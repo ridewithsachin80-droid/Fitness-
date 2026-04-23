@@ -1,0 +1,282 @@
+{
+  "info": {
+    "name": "Health Monitor API — Sprint 2",
+    "_postman_id": "health-monitor-sprint2",
+    "description": "Full test suite for all backend endpoints. Set BASE_URL = http://localhost:3000 in your Postman environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "BASE_URL",        "value": "http://localhost:3000" },
+    { "key": "PATIENT_PHONE",   "value": "9876543210" },
+    { "key": "MONITOR_EMAIL",   "value": "sachin@healthmonitor.app" },
+    { "key": "MONITOR_PASS",    "value": "ChangeMe@123" },
+    { "key": "ACCESS_TOKEN",    "value": "" },
+    { "key": "PATIENT_TOKEN",   "value": "" },
+    { "key": "PATIENT_ID",      "value": "2" }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_URL}}/health"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "Auth — Patient OTP",
+      "item": [
+        {
+          "name": "POST /auth/send-otp",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/auth/send-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"phone\": \"{{PATIENT_PHONE}}\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('OTP sent message', () => pm.expect(pm.response.json().message).to.include('OTP'));"
+          ]}}]
+        },
+        {
+          "name": "POST /auth/verify-otp  ← paste OTP from server console",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/auth/verify-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"phone\": \"{{PATIENT_PHONE}}\", \"otp\": \"123456\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Has accessToken', () => pm.expect(body.accessToken).to.be.a('string'));",
+            "pm.test('Role is patient', () => pm.expect(body.user.role).to.eql('patient'));",
+            "pm.environment.set('PATIENT_TOKEN', body.accessToken);"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "Auth — Monitor Login",
+      "item": [
+        {
+          "name": "POST /auth/login (monitor)",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"email\": \"{{MONITOR_EMAIL}}\", \"password\": \"{{MONITOR_PASS}}\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Has accessToken', () => pm.expect(body.accessToken).to.be.a('string'));",
+            "pm.test('Role is admin/monitor', () => pm.expect(['admin','monitor']).to.include(body.user.role));",
+            "pm.environment.set('ACCESS_TOKEN', body.accessToken);"
+          ]}}]
+        },
+        {
+          "name": "POST /auth/refresh",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/auth/refresh"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('New accessToken issued', () => pm.expect(pm.response.json().accessToken).to.be.a('string'));"
+          ]}}]
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/auth/logout"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "Daily Logs (patient token)",
+      "item": [
+        {
+          "name": "POST /logs/:date — save log",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/logs/{{TODAY}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"weight_kg\": 91.5,\n  \"activities\": { \"walk\": true, \"sun\": true, \"steps1\": false, \"resistance\": false, \"steps2\": false, \"steps3\": false },\n  \"acv\": { \"acv1\": true, \"acv2\": true, \"acv3\": false },\n  \"food_items\": [{ \"id\": 1, \"name\": \"Epigamia Greek Yoghurt\", \"grams\": 150, \"meal\": \"Meal 1\" }],\n  \"water_ml\": 2500,\n  \"supplements\": { \"b12\": true, \"d3\": false, \"fishoil\": true, \"multi\": true, \"flax\": false, \"yeast\": false, \"electrolyte\": true },\n  \"sleep\": { \"bedtime\": \"22:00\", \"waketime\": \"06:30\", \"quality\": 4 },\n  \"notes\": \"Felt good today\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('compliance_pct calculated', () => pm.expect(body.compliance_pct).to.be.a('number'));",
+            "pm.test('weight saved', () => pm.expect(parseFloat(body.weight_kg)).to.eql(91.5));"
+          ]}}]
+        },
+        {
+          "name": "GET /logs/:date — load log",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_URL}}/api/logs/{{TODAY}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns log object', () => pm.expect(pm.response.json()).to.have.property('log_date'));"
+          ]}}]
+        },
+        {
+          "name": "GET /logs/range/:from/:to — chart data",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_URL}}/api/logs/range/2025-01-01/{{TODAY}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "POST /logs/:date — upsert (save again)",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/logs/{{TODAY}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"weight_kg\": 91.2, \"water_ml\": 3000 }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Upsert succeeds', () => pm.response.to.have.status(200));",
+            "pm.test('Weight updated to 91.2', () => pm.expect(parseFloat(pm.response.json().weight_kg)).to.eql(91.2));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "Patients (monitor token)",
+      "item": [
+        {
+          "name": "GET /patients — patient list",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_URL}}/api/patients",
+            "header": [{ "key": "Authorization", "value": "Bearer {{ACCESS_TOKEN}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "GET /patients/:id — patient detail",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_URL}}/api/patients/{{PATIENT_ID}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{ACCESS_TOKEN}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Has profile', () => pm.expect(body).to.have.property('profile'));",
+            "pm.test('Has logs array', () => pm.expect(body.logs).to.be.an('array'));",
+            "pm.test('Has labs array', () => pm.expect(body.labs).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "POST /patients/:id/labs — add lab value",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/patients/{{PATIENT_ID}}/labs",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{ACCESS_TOKEN}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"test_date\": \"2025-01-15\",\n  \"test_name\": \"HbA1c\",\n  \"value\": 6.2,\n  \"unit\": \"%\",\n  \"ref_min\": 4.0,\n  \"ref_max\": 5.6\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Status computed as high', () => pm.expect(pm.response.json().status).to.eql('high'));"
+          ]}}]
+        },
+        {
+          "name": "ROLE GUARD — patient cannot GET /patients (expect 403)",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_URL}}/api/patients",
+            "header": [{ "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Returns 403 for patient role', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "Push Notifications",
+      "item": [
+        {
+          "name": "POST /notifications/subscribe",
+          "request": {
+            "method": "POST",
+            "url": "{{BASE_URL}}/api/notifications/subscribe",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/test-endpoint-123\",\n  \"p256dh\": \"test-p256dh-key\",\n  \"auth\": \"test-auth-key\",\n  \"device_name\": \"Test Device\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('subscribed true', () => pm.expect(pm.response.json().subscribed).to.be.true);"
+          ]}}]
+        },
+        {
+          "name": "GET /notifications/subscriptions",
+          "request": {
+            "method": "GET",
+            "url": "{{BASE_URL}}/api/notifications/subscriptions",
+            "header": [{ "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "DELETE /notifications/unsubscribe",
+          "request": {
+            "method": "DELETE",
+            "url": "{{BASE_URL}}/api/notifications/unsubscribe",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{PATIENT_TOKEN}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"endpoint\": \"https://fcm.googleapis.com/fcm/send/test-endpoint-123\" }" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('unsubscribed true', () => pm.expect(pm.response.json().unsubscribed).to.be.true);"
+          ]}}]
+        }
+      ]
+    }
+  ]
+}

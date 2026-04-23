@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base resets ─────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* Respect safe area insets on iPhone notch / home bar */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f4; /* stone-100 */
+  color: #1c1917;            /* stone-900 */
+}
+
+/* ── Number inputs — remove spinners ────────────────────────────────────── */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] { -moz-appearance: textfield; }
+
+/* ── Tap highlight — remove on mobile ───────────────────────────────────── */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* ── Smooth scroll ──────────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+/* ── PWA status bar padding on iOS ─────────────────────────────────────── */
+.safe-top    { padding-top:    env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* ── Compliance ring animation ──────────────────────────────────────────── */
+@keyframes ring-fill {
+  from { stroke-dasharray: 0 150.8; }
+}
+.ring-animated {
+  animation: ring-fill 0.8s ease-out forwards;
+}
+
+/* ── Fade-in for page transitions ───────────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fade-up 0.25s ease-out both;
+}
+
+/* ── Pulse for save button ──────────────────────────────────────────────── */
+@keyframes saved-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+.saved-pulse { animation: saved-pulse 1s ease-in-out 2; }

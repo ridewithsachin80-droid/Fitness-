@@ -1,0 +1,198 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
+import { getPatients }  from '../api/logs';
+import { today, formatDate } from '../constants';
+import { OfflineBanner, PageLoader } from '../components/UI';
+import { useSync } from '../hooks/useSync';
+
+function complianceBadge(pct) {
+  if (pct === null || pct === undefined) return { bg: 'bg-stone-100', text: 'text-stone-400', label: '—' };
+  if (pct >= 75) return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: `${pct}%` };
+  if (pct >= 50) return { bg: 'bg-amber-100',   text: 'text-amber-700',   label: `${pct}%` };
+  return           { bg: 'bg-red-100',     text: 'text-red-700',     label: `${pct}%` };
+}
+
+function weightDelta(current, start) {
+  if (!current || !start) return null;
+  const delta = parseFloat(current) - parseFloat(start);
+  return delta;
+}
+
+export default function PatientList() {
+  const navigate       = useNavigate();
+  const { user, logout } = useAuthStore();
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error,   setError]     = useState('');
+  const todayStr = today();
+
+  const load = async () => {
+    try {
+      const { data } = await getPatients();
+      setPatients(data);
+    } catch (e) {
+      setError('Failed to load patients');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  // Real-time: when a patient saves a log, update their card live
+  useSync((update) => {
+    setPatients(prev => prev.map(p =>
+      p.id === update.patientId
+        ? { ...p, last_compliance: update.compliance, latest_weight: update.weight_kg, last_logged: update.date }
+        : p
+    ));
+  });
+
+  if (loading) return <PageLoader />;
+
+  const noLogToday  = patients.filter(p => p.last_logged !== todayStr);
+  const loggedToday = patients.filter(p => p.last_logged === todayStr);
+
+  return (
+    <div className="min-h-screen bg-stone-100">
+      <OfflineBanner />
+
+      {/* Header */}
+      <div className="bg-gradient-to-br from-stone-800 to-stone-900 text-white px-4 pt-10 pb-6">
+        <div className="max-w-md mx-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mb-0.5">Monitor</p>
+              <h1 className="text-xl font-bold">{user?.name}</h1>
+              <p className="text-stone-400 text-xs mt-0.5">{patients.length} patient{patients.length !== 1 ? 's' : ''} assigned</p>
+            </div>
+            <button onClick={() => navigate('/settings')}
+              className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Quick stats */}
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            {[
+              { label: 'Logged today', value: loggedToday.length, color: 'text-emerald-400' },
+              { label: 'Pending',      value: noLogToday.length,  color: noLogToday.length > 0 ? 'text-red-400' : 'text-stone-400' },
+              { label: 'Total',        value: patients.length,    color: 'text-stone-300' },
+            ].map(stat => (
+              <div key={stat.label} className="bg-white/10 rounded-xl py-2.5 text-center">
+                <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+                <div className="text-xs text-stone-400 mt-0.5">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Patient cards */}
+      <div className="max-w-md mx-auto px-4 pt-4 pb-8 space-y-3">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+        )}
+
+        {patients.length === 0 && !error && (
+          <div className="text-center py-16 text-stone-400">
+            <div className="text-4xl mb-3">👥</div>
+            <p className="font-medium">No patients assigned yet</p>
+          </div>
+        )}
+
+        {/* Pending logs first */}
+        {noLogToday.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 px-1">
+              ⚠ No log today ({noLogToday.length})
+            </p>
+            {noLogToday.map(p => <PatientCard key={p.id} patient={p} todayStr={todayStr} onClick={() => navigate(`/monitor/${p.id}`)} />)}
+          </div>
+        )}
+
+        {loggedToday.length > 0 && (
+          <div>
+            {noLogToday.length > 0 && (
+              <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2 mt-4 px-1">
+                ✓ Logged today ({loggedToday.length})
+              </p>
+            )}
+            {loggedToday.map(p => <PatientCard key={p.id} patient={p} todayStr={todayStr} onClick={() => navigate(`/monitor/${p.id}`)} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PatientCard({ patient: p, todayStr, onClick }) {
+  const badge  = complianceBadge(p.last_compliance);
+  const delta  = weightDelta(p.latest_weight, p.start_weight);
+  const noLog  = p.last_logged !== todayStr;
+  const conditions = Array.isArray(p.conditions) ? p.conditions : [];
+
+  return (
+    <div onClick={onClick}
+      className={`bg-white rounded-2xl p-4 shadow-card cursor-pointer border transition-all
+        hover:shadow-md active:scale-98 ${noLog ? 'border-red-200' : 'border-stone-100'}`}>
+      <div className="flex items-start justify-between gap-3">
+        {/* Left: name + info */}
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold text-stone-800 text-base truncate">{p.name}</h2>
+          <p className="text-xs text-stone-400 mt-0.5">{p.phone}</p>
+
+          {conditions.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {conditions.map(c => (
+                <span key={c} className="text-xs bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full font-medium">
+                  {c.replace(/_/g, ' ')}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right: weight + compliance */}
+        <div className="text-right flex-shrink-0">
+          {p.latest_weight ? (
+            <>
+              <div className="font-bold text-stone-800">{p.latest_weight} kg</div>
+              {delta !== null && (
+                <div className={`text-xs font-semibold mt-0.5 ${delta < 0 ? 'text-emerald-600' : delta > 0 ? 'text-red-500' : 'text-stone-400'}`}>
+                  {delta < 0 ? '↓' : delta > 0 ? '↑' : '='} {Math.abs(delta).toFixed(1)} kg
+                </div>
+              )}
+            </>
+          ) : (
+            <span className="text-xs text-stone-300">No weight</span>
+          )}
+          <div className={`mt-1.5 text-xs font-bold px-2 py-0.5 rounded-full inline-block ${badge.bg} ${badge.text}`}>
+            {badge.label}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom row */}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-50">
+        {noLog ? (
+          <span className="text-xs font-bold text-red-500">⚠ No log today</span>
+        ) : (
+          <span className="text-xs text-stone-400">
+            Logged {p.last_logged === todayStr ? 'today' : formatDate(p.last_logged)}
+          </span>
+        )}
+        <div className="flex items-center gap-1 text-stone-300">
+          <span className="text-xs">Goal: {p.target_weight} kg</span>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}

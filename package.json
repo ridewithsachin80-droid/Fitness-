@@ -1,0 +1,17 @@
+{
+  "name": "health-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Health Monitor PWA — monorepo root",
+  "scripts": {
+    "build": "bash build.sh",
+    "start": "node server/index.js",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "seed": "node server/scripts/createAdmin.js",
+    "db:schema": "psql $DATABASE_URL -f server/db/schema.sql"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
