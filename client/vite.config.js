@@ -10,9 +10,9 @@ export default defineConfig({
       includeAssets: ['icons/*.png', 'icons/*.svg', 'favicon.ico', 'icons/apple-touch-icon.png'],
 
       manifest: {
-        name: 'Health Monitor',
-        short_name: 'HealthMon',
-        description: 'Daily health tracking for Mrs. Padmini',
+        name: 'FitLife',
+        short_name: 'FitLife',
+        description: 'Transform your health, one day at a time',
         theme_color: '#1a7a4a',
         background_color: '#ffffff',
         display: 'standalone',
