@@ -123,7 +123,7 @@ export default function Settings() {
         </button>
 
         <p className="text-center text-xs text-stone-300 pt-2">
-          Health Monitor · Sprint build in progress
+          FitLife · Sprint build in progress
         </p>
       </div>
     </div>

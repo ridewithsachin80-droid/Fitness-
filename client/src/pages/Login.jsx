@@ -264,8 +264,8 @@ export default function Login() {
                 d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-stone-800">Health Monitor</h1>
-          <p className="text-stone-500 text-sm mt-1">Your health journey starts here 💚</p>
+          <h1 className="text-2xl font-bold text-stone-800">FitLife</h1>
+          <p className="text-stone-500 text-sm mt-1">Transform your health, one day at a time 💚</p>
         </div>
 
         {/* Card */}
@@ -274,8 +274,8 @@ export default function Login() {
           {/* Tab bar */}
           <div className="flex border-b border-stone-100">
             {[
-              { id: 'patient',  label: 'Patient',  sub: 'OTP login' },
-              { id: 'monitor',  label: 'Monitor',  sub: 'Email login' },
+              { id: 'patient',  label: 'Member',   sub: 'OTP login' },
+              { id: 'monitor',  label: 'Monitor',   sub: 'Email login' },
             ].map((tab) => (
               <button
                 key={tab.id}
