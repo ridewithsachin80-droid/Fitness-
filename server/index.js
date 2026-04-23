@@ -64,11 +64,18 @@ app.get('/health', (req, res) => {
 });
 
 // ── Serve built React app in production ──────────────────────────────────────
-// Sprint 6 (deployment) will activate this:
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  const distPath = path.join(__dirname, '../client/dist');
+  app.use(express.static(distPath));
+
+  // Catch-all: serve index.html for any non-API route (SPA client-side routing)
+  // Using a function-based fallback instead of wildcard to support Express 4 & 5
+  app.use((req, res, next) => {
+    // Let API routes and static assets fall through normally
+    if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+      return next();
+    }
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 
