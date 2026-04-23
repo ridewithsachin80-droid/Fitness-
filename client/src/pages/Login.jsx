@@ -265,7 +265,7 @@ export default function Login() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-stone-800">Health Monitor</h1>
-          <p className="text-stone-500 text-sm mt-1">Daily tracking for Mrs. Padmini</p>
+          <p className="text-stone-500 text-sm mt-1">Your health journey starts here 💚</p>
         </div>
 
         {/* Card */}

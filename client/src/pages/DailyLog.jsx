@@ -59,8 +59,8 @@ export default function DailyLog() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-xs font-bold tracking-widest uppercase text-emerald-300 mb-0.5">Health Monitor</p>
-              <h1 className="text-xl font-bold">{user?.name || 'Mrs. Padmini'}</h1>
-              <p className="text-emerald-300 text-xs mt-0.5">60 yrs · Grade 2 Fatty Liver · Pre-Diabetic</p>
+              <h1 className="text-xl font-bold">{user?.name}</h1>
+              <p className="text-emerald-300 text-xs mt-0.5">Every step counts 💪 Keep going!</p>
             </div>
             <button onClick={() => navigate('/settings')}
               className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
@@ -118,8 +118,8 @@ export default function DailyLog() {
                 <span className="text-stone-400 font-bold">kg</span>
               </div>
               {log.weight && (
-                <div className={`mt-3 text-center text-xs font-semibold py-2 rounded-xl ${parseFloat(log.weight) < 93 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                  {parseFloat(log.weight) < 93 ? `↓ ${(93 - parseFloat(log.weight)).toFixed(1)} kg below start` : 'At or above start weight of 93 kg'}
+                <div className="mt-3 text-center text-xs font-semibold py-2 rounded-xl bg-emerald-50 text-emerald-700">
+                  ✓ Weight logged — great job tracking!
                 </div>
               )}
             </Card>
