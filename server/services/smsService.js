@@ -1,18 +1,17 @@
 const axios = require('axios');
 
 /**
- * Sends a 6-digit OTP via MSG91 SMS gateway.
- * Docs: https://docs.msg91.com/reference/send-otp
- *
- * Requirements:
- *   MSG91_API_KEY     — your MSG91 auth key
- *   MSG91_SENDER_ID   — e.g. HLTHMO (6 chars, DLT registered)
- *   MSG91_TEMPLATE_ID — DLT-approved template ID
+ * Sends OTP via MSG91 if credentials are set.
+ * ALWAYS logs the OTP to console so you can find it in Railway logs.
  */
 async function sendOTP(phone, otp) {
-  // Dev mode: just log the OTP instead of calling the SMS API
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`\n📱 [DEV] OTP for ${phone}: ${otp}\n`);
+  // Always log OTP — visible in Railway Deploy Logs
+  console.log(`\n🔑 OTP for ${phone}: ${otp}  (valid 10 min)\n`);
+
+  // Only attempt SMS if MSG91 is configured
+  const { MSG91_API_KEY, MSG91_TEMPLATE_ID } = process.env;
+  if (!MSG91_API_KEY || !MSG91_TEMPLATE_ID || MSG91_API_KEY === 'your-msg91-auth-key') {
+    console.log('ℹ️  MSG91 not configured — OTP logged above, SMS skipped');
     return;
   }
 
@@ -20,25 +19,21 @@ async function sendOTP(phone, otp) {
     const response = await axios.post(
       'https://api.msg91.com/api/v5/otp',
       {
-        template_id: process.env.MSG91_TEMPLATE_ID,
-        mobile: `91${phone}`,   // Prepend country code for India
-        authkey: process.env.MSG91_API_KEY,
+        template_id: MSG91_TEMPLATE_ID,
+        mobile: `91${phone}`,
+        authkey: MSG91_API_KEY,
         otp,
       },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 10000,
-      }
+      { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
     );
 
     if (response.data?.type !== 'success') {
       throw new Error(`MSG91 error: ${JSON.stringify(response.data)}`);
     }
-
-    console.log(`✅ OTP sent to ${phone}`);
+    console.log(`✅ SMS sent to ${phone}`);
   } catch (err) {
-    console.error(`❌ Failed to send OTP to ${phone}:`, err.message);
-    throw new Error('Failed to send OTP. Please try again.');
+    // SMS failed but OTP is already logged above — don't block login flow
+    console.error(`⚠️  SMS failed (OTP still valid — check logs): ${err.message}`);
   }
 }
 
