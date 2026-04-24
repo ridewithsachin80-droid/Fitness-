@@ -10,7 +10,8 @@ import Login       from './pages/Login';
 import DailyLog    from './pages/DailyLog';
 import Monitor     from './pages/Monitor';
 import PatientList from './pages/PatientList';
-import Settings    from './pages/Settings';
+import Settings       from './pages/Settings';
+import AdminDashboard from './pages/AdminDashboard';
 
 // ── Route guard ───────────────────────────────────────────────────────────────
 function PrivateRoute({ children, roles }) {
@@ -97,6 +98,16 @@ export default function App() {
           }
         />
 
+        {/* Admin dashboard */}
+        <Route
+          path="/admin"
+          element={
+            <PrivateRoute roles={['admin']}>
+              <AdminDashboard />
+            </PrivateRoute>
+          }
+        />
+
         {/* Settings — any authenticated user */}
         <Route
           path="/settings"
@@ -117,6 +128,8 @@ export default function App() {
                   ? '/login'
                   : user.role === 'patient'
                   ? '/'
+                  : user.role === 'admin'
+                  ? '/admin'
                   : '/monitor'
               }
               replace
