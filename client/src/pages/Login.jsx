@@ -235,7 +235,7 @@ export default function Login() {
         { withCredentials: true }
       );
       login(data.accessToken, data.user);
-      navigate('/monitor');
+      navigate(data.user.role === 'admin' ? '/admin' : '/monitor');
     } catch (e) {
       setError(e.response?.data?.error || 'Invalid email or password.');
     } finally {
@@ -275,7 +275,7 @@ export default function Login() {
           <div className="flex border-b border-stone-100">
             {[
               { id: 'patient',  label: 'Member',   sub: 'OTP login' },
-              { id: 'monitor',  label: 'Monitor',   sub: 'Email login' },
+              { id: 'monitor',  label: 'Monitor / Admin',   sub: 'Email login' },
             ].map((tab) => (
               <button
                 key={tab.id}
