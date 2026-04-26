@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 export function Card({ children, className = '' }) {
@@ -145,6 +146,87 @@ export function StatPill({ value, label, color = 'stone' }) {
       <div className="font-bold text-sm leading-tight">{value}</div>
       <div className="text-xs opacity-70 mt-0.5">{label}</div>
     </div>
+  );
+}
+
+// ── BottomNav ─────────────────────────────────────────────────────────────────
+export function BottomNav({ role }) {
+  const navigate  = useNavigate?.() ?? null;
+  const pathname  = useLocation?.()?.pathname ?? '';
+
+  const tabs = [
+    {
+      label: 'Patients',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+      path: '/monitor',
+      active: pathname.startsWith('/monitor'),
+      roles: ['monitor', 'admin'],
+    },
+    {
+      label: 'Admin',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      ),
+      path: '/admin',
+      active: pathname === '/admin',
+      roles: ['admin'],
+    },
+    {
+      label: 'Settings',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round"
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+      path: '/settings',
+      active: pathname === '/settings',
+      roles: ['monitor', 'admin'],
+    },
+  ].filter(t => t.roles.includes(role));
+
+  if (!navigate) return null;
+
+  return (
+    <>
+      {/* Spacer so content isn't hidden behind nav */}
+      <div className="h-20" />
+      <div className="fixed bottom-0 left-0 right-0 z-40">
+        <div className="max-w-md mx-auto">
+          <div className="mx-3 mb-3 bg-white rounded-2xl shadow-float border border-stone-100
+            flex items-center divide-x divide-stone-100">
+            {tabs.map(tab => (
+              <button
+                key={tab.path}
+                onClick={() => navigate(tab.path)}
+                className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors rounded-2xl
+                  ${tab.active
+                    ? 'text-emerald-600'
+                    : 'text-stone-400 hover:text-stone-600'
+                  }`}
+              >
+                {tab.icon}
+                <span className={`text-xs font-semibold ${tab.active ? 'text-emerald-600' : ''}`}>
+                  {tab.label}
+                </span>
+                {tab.active && (
+                  <div className="absolute bottom-2 w-1 h-1 bg-emerald-500 rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
