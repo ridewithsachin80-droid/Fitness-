@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getPatients }  from '../api/logs';
 import { today, formatDate } from '../constants';
-import { OfflineBanner, PageLoader } from '../components/UI';
+import { OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import { useSync } from '../hooks/useSync';
 
 function complianceBadge(pct) {
@@ -126,6 +126,7 @@ export default function PatientList() {
           </div>
         )}
       </div>
+      <BottomNav role={user?.role} />
     </div>
   );
 }
