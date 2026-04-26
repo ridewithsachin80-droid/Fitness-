@@ -115,10 +115,12 @@ export const emptyLog = () => ({
   savedAt:     null,
 });
 
-/** Calculate compliance % from log fields */
-export const calcCompliance = (log) => {
-  const actDone  = ACTIVITIES.filter(a => log.activities?.[a.id]).length;
-  const acvDone  = ACV_ITEMS.filter(a => log.acv?.[a.id]).length;
-  const suppDone = SUPPLEMENTS.filter(s => log.supplements?.[s.id]).length;
-  return Math.round(((actDone + acvDone + suppDone) / TOTAL_CHECKABLE) * 100);
+/** Calculate compliance % from log fields — pass filtered active lists for per-member protocol */
+export const calcCompliance = (log, acts = ACTIVITIES, acvList = ACV_ITEMS, suppList = SUPPLEMENTS) => {
+  const actDone  = acts.filter(a => log.activities?.[a.id]).length;
+  const acvDone  = acvList.filter(a => log.acv?.[a.id]).length;
+  const suppDone = suppList.filter(s => log.supplements?.[s.id]).length;
+  const total    = acts.length + acvList.length + suppList.length;
+  if (!total) return 0;
+  return Math.round(((actDone + acvDone + suppDone) / total) * 100);
 };
