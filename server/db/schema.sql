@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS patient_profiles (
   conditions     JSONB       DEFAULT '[]',
   diet_notes     TEXT,
   water_target   INT         DEFAULT 3000,   -- ml
+  -- per-member protocol: which items are assigned (null = use all defaults)
+  protocol_activities  JSONB DEFAULT NULL,   -- ["walk","sun","steps1",...] or null
+  protocol_acv         JSONB DEFAULT NULL,   -- ["acv1","acv2","acv3"] or null
+  protocol_supplements JSONB DEFAULT NULL,   -- ["b12","d3","fishoil",...] or null
   updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
