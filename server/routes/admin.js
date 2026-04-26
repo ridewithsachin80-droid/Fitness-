@@ -153,7 +153,8 @@ router.post('/assign', async (req, res) => {
 // Full edit of a member: name, phone, PIN, profile fields
 router.put('/members/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, phone, pin, height_cm, start_weight, target_weight, conditions } = req.body;
+  const { name, phone, pin, height_cm, start_weight, target_weight, conditions,
+          protocol_activities, protocol_acv, protocol_supplements } = req.body;
 
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
@@ -182,20 +183,27 @@ router.put('/members/:id', async (req, res) => {
 
     // Upsert patient profile
     await client.query(`
-      INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target)
-      VALUES ($1,$2,$3,$4,$5,3000)
+      INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target,
+        protocol_activities, protocol_acv, protocol_supplements)
+      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8)
       ON CONFLICT (user_id) DO UPDATE SET
-        height_cm     = EXCLUDED.height_cm,
-        start_weight  = EXCLUDED.start_weight,
-        target_weight = EXCLUDED.target_weight,
-        conditions    = EXCLUDED.conditions,
-        updated_at    = NOW()
+        height_cm            = EXCLUDED.height_cm,
+        start_weight         = EXCLUDED.start_weight,
+        target_weight        = EXCLUDED.target_weight,
+        conditions           = EXCLUDED.conditions,
+        protocol_activities  = EXCLUDED.protocol_activities,
+        protocol_acv         = EXCLUDED.protocol_acv,
+        protocol_supplements = EXCLUDED.protocol_supplements,
+        updated_at           = NOW()
     `, [
       id,
       height_cm     || null,
       start_weight  || null,
       target_weight || null,
       JSON.stringify(conditions || []),
+      protocol_activities  ? JSON.stringify(protocol_activities)  : null,
+      protocol_acv         ? JSON.stringify(protocol_acv)         : null,
+      protocol_supplements ? JSON.stringify(protocol_supplements) : null,
     ]);
 
     await client.query('COMMIT');
@@ -203,7 +211,8 @@ router.put('/members/:id', async (req, res) => {
     // Return updated member
     const result = await client.query(
       `SELECT u.id, u.name, u.phone, u.active,
-         pp.height_cm, pp.start_weight, pp.target_weight
+         pp.height_cm, pp.start_weight, pp.target_weight,
+         pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements
        FROM users u
        LEFT JOIN patient_profiles pp ON pp.user_id=u.id
        WHERE u.id=$1`,
