@@ -35,6 +35,44 @@ const setRefreshCookie = (res, token) => {
   });
 };
 
+// ── POST /api/auth/pin-login ────────────────────────────────────────────────
+// Patient: phone number + PIN login (replaces OTP)
+router.post('/pin-login', async (req, res) => {
+  const { phone, pin } = req.body;
+
+  if (!phone || !pin) {
+    return res.status(400).json({ error: 'Phone and PIN are required' });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM users WHERE phone = $1 AND role = 'patient' AND active = true",
+      [phone]
+    );
+    const user = result.rows[0];
+
+    if (!user || !user.password) {
+      return res.status(401).json({ error: 'Invalid phone number or PIN' });
+    }
+
+    const isValid = await bcrypt.compare(pin, user.password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Incorrect PIN. Contact your monitor to reset.' });
+    }
+
+    const { accessToken, refreshToken } = signTokens(user);
+    setRefreshCookie(res, refreshToken);
+
+    res.json({
+      accessToken,
+      user: { id: user.id, name: user.name, role: user.role },
+    });
+  } catch (err) {
+    console.error('pin-login error:', err);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
 // ── POST /api/auth/send-otp ─────────────────────────────────────────────────
 // Patient: request OTP to their registered phone number
 router.post('/send-otp', async (req, res) => {
