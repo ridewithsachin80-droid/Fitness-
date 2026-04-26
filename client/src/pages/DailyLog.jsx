@@ -34,7 +34,15 @@ function ComplianceRing({ pct }) {
 export default function DailyLog() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { date, log, loading, saving, saved, error, setDate, updateLog, saveLog } = useLogStore();
+  const { date, log, protocol, loading, saving, saved, error, setDate, updateLog, saveLog } = useLogStore();
+
+  // Build effective item lists — use protocol if set, else show all defaults
+  const activeActivities  = ACTIVITIES.filter(a =>
+    !protocol?.activities  || protocol.activities.includes(a.id));
+  const activeACV         = ACV_ITEMS.filter(a =>
+    !protocol?.acv         || protocol.acv.includes(a.id));
+  const activeSupplements = SUPPLEMENTS.filter(s =>
+    !protocol?.supplements || protocol.supplements.includes(s.id));
 
   // Register Web Push subscription on first load (patient only)
   usePush();
@@ -43,10 +51,10 @@ export default function DailyLog() {
 
   useEffect(() => { setDate(today()); }, []);
 
-  const compliance = calcCompliance(log);
-  const actDone    = ACTIVITIES.filter(a => log.activities?.[a.id]).length;
-  const acvDone    = ACV_ITEMS.filter(a => log.acv?.[a.id]).length;
-  const suppDone   = SUPPLEMENTS.filter(s => log.supplements?.[s.id]).length;
+  const compliance = calcCompliance(log, activeActivities, activeACV, activeSupplements);
+  const actDone    = activeActivities.filter(a => log.activities?.[a.id]).length;
+  const acvDone    = activeACV.filter(a => log.acv?.[a.id]).length;
+  const suppDone   = activeSupplements.filter(s => log.supplements?.[s.id]).length;
   const update     = useCallback(updateLog, [updateLog]);
 
   return (
@@ -75,7 +83,7 @@ export default function DailyLog() {
             <div className="flex-1">
               <div className="text-sm font-semibold">Today's Compliance</div>
               <div className="text-xs text-emerald-200 mt-0.5">
-                {actDone}/{ACTIVITIES.length} activities · {acvDone}/{ACV_ITEMS.length} ACV · {suppDone}/{SUPPLEMENTS.length} supps
+                {actDone}/{activeActivities.length} activities · {acvDone}/{activeACV.length} ACV · {suppDone}/{activeSupplements.length} supps
               </div>
               {log.weight && <div className="text-xs text-emerald-300 mt-1 font-medium">⚖ {log.weight} kg logged</div>}
             </div>
@@ -128,7 +136,7 @@ export default function DailyLog() {
             <Card>
               <SectionTitle icon="🏃">Physical Activity</SectionTitle>
               <div className="space-y-2">
-                {ACTIVITIES.map(a => (
+                {activeActivities.map(a => (
                   <CheckRow key={a.id} label={a.label} sub={a.sub} icon={a.icon}
                     checked={!!log.activities?.[a.id]}
                     onChange={v => update('activities', { ...log.activities, [a.id]: v })} />
@@ -141,7 +149,7 @@ export default function DailyLog() {
               <SectionTitle icon="🍶">Apple Cider Vinegar</SectionTitle>
               <p className="text-xs text-stone-400 mb-3">1 tbsp in 200ml warm water · through a straw · 15 min before meal</p>
               <div className="space-y-2">
-                {ACV_ITEMS.map(a => (
+                {activeACV.map(a => (
                   <CheckRow key={a.id} label={a.label} sub={a.sub}
                     checked={!!log.acv?.[a.id]}
                     onChange={v => update('acv', { ...log.acv, [a.id]: v })} />
@@ -167,7 +175,7 @@ export default function DailyLog() {
             <Card>
               <SectionTitle icon="💊">Supplements</SectionTitle>
               <div className="space-y-2">
-                {SUPPLEMENTS.map(s => (
+                {activeSupplements.map(s => (
                   <CheckRow key={s.id} label={s.label} sub={s.sub}
                     checked={!!log.supplements?.[s.id]}
                     onChange={v => update('supplements', { ...log.supplements, [s.id]: v })} />
