@@ -154,7 +154,8 @@ router.post('/assign', async (req, res) => {
 router.put('/members/:id', async (req, res) => {
   const { id } = req.params;
   const { name, phone, pin, height_cm, start_weight, target_weight, conditions,
-          protocol_activities, protocol_acv, protocol_supplements } = req.body;
+          protocol_activities, protocol_acv, protocol_supplements,
+          custom_activities, custom_acv, custom_supplements } = req.body;
 
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
@@ -184,8 +185,9 @@ router.put('/members/:id', async (req, res) => {
     // Upsert patient profile
     await client.query(`
       INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target,
-        protocol_activities, protocol_acv, protocol_supplements)
-      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8)
+        protocol_activities, protocol_acv, protocol_supplements,
+        custom_activities, custom_acv, custom_supplements)
+      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11)
       ON CONFLICT (user_id) DO UPDATE SET
         height_cm            = EXCLUDED.height_cm,
         start_weight         = EXCLUDED.start_weight,
@@ -194,6 +196,9 @@ router.put('/members/:id', async (req, res) => {
         protocol_activities  = EXCLUDED.protocol_activities,
         protocol_acv         = EXCLUDED.protocol_acv,
         protocol_supplements = EXCLUDED.protocol_supplements,
+        custom_activities    = EXCLUDED.custom_activities,
+        custom_acv           = EXCLUDED.custom_acv,
+        custom_supplements   = EXCLUDED.custom_supplements,
         updated_at           = NOW()
     `, [
       id,
@@ -204,6 +209,9 @@ router.put('/members/:id', async (req, res) => {
       protocol_activities  ? JSON.stringify(protocol_activities)  : null,
       protocol_acv         ? JSON.stringify(protocol_acv)         : null,
       protocol_supplements ? JSON.stringify(protocol_supplements) : null,
+      JSON.stringify(custom_activities  || []),
+      JSON.stringify(custom_acv         || []),
+      JSON.stringify(custom_supplements || []),
     ]);
 
     await client.query('COMMIT');
@@ -212,7 +220,8 @@ router.put('/members/:id', async (req, res) => {
     const result = await client.query(
       `SELECT u.id, u.name, u.phone, u.active,
          pp.height_cm, pp.start_weight, pp.target_weight,
-         pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements
+         pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
+         pp.custom_activities, pp.custom_acv, pp.custom_supplements
        FROM users u
        LEFT JOIN patient_profiles pp ON pp.user_id=u.id
        WHERE u.id=$1`,

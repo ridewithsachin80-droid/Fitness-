@@ -38,7 +38,7 @@ router.get('/:date', authMW, async (req, res) => {
 
     const [logResult, profileResult] = await Promise.all([
       pool.query('SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2', [patientId, date]),
-      pool.query('SELECT protocol_activities, protocol_acv, protocol_supplements FROM patient_profiles WHERE user_id = $1', [patientId]),
+      pool.query('SELECT protocol_activities, protocol_acv, protocol_supplements, custom_activities, custom_acv, custom_supplements FROM patient_profiles WHERE user_id = $1', [patientId]),
     ]);
 
     const log     = logResult.rows[0] || null;
@@ -47,15 +47,21 @@ router.get('/:date', authMW, async (req, res) => {
     res.json(log ? {
       ...log,
       protocol: {
-        activities:  profile.protocol_activities  || null,
-        acv:         profile.protocol_acv         || null,
-        supplements: profile.protocol_supplements || null,
+        activities:       profile.protocol_activities  || null,
+        acv:              profile.protocol_acv         || null,
+        supplements:      profile.protocol_supplements || null,
+        custom_activities:  profile.custom_activities  || [],
+        custom_acv:         profile.custom_acv         || [],
+        custom_supplements: profile.custom_supplements || [],
       }
     } : {
       protocol: {
-        activities:  profile.protocol_activities  || null,
-        acv:         profile.protocol_acv         || null,
-        supplements: profile.protocol_supplements || null,
+        activities:       profile.protocol_activities  || null,
+        acv:              profile.protocol_acv         || null,
+        supplements:      profile.protocol_supplements || null,
+        custom_activities:  profile.custom_activities  || [],
+        custom_acv:         profile.custom_acv         || [],
+        custom_supplements: profile.custom_supplements || [],
       }
     });
   } catch (err) {
