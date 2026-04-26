@@ -180,6 +180,9 @@ function EditMemberModal({ member, onClose, onSaved }) {
         protocol_activities:  proto.activities,
         protocol_acv:         proto.acv,
         protocol_supplements: proto.supplements,
+        custom_activities:  customItems.activities,
+        custom_acv:         customItems.acv,
+        custom_supplements: customItems.supplements,
       });
       onSaved(data);
       onClose();
@@ -189,24 +192,93 @@ function EditMemberModal({ member, onClose, onSaved }) {
     }
   };
 
+  // Custom items added per member (beyond defaults)
+  const [customItems, setCustomItems] = useState({
+    activities:  member.custom_activities  || [],
+    acv:         member.custom_acv         || [],
+    supplements: member.custom_supplements || [],
+  });
+  const [adding, setAdding] = useState({ activities: false, acv: false, supplements: false });
+  const [newLabel, setNewLabel] = useState({ activities: '', acv: '', supplements: '' });
+
+  const addCustomItem = (key) => {
+    const label = newLabel[key].trim();
+    if (!label) return;
+    const id = `custom_${Date.now()}`;
+    const item = { id, label, sub: '', custom: true };
+    setCustomItems(c => ({ ...c, [key]: [...c[key], item] }));
+    // Auto-assign it
+    setProto(p => {
+      const allDefault = [...(key === 'activities' ? ACTIVITIES : key === 'acv' ? ACV_ITEMS : SUPPLEMENTS)];
+      const current = p[key] || allDefault.map(i => i.id);
+      return { ...p, [key]: [...current, id] };
+    });
+    setNewLabel(n => ({ ...n, [key]: '' }));
+    setAdding(a => ({ ...a, [key]: false }));
+  };
+
+  const removeCustomItem = (key, id) => {
+    setCustomItems(c => ({ ...c, [key]: c[key].filter(i => i.id !== id) }));
+    setProto(p => ({ ...p, [key]: (p[key] || []).filter(x => x !== id) }));
+  };
+
   const ProtocolSection = ({ label, icon, items, protoKey }) => {
-    const assigned = proto[protoKey] || items.map(i => i.id);
+    const allItems  = [...items, ...customItems[protoKey]];
+    const assigned  = proto[protoKey] || items.map(i => i.id);
+    const isAdding  = adding[protoKey];
+
     return (
       <div className="border border-stone-100 rounded-2xl p-3 space-y-2">
         <p className="text-xs font-bold tracking-widest uppercase text-stone-400">{icon} {label}</p>
-        {items.map(item => (
-          <label key={item.id} className="flex items-start gap-3 cursor-pointer">
+
+        {/* Default items */}
+        {allItems.map(item => (
+          <label key={item.id} className="flex items-start gap-3 cursor-pointer group">
             <input type="checkbox"
               checked={assigned.includes(item.id)}
               onChange={() => toggleProto(protoKey, item.id, items)}
               className="mt-0.5 w-4 h-4 accent-emerald-600 flex-shrink-0"
             />
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-stone-700">{item.icon ? `${item.icon} ` : ''}{item.label}</div>
               {item.sub && <div className="text-xs text-stone-400">{item.sub}</div>}
             </div>
+            {item.custom && (
+              <button onClick={() => removeCustomItem(protoKey, item.id)}
+                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs px-1 flex-shrink-0 transition-opacity">
+                ✕
+              </button>
+            )}
           </label>
         ))}
+
+        {/* Add custom item inline */}
+        {isAdding ? (
+          <div className="flex gap-2 mt-2">
+            <input
+              autoFocus
+              type="text"
+              value={newLabel[protoKey]}
+              onChange={e => setNewLabel(n => ({ ...n, [protoKey]: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') addCustomItem(protoKey); if (e.key === 'Escape') setAdding(a => ({ ...a, [protoKey]: false })); }}
+              placeholder="e.g. Evening Walk"
+              className="flex-1 text-sm border border-emerald-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-emerald-500"
+            />
+            <button onClick={() => addCustomItem(protoKey)}
+              className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700">
+              Add
+            </button>
+            <button onClick={() => setAdding(a => ({ ...a, [protoKey]: false }))}
+              className="text-xs px-2 py-1.5 text-stone-400 hover:text-stone-600">
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setAdding(a => ({ ...a, [protoKey]: true }))}
+            className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-800 font-semibold mt-1 px-1">
+            <span className="text-base leading-none">+</span> Add custom item
+          </button>
+        )}
       </div>
     );
   };

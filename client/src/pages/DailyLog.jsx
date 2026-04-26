@@ -36,12 +36,16 @@ export default function DailyLog() {
   const { user } = useAuthStore();
   const { date, log, protocol, loading, saving, saved, error, setDate, updateLog, saveLog } = useLogStore();
 
-  // Build effective item lists — use protocol if set, else show all defaults
-  const activeActivities  = ACTIVITIES.filter(a =>
+  // Merge default + custom items, then filter by protocol
+  const allActivities  = [...ACTIVITIES,  ...(protocol?.custom_activities  || [])];
+  const allACV         = [...ACV_ITEMS,   ...(protocol?.custom_acv         || [])];
+  const allSupplements = [...SUPPLEMENTS, ...(protocol?.custom_supplements || [])];
+
+  const activeActivities  = allActivities.filter(a =>
     !protocol?.activities  || protocol.activities.includes(a.id));
-  const activeACV         = ACV_ITEMS.filter(a =>
+  const activeACV         = allACV.filter(a =>
     !protocol?.acv         || protocol.acv.includes(a.id));
-  const activeSupplements = SUPPLEMENTS.filter(s =>
+  const activeSupplements = allSupplements.filter(s =>
     !protocol?.supplements || protocol.supplements.includes(s.id));
 
   // Register Web Push subscription on first load (patient only)
