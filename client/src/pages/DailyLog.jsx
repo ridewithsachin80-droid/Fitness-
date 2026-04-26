@@ -37,9 +37,18 @@ export default function DailyLog() {
   const { date, log, protocol, loading, saving, saved, error, setDate, updateLog, saveLog } = useLogStore();
 
   // Merge default + custom items, then filter by protocol
-  const allActivities  = [...ACTIVITIES,  ...(protocol?.custom_activities  || [])];
-  const allACV         = [...ACV_ITEMS,   ...(protocol?.custom_acv         || [])];
-  const allSupplements = [...SUPPLEMENTS, ...(protocol?.custom_supplements || [])];
+  const overrides    = protocol?.item_overrides || {};
+  const applyOverride = (item) => {
+    const ov = overrides[item.id];
+    if (!ov) return item;
+    const timing = [ov.fromTime, ov.toTime].filter(Boolean).join('–');
+    const sub    = [ov.totalTime, timing].filter(Boolean).join(' · ') || ov.sub || item.sub || '';
+    return { ...item, label: ov.label || item.label, sub };
+  };
+
+  const allActivities  = [...ACTIVITIES,  ...(protocol?.custom_activities  || [])].map(applyOverride);
+  const allACV         = [...ACV_ITEMS,   ...(protocol?.custom_acv         || [])].map(applyOverride);
+  const allSupplements = [...SUPPLEMENTS, ...(protocol?.custom_supplements || [])].map(applyOverride);
 
   const activeActivities  = allActivities.filter(a =>
     !protocol?.activities  || protocol.activities.includes(a.id));

@@ -124,6 +124,7 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
   );
 }
 
+// ── Edit Member modal ─────────────────────────────────────────────────────────
 function EditMemberModal({ member, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:          member.name          || '',
@@ -134,40 +135,95 @@ function EditMemberModal({ member, onClose, onSaved }) {
     start_weight:  member.start_weight  || '',
     target_weight: member.target_weight || '',
   });
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [tab,     setTab]     = useState('identity');
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  // Protocol — null means "all items" (default). Array of IDs means only those are assigned.
+  // Protocol enabled IDs (null = all enabled)
   const [proto, setProto] = useState({
     activities:  member.protocol_activities  || null,
     acv:         member.protocol_acv         || null,
     supplements: member.protocol_supplements || null,
   });
 
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState('');
-  const [showPin, setShowPin] = useState(false);
-  const [tab, setTab] = useState('identity'); // 'identity' | 'protocol'
+  // Per-item overrides: { [itemId]: { label, sub, fromTime, toTime, totalTime } }
+  const [overrides, setOverrides] = useState(member.item_overrides || {});
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // Custom items per section
+  const [customItems, setCustomItems] = useState({
+    activities:  member.custom_activities  || [],
+    acv:         member.custom_acv         || [],
+    supplements: member.custom_supplements || [],
+  });
 
-  // Toggle an item in a protocol list
-  const toggleProto = (key, id, allItems) => {
+  // Which item is being edited inline
+  const [editingId, setEditingId] = useState(null);
+  // Draft state while editing
+  const [draft, setDraft] = useState({});
+
+  // Adding new custom item
+  const [addingKey, setAddingKey] = useState(null);
+  const [newItem, setNewItem]     = useState({ label: '', sub: '', fromTime: '', toTime: '', totalTime: '' });
+
+  const toggleProto = (key, id, defaultItems) => {
     setProto(p => {
-      const current = p[key] || allItems.map(i => i.id); // if null, expand to all
-      const next = current.includes(id)
-        ? current.filter(x => x !== id)
-        : [...current, id];
-      // If all items selected, store null (means "all")
-      return { ...p, [key]: next.length === allItems.length ? null : next };
+      const current = p[key] || defaultItems.map(i => i.id);
+      const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+      return { ...p, [key]: next.length === defaultItems.length ? null : next };
     });
   };
 
+  const startEdit = (item) => {
+    const ov = overrides[item.id] || {};
+    setDraft({
+      label:     ov.label     ?? item.label ?? '',
+      sub:       ov.sub       ?? item.sub   ?? '',
+      fromTime:  ov.fromTime  ?? '',
+      toTime:    ov.toTime    ?? '',
+      totalTime: ov.totalTime ?? '',
+    });
+    setEditingId(item.id);
+  };
+
+  const saveEdit = (id) => {
+    setOverrides(o => ({ ...o, [id]: { ...draft } }));
+    setEditingId(null);
+  };
+
+  const deleteItem = (key, id, isCustom) => {
+    if (isCustom) {
+      setCustomItems(c => ({ ...c, [key]: c[key].filter(i => i.id !== id) }));
+    }
+    setProto(p => {
+      const def = key === 'activities' ? ACTIVITIES : key === 'acv' ? ACV_ITEMS : SUPPLEMENTS;
+      const current = p[key] || def.map(i => i.id);
+      return { ...p, [key]: current.filter(x => x !== id) };
+    });
+    setOverrides(o => { const n = { ...o }; delete n[id]; return n; });
+  };
+
+  const confirmAddCustom = (key) => {
+    if (!newItem.label.trim()) return;
+    const id   = `custom_${Date.now()}`;
+    const item = { id, label: newItem.label.trim(), sub: newItem.sub.trim(), custom: true };
+    const ov   = { label: item.label, sub: item.sub,
+                   fromTime: newItem.fromTime, toTime: newItem.toTime, totalTime: newItem.totalTime };
+    setCustomItems(c => ({ ...c, [key]: [...c[key], item] }));
+    setOverrides(o => ({ ...o, [id]: ov }));
+    setProto(p => {
+      const def = key === 'activities' ? ACTIVITIES : key === 'acv' ? ACV_ITEMS : SUPPLEMENTS;
+      const current = p[key] || def.map(i => i.id);
+      return { ...p, [key]: [...current, id] };
+    });
+    setAddingKey(null);
+    setNewItem({ label: '', sub: '', fromTime: '', toTime: '', totalTime: '' });
+  };
+
   const submit = async () => {
-    if (!form.name.trim() || !form.phone.trim()) {
-      setError('Name and phone are required'); return;
-    }
-    if (form.pin && form.pin !== form.confirmPin) {
-      setError('PINs do not match'); return;
-    }
+    if (!form.name.trim() || !form.phone.trim()) { setError('Name and phone are required'); return; }
+    if (form.pin && form.pin !== form.confirmPin) { setError('PINs do not match'); return; }
     setSaving(true); setError('');
     try {
       const { data } = await api.put(`/admin/members/${member.id}`, {
@@ -180,9 +236,10 @@ function EditMemberModal({ member, onClose, onSaved }) {
         protocol_activities:  proto.activities,
         protocol_acv:         proto.acv,
         protocol_supplements: proto.supplements,
-        custom_activities:  customItems.activities,
-        custom_acv:         customItems.acv,
-        custom_supplements: customItems.supplements,
+        custom_activities:    customItems.activities,
+        custom_acv:           customItems.acv,
+        custom_supplements:   customItems.supplements,
+        item_overrides:       overrides,
       });
       onSaved(data);
       onClose();
@@ -192,93 +249,164 @@ function EditMemberModal({ member, onClose, onSaved }) {
     }
   };
 
-  // Custom items added per member (beyond defaults)
-  const [customItems, setCustomItems] = useState({
-    activities:  member.custom_activities  || [],
-    acv:         member.custom_acv         || [],
-    supplements: member.custom_supplements || [],
-  });
-  const [adding, setAdding] = useState({ activities: false, acv: false, supplements: false });
-  const [newLabel, setNewLabel] = useState({ activities: '', acv: '', supplements: '' });
+  // ── Inline timing edit form ────────────────────────────────────────────────
+  const EditForm = ({ onSave, onCancel }) => (
+    <div className="mt-2 ml-7 space-y-2 p-2.5 bg-stone-50 rounded-xl border border-stone-200">
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <p className="text-xs text-stone-400 mb-1">Label</p>
+          <input value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
+            placeholder="Item name"
+            className="w-full text-sm border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+        </div>
+      </div>
+      <div>
+        <p className="text-xs text-stone-400 mb-1">Description (optional)</p>
+        <input value={draft.sub} onChange={e => setDraft(d => ({ ...d, sub: e.target.value }))}
+          placeholder="e.g. 30 min · 6:30–7:00 AM"
+          className="w-full text-sm border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <p className="text-xs text-stone-400 mb-1">From</p>
+          <input type="time" value={draft.fromTime} onChange={e => setDraft(d => ({ ...d, fromTime: e.target.value }))}
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+        </div>
+        <div>
+          <p className="text-xs text-stone-400 mb-1">To</p>
+          <input type="time" value={draft.toTime} onChange={e => setDraft(d => ({ ...d, toTime: e.target.value }))}
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+        </div>
+        <div>
+          <p className="text-xs text-stone-400 mb-1">Duration</p>
+          <input value={draft.totalTime} onChange={e => setDraft(d => ({ ...d, totalTime: e.target.value }))}
+            placeholder="30 min"
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+        </div>
+      </div>
+      <div className="flex gap-2 pt-1">
+        <button onClick={onSave}
+          className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700">
+          ✓ Save
+        </button>
+        <button onClick={onCancel}
+          className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-700 rounded-lg border border-stone-200">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 
-  const addCustomItem = (key) => {
-    const label = newLabel[key].trim();
-    if (!label) return;
-    const id = `custom_${Date.now()}`;
-    const item = { id, label, sub: '', custom: true };
-    setCustomItems(c => ({ ...c, [key]: [...c[key], item] }));
-    // Auto-assign it
-    setProto(p => {
-      const allDefault = [...(key === 'activities' ? ACTIVITIES : key === 'acv' ? ACV_ITEMS : SUPPLEMENTS)];
-      const current = p[key] || allDefault.map(i => i.id);
-      return { ...p, [key]: [...current, id] };
-    });
-    setNewLabel(n => ({ ...n, [key]: '' }));
-    setAdding(a => ({ ...a, [key]: false }));
-  };
+  // ── Add new custom item form ───────────────────────────────────────────────
+  const AddForm = ({ protoKey }) => (
+    <div className="mt-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2">
+      <p className="text-xs font-semibold text-emerald-700">New item</p>
+      <input autoFocus value={newItem.label}
+        onChange={e => setNewItem(n => ({ ...n, label: e.target.value }))}
+        onKeyDown={e => e.key === 'Enter' && confirmAddCustom(protoKey)}
+        placeholder="Item name (required)"
+        className="w-full text-sm border border-emerald-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-emerald-500 bg-white" />
+      <input value={newItem.sub}
+        onChange={e => setNewItem(n => ({ ...n, sub: e.target.value }))}
+        placeholder="Description (optional)"
+        className="w-full text-sm border border-stone-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <p className="text-xs text-stone-400 mb-1">From</p>
+          <input type="time" value={newItem.fromTime}
+            onChange={e => setNewItem(n => ({ ...n, fromTime: e.target.value }))}
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+        </div>
+        <div>
+          <p className="text-xs text-stone-400 mb-1">To</p>
+          <input type="time" value={newItem.toTime}
+            onChange={e => setNewItem(n => ({ ...n, toTime: e.target.value }))}
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+        </div>
+        <div>
+          <p className="text-xs text-stone-400 mb-1">Duration</p>
+          <input value={newItem.totalTime}
+            onChange={e => setNewItem(n => ({ ...n, totalTime: e.target.value }))}
+            placeholder="30 min"
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={() => confirmAddCustom(protoKey)}
+          className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700">
+          + Add
+        </button>
+        <button onClick={() => { setAddingKey(null); setNewItem({ label:'',sub:'',fromTime:'',toTime:'',totalTime:'' }); }}
+          className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-700 rounded-lg border border-stone-200">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 
-  const removeCustomItem = (key, id) => {
-    setCustomItems(c => ({ ...c, [key]: c[key].filter(i => i.id !== id) }));
-    setProto(p => ({ ...p, [key]: (p[key] || []).filter(x => x !== id) }));
-  };
-
+  // ── Protocol section ───────────────────────────────────────────────────────
   const ProtocolSection = ({ label, icon, items, protoKey }) => {
-    const allItems  = [...items, ...customItems[protoKey]];
-    const assigned  = proto[protoKey] || items.map(i => i.id);
-    const isAdding  = adding[protoKey];
+    const allItems = [...items, ...customItems[protoKey]];
+    const assigned = proto[protoKey] || items.map(i => i.id);
 
     return (
-      <div className="border border-stone-100 rounded-2xl p-3 space-y-2">
-        <p className="text-xs font-bold tracking-widest uppercase text-stone-400">{icon} {label}</p>
+      <div className="border border-stone-100 rounded-2xl p-3 space-y-1">
+        <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mb-2">{icon} {label}</p>
 
-        {/* Default items */}
-        {allItems.map(item => (
-          <label key={item.id} className="flex items-start gap-3 cursor-pointer group">
-            <input type="checkbox"
-              checked={assigned.includes(item.id)}
-              onChange={() => toggleProto(protoKey, item.id, items)}
-              className="mt-0.5 w-4 h-4 accent-emerald-600 flex-shrink-0"
-            />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-stone-700">{item.icon ? `${item.icon} ` : ''}{item.label}</div>
-              {item.sub && <div className="text-xs text-stone-400">{item.sub}</div>}
+        {allItems.map(item => {
+          const ov       = overrides[item.id] || {};
+          const dispLabel = ov.label || item.label || '';
+          const dispSub   = ov.sub   || item.sub   || '';
+          const timing    = [ov.fromTime, ov.toTime].filter(Boolean).join('–');
+          const duration  = ov.totalTime || '';
+          const subLine   = [duration, timing].filter(Boolean).join(' · ') || dispSub;
+          const isEditing = editingId === item.id;
+          const enabled   = assigned.includes(item.id);
+
+          return (
+            <div key={item.id} className={`rounded-xl transition-colors ${enabled ? '' : 'opacity-40'}`}>
+              <div className="flex items-center gap-2 py-1.5">
+                {/* Checkbox */}
+                <input type="checkbox" checked={enabled}
+                  onChange={() => toggleProto(protoKey, item.id, items)}
+                  className="w-4 h-4 accent-emerald-600 flex-shrink-0 cursor-pointer" />
+
+                {/* Label + sub */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-stone-700 leading-tight">{dispLabel}</div>
+                  {subLine && <div className="text-xs text-stone-400 mt-0.5">{subLine}</div>}
+                </div>
+
+                {/* Edit button */}
+                <button onClick={() => isEditing ? setEditingId(null) : startEdit(item)}
+                  className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                    isEditing ? 'bg-emerald-100 text-emerald-700' : 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50'}`}>
+                  ✏️
+                </button>
+
+                {/* Delete button */}
+                <button onClick={() => deleteItem(protoKey, item.id, !!item.custom)}
+                  className="text-xs px-2 py-1 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                  🗑
+                </button>
+              </div>
+
+              {/* Inline edit form */}
+              {isEditing && <EditForm onSave={() => saveEdit(item.id)} onCancel={() => setEditingId(null)} />}
             </div>
-            {item.custom && (
-              <button onClick={() => removeCustomItem(protoKey, item.id)}
-                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs px-1 flex-shrink-0 transition-opacity">
-                ✕
-              </button>
-            )}
-          </label>
-        ))}
+          );
+        })}
 
-        {/* Add custom item inline */}
-        {isAdding ? (
-          <div className="flex gap-2 mt-2">
-            <input
-              autoFocus
-              type="text"
-              value={newLabel[protoKey]}
-              onChange={e => setNewLabel(n => ({ ...n, [protoKey]: e.target.value }))}
-              onKeyDown={e => { if (e.key === 'Enter') addCustomItem(protoKey); if (e.key === 'Escape') setAdding(a => ({ ...a, [protoKey]: false })); }}
-              placeholder="e.g. Evening Walk"
-              className="flex-1 text-sm border border-emerald-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-emerald-500"
-            />
-            <button onClick={() => addCustomItem(protoKey)}
-              className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700">
-              Add
+        {/* Add item */}
+        {addingKey === protoKey
+          ? <AddForm protoKey={protoKey} />
+          : (
+            <button onClick={() => setAddingKey(protoKey)}
+              className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-800 font-semibold mt-2 px-1">
+              <span className="text-base leading-none">+</span> Add custom item
             </button>
-            <button onClick={() => setAdding(a => ({ ...a, [protoKey]: false }))}
-              className="text-xs px-2 py-1.5 text-stone-400 hover:text-stone-600">
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => setAdding(a => ({ ...a, [protoKey]: true }))}
-            className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-800 font-semibold mt-1 px-1">
-            <span className="text-base leading-none">+</span> Add custom item
-          </button>
-        )}
+          )
+        }
       </div>
     );
   };
@@ -299,8 +427,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
       {tab === 'identity' && (
         <div className="space-y-3">
           <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Identity</p>
-          <Field label="Full Name"         value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
-          <Field label="Phone (Login ID)"  type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
+          <Field label="Full Name"        value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
+          <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
 
           <div className="border border-stone-100 rounded-2xl p-3 space-y-3">
             <div className="flex items-center justify-between">
@@ -331,11 +459,11 @@ function EditMemberModal({ member, onClose, onSaved }) {
       {tab === 'protocol' && (
         <div className="space-y-3">
           <p className="text-xs text-stone-400 bg-amber-50 px-3 py-2 rounded-xl">
-            ✅ Checked = assigned to this member. Uncheck to remove from their daily log.
+            ✅ Check/uncheck to assign. ✏️ Edit label & timing. 🗑 Delete item.
           </p>
           <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />
-          <ProtocolSection label="Apple Cider Vinegar"  icon="🍶" items={ACV_ITEMS}   protoKey="acv"         />
-          <ProtocolSection label="Supplements"          icon="💊" items={SUPPLEMENTS} protoKey="supplements" />
+          <ProtocolSection label="Apple Cider Vinegar" icon="🍶" items={ACV_ITEMS}   protoKey="acv"         />
+          <ProtocolSection label="Supplements"         icon="💊" items={SUPPLEMENTS} protoKey="supplements" />
         </div>
       )}
 
