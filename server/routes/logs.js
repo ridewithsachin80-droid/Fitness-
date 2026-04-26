@@ -36,12 +36,28 @@ router.get('/:date', authMW, async (req, res) => {
       return res.status(400).json({ error: 'patientId query param required for monitors' });
     }
 
-    const result = await pool.query(
-      'SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2',
-      [patientId, date]
-    );
+    const [logResult, profileResult] = await Promise.all([
+      pool.query('SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2', [patientId, date]),
+      pool.query('SELECT protocol_activities, protocol_acv, protocol_supplements FROM patient_profiles WHERE user_id = $1', [patientId]),
+    ]);
 
-    res.json(result.rows[0] || null);
+    const log     = logResult.rows[0] || null;
+    const profile = profileResult.rows[0] || {};
+
+    res.json(log ? {
+      ...log,
+      protocol: {
+        activities:  profile.protocol_activities  || null,
+        acv:         profile.protocol_acv         || null,
+        supplements: profile.protocol_supplements || null,
+      }
+    } : {
+      protocol: {
+        activities:  profile.protocol_activities  || null,
+        acv:         profile.protocol_acv         || null,
+        supplements: profile.protocol_supplements || null,
+      }
+    });
   } catch (err) {
     console.error('GET /logs/:date error:', err);
     res.status(500).json({ error: 'Failed to fetch log' });
