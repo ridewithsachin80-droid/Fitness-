@@ -155,7 +155,8 @@ router.put('/members/:id', async (req, res) => {
   const { id } = req.params;
   const { name, phone, pin, height_cm, start_weight, target_weight, conditions,
           protocol_activities, protocol_acv, protocol_supplements,
-          custom_activities, custom_acv, custom_supplements } = req.body;
+          custom_activities, custom_acv, custom_supplements,
+          item_overrides } = req.body;
 
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
@@ -186,8 +187,8 @@ router.put('/members/:id', async (req, res) => {
     await client.query(`
       INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target,
         protocol_activities, protocol_acv, protocol_supplements,
-        custom_activities, custom_acv, custom_supplements)
-      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11)
+        custom_activities, custom_acv, custom_supplements, item_overrides)
+      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11,$12)
       ON CONFLICT (user_id) DO UPDATE SET
         height_cm            = EXCLUDED.height_cm,
         start_weight         = EXCLUDED.start_weight,
@@ -199,6 +200,7 @@ router.put('/members/:id', async (req, res) => {
         custom_activities    = EXCLUDED.custom_activities,
         custom_acv           = EXCLUDED.custom_acv,
         custom_supplements   = EXCLUDED.custom_supplements,
+        item_overrides       = EXCLUDED.item_overrides,
         updated_at           = NOW()
     `, [
       id,
@@ -212,6 +214,7 @@ router.put('/members/:id', async (req, res) => {
       JSON.stringify(custom_activities  || []),
       JSON.stringify(custom_acv         || []),
       JSON.stringify(custom_supplements || []),
+      JSON.stringify(item_overrides     || {}),
     ]);
 
     await client.query('COMMIT');
@@ -221,7 +224,8 @@ router.put('/members/:id', async (req, res) => {
       `SELECT u.id, u.name, u.phone, u.active,
          pp.height_cm, pp.start_weight, pp.target_weight,
          pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
-         pp.custom_activities, pp.custom_acv, pp.custom_supplements
+         pp.custom_activities, pp.custom_acv, pp.custom_supplements,
+         pp.item_overrides
        FROM users u
        LEFT JOIN patient_profiles pp ON pp.user_id=u.id
        WHERE u.id=$1`,
