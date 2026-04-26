@@ -123,6 +123,104 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
   );
 }
 
+// ── Edit Member modal ─────────────────────────────────────────────────────────
+function EditMemberModal({ member, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name:          member.name          || '',
+    phone:         member.phone         || '',
+    pin:           '',
+    confirmPin:    '',
+    height_cm:     member.height_cm     || '',
+    start_weight:  member.start_weight  || '',
+    target_weight: member.target_weight || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+  const [showPin, setShowPin] = useState(false);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.name.trim() || !form.phone.trim()) {
+      setError('Name and phone are required'); return;
+    }
+    if (form.pin && form.pin !== form.confirmPin) {
+      setError('PINs do not match'); return;
+    }
+    setSaving(true); setError('');
+    try {
+      const { data } = await api.put(`/admin/members/${member.id}`, {
+        name:          form.name.trim(),
+        phone:         form.phone.trim(),
+        pin:           form.pin || undefined,
+        height_cm:     form.height_cm     || null,
+        start_weight:  form.start_weight  || null,
+        target_weight: form.target_weight || null,
+      });
+      onSaved(data);
+      onClose();
+    } catch (e) {
+      setError(e.response?.data?.error || 'Failed to save changes');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title={`Edit — ${member.name}`} onClose={onClose}>
+      <div className="space-y-3">
+
+        {/* Identity */}
+        <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Identity</p>
+        <Field label="Full Name"    value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
+        <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
+
+        {/* PIN section */}
+        <div className="border border-stone-100 rounded-2xl p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold tracking-widest uppercase text-stone-400">PIN / Password</p>
+            <button
+              onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
+              className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
+                showPin
+                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+              }`}>
+              {showPin ? 'Cancel' : '🔑 Change PIN'}
+            </button>
+          </div>
+          {showPin ? (
+            <>
+              <Field label="New PIN (min 4 digits)" type="password" value={form.pin}
+                onChange={v=>set('pin',v)} placeholder="e.g. 1234" />
+              <Field label="Confirm PIN" type="password" value={form.confirmPin}
+                onChange={v=>set('confirmPin',v)} placeholder="Repeat PIN" />
+              <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
+                Member can use this PIN to log in instead of OTP.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-stone-400">Leave unchanged — member uses OTP by default.</p>
+          )}
+        </div>
+
+        {/* Profile */}
+        <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mt-1">Profile</p>
+        <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
+        <Field label="Start Weight (kg)"  type="number" value={form.start_weight}  onChange={v=>set('start_weight',v)}  placeholder="85" />
+        <Field label="Target Weight (kg)" type="number" value={form.target_weight} onChange={v=>set('target_weight',v)} placeholder="70" />
+
+        {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+
+        <button onClick={submit} disabled={saving}
+          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+            rounded-xl transition-colors disabled:opacity-50 mt-2">
+          {saving ? 'Saving…' : 'Save Changes'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Add Monitor modal ─────────────────────────────────────────────────────────
 function AddMonitorModal({ onClose, onAdded }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'monitor' });
@@ -235,6 +333,7 @@ export default function AdminDashboard() {
   const [showAddMember,  setShowAddMember]  = useState(false);
   const [showAddMonitor, setShowAddMonitor] = useState(false);
   const [assignTarget,   setAssignTarget]   = useState(null);
+  const [editTarget,     setEditTarget]     = useState(null);
   const [search,    setSearch]    = useState('');
 
   const load = useCallback(async () => {
@@ -401,6 +500,11 @@ export default function AdminDashboard() {
                             rounded-lg hover:bg-emerald-100 transition-colors">
                           Assign
                         </button>
+                        <button onClick={() => setEditTarget(m)}
+                          className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-700 font-semibold
+                            rounded-lg hover:bg-blue-100 transition-colors">
+                          ✏️ Edit
+                        </button>
                         <button onClick={() => navigate(`/monitor/${m.id}`)}
                           className="text-xs px-2.5 py-1.5 bg-stone-50 text-stone-600 font-semibold
                             rounded-lg hover:bg-stone-100 transition-colors">
@@ -488,6 +592,12 @@ export default function AdminDashboard() {
         onAssigned={(pid, mid, mname) => {
           setMembers(prev => prev.map(m => m.id === pid ? { ...m, monitor_id: mid, monitor_name: mname } : m));
           setAssignTarget(null);
+        }} />}
+      {editTarget && <EditMemberModal member={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={updated => {
+          setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
+          setEditTarget(null);
         }} />}
     </div>
   );
