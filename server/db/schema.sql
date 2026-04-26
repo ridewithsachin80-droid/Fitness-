@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS patient_profiles (
   custom_activities    JSONB DEFAULT '[]',   -- [{id,label,sub},...] member-specific extras
   custom_acv           JSONB DEFAULT '[]',
   custom_supplements   JSONB DEFAULT '[]',
+  item_overrides       JSONB DEFAULT '{}',   -- {[itemId]: {label,sub,fromTime,toTime,totalTime}}
   protocol_supplements JSONB DEFAULT NULL,   -- ["b12","d3","fishoil",...] or null
   updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
