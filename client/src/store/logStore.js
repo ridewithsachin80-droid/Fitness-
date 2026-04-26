@@ -4,22 +4,27 @@ import api from '../api/client';
 import { saveLogWithFallback } from '../hooks/useOfflineQueue';
 
 export const useLogStore = create((set, get) => ({
-  date:    today(),
-  log:     emptyLog(),
-  loading: false,
-  saving:  false,
-  saved:   false,
-  error:   null,
+  date:     today(),
+  log:      emptyLog(),
+  protocol: null,   // { activities: [...ids] | null, acv: [...ids] | null, supplements: [...ids] | null }
+  loading:  false,
+  saving:   false,
+  saved:    false,
+  error:    null,
 
   /** Switch to a different date and load its log from the API */
   setDate: async (date) => {
     set({ date, loading: true, saved: false, error: null });
     try {
       const { data } = await api.get(`/logs/${date}`);
-      set({ log: data ? mapServerLog(data) : emptyLog(), loading: false });
+      set({
+        log:      data ? mapServerLog(data) : emptyLog(),
+        protocol: data?.protocol ?? null,
+        loading:  false,
+      });
     } catch (err) {
       console.error('Failed to load log for', date, err);
-      set({ log: emptyLog(), loading: false, error: 'Failed to load log' });
+      set({ log: emptyLog(), protocol: null, loading: false, error: 'Failed to load log' });
     }
   },
 
