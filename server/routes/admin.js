@@ -149,6 +149,76 @@ router.post('/assign', async (req, res) => {
   }
 });
 
+// ── PUT /api/admin/members/:id ────────────────────────────────────────────────
+// Full edit of a member: name, phone, PIN, profile fields
+router.put('/members/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, phone, pin, height_cm, start_weight, target_weight, conditions } = req.body;
+
+  if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Build user update — optionally hash new PIN
+    if (pin && pin.trim()) {
+      if (pin.trim().length < 4) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(400).json({ error: 'PIN must be at least 4 digits' });
+      }
+      const pinHash = await bcrypt.hash(pin.trim(), 10);
+      await client.query(
+        `UPDATE users SET name=$1, phone=$2, password=$3 WHERE id=$4 AND role='patient'`,
+        [name.trim(), phone.trim(), pinHash, id]
+      );
+    } else {
+      await client.query(
+        `UPDATE users SET name=$1, phone=$2 WHERE id=$3 AND role='patient'`,
+        [name.trim(), phone.trim(), id]
+      );
+    }
+
+    // Upsert patient profile
+    await client.query(`
+      INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target)
+      VALUES ($1,$2,$3,$4,$5,3000)
+      ON CONFLICT (user_id) DO UPDATE SET
+        height_cm     = EXCLUDED.height_cm,
+        start_weight  = EXCLUDED.start_weight,
+        target_weight = EXCLUDED.target_weight,
+        conditions    = EXCLUDED.conditions,
+        updated_at    = NOW()
+    `, [
+      id,
+      height_cm     || null,
+      start_weight  || null,
+      target_weight || null,
+      JSON.stringify(conditions || []),
+    ]);
+
+    await client.query('COMMIT');
+
+    // Return updated member
+    const result = await client.query(
+      `SELECT u.id, u.name, u.phone, u.active,
+         pp.height_cm, pp.start_weight, pp.target_weight
+       FROM users u
+       LEFT JOIN patient_profiles pp ON pp.user_id=u.id
+       WHERE u.id=$1`,
+      [id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (err.code === '23505') return res.status(409).json({ error: 'Phone number already in use' });
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ── PATCH /api/admin/members/:id/toggle ───────────────────────────────────────
 // Activate / deactivate a member
 router.patch('/members/:id/toggle', async (req, res) => {
