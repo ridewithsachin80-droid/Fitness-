@@ -26,31 +26,58 @@ export const SUPPLEMENTS = [
   { id: 'electrolyte',label: 'Electrolyte',       sub: 'Sugar-free · post activity' },
 ];
 
+// ── Nutrition database (per 100g) ─────────────────────────────────────────────
+// { cal: kcal, pro: protein g, carb: carbs g, fat: fat g }
+export const NUTRITION_DB = {
+  'Epigamia Greek Yoghurt':   { cal: 73,  pro: 6.5, carb: 5.0, fat: 2.8 },
+  'Chia Seeds':               { cal: 486, pro: 17,  carb: 42,  fat: 31  },
+  'Paneer (Low Fat)':         { cal: 204, pro: 18,  carb: 4.0, fat: 13  },
+  'Avocado':                  { cal: 160, pro: 2.0, carb: 9.0, fat: 15  },
+  'Leafy Greens':             { cal: 25,  pro: 2.5, carb: 4.0, fat: 0.4 },
+  'Non-Starchy Vegetables':   { cal: 30,  pro: 2.0, carb: 5.0, fat: 0.3 },
+  'Millets':                  { cal: 378, pro: 11,  carb: 73,  fat: 4.2 },
+  'Brown/Red Rice':           { cal: 216, pro: 5.0, carb: 45,  fat: 1.8 },
+  'Macadamia Nuts':           { cal: 718, pro: 7.9, carb: 14,  fat: 76  },
+  'Pecan Nuts':               { cal: 691, pro: 9.2, carb: 14,  fat: 72  },
+  'Almonds':                  { cal: 579, pro: 21,  carb: 22,  fat: 50  },
+  'Ghee':                     { cal: 900, pro: 0,   carb: 0,   fat: 99  },
+  'Tomato':                   { cal: 18,  pro: 0.9, carb: 3.9, fat: 0.2 },
+  'Flaxseed Oil':             { cal: 884, pro: 0,   carb: 0,   fat: 100 },
+  'Nutritional Yeast':        { cal: 325, pro: 50,  carb: 38,  fat: 5.0 },
+  'ACV (Apple Cider Vinegar)':{ cal: 22,  pro: 0,   carb: 0.9, fat: 0   },
+  'Eggs':                     { cal: 155, pro: 13,  carb: 1.1, fat: 11  },
+  'Tofu':                     { cal: 76,  pro: 8.1, carb: 1.9, fat: 4.8 },
+  'Broccoli':                 { cal: 34,  pro: 2.8, carb: 7.0, fat: 0.4 },
+  'Cucumber':                 { cal: 15,  pro: 0.7, carb: 3.6, fat: 0.1 },
+  'Spinach':                  { cal: 23,  pro: 2.9, carb: 3.6, fat: 0.4 },
+  'Oats':                     { cal: 389, pro: 17,  carb: 66,  fat: 7.0 },
+  'Chicken Breast':           { cal: 165, pro: 31,  carb: 0,   fat: 3.6 },
+  'Fish (Rohu/Catla)':        { cal: 97,  pro: 17,  carb: 0,   fat: 2.8 },
+  'Dal (Cooked)':             { cal: 116, pro: 9.0, carb: 20,  fat: 0.4 },
+  'Banana':                   { cal: 89,  pro: 1.1, carb: 23,  fat: 0.3 },
+  'Apple':                    { cal: 52,  pro: 0.3, carb: 14,  fat: 0.2 },
+  'Coconut Oil':              { cal: 862, pro: 0,   carb: 0,   fat: 100 },
+  'Peanut Butter':            { cal: 588, pro: 25,  carb: 20,  fat: 50  },
+  'Whole Milk':               { cal: 61,  pro: 3.2, carb: 4.8, fat: 3.3 },
+  'Sweet Potato':             { cal: 86,  pro: 1.6, carb: 20,  fat: 0.1 },
+  'Chapati/Roti':             { cal: 297, pro: 8.0, carb: 61,  fat: 3.7 },
+};
+
+/** Get nutrition for a food item (grams). Returns { cal, pro, carb, fat } */
+export const getNutrition = (name, grams) => {
+  const db = NUTRITION_DB[name];
+  if (!db || !grams) return null;
+  const factor = grams / 100;
+  return {
+    cal:  Math.round(db.cal  * factor),
+    pro:  +(db.pro  * factor).toFixed(1),
+    carb: +(db.carb * factor).toFixed(1),
+    fat:  +(db.fat  * factor).toFixed(1),
+  };
+};
+
 // ── Food presets for autocomplete ────────────────────────────────────────────
-export const FOOD_PRESETS = [
-  'Epigamia Greek Yoghurt',
-  'Chia Seeds',
-  'Paneer (Low Fat)',
-  'Avocado',
-  'Leafy Greens',
-  'Non-Starchy Vegetables',
-  'Millets',
-  'Brown/Red Rice',
-  'Macadamia Nuts',
-  'Pecan Nuts',
-  'Almonds',
-  'Ghee',
-  'Tomato',
-  'Flaxseed Oil',
-  'Nutritional Yeast',
-  'ACV (Apple Cider Vinegar)',
-  'Eggs',
-  'Tofu',
-  'Broccoli',
-  'Cucumber',
-  'Spinach',
-  'Oats',
-];
+export const FOOD_PRESETS = Object.keys(NUTRITION_DB);
 
 // ── Compliance totals ────────────────────────────────────────────────────────
 export const TOTAL_ACTIVITIES   = ACTIVITIES.length;   // 6
@@ -65,13 +92,15 @@ export const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** Formats YYYY-MM-DD as "Mon, 3 Jan" in Indian locale */
-export const formatDate = (dateStr) =>
-  new Date(dateStr + 'T12:00:00').toLocaleDateString('en-IN', {
+/** Formats YYYY-MM-DD (or full ISO timestamp) as "Mon, 3 Jan" in Indian locale */
+export const formatDate = (dateStr) => {
+  const d = String(dateStr).slice(0, 10); // handles both "2026-04-26" and "2026-04-26T00:00:00.000Z"
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-IN', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
+};
 
 /** Blank log template */
 export const emptyLog = () => ({
