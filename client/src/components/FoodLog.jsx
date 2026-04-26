@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FOOD_PRESETS } from '../constants';
+import { FOOD_PRESETS, getNutrition } from '../constants';
 
 const MEALS = ['Meal 1', 'Meal 2', 'Meal 3'];
 
@@ -54,9 +54,14 @@ export default function FoodLog({ items = [], onChange }) {
             <div className="flex items-center gap-2 mb-1.5">
               <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">{m}</span>
               {mealItems.length > 0 && (
-                <span className="text-xs text-stone-300">
-                  {mealItems.reduce((sum, i) => sum + i.grams, 0).toFixed(0)}g total
-                </span>
+                <>
+                  <span className="text-xs text-stone-300">
+                    {mealItems.reduce((sum, i) => sum + i.grams, 0).toFixed(0)}g
+                  </span>
+                  <span className="text-xs font-semibold text-orange-500">
+                    {mealItems.reduce((sum, i) => sum + (getNutrition(i.name, i.grams)?.cal || 0), 0)} kcal
+                  </span>
+                </>
               )}
             </div>
 
@@ -64,28 +69,41 @@ export default function FoodLog({ items = [], onChange }) {
               <p className="text-xs text-stone-300 italic px-2 py-1">Nothing logged yet</p>
             ) : (
               <div className="space-y-1">
-                {mealItems.map((item) => (
+                {mealItems.map((item) => {
+                  const n = getNutrition(item.name, item.grams);
+                  return (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between py-2 px-3 rounded-xl bg-stone-50 group"
+                    className="py-2 px-3 rounded-xl bg-stone-50 group"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-medium text-stone-700 truncate">{item.name}</span>
-                      <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">
-                        {item.grams}g
-                      </span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium text-stone-700 truncate">{item.name}</span>
+                        <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">
+                          {item.grams}g
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => remove(item.id)}
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center
+                          justify-center rounded-full text-stone-300 hover:text-red-400
+                          hover:bg-red-50 transition-all flex-shrink-0 ml-2"
+                        aria-label="Remove item"
+                      >
+                        ×
+                      </button>
                     </div>
-                    <button
-                      onClick={() => remove(item.id)}
-                      className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center
-                        justify-center rounded-full text-stone-300 hover:text-red-400
-                        hover:bg-red-50 transition-all flex-shrink-0 ml-2"
-                      aria-label="Remove item"
-                    >
-                      ×
-                    </button>
+                    {n && (
+                      <div className="flex gap-3 mt-1">
+                        <span className="text-xs font-bold text-orange-500">{n.cal} kcal</span>
+                        <span className="text-xs text-blue-500">P {n.pro}g</span>
+                        <span className="text-xs text-amber-500">C {n.carb}g</span>
+                        <span className="text-xs text-purple-500">F {n.fat}g</span>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
