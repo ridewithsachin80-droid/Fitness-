@@ -25,13 +25,7 @@ async function runSchema() {
 }
 
 async function seedIfEmpty() {
-  const { rows } = await pool.query("SELECT id FROM users WHERE role='admin' LIMIT 1");
-  if (rows.length > 0) {
-    console.log('ℹ️  Users already exist — skipping seed');
-    return;
-  }
-
-  console.log('🌱 Seeding default users…');
+  console.log('🌱 Syncing admin credentials…');
   const bcrypt = require('bcryptjs');
 
   const adminPassword = process.env.ADMIN_PASSWORD || 'ChangeMe@123';
