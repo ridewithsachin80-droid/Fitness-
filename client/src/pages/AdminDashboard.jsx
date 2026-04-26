@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ value, label, icon, color }) {
@@ -123,7 +124,6 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
   );
 }
 
-// ── Edit Member modal ─────────────────────────────────────────────────────────
 function EditMemberModal({ member, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:          member.name          || '',
@@ -134,11 +134,32 @@ function EditMemberModal({ member, onClose, onSaved }) {
     start_weight:  member.start_weight  || '',
     target_weight: member.target_weight || '',
   });
+
+  // Protocol — null means "all items" (default). Array of IDs means only those are assigned.
+  const [proto, setProto] = useState({
+    activities:  member.protocol_activities  || null,
+    acv:         member.protocol_acv         || null,
+    supplements: member.protocol_supplements || null,
+  });
+
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [tab, setTab] = useState('identity'); // 'identity' | 'protocol'
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Toggle an item in a protocol list
+  const toggleProto = (key, id, allItems) => {
+    setProto(p => {
+      const current = p[key] || allItems.map(i => i.id); // if null, expand to all
+      const next = current.includes(id)
+        ? current.filter(x => x !== id)
+        : [...current, id];
+      // If all items selected, store null (means "all")
+      return { ...p, [key]: next.length === allItems.length ? null : next };
+    });
+  };
 
   const submit = async () => {
     if (!form.name.trim() || !form.phone.trim()) {
@@ -156,6 +177,9 @@ function EditMemberModal({ member, onClose, onSaved }) {
         height_cm:     form.height_cm     || null,
         start_weight:  form.start_weight  || null,
         target_weight: form.target_weight || null,
+        protocol_activities:  proto.activities,
+        protocol_acv:         proto.acv,
+        protocol_supplements: proto.supplements,
       });
       onSaved(data);
       onClose();
@@ -165,58 +189,91 @@ function EditMemberModal({ member, onClose, onSaved }) {
     }
   };
 
+  const ProtocolSection = ({ label, icon, items, protoKey }) => {
+    const assigned = proto[protoKey] || items.map(i => i.id);
+    return (
+      <div className="border border-stone-100 rounded-2xl p-3 space-y-2">
+        <p className="text-xs font-bold tracking-widest uppercase text-stone-400">{icon} {label}</p>
+        {items.map(item => (
+          <label key={item.id} className="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox"
+              checked={assigned.includes(item.id)}
+              onChange={() => toggleProto(protoKey, item.id, items)}
+              className="mt-0.5 w-4 h-4 accent-emerald-600 flex-shrink-0"
+            />
+            <div>
+              <div className="text-sm font-medium text-stone-700">{item.icon ? `${item.icon} ` : ''}{item.label}</div>
+              {item.sub && <div className="text-xs text-stone-400">{item.sub}</div>}
+            </div>
+          </label>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <Modal title={`Edit — ${member.name}`} onClose={onClose}>
-      <div className="space-y-3">
-
-        {/* Identity */}
-        <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Identity</p>
-        <Field label="Full Name"    value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
-        <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
-
-        {/* PIN section */}
-        <div className="border border-stone-100 rounded-2xl p-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold tracking-widest uppercase text-stone-400">PIN / Password</p>
-            <button
-              onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
-              className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                showPin
-                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-              }`}>
-              {showPin ? 'Cancel' : '🔑 Change PIN'}
-            </button>
-          </div>
-          {showPin ? (
-            <>
-              <Field label="New PIN (min 4 digits)" type="password" value={form.pin}
-                onChange={v=>set('pin',v)} placeholder="e.g. 1234" />
-              <Field label="Confirm PIN" type="password" value={form.confirmPin}
-                onChange={v=>set('confirmPin',v)} placeholder="Repeat PIN" />
-              <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
-                Member can use this PIN to log in instead of OTP.
-              </p>
-            </>
-          ) : (
-            <p className="text-xs text-stone-400">Leave unchanged — member uses OTP by default.</p>
-          )}
-        </div>
-
-        {/* Profile */}
-        <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mt-1">Profile</p>
-        <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
-        <Field label="Start Weight (kg)"  type="number" value={form.start_weight}  onChange={v=>set('start_weight',v)}  placeholder="85" />
-        <Field label="Target Weight (kg)" type="number" value={form.target_weight} onChange={v=>set('target_weight',v)} placeholder="70" />
-
-        {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
-
-        <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
-            rounded-xl transition-colors disabled:opacity-50 mt-2">
-          {saving ? 'Saving…' : 'Save Changes'}
-        </button>
+      {/* Tab switcher */}
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl mb-4">
+        {[['identity','👤 Identity'],['protocol','📋 Protocol']].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+              tab === id ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500'}`}>
+            {label}
+          </button>
+        ))}
       </div>
+
+      {tab === 'identity' && (
+        <div className="space-y-3">
+          <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Identity</p>
+          <Field label="Full Name"         value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
+          <Field label="Phone (Login ID)"  type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
+
+          <div className="border border-stone-100 rounded-2xl p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold tracking-widest uppercase text-stone-400">PIN / Password</p>
+              <button onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
+                  showPin ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                {showPin ? 'Cancel' : '🔑 Change PIN'}
+              </button>
+            </div>
+            {showPin ? (
+              <>
+                <Field label="New PIN (min 4 digits)" type="password" value={form.pin} onChange={v=>set('pin',v)} placeholder="e.g. 1234" />
+                <Field label="Confirm PIN" type="password" value={form.confirmPin} onChange={v=>set('confirmPin',v)} placeholder="Repeat PIN" />
+              </>
+            ) : (
+              <p className="text-xs text-stone-400">Leave unchanged — member uses existing PIN.</p>
+            )}
+          </div>
+
+          <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mt-1">Profile</p>
+          <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
+          <Field label="Start Weight (kg)"  type="number" value={form.start_weight}  onChange={v=>set('start_weight',v)}  placeholder="85" />
+          <Field label="Target Weight (kg)" type="number" value={form.target_weight} onChange={v=>set('target_weight',v)} placeholder="70" />
+        </div>
+      )}
+
+      {tab === 'protocol' && (
+        <div className="space-y-3">
+          <p className="text-xs text-stone-400 bg-amber-50 px-3 py-2 rounded-xl">
+            ✅ Checked = assigned to this member. Uncheck to remove from their daily log.
+          </p>
+          <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />
+          <ProtocolSection label="Apple Cider Vinegar"  icon="🍶" items={ACV_ITEMS}   protoKey="acv"         />
+          <ProtocolSection label="Supplements"          icon="💊" items={SUPPLEMENTS} protoKey="supplements" />
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl mt-3">{error}</p>}
+
+      <button onClick={submit} disabled={saving}
+        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+          rounded-xl transition-colors disabled:opacity-50 mt-4">
+        {saving ? 'Saving…' : 'Save Changes'}
+      </button>
     </Modal>
   );
 }
