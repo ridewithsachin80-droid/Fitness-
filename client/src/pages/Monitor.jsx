@@ -6,9 +6,10 @@ import {
 } from 'recharts';
 import { getPatient } from '../api/logs';
 import { addLabValue } from '../api/logs';
-import { Card, SectionTitle, BackButton, PageLoader, StatPill } from '../components/UI';
-import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
+import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
+import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition } from '../constants';
 import { useSync } from '../hooks/useSync';
+import { useAuthStore } from '../store/authStore';
 
 // ── Compliance from a raw server log row ──────────────────────────────────────
 function rowCompliance(log) {
@@ -92,6 +93,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
 export default function Monitor() {
   const { patientId } = useParams();
   const navigate      = useNavigate();
+  const { user }      = useAuthStore();
   const [data,       setData]    = useState(null);
   const [loading,    setLoading] = useState(true);
   const [showLabForm,setShowLab] = useState(false);
@@ -268,14 +270,99 @@ export default function Monitor() {
                       </div>
                     </div>
 
-                    {/* Row 2 — water / sleep / foods */}
+                    {/* Row 2 — water / sleep / calories */}
                     <div className="grid grid-cols-3 gap-1.5 mb-2">
                       <StatPill value={`${((log.water_ml || 0) / 1000).toFixed(1)}L`} label="Water" color="blue" />
                       <StatPill
                         value={log.sleep?.quality > 0 ? '⭐'.repeat(log.sleep.quality) : '—'}
                         label="Sleep" color="purple" />
-                      <StatPill value={log.food_items?.length || 0} label="Foods" color="stone" />
+                      <StatPill
+                        value={`${(log.food_items || []).reduce((sum, f) => {
+                          const n = getNutrition(f.name, f.grams);
+                          return sum + (n?.cal || 0);
+                        }, 0)} kcal`}
+                        label="Calories" color="stone" />
                     </div>
+
+                    {/* Food items breakdown */}
+                    {log.food_items?.length > 0 && (
+                      <div className="mb-2 bg-white rounded-xl border border-stone-100 overflow-hidden">
+                        <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100 flex justify-between">
+                          <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">🥗 Food Log</span>
+                          <span className="text-xs font-bold text-emerald-700">
+                            {log.food_items.reduce((sum, f) => {
+                              const n = getNutrition(f.name, f.grams);
+                              return sum + (n?.cal || 0);
+                            }, 0)} kcal total
+                          </span>
+                        </div>
+                        {['Meal 1', 'Meal 2', 'Meal 3'].map(meal => {
+                          const mealItems = log.food_items.filter(f => f.meal === meal);
+                          if (!mealItems.length) return null;
+                          const mealCal = mealItems.reduce((s, f) => s + (getNutrition(f.name, f.grams)?.cal || 0), 0);
+                          return (
+                            <div key={meal} className="border-b border-stone-50 last:border-0">
+                              <div className="px-3 py-1 flex justify-between items-center bg-stone-50/50">
+                                <span className="text-xs font-semibold text-stone-400">{meal}</span>
+                                <span className="text-xs text-stone-400">{mealCal} kcal</span>
+                              </div>
+                              {mealItems.map((f, i) => {
+                                const n = getNutrition(f.name, f.grams);
+                                return (
+                                  <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-stone-50">
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-semibold text-stone-700 truncate">{f.name}</div>
+                                      <div className="text-xs text-stone-400">{f.grams}g</div>
+                                    </div>
+                                    {n ? (
+                                      <div className="flex gap-2 text-right flex-shrink-0">
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-orange-600">{n.cal}</div>
+                                          <div className="text-xs text-stone-300">kcal</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-blue-600">{n.pro}g</div>
+                                          <div className="text-xs text-stone-300">pro</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-amber-600">{n.carb}g</div>
+                                          <div className="text-xs text-stone-300">carb</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-purple-600">{n.fat}g</div>
+                                          <div className="text-xs text-stone-300">fat</div>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-stone-300 italic">no data</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                        {/* Daily totals row */}
+                        {(() => {
+                          const totals = log.food_items.reduce((acc, f) => {
+                            const n = getNutrition(f.name, f.grams);
+                            if (!n) return acc;
+                            return { cal: acc.cal + n.cal, pro: acc.pro + n.pro, carb: acc.carb + n.carb, fat: acc.fat + n.fat };
+                          }, { cal: 0, pro: 0, carb: 0, fat: 0 });
+                          return (
+                            <div className="px-3 py-2 bg-emerald-50 flex items-center justify-between">
+                              <span className="text-xs font-bold text-emerald-700">Day Total</span>
+                              <div className="flex gap-2">
+                                <span className="text-xs font-bold text-orange-600">{totals.cal} kcal</span>
+                                <span className="text-xs text-blue-600">{totals.pro.toFixed(1)}g P</span>
+                                <span className="text-xs text-amber-600">{totals.carb.toFixed(1)}g C</span>
+                                <span className="text-xs text-purple-600">{totals.fat.toFixed(1)}g F</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
 
                     {/* Activity pills */}
                     <div className="flex flex-wrap gap-1">
@@ -312,6 +399,7 @@ export default function Monitor() {
           onAdded={(newLab) => setData(d => ({ ...d, labs: [newLab, ...d.labs] }))}
         />
       )}
+      <BottomNav role={user?.role} />
     </div>
   );
 }
