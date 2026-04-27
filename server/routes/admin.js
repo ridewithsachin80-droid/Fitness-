@@ -28,7 +28,7 @@ router.get('/stats', async (req, res) => {
 // ── GET /api/admin/overview ────────────────────────────────────────────────────
 // Sprint 7: Full admin overview — today's activity, 7-day compliance,
 // member alerts, weight progress totals.
-router.get('/overview', authMW, roleCheck('admin'), async (req, res) => {
+router.get('/overview', async (req, res) => {
   try {
     const [statsRes, todayRes, alertsRes, complianceRes, weightRes] = await Promise.all([
       // Total counts
