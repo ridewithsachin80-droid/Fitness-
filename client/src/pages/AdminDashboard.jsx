@@ -126,6 +126,18 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
 
 // ── Edit Member modal ─────────────────────────────────────────────────────────
 function EditMemberModal({ member, onClose, onSaved }) {
+  // ── Fetch full profile on open (list query only has basic fields) ───────────
+  // We use 'data' as the source of truth once loaded; falls back to 'member' prop.
+  const [data, setData] = useState(member);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  useEffect(() => {
+    api.get(`/admin/members/${member.id}`)
+      .then(res => setData({ ...member, ...res.data }))
+      .catch(() => { /* use member prop as fallback */ })
+      .finally(() => setLoadingProfile(false));
+  }, [member.id]);
+
   const [form, setForm] = useState({
     name:          member.name          || '',
     phone:         member.phone         || '',
@@ -135,6 +147,42 @@ function EditMemberModal({ member, onClose, onSaved }) {
     start_weight:  member.start_weight  || '',
     target_weight: member.target_weight || '',
   });
+
+  // Re-init form fields when full profile loads
+  useEffect(() => {
+    if (loadingProfile) return;
+    setForm(f => ({
+      ...f,
+      height_cm:     data.height_cm     || '',
+      start_weight:  data.start_weight  || '',
+      target_weight: data.target_weight || '',
+    }));
+    setProto({
+      activities:  data.protocol_activities  || null,
+      acv:         data.protocol_acv         || null,
+      supplements: data.protocol_supplements || null,
+    });
+    setOverrides(data.item_overrides || {});
+    setCustomItems({
+      activities:  data.custom_activities  || [],
+      acv:         data.custom_acv         || [],
+      supplements: data.custom_supplements || [],
+    });
+    setFasting({
+      start: data.fasting_start ? String(data.fasting_start).slice(0, 5) : '',
+      end:   data.fasting_end   ? String(data.fasting_end).slice(0, 5)   : '',
+      note:  data.fasting_note  || '',
+      label: data.fasting_label || '',
+    });
+    setMacros({
+      kcal:  data.macro_kcal  ? String(data.macro_kcal)  : '',
+      pro:   data.macro_pro   ? String(data.macro_pro)   : '',
+      carb:  data.macro_carb  ? String(data.macro_carb)  : '',
+      fat:   data.macro_fat   ? String(data.macro_fat)   : '',
+      phase: data.macro_phase || '',
+    });
+  }, [loadingProfile]);
+
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
   const [showPin, setShowPin] = useState(false);
