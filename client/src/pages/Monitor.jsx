@@ -269,6 +269,20 @@ export default function Monitor() {
                 const badge = score >= 75 ? { bg: 'bg-emerald-100', text: 'text-emerald-700' }
                             : score >= 50 ? { bg: 'bg-amber-100',   text: 'text-amber-700'   }
                             :               { bg: 'bg-red-100',     text: 'text-red-700'      };
+
+                // Sprint 4: calculate burned kcal from activities + weight
+                const weightKg = parseFloat(log.weight_kg) || 0;
+                const burnedKcal = weightKg > 0
+                  ? ACTIVITIES.reduce((sum, a) => {
+                      if (!log.activities?.[a.id] || !a.met) return sum;
+                      return sum + Math.round(a.met * weightKg * ((a.durationMin || 30) / 60));
+                    }, 0)
+                  : 0;
+                const eatenKcal = (log.food_items || []).reduce((sum, f) => {
+                  const n = calcN(f); return sum + (n?.cal || 0);
+                }, 0);
+                const netKcal = eatenKcal - burnedKcal;
+
                 return (
                   <div key={log.id} className="bg-stone-50 rounded-2xl p-3 border border-stone-100">
                     {/* Row 1 — date, weight, score */}
@@ -286,21 +300,34 @@ export default function Monitor() {
                       </div>
                     </div>
 
-                    {/* Row 2 — water / sleep / calories */}
+                    {/* Row 2 — water / sleep / calories + burn */}
                     <div className="grid grid-cols-3 gap-1.5 mb-2">
                       <StatPill value={`${((log.water_ml || 0) / 1000).toFixed(1)}L`} label="Water" color="blue" />
                       <StatPill
                         value={log.sleep?.quality > 0 ? '⭐'.repeat(log.sleep.quality) : '—'}
                         label="Sleep" color="purple" />
                       <StatPill
-                        value={`${(log.food_items || []).reduce((sum, f) => {
-                          const n = calcN(f);
-                          return sum + (n?.cal || 0);
-                        }, 0)} kcal`}
-                        label="Calories" color="stone" />
+                        value={`${eatenKcal} kcal`}
+                        label="Eaten" color="stone" />
                     </div>
 
-                    {/* Food items breakdown */}
+                    {/* Sprint 4: Burn + Net calorie row */}
+                    {burnedKcal > 0 && (
+                      <div className={`flex items-center justify-between text-xs px-3 py-2 rounded-xl mb-2 ${
+                        netKcal <= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                        : netKcal <= 200 ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                        : 'bg-red-50 text-red-700 border border-red-100'
+                      }`}>
+                        <div className="flex gap-3">
+                          <span>🍽 <strong>{eatenKcal}</strong> eaten</span>
+                          <span>🔥 <strong>{burnedKcal}</strong> burned</span>
+                        </div>
+                        <span className="font-bold">
+                          Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal
+                          {netKcal <= 0 && ' 🎯'}
+                        </span>
+                      </div>
+                    )}
                     {/* Sprint 3: Meal plan adherence indicator */}
                     {data?.profile?.meal_plan?.length > 0 && (
                       <div className="mb-2 bg-white rounded-xl border border-stone-100 overflow-hidden">

@@ -669,14 +669,46 @@ export default function DailyLog() {
 
             {/* Activities */}
             <Card>
-              <SectionTitle icon="🏃">Physical Activity</SectionTitle>
-              <div className="space-y-2">
-                {activeActivities.map(a => (
-                  <CheckRow key={a.id} label={a.label} sub={a.sub} icon={a.icon}
-                    checked={!!log.activities?.[a.id]}
-                    onChange={v => update('activities', { ...log.activities, [a.id]: v })} />
-                ))}
-              </div>
+              {(() => {
+                const weightKg = parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0;
+                const totalBurned = activeActivities.reduce((sum, a) => {
+                  if (!log.activities?.[a.id] || !a.met || !weightKg) return sum;
+                  const ov = (protocol?.item_overrides || {})[a.id];
+                  let mins = a.durationMin || 30;
+                  if (ov?.totalTime) { const m = String(ov.totalTime).match(/(\d+)/); if (m) mins = parseInt(m[1]); }
+                  return sum + Math.round(a.met * weightKg * (mins / 60));
+                }, 0);
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <SectionTitle icon="🏃">Physical Activity</SectionTitle>
+                      {totalBurned > 0 && (
+                        <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
+                          🔥 {totalBurned} kcal burned
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {activeActivities.map(a => {
+                        const isChecked = !!log.activities?.[a.id];
+                        let burnKcal = 0;
+                        if (a.met && weightKg > 0) {
+                          const ov = (protocol?.item_overrides || {})[a.id];
+                          let mins = a.durationMin || 30;
+                          if (ov?.totalTime) { const m = String(ov.totalTime).match(/(\d+)/); if (m) mins = parseInt(m[1]); }
+                          burnKcal = Math.round(a.met * weightKg * (mins / 60));
+                        }
+                        return (
+                          <CheckRow key={a.id} label={a.label} sub={a.sub} icon={a.icon}
+                            checked={isChecked}
+                            burnKcal={burnKcal}
+                            onChange={v => update('activities', { ...log.activities, [a.id]: v })} />
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
             </Card>
 
             {/* ACV */}

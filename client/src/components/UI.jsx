@@ -23,7 +23,7 @@ export function SectionTitle({ children, icon }) {
 }
 
 // ── CheckRow ──────────────────────────────────────────────────────────────────
-export function CheckRow({ checked, onChange, label, sub, icon }) {
+export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
   return (
     <div
       role="checkbox"
@@ -67,6 +67,13 @@ export function CheckRow({ checked, onChange, label, sub, icon }) {
           <div className="text-xs text-stone-400 mt-0.5 leading-tight">{sub}</div>
         )}
       </div>
+
+      {/* Sprint 4: calorie burn badge — shown when checked and weight is known */}
+      {checked && burnKcal > 0 && (
+        <span className="flex-shrink-0 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+          −{burnKcal} kcal
+        </span>
+      )}
     </div>
   );
 }
