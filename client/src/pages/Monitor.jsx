@@ -11,6 +11,22 @@ import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition } from '..
 import { useSync } from '../hooks/useSync';
 import { useAuthStore } from '../store/authStore';
 
+// ── Nutrition helper — Sprint 1 foods have per_100g, legacy fall back to NUTRITION_DB
+function calcN(item) {
+  if (!item) return null;
+  if (item.per_100g) {
+    const f = (item.grams || 0) / 100;
+    const n = item.per_100g;
+    return {
+      cal:  Math.round((n.calories || 0) * f),
+      pro:  +((n.protein    || 0) * f).toFixed(1),
+      carb: +((n.net_carbs != null ? n.net_carbs : n.total_carbs || 0) * f).toFixed(1),
+      fat:  +((n.fat        || 0) * f).toFixed(1),
+    };
+  }
+  return getNutrition(item.name, item.grams);
+}
+
 // ── Compliance from a raw server log row ──────────────────────────────────────
 function rowCompliance(log) {
   if (!log) return 0;
@@ -278,7 +294,7 @@ export default function Monitor() {
                         label="Sleep" color="purple" />
                       <StatPill
                         value={`${(log.food_items || []).reduce((sum, f) => {
-                          const n = getNutrition(f.name, f.grams);
+                          const n = calcN(f);
                           return sum + (n?.cal || 0);
                         }, 0)} kcal`}
                         label="Calories" color="stone" />
@@ -291,7 +307,7 @@ export default function Monitor() {
                           <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">🥗 Food Log</span>
                           <span className="text-xs font-bold text-emerald-700">
                             {log.food_items.reduce((sum, f) => {
-                              const n = getNutrition(f.name, f.grams);
+                              const n = calcN(f);
                               return sum + (n?.cal || 0);
                             }, 0)} kcal total
                           </span>
@@ -299,7 +315,7 @@ export default function Monitor() {
                         {['Meal 1', 'Meal 2', 'Meal 3'].map(meal => {
                           const mealItems = log.food_items.filter(f => f.meal === meal);
                           if (!mealItems.length) return null;
-                          const mealCal = mealItems.reduce((s, f) => s + (getNutrition(f.name, f.grams)?.cal || 0), 0);
+                          const mealCal = mealItems.reduce((s, f) => s + (calcN(f)?.cal || 0), 0);
                           return (
                             <div key={meal} className="border-b border-stone-50 last:border-0">
                               <div className="px-3 py-1 flex justify-between items-center bg-stone-50/50">
@@ -307,7 +323,7 @@ export default function Monitor() {
                                 <span className="text-xs text-stone-400">{mealCal} kcal</span>
                               </div>
                               {mealItems.map((f, i) => {
-                                const n = getNutrition(f.name, f.grams);
+                                const n = calcN(f);
                                 return (
                                   <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-stone-50">
                                     <div className="min-w-0">
@@ -345,7 +361,7 @@ export default function Monitor() {
                         {/* Daily totals row */}
                         {(() => {
                           const totals = log.food_items.reduce((acc, f) => {
-                            const n = getNutrition(f.name, f.grams);
+                            const n = calcN(f);
                             if (!n) return acc;
                             return { cal: acc.cal + n.cal, pro: acc.pro + n.pro, carb: acc.carb + n.carb, fat: acc.fat + n.fat };
                           }, { cal: 0, pro: 0, carb: 0, fat: 0 });
