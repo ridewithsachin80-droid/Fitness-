@@ -185,7 +185,7 @@ router.put('/members/:id', async (req, res) => {
           item_overrides,
           fasting_start, fasting_end, fasting_note, fasting_label,
           macro_kcal, macro_pro, macro_carb, macro_fat, macro_phase,
-          meal_plan } = req.body;
+          meal_plan, rda_overrides } = req.body;
 
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
@@ -219,8 +219,8 @@ router.put('/members/:id', async (req, res) => {
         custom_activities, custom_acv, custom_supplements, item_overrides,
         fasting_start, fasting_end, fasting_note, fasting_label,
         macro_kcal, macro_pro, macro_carb, macro_fat, macro_phase,
-        meal_plan)
-      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+        meal_plan, rda_overrides)
+      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
       ON CONFLICT (user_id) DO UPDATE SET
         height_cm            = EXCLUDED.height_cm,
         start_weight         = EXCLUDED.start_weight,
@@ -243,6 +243,7 @@ router.put('/members/:id', async (req, res) => {
         macro_fat            = EXCLUDED.macro_fat,
         macro_phase          = EXCLUDED.macro_phase,
         meal_plan            = EXCLUDED.meal_plan,
+        rda_overrides        = EXCLUDED.rda_overrides,
         updated_at           = NOW()
     `, [
       id,
@@ -267,6 +268,8 @@ router.put('/members/:id', async (req, res) => {
       macro_fat   ? parseInt(macro_fat)   : null,
       macro_phase || null,
       meal_plan   ? JSON.stringify(meal_plan) : null,
+      rda_overrides && Object.keys(rda_overrides).length > 0
+        ? JSON.stringify(rda_overrides) : '{}',
     ]);
 
     await client.query('COMMIT');

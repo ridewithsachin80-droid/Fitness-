@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import {
   today, formatDate,
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
-  calcCompliance, getNutrition,
+  calcCompliance, getNutrition, RDA_TARGETS,
 } from '../constants';
 import { Card, SectionTitle, CheckRow, OfflineBanner } from '../components/UI';
 import WaterTracker  from '../components/WaterTracker';
@@ -47,33 +47,65 @@ function calcMicros(foodItems = []) {
     const f = item.grams / 100;
     const n = item.per_100g;
     return {
-      fiber:    acc.fiber    + (n.fiber    || 0) * f,
-      omega3:   acc.omega3   + ((n.omega3_epa||0)+(n.omega3_dha||0)+(n.omega3_ala||0)) * f,
+      // Vitamins
+      vit_a:    acc.vit_a    + (n.vit_a    || 0) * f,
+      vit_b1:   acc.vit_b1   + (n.vit_b1   || 0) * f,
+      vit_b2:   acc.vit_b2   + (n.vit_b2   || 0) * f,
+      vit_b3:   acc.vit_b3   + (n.vit_b3   || 0) * f,
+      vit_b5:   acc.vit_b5   + (n.vit_b5   || 0) * f,
+      vit_b6:   acc.vit_b6   + (n.vit_b6   || 0) * f,
       vit_b12:  acc.vit_b12  + (n.vit_b12  || 0) * f,
-      vit_d:    acc.vit_d    + (n.vit_d    || 0) * f,
       vit_c:    acc.vit_c    + (n.vit_c    || 0) * f,
-      calcium:  acc.calcium  + (n.calcium  || 0) * f,
-      iron:     acc.iron     + (n.iron     || 0) * f,
-      magnesium:acc.magnesium+ (n.magnesium|| 0) * f,
-      zinc:     acc.zinc     + (n.zinc     || 0) * f,
+      vit_d:    acc.vit_d    + (n.vit_d    || 0) * f,
+      vit_e:    acc.vit_e    + (n.vit_e    || 0) * f,
+      vit_k:    acc.vit_k    + (n.vit_k    || 0) * f,
       folate:   acc.folate   + (n.folate   || 0) * f,
-      potassium:acc.potassium+ (n.potassium|| 0) * f,
+      biotin:   acc.biotin   + (n.biotin   || 0) * f,
+      choline:  acc.choline  + (n.choline  || 0) * f,
+      // Minerals
+      calcium:    acc.calcium    + (n.calcium    || 0) * f,
+      iron:       acc.iron       + (n.iron       || 0) * f,
+      magnesium:  acc.magnesium  + (n.magnesium  || 0) * f,
+      phosphorus: acc.phosphorus + (n.phosphorus || 0) * f,
+      potassium:  acc.potassium  + (n.potassium  || 0) * f,
+      sodium:     acc.sodium     + (n.sodium     || 0) * f,
+      zinc:       acc.zinc       + (n.zinc       || 0) * f,
+      copper:     acc.copper     + (n.copper     || 0) * f,
+      manganese:  acc.manganese  + (n.manganese  || 0) * f,
+      selenium:   acc.selenium   + (n.selenium   || 0) * f,
+      // Specials
+      omega3_ala:  acc.omega3_ala  + (n.omega3_ala  || 0) * f,
+      omega3_epa:  acc.omega3_epa  + (n.omega3_epa  || 0) * f,
+      omega3_dha:  acc.omega3_dha  + (n.omega3_dha  || 0) * f,
+      omega6:      acc.omega6      + (n.omega6      || 0) * f,
+      fiber:       acc.fiber       + (n.fiber       || 0) * f,
+      lycopene:    acc.lycopene    + (n.lycopene    || 0) * f,
+      beta_glucan: acc.beta_glucan + (n.beta_glucan || 0) * f,
     };
-  }, { fiber:0,omega3:0,vit_b12:0,vit_d:0,vit_c:0,calcium:0,iron:0,magnesium:0,zinc:0,folate:0,potassium:0 });
+  }, {
+    vit_a:0,vit_b1:0,vit_b2:0,vit_b3:0,vit_b5:0,vit_b6:0,vit_b12:0,
+    vit_c:0,vit_d:0,vit_e:0,vit_k:0,folate:0,biotin:0,choline:0,
+    calcium:0,iron:0,magnesium:0,phosphorus:0,potassium:0,sodium:0,
+    zinc:0,copper:0,manganese:0,selenium:0,
+    omega3_ala:0,omega3_epa:0,omega3_dha:0,omega6:0,
+    fiber:0,lycopene:0,beta_glucan:0,
+  });
 }
 
 function addSupplementMicros(base, supplements = {}) {
   const m = { ...base };
-  if (supplements.b12)     m.vit_b12  += 1000;
-  if (supplements.d3)      m.vit_d    += 8571;
-  if (supplements.fishoil) m.omega3   += 360;
-  if (supplements.flax)    m.omega3   += 533;
-  if (supplements.multi) {
-    m.vit_b12 += 2.4; m.vit_d += 600; m.vit_c += 90;
-    m.calcium += 200; m.iron  += 8;   m.magnesium += 100;
-    m.zinc    += 8;   m.folate += 400;
+  if (supplements.b12)     { m.vit_b12  += 1000; }
+  if (supplements.d3)      { m.vit_d    += 8571; }  // 60000 IU / 7 days
+  if (supplements.fishoil) { m.omega3_epa += 180; m.omega3_dha += 120; }
+  if (supplements.flax)    { m.omega3_ala  += 533; }
+  if (supplements.multi)   {
+    m.vit_a += 900; m.vit_b1 += 1.2; m.vit_b2 += 1.3; m.vit_b3 += 16;
+    m.vit_b5 += 5;  m.vit_b6 += 1.7; m.vit_b12 += 2.4; m.vit_c += 90;
+    m.vit_d += 600; m.vit_e += 15;   m.vit_k += 120;   m.folate += 400;
+    m.biotin += 30; m.calcium += 200; m.iron += 8;      m.magnesium += 100;
+    m.zinc += 8;    m.selenium += 55; m.copper += 0.9;  m.manganese += 2.3;
   }
-  if (supplements.yeast) m.vit_b12 += 1.0;
+  if (supplements.yeast)   { m.vit_b12 += 1.0; m.vit_b1 += 0.5; m.vit_b2 += 0.5; m.vit_b3 += 2.75; m.folate += 125; }
   return m;
 }
 
@@ -105,19 +137,9 @@ function calcBurned(activities = {}, activeActivities = [], weightKg, overrides 
   return { items, total };
 }
 
-const RDA = {
-  fiber:    { target: 25,   unit: 'g',   label: 'Fiber',       icon: '🌿' },
-  omega3:   { target: 1000, unit: 'mg',  label: 'Omega-3',     icon: '🐟' },
-  vit_b12:  { target: 2.4,  unit: 'mcg', label: 'Vitamin B12', icon: '💉' },
-  vit_d:    { target: 600,  unit: 'IU',  label: 'Vitamin D',   icon: '☀️' },
-  vit_c:    { target: 65,   unit: 'mg',  label: 'Vitamin C',   icon: '🍊' },
-  calcium:  { target: 1200, unit: 'mg',  label: 'Calcium',     icon: '🦴' },
-  iron:     { target: 8,    unit: 'mg',  label: 'Iron',        icon: '⚙️' },
-  magnesium:{ target: 320,  unit: 'mg',  label: 'Magnesium',   icon: '⚡' },
-  zinc:     { target: 8,    unit: 'mg',  label: 'Zinc',        icon: '🔩' },
-  folate:   { target: 400,  unit: 'mcg', label: 'Folate',      icon: '🧬' },
-  potassium:{ target: 2600, unit: 'mg',  label: 'Potassium',   icon: '🍌' },
-};
+// Key nutrients for the quick summary badge inside MacroProgress
+// Full detail is in the standalone NutritionSummary card below food log
+const QUICK_MICRO_KEYS = ['fiber','omega3_epa','omega3_dha','vit_b12','vit_d','calcium','iron','magnesium','zinc','folate','potassium'];
 
 // ─── Compliance Ring ──────────────────────────────────────────────────────────
 
@@ -232,8 +254,18 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
   const rawMicros  = calcMicros(foodItems);
   const withSupps  = addSupplementMicros(rawMicros, supplements);
   const micros     = addActivityMicros(withSupps, activities, activeActivities);
-  const [showMicros, setShowMicros] = useState(false);
   const hasMicroData = foodItems.some(f => f.per_100g);
+
+  // Quick count badge for MacroProgress — full detail in standalone NutritionSummary
+  const quickMet = hasMicroData ? QUICK_MICRO_KEYS.filter(key => {
+    const meta = RDA_TARGETS[key];
+    if (!meta) return false;
+    const val = key === 'omega3_epa' ? (micros.omega3_epa + micros.omega3_dha)
+               : key === 'omega3_dha' ? 0   // counted in epa
+               : micros[key] || 0;
+    return (val / (meta.rda)) * 100 >= 80;
+  }).length : 0;
+  const quickTotal = QUICK_MICRO_KEYS.filter(k => k !== 'omega3_dha').length;
 
   const burn   = calcBurned(activities, activeActivities, weightKg, overrides);
   const netKcal = Math.round(totals.kcal) - burn.total;
@@ -245,133 +277,131 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
     { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-purple-500', light:'bg-purple-50', text:'text-purple-600' },
   ];
 
-  const microRows = Object.entries(RDA).map(([key, rda]) => {
-    const raw  = micros[key] || 0;
-    const val  = (key==='vit_b12'||key==='folate') ? +raw.toFixed(1) : Math.round(raw);
-    const pct  = Math.min(100, (raw / rda.target) * 100);
-    const color = pct>=80 ? 'bg-emerald-400' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-    const textColor = pct>=80 ? 'text-emerald-600' : pct>=50 ? 'text-amber-600' : 'text-red-500';
-    return { key, ...rda, val, pct, color, textColor };
-  });
-  const microsMet = microRows.filter(m => m.pct >= 80).length;
-
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-3">
-        <SectionTitle icon="🎯">Macro Targets</SectionTitle>
-        {macros.phase && (
-          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">{macros.phase}</span>
-        )}
-      </div>
-
-      {/* Net calorie banner */}
-      {burn.total > 0 && (
-        <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl mb-3 ${
-          netKcal <= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
-          <div className="flex gap-3">
-            <span>🍽 Eaten <strong>{Math.round(totals.kcal)}</strong></span>
-            <span>🔥 Burned <strong>{burn.total}</strong></span>
-          </div>
-          <span className="font-bold">Net {netKcal>0?`+${netKcal}`:netKcal} kcal{netKcal<=0&&' 🎯'}</span>
-        </div>
-      )}
-
-      {/* Macro bars */}
-      <div className="space-y-3">
-        {bars.map(({ key, label, icon, unit, current, target, bg, light, text }) => {
-          const pct = target ? Math.min(100, (current/target)*100) : 0;
-          const over = target && current > target;
-          const remaining = target ? Math.max(0, +(target-current).toFixed(1)) : null;
-          return (
-            <div key={key}>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-semibold text-stone-600">{icon} {label}</span>
-                <div className="flex items-center gap-1.5">
-                  {over && <span className="text-red-500 font-bold">⚠️ over</span>}
-                  <span className={`font-bold ${over?'text-red-500':text}`}>{current}</span>
-                  <span className="text-stone-400">/ {target} {unit}</span>
-                  {remaining!==null && !over && remaining>0 && <span className="text-stone-300">({remaining} left)</span>}
-                </div>
-              </div>
-              <div className={`h-2.5 rounded-full overflow-hidden ${light}`}>
-                <div className={`h-full rounded-full transition-all duration-500 ${bg} ${over?'opacity-50':''}`} style={{width:`${pct}%`}} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Activity burn breakdown */}
-      {burn.items.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">🔥 Calories Burned</p>
-          {burn.items.map(item => (
-            <div key={item.id} className="flex justify-between text-xs">
-              <span className="text-stone-500">{item.label} ({item.mins} min)</span>
-              <span className="font-bold text-orange-500">−{item.kcal} kcal</span>
-            </div>
-          ))}
-          <div className="flex justify-between text-xs font-bold pt-1 border-t border-stone-100">
-            <span className="text-stone-600">Total burned</span>
-            <span className="text-orange-600">−{burn.total} kcal</span>
-          </div>
-        </div>
-      )}
-
-      {/* Total */}
-      {totals.kcal > 0 && (
-        <div className="mt-3 pt-3 border-t border-stone-100 flex justify-between text-xs text-stone-400">
-          <span>Total logged today</span>
-          <span className="font-semibold text-stone-600">
-            {Math.round(totals.kcal)} kcal · P {totals.pro.toFixed(0)}g · C {totals.carb.toFixed(0)}g · F {totals.fat.toFixed(0)}g
-          </span>
-        </div>
-      )}
-
-      {/* Micronutrient toggle */}
+      {/* Micro summary badge — full detail in NutritionSummary card below food log */}
       {hasMicroData && (
-        <div className="mt-3 pt-3 border-t border-stone-100">
-          <button onClick={() => setShowMicros(v => !v)}
-            className="w-full flex items-center justify-between text-xs font-semibold text-stone-500 hover:text-emerald-700 transition-colors">
-            <span>
-              🔬 Key Nutrients
-              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
-                microsMet>=8 ? 'bg-emerald-100 text-emerald-700' :
-                microsMet>=5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
-              }`}>{microsMet}/{microRows.length} met</span>
-            </span>
-            <span>{showMicros ? '▲' : '▼'}</span>
-          </button>
-          {showMicros && (
-            <div className="mt-3 space-y-2">
-              {microRows.map(({ key, label, icon, unit, val, pct, color, textColor, target }) => (
-                <div key={key}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-stone-600 font-medium">{icon} {label}</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`font-bold ${textColor}`}>{val}</span>
-                      <span className="text-stone-400">/ {target} {unit}</span>
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                        pct>=80 ? 'bg-emerald-100 text-emerald-700' :
-                        pct>=50 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
-                      }`}>{Math.round(pct)}%</span>
-                    </div>
-                  </div>
-                  <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{width:`${pct}%`}} />
-                  </div>
-                </div>
-              ))}
-              <p className="text-xs text-stone-400 pt-1 italic">* Includes food + supplements + sunlight.</p>
-            </div>
-          )}
+        <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
+          <span className="text-stone-500 font-medium">🔬 Key Nutrients</span>
+          <span className={`px-2 py-0.5 rounded-full font-bold ${
+            quickMet >= quickTotal*0.8 ? 'bg-emerald-100 text-emerald-700' :
+            quickMet >= quickTotal*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
+          }`}>{quickMet}/{quickTotal} met · see below ↓</span>
         </div>
       )}
     </Card>
   );
 }
 
-// ─── Prescribed Meal Plan Cards (Sprint 3) ────────────────────────────────────
+// ─── Sprint 5: Nutrition Summary Panel (3 tabs) ───────────────────────────────
+
+function NutritionSummary({ foodItems, supplements, activities, activeActivities, rdaOverrides = {} }) {
+  const [tab, setTab] = useState('vitamins');
+
+  const rawMicros  = calcMicros(foodItems);
+  const withSupps  = addSupplementMicros(rawMicros, supplements);
+  const micros     = addActivityMicros(withSupps, activities, activeActivities);
+  const hasMicros  = foodItems.some(f => f.per_100g);
+  if (!hasMicros) return null;
+
+  const VITAMINS = ['vit_a','vit_b1','vit_b2','vit_b3','vit_b5','vit_b6','vit_b12','vit_c','vit_d','vit_e','vit_k','folate','biotin','choline'];
+  const MINERALS = ['calcium','iron','magnesium','phosphorus','potassium','sodium','zinc','copper','manganese','selenium'];
+  const SPECIALS = ['fiber','omega3_ala','omega3_epa','omega3_dha','omega6','lycopene','beta_glucan'];
+
+  const getRda = (key) => {
+    const meta = RDA_TARGETS[key];
+    if (!meta) return null;
+    const override = rdaOverrides[key];
+    return { ...meta, rda: override ? parseFloat(override) : meta.rda };
+  };
+
+  const renderRows = (keys) => keys.map(key => {
+    const meta = getRda(key);
+    if (!meta) return null;
+    const raw  = micros[key] || 0;
+    const dec  = ['vit_b12','folate','biotin','vit_b1','vit_b2','vit_b5','vit_b6','copper','manganese','selenium'].includes(key) ? 1 : 0;
+    const val  = +raw.toFixed(dec);
+    const pct  = Math.min(100, (raw / meta.rda) * 100);
+    const isUpper = meta.upper;
+    const good = isUpper ? (pct <= 100) : (pct >= 80);
+    const warn = isUpper ? (pct > 80 && pct <= 100) : (pct >= 50 && pct < 80);
+    const barCls  = good ? 'bg-emerald-400' : warn ? 'bg-amber-400' : isUpper ? 'bg-red-500' : 'bg-red-400';
+    const textCls = good ? 'text-emerald-600' : warn ? 'text-amber-600' : 'text-red-500';
+    const badgeCls= good ? 'bg-emerald-100 text-emerald-700' : warn ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500';
+    return (
+      <div key={key}>
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="text-stone-600 font-medium">{meta.icon} {meta.label}
+            {rdaOverrides[key] && <span className="ml-1 text-purple-500 text-xs">★</span>}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`font-bold ${textCls}`}>{val}</span>
+            <span className="text-stone-400">/ {meta.rda} {meta.unit}</span>
+            <span className={`font-bold px-1.5 py-0.5 rounded-full text-xs ${badgeCls}`}>
+              {isUpper && pct > 100 ? '⚠️ ' : ''}{Math.round(pct)}%
+            </span>
+          </div>
+        </div>
+        <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-500 ${barCls}`} style={{width:`${pct}%`}} />
+        </div>
+      </div>
+    );
+  });
+
+  const metCount = (keys) => keys.filter(key => {
+    const meta = getRda(key);
+    if (!meta) return false;
+    const pct = ((micros[key]||0) / meta.rda) * 100;
+    return meta.upper ? pct <= 100 : pct >= 80;
+  }).length;
+
+  const vMet = metCount(VITAMINS), mMet = metCount(MINERALS), sMet = metCount(SPECIALS);
+  const totalMet = vMet + mMet + sMet;
+  const totalAll = VITAMINS.length + MINERALS.length + SPECIALS.length;
+  const hasOverrides = Object.keys(rdaOverrides).length > 0;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <SectionTitle icon="🔬">Nutrition Summary</SectionTitle>
+        <div className="flex items-center gap-2">
+          {hasOverrides && <span className="text-xs text-purple-600 font-semibold">★ custom targets</span>}
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+            totalMet >= totalAll*0.8 ? 'bg-emerald-100 text-emerald-700' :
+            totalMet >= totalAll*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
+          }`}>{totalMet}/{totalAll}</span>
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl mb-4">
+        {[
+          ['vitamins', `💊 Vitamins`,  vMet, VITAMINS.length],
+          ['minerals', `⛏ Minerals`,  mMet, MINERALS.length],
+          ['specials', `🌿 Specials`,  sMet, SPECIALS.length],
+        ].map(([id, label, met, total]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
+              tab===id ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>
+            <div className="text-xs font-bold">{label}</div>
+            <div className={`text-xs font-semibold ${met===total?'text-emerald-600':met>=total*0.5?'text-amber-600':'text-red-500'}`}>
+              {met}/{total}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {tab==='vitamins' && renderRows(VITAMINS)}
+        {tab==='minerals' && renderRows(MINERALS)}
+        {tab==='specials' && renderRows(SPECIALS)}
+      </div>
+
+      <p className="text-xs text-stone-400 mt-3 italic">
+        * Includes food + supplements + sunlight. ★ = clinically adjusted target.
+      </p>
+    </Card>
+  );
+}
 
 function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
   const [expanded, setExpanded] = useState(null);
@@ -735,6 +765,15 @@ export default function DailyLog() {
               <p className="text-xs text-stone-400 mb-3">Enter raw weight before cooking</p>
               <FoodLog items={log.food} onChange={v => update('food', v)} />
             </Card>
+
+            {/* Sprint 5: Nutrition summary (3 tabs) — always shows when food has micro data */}
+            <NutritionSummary
+              foodItems={log.food || []}
+              supplements={log.supplements || {}}
+              activeActivities={activeActivities}
+              activities={log.activities || {}}
+              rdaOverrides={protocol?.rda_overrides || {}}
+            />
 
             {/* Water */}
             <Card>

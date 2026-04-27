@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ value, label, icon, color }) {
@@ -459,6 +459,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
       fat:   data.macro_fat   ? String(data.macro_fat)   : '',
       phase: data.macro_phase || '',
     });
+    setRdaOverrides(data.rda_overrides || {});
     // Sprint 3: meal plan
     setMealPlan(data.meal_plan || []);
   }, [loadingProfile]);
@@ -513,6 +514,10 @@ function EditMemberModal({ member, onClose, onSaved }) {
     phase: member.macro_phase || '',
   });
   const setM = (k, v) => setMacros(m => ({ ...m, [k]: v }));
+
+  // ── Sprint 5: RDA overrides per member ────────────────────────────────────
+  const [rdaOverrides, setRdaOverrides] = useState(member.rda_overrides || {});
+  const setRda = (key, val) => setRdaOverrides(o => val ? { ...o, [key]: parseFloat(val) } : (({ [key]:_, ...rest }) => rest)(o));
 
   // ── Protocol sub-tab (items / fasting / macros / meal plan) ──────────────────
   const [protoTab, setProtoTab] = useState('items');
@@ -606,6 +611,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
         macro_phase: macros.phase || null,
         // Sprint 3
         meal_plan: mealPlan.length > 0 ? mealPlan : null,
+        // Sprint 5
+        rda_overrides: Object.keys(rdaOverrides).length > 0 ? rdaOverrides : {},
       });
       onSaved(data);
       onClose();
@@ -792,6 +799,47 @@ function EditMemberModal({ member, onClose, onSaved }) {
             🗑 Clear macro targets
           </button>
         )}
+
+        {/* Sprint 5: Clinical RDA Overrides */}
+        <div className="border-t border-stone-100 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-bold text-stone-500 uppercase tracking-wider">★ Clinical RDA Overrides</p>
+            <span className="text-xs text-stone-400">Leave blank = use defaults</span>
+          </div>
+          <p className="text-xs text-stone-400 mb-3">
+            Override default nutrient targets for this member's specific needs (e.g. B12 deficiency, osteoporosis).
+          </p>
+          <div className="space-y-2">
+            {RDA_OVERRIDE_KEYS.map(key => {
+              const meta = RDA_TARGETS[key];
+              if (!meta) return null;
+              const current = rdaOverrides[key] || '';
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-xs text-stone-600 w-28 flex-shrink-0">{meta.icon} {meta.label}</span>
+                  <input
+                    type="number"
+                    value={current}
+                    onChange={e => setRda(key, e.target.value)}
+                    placeholder={`${meta.rda} ${meta.unit}`}
+                    className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 ${
+                      current ? 'border-purple-300 bg-purple-50 text-purple-800 font-semibold' : 'border-stone-200'}`}
+                  />
+                  <span className="text-xs text-stone-400 w-10">{meta.unit}</span>
+                  {current && (
+                    <button onClick={() => setRda(key, '')} className="text-stone-300 hover:text-red-400 text-sm flex-shrink-0">×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {Object.keys(rdaOverrides).length > 0 && (
+            <button onClick={() => setRdaOverrides({})}
+              className="text-xs text-red-400 hover:text-red-600 font-semibold mt-2">
+              🗑 Clear all overrides
+            </button>
+          )}
+        </div>
       </div>
     );
   };

@@ -7,7 +7,7 @@ import {
 import { getPatient } from '../api/logs';
 import { addLabValue } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
-import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition } from '../constants';
+import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
 import { useSync } from '../hooks/useSync';
 import { useAuthStore } from '../store/authStore';
 
@@ -28,6 +28,42 @@ function calcN(item) {
 }
 
 // ── Compliance from a raw server log row ──────────────────────────────────────
+function calcMicrosFromItems(foodItems = [], supplements = {}) {
+  const m = foodItems.reduce((acc, item) => {
+    if (!item.per_100g) return acc;
+    const f = item.grams / 100;
+    const n = item.per_100g;
+    const add = (k) => acc[k] + (n[k] || 0) * f;
+    return {
+      vit_a:add('vit_a'),vit_b1:add('vit_b1'),vit_b2:add('vit_b2'),vit_b3:add('vit_b3'),
+      vit_b5:add('vit_b5'),vit_b6:add('vit_b6'),vit_b12:add('vit_b12'),vit_c:add('vit_c'),
+      vit_d:add('vit_d'),vit_e:add('vit_e'),vit_k:add('vit_k'),folate:add('folate'),
+      biotin:add('biotin'),choline:add('choline'),
+      calcium:add('calcium'),iron:add('iron'),magnesium:add('magnesium'),
+      phosphorus:add('phosphorus'),potassium:add('potassium'),sodium:add('sodium'),
+      zinc:add('zinc'),copper:add('copper'),manganese:add('manganese'),selenium:add('selenium'),
+      omega3_ala:add('omega3_ala'),omega3_epa:add('omega3_epa'),omega3_dha:add('omega3_dha'),
+      omega6:add('omega6'),fiber:add('fiber'),lycopene:add('lycopene'),beta_glucan:add('beta_glucan'),
+    };
+  }, {
+    vit_a:0,vit_b1:0,vit_b2:0,vit_b3:0,vit_b5:0,vit_b6:0,vit_b12:0,vit_c:0,vit_d:0,
+    vit_e:0,vit_k:0,folate:0,biotin:0,choline:0,calcium:0,iron:0,magnesium:0,
+    phosphorus:0,potassium:0,sodium:0,zinc:0,copper:0,manganese:0,selenium:0,
+    omega3_ala:0,omega3_epa:0,omega3_dha:0,omega6:0,fiber:0,lycopene:0,beta_glucan:0,
+  });
+
+  // Add supplement contributions
+  if (supplements?.b12)     m.vit_b12  += 1000;
+  if (supplements?.d3)      m.vit_d    += 8571;
+  if (supplements?.fishoil) { m.omega3_epa += 180; m.omega3_dha += 120; }
+  if (supplements?.flax)    m.omega3_ala += 533;
+  if (supplements?.multi)   {
+    m.vit_b12+=2.4; m.vit_d+=600; m.vit_c+=90; m.calcium+=200;
+    m.iron+=8; m.magnesium+=100; m.zinc+=8; m.folate+=400;
+  }
+  if (supplements?.yeast)   { m.vit_b12+=1.0; m.folate+=125; }
+  return m;
+}
 function rowCompliance(log) {
   if (!log) return 0;
   const a = Object.values(log.activities  || {}).filter(Boolean).length;
@@ -446,6 +482,57 @@ export default function Monitor() {
                         }`}>ACV{i + 1}</span>
                       ))}
                     </div>
+
+                    {/* Sprint 5: Micro panel — collapsible per day */}
+                    {(log.food_items || []).some(f => f.per_100g) && (() => {
+                      const rdaOv = data?.profile?.rda_overrides || {};
+                      const micros = calcMicrosFromItems(log.food_items, log.supplements);
+                      const KEYS = ['vit_b12','vit_d','vit_c','calcium','iron','magnesium','zinc','folate','omega3_epa','omega3_dha','fiber'];
+                      const met  = KEYS.filter(k => {
+                        const meta = RDA_TARGETS[k];
+                        if (!meta) return false;
+                        const rda = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
+                        return (micros[k]||0) / rda >= 0.8;
+                      }).length;
+                      return (
+                        <details className="mt-2 border-t border-stone-100 pt-2">
+                          <summary className="text-xs font-semibold text-stone-500 cursor-pointer hover:text-emerald-700 list-none flex justify-between">
+                            <span>🔬 Key Nutrients</span>
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
+                              met >= KEYS.length*0.8 ? 'bg-emerald-100 text-emerald-700' :
+                              met >= KEYS.length*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
+                            }`}>{met}/{KEYS.length} ▼</span>
+                          </summary>
+                          <div className="mt-2 space-y-1.5">
+                            {KEYS.map(k => {
+                              const meta = RDA_TARGETS[k];
+                              if (!meta) return null;
+                              const rda  = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
+                              const raw  = micros[k] || 0;
+                              const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
+                              const val  = +raw.toFixed(dec);
+                              const pct  = Math.min(100, (raw / rda) * 100);
+                              const cls  = pct>=80 ? 'bg-emerald-400' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
+                              const tcls = pct>=80 ? 'text-emerald-600' : pct>=50 ? 'text-amber-600' : 'text-red-500';
+                              return (
+                                <div key={k}>
+                                  <div className="flex justify-between text-xs mb-0.5">
+                                    <span className="text-stone-500">{meta.icon} {meta.label}</span>
+                                    <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit} ({Math.round(pct)}%)</span>
+                                  </div>
+                                  <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${cls}`} style={{width:`${pct}%`}} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {rdaOv && Object.keys(rdaOv).length > 0 && (
+                              <p className="text-xs text-purple-500 italic">★ Custom targets applied</p>
+                            )}
+                          </div>
+                        </details>
+                      );
+                    })()}
 
                     {log.notes && (
                       <p className="mt-2 text-xs text-stone-500 italic border-t border-stone-100 pt-2">

@@ -136,7 +136,9 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS custom_supplements  JSONB 
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS item_overrides      JSONB        DEFAULT '{}';
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS updated_at          TIMESTAMPTZ  DEFAULT NOW();
 --
--- Sprint 3 columns (meal plan)
+-- Sprint 5 columns (micronutrient RDA overrides)
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS rda_overrides JSONB DEFAULT '{}';
+
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS meal_plan JSONB DEFAULT NULL;
 
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_start  TIME;

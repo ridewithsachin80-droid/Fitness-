@@ -124,3 +124,47 @@ export const calcCompliance = (log, acts = ACTIVITIES, acvList = ACV_ITEMS, supp
   if (!total) return 0;
   return Math.round(((actDone + acvDone + suppDone) / total) * 100);
 };
+
+// ── Sprint 5: Full RDA Targets (female, 60yr, Indian baseline) ───────────────
+// Admin can override any value per member via rda_overrides in patient_profiles.
+export const RDA_TARGETS = {
+  // ── Vitamins (14) ──
+  vit_a:   { rda:700,   unit:'mcg', label:'Vitamin A',         icon:'🥕', tab:'vitamins' },
+  vit_b1:  { rda:1.1,   unit:'mg',  label:'B1 Thiamine',       icon:'🌾', tab:'vitamins' },
+  vit_b2:  { rda:1.1,   unit:'mg',  label:'B2 Riboflavin',     icon:'🥛', tab:'vitamins' },
+  vit_b3:  { rda:14,    unit:'mg',  label:'B3 Niacin',         icon:'🐟', tab:'vitamins' },
+  vit_b5:  { rda:5,     unit:'mg',  label:'B5 Pantothenic',    icon:'🥑', tab:'vitamins' },
+  vit_b6:  { rda:1.5,   unit:'mg',  label:'B6 Pyridoxine',     icon:'🥜', tab:'vitamins' },
+  vit_b12: { rda:2.4,   unit:'mcg', label:'Vitamin B12',       icon:'💉', tab:'vitamins' },
+  vit_c:   { rda:75,    unit:'mg',  label:'Vitamin C',         icon:'🍊', tab:'vitamins' },
+  vit_d:   { rda:800,   unit:'IU',  label:'Vitamin D',         icon:'☀️', tab:'vitamins' },
+  vit_e:   { rda:15,    unit:'mg',  label:'Vitamin E',         icon:'🌻', tab:'vitamins' },
+  vit_k:   { rda:90,    unit:'mcg', label:'Vitamin K',         icon:'🥦', tab:'vitamins' },
+  folate:  { rda:400,   unit:'mcg', label:'Folate (B9)',        icon:'🧬', tab:'vitamins' },
+  biotin:  { rda:30,    unit:'mcg', label:'Biotin (B7)',        icon:'🥚', tab:'vitamins' },
+  choline: { rda:425,   unit:'mg',  label:'Choline',           icon:'🧠', tab:'vitamins' },
+  // ── Minerals (10) ──
+  calcium:    { rda:1200, unit:'mg',  label:'Calcium',   icon:'🦴', tab:'minerals' },
+  iron:       { rda:8,    unit:'mg',  label:'Iron',      icon:'⚙️', tab:'minerals' },
+  magnesium:  { rda:320,  unit:'mg',  label:'Magnesium', icon:'⚡', tab:'minerals' },
+  phosphorus: { rda:700,  unit:'mg',  label:'Phosphorus',icon:'🔋', tab:'minerals' },
+  potassium:  { rda:2600, unit:'mg',  label:'Potassium', icon:'🍌', tab:'minerals' },
+  sodium:     { rda:2300, unit:'mg',  label:'Sodium',    icon:'🧂', tab:'minerals', upper:true },
+  zinc:       { rda:8,    unit:'mg',  label:'Zinc',      icon:'🔩', tab:'minerals' },
+  copper:     { rda:0.9,  unit:'mg',  label:'Copper',    icon:'🔶', tab:'minerals' },
+  manganese:  { rda:1.8,  unit:'mg',  label:'Manganese', icon:'🔷', tab:'minerals' },
+  selenium:   { rda:55,   unit:'mcg', label:'Selenium',  icon:'🌟', tab:'minerals' },
+  // ── Specials (7) ──
+  omega3_ala: { rda:1100, unit:'mg',  label:'Omega-3 ALA',    icon:'🌿', tab:'specials' },
+  omega3_epa: { rda:250,  unit:'mg',  label:'Omega-3 EPA',    icon:'🐟', tab:'specials' },
+  omega3_dha: { rda:250,  unit:'mg',  label:'Omega-3 DHA',    icon:'🐠', tab:'specials' },
+  omega6:     { rda:11000,unit:'mg',  label:'Omega-6',        icon:'🫒', tab:'specials' },
+  fiber:      { rda:21,   unit:'g',   label:'Dietary Fiber',  icon:'🌾', tab:'specials' },
+  lycopene:   { rda:6000, unit:'mcg', label:'Lycopene',       icon:'🍅', tab:'specials' },
+  beta_glucan:{ rda:3,    unit:'g',   label:'Beta-Glucan',    icon:'🌀', tab:'specials' },
+};
+
+// Keys for admin RDA override UI (the most clinically relevant)
+export const RDA_OVERRIDE_KEYS = [
+  'vit_b12','vit_d','calcium','iron','omega3_epa','omega3_dha','fiber','folate','zinc','selenium'
+];

@@ -72,6 +72,8 @@ router.get('/:date', authMW, async (req, res) => {
       } : null,
       // Sprint 3: meal plan (null = not set)
       meal_plan: profile.meal_plan || null,
+      // Sprint 5: per-member RDA overrides (null = use defaults)
+      rda_overrides: profile.rda_overrides || {},
       // For calorie burn calculation (Sprint 4)
       start_weight: profile.start_weight || null,
     };
