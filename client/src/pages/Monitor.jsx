@@ -301,6 +301,32 @@ export default function Monitor() {
                     </div>
 
                     {/* Food items breakdown */}
+                    {/* Sprint 3: Meal plan adherence indicator */}
+                    {data?.profile?.meal_plan?.length > 0 && (
+                      <div className="mb-2 bg-white rounded-xl border border-stone-100 overflow-hidden">
+                        <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100">
+                          <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">🍽 Meal Plan Adherence</span>
+                        </div>
+                        <div className="px-3 py-2 flex flex-wrap gap-2">
+                          {data.profile.meal_plan.map((meal) => {
+                            const logged     = (log.food_items || []).map(f => f.name?.toLowerCase());
+                            const total      = (meal.items || []).length;
+                            const matched    = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
+                            const pct        = total > 0 ? matched / total : 0;
+                            const color      = pct >= 0.8 ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                             : pct >= 0.5 ? 'bg-amber-100 text-amber-700 border-amber-200'
+                                             :              'bg-red-50 text-red-600 border-red-200';
+                            const icon       = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
+                            return (
+                              <div key={meal.id} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
+                                {icon} {meal.name} {total > 0 ? `${matched}/${total}` : ''}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {log.food_items?.length > 0 && (
                       <div className="mb-2 bg-white rounded-xl border border-stone-100 overflow-hidden">
                         <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100 flex justify-between">

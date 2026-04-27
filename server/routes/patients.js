@@ -60,8 +60,7 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     const [profileResult, logsResult, labsResult] = await Promise.all([
       pool.query(
         `SELECT u.id, u.name, u.phone, u.email, u.created_at,
-                pp.dob, pp.height_cm, pp.start_weight, pp.target_weight,
-                pp.conditions, pp.diet_notes, pp.water_target
+                pp.*
          FROM users u
          JOIN patient_profiles pp ON pp.user_id = u.id
          WHERE u.id = $1`,

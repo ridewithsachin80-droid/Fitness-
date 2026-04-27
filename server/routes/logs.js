@@ -70,6 +70,8 @@ router.get('/:date', authMW, async (req, res) => {
         fat:   profile.macro_fat,
         phase: profile.macro_phase || null,
       } : null,
+      // Sprint 3: meal plan (null = not set)
+      meal_plan: profile.meal_plan || null,
     };
 
     res.json(log ? { ...log, protocol } : { protocol });

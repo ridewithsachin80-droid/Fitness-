@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
@@ -181,6 +181,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
       fat:   data.macro_fat   ? String(data.macro_fat)   : '',
       phase: data.macro_phase || '',
     });
+    // Sprint 3: meal plan
+    setMealPlan(data.meal_plan || []);
   }, [loadingProfile]);
 
   const [saving,  setSaving]  = useState(false);
@@ -234,8 +236,12 @@ function EditMemberModal({ member, onClose, onSaved }) {
   });
   const setM = (k, v) => setMacros(m => ({ ...m, [k]: v }));
 
-  // ── Protocol sub-tab (items / fasting / macros) ────────────────────────────
+  // ── Protocol sub-tab (items / fasting / macros / meal plan) ──────────────────
   const [protoTab, setProtoTab] = useState('items');
+
+  // ── Sprint 3: Meal plan ────────────────────────────────────────────────────
+  // Structure: [{id, name, badge, time, color, items:[{food_id,food_name,qty_g,kcal,pro,carb,fat,fiber,per_100g}]}]
+  const [mealPlan, setMealPlan] = useState(member.meal_plan || []);
 
   const toggleProto = (key, id, defaultItems) => {
     setProto(p => {
@@ -320,6 +326,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
         macro_carb:  macros.carb  ? parseInt(macros.carb)  : null,
         macro_fat:   macros.fat   ? parseInt(macros.fat)   : null,
         macro_phase: macros.phase || null,
+        // Sprint 3
+        meal_plan: mealPlan.length > 0 ? mealPlan : null,
       });
       onSaved(data);
       onClose();
@@ -504,6 +512,247 @@ function EditMemberModal({ member, onClose, onSaved }) {
           <button onClick={() => setMacros({ kcal:'', pro:'', carb:'', fat:'', phase:'' })}
             className="text-xs text-red-400 hover:text-red-600 font-semibold">
             🗑 Clear macro targets
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ── Meal Plan tab (Sprint 3) ───────────────────────────────────────────────
+  const MealPlanTab = () => {
+    const MEAL_COLORS = ['emerald','blue','orange','purple','rose'];
+    const [foodQuery, setFoodQuery]         = useState('');
+    const [foodSuggestions, setFoodSugg]    = useState([]);
+    const [searchingFood, setSearchingFood] = useState(false);
+    const [activeMealId, setActiveMealId]   = useState(null); // which meal is being added to
+    const debRef = useRef(null);
+    const containerRef = useRef(null);
+
+    const searchFood = async (q) => {
+      if (!q || q.length < 2) { setFoodSugg([]); return; }
+      setSearchingFood(true);
+      try {
+        const { data } = await api.get('/foods/search', { params: { q, limit: 8 } });
+        setFoodSugg(data);
+      } catch { setFoodSugg([]); }
+      finally { setSearchingFood(false); }
+    };
+
+    const handleFoodQuery = (v) => {
+      setFoodQuery(v);
+      clearTimeout(debRef.current);
+      if (v.length >= 2) debRef.current = setTimeout(() => searchFood(v), 300);
+      else setFoodSugg([]);
+    };
+
+    // Add a food to a specific meal
+    const addFoodToMeal = (mealId, food, qtyG = 100) => {
+      const f   = qtyG / 100;
+      const n   = food.per_100g || {};
+      const item = {
+        food_id:   food.id,
+        food_name: food.name,
+        qty_g:     qtyG,
+        kcal:      Math.round((n.calories || 0) * f),
+        pro:       +((n.protein    || 0) * f).toFixed(1),
+        carb:      +((n.net_carbs != null ? n.net_carbs : n.total_carbs || 0) * f).toFixed(1),
+        fat:       +((n.fat        || 0) * f).toFixed(1),
+        fiber:     +((n.fiber      || 0) * f).toFixed(1),
+        per_100g:  n,
+      };
+      setMealPlan(mp => mp.map(m =>
+        m.id === mealId ? { ...m, items: [...(m.items || []), item] } : m
+      ));
+      setFoodQuery(''); setFoodSugg([]); setActiveMealId(null);
+    };
+
+    // Update qty_g and recalculate macros for a food item in a meal
+    const updateItemQty = (mealId, idx, newQty) => {
+      setMealPlan(mp => mp.map(m => {
+        if (m.id !== mealId) return m;
+        const items = [...m.items];
+        const item  = { ...items[idx] };
+        const f = newQty / 100;
+        const n = item.per_100g || {};
+        item.qty_g = newQty;
+        item.kcal  = Math.round((n.calories || 0) * f);
+        item.pro   = +((n.protein    || 0) * f).toFixed(1);
+        item.carb  = +((n.net_carbs != null ? n.net_carbs : n.total_carbs || 0) * f).toFixed(1);
+        item.fat   = +((n.fat        || 0) * f).toFixed(1);
+        item.fiber = +((n.fiber      || 0) * f).toFixed(1);
+        items[idx] = item;
+        return { ...m, items };
+      }));
+    };
+
+    const removeItem     = (mealId, idx)   => setMealPlan(mp => mp.map(m => m.id === mealId ? { ...m, items: m.items.filter((_, i) => i !== idx) } : m));
+    const removeMeal     = (mealId)        => setMealPlan(mp => mp.filter(m => m.id !== mealId));
+    const updateMeal     = (mealId, k, v)  => setMealPlan(mp => mp.map(m => m.id === mealId ? { ...m, [k]: v } : m));
+
+    const addMeal = () => {
+      const idx   = mealPlan.length;
+      const color = MEAL_COLORS[idx % MEAL_COLORS.length];
+      setMealPlan(mp => [...mp, {
+        id:    `meal_${Date.now()}`,
+        name:  `Meal ${idx + 1}`,
+        badge: `M${idx + 1}`,
+        time:  '',
+        color,
+        items: [],
+      }]);
+    };
+
+    // Day totals
+    const dayTotal = mealPlan.reduce((acc, m) => {
+      (m.items || []).forEach(item => {
+        acc.kcal  += item.kcal  || 0;
+        acc.pro   += item.pro   || 0;
+        acc.carb  += item.carb  || 0;
+        acc.fat   += item.fat   || 0;
+        acc.fiber += item.fiber || 0;
+      });
+      return acc;
+    }, { kcal: 0, pro: 0, carb: 0, fat: 0, fiber: 0 });
+
+    const colorMap = {
+      emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      blue:    'bg-blue-100 text-blue-700 border-blue-200',
+      orange:  'bg-orange-100 text-orange-700 border-orange-200',
+      purple:  'bg-purple-100 text-purple-700 border-purple-200',
+      rose:    'bg-rose-100 text-rose-700 border-rose-200',
+    };
+    const dotMap = {
+      emerald: 'bg-emerald-500', blue: 'bg-blue-500',
+      orange: 'bg-orange-500',   purple: 'bg-purple-500', rose: 'bg-rose-500',
+    };
+
+    return (
+      <div className="space-y-4">
+        <p className="text-xs text-stone-400">
+          Build the prescribed meal plan. Member sees cards above the food log — tap to pre-fill.
+        </p>
+
+        {mealPlan.map((meal, mIdx) => {
+          const mealTotal = (meal.items || []).reduce((a, i) => ({
+            kcal: a.kcal + (i.kcal||0), pro: a.pro + (i.pro||0),
+            carb: a.carb + (i.carb||0), fat: a.fat + (i.fat||0),
+          }), { kcal:0, pro:0, carb:0, fat:0 });
+
+          return (
+            <div key={meal.id} className={`rounded-2xl border p-3 space-y-2 ${colorMap[meal.color] || colorMap.emerald}`}>
+              {/* Meal header */}
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotMap[meal.color] || dotMap.emerald}`} />
+                <input value={meal.name} onChange={e => updateMeal(meal.id, 'name', e.target.value)}
+                  className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-stone-700" />
+                <input type="time" value={meal.time} onChange={e => updateMeal(meal.id, 'time', e.target.value)}
+                  className="text-xs bg-white/70 border border-white/50 rounded-lg px-2 py-1 text-stone-600 w-28" />
+                <button onClick={() => removeMeal(meal.id)} className="text-stone-400 hover:text-red-500 text-sm ml-1">🗑</button>
+              </div>
+
+              {/* Food items */}
+              {(meal.items || []).map((item, iIdx) => (
+                <div key={iIdx} className="bg-white/80 rounded-xl px-3 py-2 flex items-center gap-2 group">
+                  <span className="text-xs text-stone-700 font-medium flex-1 truncate">{item.food_name}</span>
+                  <input
+                    type="number" value={item.qty_g}
+                    onChange={e => updateItemQty(meal.id, iIdx, parseFloat(e.target.value) || 0)}
+                    className="w-16 text-xs text-center border border-stone-200 rounded-lg px-1 py-1 bg-white"
+                  />
+                  <span className="text-xs text-stone-400">g</span>
+                  <span className="text-xs font-bold text-orange-600 w-10 text-right">{item.kcal}</span>
+                  <span className="text-xs text-stone-400">kcal</span>
+                  <button onClick={() => removeItem(meal.id, iIdx)}
+                    className="opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-400 ml-1 transition-opacity">×</button>
+                </div>
+              ))}
+
+              {/* Meal subtotal */}
+              {(meal.items || []).length > 0 && (
+                <div className="flex gap-3 text-xs px-1 pt-1 border-t border-white/50">
+                  <span className="font-bold text-orange-600">{mealTotal.kcal} kcal</span>
+                  <span className="text-blue-700">P {mealTotal.pro.toFixed(1)}g</span>
+                  <span className="text-amber-700">C {mealTotal.carb.toFixed(1)}g</span>
+                  <span className="text-purple-700">F {mealTotal.fat.toFixed(1)}g</span>
+                </div>
+              )}
+
+              {/* Add food to this meal */}
+              {activeMealId === meal.id ? (
+                <div ref={containerRef} className="relative">
+                  <input autoFocus value={foodQuery} onChange={e => handleFoodQuery(e.target.value)}
+                    placeholder="Search food…"
+                    className="w-full text-xs px-3 py-2 rounded-xl border border-white bg-white
+                      focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-700" />
+                  {searchingFood && <span className="absolute right-3 top-2 text-xs text-stone-400">…</span>}
+                  {foodSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg
+                      z-30 border border-stone-100 max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
+                      {foodSuggestions.map(food => (
+                        <button key={food.id}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => addFoodToMeal(meal.id, food, 100)}
+                          className="w-full text-left px-3 py-2 hover:bg-emerald-50 border-b border-stone-50 last:border-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-stone-700 font-medium truncate">{food.name}</span>
+                            <span className="text-xs font-bold text-orange-500 flex-shrink-0 ml-2">
+                              {food.per_100g?.calories || 0} kcal/100g
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => { setActiveMealId(null); setFoodQuery(''); setFoodSugg([]); }}
+                    className="text-xs text-stone-400 mt-1 hover:text-stone-600">Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => { setActiveMealId(meal.id); setFoodQuery(''); setFoodSugg([]); }}
+                  className="w-full py-1.5 text-xs font-semibold text-stone-500 hover:text-emerald-700
+                    bg-white/60 hover:bg-white/90 rounded-xl border border-dashed border-stone-300
+                    hover:border-emerald-400 transition-all">
+                  + Add food item
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Add meal button */}
+        <button onClick={addMeal}
+          className="w-full py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50
+            hover:bg-emerald-100 border-2 border-dashed border-emerald-300
+            hover:border-emerald-500 rounded-2xl transition-all">
+          + Add meal
+        </button>
+
+        {/* Day total panel */}
+        {mealPlan.length > 0 && (
+          <div className="bg-stone-800 text-white rounded-2xl px-4 py-3 space-y-2">
+            <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Day Total</p>
+            <div className="flex gap-4 flex-wrap">
+              <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
+              <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
+              <span className="text-sm text-amber-300">C {dayTotal.carb.toFixed(1)}g</span>
+              <span className="text-sm text-purple-300">F {dayTotal.fat.toFixed(1)}g</span>
+              <span className="text-sm text-emerald-300">Fiber {dayTotal.fiber.toFixed(1)}g</span>
+            </div>
+            {/* vs target check */}
+            {macros.kcal && (
+              <div className="text-xs text-stone-400 pt-1 border-t border-stone-700">
+                Target: {macros.kcal} kcal · Difference: {' '}
+                <span className={Math.abs(dayTotal.kcal - parseInt(macros.kcal)) <= 100 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                  {dayTotal.kcal - parseInt(macros.kcal) > 0 ? '+' : ''}{dayTotal.kcal - parseInt(macros.kcal)} kcal
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {mealPlan.length > 0 && (
+          <button onClick={() => setMealPlan([])}
+            className="text-xs text-red-400 hover:text-red-600 font-semibold">
+            🗑 Clear entire meal plan
           </button>
         )}
       </div>
@@ -721,7 +970,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         <div className="space-y-3">
           {/* Protocol sub-tabs */}
           <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
-            {[['items','📋 Items'],['fasting','⏰ Fasting'],['macros','🎯 Macros']].map(([id, label]) => (
+            {[['items','📋 Items'],['fasting','⏰ Fasting'],['macros','🎯 Macros'],['meals','🍽 Meal Plan']].map(([id, label]) => (
               <button key={id} onClick={() => setProtoTab(id)}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
                   protoTab === id ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>
@@ -743,6 +992,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
           {protoTab === 'fasting' && FastingTab()}
           {protoTab === 'macros'  && MacrosTab()}
+          {protoTab === 'meals'   && MealPlanTab()}
         </div>
       )}
 

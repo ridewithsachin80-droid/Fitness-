@@ -244,6 +244,105 @@ function MacroProgress({ macros, foodItems }) {
   );
 }
 
+// ─── Sprint 3: Prescribed Meal Plan Cards ────────────────────────────────────
+// Collapsible cards above the food log. Each card shows the prescribed meal,
+// its items, and a "Log this meal" button that pre-fills the food log.
+
+function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
+  const [expanded, setExpanded] = useState(null);
+  if (!mealPlan || mealPlan.length === 0) return null;
+
+  const now      = new Date();
+  const nowMin   = now.getHours() * 60 + now.getMinutes();
+  const toMin    = (t) => { if (!t) return null; const [h,m] = t.split(':').map(Number); return h*60+(m||0); };
+
+  // Check if a meal's food items are already logged (>= 80% by name match)
+  const isMealLogged = (meal) => {
+    if (!meal.items?.length) return false;
+    const logged = (foodItems || []).map(f => f.name?.toLowerCase());
+    const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
+    return matched / meal.items.length >= 0.8;
+  };
+
+  return (
+    <Card>
+      <SectionTitle icon="🍽">Prescribed Meal Plan</SectionTitle>
+      <p className="text-xs text-stone-400 mb-3">Your personalised plan for today. Tap a meal to log it quickly.</p>
+      <div className="space-y-2">
+        {mealPlan.map((meal) => {
+          const mealMin  = toMin(meal.time);
+          const logged   = isMealLogged(meal);
+          const isCurrent = mealMin !== null && nowMin >= mealMin - 30 && nowMin <= mealMin + 120;
+          const isOpen   = expanded === meal.id;
+
+          const mealKcal = (meal.items || []).reduce((s, i) => s + (i.kcal || 0), 0);
+
+          // Status badge
+          const badge = logged
+            ? { label: '✓ Logged', cls: 'bg-emerald-100 text-emerald-700' }
+            : isCurrent
+              ? { label: '⏰ Now', cls: 'bg-amber-100 text-amber-700' }
+              : { label: meal.time || '', cls: 'bg-stone-100 text-stone-500' };
+
+          return (
+            <div key={meal.id} className={`rounded-2xl border overflow-hidden transition-all ${
+              logged ? 'border-emerald-200 bg-emerald-50/50' :
+              isCurrent ? 'border-amber-200 bg-amber-50/50' : 'border-stone-100 bg-stone-50'
+            }`}>
+              {/* Card header — always visible */}
+              <button className="w-full text-left px-4 py-3 flex items-center gap-3"
+                onClick={() => setExpanded(isOpen ? null : meal.id)}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-stone-700">{meal.name}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
+                  </div>
+                  <p className="text-xs text-stone-400 mt-0.5">
+                    {(meal.items || []).length} items · <span className="font-bold text-orange-500">{mealKcal} kcal</span>
+                  </p>
+                </div>
+                <span className="text-stone-400 text-sm">{isOpen ? '▲' : '▼'}</span>
+              </button>
+
+              {/* Expanded content */}
+              {isOpen && (
+                <div className="px-4 pb-4 space-y-2 border-t border-stone-100">
+                  {(meal.items || []).map((item, i) => (
+                    <div key={i} className="flex items-center justify-between py-1.5">
+                      <div>
+                        <span className="text-sm text-stone-700 font-medium">{item.food_name}</span>
+                        <span className="text-xs text-stone-400 ml-2">{item.qty_g}g</span>
+                      </div>
+                      <div className="flex gap-2 text-xs flex-shrink-0">
+                        <span className="font-bold text-orange-500">{item.kcal} kcal</span>
+                        <span className="text-blue-500">P {item.pro}g</span>
+                        <span className="text-amber-500">C {item.carb}g</span>
+                        <span className="text-purple-500">F {item.fat}g</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {!logged && (
+                    <button
+                      onClick={() => { onLogMeal(meal); setExpanded(null); }}
+                      className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white
+                        text-sm font-bold rounded-xl transition-all active:scale-95">
+                      📋 Log this meal
+                    </button>
+                  )}
+                  {logged && (
+                    <p className="text-center text-xs text-emerald-600 font-semibold pt-1">✓ Already logged</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 // ─── Main DailyLog Page ────────────────────────────────────────────────────────
 
 export default function DailyLog() {
@@ -272,8 +371,22 @@ export default function DailyLog() {
   const activeSupplements = allSupplements.filter(s =>
     !protocol?.supplements || protocol.supplements.includes(s.id));
 
-  usePush();
-  useOfflineSync();
+  // ── Sprint 3: pre-fill food log from prescribed meal ─────────────────────
+  const logMeal = useCallback((meal) => {
+    const newItems = (meal.items || []).map(item => ({
+      id:       Date.now() + Math.random(),
+      name:     item.food_name,
+      grams:    item.qty_g,
+      meal:     meal.name,   // maps to Meal 1/2/3 label
+      food_id:  item.food_id  || null,
+      per_100g: item.per_100g || null,
+    }));
+    // Append to existing food items without duplicating already-logged ones
+    const existing = log.food || [];
+    const existingNames = existing.map(f => f.name?.toLowerCase());
+    const toAdd = newItems.filter(i => !existingNames.includes(i.name?.toLowerCase()));
+    update('food', [...existing, ...toAdd]);
+  }, [log.food, update]);
 
   useEffect(() => { setDate(today()); }, []);
 
@@ -391,6 +504,15 @@ export default function DailyLog() {
                 ))}
               </div>
             </Card>
+
+            {/* ── Sprint 3: Prescribed meal plan cards ── */}
+            {protocol?.meal_plan?.length > 0 && (
+              <PrescribedMeals
+                mealPlan={protocol.meal_plan}
+                foodItems={log.food}
+                onLogMeal={logMeal}
+              />
+            )}
 
             {/* Food */}
             <Card>
