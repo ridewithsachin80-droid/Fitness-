@@ -116,9 +116,27 @@ CREATE TABLE IF NOT EXISTS monitor_notes (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ── SPRINT 2 — Fasting + Macro columns ──────────────────────────────────
--- ALTER TABLE is used (not CREATE TABLE) because patient_profiles already
--- exists in production. IF NOT EXISTS makes these safe to re-run on every deploy.
+-- ── MIGRATIONS — ADD MISSING COLUMNS SAFELY ──────────────────────────────
+-- ALTER TABLE ADD COLUMN IF NOT EXISTS is idempotent — safe to re-run every
+-- deploy. This handles the case where patient_profiles was originally created
+-- from an older schema that was missing some columns (e.g. if the CREATE TABLE
+-- above failed mid-run due to the duplicate protocol_supplements column that
+-- existed in early versions of this file).
+--
+-- Sprint 0 columns (may be missing on older deployments)
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS dob                 DATE;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS diet_notes          TEXT;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS water_target        INT          DEFAULT 3000;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_activities JSONB        DEFAULT NULL;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_acv        JSONB        DEFAULT NULL;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_supplements JSONB       DEFAULT NULL;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS custom_activities   JSONB        DEFAULT '[]';
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS custom_acv          JSONB        DEFAULT '[]';
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS custom_supplements  JSONB        DEFAULT '[]';
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS item_overrides      JSONB        DEFAULT '{}';
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS updated_at          TIMESTAMPTZ  DEFAULT NOW();
+--
+-- Sprint 2 columns (fasting + macros)
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_start  TIME;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_end    TIME;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_note   TEXT;
