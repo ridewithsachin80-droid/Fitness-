@@ -277,13 +277,87 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
     { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-purple-500', light:'bg-purple-50', text:'text-purple-600' },
   ];
 
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <SectionTitle icon="🎯">Macro Targets</SectionTitle>
+        {macros.phase && (
+          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">{macros.phase}</span>
+        )}
+      </div>
+
+      {/* Net calorie banner */}
+      {burn.total > 0 && (
+        <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl mb-3 ${
+          netKcal <= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+          <div className="flex gap-3">
+            <span>🍽 Eaten <strong>{Math.round(totals.kcal)}</strong></span>
+            <span>🔥 Burned <strong>{burn.total}</strong></span>
+          </div>
+          <span className="font-bold">Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal{netKcal <= 0 && ' 🎯'}</span>
+        </div>
+      )}
+
+      {/* Macro bars */}
+      <div className="space-y-3">
+        {bars.map(({ key, label, icon, unit, current, target, bg, light, text }) => {
+          const pct = target ? Math.min(100, (current / target) * 100) : 0;
+          const over = target && current > target;
+          const remaining = target ? Math.max(0, +(target - current).toFixed(1)) : null;
+          return (
+            <div key={key}>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-semibold text-stone-600">{icon} {label}</span>
+                <div className="flex items-center gap-1.5">
+                  {over && <span className="text-red-500 font-bold">⚠️ over</span>}
+                  <span className={`font-bold ${over ? 'text-red-500' : text}`}>{current}</span>
+                  <span className="text-stone-400">/ {target} {unit}</span>
+                  {remaining !== null && !over && remaining > 0 && <span className="text-stone-300">({remaining} left)</span>}
+                </div>
+              </div>
+              <div className={`h-2.5 rounded-full overflow-hidden ${light}`}>
+                <div className={`h-full rounded-full transition-all duration-500 ${bg} ${over ? 'opacity-50' : ''}`}
+                  style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Activity burn breakdown */}
+      {burn.items.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">🔥 Calories Burned</p>
+          {burn.items.map(item => (
+            <div key={item.id} className="flex justify-between text-xs">
+              <span className="text-stone-500">{item.label} ({item.mins} min)</span>
+              <span className="font-bold text-orange-500">−{item.kcal} kcal</span>
+            </div>
+          ))}
+          <div className="flex justify-between text-xs font-bold pt-1 border-t border-stone-100">
+            <span className="text-stone-600">Total burned</span>
+            <span className="text-orange-600">−{burn.total} kcal</span>
+          </div>
+        </div>
+      )}
+
+      {/* Total eaten */}
+      {totals.kcal > 0 && (
+        <div className="mt-3 pt-3 border-t border-stone-100 flex justify-between text-xs text-stone-400">
+          <span>Total logged today</span>
+          <span className="font-semibold text-stone-600">
+            {Math.round(totals.kcal)} kcal · P {totals.pro.toFixed(0)}g · C {totals.carb.toFixed(0)}g · F {totals.fat.toFixed(0)}g
+          </span>
+        </div>
+      )}
+
       {/* Micro summary badge — full detail in NutritionSummary card below food log */}
       {hasMicroData && (
         <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
           <span className="text-stone-500 font-medium">🔬 Key Nutrients</span>
           <span className={`px-2 py-0.5 rounded-full font-bold ${
-            quickMet >= quickTotal*0.8 ? 'bg-emerald-100 text-emerald-700' :
-            quickMet >= quickTotal*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
+            quickMet >= quickTotal * 0.8 ? 'bg-emerald-100 text-emerald-700' :
+            quickMet >= quickTotal * 0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
           }`}>{`${quickMet}/${quickTotal}`} met · see below ↓</span>
         </div>
       )}
