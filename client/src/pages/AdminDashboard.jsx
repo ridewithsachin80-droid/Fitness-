@@ -741,8 +741,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
             </>
           )}
 
-          {protoTab === 'fasting' && <FastingTab />}
-          {protoTab === 'macros'  && <MacrosTab />}
+          {protoTab === 'fasting' && FastingTab()}
+          {protoTab === 'macros'  && MacrosTab()}
         </div>
       )}
 
