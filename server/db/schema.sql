@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS patient_profiles (
   custom_acv           JSONB DEFAULT '[]',
   custom_supplements   JSONB DEFAULT '[]',
   item_overrides       JSONB DEFAULT '{}',   -- {[itemId]: {label,sub,fromTime,toTime,totalTime}}
-  protocol_supplements JSONB DEFAULT NULL,   -- ["b12","d3","fishoil",...] or null
   updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -116,6 +115,33 @@ CREATE TABLE IF NOT EXISTS monitor_notes (
   flagged     BOOLEAN     DEFAULT false,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ── FOODS (Sprint 1) ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS foods (
+  id           SERIAL PRIMARY KEY,
+  name         VARCHAR(200) NOT NULL,
+  name_hindi   VARCHAR(200),
+  name_local   VARCHAR(200),
+  category     VARCHAR(50) CHECK (category IN
+                 ('dairy','grain','vegetable','fruit','nut','oil',
+                  'supplement','branded','other')),
+  source       VARCHAR(20) CHECK (source IN ('nin','usda','off','manual')),
+  verified     BOOLEAN     DEFAULT false,
+  per_100g     JSONB       NOT NULL DEFAULT '{}',
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Full-text search on name + transliteration columns
+CREATE INDEX IF NOT EXISTS idx_foods_name_fts
+  ON foods USING GIN (to_tsvector('simple', name));
+CREATE INDEX IF NOT EXISTS idx_foods_category
+  ON foods(category);
+CREATE INDEX IF NOT EXISTS idx_foods_source
+  ON foods(source);
+
+-- Unique name per source to prevent duplicate seeding
+CREATE UNIQUE INDEX IF NOT EXISTS idx_foods_name_source
+  ON foods(lower(name), source);
 
 -- ── INDEXES ──────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_daily_logs_patient_date
