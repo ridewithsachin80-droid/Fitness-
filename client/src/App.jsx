@@ -13,6 +13,7 @@ import Monitor     from './pages/Monitor';
 import PatientList from './pages/PatientList';
 import Settings       from './pages/Settings';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminFoods     from './pages/AdminFoods';
 
 // ── Route guard ───────────────────────────────────────────────────────────────
 function PrivateRoute({ children, roles }) {
@@ -113,6 +114,14 @@ export default function App() {
           element={
             <PrivateRoute roles={['admin']}>
               <AdminDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/foods"
+          element={
+            <PrivateRoute roles={['admin']}>
+              <AdminFoods />
             </PrivateRoute>
           }
         />

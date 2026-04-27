@@ -393,4 +393,58 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// ── DELETE /api/foods/:id — admin only ───────────────────────────────────────
+router.delete('/:id', authMW, role('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await pool.query('DELETE FROM foods WHERE id = $1', [id]);
+    if (!rowCount) return res.status(404).json({ error: 'Food not found' });
+    res.json({ deleted: true, id: parseInt(id) });
+  } catch (err) {
+    console.error('DELETE /api/foods/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/foods/admin/list — paginated list for admin food manager ─────────
+router.get('/admin/list', authMW, role('admin'), async (req, res) => {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(50, parseInt(req.query.limit) || 30);
+    const q     = req.query.q || '';
+    const offset = (page - 1) * limit;
+
+    const where = q
+      ? `WHERE (LOWER(name) LIKE $3 OR LOWER(name_local) LIKE $3)`
+      : '';
+    const params = q
+      ? [`%${q.toLowerCase()}%`, limit, offset]
+      : [limit, offset];
+    const countParams = q ? [`%${q.toLowerCase()}%`] : [];
+
+    const [rows, countRes] = await Promise.all([
+      pool.query(
+        `SELECT id, name, name_hindi, name_local, category, source, verified,
+           per_100g->>'calories' AS kcal_per_100g
+         FROM foods ${where.replace('$3','$1')} ORDER BY name ASC LIMIT $${q?2:1} OFFSET $${q?3:2}`,
+        q ? [`%${q.toLowerCase()}%`, limit, offset] : [limit, offset]
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM foods ${q ? 'WHERE (LOWER(name) LIKE $1 OR LOWER(name_local) LIKE $1)' : ''}`,
+        countParams
+      ),
+    ]);
+
+    res.json({
+      foods: rows.rows,
+      total: parseInt(countRes.rows[0].count),
+      page,
+      pages: Math.ceil(parseInt(countRes.rows[0].count) / limit),
+    });
+  } catch (err) {
+    console.error('GET /api/foods/admin/list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

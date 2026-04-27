@@ -1208,8 +1208,9 @@ function AssignModal({ member, monitors, onClose, onAssigned }) {
 export default function AdminDashboard() {
   const navigate         = useNavigate();
   const { user, logout } = useAuthStore();
-  const [tab,       setTab]       = useState('members');
+  const [tab,       setTab]       = useState('overview');
   const [stats,     setStats]     = useState(null);
+  const [overview,  setOverview]  = useState(null);
   const [members,   setMembers]   = useState([]);
   const [monitors,  setMonitors]  = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -1221,14 +1222,16 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [s, m, mo] = await Promise.all([
+      const [s, m, mo, ov] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/members'),
         api.get('/admin/monitors'),
+        api.get('/admin/overview').catch(() => ({ data: null })),
       ]);
       setStats(s.data);
       setMembers(m.data);
       setMonitors(mo.data);
+      setOverview(ov.data);
     } catch (e) {
       console.error('Admin load error:', e);
     } finally {
@@ -1289,8 +1292,9 @@ export default function AdminDashboard() {
       <div className="max-w-2xl mx-auto px-4 pt-4">
         <div className="flex gap-2 mb-3">
           {[
-            { id: 'members',  label: '👥 Members'  },
-            { id: 'monitors', label: '🏋️ Monitors' },
+            { id: 'overview', label: '📊 Overview'  },
+            { id: 'members',  label: '👥 Members'   },
+            { id: 'monitors', label: '🏋️ Monitors'  },
           ].map(t => (
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
@@ -1303,7 +1307,8 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Search + add button */}
+        {/* Search + add button — only for members/monitors tabs */}
+        {tab !== 'overview' && (
         <div className="flex gap-2 mb-4">
           <input
             value={search}
@@ -1319,10 +1324,108 @@ export default function AdminDashboard() {
             + Add {tab === 'members' ? 'Member' : 'Monitor'}
           </button>
         </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="max-w-2xl mx-auto px-4 pb-10 space-y-2">
+
+        {/* ── Overview tab ── */}
+        {tab === 'overview' && overview && (
+          <div className="space-y-3">
+            {/* Quick stats */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Total Members',    value: overview.stats.total_members,         color: 'bg-blue-50 text-blue-700' },
+                { label: 'Logged Today',     value: `${overview.stats.logged_today} / ${overview.stats.total_members}`, color: 'bg-emerald-50 text-emerald-700' },
+                { label: '7-Day Avg Comply', value: `${overview.stats.avg_compliance_7d}%`, color: overview.stats.avg_compliance_7d >= 75 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' },
+                { label: 'Total Weight Lost',value: `${overview.stats.total_weight_lost_kg} kg`, color: 'bg-purple-50 text-purple-700' },
+              ].map(s => (
+                <div key={s.label} className={`rounded-2xl px-4 py-3 ${s.color}`}>
+                  <div className="text-xl font-bold">{s.value}</div>
+                  <div className="text-xs font-semibold mt-0.5 opacity-80">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Alerts — members who haven't logged */}
+            {overview.alerts.length > 0 && (
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                <p className="text-sm font-bold text-red-700 mb-2">⚠️ Needs Attention ({overview.alerts.length})</p>
+                <div className="space-y-1">
+                  {overview.alerts.map(a => (
+                    <div key={a.id} className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-red-800">{a.name}</span>
+                      <span className="text-red-500 font-bold">
+                        {a.days_since ? `${a.days_since}d no log` : 'Never logged'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Today's detail per member */}
+            <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+              <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100">
+                <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Today's Compliance</span>
+              </div>
+              {overview.today_detail.map(m => {
+                const pct = m.compliance_pct || 0;
+                const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-stone-200';
+                const textColor = pct >= 75 ? 'text-emerald-700' : pct >= 50 ? 'text-amber-700' : pct > 0 ? 'text-red-600' : 'text-stone-400';
+                return (
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-3 border-b border-stone-50 last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-stone-700">{m.name}</span>
+                      {m.monitor_name && <span className="text-xs text-stone-400 ml-2">· {m.monitor_name}</span>}
+                    </div>
+                    {m.weight_kg && <span className="text-xs font-semibold text-emerald-600">{m.weight_kg} kg</span>}
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-2 bg-stone-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className={`text-xs font-bold w-8 text-right ${textColor}`}>
+                        {m.log_date ? `${pct}%` : '—'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 7-day compliance ranking */}
+            <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+              <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100">
+                <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">7-Day Average Compliance</span>
+              </div>
+              {overview.compliance_7d.map(m => {
+                const pct = parseFloat(m.avg_7d) || 0;
+                return (
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-stone-50 last:border-0">
+                    <span className="text-sm text-stone-700 flex-1">{m.name}</span>
+                    <span className="text-xs text-stone-400">{m.days_logged} days</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      pct >= 75 ? 'bg-emerald-100 text-emerald-700' :
+                      pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
+                    }`}>{Math.round(pct)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Food manager shortcut */}
+            <button onClick={() => navigate('/admin/foods')}
+              className="w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
+              🥗 Food Database Manager
+              <span className="text-stone-400 text-xs">→</span>
+            </button>
+          </div>
+        )}
+
+        {tab === 'overview' && !overview && !loading && (
+          <p className="text-center text-stone-400 py-8">Overview data loading…</p>
+        )}
 
         {/* ── Members tab ── */}
         {tab === 'members' && (

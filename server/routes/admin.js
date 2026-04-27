@@ -25,6 +25,109 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// ── GET /api/admin/overview ────────────────────────────────────────────────────
+// Sprint 7: Full admin overview — today's activity, 7-day compliance,
+// member alerts, weight progress totals.
+router.get('/overview', authMW, roleCheck('admin'), async (req, res) => {
+  try {
+    const [statsRes, todayRes, alertsRes, complianceRes, weightRes] = await Promise.all([
+      // Total counts
+      pool.query(`
+        SELECT
+          (SELECT COUNT(*) FROM users WHERE role='patient' AND active=true)  AS total_members,
+          (SELECT COUNT(*) FROM daily_logs WHERE log_date = CURRENT_DATE)    AS logged_today,
+          (SELECT COUNT(*) FROM daily_logs WHERE log_date = CURRENT_DATE
+            AND compliance_pct >= 75)                                        AS good_compliance_today
+      `),
+      // Today's detail per member
+      pool.query(`
+        SELECT u.id, u.name, u.phone,
+          dl.compliance_pct, dl.weight_kg, dl.log_date,
+          (SELECT u2.name FROM monitor_patients mp
+            JOIN users u2 ON u2.id = mp.monitor_id
+            WHERE mp.patient_id = u.id AND mp.active = true LIMIT 1) AS monitor_name
+        FROM users u
+        LEFT JOIN daily_logs dl ON dl.patient_id = u.id AND dl.log_date = CURRENT_DATE
+        WHERE u.role = 'patient' AND u.active = true
+        ORDER BY COALESCE(dl.compliance_pct, -1) ASC
+      `),
+      // Members who haven't logged in 2+ days
+      pool.query(`
+        SELECT u.id, u.name,
+          MAX(dl.log_date) AS last_logged,
+          CURRENT_DATE - MAX(dl.log_date) AS days_since
+        FROM users u
+        LEFT JOIN daily_logs dl ON dl.patient_id = u.id
+        WHERE u.role = 'patient' AND u.active = true
+        GROUP BY u.id, u.name
+        HAVING MAX(dl.log_date) < CURRENT_DATE - INTERVAL '1 day'
+          OR MAX(dl.log_date) IS NULL
+        ORDER BY days_since DESC NULLS FIRST
+      `),
+      // 7-day avg compliance per member
+      pool.query(`
+        SELECT u.id, u.name,
+          ROUND(AVG(dl.compliance_pct)) AS avg_7d,
+          COUNT(dl.id) AS days_logged
+        FROM users u
+        LEFT JOIN daily_logs dl ON dl.patient_id = u.id
+          AND dl.log_date >= CURRENT_DATE - INTERVAL '6 days'
+        WHERE u.role = 'patient' AND u.active = true
+        GROUP BY u.id, u.name
+        ORDER BY avg_7d ASC NULLS FIRST
+      `),
+      // Weight progress (start vs latest per member)
+      pool.query(`
+        SELECT u.id, u.name,
+          pp.start_weight, pp.target_weight,
+          (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id
+            AND weight_kg IS NOT NULL ORDER BY log_date DESC LIMIT 1) AS current_weight
+        FROM users u
+        JOIN patient_profiles pp ON pp.user_id = u.id
+        WHERE u.role = 'patient' AND u.active = true
+          AND pp.start_weight IS NOT NULL
+      `),
+    ]);
+
+    const stats       = statsRes.rows[0];
+    const today       = todayRes.rows;
+    const alerts      = alertsRes.rows;
+    const compliance7 = complianceRes.rows;
+    const weights     = weightRes.rows;
+
+    // Total weight lost across all members
+    const totalLost = weights.reduce((sum, m) => {
+      if (m.start_weight && m.current_weight) {
+        const lost = parseFloat(m.start_weight) - parseFloat(m.current_weight);
+        return sum + (lost > 0 ? lost : 0);
+      }
+      return sum;
+    }, 0);
+
+    // 7-day overall average
+    const avg7 = compliance7.length
+      ? Math.round(compliance7.reduce((s, m) => s + (parseFloat(m.avg_7d) || 0), 0) / compliance7.length)
+      : 0;
+
+    res.json({
+      stats: {
+        total_members:          parseInt(stats.total_members),
+        logged_today:           parseInt(stats.logged_today),
+        good_compliance_today:  parseInt(stats.good_compliance_today),
+        avg_compliance_7d:      avg7,
+        total_weight_lost_kg:   +totalLost.toFixed(1),
+      },
+      today_detail:  today,
+      alerts,
+      compliance_7d: compliance7,
+      weights,
+    });
+  } catch (err) {
+    console.error('GET /admin/overview error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/admin/members ─────────────────────────────────────────────────────
 // NOTE: Only selects basic profile columns (height, weight, conditions) in the
 // list view. Protocol / fasting / macro data is fetched via GET /admin/members/:id
