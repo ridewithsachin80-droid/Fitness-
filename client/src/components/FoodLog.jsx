@@ -1,66 +1,150 @@
-import { useState, useRef, useEffect } from 'react';
-import { FOOD_PRESETS, getNutrition } from '../constants';
+/**
+ * client/src/components/FoodLog.jsx
+ * Sprint 1 — Food search now hits GET /api/foods/search instead of the
+ * local NUTRITION_DB constant. All 36 nutrient fields available for Sprint 5.
+ *
+ * Backwards compatible: items saved before Sprint 1 (no food_id/per_100g)
+ * fall back to getNutrition() from constants.js.
+ */
+
+import { useState, useRef, useEffect, useCallback } from 'react';
+import api from '../api/client';
+import { getNutrition } from '../constants';
 
 const MEALS = ['Meal 1', 'Meal 2', 'Meal 3'];
+
+function calcMacros(item) {
+  if (item.per_100g) {
+    const f = item.grams / 100;
+    const n = item.per_100g;
+    return {
+      cal:  Math.round((n.calories || 0) * f),
+      pro:  +((n.protein    || 0) * f).toFixed(1),
+      carb: +((n.net_carbs != null ? n.net_carbs : n.total_carbs || 0) * f).toFixed(1),
+      fat:  +((n.fat        || 0) * f).toFixed(1),
+    };
+  }
+  return getNutrition(item.name, item.grams);
+}
 
 export default function FoodLog({ items = [], onChange }) {
   const [showForm, setShowForm]   = useState(false);
   const [meal, setMeal]           = useState('Meal 1');
-  const [name, setName]           = useState('');
+  const [query, setQuery]         = useState('');
   const [grams, setGrams]         = useState('');
+  const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const nameRef = useRef(null);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected]   = useState(null);
+  const [lookupStatus, setLookupStatus] = useState('');
 
-  const suggestions = name.length > 0
-    ? FOOD_PRESETS.filter((f) => f.toLowerCase().includes(name.toLowerCase())).slice(0, 6)
-    : [];
+  const nameRef     = useRef(null);
+  const debounceRef = useRef(null);
+
+  const searchFoods = useCallback(async (q) => {
+    if (!q || q.length < 2) { setSuggestions([]); return; }
+    setSearching(true);
+    try {
+      const { data } = await api.get('/foods/search', { params: { q, limit: 8 } });
+      setSuggestions(data);
+      setShowSuggestions(true);
+    } catch { setSuggestions([]); }
+    finally { setSearching(false); }
+  }, []);
+
+  const handleQueryChange = (val) => {
+    setQuery(val);
+    setSelected(null);
+    setLookupStatus('');
+    clearTimeout(debounceRef.current);
+    if (val.length >= 2) {
+      debounceRef.current = setTimeout(() => searchFoods(val), 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const pickSuggestion = (food) => {
+    setSelected(food);
+    setQuery(food.name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const lookupOff = async () => {
+    if (!query.trim()) return;
+    setLookupStatus('loading');
+    setSuggestions([]);
+    setShowSuggestions(false);
+    try {
+      const { data } = await api.post('/foods/lookup', { name: query.trim() });
+      setSelected(data);
+      setQuery(data.name);
+      setLookupStatus('found');
+    } catch {
+      setLookupStatus('notfound');
+    }
+  };
 
   const add = () => {
-    if (!name.trim() || !grams) return;
-    onChange([
-      ...items,
-      { id: Date.now(), name: name.trim(), grams: parseFloat(grams), meal },
-    ]);
-    setName('');
-    setGrams('');
-    setShowSuggestions(false);
-    // Keep form open for rapid entry
+    if (!query.trim() || !grams) return;
+    const g = parseFloat(grams);
+    if (isNaN(g) || g <= 0) return;
+    onChange([...items, {
+      id:      Date.now(),
+      name:    selected?.name || query.trim(),
+      grams:   g,
+      meal,
+      food_id:  selected?.id   || null,
+      per_100g: selected?.per_100g || null,
+    }]);
+    setQuery(''); setGrams(''); setSelected(null);
+    setLookupStatus(''); setSuggestions([]);
     nameRef.current?.focus();
   };
 
   const remove = (id) => onChange(items.filter((i) => i.id !== id));
-
   const byMeal = (m) => items.filter((i) => i.meal === m);
 
-  // Close suggestions on outside click
+  function mealTotal(mealItems) {
+    return mealItems.reduce((acc, item) => {
+      const n = calcMacros(item);
+      if (!n) return acc;
+      return { cal: acc.cal + (n.cal||0), pro: acc.pro + (n.pro||0), carb: acc.carb + (n.carb||0), fat: acc.fat + (n.fat||0) };
+    }, { cal: 0, pro: 0, carb: 0, fat: 0 });
+  }
+
   useEffect(() => {
     const handler = (e) => {
-      if (!nameRef.current?.parentElement?.contains(e.target)) {
-        setShowSuggestions(false);
-      }
+      if (!nameRef.current?.parentElement?.contains(e.target)) setShowSuggestions(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const closeForm = () => {
+    setShowForm(false); setQuery(''); setGrams(''); setSelected(null);
+    setLookupStatus(''); setSuggestions([]); setShowSuggestions(false);
+  };
+
   return (
     <div className="space-y-3">
 
-      {/* Meal sections */}
       {MEALS.map((m) => {
         const mealItems = byMeal(m);
+        const totals    = mealTotal(mealItems);
         return (
           <div key={m}>
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">{m}</span>
               {mealItems.length > 0 && (
                 <>
-                  <span className="text-xs text-stone-300">
-                    {mealItems.reduce((sum, i) => sum + i.grams, 0).toFixed(0)}g
-                  </span>
-                  <span className="text-xs font-semibold text-orange-500">
-                    {mealItems.reduce((sum, i) => sum + (getNutrition(i.name, i.grams)?.cal || 0), 0)} kcal
-                  </span>
+                  <span className="text-xs text-stone-300">{mealItems.reduce((s,i)=>s+i.grams,0).toFixed(0)}g</span>
+                  <span className="text-xs font-semibold text-orange-500">{totals.cal} kcal</span>
+                  <span className="text-xs text-blue-400">P {totals.pro.toFixed(1)}g</span>
+                  <span className="text-xs text-amber-400">C {totals.carb.toFixed(1)}g</span>
+                  <span className="text-xs text-purple-400">F {totals.fat.toFixed(1)}g</span>
                 </>
               )}
             </div>
@@ -70,38 +154,31 @@ export default function FoodLog({ items = [], onChange }) {
             ) : (
               <div className="space-y-1">
                 {mealItems.map((item) => {
-                  const n = getNutrition(item.name, item.grams);
+                  const n = calcMacros(item);
                   return (
-                  <div
-                    key={item.id}
-                    className="py-2 px-3 rounded-xl bg-stone-50 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm font-medium text-stone-700 truncate">{item.name}</span>
-                        <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">
-                          {item.grams}g
-                        </span>
+                    <div key={item.id} className="py-2 px-3 rounded-xl bg-stone-50 group">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm font-medium text-stone-700 truncate">{item.name}</span>
+                          <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{item.grams}g</span>
+                        </div>
+                        <button
+                          onClick={() => remove(item.id)}
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center
+                            justify-center rounded-full text-stone-300 hover:text-red-400
+                            hover:bg-red-50 transition-all flex-shrink-0 ml-2"
+                          aria-label="Remove item"
+                        >×</button>
                       </div>
-                      <button
-                        onClick={() => remove(item.id)}
-                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center
-                          justify-center rounded-full text-stone-300 hover:text-red-400
-                          hover:bg-red-50 transition-all flex-shrink-0 ml-2"
-                        aria-label="Remove item"
-                      >
-                        ×
-                      </button>
+                      {n && (
+                        <div className="flex gap-3 mt-1">
+                          <span className="text-xs font-bold text-orange-500">{n.cal} kcal</span>
+                          <span className="text-xs text-blue-500">P {n.pro}g</span>
+                          <span className="text-xs text-amber-500">C {n.carb}g</span>
+                          <span className="text-xs text-purple-500">F {n.fat}g</span>
+                        </div>
+                      )}
                     </div>
-                    {n && (
-                      <div className="flex gap-3 mt-1">
-                        <span className="text-xs font-bold text-orange-500">{n.cal} kcal</span>
-                        <span className="text-xs text-blue-500">P {n.pro}g</span>
-                        <span className="text-xs text-amber-500">C {n.carb}g</span>
-                        <span className="text-xs text-purple-500">F {n.fat}g</span>
-                      </div>
-                    )}
-                  </div>
                   );
                 })}
               </div>
@@ -110,7 +187,6 @@ export default function FoodLog({ items = [], onChange }) {
         );
       })}
 
-      {/* Add food form */}
       {!showForm ? (
         <button
           onClick={() => setShowForm(true)}
@@ -126,56 +202,102 @@ export default function FoodLog({ items = [], onChange }) {
           {/* Meal selector */}
           <div className="flex gap-1.5">
             {MEALS.map((m) => (
-              <button
-                key={m}
-                onClick={() => setMeal(m)}
+              <button key={m} onClick={() => setMeal(m)}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  meal === m
-                    ? 'bg-emerald-500 text-white shadow-sm'
-                    : 'bg-white text-stone-500 hover:bg-stone-100'
+                  meal === m ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white text-stone-500 hover:bg-stone-100'
                 }`}
-              >
-                {m}
-              </button>
+              >{m}</button>
             ))}
           </div>
 
-          {/* Food name with autocomplete */}
+          {/* Food name autocomplete */}
           <div className="relative">
-            <input
-              ref={nameRef}
-              value={name}
-              onChange={(e) => { setName(e.target.value); setShowSuggestions(true); }}
-              onFocus={() => name.length > 0 && setShowSuggestions(true)}
-              placeholder="Food name…"
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm bg-white
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800 font-medium"
-              autoFocus
-            />
+            <div className="relative">
+              <input
+                ref={nameRef}
+                value={query}
+                onChange={(e) => handleQueryChange(e.target.value)}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                placeholder="Food name…"
+                className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm bg-white
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800 font-medium pr-10"
+                autoFocus
+              />
+              {searching && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-emerald-300 border-t-emerald-600 rounded-full animate-spin" />
+                </div>
+              )}
+              {selected && !searching && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 text-sm font-bold">✓</span>
+              )}
+            </div>
+
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-float
-                z-20 border border-stone-100 overflow-hidden">
-                {suggestions.map((f) => (
-                  <button
-                    key={f}
-                    onMouseDown={(e) => e.preventDefault()} // prevent blur before click
-                    onClick={() => { setName(f); setShowSuggestions(false); }}
-                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-emerald-50
-                      text-stone-700 hover:text-emerald-700 transition-colors"
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg
+                z-20 border border-stone-100 overflow-hidden max-h-64 overflow-y-auto">
+                {suggestions.map((food) => (
+                  <button key={food.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickSuggestion(food)}
+                    className="w-full text-left px-3 py-2.5 hover:bg-emerald-50 transition-colors border-b border-stone-50 last:border-0"
                   >
-                    {f}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-stone-700 font-medium truncate">{food.name}</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {food.verified && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">✓</span>}
+                        <span className="text-xs font-bold text-orange-500">{food.per_100g?.calories || 0} kcal</span>
+                      </div>
+                    </div>
+                    {food.name_local && food.name_local !== food.name && (
+                      <div className="text-xs text-stone-400 mt-0.5">{food.name_local}</div>
+                    )}
                   </button>
                 ))}
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setShowSuggestions(false); lookupOff(); }}
+                  className="w-full text-left px-3 py-2 bg-stone-50 hover:bg-blue-50 transition-colors"
+                >
+                  <span className="text-xs text-blue-600 font-semibold">🔍 Search Open Food Facts for "{query}"</span>
+                </button>
+              </div>
+            )}
+
+            {/* States when no suggestions */}
+            {!searching && query.length >= 2 && suggestions.length === 0 && !showSuggestions && !selected && (
+              <div className="mt-1">
+                {lookupStatus === 'loading' && <p className="text-xs text-stone-400 px-1">Searching Open Food Facts…</p>}
+                {lookupStatus === 'notfound' && <p className="text-xs text-red-400 px-1">Not found — you can still add it manually above</p>}
+                {lookupStatus === 'found' && <p className="text-xs text-emerald-600 px-1">Found on Open Food Facts ✓</p>}
+                {lookupStatus === '' && (
+                  <button onClick={lookupOff} className="text-xs text-blue-600 font-semibold px-1 hover:underline">
+                    🔍 Not in local DB — search Open Food Facts
+                  </button>
+                )}
               </div>
             )}
           </div>
 
-          {/* Grams + action */}
+          {/* Per-100g preview of selected food */}
+          {selected?.per_100g && (
+            <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
+              <p className="text-xs text-stone-400 mb-1">Per 100g</p>
+              <div className="flex gap-3 flex-wrap">
+                <span className="text-xs font-bold text-orange-500">{selected.per_100g.calories || 0} kcal</span>
+                <span className="text-xs text-blue-500">P {selected.per_100g.protein || 0}g</span>
+                <span className="text-xs text-amber-500">C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net</span>
+                <span className="text-xs text-purple-500">F {selected.per_100g.fat || 0}g</span>
+                {!selected.verified && <span className="text-xs text-stone-400 italic">unverified</span>}
+              </div>
+            </div>
+          )}
+
+          {/* Weight + submit */}
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <input
-                type="number"
-                inputMode="decimal"
+                type="number" inputMode="decimal"
                 value={grams}
                 onChange={(e) => setGrams(e.target.value)}
                 placeholder="Raw weight"
@@ -185,23 +307,14 @@ export default function FoodLog({ items = [], onChange }) {
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">g</span>
             </div>
-
-            <button
-              onClick={add}
-              disabled={!name.trim() || !grams}
+            <button onClick={add} disabled={!query.trim() || !grams}
               className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40
                 text-white text-sm font-bold rounded-xl transition-all active:scale-95"
-            >
-              Add
-            </button>
-
-            <button
-              onClick={() => { setShowForm(false); setName(''); setGrams(''); setShowSuggestions(false); }}
+            >Add</button>
+            <button onClick={closeForm}
               className="px-3 py-2.5 text-stone-400 hover:text-stone-600 text-lg leading-none"
               aria-label="Close"
-            >
-              ×
-            </button>
+            >×</button>
           </div>
         </div>
       )}
