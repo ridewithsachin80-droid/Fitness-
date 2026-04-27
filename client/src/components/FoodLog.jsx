@@ -1,10 +1,14 @@
 /**
  * client/src/components/FoodLog.jsx
- * Sprint 1 — Food search now hits GET /api/foods/search instead of the
- * local NUTRITION_DB constant. All 36 nutrient fields available for Sprint 5.
+ * Sprint 1 — API-backed food search.
  *
- * Backwards compatible: items saved before Sprint 1 (no food_id/per_100g)
- * fall back to getNutrition() from constants.js.
+ * Bug fixes (27 Apr 2026):
+ *  - Debounce timer was not cancelled on suggestion click, causing it to fire
+ *    300ms later and re-show old results over the weight/Add button (blocking add).
+ *  - Dropdown was capturing all scroll events, blocking page scroll.
+ *  - Outside-click handler was using inner wrapper ref, not the full container,
+ *    so clicking a suggestion was falsely detected as "outside" and closed the
+ *    dropdown before the onClick fired.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -38,11 +42,16 @@ export default function FoodLog({ items = [], onChange }) {
   const [selected, setSelected]   = useState(null);
   const [lookupStatus, setLookupStatus] = useState('');
 
-  const nameRef     = useRef(null);
-  const debounceRef = useRef(null);
+  const nameRef      = useRef(null);
+  const gramsRef     = useRef(null);
+  const debounceRef  = useRef(null);
+  // FIX: ref for the FULL search container (input + dropdown together)
+  // so the outside-click handler correctly detects clicks inside the dropdown
+  const containerRef = useRef(null);
 
+  // ── Search ──────────────────────────────────────────────────────────────────
   const searchFoods = useCallback(async (q) => {
-    if (!q || q.length < 2) { setSuggestions([]); return; }
+    if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     setSearching(true);
     try {
       const { data } = await api.get('/foods/search', { params: { q, limit: 8 } });
@@ -54,8 +63,9 @@ export default function FoodLog({ items = [], onChange }) {
 
   const handleQueryChange = (val) => {
     setQuery(val);
-    setSelected(null);
+    setSelected(null);      // typing again clears previous selection
     setLookupStatus('');
+    // FIX: always cancel previous debounce before starting a new one
     clearTimeout(debounceRef.current);
     if (val.length >= 2) {
       debounceRef.current = setTimeout(() => searchFoods(val), 300);
@@ -65,15 +75,26 @@ export default function FoodLog({ items = [], onChange }) {
     }
   };
 
+  // ── Pick suggestion ─────────────────────────────────────────────────────────
   const pickSuggestion = (food) => {
+    // FIX: cancel any pending debounced search so it doesn't re-open the
+    // dropdown 300ms later and block the weight field / Add button
+    clearTimeout(debounceRef.current);
+
     setSelected(food);
     setQuery(food.name);
     setSuggestions([]);
     setShowSuggestions(false);
+    setLookupStatus('');
+
+    // Move focus to grams field so user can immediately type the weight
+    setTimeout(() => gramsRef.current?.focus(), 50);
   };
 
+  // ── Open Food Facts fallback ────────────────────────────────────────────────
   const lookupOff = async () => {
     if (!query.trim()) return;
+    clearTimeout(debounceRef.current);
     setLookupStatus('loading');
     setSuggestions([]);
     setShowSuggestions(false);
@@ -82,25 +103,30 @@ export default function FoodLog({ items = [], onChange }) {
       setSelected(data);
       setQuery(data.name);
       setLookupStatus('found');
+      setTimeout(() => gramsRef.current?.focus(), 50);
     } catch {
       setLookupStatus('notfound');
     }
   };
 
+  // ── Add item ────────────────────────────────────────────────────────────────
   const add = () => {
     if (!query.trim() || !grams) return;
     const g = parseFloat(grams);
     if (isNaN(g) || g <= 0) return;
+
     onChange([...items, {
-      id:      Date.now(),
-      name:    selected?.name || query.trim(),
-      grams:   g,
+      id:       Date.now(),
+      name:     selected?.name || query.trim(),
+      grams:    g,
       meal,
-      food_id:  selected?.id   || null,
+      food_id:  selected?.id      || null,
       per_100g: selected?.per_100g || null,
     }]);
+
     setQuery(''); setGrams(''); setSelected(null);
-    setLookupStatus(''); setSuggestions([]);
+    setLookupStatus(''); setSuggestions([]); setShowSuggestions(false);
+    clearTimeout(debounceRef.current);
     nameRef.current?.focus();
   };
 
@@ -111,19 +137,31 @@ export default function FoodLog({ items = [], onChange }) {
     return mealItems.reduce((acc, item) => {
       const n = calcMacros(item);
       if (!n) return acc;
-      return { cal: acc.cal + (n.cal||0), pro: acc.pro + (n.pro||0), carb: acc.carb + (n.carb||0), fat: acc.fat + (n.fat||0) };
-    }, { cal: 0, pro: 0, carb: 0, fat: 0 });
+      return { cal: acc.cal+(n.cal||0), pro: acc.pro+(n.pro||0), carb: acc.carb+(n.carb||0), fat: acc.fat+(n.fat||0) };
+    }, { cal:0, pro:0, carb:0, fat:0 });
   }
 
+  // ── Outside-click closes dropdown ───────────────────────────────────────────
+  // FIX: use containerRef (outer div containing input + dropdown) instead of
+  // nameRef.current.parentElement (which only covered the input wrapper).
+  // With the old code, clicking a suggestion was detected as "outside" and
+  // closed the dropdown before the onClick fired.
   useEffect(() => {
     const handler = (e) => {
-      if (!nameRef.current?.parentElement?.contains(e.target)) setShowSuggestions(false);
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
   }, []);
 
   const closeForm = () => {
+    clearTimeout(debounceRef.current);
     setShowForm(false); setQuery(''); setGrams(''); setSelected(null);
     setLookupStatus(''); setSuggestions([]); setShowSuggestions(false);
   };
@@ -131,6 +169,7 @@ export default function FoodLog({ items = [], onChange }) {
   return (
     <div className="space-y-3">
 
+      {/* Meal sections */}
       {MEALS.map((m) => {
         const mealItems = byMeal(m);
         const totals    = mealTotal(mealItems);
@@ -148,7 +187,6 @@ export default function FoodLog({ items = [], onChange }) {
                 </>
               )}
             </div>
-
             {mealItems.length === 0 ? (
               <p className="text-xs text-stone-300 italic px-2 py-1">Nothing logged yet</p>
             ) : (
@@ -162,13 +200,11 @@ export default function FoodLog({ items = [], onChange }) {
                           <span className="text-sm font-medium text-stone-700 truncate">{item.name}</span>
                           <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{item.grams}g</span>
                         </div>
-                        <button
-                          onClick={() => remove(item.id)}
+                        <button onClick={() => remove(item.id)}
                           className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center
                             justify-center rounded-full text-stone-300 hover:text-red-400
                             hover:bg-red-50 transition-all flex-shrink-0 ml-2"
-                          aria-label="Remove item"
-                        >×</button>
+                          aria-label="Remove item">×</button>
                       </div>
                       {n && (
                         <div className="flex gap-3 mt-1">
@@ -187,13 +223,12 @@ export default function FoodLog({ items = [], onChange }) {
         );
       })}
 
+      {/* Add food form */}
       {!showForm ? (
-        <button
-          onClick={() => setShowForm(true)}
+        <button onClick={() => setShowForm(true)}
           className="w-full py-3 rounded-2xl border-2 border-dashed border-emerald-200
             text-emerald-600 text-sm font-semibold hover:bg-emerald-50 hover:border-emerald-300
-            active:scale-98 transition-all"
-        >
+            active:scale-98 transition-all">
           + Add food item
         </button>
       ) : (
@@ -205,19 +240,22 @@ export default function FoodLog({ items = [], onChange }) {
               <button key={m} onClick={() => setMeal(m)}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   meal === m ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white text-stone-500 hover:bg-stone-100'
-                }`}
-              >{m}</button>
+                }`}>{m}</button>
             ))}
           </div>
 
-          {/* Food name autocomplete */}
-          <div className="relative">
+          {/* Food name + autocomplete
+              FIX: containerRef on the outer div so clicks inside the dropdown
+              are not detected as "outside" by the close handler */}
+          <div ref={containerRef} className="relative">
+
+            {/* Input row */}
             <div className="relative">
               <input
                 ref={nameRef}
                 value={query}
                 onChange={(e) => handleQueryChange(e.target.value)}
-                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                onFocus={() => { if (suggestions.length > 0 && !selected) setShowSuggestions(true); }}
                 placeholder="Food name…"
                 className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm bg-white
                   focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800 font-medium pr-10"
@@ -233,20 +271,34 @@ export default function FoodLog({ items = [], onChange }) {
               )}
             </div>
 
+            {/* Suggestions dropdown
+                FIX: overscroll-contain stops the dropdown from stealing page
+                scroll events when it hits its own top/bottom boundary */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg
-                z-20 border border-stone-100 overflow-hidden max-h-64 overflow-y-auto">
+              <div
+                className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg
+                  z-30 border border-stone-100 overflow-hidden"
+                style={{ maxHeight: '240px', overflowY: 'auto', overscrollBehavior: 'contain' }}
+              >
                 {suggestions.map((food) => (
-                  <button key={food.id}
+                  <button
+                    key={food.id}
+                    // FIX: prevent input blur so the click event can fire correctly
                     onMouseDown={(e) => e.preventDefault()}
+                    onTouchStart={(e) => e.preventDefault()}
                     onClick={() => pickSuggestion(food)}
-                    className="w-full text-left px-3 py-2.5 hover:bg-emerald-50 transition-colors border-b border-stone-50 last:border-0"
+                    className="w-full text-left px-3 py-2.5 hover:bg-emerald-50 active:bg-emerald-100
+                      transition-colors border-b border-stone-50 last:border-0"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-stone-700 font-medium truncate">{food.name}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {food.verified && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">✓</span>}
-                        <span className="text-xs font-bold text-orange-500">{food.per_100g?.calories || 0} kcal</span>
+                        {food.verified && (
+                          <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">✓</span>
+                        )}
+                        <span className="text-xs font-bold text-orange-500">
+                          {food.per_100g?.calories || 0} kcal
+                        </span>
                       </div>
                     </div>
                     {food.name_local && food.name_local !== food.name && (
@@ -254,24 +306,37 @@ export default function FoodLog({ items = [], onChange }) {
                     )}
                   </button>
                 ))}
+
+                {/* Search Open Food Facts option at bottom of list */}
                 <button
                   onMouseDown={(e) => e.preventDefault()}
+                  onTouchStart={(e) => e.preventDefault()}
                   onClick={() => { setShowSuggestions(false); lookupOff(); }}
-                  className="w-full text-left px-3 py-2 bg-stone-50 hover:bg-blue-50 transition-colors"
+                  className="w-full text-left px-3 py-2.5 bg-stone-50 hover:bg-blue-50
+                    active:bg-blue-100 transition-colors border-t border-stone-100"
                 >
-                  <span className="text-xs text-blue-600 font-semibold">🔍 Search Open Food Facts for "{query}"</span>
+                  <span className="text-xs text-blue-600 font-semibold">
+                    🔍 Search Open Food Facts for "{query}"
+                  </span>
                 </button>
               </div>
             )}
 
-            {/* States when no suggestions */}
+            {/* No-results / lookup status */}
             {!searching && query.length >= 2 && suggestions.length === 0 && !showSuggestions && !selected && (
-              <div className="mt-1">
-                {lookupStatus === 'loading' && <p className="text-xs text-stone-400 px-1">Searching Open Food Facts…</p>}
-                {lookupStatus === 'notfound' && <p className="text-xs text-red-400 px-1">Not found — you can still add it manually above</p>}
-                {lookupStatus === 'found' && <p className="text-xs text-emerald-600 px-1">Found on Open Food Facts ✓</p>}
+              <div className="mt-1.5">
+                {lookupStatus === 'loading' && (
+                  <p className="text-xs text-stone-400 px-1">Searching Open Food Facts…</p>
+                )}
+                {lookupStatus === 'notfound' && (
+                  <p className="text-xs text-red-400 px-1">Not found — you can still add it manually</p>
+                )}
+                {lookupStatus === 'found' && (
+                  <p className="text-xs text-emerald-600 px-1 font-semibold">✓ Found on Open Food Facts</p>
+                )}
                 {lookupStatus === '' && (
-                  <button onClick={lookupOff} className="text-xs text-blue-600 font-semibold px-1 hover:underline">
+                  <button onClick={lookupOff}
+                    className="text-xs text-blue-600 font-semibold px-1 hover:underline">
                     🔍 Not in local DB — search Open Food Facts
                   </button>
                 )}
@@ -279,25 +344,29 @@ export default function FoodLog({ items = [], onChange }) {
             )}
           </div>
 
-          {/* Per-100g preview of selected food */}
+          {/* Per-100g nutrition preview when a food is selected */}
           {selected?.per_100g && (
             <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
-              <p className="text-xs text-stone-400 mb-1">Per 100g</p>
+              <p className="text-xs text-stone-400 mb-1">Per 100g — {selected.name}</p>
               <div className="flex gap-3 flex-wrap">
                 <span className="text-xs font-bold text-orange-500">{selected.per_100g.calories || 0} kcal</span>
                 <span className="text-xs text-blue-500">P {selected.per_100g.protein || 0}g</span>
-                <span className="text-xs text-amber-500">C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net</span>
+                <span className="text-xs text-amber-500">
+                  C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net
+                </span>
                 <span className="text-xs text-purple-500">F {selected.per_100g.fat || 0}g</span>
                 {!selected.verified && <span className="text-xs text-stone-400 italic">unverified</span>}
               </div>
             </div>
           )}
 
-          {/* Weight + submit */}
+          {/* Weight + Add + Close */}
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <input
-                type="number" inputMode="decimal"
+                ref={gramsRef}
+                type="number"
+                inputMode="decimal"
                 value={grams}
                 onChange={(e) => setGrams(e.target.value)}
                 placeholder="Raw weight"
@@ -307,14 +376,19 @@ export default function FoodLog({ items = [], onChange }) {
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400">g</span>
             </div>
-            <button onClick={add} disabled={!query.trim() || !grams}
+            <button
+              onClick={add}
+              disabled={!query.trim() || !grams}
               className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40
-                text-white text-sm font-bold rounded-xl transition-all active:scale-95"
-            >Add</button>
-            <button onClick={closeForm}
+                text-white text-sm font-bold rounded-xl transition-all active:scale-95">
+              Add
+            </button>
+            <button
+              onClick={closeForm}
               className="px-3 py-2.5 text-stone-400 hover:text-stone-600 text-lg leading-none"
-              aria-label="Close"
-            >×</button>
+              aria-label="Close">
+              ×
+            </button>
           </div>
         </div>
       )}
