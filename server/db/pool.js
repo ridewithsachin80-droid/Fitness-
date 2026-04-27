@@ -12,8 +12,9 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle PostgreSQL client:', err);
-  process.exit(-1);
+  // Log but do NOT exit — Railway recycles idle connections normally.
+  // Calling process.exit() here would crash the server and cause 502 errors.
+  console.error('Unexpected error on idle PostgreSQL client:', err.message);
 });
 
 // Verify connection on startup
