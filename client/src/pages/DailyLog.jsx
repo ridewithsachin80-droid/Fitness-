@@ -36,12 +36,48 @@ function calcFoodMacros(foodItems = []) {
         fat:  acc.fat  + (n.fat        || 0) * f,
       };
     }
-    // Legacy fallback for items logged before Sprint 1
     const n = getNutrition(item.name, item.grams);
     if (!n) return acc;
     return { kcal: acc.kcal + n.cal, pro: acc.pro + n.pro, carb: acc.carb + n.carb, fat: acc.fat + n.fat };
   }, { kcal: 0, pro: 0, carb: 0, fat: 0 });
 }
+
+// Aggregate key micronutrients from food items that have per_100g data
+function calcMicros(foodItems = []) {
+  return foodItems.reduce((acc, item) => {
+    if (!item.per_100g) return acc;
+    const f = item.grams / 100;
+    const n = item.per_100g;
+    return {
+      fiber:    acc.fiber    + (n.fiber    || 0) * f,
+      omega3:   acc.omega3   + ((n.omega3_epa || 0) + (n.omega3_dha || 0) + (n.omega3_ala || 0)) * f,
+      vit_b12:  acc.vit_b12  + (n.vit_b12  || 0) * f,
+      vit_d:    acc.vit_d    + (n.vit_d    || 0) * f,
+      vit_c:    acc.vit_c    + (n.vit_c    || 0) * f,
+      calcium:  acc.calcium  + (n.calcium  || 0) * f,
+      iron:     acc.iron     + (n.iron     || 0) * f,
+      magnesium:acc.magnesium+ (n.magnesium|| 0) * f,
+      zinc:     acc.zinc     + (n.zinc     || 0) * f,
+      folate:   acc.folate   + (n.folate   || 0) * f,
+      potassium:acc.potassium+ (n.potassium|| 0) * f,
+    };
+  }, { fiber:0, omega3:0, vit_b12:0, vit_d:0, vit_c:0, calcium:0, iron:0, magnesium:0, zinc:0, folate:0, potassium:0 });
+}
+
+// Standard RDA targets (female, ~60yr) — Sprint 5 will add per-member overrides
+const RDA = {
+  fiber:    { target: 25,    unit: 'g',   label: 'Fiber',      icon: '🌿' },
+  omega3:   { target: 1000,  unit: 'mg',  label: 'Omega-3',    icon: '🐟' },
+  vit_b12:  { target: 2.4,   unit: 'mcg', label: 'Vitamin B12',icon: '💉' },
+  vit_d:    { target: 600,   unit: 'IU',  label: 'Vitamin D',  icon: '☀️' },
+  vit_c:    { target: 65,    unit: 'mg',  label: 'Vitamin C',  icon: '🍊' },
+  calcium:  { target: 1200,  unit: 'mg',  label: 'Calcium',    icon: '🦴' },
+  iron:     { target: 8,     unit: 'mg',  label: 'Iron',       icon: '⚙️' },
+  magnesium:{ target: 320,   unit: 'mg',  label: 'Magnesium',  icon: '⚡' },
+  zinc:     { target: 8,     unit: 'mg',  label: 'Zinc',       icon: '🔩' },
+  folate:   { target: 400,   unit: 'mcg', label: 'Folate',     icon: '🧬' },
+  potassium:{ target: 2600,  unit: 'mg',  label: 'Potassium',  icon: '🍌' },
+};
 
 // ─── Compliance Ring ──────────────────────────────────────────────────────────
 
@@ -171,22 +207,38 @@ function FastingBar({ fasting }) {
 // Only renders if protocol.macros is set by admin.
 
 function MacroProgress({ macros, foodItems }) {
-  const totals = calcFoodMacros(foodItems);
+  const totals  = calcFoodMacros(foodItems);
+  const micros  = calcMicros(foodItems);
+  const [showMicros, setShowMicros] = useState(false);
+
+  const hasMicroData = foodItems.some(f => f.per_100g);
 
   const bars = [
-    { key: 'kcal', label: 'Calories', icon: '🔥', unit: 'kcal',
+    { key: 'kcal', label: 'Calories',  icon: '🔥', unit: 'kcal',
       current: Math.round(totals.kcal), target: macros.kcal,
       bg: 'bg-orange-400', light: 'bg-orange-50', text: 'text-orange-600' },
-    { key: 'pro',  label: 'Protein',  icon: '💪', unit: 'g',
+    { key: 'pro',  label: 'Protein',   icon: '💪', unit: 'g',
       current: +totals.pro.toFixed(1),  target: macros.pro,
       bg: 'bg-blue-500',   light: 'bg-blue-50',   text: 'text-blue-600' },
     { key: 'carb', label: 'Net Carbs', icon: '🌾', unit: 'g',
       current: +totals.carb.toFixed(1), target: macros.carb,
       bg: 'bg-amber-400',  light: 'bg-amber-50',  text: 'text-amber-600' },
-    { key: 'fat',  label: 'Fat',      icon: '🥑', unit: 'g',
+    { key: 'fat',  label: 'Fat',       icon: '🥑', unit: 'g',
       current: +totals.fat.toFixed(1),  target: macros.fat,
       bg: 'bg-purple-500', light: 'bg-purple-50', text: 'text-purple-600' },
   ];
+
+  const microRows = Object.entries(RDA).map(([key, rda]) => {
+    const raw  = micros[key] || 0;
+    const val  = key === 'vit_b12' || key === 'folate' ? +raw.toFixed(1) : Math.round(raw);
+    const pct  = Math.min(100, (raw / rda.target) * 100);
+    const color = pct >= 80 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400';
+    const textColor = pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500';
+    return { key, ...rda, val, pct, color, textColor };
+  });
+
+  // Count how many micros are meeting targets (>=80%)
+  const microsMet = microRows.filter(m => m.pct >= 80).length;
 
   return (
     <Card>
@@ -199,45 +251,87 @@ function MacroProgress({ macros, foodItems }) {
         )}
       </div>
 
+      {/* Macro bars */}
       <div className="space-y-3">
         {bars.map(({ key, label, icon, unit, current, target, bg, light, text }) => {
           const pct  = target ? Math.min(100, (current / target) * 100) : 0;
           const over = target && current > target;
           const remaining = target ? Math.max(0, target - current) : null;
-
           return (
             <div key={key}>
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="font-semibold text-stone-600">{icon} {label}</span>
                 <div className="flex items-center gap-1.5">
                   {over && <span className="text-red-500 font-bold">⚠️ over</span>}
-                  <span className={`font-bold ${over ? 'text-red-500' : text}`}>
-                    {current}
-                  </span>
+                  <span className={`font-bold ${over ? 'text-red-500' : text}`}>{current}</span>
                   <span className="text-stone-400">/ {target} {unit}</span>
                   {remaining !== null && !over && remaining > 0 && (
-                    <span className="text-stone-300 text-xs">({remaining} left)</span>
+                    <span className="text-stone-300">({remaining} left)</span>
                   )}
                 </div>
               </div>
               <div className={`h-2.5 rounded-full overflow-hidden ${light}`}>
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${bg} ${over ? 'opacity-50' : ''}`}
-                  style={{ width: `${pct}%` }}
-                />
+                <div className={`h-full rounded-full transition-all duration-500 ${bg} ${over ? 'opacity-50' : ''}`}
+                  style={{ width: `${pct}%` }} />
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Total eaten */}
+      {/* Total row */}
       {totals.kcal > 0 && (
         <div className="mt-3 pt-3 border-t border-stone-100 flex justify-between text-xs text-stone-400">
           <span>Total logged today</span>
           <span className="font-semibold text-stone-600">
             {Math.round(totals.kcal)} kcal · P {totals.pro.toFixed(0)}g · C {totals.carb.toFixed(0)}g · F {totals.fat.toFixed(0)}g
           </span>
+        </div>
+      )}
+
+      {/* ── Micronutrient toggle ── */}
+      {hasMicroData && (
+        <div className="mt-3 pt-3 border-t border-stone-100">
+          <button onClick={() => setShowMicros(v => !v)}
+            className="w-full flex items-center justify-between text-xs font-semibold text-stone-500 hover:text-emerald-700 transition-colors">
+            <span>
+              🔬 Key Nutrients
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                microsMet >= 8 ? 'bg-emerald-100 text-emerald-700' :
+                microsMet >= 5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
+              }`}>
+                {microsMet}/{microRows.length} met
+              </span>
+            </span>
+            <span>{showMicros ? '▲' : '▼'}</span>
+          </button>
+
+          {showMicros && (
+            <div className="mt-3 space-y-2">
+              {microRows.map(({ key, label, icon, unit, val, pct, color, textColor, target }) => (
+                <div key={key}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-stone-600 font-medium">{icon} {label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`font-bold ${textColor}`}>{val}</span>
+                      <span className="text-stone-400">/ {target} {unit}</span>
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                        pct >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                        pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
+                      }`}>{Math.round(pct)}%</span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${color}`}
+                      style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              ))}
+              <p className="text-xs text-stone-400 pt-1 italic">
+                * Only foods logged via search have micronutrient data.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </Card>

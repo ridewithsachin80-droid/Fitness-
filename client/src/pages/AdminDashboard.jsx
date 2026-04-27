@@ -214,14 +214,29 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
   const dayTotal = mealPlan.reduce((acc, m) => {
     (m.items || []).forEach(item => {
-      acc.kcal  += item.kcal  || 0;
-      acc.pro   += item.pro   || 0;
-      acc.carb  += item.carb  || 0;
-      acc.fat   += item.fat   || 0;
-      acc.fiber += item.fiber || 0;
+      acc.kcal   += item.kcal  || 0;
+      acc.pro    += item.pro   || 0;
+      acc.carb   += item.carb  || 0;
+      acc.fat    += item.fat   || 0;
+      acc.fiber  += item.fiber || 0;
+      // Micros from per_100g snapshot
+      const n = item.per_100g || {};
+      const f = (item.qty_g || 0) / 100;
+      acc.omega3    += ((n.omega3_epa || 0) + (n.omega3_dha || 0) + (n.omega3_ala || 0)) * f;
+      acc.vit_b12   += (n.vit_b12   || 0) * f;
+      acc.vit_d     += (n.vit_d     || 0) * f;
+      acc.vit_c     += (n.vit_c     || 0) * f;
+      acc.calcium   += (n.calcium   || 0) * f;
+      acc.iron      += (n.iron      || 0) * f;
+      acc.magnesium += (n.magnesium || 0) * f;
+      acc.zinc      += (n.zinc      || 0) * f;
+      acc.folate    += (n.folate    || 0) * f;
+      acc.potassium += (n.potassium || 0) * f;
     });
     return acc;
-  }, { kcal: 0, pro: 0, carb: 0, fat: 0, fiber: 0 });
+  }, { kcal:0, pro:0, carb:0, fat:0, fiber:0,
+       omega3:0, vit_b12:0, vit_d:0, vit_c:0, calcium:0,
+       iron:0, magnesium:0, zinc:0, folate:0, potassium:0 });
 
   const colorMap = {
     emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -337,6 +352,34 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             <span className="text-sm text-amber-300">C {dayTotal.carb.toFixed(1)}g</span>
             <span className="text-sm text-purple-300">F {dayTotal.fat.toFixed(1)}g</span>
             <span className="text-sm text-emerald-300">Fiber {dayTotal.fiber.toFixed(1)}g</span>
+          </div>
+          {/* Micronutrients */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-stone-700">
+            {[
+              ['🐟 Omega-3',    dayTotal.omega3,    1000, 'mg',  1],
+              ['💉 B12',        dayTotal.vit_b12,   2.4,  'mcg', 1],
+              ['☀️ Vit D',      dayTotal.vit_d,     600,  'IU',  0],
+              ['🍊 Vit C',      dayTotal.vit_c,     65,   'mg',  0],
+              ['🦴 Calcium',    dayTotal.calcium,   1200, 'mg',  0],
+              ['⚙️ Iron',       dayTotal.iron,      8,    'mg',  1],
+              ['⚡ Magnesium',  dayTotal.magnesium, 320,  'mg',  0],
+              ['🔩 Zinc',       dayTotal.zinc,      8,    'mg',  1],
+              ['🧬 Folate',     dayTotal.folate,    400,  'mcg', 0],
+              ['🍌 Potassium',  dayTotal.potassium, 2600, 'mg',  0],
+            ].map(([label, val, target, unit, dec]) => {
+              const v   = +val.toFixed(dec);
+              const pct = Math.min(100, (val / target) * 100);
+              const cls = pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400';
+              return (
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-xs text-stone-400">{label}</span>
+                  <span className={`text-xs font-bold ${cls}`}>
+                    {v} <span className="text-stone-500 font-normal">{unit}</span>
+                    <span className="text-stone-600 ml-1">({Math.round(pct)}%)</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
           {macrosKcal && (
             <div className="text-xs text-stone-400 pt-1 border-t border-stone-700">
