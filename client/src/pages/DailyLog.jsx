@@ -106,7 +106,7 @@ function FastingBar({ fasting }) {
   const hLeft = Math.floor(minsLeft / 60);
   const mLeft = minsLeft % 60;
 
-  const eatHrs  = crossesMid ? (fastEnd - fastStart + TOTAL) / 60 : (fastEnd - fastStart) / 60;
+  const eatHrs  = crossesMid ? (fastStart - fastEnd) / 60 : (fastEnd - fastStart) / 60;
   const fastHrs = 24 - eatHrs;
 
   return (

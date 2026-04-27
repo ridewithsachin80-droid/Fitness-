@@ -338,8 +338,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
     const fastEndMin   = timeToMin(fasting.end);
     const hasValues    = fasting.start && fasting.end;
     const crossesMid   = hasValues && fastStartMin > fastEndMin;
-    const eatHrs       = hasValues ? (crossesMid ? (fastEndMin - fastStartMin + TOTAL) : (fastEndMin - fastStartMin)) / 60 : 0;
-    const fastHrs      = hasValues ? 24 - eatHrs : 0;
+    const eatHrs  = hasValues ? (crossesMid ? (fastStartMin - fastEndMin) : (fastEndMin - fastStartMin)) / 60 : 0;
+    const fastHrs = hasValues ? 24 - eatHrs : 0;
 
     // Segments for preview bar
     let segments = [];
