@@ -87,7 +87,17 @@ function mapToServer(log) {
     weight_kg:   log.weight ? parseFloat(log.weight) : null,
     activities:  log.activities,
     acv:         log.acv,
-    food_items:  log.food,
+    // Explicitly preserve food_id and per_100g so Monitor can display nutrition
+    // for foods added via the API search (Sprint 1+). Legacy items without
+    // per_100g fall back to getNutrition() in Monitor.
+    food_items:  (log.food || []).map(item => ({
+      id:       item.id,
+      name:     item.name,
+      grams:    item.grams,
+      meal:     item.meal,
+      food_id:  item.food_id  || null,
+      per_100g: item.per_100g || null,
+    })),
     water_ml:    log.water,
     supplements: log.supplements,
     sleep:       log.sleep,
