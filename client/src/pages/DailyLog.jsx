@@ -284,7 +284,7 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
           <span className={`px-2 py-0.5 rounded-full font-bold ${
             quickMet >= quickTotal*0.8 ? 'bg-emerald-100 text-emerald-700' :
             quickMet >= quickTotal*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
-          }`}>{quickMet}/{quickTotal} met · see below ↓</span>
+          }`}>{`${quickMet}/${quickTotal}`} met · see below ↓</span>
         </div>
       )}
     </Card>
@@ -368,7 +368,7 @@ function NutritionSummary({ foodItems, supplements, activities, activeActivities
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
             totalMet >= totalAll*0.8 ? 'bg-emerald-100 text-emerald-700' :
             totalMet >= totalAll*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
-          }`}>{totalMet}/{totalAll}</span>
+          }`}>{`${totalMet}/${totalAll}`}</span>
         </div>
       </div>
 
@@ -384,7 +384,7 @@ function NutritionSummary({ foodItems, supplements, activities, activeActivities
               tab===id ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>
             <div className="text-xs font-bold">{label}</div>
             <div className={`text-xs font-semibold ${met===total?'text-emerald-600':met>=total*0.5?'text-amber-600':'text-red-500'}`}>
-              {met}/{total}
+              {met + "/" + total}
             </div>
           </button>
         ))}
@@ -648,7 +648,7 @@ export default function DailyLog() {
             <div className="flex-1">
               <div className="text-sm font-semibold">Today's Compliance</div>
               <div className="text-xs text-emerald-200 mt-0.5">
-                {actDone}/{activeActivities.length} activities · {acvDone}/{activeACV.length} ACV · {suppDone}/{activeSupplements.length} supps
+                {`${actDone}/${activeActivities.length}`} activities · {`${acvDone}/${activeACV.length}`} ACV · {`${suppDone}/${activeSupplements.length}`} supps
               </div>
               {log.weight && <div className="text-xs text-emerald-300 mt-1 font-medium">⚖ {log.weight} kg logged</div>}
             </div>
