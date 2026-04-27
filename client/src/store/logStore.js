@@ -6,7 +6,7 @@ import { saveLogWithFallback } from '../hooks/useOfflineQueue';
 export const useLogStore = create((set, get) => ({
   date:     today(),
   log:      emptyLog(),
-  protocol: null,   // { activities: [...ids] | null, acv: [...ids] | null, supplements: [...ids] | null }
+  protocol: null,   // Sprint 1+2 shape: { activities, acv, supplements, custom_*, item_overrides, fasting, macros }
   loading:  false,
   saving:   false,
   saved:    false,

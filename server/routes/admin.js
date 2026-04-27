@@ -31,6 +31,10 @@ router.get('/members', async (req, res) => {
     const result = await pool.query(`
       SELECT u.id, u.name, u.phone, u.active, u.created_at,
         pp.height_cm, pp.start_weight, pp.target_weight, pp.conditions,
+        pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
+        pp.custom_activities, pp.custom_acv, pp.custom_supplements, pp.item_overrides,
+        pp.fasting_start, pp.fasting_end, pp.fasting_note, pp.fasting_label,
+        pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
         (SELECT weight_kg  FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
         (SELECT log_date   FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
         (SELECT compliance_pct FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,
@@ -156,7 +160,9 @@ router.put('/members/:id', async (req, res) => {
   const { name, phone, pin, height_cm, start_weight, target_weight, conditions,
           protocol_activities, protocol_acv, protocol_supplements,
           custom_activities, custom_acv, custom_supplements,
-          item_overrides } = req.body;
+          item_overrides,
+          fasting_start, fasting_end, fasting_note, fasting_label,
+          macro_kcal, macro_pro, macro_carb, macro_fat, macro_phase } = req.body;
 
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
@@ -187,8 +193,10 @@ router.put('/members/:id', async (req, res) => {
     await client.query(`
       INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target,
         protocol_activities, protocol_acv, protocol_supplements,
-        custom_activities, custom_acv, custom_supplements, item_overrides)
-      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11,$12)
+        custom_activities, custom_acv, custom_supplements, item_overrides,
+        fasting_start, fasting_end, fasting_note, fasting_label,
+        macro_kcal, macro_pro, macro_carb, macro_fat, macro_phase)
+      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
       ON CONFLICT (user_id) DO UPDATE SET
         height_cm            = EXCLUDED.height_cm,
         start_weight         = EXCLUDED.start_weight,
@@ -201,6 +209,15 @@ router.put('/members/:id', async (req, res) => {
         custom_acv           = EXCLUDED.custom_acv,
         custom_supplements   = EXCLUDED.custom_supplements,
         item_overrides       = EXCLUDED.item_overrides,
+        fasting_start        = EXCLUDED.fasting_start,
+        fasting_end          = EXCLUDED.fasting_end,
+        fasting_note         = EXCLUDED.fasting_note,
+        fasting_label        = EXCLUDED.fasting_label,
+        macro_kcal           = EXCLUDED.macro_kcal,
+        macro_pro            = EXCLUDED.macro_pro,
+        macro_carb           = EXCLUDED.macro_carb,
+        macro_fat            = EXCLUDED.macro_fat,
+        macro_phase          = EXCLUDED.macro_phase,
         updated_at           = NOW()
     `, [
       id,
@@ -215,6 +232,15 @@ router.put('/members/:id', async (req, res) => {
       JSON.stringify(custom_acv         || []),
       JSON.stringify(custom_supplements || []),
       JSON.stringify(item_overrides     || {}),
+      fasting_start || null,
+      fasting_end   || null,
+      fasting_note  || null,
+      fasting_label || null,
+      macro_kcal  ? parseInt(macro_kcal)  : null,
+      macro_pro   ? parseInt(macro_pro)   : null,
+      macro_carb  ? parseInt(macro_carb)  : null,
+      macro_fat   ? parseInt(macro_fat)   : null,
+      macro_phase || null,
     ]);
 
     await client.query('COMMIT');
@@ -225,7 +251,9 @@ router.put('/members/:id', async (req, res) => {
          pp.height_cm, pp.start_weight, pp.target_weight,
          pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
          pp.custom_activities, pp.custom_acv, pp.custom_supplements,
-         pp.item_overrides
+         pp.item_overrides,
+         pp.fasting_start, pp.fasting_end, pp.fasting_note, pp.fasting_label,
+         pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase
        FROM users u
        LEFT JOIN patient_profiles pp ON pp.user_id=u.id
        WHERE u.id=$1`,

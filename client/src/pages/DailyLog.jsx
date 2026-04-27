@@ -1,11 +1,11 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLogStore }  from '../store/logStore';
 import { useAuthStore } from '../store/authStore';
 import {
   today, formatDate,
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
-  calcCompliance,
+  calcCompliance, getNutrition,
 } from '../constants';
 import { Card, SectionTitle, CheckRow, OfflineBanner } from '../components/UI';
 import WaterTracker  from '../components/WaterTracker';
@@ -14,6 +14,36 @@ import SleepTracker  from '../components/SleepTracker';
 import InstallPrompt from '../components/InstallPrompt';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeToMin(t) {
+  if (!t) return 0;
+  const [h, m] = String(t).slice(0, 5).split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+/** Sum all macro values from the food log, using per_100g data (Sprint 1+) */
+function calcFoodMacros(foodItems = []) {
+  return foodItems.reduce((acc, item) => {
+    if (item.per_100g) {
+      const f = item.grams / 100;
+      const n = item.per_100g;
+      return {
+        kcal: acc.kcal + Math.round((n.calories || 0) * f),
+        pro:  acc.pro  + (n.protein    || 0) * f,
+        carb: acc.carb + ((n.net_carbs != null ? n.net_carbs : n.total_carbs) || 0) * f,
+        fat:  acc.fat  + (n.fat        || 0) * f,
+      };
+    }
+    // Legacy fallback for items logged before Sprint 1
+    const n = getNutrition(item.name, item.grams);
+    if (!n) return acc;
+    return { kcal: acc.kcal + n.cal, pro: acc.pro + n.pro, carb: acc.carb + n.carb, fat: acc.fat + n.fat };
+  }, { kcal: 0, pro: 0, carb: 0, fat: 0 });
+}
+
+// ─── Compliance Ring ──────────────────────────────────────────────────────────
 
 function ComplianceRing({ pct }) {
   const r = 24, circ = 2 * Math.PI * r;
@@ -30,6 +60,191 @@ function ComplianceRing({ pct }) {
     </svg>
   );
 }
+
+// ─── Sprint 2: Fasting Bar ─────────────────────────────────────────────────────
+// Shows a 24-hour timeline with fasting (blue) and eating (green) windows.
+// Red NOW marker moves in real time. Only renders if protocol.fasting is set.
+
+function FastingBar({ fasting }) {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const TOTAL      = 1440;
+  const nowMin     = now.getHours() * 60 + now.getMinutes();
+  const fastStart  = timeToMin(fasting.start);   // e.g. 18:00 → 1080
+  const fastEnd    = timeToMin(fasting.end);     // e.g. 10:00 → 600
+  const crossesMid = fastStart > fastEnd;        // Padmini's 18:00–10:00 crosses midnight
+
+  // Build visual segments
+  let segments = [];
+  if (crossesMid) {
+    if (fastEnd > 0)       segments.push({ w: (fastEnd / TOTAL) * 100,               type: 'fast' });
+    segments.push({          w: ((fastStart - fastEnd) / TOTAL) * 100,               type: 'eat' });
+    if (fastStart < TOTAL) segments.push({ w: ((TOTAL - fastStart) / TOTAL) * 100,  type: 'fast' });
+  } else {
+    if (fastStart > 0)     segments.push({ w: (fastStart / TOTAL) * 100,             type: 'eat' });
+    segments.push({          w: ((fastEnd - fastStart) / TOTAL) * 100,               type: 'fast' });
+    if (fastEnd < TOTAL)   segments.push({ w: ((TOTAL - fastEnd) / TOTAL) * 100,    type: 'eat' });
+  }
+
+  // Is NOW in the eating window?
+  const isEating = crossesMid
+    ? (nowMin >= fastEnd && nowMin < fastStart)
+    : (nowMin < fastStart || nowMin >= fastEnd);
+
+  // Minutes until next phase change
+  let minsLeft;
+  if (isEating) {
+    minsLeft = fastStart > nowMin ? fastStart - nowMin : fastStart + TOTAL - nowMin;
+  } else {
+    minsLeft = fastEnd > nowMin ? fastEnd - nowMin : fastEnd + TOTAL - nowMin;
+  }
+  const hLeft = Math.floor(minsLeft / 60);
+  const mLeft = minsLeft % 60;
+
+  const eatHrs  = crossesMid ? (fastEnd - fastStart + TOTAL) / 60 : (fastEnd - fastStart) / 60;
+  const fastHrs = 24 - eatHrs;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <SectionTitle icon="⏰">{fasting.label || 'Fasting Protocol'}</SectionTitle>
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+          isEating ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+          {isEating ? '🟢 Eating' : '🔵 Fasting'}
+        </span>
+      </div>
+
+      {/* Status line */}
+      <p className="text-xs text-stone-500 mb-3">
+        {isEating
+          ? `Eating window — ${hLeft}h ${mLeft}m until fast begins`
+          : `Fasting — ${hLeft}h ${mLeft}m until eating window opens`}
+      </p>
+
+      {/* 24-hour bar */}
+      <div className="relative h-6 rounded-full overflow-hidden flex">
+        {segments.map((seg, i) => (
+          <div key={i} style={{ width: `${seg.w}%` }}
+            className={seg.type === 'eat' ? 'bg-emerald-400' : 'bg-blue-300'} />
+        ))}
+        {/* NOW marker */}
+        <div className="absolute top-0 bottom-0 flex flex-col items-center"
+          style={{ left: `${(nowMin / TOTAL) * 100}%`, transform: 'translateX(-50%)' }}>
+          <div className="w-0.5 h-full bg-red-500" />
+          <div className="absolute -top-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white shadow" />
+        </div>
+      </div>
+
+      {/* Hour labels */}
+      <div className="flex justify-between mt-1 text-xs text-stone-400 select-none">
+        <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span><span>12AM</span>
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-4 mt-2 text-xs">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+          <span className="text-stone-500">Eating {eatHrs.toFixed(0)}h ({fasting.end?.slice(0,5)}–{fasting.start?.slice(0,5)})</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-blue-300 flex-shrink-0" />
+          <span className="text-stone-500">Fasting {fastHrs.toFixed(0)}h</span>
+        </span>
+      </div>
+
+      {fasting.note && (
+        <p className="mt-3 text-xs text-stone-500 bg-stone-50 px-3 py-2 rounded-xl leading-relaxed">
+          📌 {fasting.note}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+// ─── Sprint 2: Macro Progress ──────────────────────────────────────────────────
+// 4 progress bars (kcal, protein, carbs, fat) that fill as food is logged.
+// Only renders if protocol.macros is set by admin.
+
+function MacroProgress({ macros, foodItems }) {
+  const totals = calcFoodMacros(foodItems);
+
+  const bars = [
+    { key: 'kcal', label: 'Calories', icon: '🔥', unit: 'kcal',
+      current: Math.round(totals.kcal), target: macros.kcal,
+      bg: 'bg-orange-400', light: 'bg-orange-50', text: 'text-orange-600' },
+    { key: 'pro',  label: 'Protein',  icon: '💪', unit: 'g',
+      current: +totals.pro.toFixed(1),  target: macros.pro,
+      bg: 'bg-blue-500',   light: 'bg-blue-50',   text: 'text-blue-600' },
+    { key: 'carb', label: 'Net Carbs', icon: '🌾', unit: 'g',
+      current: +totals.carb.toFixed(1), target: macros.carb,
+      bg: 'bg-amber-400',  light: 'bg-amber-50',  text: 'text-amber-600' },
+    { key: 'fat',  label: 'Fat',      icon: '🥑', unit: 'g',
+      current: +totals.fat.toFixed(1),  target: macros.fat,
+      bg: 'bg-purple-500', light: 'bg-purple-50', text: 'text-purple-600' },
+  ];
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <SectionTitle icon="🎯">Macro Targets</SectionTitle>
+        {macros.phase && (
+          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+            {macros.phase}
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {bars.map(({ key, label, icon, unit, current, target, bg, light, text }) => {
+          const pct  = target ? Math.min(100, (current / target) * 100) : 0;
+          const over = target && current > target;
+          const remaining = target ? Math.max(0, target - current) : null;
+
+          return (
+            <div key={key}>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-semibold text-stone-600">{icon} {label}</span>
+                <div className="flex items-center gap-1.5">
+                  {over && <span className="text-red-500 font-bold">⚠️ over</span>}
+                  <span className={`font-bold ${over ? 'text-red-500' : text}`}>
+                    {current}
+                  </span>
+                  <span className="text-stone-400">/ {target} {unit}</span>
+                  {remaining !== null && !over && remaining > 0 && (
+                    <span className="text-stone-300 text-xs">({remaining} left)</span>
+                  )}
+                </div>
+              </div>
+              <div className={`h-2.5 rounded-full overflow-hidden ${light}`}>
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${bg} ${over ? 'opacity-50' : ''}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Total eaten */}
+      {totals.kcal > 0 && (
+        <div className="mt-3 pt-3 border-t border-stone-100 flex justify-between text-xs text-stone-400">
+          <span>Total logged today</span>
+          <span className="font-semibold text-stone-600">
+            {Math.round(totals.kcal)} kcal · P {totals.pro.toFixed(0)}g · C {totals.carb.toFixed(0)}g · F {totals.fat.toFixed(0)}g
+          </span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Main DailyLog Page ────────────────────────────────────────────────────────
 
 export default function DailyLog() {
   const navigate = useNavigate();
@@ -57,9 +272,7 @@ export default function DailyLog() {
   const activeSupplements = allSupplements.filter(s =>
     !protocol?.supplements || protocol.supplements.includes(s.id));
 
-  // Register Web Push subscription on first load (patient only)
   usePush();
-  // Auto-sync any offline-queued logs when connection restores
   useOfflineSync();
 
   useEffect(() => { setDate(today()); }, []);
@@ -106,6 +319,7 @@ export default function DailyLog() {
 
       {/* Content */}
       <div className="max-w-md mx-auto px-4 space-y-3 pb-32 pt-4">
+
         {/* Date picker */}
         <Card>
           <div className="flex items-center gap-3">
@@ -128,6 +342,14 @@ export default function DailyLog() {
           </div>
         ) : (
           <>
+            {/* ── Sprint 2: Fasting bar (only if admin set a fasting window) ── */}
+            {protocol?.fasting && <FastingBar fasting={protocol.fasting} />}
+
+            {/* ── Sprint 2: Macro progress (only if admin set macro targets) ── */}
+            {protocol?.macros && (
+              <MacroProgress macros={protocol.macros} foodItems={log.food || []} />
+            )}
+
             {/* Morning Weight */}
             <Card>
               <SectionTitle icon="⚖️">Morning Weight</SectionTitle>

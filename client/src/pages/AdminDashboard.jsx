@@ -167,6 +167,28 @@ function EditMemberModal({ member, onClose, onSaved }) {
   const [addingKey, setAddingKey] = useState(null);
   const [newItem, setNewItem]     = useState({ label: '', sub: '', fromTime: '', toTime: '', totalTime: '' });
 
+  // ── Sprint 2: Fasting window ───────────────────────────────────────────────
+  const [fasting, setFasting] = useState({
+    start: member.fasting_start ? String(member.fasting_start).slice(0, 5) : '',
+    end:   member.fasting_end   ? String(member.fasting_end).slice(0, 5)   : '',
+    note:  member.fasting_note  || '',
+    label: member.fasting_label || '',
+  });
+  const setF = (k, v) => setFasting(f => ({ ...f, [k]: v }));
+
+  // ── Sprint 2: Macro targets ────────────────────────────────────────────────
+  const [macros, setMacros] = useState({
+    kcal:  member.macro_kcal  ? String(member.macro_kcal)  : '',
+    pro:   member.macro_pro   ? String(member.macro_pro)   : '',
+    carb:  member.macro_carb  ? String(member.macro_carb)  : '',
+    fat:   member.macro_fat   ? String(member.macro_fat)   : '',
+    phase: member.macro_phase || '',
+  });
+  const setM = (k, v) => setMacros(m => ({ ...m, [k]: v }));
+
+  // ── Protocol sub-tab (items / fasting / macros) ────────────────────────────
+  const [protoTab, setProtoTab] = useState('items');
+
   const toggleProto = (key, id, defaultItems) => {
     setProto(p => {
       const current = p[key] || defaultItems.map(i => i.id);
@@ -240,6 +262,16 @@ function EditMemberModal({ member, onClose, onSaved }) {
         custom_acv:           customItems.acv,
         custom_supplements:   customItems.supplements,
         item_overrides:       overrides,
+        // Sprint 2
+        fasting_start: fasting.start || null,
+        fasting_end:   fasting.end   || null,
+        fasting_note:  fasting.note  || null,
+        fasting_label: fasting.label || null,
+        macro_kcal:  macros.kcal  ? parseInt(macros.kcal)  : null,
+        macro_pro:   macros.pro   ? parseInt(macros.pro)   : null,
+        macro_carb:  macros.carb  ? parseInt(macros.carb)  : null,
+        macro_fat:   macros.fat   ? parseInt(macros.fat)   : null,
+        macro_phase: macros.phase || null,
       });
       onSaved(data);
       onClose();
@@ -247,6 +279,187 @@ function EditMemberModal({ member, onClose, onSaved }) {
       setError(e.response?.data?.error || 'Failed to save changes');
       setSaving(false);
     }
+  };
+
+  // ── Fasting tab ────────────────────────────────────────────────────────────
+  const FastingTab = () => {
+    // Live preview bar (recalculates on fasting state change)
+    const timeToMin = (t) => { if (!t) return 0; const [h,m]=t.split(':').map(Number); return h*60+m; };
+    const TOTAL = 1440;
+    const fastStartMin = timeToMin(fasting.start);
+    const fastEndMin   = timeToMin(fasting.end);
+    const hasValues    = fasting.start && fasting.end;
+    const crossesMid   = hasValues && fastStartMin > fastEndMin;
+    const eatHrs       = hasValues ? (crossesMid ? (fastEndMin - fastStartMin + TOTAL) : (fastEndMin - fastStartMin)) / 60 : 0;
+    const fastHrs      = hasValues ? 24 - eatHrs : 0;
+
+    // Segments for preview bar
+    let segments = [];
+    if (hasValues) {
+      if (crossesMid) {
+        if (fastEndMin > 0)        segments.push({ pct: (fastEndMin / TOTAL)*100, type:'fast' });
+        segments.push({ pct: ((fastStartMin - fastEndMin) / TOTAL)*100, type:'eat' });
+        if (fastStartMin < TOTAL)  segments.push({ pct: ((TOTAL - fastStartMin) / TOTAL)*100, type:'fast' });
+      } else {
+        if (fastStartMin > 0)      segments.push({ pct: (fastStartMin / TOTAL)*100, type:'eat' });
+        segments.push({ pct: ((fastEndMin - fastStartMin) / TOTAL)*100, type:'fast' });
+        if (fastEndMin < TOTAL)    segments.push({ pct: ((TOTAL - fastEndMin) / TOTAL)*100, type:'eat' });
+      }
+    }
+
+    return (
+      <div className="space-y-4">
+        <p className="text-xs text-stone-400">
+          Set the fasting window. Member sees a live bar showing exactly where they are right now.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+              Fast Begins ⏸
+            </label>
+            <input type="time" value={fasting.start} onChange={e => setF('start', e.target.value)}
+              className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+              Eating Window Opens ▶
+            </label>
+            <input type="time" value={fasting.end} onChange={e => setF('end', e.target.value)}
+              className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+          </div>
+        </div>
+
+        {/* Live preview bar */}
+        {hasValues && (
+          <div className="bg-stone-50 rounded-2xl p-3">
+            <div className="flex justify-between text-xs text-stone-500 mb-1.5">
+              <span className="font-semibold text-blue-600">🔵 Fasting {fastHrs.toFixed(1)}h</span>
+              <span className="font-semibold text-emerald-600">🟢 Eating {eatHrs.toFixed(1)}h</span>
+            </div>
+            <div className="h-5 rounded-full overflow-hidden flex">
+              {segments.map((s, i) => (
+                <div key={i} style={{ width: `${s.pct}%` }}
+                  className={s.type === 'eat' ? 'bg-emerald-400' : 'bg-blue-400'} />
+              ))}
+            </div>
+            <div className="flex justify-between mt-1 text-xs text-stone-400">
+              <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span><span>12AM</span>
+            </div>
+            <p className="text-xs text-stone-500 mt-2 text-center font-medium">
+              Eating: {fasting.end} – {fasting.start} · Fasting: {fasting.start} – {fasting.end}
+            </p>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+            Protocol Label (shown to member)
+          </label>
+          <input value={fasting.label} onChange={e => setF('label', e.target.value)}
+            placeholder="e.g. 16:8 Intermittent Fasting"
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+            Member-Facing Note
+          </label>
+          <textarea value={fasting.note} onChange={e => setF('note', e.target.value)} rows={2}
+            placeholder="e.g. Water and black coffee allowed during fasting window"
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800 resize-none" />
+        </div>
+
+        {(fasting.start || fasting.end) && (
+          <button onClick={() => setFasting({ start:'', end:'', note:'', label:'' })}
+            className="text-xs text-red-400 hover:text-red-600 font-semibold">
+            🗑 Clear fasting window
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ── Macros tab ─────────────────────────────────────────────────────────────
+  const MacrosTab = () => {
+    const p = parseFloat(macros.pro)  || 0;
+    const c = parseFloat(macros.carb) || 0;
+    const f = parseFloat(macros.fat)  || 0;
+    const fromMacros = Math.round(p * 4 + c * 4 + f * 9);
+    const target     = parseInt(macros.kcal) || 0;
+    const diff       = target - fromMacros;
+    const absDiff    = Math.abs(diff);
+    const diffOk     = target === 0 || absDiff <= 100;
+
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-stone-400">
+          Set daily targets. Member sees live progress bars that fill as food is logged.
+        </p>
+
+        <div>
+          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+            Daily Calorie Target (kcal)
+          </label>
+          <input type="number" value={macros.kcal} onChange={e => setM('kcal', e.target.value)}
+            placeholder="e.g. 1450"
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          {[['pro','Protein (g)','66'],['carb','Net Carbs (g)','144'],['fat','Fat (g)','57']].map(([k,lbl,ph]) => (
+            <div key={k}>
+              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">{lbl}</label>
+              <input type="number" value={macros[k]} onChange={e => setM(k, e.target.value)}
+                placeholder={ph}
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+            </div>
+          ))}
+        </div>
+
+        {/* Live macro → kcal calculator */}
+        {(p > 0 || c > 0 || f > 0) && (
+          <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+            <div className="flex justify-between items-center">
+              <span className="text-stone-500">
+                {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-stone-700">{fromMacros} kcal from macros</span>
+              </span>
+              {target > 0 && (
+                <span className={`font-bold ml-2 ${diffOk ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {diffOk ? '✓ Balanced' : `${diff > 0 ? '+' : ''}${diff} kcal off`}
+                </span>
+              )}
+            </div>
+            {!diffOk && (
+              <p className="text-amber-600 mt-1">⚠️ Macro kcal is {absDiff} kcal away from target — adjust to match.</p>
+            )}
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+            Phase / Label (shown to member)
+          </label>
+          <input value={macros.phase} onChange={e => setM('phase', e.target.value)}
+            placeholder="e.g. Phase 1 — Fat Loss"
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+        </div>
+
+        {(macros.kcal || macros.pro) && (
+          <button onClick={() => setMacros({ kcal:'', pro:'', carb:'', fat:'', phase:'' })}
+            className="text-xs text-red-400 hover:text-red-600 font-semibold">
+            🗑 Clear macro targets
+          </button>
+        )}
+      </div>
+    );
   };
 
   // ── Inline timing edit form ────────────────────────────────────────────────
@@ -458,12 +671,30 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
       {tab === 'protocol' && (
         <div className="space-y-3">
-          <p className="text-xs text-stone-400 bg-amber-50 px-3 py-2 rounded-xl">
-            ✅ Check/uncheck to assign. ✏️ Edit label & timing. 🗑 Delete item.
-          </p>
-          <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />
-          <ProtocolSection label="Apple Cider Vinegar" icon="🍶" items={ACV_ITEMS}   protoKey="acv"         />
-          <ProtocolSection label="Supplements"         icon="💊" items={SUPPLEMENTS} protoKey="supplements" />
+          {/* Protocol sub-tabs */}
+          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
+            {[['items','📋 Items'],['fasting','⏰ Fasting'],['macros','🎯 Macros']].map(([id, label]) => (
+              <button key={id} onClick={() => setProtoTab(id)}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                  protoTab === id ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {protoTab === 'items' && (
+            <>
+              <p className="text-xs text-stone-400 bg-amber-50 px-3 py-2 rounded-xl">
+                ✅ Check/uncheck to assign. ✏️ Edit label & timing. 🗑 Delete item.
+              </p>
+              <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />
+              <ProtocolSection label="Apple Cider Vinegar" icon="🍶" items={ACV_ITEMS}   protoKey="acv"         />
+              <ProtocolSection label="Supplements"         icon="💊" items={SUPPLEMENTS} protoKey="supplements" />
+            </>
+          )}
+
+          {protoTab === 'fasting' && <FastingTab />}
+          {protoTab === 'macros'  && <MacrosTab />}
         </div>
       )}
 

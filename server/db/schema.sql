@@ -116,6 +116,19 @@ CREATE TABLE IF NOT EXISTS monitor_notes (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── SPRINT 2 — Fasting + Macro columns ──────────────────────────────────
+-- ALTER TABLE is used (not CREATE TABLE) because patient_profiles already
+-- exists in production. IF NOT EXISTS makes these safe to re-run on every deploy.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_start  TIME;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_end    TIME;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_note   TEXT;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_label  VARCHAR(100);
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS macro_kcal     INT;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS macro_pro      INT;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS macro_carb     INT;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS macro_fat      INT;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS macro_phase    VARCHAR(100);
+
 -- ── FOODS (Sprint 1) ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS foods (
   id           SERIAL PRIMARY KEY,

@@ -39,35 +39,41 @@ router.get('/:date', authMW, async (req, res) => {
     const [logResult, profileResult] = await Promise.all([
       pool.query('SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2', [patientId, date]),
       pool.query(`SELECT protocol_activities, protocol_acv, protocol_supplements,
-        custom_activities, custom_acv, custom_supplements, item_overrides
+        custom_activities, custom_acv, custom_supplements, item_overrides,
+        fasting_start, fasting_end, fasting_note, fasting_label,
+        macro_kcal, macro_pro, macro_carb, macro_fat, macro_phase
         FROM patient_profiles WHERE user_id = $1`, [patientId]),
     ]);
 
     const log     = logResult.rows[0] || null;
     const profile = profileResult.rows[0] || {};
 
-    res.json(log ? {
-      ...log,
-      protocol: {
-        activities:       profile.protocol_activities  || null,
-        acv:              profile.protocol_acv         || null,
-        supplements:      profile.protocol_supplements || null,
-        custom_activities:  profile.custom_activities    || [],
-        custom_acv:         profile.custom_acv           || [],
-        custom_supplements: profile.custom_supplements   || [],
-        item_overrides:     profile.item_overrides       || {},
-      }
-    } : {
-      protocol: {
-        activities:       profile.protocol_activities  || null,
-        acv:              profile.protocol_acv         || null,
-        supplements:      profile.protocol_supplements || null,
-        custom_activities:  profile.custom_activities    || [],
-        custom_acv:         profile.custom_acv           || [],
-        custom_supplements: profile.custom_supplements   || [],
-        item_overrides:     profile.item_overrides       || {},
-      }
-    });
+    // Build protocol — Sprint 1 items + Sprint 2 fasting/macros
+    const protocol = {
+      activities:         profile.protocol_activities  || null,
+      acv:                profile.protocol_acv         || null,
+      supplements:        profile.protocol_supplements || null,
+      custom_activities:  profile.custom_activities    || [],
+      custom_acv:         profile.custom_acv           || [],
+      custom_supplements: profile.custom_supplements   || [],
+      item_overrides:     profile.item_overrides       || {},
+      // Sprint 2: null = not set = not shown to member
+      fasting: profile.fasting_start ? {
+        start: profile.fasting_start,
+        end:   profile.fasting_end,
+        note:  profile.fasting_note  || null,
+        label: profile.fasting_label || null,
+      } : null,
+      macros: profile.macro_kcal ? {
+        kcal:  profile.macro_kcal,
+        pro:   profile.macro_pro,
+        carb:  profile.macro_carb,
+        fat:   profile.macro_fat,
+        phase: profile.macro_phase || null,
+      } : null,
+    };
+
+    res.json(log ? { ...log, protocol } : { protocol });
   } catch (err) {
     console.error('GET /logs/:date error:', err);
     res.status(500).json({ error: 'Failed to fetch log' });
