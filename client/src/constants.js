@@ -158,7 +158,7 @@ export const RDA_TARGETS = {
   omega3_ala: { rda:1100, unit:'mg',  label:'Omega-3 ALA',    icon:'🌿', tab:'specials' },
   omega3_epa: { rda:250,  unit:'mg',  label:'Omega-3 EPA',    icon:'🐟', tab:'specials' },
   omega3_dha: { rda:250,  unit:'mg',  label:'Omega-3 DHA',    icon:'🐠', tab:'specials' },
-  omega6:     { rda:11000,unit:'mg',  label:'Omega-6',        icon:'🫒', tab:'specials' },
+  omega6:     { rda:11000,unit:'mg',  label:'Omega-6',        icon:'🌿', tab:'specials' },
   fiber:      { rda:21,   unit:'g',   label:'Dietary Fiber',  icon:'🌾', tab:'specials' },
   lycopene:   { rda:6000, unit:'mcg', label:'Lycopene',       icon:'🍅', tab:'specials' },
   beta_glucan:{ rda:3,    unit:'g',   label:'Beta-Glucan',    icon:'🌀', tab:'specials' },

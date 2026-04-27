@@ -517,7 +517,13 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
   // ── Sprint 5: RDA overrides per member ────────────────────────────────────
   const [rdaOverrides, setRdaOverrides] = useState(member.rda_overrides || {});
-  const setRda = (key, val) => setRdaOverrides(o => val ? { ...o, [key]: parseFloat(val) } : (({ [key]:_, ...rest }) => rest)(o));
+  const setRda = (key, val) => {
+    if (val) {
+      setRdaOverrides(o => ({ ...o, [key]: parseFloat(val) }));
+    } else {
+      setRdaOverrides(o => { const r = { ...o }; delete r[key]; return r; });
+    }
+  };
 
   // ── Protocol sub-tab (items / fasting / macros / meal plan) ──────────────────
   const [protoTab, setProtoTab] = useState('items');
