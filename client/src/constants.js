@@ -1,11 +1,11 @@
 // ── Activities (6 total) ─────────────────────────────────────────────────────
 export const ACTIVITIES = [
-  { id: 'walk',       label: 'Morning Walk',        sub: '30 min · 6:30–7:00 AM',             icon: '🚶' },
-  { id: 'sun',        label: 'Sunlight Exposure',   sub: '20 min · 7:00–7:20 AM',             icon: '☀️' },
-  { id: 'steps1',     label: 'Post Meal 1 Steps',   sub: '2,000 steps after 10 AM meal',      icon: '👟' },
-  { id: 'resistance', label: 'Resistance Training', sub: '30 min under instructor',            icon: '🏋️' },
-  { id: 'steps2',     label: 'Post Meal 2 Steps',   sub: '2,000 steps after 1:30 PM meal',    icon: '👟' },
-  { id: 'steps3',     label: 'Post Meal 3 Steps',   sub: '2,000 steps after 5:30 PM meal',    icon: '👟' },
+  { id: 'walk',       label: 'Morning Walk',        sub: '30 min · 6:30–7:00 AM',             icon: '🚶', met: 3.5, durationMin: 30 },
+  { id: 'sun',        label: 'Sunlight Exposure',   sub: '20 min · 7:00–7:20 AM',             icon: '☀️', met: 1.3, durationMin: 20, vitD_iu: 1000 },
+  { id: 'steps1',     label: 'Post Meal 1 Steps',   sub: '2,000 steps after 10 AM meal',      icon: '👟', met: 3.0, durationMin: 15 },
+  { id: 'resistance', label: 'Resistance Training', sub: '30 min under instructor',            icon: '🏋️', met: 5.0, durationMin: 30 },
+  { id: 'steps2',     label: 'Post Meal 2 Steps',   sub: '2,000 steps after 1:30 PM meal',    icon: '👟', met: 3.0, durationMin: 15 },
+  { id: 'steps3',     label: 'Post Meal 3 Steps',   sub: '2,000 steps after 5:30 PM meal',    icon: '👟', met: 3.0, durationMin: 15 },
 ];
 
 // ── ACV Items (3 total) ──────────────────────────────────────────────────────
