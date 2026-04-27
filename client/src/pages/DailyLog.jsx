@@ -64,6 +64,57 @@ function calcMicros(foodItems = []) {
   }, { fiber:0, omega3:0, vit_b12:0, vit_d:0, vit_c:0, calcium:0, iron:0, magnesium:0, zinc:0, folate:0, potassium:0 });
 }
 
+// Add supplement contributions to micros when they are checked
+// (B12 injection, D3, Fish Oil, Flaxseed etc. have known nutrient values)
+function addSupplementMicros(base, supplements = {}) {
+  const m = { ...base };
+  if (supplements.b12)     { m.vit_b12  += 1000; }           // 1000mcg B12 injection
+  if (supplements.d3)      { m.vit_d    += 8571; }           // 60000 IU / 7 days
+  if (supplements.fishoil) { m.omega3   += 360;  }           // ~360mg EPA+DHA per 1g capsule
+  if (supplements.flax)    { m.omega3   += 533;  }           // ~533mg ALA per 1 tsp
+  if (supplements.multi)   {                                   // Multivitamin approximate
+    m.vit_b12  += 2.4;  m.vit_d  += 600;   m.vit_c += 90;
+    m.calcium  += 200;  m.iron   += 8;     m.magnesium += 100;
+    m.zinc     += 8;    m.folate += 400;
+  }
+  if (supplements.yeast) { m.vit_b12 += 1.0; }              // ~1 tbsp nutritional yeast
+  return m;
+}
+
+// Add Vitamin D contribution from sunlight activity (20 min UVB optimal window)
+function addActivityMicros(base, activities = {}, activeActivities = []) {
+  const m = { ...base };
+  activeActivities.forEach(act => {
+    if (activities[act.id] && act.vitD_iu) {
+      m.vit_d += act.vitD_iu;
+    }
+  });
+  return m;
+}
+
+// Calculate kcal burned per activity using MET × weight × duration
+// weight: kg, duration parsed from override totalTime or activity default
+function calcBurned(activities = {}, activeActivities = [], weightKg, overrides = {}) {
+  if (!weightKg || weightKg <= 0) return { items: [], total: 0 };
+  const items = [];
+  let total = 0;
+  activeActivities.forEach(act => {
+    if (!activities[act.id]) return;
+    const met = act.met || 3.0;
+    // Parse duration from override first, fall back to activity default
+    let mins = act.durationMin || 30;
+    const ov = overrides[act.id];
+    if (ov?.totalTime) {
+      const m = String(ov.totalTime).match(/(\d+)/);
+      if (m) mins = parseInt(m[1]);
+    }
+    const kcal = Math.round(met * weightKg * (mins / 60));
+    items.push({ id: act.id, label: act.label, kcal, mins });
+    total += kcal;
+  });
+  return { items, total };
+}
+
 // Standard RDA targets (female, ~60yr) — Sprint 5 will add per-member overrides
 const RDA = {
   fiber:    { target: 25,    unit: 'g',   label: 'Fiber',      icon: '🌿' },
@@ -206,137 +257,19 @@ function FastingBar({ fasting }) {
 // 4 progress bars (kcal, protein, carbs, fat) that fill as food is logged.
 // Only renders if protocol.macros is set by admin.
 
-function MacroProgress({ macros, foodItems }) {
+function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, weightKg }) {
   const totals  = calcFoodMacros(foodItems);
-  const micros  = calcMicros(foodItems);
+  const rawMicros = calcMicros(foodItems);
+  const withSupps = addSupplementMicros(rawMicros, supplements);
+  const micros    = addActivityMicros(withSupps, activities, activeActivities);
   const [showMicros, setShowMicros] = useState(false);
 
   const hasMicroData = foodItems.some(f => f.per_100g);
 
-  const bars = [
-    { key: 'kcal', label: 'Calories',  icon: '🔥', unit: 'kcal',
-      current: Math.round(totals.kcal), target: macros.kcal,
-      bg: 'bg-orange-400', light: 'bg-orange-50', text: 'text-orange-600' },
-    { key: 'pro',  label: 'Protein',   icon: '💪', unit: 'g',
-      current: +totals.pro.toFixed(1),  target: macros.pro,
-      bg: 'bg-blue-500',   light: 'bg-blue-50',   text: 'text-blue-600' },
-    { key: 'carb', label: 'Net Carbs', icon: '🌾', unit: 'g',
-      current: +totals.carb.toFixed(1), target: macros.carb,
-      bg: 'bg-amber-400',  light: 'bg-amber-50',  text: 'text-amber-600' },
-    { key: 'fat',  label: 'Fat',       icon: '🥑', unit: 'g',
-      current: +totals.fat.toFixed(1),  target: macros.fat,
-      bg: 'bg-purple-500', light: 'bg-purple-50', text: 'text-purple-600' },
-  ];
+  // Calorie burn
+  const burn = calcBurned(activities, activeActivities, weightKg, overrides);
+  const netKcal = Math.round(totals.kcal) - burn.total;
 
-  const microRows = Object.entries(RDA).map(([key, rda]) => {
-    const raw  = micros[key] || 0;
-    const val  = key === 'vit_b12' || key === 'folate' ? +raw.toFixed(1) : Math.round(raw);
-    const pct  = Math.min(100, (raw / rda.target) * 100);
-    const color = pct >= 80 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400';
-    const textColor = pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500';
-    return { key, ...rda, val, pct, color, textColor };
-  });
-
-  // Count how many micros are meeting targets (>=80%)
-  const microsMet = microRows.filter(m => m.pct >= 80).length;
-
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-3">
-        <SectionTitle icon="🎯">Macro Targets</SectionTitle>
-        {macros.phase && (
-          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
-            {macros.phase}
-          </span>
-        )}
-      </div>
-
-      {/* Macro bars */}
-      <div className="space-y-3">
-        {bars.map(({ key, label, icon, unit, current, target, bg, light, text }) => {
-          const pct  = target ? Math.min(100, (current / target) * 100) : 0;
-          const over = target && current > target;
-          const remaining = target ? Math.max(0, target - current) : null;
-          return (
-            <div key={key}>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-semibold text-stone-600">{icon} {label}</span>
-                <div className="flex items-center gap-1.5">
-                  {over && <span className="text-red-500 font-bold">⚠️ over</span>}
-                  <span className={`font-bold ${over ? 'text-red-500' : text}`}>{current}</span>
-                  <span className="text-stone-400">/ {target} {unit}</span>
-                  {remaining !== null && !over && remaining > 0 && (
-                    <span className="text-stone-300">({remaining} left)</span>
-                  )}
-                </div>
-              </div>
-              <div className={`h-2.5 rounded-full overflow-hidden ${light}`}>
-                <div className={`h-full rounded-full transition-all duration-500 ${bg} ${over ? 'opacity-50' : ''}`}
-                  style={{ width: `${pct}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Total row */}
-      {totals.kcal > 0 && (
-        <div className="mt-3 pt-3 border-t border-stone-100 flex justify-between text-xs text-stone-400">
-          <span>Total logged today</span>
-          <span className="font-semibold text-stone-600">
-            {Math.round(totals.kcal)} kcal · P {totals.pro.toFixed(0)}g · C {totals.carb.toFixed(0)}g · F {totals.fat.toFixed(0)}g
-          </span>
-        </div>
-      )}
-
-      {/* ── Micronutrient toggle ── */}
-      {hasMicroData && (
-        <div className="mt-3 pt-3 border-t border-stone-100">
-          <button onClick={() => setShowMicros(v => !v)}
-            className="w-full flex items-center justify-between text-xs font-semibold text-stone-500 hover:text-emerald-700 transition-colors">
-            <span>
-              🔬 Key Nutrients
-              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
-                microsMet >= 8 ? 'bg-emerald-100 text-emerald-700' :
-                microsMet >= 5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
-              }`}>
-                {microsMet}/{microRows.length} met
-              </span>
-            </span>
-            <span>{showMicros ? '▲' : '▼'}</span>
-          </button>
-
-          {showMicros && (
-            <div className="mt-3 space-y-2">
-              {microRows.map(({ key, label, icon, unit, val, pct, color, textColor, target }) => (
-                <div key={key}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-stone-600 font-medium">{icon} {label}</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`font-bold ${textColor}`}>{val}</span>
-                      <span className="text-stone-400">/ {target} {unit}</span>
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                        pct >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                        pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
-                      }`}>{Math.round(pct)}%</span>
-                    </div>
-                  </div>
-                  <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-500 ${color}`}
-                      style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              ))}
-              <p className="text-xs text-stone-400 pt-1 italic">
-                * Only foods logged via search have micronutrient data.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
 
 // ─── Sprint 3: Prescribed Meal Plan Cards ────────────────────────────────────
 // Collapsible cards above the food log. Each card shows the prescribed meal,
@@ -353,13 +286,17 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
   const nowMin  = now.getHours() * 60 + now.getMinutes();
   const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h*60+(m||0); };
 
-  const loggedNames = (foodItems || []).map(f => f.name?.toLowerCase());
-
-  const isItemLogged = (item) => loggedNames.includes(item.food_name?.toLowerCase());
+  const isItemLogged = (item, mealName) => {
+    // Check within the SAME meal slot to avoid false positives from shared foods
+    const loggedInMeal = (foodItems || [])
+      .filter(f => f.meal === mealName)
+      .map(f => f.name?.toLowerCase());
+    return loggedInMeal.includes(item.food_name?.toLowerCase());
+  };
 
   const isMealFullyLogged = (meal) => {
     if (!meal.items?.length) return false;
-    const matched = (meal.items || []).filter(i => isItemLogged(i)).length;
+    const matched = (meal.items || []).filter(i => isItemLogged(i, meal.name)).length;
     return matched / meal.items.length >= 0.8;
   };
 
@@ -388,7 +325,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
     // Pre-check all items that aren't logged yet when opening
     if (!isOpen && !checked[meal.id]) {
       const unlogged = new Set(
-        (meal.items || []).map((item, i) => (!isItemLogged(item) ? i : null)).filter(i => i !== null)
+        (meal.items || []).map((item, i) => (!isItemLogged(item, meal.name) ? i : null)).filter(i => i !== null)
       );
       setChecked(prev => ({ ...prev, [meal.id]: unlogged }));
     }
@@ -473,7 +410,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                   <div className="space-y-1">
                     {(meal.items || []).map((item, i) => {
                       const isChecked  = checkedSet.has(i);
-                      const alreadyIn  = isItemLogged(item);
+                      const alreadyIn  = isItemLogged(item, meal.name);
 
                       return (
                         <button key={i} onClick={() => toggleItem(meal.id, i)}
@@ -664,7 +601,15 @@ export default function DailyLog() {
 
             {/* ── Sprint 2: Macro progress (only if admin set macro targets) ── */}
             {protocol?.macros && (
-              <MacroProgress macros={protocol.macros} foodItems={log.food || []} />
+              <MacroProgress
+                macros={protocol.macros}
+                foodItems={log.food || []}
+                supplements={log.supplements || {}}
+                activeActivities={activeActivities}
+                activities={log.activities || {}}
+                overrides={protocol?.item_overrides || {}}
+                weightKg={parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0}
+              />
             )}
 
             {/* Morning Weight */}
