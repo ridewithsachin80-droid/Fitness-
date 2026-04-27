@@ -142,6 +142,83 @@ async function seedFoodsIfEmpty() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 5. PATCH FOODS — always runs, inserts missing foods ON CONFLICT DO NOTHING
+//    Add any food here and it will appear on next deploy even if the table
+//    already has data. Safe to re-run — duplicates are silently skipped.
+// ─────────────────────────────────────────────────────────────────────────────
+const FOOD_PATCHES = [
+  // ── format: [ name, name_hindi, name_local, category, source, verified, per_100g ] ──
+
+  // Mixed Vegetables — cooked, standard Indian sabzi mix
+  // (carrot, beans, peas, capsicum, corn — average nutrient values)
+  ['Mixed Vegetables (Cooked)', 'मिक्स सब्जी', 'Mixed Sabzi', 'vegetable', 'nin', true, {
+    calories: 65, protein: 2.5, total_carbs: 11.5, net_carbs: 8.5,
+    fat: 1.5, fiber: 3.0, sugar: 4.5, saturated_fat: 0.2, trans_fat: 0, cholesterol: 0,
+    omega3_ala: 0, omega3_epa: 0, omega3_dha: 0, omega6: 0, omega9_mufa: 0.8,
+    vit_a: 120, vit_b1: 0.08, vit_b2: 0.07, vit_b3: 0.8, vit_b5: 0.3,
+    vit_b6: 0.15, vit_b12: 0, vit_c: 22, vit_d: 0, vit_e: 0.8, vit_k: 35,
+    folate: 45, biotin: 0, choline: 18,
+    calcium: 40, iron: 1.2, magnesium: 22, phosphorus: 55,
+    potassium: 310, sodium: 25, zinc: 0.5, copper: 0.1, manganese: 0.3, selenium: 1.2,
+    glycemic_index: 32, glycemic_load: 4, probiotic: false, prebiotic_fiber: 1.0,
+    lycopene: 0, beta_glucan: 0,
+  }],
+
+  // Mixed Vegetables (Stir-fried with oil)
+  ['Mixed Vegetables (Stir-fried)', 'मिक्स सब्जी (तली)', 'Mixed Stir Fry', 'vegetable', 'nin', true, {
+    calories: 95, protein: 2.5, total_carbs: 11.0, net_carbs: 8.0,
+    fat: 4.5, fiber: 3.0, sugar: 4.0, saturated_fat: 0.5, trans_fat: 0, cholesterol: 0,
+    omega3_ala: 80, omega3_epa: 0, omega3_dha: 0, omega6: 900, omega9_mufa: 2.5,
+    vit_a: 115, vit_b1: 0.08, vit_b2: 0.07, vit_b3: 0.8, vit_b5: 0.3,
+    vit_b6: 0.14, vit_b12: 0, vit_c: 20, vit_d: 0, vit_e: 1.2, vit_k: 32,
+    folate: 42, biotin: 0, choline: 16,
+    calcium: 38, iron: 1.1, magnesium: 20, phosphorus: 52,
+    potassium: 295, sodium: 180, zinc: 0.5, copper: 0.1, manganese: 0.3, selenium: 1.0,
+    glycemic_index: 35, glycemic_load: 4, probiotic: false, prebiotic_fiber: 1.0,
+    lycopene: 0, beta_glucan: 0,
+  }],
+
+  // Mixed Vegetables (Frozen, uncooked) — for raw weight logging
+  ['Mixed Vegetables (Frozen, Raw)', 'फ्रोज़न मिक्स सब्जी', 'Frozen Mixed Veg', 'vegetable', 'usda', true, {
+    calories: 42, protein: 2.2, total_carbs: 8.5, net_carbs: 6.0,
+    fat: 0.3, fiber: 2.5, sugar: 3.0, saturated_fat: 0.1, trans_fat: 0, cholesterol: 0,
+    omega3_ala: 0, omega3_epa: 0, omega3_dha: 0, omega6: 0, omega9_mufa: 0,
+    vit_a: 190, vit_b1: 0.07, vit_b2: 0.06, vit_b3: 0.7, vit_b5: 0.2,
+    vit_b6: 0.12, vit_b12: 0, vit_c: 8, vit_d: 0, vit_e: 0.4, vit_k: 22,
+    folate: 30, biotin: 0, choline: 12,
+    calcium: 25, iron: 0.8, magnesium: 15, phosphorus: 40,
+    potassium: 200, sodium: 45, zinc: 0.3, copper: 0.05, manganese: 0.2, selenium: 0.8,
+    glycemic_index: 30, glycemic_load: 3, probiotic: false, prebiotic_fiber: 0.8,
+    lycopene: 0, beta_glucan: 0,
+  }],
+];
+
+async function patchFoods() {
+  if (!FOOD_PATCHES.length) return;
+
+  const client = await pool.connect();
+  let added = 0;
+  try {
+    for (const [name, name_hindi, name_local, category, source, verified, per_100g] of FOOD_PATCHES) {
+      const result = await client.query(
+        `INSERT INTO foods (name, name_hindi, name_local, category, source, verified, per_100g)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (lower(name), source) DO NOTHING
+         RETURNING id`,
+        [name, name_hindi, name_local, category, source, verified, JSON.stringify(per_100g)]
+      );
+      if (result.rowCount > 0) added++;
+    }
+    if (added > 0) console.log(`🥦 Food patches: added ${added} new item(s)`);
+    else           console.log(`ℹ️  Food patches: all items already present`);
+  } catch (err) {
+    console.error('⚠️  Food patch error (non-fatal):', err.message);
+  } finally {
+    client.release();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 async function main() {
@@ -149,9 +226,9 @@ async function main() {
     await runSchema();
     await seedUsers();
     await seedFoodsIfEmpty();
+    await patchFoods();          // ← always runs, adds missing foods
   } catch (err) {
     console.error('❌ Startup error:', err.message);
-    // Non-fatal — still start the server
   } finally {
     await pool.end();
   }
