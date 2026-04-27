@@ -246,92 +246,198 @@ function MacroProgress({ macros, foodItems }) {
 
 // ─── Sprint 3: Prescribed Meal Plan Cards ────────────────────────────────────
 // Collapsible cards above the food log. Each card shows the prescribed meal,
-// its items, and a "Log this meal" button that pre-fills the food log.
+// its items with checkboxes. Member ticks what they consumed then presses Log.
 
 function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
-  const [expanded, setExpanded] = useState(null);
+  const [expanded,  setExpanded]  = useState(null);
+  // Per-meal checked items: { [mealId]: Set of item indices }
+  const [checked,   setChecked]   = useState({});
+
   if (!mealPlan || mealPlan.length === 0) return null;
 
-  const now      = new Date();
-  const nowMin   = now.getHours() * 60 + now.getMinutes();
-  const toMin    = (t) => { if (!t) return null; const [h,m] = t.split(':').map(Number); return h*60+(m||0); };
+  const now     = new Date();
+  const nowMin  = now.getHours() * 60 + now.getMinutes();
+  const toMin   = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h*60+(m||0); };
 
-  // Check if a meal's food items are already logged (>= 80% by name match)
-  const isMealLogged = (meal) => {
+  const loggedNames = (foodItems || []).map(f => f.name?.toLowerCase());
+
+  const isItemLogged = (item) => loggedNames.includes(item.food_name?.toLowerCase());
+
+  const isMealFullyLogged = (meal) => {
     if (!meal.items?.length) return false;
-    const logged = (foodItems || []).map(f => f.name?.toLowerCase());
-    const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
+    const matched = (meal.items || []).filter(i => isItemLogged(i)).length;
     return matched / meal.items.length >= 0.8;
+  };
+
+  const toggleItem = (mealId, idx) => {
+    setChecked(prev => {
+      const set = new Set(prev[mealId] || []);
+      set.has(idx) ? set.delete(idx) : set.add(idx);
+      return { ...prev, [mealId]: set };
+    });
+  };
+
+  const toggleAll = (meal) => {
+    const allIdxs = (meal.items || []).map((_, i) => i);
+    const current = checked[meal.id] || new Set();
+    // If all checked → uncheck all; otherwise → check all
+    const allChecked = allIdxs.every(i => current.has(i));
+    setChecked(prev => ({
+      ...prev,
+      [meal.id]: allChecked ? new Set() : new Set(allIdxs),
+    }));
+  };
+
+  const handleOpen = (meal) => {
+    const isOpen = expanded === meal.id;
+    setExpanded(isOpen ? null : meal.id);
+    // Pre-check all items that aren't logged yet when opening
+    if (!isOpen && !checked[meal.id]) {
+      const unlogged = new Set(
+        (meal.items || []).map((item, i) => (!isItemLogged(item) ? i : null)).filter(i => i !== null)
+      );
+      setChecked(prev => ({ ...prev, [meal.id]: unlogged }));
+    }
+  };
+
+  const handleLog = (meal) => {
+    const checkedIdxs = checked[meal.id] || new Set();
+    const selectedItems = (meal.items || []).filter((_, i) => checkedIdxs.has(i));
+    if (selectedItems.length === 0) return;
+    onLogMeal({ ...meal, items: selectedItems });
+    setExpanded(null);
   };
 
   return (
     <Card>
       <SectionTitle icon="🍽">Prescribed Meal Plan</SectionTitle>
-      <p className="text-xs text-stone-400 mb-3">Your personalised plan for today. Tap a meal to log it quickly.</p>
+      <p className="text-xs text-stone-400 mb-3">Tick what you consumed, then tap Log.</p>
       <div className="space-y-2">
         {mealPlan.map((meal) => {
-          const mealMin  = toMin(meal.time);
-          const logged   = isMealLogged(meal);
+          const mealMin   = toMin(meal.time);
+          const fullyLogged = isMealFullyLogged(meal);
           const isCurrent = mealMin !== null && nowMin >= mealMin - 30 && nowMin <= mealMin + 120;
-          const isOpen   = expanded === meal.id;
+          const isOpen    = expanded === meal.id;
+          const mealKcal  = (meal.items || []).reduce((s, i) => s + (i.kcal || 0), 0);
 
-          const mealKcal = (meal.items || []).reduce((s, i) => s + (i.kcal || 0), 0);
+          const checkedSet   = checked[meal.id] || new Set();
+          const checkedCount = checkedSet.size;
+          // Kcal of only checked items
+          const checkedKcal  = (meal.items || []).reduce((s, item, i) =>
+            checkedSet.has(i) ? s + (item.kcal || 0) : s, 0);
 
-          // Status badge
-          const badge = logged
+          const badge = fullyLogged
             ? { label: '✓ Logged', cls: 'bg-emerald-100 text-emerald-700' }
             : isCurrent
-              ? { label: '⏰ Now', cls: 'bg-amber-100 text-amber-700' }
-              : { label: meal.time || '', cls: 'bg-stone-100 text-stone-500' };
+              ? { label: '⏰ Now',   cls: 'bg-amber-100 text-amber-700' }
+              : { label: meal.time ? meal.time.slice(0,5) : '', cls: 'bg-stone-100 text-stone-500' };
 
           return (
             <div key={meal.id} className={`rounded-2xl border overflow-hidden transition-all ${
-              logged ? 'border-emerald-200 bg-emerald-50/50' :
-              isCurrent ? 'border-amber-200 bg-amber-50/50' : 'border-stone-100 bg-stone-50'
+              fullyLogged ? 'border-emerald-200 bg-emerald-50/50' :
+              isCurrent   ? 'border-amber-200 bg-amber-50/50'    : 'border-stone-100 bg-stone-50'
             }`}>
-              {/* Card header — always visible */}
+              {/* Header */}
               <button className="w-full text-left px-4 py-3 flex items-center gap-3"
-                onClick={() => setExpanded(isOpen ? null : meal.id)}>
+                onClick={() => handleOpen(meal)}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-stone-700">{meal.name}</span>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                   </div>
                   <p className="text-xs text-stone-400 mt-0.5">
-                    {(meal.items || []).length} items · <span className="font-bold text-orange-500">{mealKcal} kcal</span>
+                    {(meal.items || []).length} items ·{' '}
+                    <span className="font-bold text-orange-500">{mealKcal} kcal</span>
+                    {isOpen && checkedCount > 0 && (
+                      <span className="text-emerald-600 font-semibold ml-2">
+                        · {checkedCount} selected · {checkedKcal} kcal
+                      </span>
+                    )}
                   </p>
                 </div>
                 <span className="text-stone-400 text-sm">{isOpen ? '▲' : '▼'}</span>
               </button>
 
-              {/* Expanded content */}
+              {/* Expanded — checkbox list */}
               {isOpen && (
-                <div className="px-4 pb-4 space-y-2 border-t border-stone-100">
-                  {(meal.items || []).map((item, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5">
-                      <div>
-                        <span className="text-sm text-stone-700 font-medium">{item.food_name}</span>
-                        <span className="text-xs text-stone-400 ml-2">{item.qty_g}g</span>
-                      </div>
-                      <div className="flex gap-2 text-xs flex-shrink-0">
-                        <span className="font-bold text-orange-500">{item.kcal} kcal</span>
-                        <span className="text-blue-500">P {item.pro}g</span>
-                        <span className="text-amber-500">C {item.carb}g</span>
-                        <span className="text-purple-500">F {item.fat}g</span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="px-4 pb-4 border-t border-stone-100">
 
-                  {!logged && (
+                  {/* Select all row */}
+                  <button onClick={() => toggleAll(meal)}
+                    className="flex items-center gap-2 py-2 text-xs text-stone-500 font-semibold hover:text-emerald-700 transition-colors">
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                      (meal.items||[]).every((_, i) => checkedSet.has(i))
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : 'border-stone-300 bg-white'
+                    }`}>
+                      {(meal.items||[]).every((_, i) => checkedSet.has(i)) && '✓'}
+                    </span>
+                    Select all / None
+                  </button>
+
+                  {/* Food item rows with checkboxes */}
+                  <div className="space-y-1">
+                    {(meal.items || []).map((item, i) => {
+                      const isChecked  = checkedSet.has(i);
+                      const alreadyIn  = isItemLogged(item);
+
+                      return (
+                        <button key={i} onClick={() => toggleItem(meal.id, i)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                            isChecked  ? 'bg-emerald-50 border border-emerald-200' :
+                            alreadyIn  ? 'bg-stone-100 border border-stone-200 opacity-60' :
+                                         'bg-white border border-stone-100 hover:border-stone-200'
+                          }`}>
+                          {/* Checkbox */}
+                          <span className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-300 bg-white'
+                          }`}>
+                            {isChecked && <span className="text-xs font-bold">✓</span>}
+                          </span>
+
+                          {/* Food name + weight */}
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm font-medium ${isChecked ? 'text-stone-800' : 'text-stone-500'}`}>
+                              {item.food_name}
+                            </span>
+                            <span className="text-xs text-stone-400 ml-1.5">{item.qty_g}g</span>
+                            {alreadyIn && (
+                              <span className="text-xs text-emerald-600 font-semibold ml-1.5">already logged</span>
+                            )}
+                          </div>
+
+                          {/* Macros */}
+                          <div className="flex gap-1.5 text-xs flex-shrink-0">
+                            <span className={`font-bold ${isChecked ? 'text-orange-500' : 'text-stone-400'}`}>
+                              {item.kcal} kcal
+                            </span>
+                            <span className={isChecked ? 'text-blue-500' : 'text-stone-300'}>P {item.pro}g</span>
+                            <span className={isChecked ? 'text-amber-500' : 'text-stone-300'}>C {item.carb}g</span>
+                            <span className={isChecked ? 'text-purple-500' : 'text-stone-300'}>F {item.fat}g</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Log button */}
+                  {!fullyLogged && (
                     <button
-                      onClick={() => { onLogMeal(meal); setExpanded(null); }}
-                      className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white
-                        text-sm font-bold rounded-xl transition-all active:scale-95">
-                      📋 Log this meal
+                      onClick={() => handleLog(meal)}
+                      disabled={checkedCount === 0}
+                      className={`w-full mt-3 py-3 text-sm font-bold rounded-xl transition-all active:scale-95 ${
+                        checkedCount > 0
+                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm'
+                          : 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                      }`}>
+                      {checkedCount === 0
+                        ? 'Select items to log'
+                        : `📋 Log ${checkedCount} item${checkedCount > 1 ? 's' : ''} · ${checkedKcal} kcal`}
                     </button>
                   )}
-                  {logged && (
-                    <p className="text-center text-xs text-emerald-600 font-semibold pt-1">✓ Already logged</p>
+
+                  {fullyLogged && (
+                    <p className="text-center text-xs text-emerald-600 font-semibold pt-3">✓ Already logged</p>
                   )}
                 </div>
               )}
