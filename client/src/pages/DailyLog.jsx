@@ -371,22 +371,8 @@ export default function DailyLog() {
   const activeSupplements = allSupplements.filter(s =>
     !protocol?.supplements || protocol.supplements.includes(s.id));
 
-  // ── Sprint 3: pre-fill food log from prescribed meal ─────────────────────
-  const logMeal = useCallback((meal) => {
-    const newItems = (meal.items || []).map(item => ({
-      id:       Date.now() + Math.random(),
-      name:     item.food_name,
-      grams:    item.qty_g,
-      meal:     meal.name,   // maps to Meal 1/2/3 label
-      food_id:  item.food_id  || null,
-      per_100g: item.per_100g || null,
-    }));
-    // Append to existing food items without duplicating already-logged ones
-    const existing = log.food || [];
-    const existingNames = existing.map(f => f.name?.toLowerCase());
-    const toAdd = newItems.filter(i => !existingNames.includes(i.name?.toLowerCase()));
-    update('food', [...existing, ...toAdd]);
-  }, [log.food, update]);
+  usePush();
+  useOfflineSync();
 
   useEffect(() => { setDate(today()); }, []);
 
@@ -395,6 +381,24 @@ export default function DailyLog() {
   const acvDone    = activeACV.filter(a => log.acv?.[a.id]).length;
   const suppDone   = activeSupplements.filter(s => log.supplements?.[s.id]).length;
   const update     = useCallback(updateLog, [updateLog]);
+
+  // ── Sprint 3: pre-fill food log from prescribed meal ─────────────────────
+  // MUST be after `update` — dep array [log.food, update] is evaluated
+  // immediately by useCallback, so `update` must already be declared (const TDZ).
+  const logMeal = useCallback((meal) => {
+    const newItems = (meal.items || []).map(item => ({
+      id:       Date.now() + Math.random(),
+      name:     item.food_name,
+      grams:    item.qty_g,
+      meal:     meal.name,
+      food_id:  item.food_id  || null,
+      per_100g: item.per_100g || null,
+    }));
+    const existing     = log.food || [];
+    const existingNames = existing.map(f => f.name?.toLowerCase());
+    const toAdd        = newItems.filter(i => !existingNames.includes(i.name?.toLowerCase()));
+    update('food', [...existing, ...toAdd]);
+  }, [log.food, update]);
 
   return (
     <div className="min-h-screen bg-stone-100 font-sans">
