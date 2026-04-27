@@ -33,8 +33,6 @@ router.get('/members', async (req, res) => {
         pp.height_cm, pp.start_weight, pp.target_weight, pp.conditions,
         pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
         pp.custom_activities, pp.custom_acv, pp.custom_supplements, pp.item_overrides,
-        pp.fasting_start, pp.fasting_end, pp.fasting_note, pp.fasting_label,
-        pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
         (SELECT weight_kg  FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
         (SELECT log_date   FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
         (SELECT compliance_pct FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,

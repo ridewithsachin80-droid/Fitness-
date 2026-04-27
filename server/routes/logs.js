@@ -38,11 +38,10 @@ router.get('/:date', authMW, async (req, res) => {
 
     const [logResult, profileResult] = await Promise.all([
       pool.query('SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2', [patientId, date]),
-      pool.query(`SELECT protocol_activities, protocol_acv, protocol_supplements,
-        custom_activities, custom_acv, custom_supplements, item_overrides,
-        fasting_start, fasting_end, fasting_note, fasting_label,
-        macro_kcal, macro_pro, macro_carb, macro_fat, macro_phase
-        FROM patient_profiles WHERE user_id = $1`, [patientId]),
+      // SELECT * so this works on both Sprint 1 schema (no fasting/macro columns)
+      // and Sprint 2 schema. Missing columns just come back as undefined → handled
+      // safely below with || null checks.
+      pool.query('SELECT * FROM patient_profiles WHERE user_id = $1', [patientId]),
     ]);
 
     const log     = logResult.rows[0] || null;
