@@ -574,9 +574,12 @@ export default function DailyLog() {
       food_id:  item.food_id  || null,
       per_100g: item.per_100g || null,
     }));
-    const existing      = log.food || [];
-    const existingNames = existing.map(f => f.name?.toLowerCase());
-    const toAdd         = newItems.filter(i => !existingNames.includes(i.name?.toLowerCase()));
+    const existing = log.food || [];
+    // Only skip items already in THIS meal slot — same food can appear in multiple meals
+    const existingInMeal = existing
+      .filter(f => f.meal === meal.name)
+      .map(f => f.name?.toLowerCase());
+    const toAdd = newItems.filter(i => !existingInMeal.includes(i.name?.toLowerCase()));
     update('food', [...existing, ...toAdd]);
   }, [log.food, update]);
 
