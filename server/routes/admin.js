@@ -26,13 +26,15 @@ router.get('/stats', async (req, res) => {
 });
 
 // ── GET /api/admin/members ─────────────────────────────────────────────────────
+// NOTE: Only selects basic profile columns (height, weight, conditions) in the
+// list view. Protocol / fasting / macro data is fetched via GET /admin/members/:id
+// when the admin opens a member for editing — this avoids 500s if schema migrations
+// haven't run yet.
 router.get('/members', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id, u.name, u.phone, u.active, u.created_at,
         pp.height_cm, pp.start_weight, pp.target_weight, pp.conditions,
-        pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
-        pp.custom_activities, pp.custom_acv, pp.custom_supplements, pp.item_overrides,
         (SELECT weight_kg  FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
         (SELECT log_date   FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
         (SELECT compliance_pct FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,
@@ -47,6 +49,28 @@ router.get('/members', async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
+    console.error('GET /admin/members error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/admin/members/:id ────────────────────────────────────────────────
+// Returns full profile for a single member — used by EditMemberModal on open.
+// Uses SELECT * so it works regardless of which schema migration has run.
+router.get('/members/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.id, u.name, u.phone, u.email, u.active, u.created_at,
+        pp.*
+      FROM users u
+      LEFT JOIN patient_profiles pp ON pp.user_id = u.id
+      WHERE u.id = $1 AND u.role = 'patient'
+    `, [req.params.id]);
+
+    if (!rows.length) return res.status(404).json({ error: 'Member not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('GET /admin/members/:id error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
