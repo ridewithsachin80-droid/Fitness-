@@ -38,6 +38,24 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   }
 });
 
+// ── GET /api/patients/me ────────────────────────────────────────────────────────
+// Patient fetches their own profile + labs for the Progress page.
+router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const id = req.user.id;
+    const [profileResult, labsResult] = await Promise.all([
+      pool.query(`SELECT u.id, u.name, pp.* FROM users u
+        JOIN patient_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [id]),
+      pool.query(`SELECT * FROM lab_values WHERE patient_id = $1 ORDER BY test_date DESC`, [id]),
+    ]);
+    if (!profileResult.rows.length) return res.status(404).json({ error: 'Profile not found' });
+    res.json({ ...profileResult.rows[0], labs: labsResult.rows });
+  } catch (err) {
+    console.error('GET /patients/me error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/patients/:id ──────────────────────────────────────────────────────
 // Monitor/admin: full patient detail — profile + last 30 logs + all lab values.
 // All three queries run in parallel for speed.

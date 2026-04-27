@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
+  LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts';
 import { getPatient } from '../api/logs';
@@ -188,6 +188,29 @@ export default function Monitor() {
     .reverse()
     .map(l => ({ date: formatDate(l.log_date), weight: parseFloat(l.weight_kg) }));
 
+  // Sprint 6: 30-day compliance bar chart
+  const complianceData = [...logs]
+    .slice(0, 30)
+    .reverse()
+    .map(l => {
+      const d = new Date(l.log_date + 'T00:00:00');
+      return {
+        date:  `${d.getDate()}/${d.getMonth()+1}`,
+        score: l.compliance_pct || 0,
+      };
+    });
+  const avg30 = complianceData.length
+    ? Math.round(complianceData.reduce((s, d) => s + d.score, 0) / complianceData.length)
+    : 0;
+
+  // Lab value charts — group by test name, show latest 8 per test
+  const labByTest = {};
+  labs.forEach(l => {
+    if (!labByTest[l.test_name]) labByTest[l.test_name] = [];
+    labByTest[l.test_name].push({ date: l.test_date.slice(0, 10), value: parseFloat(l.value) || 0 });
+  });
+  Object.values(labByTest).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
+
   const delta = profile.latest_weight && profile.start_weight
     ? (parseFloat(profile.start_weight) - parseFloat(profile.latest_weight || profile.start_weight)).toFixed(1)
     : null;
@@ -253,6 +276,59 @@ export default function Monitor() {
             </ResponsiveContainer>
           </Card>
         )}
+
+        {/* Sprint 6: 30-day compliance chart */}
+        {complianceData.length > 1 && (
+          <Card>
+            <div className="flex items-center justify-between mb-2">
+              <SectionTitle icon="📊">30-Day Compliance</SectionTitle>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                avg30 >= 75 ? 'bg-emerald-100 text-emerald-700' :
+                avg30 >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
+              }`}>avg {avg30}%</span>
+            </div>
+            <ResponsiveContainer width="100%" height={100}>
+              <BarChart data={complianceData} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false}
+                  interval={Math.floor(complianceData.length / 5)} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <Tooltip
+                  content={({ active, payload }) => active && payload?.length
+                    ? <div className="bg-white border border-stone-100 rounded-xl px-2 py-1 shadow-sm text-xs">
+                        <span className="font-bold text-emerald-600">{payload[0].value}%</span>
+                        <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
+                      </div>
+                    : null}
+                />
+                <Bar dataKey="score" fill="#10b981" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        )}
+
+        {/* Sprint 6: Lab value trend charts per test */}
+        {Object.entries(labByTest).map(([testName, values]) => values.length < 2 ? null : (
+          <Card key={testName}>
+            <SectionTitle icon="📈">{testName} Trend</SectionTitle>
+            <ResponsiveContainer width="100%" height={100}>
+              <LineChart data={values} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <Tooltip
+                  content={({ active, payload }) => active && payload?.length
+                    ? <div className="bg-white border border-stone-100 rounded-xl px-2 py-1 shadow-sm text-xs">
+                        <span className="font-bold text-blue-600">{payload[0].value}</span>
+                        <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
+                      </div>
+                    : null}
+                />
+                <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2}
+                  dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+        ))}
 
         {/* Lab values */}
         <Card>

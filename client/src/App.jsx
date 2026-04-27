@@ -8,6 +8,7 @@ import { useAuthStore } from './store/authStore';
 // Pages (Sprint 3 — Login only; rest added as they're built)
 import Login       from './pages/Login';
 import DailyLog    from './pages/DailyLog';
+import Progress    from './pages/Progress';
 import Monitor     from './pages/Monitor';
 import PatientList from './pages/PatientList';
 import Settings       from './pages/Settings';
@@ -76,6 +77,14 @@ export default function App() {
           element={
             <PrivateRoute roles={['patient']}>
               <DailyLog />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/progress"
+          element={
+            <PrivateRoute roles={['patient']}>
+              <Progress />
             </PrivateRoute>
           }
         />
