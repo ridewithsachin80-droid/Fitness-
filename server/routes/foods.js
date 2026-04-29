@@ -152,16 +152,25 @@ router.get('/search', async (req, res) => {
     // Priority: exact start-of-name match first, then full-text, then partial
     const sql = `
       SELECT
-        id, name, name_hindi, name_local, category, source, verified, per_100g
+        id, name, name_hindi, name_local, name_aliases, category, source, verified, per_100g
       FROM foods
       WHERE (
         name        ILIKE $1
         OR name_local ILIKE $2
         OR name_hindi ILIKE $1
+        OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(COALESCE(name_aliases, '[]'::jsonb)) alias
+          WHERE alias ILIKE $1
+        )
       )
       ${filterClauses}
       ORDER BY
-        CASE WHEN name ILIKE '${q}%' THEN 0 ELSE 1 END,
+        CASE
+          WHEN name ILIKE '${q}%'        THEN 0
+          WHEN name_local ILIKE '${q}%'  THEN 1
+          WHEN name ILIKE $1             THEN 2
+          ELSE 3
+        END,
         verified DESC,
         name ASC
       LIMIT $3

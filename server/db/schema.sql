@@ -194,6 +194,25 @@ CREATE INDEX IF NOT EXISTS idx_push_subs_user
 CREATE INDEX IF NOT EXISTS idx_monitor_patients_monitor
   ON monitor_patients(monitor_id) WHERE active = true;
 
+-- ── FOODS — Kannada / regional alias column (Sprint 16) ──────────────────────
+-- Stores alternate language names as a JSON array, e.g.
+-- ["Bendekai", "ಬೆಂಡೆಕಾಯಿ", "Bendekaayi"]
+-- Search query matches against this column so members can type in Kannada.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS name_aliases JSONB DEFAULT '[]';
+
+-- GIN index for fast containment checks on the array
+CREATE INDEX IF NOT EXISTS idx_foods_name_aliases
+  ON foods USING GIN (name_aliases);
+
+-- ── MIGRATIONS TABLE — tracks one-time data patches ──────────────────────────
+-- Each named migration runs exactly once at boot, then is recorded here.
+-- The schema itself is idempotent; this tracks DATA migrations only.
+CREATE TABLE IF NOT EXISTS migrations (
+  id       SERIAL PRIMARY KEY,
+  name     TEXT NOT NULL UNIQUE,
+  run_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── AUDIT LOG (Sprint 13) ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
   id          SERIAL PRIMARY KEY,
