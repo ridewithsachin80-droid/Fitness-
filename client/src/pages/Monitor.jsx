@@ -77,7 +77,7 @@ function rowCompliance(log) {
 function WeightTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-stone-200 rounded-xl px-3 py-2 shadow-float text-xs">
+    <div className="bg-[#1a1a20] border border-white/[0.10] rounded-xl px-3 py-2 shadow-float text-xs">
       <p className="text-stone-400 mb-0.5">{label}</p>
       <p className="font-bold text-emerald-700">{payload[0].value} kg</p>
     </div>
@@ -112,7 +112,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-bold text-stone-800">Add Lab Value</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
@@ -126,7 +126,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
           { key: 'ref_max',   label: 'Ref max',   type: 'number', placeholder: '5.6' },
         ].map(({ key, label, type, placeholder }) => (
           <div key={key}>
-            <label className="block text-xs text-stone-400 font-medium mb-1">{label}</label>
+            <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
             <input type={type} value={form[key]} placeholder={placeholder}
               onChange={e => set(key, e.target.value)}
               className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
@@ -134,7 +134,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
         ))}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50">
+          className="w-full py-3 bg-[#2ce89c] hover:bg-[#34d399] text-[#040c08] font-bold rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Add Lab Value'}
         </button>
       </div>
@@ -167,7 +167,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between mb-1">
           <div>
             <h3 className="font-bold text-stone-800">Set Login PIN</h3>
@@ -178,7 +178,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-emerald-700">PIN set successfully!</p>
+            <p className="font-semibold text-[#2ce89c]">PIN set successfully!</p>
             <p className="text-xs text-stone-400 mt-1">Member can now log in with this PIN</p>
           </div>
         ) : (
@@ -191,7 +191,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
               { label: 'Confirm PIN', value: confirm, onChange: setConfirm },
             ].map(({ label, value, onChange }) => (
               <div key={label}>
-                <label className="block text-xs text-stone-400 font-medium mb-1">{label}</label>
+                <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
                 <div className="relative">
                   <input type={show ? 'text' : 'password'} inputMode="numeric" value={value}
                     onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
@@ -244,14 +244,14 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-stone-800">Add Clinical Note</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
         </div>
 
         <div>
-          <label className="block text-xs text-stone-400 font-medium mb-1">Date</label>
+          <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
           <input type="date" value={form.note_date} max={today}
             onChange={e => set('note_date', e.target.value)}
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
@@ -259,7 +259,7 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
         </div>
 
         <div>
-          <label className="block text-xs text-stone-400 font-medium mb-1">Note</label>
+          <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Note</label>
           <textarea value={form.note} onChange={e => set('note', e.target.value)}
             rows={4} placeholder="Clinical observations, progress notes, instructions…"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
@@ -278,7 +278,7 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
         {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving || !form.note.trim()}
-          className="w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-bold
+          className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
             rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Save Note'}
         </button>
@@ -315,7 +315,7 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-bold text-stone-800">Log Weight</h3>
@@ -327,7 +327,7 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-emerald-700">Weight saved!</p>
+            <p className="font-semibold text-[#2ce89c]">Weight saved!</p>
           </div>
         ) : (
           <>
@@ -335,14 +335,14 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
               Creates or updates the weight entry for the selected date. Other log data is preserved.
             </p>
             <div>
-              <label className="block text-xs text-stone-400 font-medium mb-1">Date</label>
+              <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
               <input type="date" value={date} max={todayStr}
                 onChange={e => setDate(e.target.value)}
                 className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
                   focus:outline-none focus:ring-2 focus:ring-emerald-300" />
             </div>
             <div>
-              <label className="block text-xs text-stone-400 font-medium mb-1">Weight (kg)</label>
+              <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Weight (kg)</label>
               <div className="flex items-center gap-2">
                 <input type="number" step="0.1" inputMode="decimal" value={weight}
                   onChange={e => setWeight(e.target.value)}
@@ -535,7 +535,7 @@ export default function Monitor() {
     : null;
 
   return (
-    <div className="min-h-screen bg-stone-100">
+    <div className="min-h-screen bg-[#0b0b0e]">
       {/* Header */}
       <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
@@ -603,9 +603,9 @@ export default function Monitor() {
             <SectionTitle icon="📈">Weight Trend</SectionTitle>
             <ResponsiveContainer width="100%" height={160}>
               <LineChart data={weightData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" />
-                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTooltip />} />
                 {profile.start_weight && (
                   <ReferenceLine y={parseFloat(profile.start_weight)} stroke="#f87171"
@@ -635,12 +635,12 @@ export default function Monitor() {
             <ResponsiveContainer width="100%" height={100}>
               <BarChart data={complianceData} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}
                 style={{ cursor: 'pointer' }}>
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false}
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false}
                   interval={Math.floor(complianceData.length / 5)} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   content={({ active, payload }) => active && payload?.length
-                    ? <div className="bg-white border border-stone-100 rounded-xl px-2 py-1 shadow-sm text-xs">
+                    ? <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
                         <span className="font-bold text-emerald-600">{payload[0].value}%</span>
                         <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
                         <span className="text-stone-300 ml-1">· tap to view</span>
@@ -651,7 +651,7 @@ export default function Monitor() {
                   onClick={(data) => data?.log && setSelectedLog(data.log)} />
               </BarChart>
             </ResponsiveContainer>
-            <p className="text-xs text-stone-400 mt-1 text-center">Tap any bar to see what they logged that day</p>
+            <p className="text-[10px] text-[#4e4e5c] mt-1.5 text-center">Tap any bar to see what they logged that day</p>
           </Card>
         )}
 
@@ -664,7 +664,7 @@ export default function Monitor() {
           return (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2"
               onClick={() => setSelectedLog(null)}>
-              <div className="bg-white rounded-3xl w-full max-w-md max-h-[82vh] flex flex-col"
+              <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[82vh] flex flex-col"
                 onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 flex-shrink-0">
                   <div>
@@ -691,7 +691,7 @@ export default function Monitor() {
                         {foodItems.map((item, i) => {
                           const n = calcN(item);
                           return (
-                            <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-stone-50 last:border-0">
+                            <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-white/[0.05] last:border-0">
                               <div>
                                 <span className="text-stone-700 font-medium">{item.name}</span>
                                 <span className="text-xs text-stone-400 ml-1">{item.grams}g{item.meal ? ` · ${item.meal}` : ''}</span>
@@ -725,12 +725,12 @@ export default function Monitor() {
             <SectionTitle icon="📈">{testName} Trend</SectionTitle>
             <ResponsiveContainer width="100%" height={100}>
               <LineChart data={values} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   content={({ active, payload }) => active && payload?.length
-                    ? <div className="bg-white border border-stone-100 rounded-xl px-2 py-1 shadow-sm text-xs">
+                    ? <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
                         <span className="font-bold text-blue-600">{payload[0].value}</span>
                         <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
                       </div>
@@ -788,7 +788,7 @@ export default function Monitor() {
             <SectionTitle icon="📝">Clinical Notes</SectionTitle>
             <button onClick={() => setShowNote(true)}
               className="text-xs font-semibold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-xl
-                hover:bg-stone-200 transition-colors">
+                hover:bg-white/[0.08] transition-colors">
               + Add
             </button>
           </div>
@@ -804,7 +804,7 @@ export default function Monitor() {
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       {n.flagged && (
-                        <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-semibold text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
                           🚩 Follow-up
                         </span>
                       )}
@@ -894,7 +894,7 @@ export default function Monitor() {
                     )}
                     {/* Sprint 3: Meal plan adherence indicator */}
                     {data?.profile?.meal_plan?.length > 0 && (
-                      <div className="mb-2 bg-white rounded-xl border border-stone-100 overflow-hidden">
+                      <div className="mb-2 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-100 overflow-hidden">
                         <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100">
                           <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">🍽 Meal Plan Adherence</span>
                         </div>
@@ -919,7 +919,7 @@ export default function Monitor() {
                     )}
 
                     {log.food_items?.length > 0 && (
-                      <div className="mb-2 bg-white rounded-xl border border-stone-100 overflow-hidden">
+                      <div className="mb-2 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-100 overflow-hidden">
                         <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100 flex justify-between">
                           <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">🥗 Food Log</span>
                           <span className="text-xs font-bold text-emerald-700">
@@ -934,7 +934,7 @@ export default function Monitor() {
                           if (!mealItems.length) return null;
                           const mealCal = mealItems.reduce((s, f) => s + (calcN(f)?.cal || 0), 0);
                           return (
-                            <div key={meal} className="border-b border-stone-50 last:border-0">
+                            <div key={meal} className="border-b border-white/[0.05] last:border-0">
                               <div className="px-3 py-1 flex justify-between items-center bg-stone-50/50">
                                 <span className="text-xs font-semibold text-stone-400">{meal}</span>
                                 <span className="text-xs text-stone-400">{mealCal} kcal</span>

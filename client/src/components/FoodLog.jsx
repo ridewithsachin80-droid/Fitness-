@@ -237,7 +237,7 @@ export default function FoodLog({ items = [], onChange }) {
                 {mealItems.map((item) => {
                   const n = calcMacros(item);
                   return (
-                    <div key={item.id} className="py-2 px-3 rounded-xl bg-stone-50 group">
+                    <div key={item.id} className="py-2 px-3 rounded-xl bg-[#1a1a20] border border-white/[0.05] group">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-sm font-medium text-stone-700 truncate">{item.name}</span>
@@ -274,7 +274,7 @@ export default function FoodLog({ items = [], onChange }) {
           return { cal: acc.cal + (n.cal || 0), pro: acc.pro + (n.pro || 0), carb: acc.carb + (n.carb || 0), fat: acc.fat + (n.fat || 0) };
         }, { cal: 0, pro: 0, carb: 0, fat: 0 });
         return (
-          <div className="flex items-center justify-between bg-stone-100 rounded-2xl px-4 py-2.5">
+          <div className="flex items-center justify-between bg-white/[0.04] rounded-2xl px-4 py-2.5 border border-white/[0.06]">
             <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Day total</span>
             <div className="flex gap-3">
               <span className="text-xs font-bold text-orange-500">{dayTotal.cal} kcal</span>
@@ -295,14 +295,14 @@ export default function FoodLog({ items = [], onChange }) {
           + Add food item
         </button>
       ) : (
-        <div className="bg-stone-50 rounded-2xl p-3 space-y-3 border border-stone-100">
+        <div className="bg-[#1a1a20] rounded-2xl p-3 space-y-3 border border-white/[0.07]">
 
           {/* Meal selector */}
           <div className="flex gap-1.5">
             {MEALS.map((m) => (
               <button key={m} onClick={() => setMeal(m)}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  meal === m ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white text-stone-500 hover:bg-stone-100'
+                  meal === m ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white text-stone-500 hover:bg-white/[0.05]'
                 }`}>{m}</button>
             ))}
           </div>
@@ -318,7 +318,7 @@ export default function FoodLog({ items = [], onChange }) {
                     : null;
                   return (
                     <button key={i} onClick={() => pickRecent(food)}
-                      className="flex items-center gap-1.5 text-xs bg-white border border-stone-200
+                      className="flex items-center gap-1.5 text-xs bg-[#1a1a20] border border-white/[0.10]
                         hover:border-emerald-300 hover:bg-emerald-50 rounded-xl px-2.5 py-1.5
                         transition-colors text-stone-700 font-medium max-w-full">
                       <span className="truncate max-w-[120px]">{food.name}</span>
@@ -363,7 +363,7 @@ export default function FoodLog({ items = [], onChange }) {
                 scroll events when it hits its own top/bottom boundary */}
             {showSuggestions && suggestions.length > 0 && (
               <div
-                className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg
+                className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] rounded-xl border border-white/[0.07] shadow-lg
                   z-30 border border-stone-100 overflow-hidden"
                 style={{ maxHeight: '240px', overflowY: 'auto', overscrollBehavior: 'contain' }}
               >
@@ -381,7 +381,7 @@ export default function FoodLog({ items = [], onChange }) {
                       <span className="text-sm text-stone-700 font-medium truncate">{food.name}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {food.verified && (
-                          <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">✓</span>
+                          <span className="text-xs bg-[rgba(44,232,156,0.12)] text-[#2ce89c] px-1.5 py-0.5 rounded font-semibold">✓</span>
                         )}
                         <span className="text-xs font-bold text-orange-500">
                           {food.per_100g?.calories || 0} kcal
@@ -399,10 +399,10 @@ export default function FoodLog({ items = [], onChange }) {
                   onMouseDown={(e) => e.preventDefault()}
                   onTouchStart={(e) => e.preventDefault()}
                   onClick={() => { setShowSuggestions(false); lookupOff(); }}
-                  className="w-full text-left px-3 py-2.5 bg-stone-50 hover:bg-blue-50
+                  className="w-full text-left px-3 py-2.5 bg-[#1a1a20] hover:bg-blue-500/10
                     active:bg-blue-100 transition-colors border-t border-stone-100"
                 >
-                  <span className="text-xs text-blue-600 font-semibold">
+                  <span className="text-xs text-blue-400 font-semibold">
                     🔍 Search Open Food Facts for "{query}"
                   </span>
                 </button>
@@ -423,7 +423,7 @@ export default function FoodLog({ items = [], onChange }) {
                 )}
                 {lookupStatus === '' && (
                   <button onClick={lookupOff}
-                    className="text-xs text-blue-600 font-semibold px-1 hover:underline">
+                    className="text-xs text-blue-400 font-semibold px-1 hover:underline">
                     🔍 Not in local DB — search Open Food Facts
                   </button>
                 )}
@@ -433,7 +433,7 @@ export default function FoodLog({ items = [], onChange }) {
 
           {/* Per-100g nutrition preview when a food is selected */}
           {selected?.per_100g && (
-            <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
+            <div className="bg-[#1a1a20] rounded-xl border border-white/[0.07] px-3 py-2 border border-emerald-100">
               <p className="text-xs text-stone-400 mb-1">Per 100g — {selected.name}</p>
               <div className="flex gap-3 flex-wrap">
                 <span className="text-xs font-bold text-orange-500">{selected.per_100g.calories || 0} kcal</span>

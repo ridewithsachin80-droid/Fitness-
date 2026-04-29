@@ -60,7 +60,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-100">
+    <div className="min-h-screen bg-[#0b0b0e]">
       {/* Header */}
       <div className="bg-white border-b border-stone-100 px-4 pt-10 pb-4">
         <div className="max-w-md mx-auto">
@@ -181,7 +181,7 @@ export default function Settings() {
               <button
                 onClick={submitPw}
                 disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
-                className="w-full py-2.5 bg-stone-800 hover:bg-stone-900 text-white font-semibold
+                className="w-full py-2.5 bg-[#0e0e12] hover:bg-[#08080b] text-white font-semibold
                   rounded-xl text-sm transition-colors disabled:opacity-40"
               >
                 {pwSaving ? 'Saving…' : 'Update Password'}

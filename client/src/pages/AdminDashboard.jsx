@@ -26,7 +26,7 @@ function StatCard({ value, label, icon, color }) {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100">
           <h3 className="font-bold text-stone-800 text-base">{title}</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
@@ -305,7 +305,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                     focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-700" />
                 {searchingFood && <span className="absolute right-3 top-2 text-xs text-stone-400">…</span>}
                 {foodSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] rounded-xl border border-white/[0.07] shadow-lg
                     z-30 border border-stone-100 max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
                     {foodSuggestions.map(food => (
                       <button key={food.id}
@@ -345,7 +345,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
       </button>
 
       {mealPlan.length > 0 && (
-        <div className="bg-stone-800 text-white rounded-2xl px-4 py-3 space-y-2">
+        <div className="bg-white/[0.08] border border-white/[0.10] text-[#ededf0] rounded-2xl px-4 py-3 space-y-2">
           <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Day Total</p>
           <div className="flex gap-4 flex-wrap">
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
@@ -1180,7 +1180,7 @@ function PushModal({ members, onClose }) {
             {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
 
             <button onClick={send} disabled={sending || !form.title.trim() || !form.body.trim()}
-              className="w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-bold
+              className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
                 rounded-xl transition-colors disabled:opacity-40">
               {sending ? 'Sending…' : `Send Notification`}
             </button>
@@ -1227,7 +1227,7 @@ function AddMonitorModal({ onClose, onAdded }) {
               <button key={r} onClick={() => set('role', r)}
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all capitalize ${
                   form.role === r
-                    ? 'bg-stone-800 text-white border-stone-800'
+                    ? 'bg-white/[0.08] border border-white/[0.10] text-[#ededf0] border-stone-800'
                     : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'
                 }`}>
                 {r === 'admin' ? '👑 Admin' : '🏋️ Monitor'}
@@ -1244,7 +1244,7 @@ function AddMonitorModal({ onClose, onAdded }) {
         {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-bold
+          className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
             rounded-xl transition-colors disabled:opacity-50 mt-2">
           {saving ? 'Creating…' : 'Create Account'}
         </button>
@@ -1350,7 +1350,7 @@ export default function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="min-h-screen bg-stone-100">
+    <div className="min-h-screen bg-[#0b0b0e]">
 
       {/* Header */}
       <div className="bg-gradient-to-br from-stone-800 to-stone-900 text-white px-4 pt-10 pb-6">
@@ -1406,7 +1406,7 @@ export default function AdminDashboard() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${tab}…`}
-            className="flex-1 px-3 py-2.5 bg-white border border-stone-200 rounded-xl text-sm
+            className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm
               focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800"
           />
           <button
@@ -1458,7 +1458,7 @@ export default function AdminDashboard() {
             )}
 
             {/* Today's detail per member */}
-            <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-stone-100 overflow-hidden">
               <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100">
                 <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Today's Compliance</span>
               </div>
@@ -1487,7 +1487,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* 7-day compliance ranking */}
-            <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-stone-100 overflow-hidden">
               <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100">
                 <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">7-Day Average Compliance</span>
               </div>
@@ -1508,7 +1508,7 @@ export default function AdminDashboard() {
 
             {/* Food manager shortcut */}
             <button onClick={() => navigate('/admin/foods')}
-              className="w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
+              className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
               🥗 Food Database Manager
               <span className="text-stone-400 text-xs">→</span>
             </button>
@@ -1533,7 +1533,7 @@ export default function AdminDashboard() {
               filtered(members, 'name').map(m => {
                 const noLog = m.last_logged !== today;
                 return (
-                  <div key={m.id} className={`bg-white rounded-2xl p-4 shadow-card border
+                  <div key={m.id} className={`bg-[#131317] rounded-2xl border border-white/[0.08] p-4 shadow-card border
                     ${!m.active ? 'opacity-50 border-stone-200' : noLog ? 'border-amber-200' : 'border-stone-100'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -1589,7 +1589,7 @@ export default function AdminDashboard() {
                         </button>
                         <button onClick={() => navigate(`/monitor/${m.id}`)}
                           className="text-xs px-2.5 py-1.5 bg-stone-50 text-stone-600 font-semibold
-                            rounded-lg hover:bg-stone-100 transition-colors">
+                            rounded-lg hover:bg-white/[0.05] transition-colors">
                           View
                         </button>
                         <button onClick={() => toggleUser(m.id, 'member')}
@@ -1617,12 +1617,12 @@ export default function AdminDashboard() {
               <div className="flex gap-2">
                 <button onClick={() => setShowPush(true)}
                   className="flex items-center gap-1.5 text-xs font-bold text-stone-600 bg-stone-100
-                    hover:bg-stone-200 px-3 py-2 rounded-xl transition-colors">
+                    hover:bg-white/[0.08] px-3 py-2 rounded-xl transition-colors">
                   📨 Send Push
                 </button>
                 <button onClick={() => setShowAddMonitor(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-stone-800
-                    hover:bg-stone-900 px-3 py-2 rounded-xl transition-colors">
+                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#0e0e12]
+                    hover:bg-[#08080b] px-3 py-2 rounded-xl transition-colors">
                   + Add Monitor
                 </button>
               </div>
@@ -1636,7 +1636,7 @@ export default function AdminDashboard() {
               </div>
             ) : (
               filtered(monitors, 'name').map(m => (
-                <div key={m.id} className={`bg-white rounded-2xl p-4 shadow-card border
+                <div key={m.id} className={`bg-[#131317] rounded-2xl border border-white/[0.08] p-4 shadow-card border
                   ${!m.active ? 'opacity-50 border-stone-200' : 'border-stone-100'}`}>
                   <div className="flex items-start justify-between">
                     <div>
@@ -1659,7 +1659,7 @@ export default function AdminDashboard() {
                     <div className="flex gap-1.5">
                       <button onClick={() => navigate('/monitor')}
                         className="text-xs px-2.5 py-1.5 bg-stone-50 text-stone-600 font-semibold
-                          rounded-lg hover:bg-stone-100 transition-colors">
+                          rounded-lg hover:bg-white/[0.05] transition-colors">
                         View
                       </button>
                       {m.id !== user?.id && (
@@ -1686,7 +1686,7 @@ export default function AdminDashboard() {
               <p className="text-xs text-stone-400">{auditLog.length} recent actions</p>
               <button onClick={() => getAuditLog(100).then(r => setAuditLog(r.data || []))}
                 className="text-xs font-semibold text-stone-500 hover:text-stone-700 px-3 py-1.5
-                  bg-white rounded-xl border border-stone-200 transition-colors">
+                  bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-200 transition-colors">
                 ↻ Refresh
               </button>
             </div>

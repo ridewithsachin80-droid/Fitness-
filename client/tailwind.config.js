@@ -6,30 +6,21 @@ export default {
   ],
   theme: {
     extend: {
-      colors: {
-        emerald: {
-          50:  '#ecfdf5',
-          100: '#d1fae5',
-          200: '#a7f3d0',
-          300: '#6ee7b7',
-          400: '#34d399',
-          500: '#10b981',
-          600: '#059669',
-          700: '#047857',
-          800: '#065f46',
-          900: '#064e3b',
-        },
-      },
       fontFamily: {
-        sans: ['DM Sans', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Outfit', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         '2xl': '1rem',
         '3xl': '1.5rem',
+        '4xl': '2rem',
       },
       boxShadow: {
-        'card': '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        'float': '0 4px 24px rgba(0,0,0,0.10)',
+        'card':  '0 0 0 1px rgba(255,255,255,0.07), 0 4px 24px rgba(0,0,0,0.55)',
+        'float': '0 8px 40px rgba(0,0,0,0.75)',
+        'glow':  '0 0 24px rgba(44,232,156,0.20)',
+      },
+      letterSpacing: {
+        'widest': '0.12em',
       },
     },
   },

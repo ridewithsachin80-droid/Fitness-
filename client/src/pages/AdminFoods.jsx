@@ -196,9 +196,9 @@ export default function AdminFoods() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-100">
+    <div className="min-h-screen bg-[#0b0b0e]">
       {/* Header */}
-      <div className="bg-stone-900 text-white px-4 pt-10 pb-5">
+      <div className="bg-[#08080b] text-white px-4 pt-10 pb-5">
         <div className="max-w-2xl mx-auto">
           <BackButton onClick={() => navigate('/admin')} light />
           <div className="flex items-center justify-between mt-3">
@@ -240,7 +240,7 @@ export default function AdminFoods() {
           <>
             <input value={query} onChange={e => handleSearch(e.target.value)}
               placeholder="Search foods by name…"
-              className="w-full px-4 py-3 bg-white border border-stone-200 rounded-2xl text-sm
+              className="w-full px-4 py-3 bg-[#1a1a20] border border-white/[0.10] rounded-2xl text-sm
                 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
 
             {loading ? (
@@ -253,7 +253,7 @@ export default function AdminFoods() {
                   {foods.length === 0 ? (
                     <p className="text-center text-stone-400 py-12">No foods found. Try a different search or add one.</p>
                   ) : foods.map(food => (
-                    <div key={food.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 group shadow-sm">
+                    <div key={food.id} className="bg-[#131317] rounded-2xl border border-white/[0.08] px-4 py-3 flex items-center gap-3 group shadow-sm">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-stone-800 text-sm truncate">{food.name}</span>
@@ -284,12 +284,12 @@ export default function AdminFoods() {
                 {pages > 1 && (
                   <div className="flex items-center justify-between pt-2">
                     <button onClick={() => load(query, page - 1)} disabled={page <= 1}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-white rounded-xl border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
                       ← Prev
                     </button>
                     <span className="text-xs text-stone-500 font-medium">Page {page} of {pages}</span>
                     <button onClick={() => load(query, page + 1)} disabled={page >= pages}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-white rounded-xl border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
                       Next →
                     </button>
                   </div>

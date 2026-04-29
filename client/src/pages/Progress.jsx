@@ -35,7 +35,7 @@ function shortDate(str) {
 function WeightTip({ active, payload }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-stone-100 rounded-xl px-3 py-2 shadow-sm text-xs">
+    <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
       <p className="font-bold text-emerald-600">{payload[0].value} kg</p>
       <p className="text-stone-400">{payload[0].payload.date}</p>
     </div>
@@ -46,7 +46,7 @@ function ComplianceTip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const v = payload[0].value;
   return (
-    <div className="bg-white border border-stone-100 rounded-xl px-3 py-2 shadow-sm text-xs">
+    <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
       <p className={`font-bold ${v >= 75 ? 'text-emerald-600' : v >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{v}%</p>
       <p className="text-stone-400">{payload[0].payload.date}</p>
     </div>
@@ -79,7 +79,7 @@ function PastLogModal({ log, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2">
-      <div className="bg-white rounded-3xl w-full max-w-md max-h-[88vh] flex flex-col">
+      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[88vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 flex-shrink-0">
           <div>
@@ -207,11 +207,11 @@ function PastLogModal({ log, onClose }) {
 
 function StatBox({ value, label, sub, color = 'emerald' }) {
   const colors = {
-    emerald: 'bg-emerald-50 text-emerald-700',
-    blue:    'bg-blue-50 text-blue-700',
-    orange:  'bg-orange-50 text-orange-700',
-    purple:  'bg-purple-50 text-purple-700',
-    amber:   'bg-amber-50 text-amber-700',
+    emerald: 'bg-[rgba(44,232,156,0.08)] text-[#2ce89c] border border-[rgba(44,232,156,0.14)]',
+    blue:    'bg-[rgba(96,165,250,0.08)] text-blue-400 border border-[rgba(96,165,250,0.14)]',
+    orange:  'bg-[rgba(251,146,60,0.08)] text-orange-400 border border-[rgba(251,146,60,0.14)]',
+    purple:  'bg-[rgba(192,132,252,0.08)] text-purple-400 border border-[rgba(192,132,252,0.14)]',
+    amber:   'bg-[rgba(251,191,36,0.08)] text-amber-400 border border-[rgba(251,191,36,0.14)]',
   };
   return (
     <div className={`rounded-2xl px-4 py-3 ${colors[color]}`}>
@@ -335,13 +335,13 @@ export default function Progress() {
   const complianceColor = avg30 >= 75 ? 'emerald' : avg30 >= 50 ? 'amber' : 'orange';
 
   return (
-    <div className="min-h-screen bg-stone-100 font-sans">
+    <div className="min-h-screen bg-[#0b0b0e] font-sans">
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-blue-700 to-blue-900 text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#071029] to-[#030614] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <button onClick={() => navigate('/')}
-            className="text-blue-200 text-sm mb-3 hover:text-white transition-colors">
+            className="text-[#4e4e5c] text-sm mb-3 hover:text-[#8e8e9a] transition-colors">
             ← Back to today
           </button>
           <h1 className="text-2xl font-bold">My Progress</h1>
@@ -349,7 +349,7 @@ export default function Progress() {
 
           {/* Journey progress bar */}
           {journeyPct !== null && (
-            <div className="mt-4 bg-white/10 rounded-2xl p-3">
+            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07]">
               <div className="flex justify-between text-xs text-blue-200 mb-2">
                 <span>Start: {startW} kg</span>
                 <span className="font-bold text-white">{journeyPct}% to goal</span>
@@ -362,7 +362,7 @@ export default function Progress() {
                 />
               </div>
               {lostKg !== null && lostKg > 0 && (
-                <p className="text-center text-xs text-emerald-300 mt-2 font-semibold">
+                <p className="text-center text-xs text-[#2ce89c] mt-2 font-semibold">
                   🎉 {lostKg} kg lost · {toGoKg} kg to go
                 </p>
               )}
@@ -407,10 +407,10 @@ export default function Progress() {
             <SectionTitle icon="⚖️">Weight Trend</SectionTitle>
             <ResponsiveContainer width="100%" height={160}>
               <LineChart data={weightData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" />
-                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#a8a29e' }} tickLine={false} axisLine={false}
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false}
                   interval={Math.floor(weightData.length / 5)} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTip />} />
                 {targetW && (
                   <ReferenceLine y={targetW} stroke="#34d399" strokeDasharray="4 4"
@@ -437,10 +437,10 @@ export default function Progress() {
             <SectionTitle icon="📊">30-Day Compliance</SectionTitle>
             <ResponsiveContainer width="100%" height={130}>
               <BarChart data={complianceData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false}
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false}
                   interval={Math.floor(complianceData.length / 6)} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<ComplianceTip />} />
                 <ReferenceLine y={75} stroke="#34d399" strokeDasharray="3 3" />
                 <Bar dataKey="score" radius={[3, 3, 0, 0]}
@@ -470,9 +470,9 @@ export default function Progress() {
             <p className="text-xs text-stone-400 font-medium mb-1">Calories (kcal)</p>
             <ResponsiveContainer width="100%" height={90}>
               <BarChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']}
                   contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }} />
                 {profile?.macros?.kcal && (
@@ -486,9 +486,9 @@ export default function Progress() {
             <p className="text-xs text-stone-400 font-medium mt-3 mb-1">Protein · Carbs · Fat (g)</p>
             <ResponsiveContainer width="100%" height={110}>
               <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }}
                   formatter={(v, name) => [`${v}g`, name.charAt(0).toUpperCase() + name.slice(1)]} />
                 <Line type="monotone" dataKey="pro"  stroke="#60a5fa" strokeWidth={2} dot={{ r: 3, fill: '#60a5fa' }} />
@@ -534,7 +534,7 @@ export default function Progress() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-stone-400 mt-2 italic">Ask your coach to add new lab results.</p>
+            <p className="text-xs text-[#4e4e5c] mt-2 italic">Ask your coach to add new lab results.</p>
           </Card>
         )}
 
@@ -551,7 +551,7 @@ export default function Progress() {
                 return (
                   <button key={log.log_date} onClick={() => setSelectedLog(log)}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl
-                      bg-stone-50 hover:bg-stone-100 transition-colors text-left group">
+                      bg-stone-50 hover:bg-white/[0.05] transition-colors text-left group">
                     <div className="w-14 flex-shrink-0">
                       <p className="text-xs font-bold text-stone-700">{label.split(', ')[1] || label}</p>
                       <p className="text-xs text-stone-400">{label.split(', ')[0]}</p>

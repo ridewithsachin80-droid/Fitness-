@@ -568,7 +568,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                     <span className="text-sm font-bold text-stone-700">{meal.name}</span>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                   </div>
-                  <p className="text-xs text-stone-400 mt-0.5">
+                  <p className="text-xs text-[#4e4e5c] mt-0.5">
                     {(meal.items||[]).length} items · <span className="font-bold text-orange-500">{mealKcal} kcal</span>
                     {isOpen && checkedCount>0 && <span className="text-emerald-600 font-semibold ml-2">· {checkedCount} selected · {checkedKcal} kcal</span>}
                   </p>
@@ -596,7 +596,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
                             isChecked  ? 'bg-emerald-50 border border-emerald-200' :
                             alreadyIn  ? 'bg-stone-100 border border-stone-200 opacity-60' :
-                                         'bg-white border border-stone-100 hover:border-stone-200'}`}>
+                                         'bg-[#1a1a20] border border-white/[0.07] hover:border-stone-200'}`}>
                           <span className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                             isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-300 bg-white'}`}>
                             {isChecked && <span className="text-xs font-bold">✓</span>}
@@ -739,11 +739,11 @@ export default function DailyLog() {
   }, [log.food, update]);
 
   return (
-    <div className="min-h-screen bg-stone-100 font-sans">
+    <div className="min-h-screen bg-[#0b0b0e] font-sans">
       <OfflineBanner />
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#0d2d1c] to-[#040c08] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -775,7 +775,7 @@ export default function DailyLog() {
               </button>
             </div>
           </div>
-          <div className="bg-white/10 rounded-2xl p-3 flex items-center gap-4">
+          <div className="bg-white/[0.05] rounded-2xl p-3 flex items-center gap-4 border border-white/[0.06]">
             <ComplianceRing pct={compliance} />
             <div className="flex-1">
               <div className="text-sm font-semibold">Today's Compliance</div>
@@ -800,7 +800,7 @@ export default function DailyLog() {
                 d.setDate(d.getDate() - 1);
                 setDate(d.toISOString().split('T')[0]);
               }}
-              className="flex items-center gap-1 text-sm font-semibold text-stone-500 px-3 py-2 rounded-xl hover:bg-stone-100 active:scale-95 transition-all"
+              className="flex items-center gap-1 text-sm font-semibold text-stone-500 px-3 py-2 rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all"
             >
               ← Yesterday
             </button>
@@ -851,7 +851,7 @@ export default function DailyLog() {
                 <div className="space-y-2 mt-2">
                   {coachNotes.slice(0, 3).map(n => (
                     <div key={n.id} className={`rounded-2xl px-4 py-3 border ${
-                      n.flagged ? 'bg-amber-50 border-amber-200' : 'bg-stone-50 border-stone-100'
+                      n.flagged ? 'bg-amber-500/[0.06] border-amber-500/20' : 'bg-[#1a1a20] border-white/[0.07]'
                     }`}>
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {n.flagged && (
@@ -1040,11 +1040,11 @@ export default function DailyLog() {
       </div>
 
       {/* Sticky save */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-stone-100 via-stone-100/90 to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0b0b0e] via-[#0b0b0e]/90 to-transparent">
         <div className="max-w-md mx-auto">
           <button onClick={saveLog} disabled={saving || loading}
-            className={`w-full py-4 rounded-2xl text-white font-bold text-base shadow-float transition-all duration-200 ${
-              saved ? 'bg-emerald-400' : saving ? 'bg-emerald-500 opacity-80' : 'bg-emerald-600 hover:bg-emerald-700 active:scale-98'}`}>
+            className={`w-full py-4 rounded-2xl font-bold text-base shadow-float transition-all duration-200 ${
+              saved ? 'bg-[#2ce89c] text-[#040c08]' : saving ? 'bg-[#2ce89c]/80 text-[#040c08]' : 'bg-[#2ce89c] hover:bg-[#34d399] text-[#040c08] active:scale-98'}`}>
             {saving ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1061,13 +1061,13 @@ export default function DailyLog() {
       {milestone && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
           onClick={() => setMilestone(null)}>
-          <div className="bg-white rounded-3xl p-8 max-w-xs w-full text-center shadow-2xl"
+          <div className="bg-[#131317] rounded-3xl border border-white/[0.08] p-8 max-w-xs w-full text-center shadow-2xl"
             onClick={e => e.stopPropagation()}>
             <div className="text-6xl mb-3">{milestone.icon}</div>
-            <h2 className="text-xl font-bold text-stone-800 mb-2">{milestone.title}</h2>
-            <p className="text-sm text-stone-500 leading-relaxed mb-6">{milestone.body}</p>
+            <h2 className="text-xl font-bold text-[#ededf0] mb-2">{milestone.title}</h2>
+            <p className="text-sm text-[#6a6a78] leading-relaxed mb-6">{milestone.body}</p>
             <button onClick={() => setMilestone(null)}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-colors active:scale-95">
+              className="w-full py-3 bg-[#2ce89c] hover:bg-[#34d399] text-[#040c08] font-bold rounded-2xl transition-colors active:scale-95">
               Let's keep going! 💪
             </button>
           </div>
