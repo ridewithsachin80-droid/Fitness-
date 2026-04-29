@@ -23,8 +23,8 @@ function PrivateRoute({ children, roles }) {
   // Show nothing while we're checking the session cookie
   if (isRestoring) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#7c5cfc] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

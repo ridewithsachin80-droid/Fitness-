@@ -28,7 +28,7 @@ router.get('/stats', async (req, res) => {
     const [members, monitors, logs] = await Promise.all([
       pool.query("SELECT COUNT(*) FROM users WHERE role='patient' AND active=true"),
       pool.query("SELECT COUNT(*) FROM users WHERE role IN ('monitor','admin') AND active=true"),
-      pool.query("SELECT COUNT(*) FROM daily_logs WHERE log_date = CURRENT_DATE"),
+      pool.query("SELECT COUNT(*) FROM daily_logs WHERE log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date"),
     ]);
     res.json({
       members:      parseInt(members.rows[0].count),
@@ -50,8 +50,8 @@ router.get('/overview', async (req, res) => {
       pool.query(`
         SELECT
           (SELECT COUNT(*) FROM users WHERE role='patient' AND active=true)  AS total_members,
-          (SELECT COUNT(*) FROM daily_logs WHERE log_date = CURRENT_DATE)    AS logged_today,
-          (SELECT COUNT(*) FROM daily_logs WHERE log_date = CURRENT_DATE
+          (SELECT COUNT(*) FROM daily_logs WHERE log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date)    AS logged_today,
+          (SELECT COUNT(*) FROM daily_logs WHERE log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
             AND compliance_pct >= 75)                                        AS good_compliance_today
       `),
       // Today's detail per member
@@ -62,7 +62,7 @@ router.get('/overview', async (req, res) => {
             JOIN users u2 ON u2.id = mp.monitor_id
             WHERE mp.patient_id = u.id AND mp.active = true LIMIT 1) AS monitor_name
         FROM users u
-        LEFT JOIN daily_logs dl ON dl.patient_id = u.id AND dl.log_date = CURRENT_DATE
+        LEFT JOIN daily_logs dl ON dl.patient_id = u.id AND dl.log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
         WHERE u.role = 'patient' AND u.active = true
         ORDER BY COALESCE(dl.compliance_pct, -1) ASC
       `),
@@ -75,7 +75,7 @@ router.get('/overview', async (req, res) => {
         LEFT JOIN daily_logs dl ON dl.patient_id = u.id
         WHERE u.role = 'patient' AND u.active = true
         GROUP BY u.id, u.name
-        HAVING MAX(dl.log_date) < CURRENT_DATE - INTERVAL '1 day'
+        HAVING MAX(dl.log_date) < (NOW() AT TIME ZONE 'Asia/Kolkata')::date - INTERVAL '1 day'
           OR MAX(dl.log_date) IS NULL
         ORDER BY days_since DESC NULLS FIRST
       `),

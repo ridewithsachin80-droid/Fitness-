@@ -31,7 +31,11 @@ export default function PatientList() {
   const load = async () => {
     try {
       const { data } = await getPatients();
-      setPatients(data);
+      // Normalise last_logged to YYYY-MM-DD regardless of how pg serialises it
+      setPatients((data || []).map(p => ({
+        ...p,
+        last_logged: p.last_logged ? String(p.last_logged).slice(0, 10) : null,
+      })));
     } catch (e) {
       setError('Failed to load patients');
     } finally {

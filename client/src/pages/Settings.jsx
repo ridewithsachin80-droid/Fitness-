@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore }    from '../store/authStore';
 import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword, getNotifLog } from '../api/logs';
+import { disconnectSocket } from '../hooks/useSync';
 import { Card, SectionTitle, BackButton } from '../components/UI';
 
 export default function Settings() {
@@ -56,6 +57,7 @@ export default function Settings() {
 
   const handleLogout = async () => {
     try { await apiLogout(); } catch (_) {}
+    disconnectSocket();
     logout();
   };
 

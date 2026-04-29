@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
@@ -483,9 +483,12 @@ export default function Monitor() {
   useEffect(() => { load(); }, [load]);
 
   // Real-time: reload when this patient saves a new log
+  // Guard: don't fire concurrent re-fetches on rapid socket events
+  const reloadTimer = useRef(null);
   useSync((update) => {
     if (String(update.patientId) === String(patientId)) {
-      load();
+      clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => load(), 400); // debounce 400ms
     }
   });
 

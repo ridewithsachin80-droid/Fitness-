@@ -75,6 +75,38 @@ router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
 });
 
 
+// ── GET /api/logs/range/:from/:to ─────────────────────────────────────────────
+// Returns logs between two YYYY-MM-DD dates (inclusive), ordered newest first.
+// Used for the weight chart and monitor history view.
+router.get('/range/:from/:to', authMW, async (req, res) => {
+  try {
+    const { from, to } = req.params;
+
+    const patientId =
+      req.user.role === 'patient'
+        ? req.user.id
+        : req.query.patientId;
+
+    if (!patientId) {
+      return res.status(400).json({ error: 'patientId query param required for monitors' });
+    }
+
+    const result = await pool.query(
+      `SELECT * FROM daily_logs
+       WHERE patient_id = $1 AND log_date BETWEEN $2 AND $3
+       ORDER BY log_date DESC`,
+      [patientId, from, to]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET /logs/range error:', err);
+    res.status(500).json({ error: 'Failed to fetch log range' });
+  }
+});
+
+
+
 // ── GET /api/logs/:date ──────────────────────────────────────────────────────
 // Returns the log for the given YYYY-MM-DD date.
 // Patients: always their own log.
@@ -136,7 +168,9 @@ router.get('/:date', authMW, async (req, res) => {
       // Sprint 5: per-member RDA overrides (null = use defaults)
       rda_overrides: profile.rda_overrides || {},
       // For calorie burn calculation (Sprint 4)
-      start_weight: profile.start_weight || null,
+      start_weight:  profile.start_weight  || null,
+      // Sprint 15: per-member water target (ml) — set by monitor in patient profile
+      water_target:  profile.water_target  || 3000,
     };
 
     res.json(log ? { ...log, protocol } : { protocol });
@@ -212,15 +246,17 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
 
     const saved = result.rows[0];
 
-    // Real-time: notify the monitor watching this patient
-    req.io
-      .to(`monitor_${patientId}`)
-      .emit('log_updated', {
-        patientId,
-        date,
-        compliance: compliance_pct,
-        weight_kg: saved.weight_kg,
-      });
+    // Real-time: notify all monitors watching this patient
+    // NOTE: server emits to monitor_${monitorId} (the monitor's own ID),
+    // NOT monitor_${patientId} — monitors join rooms keyed by their own userId.
+    const monitorRows = await pool.query(
+      `SELECT monitor_id FROM monitor_patients WHERE patient_id = $1 AND active = true`,
+      [patientId]
+    );
+    const payload = { patientId, date, compliance: compliance_pct, weight_kg: saved.weight_kg };
+    for (const row of monitorRows.rows) {
+      req.io.to(`monitor_${row.monitor_id}`).emit('log_updated', payload);
+    }
 
     res.json(saved);
   } catch (err) {
@@ -228,36 +264,5 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     res.status(500).json({ error: 'Failed to save log' });
   }
 });
-
-// ── GET /api/logs/range/:from/:to ─────────────────────────────────────────────
-// Returns logs between two YYYY-MM-DD dates (inclusive), ordered newest first.
-// Used for the weight chart and monitor history view.
-router.get('/range/:from/:to', authMW, async (req, res) => {
-  try {
-    const { from, to } = req.params;
-
-    const patientId =
-      req.user.role === 'patient'
-        ? req.user.id
-        : req.query.patientId;
-
-    if (!patientId) {
-      return res.status(400).json({ error: 'patientId query param required for monitors' });
-    }
-
-    const result = await pool.query(
-      `SELECT * FROM daily_logs
-       WHERE patient_id = $1 AND log_date BETWEEN $2 AND $3
-       ORDER BY log_date DESC`,
-      [patientId, from, to]
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error('GET /logs/range error:', err);
-    res.status(500).json({ error: 'Failed to fetch log range' });
-  }
-});
-
 
 module.exports = router;
