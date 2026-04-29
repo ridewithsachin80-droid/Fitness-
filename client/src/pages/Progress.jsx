@@ -207,7 +207,7 @@ function PastLogModal({ log, onClose }) {
 
 function StatBox({ value, label, sub, color = 'emerald' }) {
   const colors = {
-    emerald: 'bg-[rgba(44,232,156,0.08)] text-[#2ce89c] border border-[rgba(44,232,156,0.14)]',
+    emerald: 'bg-[rgba(124,92,252,0.08)] text-[#7c5cfc] border border-[rgba(124,92,252,0.14)]',
     blue:    'bg-[rgba(96,165,250,0.08)] text-blue-400 border border-[rgba(96,165,250,0.14)]',
     orange:  'bg-[rgba(251,146,60,0.08)] text-orange-400 border border-[rgba(251,146,60,0.14)]',
     purple:  'bg-[rgba(192,132,252,0.08)] text-purple-400 border border-[rgba(192,132,252,0.14)]',
@@ -362,7 +362,7 @@ export default function Progress() {
                 />
               </div>
               {lostKg !== null && lostKg > 0 && (
-                <p className="text-center text-xs text-[#2ce89c] mt-2 font-semibold">
+                <p className="text-center text-xs text-[#7c5cfc] mt-2 font-semibold">
                   🎉 {lostKg} kg lost · {toGoKg} kg to go
                 </p>
               )}
@@ -413,8 +413,8 @@ export default function Progress() {
                 <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTip />} />
                 {targetW && (
-                  <ReferenceLine y={targetW} stroke="#34d399" strokeDasharray="4 4"
-                    label={{ value: `Goal ${targetW}`, position: 'right', fontSize: 9, fill: '#34d399' }} />
+                  <ReferenceLine y={targetW} stroke="#a78bfa" strokeDasharray="4 4"
+                    label={{ value: `Goal ${targetW}`, position: 'right', fontSize: 9, fill: '#a78bfa' }} />
                 )}
                 <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2.5}
                   dot={{ fill: '#3b82f6', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
@@ -442,7 +442,7 @@ export default function Progress() {
                   interval={Math.floor(complianceData.length / 6)} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<ComplianceTip />} />
-                <ReferenceLine y={75} stroke="#34d399" strokeDasharray="3 3" />
+                <ReferenceLine y={75} stroke="#a78bfa" strokeDasharray="3 3" />
                 <Bar dataKey="score" radius={[3, 3, 0, 0]}
                   fill="#10b981"
                   label={false}
@@ -476,7 +476,7 @@ export default function Progress() {
                 <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']}
                   contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }} />
                 {profile?.macros?.kcal && (
-                  <ReferenceLine y={profile.macros.kcal} stroke="#34d399" strokeDasharray="3 3" />
+                  <ReferenceLine y={profile.macros.kcal} stroke="#a78bfa" strokeDasharray="3 3" />
                 )}
                 <Bar dataKey="kcal" fill="#fb923c" radius={[3, 3, 0, 0]} />
               </BarChart>

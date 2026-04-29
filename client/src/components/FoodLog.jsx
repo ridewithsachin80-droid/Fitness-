@@ -382,7 +382,7 @@ export default function FoodLog({ items = [], onChange }) {
                       <span className="text-sm text-stone-700 font-medium truncate">{food.name}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {food.verified && (
-                          <span className="text-xs bg-[rgba(44,232,156,0.12)] text-[#2ce89c] px-1.5 py-0.5 rounded font-semibold">✓</span>
+                          <span className="text-xs bg-[rgba(124,92,252,0.12)] text-[#7c5cfc] px-1.5 py-0.5 rounded font-semibold">✓</span>
                         )}
                         <span className="text-xs font-bold text-orange-500">
                           {food.per_100g?.calories || 0} kcal

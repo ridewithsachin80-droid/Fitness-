@@ -150,7 +150,7 @@ function ComplianceRing({ pct }) {
   return (
     <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
       <circle cx="28" cy="28" r={r} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="5" />
-      <circle cx="28" cy="28" r={r} fill="none" stroke="#6ee7b7" strokeWidth="5"
+      <circle cx="28" cy="28" r={r} fill="none" stroke="#c4b5fd" strokeWidth="5"
         strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
         className="transition-all duration-700" />
       <text x="28" y="28" dominantBaseline="middle" textAnchor="middle"
@@ -743,7 +743,7 @@ export default function DailyLog() {
       <OfflineBanner />
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#0d2d1c] to-[#040c08] text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#1e1258] to-[#08052a] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -1044,7 +1044,7 @@ export default function DailyLog() {
         <div className="max-w-md mx-auto">
           <button onClick={saveLog} disabled={saving || loading}
             className={`w-full py-4 rounded-2xl font-bold text-base shadow-float transition-all duration-200 ${
-              saved ? 'bg-[#2ce89c] text-[#040c08]' : saving ? 'bg-[#2ce89c]/80 text-[#040c08]' : 'bg-[#2ce89c] hover:bg-[#34d399] text-[#040c08] active:scale-98'}`}>
+              saved ? 'bg-[#7c5cfc] text-[#08052a]' : saving ? 'bg-[#7c5cfc]/80 text-[#08052a]' : 'bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] active:scale-98'}`}>
             {saving ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1067,7 +1067,7 @@ export default function DailyLog() {
             <h2 className="text-xl font-bold text-[#ededf0] mb-2">{milestone.title}</h2>
             <p className="text-sm text-[#6a6a78] leading-relaxed mb-6">{milestone.body}</p>
             <button onClick={() => setMilestone(null)}
-              className="w-full py-3 bg-[#2ce89c] hover:bg-[#34d399] text-[#040c08] font-bold rounded-2xl transition-colors active:scale-95">
+              className="w-full py-3 bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] font-bold rounded-2xl transition-colors active:scale-95">
               Let's keep going! 💪
             </button>
           </div>

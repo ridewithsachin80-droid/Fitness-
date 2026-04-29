@@ -183,7 +183,7 @@ export default function PatientList() {
         {loggedToday.length > 0 && (
           <div>
             {noLogToday.length > 0 && (
-              <p className="text-[10px] font-semibold text-[#2ce89c] uppercase tracking-[0.12em] mb-2 mt-4 px-1">
+              <p className="text-[10px] font-semibold text-[#7c5cfc] uppercase tracking-[0.12em] mb-2 mt-4 px-1">
                 ✓ Logged today ({loggedToday.length})
               </p>
             )}

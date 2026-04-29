@@ -134,7 +134,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
         ))}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-[#2ce89c] hover:bg-[#34d399] text-[#040c08] font-bold rounded-xl transition-colors disabled:opacity-50">
+          className="w-full py-3 bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] font-bold rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Add Lab Value'}
         </button>
       </div>
@@ -178,7 +178,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-[#2ce89c]">PIN set successfully!</p>
+            <p className="font-semibold text-[#7c5cfc]">PIN set successfully!</p>
             <p className="text-xs text-stone-400 mt-1">Member can now log in with this PIN</p>
           </div>
         ) : (
@@ -327,7 +327,7 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-[#2ce89c]">Weight saved!</p>
+            <p className="font-semibold text-[#7c5cfc]">Weight saved!</p>
           </div>
         ) : (
           <>
@@ -618,8 +618,8 @@ export default function Monitor() {
                     strokeDasharray="4 4" label={{ value: 'Start', position: 'right', fontSize: 9, fill: '#f87171' }} />
                 )}
                 {profile.target_weight && (
-                  <ReferenceLine y={parseFloat(profile.target_weight)} stroke="#34d399"
-                    strokeDasharray="4 4" label={{ value: 'Goal', position: 'right', fontSize: 9, fill: '#34d399' }} />
+                  <ReferenceLine y={parseFloat(profile.target_weight)} stroke="#a78bfa"
+                    strokeDasharray="4 4" label={{ value: 'Goal', position: 'right', fontSize: 9, fill: '#a78bfa' }} />
                 )}
                 <Line type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={2.5}
                   dot={{ fill: '#10b981', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
@@ -833,7 +833,7 @@ export default function Monitor() {
             <SectionTitle icon="📋">Daily Log</SectionTitle>
             {activeLog && (
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(44,232,156,0.12)] text-[#2ce89c]' :
+                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(124,92,252,0.12)] text-[#7c5cfc]' :
                 (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
                                                       'bg-red-400/10 text-red-400'
               }`}>{activeLog.compliance_pct||0}%</span>
@@ -852,7 +852,7 @@ export default function Monitor() {
                   const isToday = log.log_date === new Date().toISOString().split('T')[0];
                   const isActive = log.log_date === activeDate;
                   const pct = log.compliance_pct || 0;
-                  const dotColor = pct >= 75 ? '#2ce89c' : pct >= 50 ? '#fbbf24' : '#f87171';
+                  const dotColor = pct >= 75 ? '#7c5cfc' : pct >= 50 ? '#fbbf24' : '#f87171';
                   const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
                   return (
                     <button key={log.log_date}
@@ -860,7 +860,7 @@ export default function Monitor() {
                       className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl
                         border transition-all text-xs font-semibold ${
                         isActive
-                          ? 'bg-[rgba(44,232,156,0.10)] border-[rgba(44,232,156,0.30)] text-[#2ce89c]'
+                          ? 'bg-[rgba(124,92,252,0.10)] border-[rgba(124,92,252,0.30)] text-[#7c5cfc]'
                           : 'bg-[#1a1a20] border-white/[0.07] text-[#6a6a78] hover:border-white/[0.18] hover:text-[#ededf0]'
                       }`}>
                       <span>{dayLabel}</span>
@@ -899,7 +899,7 @@ export default function Monitor() {
                     {/* Net calorie row */}
                     {burnedKcal > 0 && (
                       <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
-                        netKcal <= 0 ? 'bg-[rgba(44,232,156,0.07)] border-[rgba(44,232,156,0.20)] text-[#2ce89c]'
+                        netKcal <= 0 ? 'bg-[rgba(124,92,252,0.07)] border-[rgba(124,92,252,0.20)] text-[#7c5cfc]'
                         : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
                         : 'bg-red-400/10 border-red-400/20 text-red-400'
                       }`}>
@@ -923,7 +923,7 @@ export default function Monitor() {
                             const total   = (meal.items || []).length;
                             const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
                             const pct     = total > 0 ? matched / total : 0;
-                            const color   = pct >= 0.8 ? 'bg-[rgba(44,232,156,0.10)] text-[#2ce89c] border-[rgba(44,232,156,0.22)]'
+                            const color   = pct >= 0.8 ? 'bg-[rgba(124,92,252,0.10)] text-[#7c5cfc] border-[rgba(124,92,252,0.22)]'
                                           : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
                                           :              'bg-red-400/10 text-red-400 border-red-400/25';
                             const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
@@ -942,7 +942,7 @@ export default function Monitor() {
                       <div className="rounded-xl border border-white/[0.07] overflow-hidden">
                         <div className="px-3 py-2 bg-[#1a1a20] border-b border-white/[0.06] flex justify-between">
                           <span className="text-[10px] font-bold text-[#4e4e5c] uppercase tracking-[0.10em]">🥗 Food Log</span>
-                          <span className="text-xs font-bold text-[#2ce89c]">{eatenKcal} kcal total</span>
+                          <span className="text-xs font-bold text-[#7c5cfc]">{eatenKcal} kcal total</span>
                         </div>
                         {['Meal 1', 'Meal 2', 'Meal 3'].map(meal => {
                           const mealItems = log.food_items.filter(f => f.meal === meal);
@@ -996,8 +996,8 @@ export default function Monitor() {
                             return { cal: acc.cal+n.cal, pro: acc.pro+n.pro, carb: acc.carb+n.carb, fat: acc.fat+n.fat };
                           }, { cal:0, pro:0, carb:0, fat:0 });
                           return (
-                            <div className="px-3 py-2.5 bg-[rgba(44,232,156,0.05)] flex items-center justify-between border-t border-[rgba(44,232,156,0.12)]">
-                              <span className="text-xs font-bold text-[#2ce89c]">Day Total</span>
+                            <div className="px-3 py-2.5 bg-[rgba(124,92,252,0.05)] flex items-center justify-between border-t border-[rgba(124,92,252,0.12)]">
+                              <span className="text-xs font-bold text-[#7c5cfc]">Day Total</span>
                               <div className="flex gap-3 text-xs">
                                 <span className="font-bold text-orange-400">{t.cal} kcal</span>
                                 <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
@@ -1015,7 +1015,7 @@ export default function Monitor() {
                       {ACTIVITIES.map(a => (
                         <span key={a.id} className={`text-xs px-2 py-1 rounded-lg font-medium border ${
                           log.activities?.[a.id]
-                            ? 'bg-[rgba(44,232,156,0.10)] border-[rgba(44,232,156,0.22)] text-[#2ce89c]'
+                            ? 'bg-[rgba(124,92,252,0.10)] border-[rgba(124,92,252,0.22)] text-[#7c5cfc]'
                             : 'bg-white/[0.04] border-white/[0.06] text-[#4e4e5c]'
                         }`}>{a.icon}</span>
                       ))}
@@ -1042,10 +1042,10 @@ export default function Monitor() {
                       return (
                         <details className="border border-white/[0.07] rounded-xl overflow-hidden">
                           <summary className="px-3 py-2.5 text-xs font-semibold text-[#6a6a78] cursor-pointer
-                            hover:text-[#2ce89c] list-none flex justify-between items-center bg-[#1a1a20]">
+                            hover:text-[#7c5cfc] list-none flex justify-between items-center bg-[#1a1a20]">
                             <span>🔬 Key Nutrients</span>
                             <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
-                              met >= KEYS.length*0.8 ? 'bg-[rgba(44,232,156,0.12)] text-[#2ce89c]' :
+                              met >= KEYS.length*0.8 ? 'bg-[rgba(124,92,252,0.12)] text-[#7c5cfc]' :
                               met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
                             }`}>{met}/{KEYS.length} ▼</span>
                           </summary>
@@ -1058,8 +1058,8 @@ export default function Monitor() {
                               const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
                               const val  = +raw.toFixed(dec);
                               const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-[#2ce89c]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-[#2ce89c]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
+                              const cls  = pct>=80 ? 'bg-[#7c5cfc]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
+                              const tcls = pct>=80 ? 'text-[#7c5cfc]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
                               return (
                                 <div key={k}>
                                   <div className="flex justify-between text-xs mb-1">

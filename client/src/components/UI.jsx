@@ -34,17 +34,17 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
       className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer select-none
         transition-all duration-150 border ${
           checked
-            ? 'bg-[rgba(44,232,156,0.07)] border-[rgba(44,232,156,0.20)]'
+            ? 'bg-[rgba(124,92,252,0.07)] border-[rgba(124,92,252,0.20)]'
             : 'bg-[#1a1a20] border-white/[0.07] hover:border-white/[0.14]'
         }`}
     >
       {/* Check circle */}
       <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center
         transition-all duration-150 ${
-          checked ? 'bg-[#2ce89c] border-[#2ce89c]' : 'border-white/[0.20]'
+          checked ? 'bg-[#7c5cfc] border-[#7c5cfc]' : 'border-white/[0.20]'
         }`}>
         {checked && (
-          <svg className="w-3 h-3 text-[#0a2318]" viewBox="0 0 12 12" fill="none">
+          <svg className="w-3 h-3 text-[#1a1040]" viewBox="0 0 12 12" fill="none">
             <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.2"
               strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -92,7 +92,7 @@ export function OfflineBanner() {
 
   if (justOnline) {
     return (
-      <div className="bg-[#2ce89c] text-[#040c08] text-center text-xs py-2 px-4 font-semibold tracking-wide">
+      <div className="bg-[#7c5cfc] text-[#08052a] text-center text-xs py-2 px-4 font-semibold tracking-wide">
         ✓ Back online — syncing…
       </div>
     );
@@ -109,7 +109,7 @@ export function OfflineBanner() {
 export function Spinner({ size = 'md', color = 'emerald' }) {
   const sizes  = { sm: 'w-4 h-4 border-2', md: 'w-6 h-6 border-2', lg: 'w-8 h-8 border-[3px]' };
   const colors = {
-    emerald: 'border-[#2ce89c]/30 border-t-[#2ce89c]',
+    emerald: 'border-[#7c5cfc]/30 border-t-[#7c5cfc]',
     white:   'border-white/30 border-t-white',
     stone:   'border-white/10 border-t-white/40',
   };
@@ -132,7 +132,7 @@ export function PageLoader() {
 export function StatPill({ value, label, color = 'stone' }) {
   const colors = {
     stone:   'bg-white/[0.06] text-[#d8d8de]',
-    emerald: 'bg-[rgba(44,232,156,0.10)] text-[#2ce89c]',
+    emerald: 'bg-[rgba(124,92,252,0.10)] text-[#7c5cfc]',
     amber:   'bg-[rgba(251,191,36,0.10)] text-amber-400',
     red:     'bg-[rgba(248,113,113,0.10)] text-red-400',
     blue:    'bg-[rgba(96,165,250,0.10)] text-blue-400',
@@ -196,12 +196,12 @@ export function BottomNav({ role }) {
             {tabs.map(tab => (
               <button key={tab.path} onClick={() => navigate(tab.path)}
                 className={`flex-1 flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${
-                  tab.active ? 'text-[#2ce89c]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'
+                  tab.active ? 'text-[#7c5cfc]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'
                 }`}>
                 {tab.icon}
                 <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
                 {tab.active && (
-                  <div className="absolute bottom-2.5 w-1 h-1 bg-[#2ce89c] rounded-full shadow-glow" />
+                  <div className="absolute bottom-2.5 w-1 h-1 bg-[#7c5cfc] rounded-full shadow-glow" />
                 )}
               </button>
             ))}
