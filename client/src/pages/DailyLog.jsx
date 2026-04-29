@@ -747,7 +747,7 @@ export default function DailyLog() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-xs font-bold tracking-widest uppercase text-emerald-300 mb-0.5">FitLife</p>
+              <p className="text-xs font-bold tracking-widest uppercase text-[#a78bfa] mb-0.5">FitLife</p>
               <h1 className="text-xl font-bold">{user?.name}</h1>
               <p className="text-emerald-300 text-xs mt-0.5">Building healthy habits daily 🌱</p>
             </div>
@@ -779,10 +779,10 @@ export default function DailyLog() {
             <ComplianceRing pct={compliance} />
             <div className="flex-1">
               <div className="text-sm font-semibold">Today's Compliance</div>
-              <div className="text-xs text-emerald-200 mt-0.5">
+              <div className="text-xs text-[#ddd6fe] mt-0.5">
                 {`${actDone}/${activeActivities.length}`} activities · {`${acvDone}/${activeACV.length}`} ACV · {`${suppDone}/${activeSupplements.length}`} supps
               </div>
-              {log.weight && <div className="text-xs text-emerald-300 mt-1 font-medium">⚖ {log.weight} kg logged</div>}
+              {log.weight && <div className="text-xs text-[#c4b5fd] mt-1 font-medium">⚖ {log.weight} kg logged</div>}
             </div>
           </div>
         </div>

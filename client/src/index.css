@@ -66,6 +66,21 @@ body {
 .text-purple-700, .text-purple-600        { color: #c084fc; }
 .text-purple-500                          { color: #d8b4fe; }
 
+
+/* Remaining emerald shades → purple-tinted so all brand elements unify */
+.text-emerald-400 { color: #a78bfa; }
+.text-emerald-300 { color: #c4b5fd; }
+.text-emerald-200 { color: #ddd6fe; }
+.text-emerald-100 { color: #ede9fe; }
+/* emerald-500 (used for chart dots / active elements) → vivid purple */
+.text-emerald-500 { color: #8b5cf6; }
+/* bg-emerald-500 (checkbox fill, meal tabs) → purple */
+.bg-emerald-500 { background-color: #7c5cfc; }
+/* bg-emerald-400 (nutrition bar) — keep as accent purple */
+.bg-emerald-400 { background-color: #8b5cf6; }
+/* border-emerald-500 (checkbox border when checked) */
+.border-emerald-500 { border-color: #7c5cfc; }
+
 /* Tinted accent backgrounds */
 .bg-emerald-50  { background-color: rgba(124,92,252,0.07); }
 .bg-emerald-100 { background-color: rgba(124,92,252,0.13); }

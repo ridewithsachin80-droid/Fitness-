@@ -26,7 +26,7 @@ function nDaysAgo(n) {
 }
 
 function shortDate(str) {
-  const d = new Date(str + 'T00:00:00');
+  const d = new Date(String(str).slice(0, 10) + 'T00:00:00');
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
@@ -73,7 +73,7 @@ function PastLogModal({ log, onClose }) {
     return sum;
   }, 0);
 
-  const dateStr = new Date(log.log_date + 'T00:00:00').toLocaleDateString('en-IN', {
+  const dateStr = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
 
@@ -254,7 +254,9 @@ export default function Progress() {
 
   // ── Derived data ────────────────────────────────────────────────────────────
 
-  const sorted   = [...logs].sort((a, b) => a.log_date.localeCompare(b.log_date));
+  const sorted   = [...logs]
+    .map(l => ({ ...l, log_date: String(l.log_date).slice(0, 10) }))
+    .sort((a, b) => a.log_date.localeCompare(b.log_date));
   const last30   = sorted.slice(-30);
 
   const weightData = sorted
@@ -282,7 +284,7 @@ export default function Progress() {
   let streak = 0;
   let d = new Date();
   while (true) {
-    const ds = d.toISOString().split('T')[0];
+    const ds = (() => { const n = new Date(); return new Date(n.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
     if (!dateSet.has(ds)) break;
     streak++;
     d.setDate(d.getDate() - 1);
@@ -311,7 +313,7 @@ export default function Progress() {
         fat:  +(acc.fat  + (n.fat        || 0) * f).toFixed(1),
       };
     }, { kcal: 0, pro: 0, carb: 0, fat: 0 });
-    const d = new Date(log.log_date + 'T00:00:00');
+    const d = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00');
     return {
       date: `${d.getDate()}/${d.getMonth() + 1}`,
       ...macros,
@@ -529,7 +531,7 @@ export default function Progress() {
                   </div>
                   <div className="text-right">
                     <span className="text-sm font-bold text-blue-600">{l.value}</span>
-                    <div className="text-xs text-stone-400">{new Date(l.test_date).toLocaleDateString('en-IN')}</div>
+                    <div className="text-xs text-stone-400">{new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</div>
                   </div>
                 </div>
               ))}
@@ -545,7 +547,7 @@ export default function Progress() {
             <p className="text-xs text-stone-400 mb-3">Tap any day to see the full log</p>
             <div className="space-y-1.5">
               {[...sorted].reverse().slice(0, 30).map(log => {
-                const d = new Date(log.log_date + 'T00:00:00');
+                const d = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00');
                 const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', weekday: 'short' });
                 const pct = log.compliance_pct;
                 return (

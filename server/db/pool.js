@@ -1,5 +1,11 @@
 require('dotenv').config();
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// Tell pg to return DATE columns as plain 'YYYY-MM-DD' strings instead of
+// JavaScript Date objects. This prevents dates serialising to ISO timestamps
+// ("2026-04-29T00:00:00.000Z") which break every +T00:00:00 concatenation and
+// every log_date === "YYYY-MM-DD" comparison in the client.
+types.setTypeParser(types.builtins.DATE, val => val);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

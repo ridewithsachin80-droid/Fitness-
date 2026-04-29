@@ -441,7 +441,7 @@ export default function Monitor() {
       const cls = p >= 75 ? 'ok' : p >= 50 ? 'warn' : 'bad';
       const s = l.sleep || {};
       const sleepStr = s.bedtime && s.waketime ? `${s.bedtime.slice(0,5)}→${s.waketime.slice(0,5)}` : '—';
-      const d = new Date(l.log_date + 'T00:00:00');
+      const d = new Date(String(l.log_date).slice(0, 10) + 'T00:00:00');
       return `<tr><td>${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</td>
         <td><span class="badge ${cls}">${p != null ? p + '%' : '—'}</span></td>
         <td>${l.weight_kg || '—'} kg</td>
@@ -454,7 +454,7 @@ export default function Monitor() {
     <table><thead><tr><th>Test</th><th>Value</th><th>Unit</th><th>Status</th><th>Date</th></tr></thead><tbody>
     ${labs.map(l => `<tr><td>${l.test_name}</td><td>${l.value}</td><td>${l.unit||'—'}</td>
       <td><span class="badge ${l.status==='normal'?'ok':l.status==='high'?'bad':'warn'}">${l.status||'—'}</span></td>
-      <td>${new Date(l.test_date).toLocaleDateString('en-IN')}</td></tr>`).join('')}
+      <td>${new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</td></tr>`).join('')}
     </tbody></table>` : ''}
 
     ${notes.length ? `<h2>📝 Clinical Notes</h2>
@@ -504,8 +504,11 @@ export default function Monitor() {
   // IST-aware "today" for chip labels and comparisons
   const todayIST = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
 
-  // Date-scoped log viewer — default to most recent log date
-  const sortedLogs   = [...logs].sort((a, b) => b.log_date.localeCompare(a.log_date));
+  // Date-scoped log viewer — normalise log_date to YYYY-MM-DD so === comparisons
+  // are reliable regardless of how pg serialises the DATE column.
+  const sortedLogs   = [...logs]
+    .map(l => ({ ...l, log_date: String(l.log_date).slice(0, 10) }))
+    .sort((a, b) => b.log_date.localeCompare(a.log_date));
   const activeDate   = viewDate || sortedLogs[0]?.log_date || null;
   const activeLog    = sortedLogs.find(l => l.log_date === activeDate) || null;
 
@@ -520,7 +523,7 @@ export default function Monitor() {
     .slice(0, 30)
     .reverse()
     .map(l => {
-      const d = new Date(l.log_date + 'T00:00:00');
+      const d = new Date(String(l.log_date).slice(0, 10) + 'T00:00:00');
       return {
         date:  `${d.getDate()}/${d.getMonth()+1}`,
         score: l.compliance_pct || 0,
@@ -667,7 +670,7 @@ export default function Monitor() {
         {/* Drill-down modal — log detail for the tapped bar */}
         {selectedLog && (() => {
           const fl    = selectedLog;
-          const dateLabel = new Date(fl.log_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+          const dateLabel = new Date(String(fl.log_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
           const foodItems = fl.food_items || [];
           const totalKcal = foodItems.reduce((s, i) => s + (calcN(i)?.cal || 0), 0);
           return (
@@ -851,7 +854,7 @@ export default function Monitor() {
               <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: 'none' }}>
                 {sortedLogs.map(log => {
-                  const d = new Date(log.log_date + 'T00:00:00');
+                  const d = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00');
                   const isToday = log.log_date === todayIST;
                   const isActive = log.log_date === activeDate;
                   const pct = log.compliance_pct || 0;
