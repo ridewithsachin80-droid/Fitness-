@@ -736,6 +736,7 @@ export default function DailyLog() {
 
   // ── Auto-save (30-second debounce) ────────────────────────────────────────
   const autoSaveRef = useRef(null);
+  const swipeRef = useRef(null);
   const [autoSaved, setAutoSaved] = useState(false);
   const triggerAutoSave = useCallback(() => {
     clearTimeout(autoSaveRef.current);
