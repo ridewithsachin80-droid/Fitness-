@@ -50,14 +50,22 @@ export default function PatientList() {
     ));
   });
 
+  const [filter, setFilter] = useState('all');
+
   if (loading) return <PageLoader />;
 
-  // Sprint 9: search filter (by name or phone)
-  const filtered    = search.trim()
+  const baseList = search.trim()
     ? patients.filter(p =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.phone || '').includes(search))
     : patients;
+
+  const filtered = (() => {
+    if (filter === 'needs_attention') return baseList.filter(p => p.last_logged !== todayStr);
+    if (filter === 'low_compliance')  return baseList.filter(p => p.last_compliance != null && p.last_compliance < 50);
+    if (filter === 'no_pin')          return baseList.filter(p => p.has_pin === false);
+    return baseList;
+  })();
 
   const noLogToday  = filtered.filter(p => p.last_logged !== todayStr);
   const loggedToday = filtered.filter(p => p.last_logged === todayStr);
@@ -126,6 +134,32 @@ export default function PatientList() {
                 ×
               </button>
             )}
+          </div>
+        )}
+
+        {/* Filter chips */}
+        {patients.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            {[
+              { id: 'all',              label: 'All',              count: patients.length },
+              { id: 'needs_attention',  label: '⚠ No log today',   count: patients.filter(p => p.last_logged !== todayStr).length },
+              { id: 'low_compliance',   label: '📉 Low compliance', count: patients.filter(p => p.last_compliance != null && p.last_compliance < 50).length },
+              { id: 'no_pin',           label: '🔑 No PIN',         count: patients.filter(p => p.has_pin === false).length },
+            ].map(chip => (
+              <button key={chip.id} onClick={() => setFilter(chip.id)}
+                className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-all whitespace-nowrap ${
+                  filter === chip.id
+                    ? 'bg-stone-800 text-white shadow-sm'
+                    : 'bg-white border border-stone-200 text-stone-600 hover:border-stone-400'
+                }`}>
+                {chip.label}
+                {chip.count > 0 && (
+                  <span className={`ml-1 ${filter === chip.id ? 'text-stone-300' : 'text-stone-400'}`}>
+                    ({chip.count})
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         )}
 

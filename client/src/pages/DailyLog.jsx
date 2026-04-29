@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLogStore }  from '../store/logStore';
 import { useAuthStore } from '../store/authStore';
+import api from '../api/client';
 import {
   today, formatDate,
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
@@ -662,6 +663,17 @@ export default function DailyLog() {
 
   useEffect(() => { setDate(today()); }, []);
 
+  // Fetch yesterday's weight for trend delta shown after weight entry
+  const [yesterdayWeight, setYesterdayWeight] = useState(null);
+  useEffect(() => {
+    const yDate = new Date();
+    yDate.setDate(yDate.getDate() - 1);
+    const yStr = yDate.toISOString().split('T')[0];
+    api.get(`/logs/${yStr}`).then(({ data }) => {
+      if (data?.weight_kg) setYesterdayWeight(parseFloat(data.weight_kg));
+    }).catch(() => {});
+  }, []);
+
   const compliance = calcCompliance(log, activeActivities, activeACV, activeSupplements);
   const actDone    = activeActivities.filter(a => log.activities?.[a.id]).length;
   const acvDone    = activeACV.filter(a => log.acv?.[a.id]).length;
@@ -740,18 +752,35 @@ export default function DailyLog() {
       {/* Content */}
       <div className="max-w-md mx-auto px-4 space-y-3 pb-32 pt-4">
 
-        {/* Date picker */}
+        {/* Date nav */}
         <Card>
-          <div className="flex items-center gap-3">
-            <span>📅</span>
-            <input type="date" value={date} max={today()} onChange={e => setDate(e.target.value)}
-              className="flex-1 text-sm font-semibold text-stone-700 border border-stone-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300" />
-            <button onClick={() => setDate(today())}
-              className="text-xs text-emerald-600 font-bold px-3 py-2 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors whitespace-nowrap">
-              Today
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => {
+                const d = new Date(date + 'T00:00:00');
+                d.setDate(d.getDate() - 1);
+                setDate(d.toISOString().split('T')[0]);
+              }}
+              className="flex items-center gap-1 text-sm font-semibold text-stone-500 px-3 py-2 rounded-xl hover:bg-stone-100 active:scale-95 transition-all"
+            >
+              ← Yesterday
+            </button>
+            <div className="text-center">
+              <p className="text-sm font-bold text-stone-700">
+                {date === today() ? 'Today' : formatDate(date)}
+              </p>
+              {date !== today() && (
+                <p className="text-xs text-amber-600 font-medium mt-0.5">Editing past entry</p>
+              )}
+            </div>
+            <button
+              onClick={() => setDate(today())}
+              disabled={date === today()}
+              className="flex items-center gap-1 text-sm font-semibold text-emerald-600 px-3 py-2 rounded-xl hover:bg-emerald-50 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Today →
             </button>
           </div>
-          {date !== today() && <p className="text-xs text-amber-600 mt-2 ml-7 font-medium">Editing: {formatDate(date)}</p>}
         </Card>
 
         {loading ? (
@@ -784,7 +813,28 @@ export default function DailyLog() {
                   className="flex-1 text-2xl font-bold text-center border-2 border-stone-200 rounded-2xl py-3 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
                 <span className="text-stone-400 font-bold">kg</span>
               </div>
-              {log.weight && <div className="mt-3 text-center text-xs font-semibold py-2 rounded-xl bg-emerald-50 text-emerald-700">✓ Weight logged — great job tracking!</div>}
+              {log.weight && (() => {
+                const delta = yesterdayWeight != null ? parseFloat(log.weight) - yesterdayWeight : null;
+                return (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-center text-xs font-semibold py-2 rounded-xl bg-emerald-50 text-emerald-700">
+                      ✓ Weight logged — great job tracking!
+                    </div>
+                    {delta != null && (
+                      <div className={`text-center text-xs font-semibold py-2 rounded-xl ${
+                        delta < 0 ? 'bg-blue-50 text-blue-700' :
+                        delta > 0 ? 'bg-amber-50 text-amber-700' : 'bg-stone-50 text-stone-500'
+                      }`}>
+                        {delta < 0
+                          ? `↓ You're down ${Math.abs(delta).toFixed(1)} kg from yesterday! 🎉`
+                          : delta > 0
+                          ? `↑ Up ${delta.toFixed(1)} kg from yesterday.`
+                          : `= Same as yesterday.`}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </Card>
 
             {/* Activities */}
@@ -868,8 +918,13 @@ export default function DailyLog() {
             {/* Water */}
             <Card>
               <SectionTitle icon="💧">Water Intake</SectionTitle>
-              <p className="text-xs text-stone-400 mb-3">Target 3L · Stop 1 hr before sleep · Not during meals</p>
-              <WaterTracker value={log.water} onChange={v => update('water', v)} />
+              {(() => {
+                const targetL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
+                return (
+                  <p className="text-xs text-stone-400 mb-3">Target {targetL}L · Stop 1 hr before sleep · Not during meals</p>
+                );
+              })()}
+              <WaterTracker value={log.water} onChange={v => update('water', v)} target={protocol?.water_target || 3000} />
             </Card>
 
             {/* Supplements */}

@@ -1,11 +1,13 @@
-const TARGET_ML = 3000;
 const QUICK_ADD = [250, 500, 750, 1000];
 
-export default function WaterTracker({ value = 0, onChange }) {
+export default function WaterTracker({ value = 0, onChange, target = 3000 }) {
+  const TARGET_ML = target;
   const pct     = Math.min((value / TARGET_ML) * 100, 100);
   const glasses = Math.round(value / 250);
   const litres  = (value / 1000).toFixed(2);
+  const targetL = (TARGET_ML / 1000).toFixed(1);
   const done    = value >= TARGET_ML;
+  const markers = [0.25, 0.5, 0.75, 1].map(f => Math.round(TARGET_ML * f));
 
   return (
     <div className="space-y-4">
@@ -18,7 +20,7 @@ export default function WaterTracker({ value = 0, onChange }) {
           }`}>
             {litres}
           </span>
-          <span className="text-stone-400 text-sm font-medium">L / 3.0L</span>
+          <span className="text-stone-400 text-sm font-medium">L / {targetL}L</span>
         </div>
         <div className="text-right">
           <span className="text-xs text-stone-400">{glasses} glasses</span>
@@ -43,7 +45,7 @@ export default function WaterTracker({ value = 0, onChange }) {
 
       {/* Segment markers */}
       <div className="flex justify-between text-xs text-stone-300 -mt-2 px-0.5">
-        {[750, 1500, 2250, 3000].map((ml) => (
+        {markers.map((ml) => (
           <span key={ml} className={value >= ml ? 'text-emerald-400 font-medium' : ''}>
             {ml / 1000}L
           </span>
