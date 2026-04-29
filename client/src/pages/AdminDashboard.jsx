@@ -1521,6 +1521,14 @@ export default function AdminDashboard() {
         {/* ── Monitors tab ── */}
         {tab === 'monitors' && (
           <>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-stone-400">{monitors.length} monitor{monitors.length !== 1 ? 's' : ''} registered</p>
+              <button onClick={() => setShowAddMonitor(true)}
+                className="flex items-center gap-1.5 text-xs font-bold text-white bg-stone-800
+                  hover:bg-stone-900 px-3 py-2 rounded-xl transition-colors">
+                + Add Monitor
+              </button>
+            </div>
             {filtered(monitors, 'name').length === 0 ? (
               <div className="text-center py-16 text-stone-400">
                 <div className="text-4xl mb-3">🏋️</div>

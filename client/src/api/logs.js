@@ -25,6 +25,8 @@ export const addLabValue     = (id, data)       => api.post(`/patients/${id}/lab
 export const addNote         = (id, data)       => api.post(`/patients/${id}/notes`, data);
 // Sprint 8: set or reset a member's login PIN (from monitor page)
 export const setMemberPin    = (id, pin)        => api.patch(`/patients/${id}/pin`, { pin });
+// Sprint 10: member fetches their own profile
+export const getMyProfile    = ()               => api.get('/patients/me');
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 // Sprint 9: admin can reset PIN directly from the dashboard

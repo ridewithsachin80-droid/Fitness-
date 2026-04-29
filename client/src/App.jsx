@@ -9,6 +9,7 @@ import { useAuthStore } from './store/authStore';
 import Login       from './pages/Login';
 import DailyLog    from './pages/DailyLog';
 import Progress    from './pages/Progress';
+import Profile     from './pages/Profile';
 import Monitor     from './pages/Monitor';
 import PatientList from './pages/PatientList';
 import Settings       from './pages/Settings';
@@ -86,6 +87,14 @@ export default function App() {
           element={
             <PrivateRoute roles={['patient']}>
               <Progress />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <PrivateRoute roles={['patient']}>
+              <Profile />
             </PrivateRoute>
           }
         />
