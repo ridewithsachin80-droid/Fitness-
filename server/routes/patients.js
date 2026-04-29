@@ -4,6 +4,18 @@ const authMW = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 const bcrypt = require('bcryptjs');
 
+// Lightweight audit helper — logs monitor/admin actions on patient records
+async function audit(actor, action, targetId, targetName, detail) {
+  try {
+    await pool.query(
+      `INSERT INTO audit_log (actor_id, actor_name, actor_role, action, target_id, target_name, detail)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [actor?.id||null, actor?.name||'System', actor?.role||'monitor',
+       action, targetId||null, targetName||null, detail||null]
+    );
+  } catch (e) { /* non-fatal */ }
+}
+
 // ── GET /api/patients ─────────────────────────────────────────────────────────
 // Monitor/admin: list all assigned patients with summary stats.
 // Returns: name, phone, start/target weight, latest weight, last logged date, compliance.
@@ -41,22 +53,6 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
 
 // ── GET /api/patients/me ────────────────────────────────────────────────────────
 // Patient fetches their own profile + labs for the Progress page.
-router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
-  try {
-    const id = req.user.id;
-    const [profileResult, labsResult] = await Promise.all([
-      pool.query(`SELECT u.id, u.name, pp.* FROM users u
-        JOIN patient_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [id]),
-      pool.query(`SELECT * FROM lab_values WHERE patient_id = $1 ORDER BY test_date DESC`, [id]),
-    ]);
-    if (!profileResult.rows.length) return res.status(404).json({ error: 'Profile not found' });
-    res.json({ ...profileResult.rows[0], labs: labsResult.rows });
-  } catch (err) {
-    console.error('GET /patients/me error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── GET /api/patients/:id ──────────────────────────────────────────────────────
 // Monitor/admin: full patient detail — profile + last 30 logs + all lab values.
 // All three queries run in parallel for speed.
@@ -365,6 +361,29 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
   }
 });
 
+// ── PATCH /api/patients/:id/pin ───────────────────────────────────────────────
+// Monitor/admin: set or reset a member's login PIN.
+router.patch('/:id/pin', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  const { pin } = req.body;
+  if (!pin || String(pin).trim().length < 4) {
+    return res.status(400).json({ error: 'PIN must be at least 4 characters' });
+  }
+  try {
+    const hash = await bcrypt.hash(String(pin).trim(), 10);
+    const result = await pool.query(
+      `UPDATE users SET password = $1 WHERE id = $2 AND role = 'patient' RETURNING id, name, phone`,
+      [hash, req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Patient not found' });
+    audit(req.user, 'pin_set', result.rows[0].id, result.rows[0].name,
+      `Set login PIN for member ${result.rows[0].name}`);
+    res.json({ message: 'PIN updated', user: result.rows[0] });
+  } catch (err) {
+    console.error('PATCH /patients/:id/pin error:', err.message);
+    res.status(500).json({ error: 'Failed to update PIN' });
+  }
+});
+
 // ── PATCH /api/patients/:id/weight ───────────────────────────────────────────
 // Sprint 11: Monitor/admin can log or correct a member's weight for any date.
 // Creates the daily_log row if it doesn't exist yet (upsert on weight only).
@@ -392,6 +411,10 @@ router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), async (req, r
        RETURNING id, log_date, weight_kg`,
       [patientId, date, w]
     );
+    // Look up patient name for audit
+    const nameQ = await pool.query('SELECT name FROM users WHERE id=$1', [patientId]);
+    audit(req.user, 'weight_logged', parseInt(patientId), nameQ.rows[0]?.name,
+      `Logged ${w}kg for ${nameQ.rows[0]?.name || patientId} on ${date}`);
     res.json({ message: 'Weight updated', log: result.rows[0] });
   } catch (err) {
     console.error('PATCH /patients/:id/weight error:', err.message);

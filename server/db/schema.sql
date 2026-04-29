@@ -193,3 +193,21 @@ CREATE INDEX IF NOT EXISTS idx_push_subs_user
 
 CREATE INDEX IF NOT EXISTS idx_monitor_patients_monitor
   ON monitor_patients(monitor_id) WHERE active = true;
+
+-- ── AUDIT LOG (Sprint 13) ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          SERIAL PRIMARY KEY,
+  actor_id    INT REFERENCES users(id) ON DELETE SET NULL,
+  actor_name  VARCHAR(100),
+  actor_role  VARCHAR(20),
+  action      VARCHAR(80)  NOT NULL,   -- e.g. 'member_created', 'pin_reset', 'member_toggled'
+  target_id   INT,                      -- id of the affected user/record
+  target_name VARCHAR(100),
+  detail      TEXT,                     -- human-readable summary
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created
+  ON audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor
+  ON audit_log(actor_id);

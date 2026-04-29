@@ -33,8 +33,9 @@ export const logWeightForPatient = (id, date, weight_kg) =>
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 export const adminResetPin   = (id, pin)        => api.patch(`/admin/members/${id}/pin`, { pin });
-// Sprint 11: admin sends manual push notification
 export const adminSendPush   = (data)           => api.post('/admin/push', data);
+// Sprint 13: audit log
+export const getAuditLog     = (limit = 100)    => api.get(`/admin/audit?limit=${limit}`);
 
 // ── Push notifications ────────────────────────────────────────────────────────
 export const subscribePush   = (sub)            => api.post('/notifications/subscribe',   sub);

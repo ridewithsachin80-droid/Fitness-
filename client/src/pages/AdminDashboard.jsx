@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
-import { adminResetPin, adminSendPush } from '../api/logs';
+import { adminResetPin, adminSendPush, getAuditLog } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
 
@@ -1304,22 +1304,25 @@ export default function AdminDashboard() {
   const [showAddMember,  setShowAddMember]  = useState(false);
   const [showAddMonitor, setShowAddMonitor] = useState(false);
   const [showPush,       setShowPush]       = useState(false);
+  const [auditLog,       setAuditLog]       = useState([]);
   const [assignTarget,   setAssignTarget]   = useState(null);
   const [editTarget,     setEditTarget]     = useState(null);
   const [search,    setSearch]    = useState('');
 
   const load = useCallback(async () => {
     try {
-      const [s, m, mo, ov] = await Promise.all([
+      const [s, m, mo, ov, al] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/members'),
         api.get('/admin/monitors'),
         api.get('/admin/overview').catch(() => ({ data: null })),
+        getAuditLog(100).catch(() => ({ data: [] })),
       ]);
       setStats(s.data);
       setMembers(m.data);
       setMonitors(mo.data);
       setOverview(ov.data);
+      setAuditLog(al.data || []);
     } catch (e) {
       console.error('Admin load error:', e);
     } finally {
@@ -1383,6 +1386,7 @@ export default function AdminDashboard() {
             { id: 'overview', label: '📊 Overview'  },
             { id: 'members',  label: '👥 Members'   },
             { id: 'monitors', label: '🏋️ Monitors'  },
+            { id: 'audit',    label: '🔍 Audit'     },
           ].map(t => (
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
@@ -1396,7 +1400,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Search + add button — only for members/monitors tabs */}
-        {tab !== 'overview' && (
+        {(tab === 'members' || tab === 'monitors') && (
         <div className="flex gap-2 mb-4">
           <input
             value={search}
@@ -1672,6 +1676,72 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ))
+            )}
+          </>
+        )}
+        {/* ── Audit tab ── */}
+        {tab === 'audit' && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-stone-400">{auditLog.length} recent actions</p>
+              <button onClick={() => getAuditLog(100).then(r => setAuditLog(r.data || []))}
+                className="text-xs font-semibold text-stone-500 hover:text-stone-700 px-3 py-1.5
+                  bg-white rounded-xl border border-stone-200 transition-colors">
+                ↻ Refresh
+              </button>
+            </div>
+
+            {auditLog.length === 0 ? (
+              <div className="text-center py-16 text-stone-400">
+                <div className="text-4xl mb-3">🔍</div>
+                <p className="font-medium">No audit events yet</p>
+                <p className="text-sm mt-1">Actions like creating members, resetting PINs, and toggling accounts will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {auditLog.map(entry => {
+                  const actionConfig = {
+                    member_created:   { icon: '➕', color: 'bg-emerald-50 border-emerald-100 text-emerald-700' },
+                    monitor_created:  { icon: '➕', color: 'bg-blue-50 border-blue-100 text-blue-700' },
+                    monitor_assigned: { icon: '🔗', color: 'bg-purple-50 border-purple-100 text-purple-700' },
+                    member_toggled:   { icon: '⚡', color: 'bg-amber-50 border-amber-100 text-amber-700' },
+                    monitor_toggled:  { icon: '⚡', color: 'bg-amber-50 border-amber-100 text-amber-700' },
+                    pin_reset:        { icon: '🔑', color: 'bg-orange-50 border-orange-100 text-orange-700' },
+                    pin_set:          { icon: '🔑', color: 'bg-orange-50 border-orange-100 text-orange-700' },
+                    weight_logged:    { icon: '⚖️', color: 'bg-stone-50 border-stone-100 text-stone-600' },
+                  }[entry.action] || { icon: '📝', color: 'bg-stone-50 border-stone-100 text-stone-600' };
+
+                  const timeAgo = (() => {
+                    const diff = Date.now() - new Date(entry.created_at).getTime();
+                    const mins = Math.floor(diff / 60000);
+                    const hrs  = Math.floor(mins / 60);
+                    const days = Math.floor(hrs / 24);
+                    if (days > 0)  return `${days}d ago`;
+                    if (hrs > 0)   return `${hrs}h ago`;
+                    if (mins > 0)  return `${mins}m ago`;
+                    return 'just now';
+                  })();
+
+                  return (
+                    <div key={entry.id}
+                      className={`rounded-2xl border px-4 py-3 ${actionConfig.color}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <span className="text-base flex-shrink-0 mt-0.5">{actionConfig.icon}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{entry.detail || entry.action}</p>
+                            <p className="text-xs opacity-70 mt-0.5">
+                              by {entry.actor_name}
+                              <span className="ml-1 opacity-60 capitalize">({entry.actor_role})</span>
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs opacity-60 flex-shrink-0 mt-0.5">{timeAgo}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </>
         )}

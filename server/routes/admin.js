@@ -7,6 +7,21 @@ const role    = require('../middleware/roleCheck');
 // All routes require admin
 router.use(authMW, role('admin'));
 
+// ── Audit helper ──────────────────────────────────────────────────────────────
+// Call after any write so admins can see who changed what and when.
+async function audit(actor, action, targetId, targetName, detail) {
+  try {
+    await pool.query(
+      `INSERT INTO audit_log (actor_id, actor_name, actor_role, action, target_id, target_name, detail)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [actor?.id || null, actor?.name || 'System', actor?.role || 'admin',
+       action, targetId || null, targetName || null, detail || null]
+    );
+  } catch (e) {
+    console.error('audit write failed:', e.message); // non-fatal
+  }
+}
+
 // ── GET /api/admin/stats ───────────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
   try {
@@ -225,6 +240,8 @@ router.post('/members', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    audit(req.user, 'member_created', user.id, user.name,
+      `Created member ${user.name} (${phone})${monitor_id ? ' and assigned to monitor' : ''}`);
     res.status(201).json({ id: user.id, name: user.name, phone: user.phone });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -248,6 +265,8 @@ router.post('/monitors', async (req, res) => {
       `INSERT INTO users (name, email, role, password) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role`,
       [name, email, userRole, hash]
     );
+    audit(req.user, 'monitor_created', result.rows[0].id, name,
+      `Created ${userRole} account for ${name} (${email})`);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
@@ -273,6 +292,14 @@ router.post('/assign', async (req, res) => {
        DO UPDATE SET active=true`,
       [monitor_id, patient_id]
     );
+    // Audit: look up names for readable log entry
+    const names = await pool.query(
+      `SELECT id, name FROM users WHERE id = ANY($1)`,
+      [[monitor_id, patient_id]]
+    );
+    const nameMap = Object.fromEntries(names.rows.map(r => [r.id, r.name]));
+    audit(req.user, 'monitor_assigned', patient_id, nameMap[patient_id],
+      `Assigned ${nameMap[patient_id] || patient_id} to monitor ${nameMap[monitor_id] || monitor_id}`);
     res.json({ assigned: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -410,7 +437,10 @@ router.patch('/members/:id/toggle', async (req, res) => {
       `UPDATE users SET active = NOT active WHERE id=$1 RETURNING id, name, active`,
       [req.params.id]
     );
-    res.json(result.rows[0]);
+    const u = result.rows[0];
+    audit(req.user, 'member_toggled', u.id, u.name,
+      `${u.active ? 'Activated' : 'Deactivated'} member ${u.name}`);
+    res.json(u);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -423,7 +453,10 @@ router.patch('/monitors/:id/toggle', async (req, res) => {
       `UPDATE users SET active = NOT active WHERE id=$1 RETURNING id, name, active`,
       [req.params.id]
     );
-    res.json(result.rows[0]);
+    const u = result.rows[0];
+    audit(req.user, 'monitor_toggled', u.id, u.name,
+      `${u.active ? 'Activated' : 'Deactivated'} monitor ${u.name}`);
+    res.json(u);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -443,6 +476,8 @@ router.patch('/members/:id/pin', async (req, res) => {
       [hash, req.params.id]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Member not found' });
+    audit(req.user, 'pin_reset', result.rows[0].id, result.rows[0].name,
+      `Reset login PIN for member ${result.rows[0].name}`);
     res.json({ message: 'PIN reset', user: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -483,6 +518,27 @@ router.post('/push', async (req, res) => {
   } catch (err) {
     console.error('POST /admin/push error:', err.message);
     res.status(500).json({ error: 'Failed to send push notifications' });
+  }
+});
+
+// ── GET /api/admin/audit ──────────────────────────────────────────────────────
+// Sprint 13: Returns the last 100 audit log entries, newest first.
+// Used by the new Audit tab in AdminDashboard.
+router.get('/audit', async (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit)  || 100, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    const result = await pool.query(
+      `SELECT id, actor_name, actor_role, action, target_name, detail, created_at
+       FROM audit_log
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET /admin/audit error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch audit log' });
   }
 });
 

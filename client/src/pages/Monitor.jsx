@@ -378,6 +378,95 @@ export default function Monitor() {
   const [showNoteForm,setShowNote]   = useState(false);
   const [showWeightForm,setShowWeight] = useState(false);
 
+  // Sprint 13: open a print-ready report in a new tab
+  const printReport = () => {
+    if (!data) return;
+    const { profile, logs, labs, notes = [] } = data;
+    const sorted = [...logs].sort((a, b) => a.log_date.localeCompare(b.log_date));
+    const last30 = sorted.slice(-30);
+    const avg = last30.length
+      ? Math.round(last30.reduce((s, l) => s + (l.compliance_pct || 0), 0) / last30.length)
+      : null;
+    const latestW = sorted.filter(l => l.weight_kg).slice(-1)[0]?.weight_kg;
+    const lostKg  = profile.start_weight && latestW
+      ? +(profile.start_weight - latestW).toFixed(1) : null;
+    const flaggedNotes = notes.filter(n => n.flagged);
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>FitLife Report — ${profile.name}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1c1917;padding:32px;font-size:13px;line-height:1.5}
+      h1{font-size:22px;font-weight:700;margin-bottom:4px}
+      h2{font-size:14px;font-weight:700;margin:20px 0 8px;color:#166534;border-bottom:1px solid #d1fae5;padding-bottom:4px}
+      .meta{color:#78716c;font-size:12px;margin-bottom:20px}
+      .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px}
+      .stat{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px}
+      .stat .val{font-size:20px;font-weight:700;color:#15803d}
+      .stat .lbl{font-size:11px;color:#4ade80;margin-top:2px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{background:#f5f5f4;padding:6px 8px;text-align:left;font-weight:600;color:#57534e;border-bottom:2px solid #e7e5e4}
+      td{padding:5px 8px;border-bottom:1px solid #f5f5f4}
+      tr:nth-child(even) td{background:#fafaf9}
+      .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+      .ok{background:#dcfce7;color:#166534}.warn{background:#fef3c7;color:#92400e}.bad{background:#fee2e2;color:#991b1b}
+      .flag{background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:8px;border-left:3px solid #ef4444;margin-bottom:8px}
+      .note-item{padding:8px 12px;border-radius:8px;background:#f5f5f4;margin-bottom:6px;font-size:12px}
+      .footer{margin-top:32px;padding-top:12px;border-top:1px solid #e7e5e4;color:#a8a29e;font-size:11px;display:flex;justify-content:space-between}
+      @media print{body{padding:20px}@page{margin:1.5cm}}
+    </style></head><body>
+    <h1>${profile.name}</h1>
+    <p class="meta">Phone: ${profile.phone || '—'} &nbsp;·&nbsp; Height: ${profile.height_cm || '—'} cm &nbsp;·&nbsp;
+      Conditions: ${(profile.conditions || []).map(c => c.replace(/_/g,' ')).join(', ') || 'None'} &nbsp;·&nbsp;
+      Coach: ${profile.monitor_name || '—'} &nbsp;·&nbsp; Report generated: ${new Date().toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'})}</p>
+
+    <div class="grid2">
+      <div class="stat"><div class="val">${latestW || '—'} kg</div><div class="lbl">Current weight</div></div>
+      <div class="stat"><div class="val">${lostKg !== null ? (lostKg >= 0 ? `↓ ${lostKg}` : `↑ ${Math.abs(lostKg)}`) : '—'} kg</div><div class="lbl">Change since start</div></div>
+      <div class="stat"><div class="val">${profile.start_weight || '—'} kg</div><div class="lbl">Start weight</div></div>
+      <div class="stat"><div class="val">${profile.target_weight || '—'} kg</div><div class="lbl">Target weight</div></div>
+      <div class="stat"><div class="val">${avg !== null ? avg + '%' : '—'}</div><div class="lbl">30-day avg compliance</div></div>
+      <div class="stat"><div class="val">${last30.length}</div><div class="lbl">Days logged (last 30)</div></div>
+    </div>
+
+    ${flaggedNotes.length ? `<h2>🚩 Flagged Notes</h2>
+      ${flaggedNotes.map(n => `<div class="flag"><strong>${new Date(n.note_date+'T00:00:00').toLocaleDateString('en-IN')}</strong> — ${n.note}</div>`).join('')}` : ''}
+
+    <h2>📊 Last 30 Days Compliance</h2>
+    <table><thead><tr><th>Date</th><th>Compliance</th><th>Weight</th><th>Water</th><th>Sleep</th></tr></thead><tbody>
+    ${[...last30].reverse().map(l => {
+      const p = l.compliance_pct;
+      const cls = p >= 75 ? 'ok' : p >= 50 ? 'warn' : 'bad';
+      const s = l.sleep || {};
+      const sleepStr = s.bedtime && s.waketime ? `${s.bedtime.slice(0,5)}→${s.waketime.slice(0,5)}` : '—';
+      const d = new Date(l.log_date + 'T00:00:00');
+      return `<tr><td>${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</td>
+        <td><span class="badge ${cls}">${p != null ? p + '%' : '—'}</span></td>
+        <td>${l.weight_kg || '—'} kg</td>
+        <td>${l.water_ml ? (l.water_ml/1000).toFixed(1)+'L' : '—'}</td>
+        <td>${sleepStr}</td></tr>`;
+    }).join('')}
+    </tbody></table>
+
+    ${labs.length ? `<h2>🧪 Lab Values</h2>
+    <table><thead><tr><th>Test</th><th>Value</th><th>Unit</th><th>Status</th><th>Date</th></tr></thead><tbody>
+    ${labs.map(l => `<tr><td>${l.test_name}</td><td>${l.value}</td><td>${l.unit||'—'}</td>
+      <td><span class="badge ${l.status==='normal'?'ok':l.status==='high'?'bad':'warn'}">${l.status||'—'}</span></td>
+      <td>${new Date(l.test_date).toLocaleDateString('en-IN')}</td></tr>`).join('')}
+    </tbody></table>` : ''}
+
+    ${notes.length ? `<h2>📝 Clinical Notes</h2>
+    ${notes.map(n => `<div class="note-item${n.flagged?' flag':''}">
+      <strong>${new Date(n.note_date+'T00:00:00').toLocaleDateString('en-IN')}</strong>
+      ${n.flagged ? ' 🚩' : ''} — ${n.note}</div>`).join('')}` : ''}
+
+    <div class="footer"><span>FitLife Health Monitor</span><span>Confidential — for clinical use only</span></div>
+    <script>window.onload=()=>window.print()</script></body></html>`;
+
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
   const load = useCallback(async () => {
     try {
       const { data: res } = await getPatient(patientId);
@@ -475,7 +564,7 @@ export default function Monitor() {
             )}
           </div>
 
-          {/* Sprint 8+9+11: Quick-action buttons */}
+          {/* Sprint 8+9+11+13: Quick-action buttons */}
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={() => setShowPin(true)}
               className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl
@@ -493,6 +582,11 @@ export default function Monitor() {
               className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
                 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
               ⚖️ Log Weight
+            </button>
+            <button onClick={printReport}
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
+                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
+              🖨️ Print Report
             </button>
           </div>
         </div>
