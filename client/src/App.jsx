@@ -4,23 +4,21 @@ import axios from 'axios';
 import { useOfflineSync } from './hooks/useOfflineQueue';
 import { disconnectSocket } from './hooks/useSync';
 import { useAuthStore } from './store/authStore';
+import { useSettingsStore, applyTheme, applyFontSize } from './store/settingsStore';
 
-// Pages (Sprint 3 — Login only; rest added as they're built)
-import Login       from './pages/Login';
-import DailyLog    from './pages/DailyLog';
-import Progress    from './pages/Progress';
-import Profile     from './pages/Profile';
-import Monitor     from './pages/Monitor';
-import PatientList from './pages/PatientList';
+import Login          from './pages/Login';
+import DailyLog       from './pages/DailyLog';
+import Progress       from './pages/Progress';
+import Profile        from './pages/Profile';
+import Monitor        from './pages/Monitor';
+import PatientList    from './pages/PatientList';
 import Settings       from './pages/Settings';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminFoods     from './pages/AdminFoods';
+import Onboarding     from './components/Onboarding';
 
-// ── Route guard ───────────────────────────────────────────────────────────────
 function PrivateRoute({ children, roles }) {
   const { user, isRestoring } = useAuthStore();
-
-  // Show nothing while we're checking the session cookie
   if (isRestoring) {
     return (
       <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center">
@@ -28,141 +26,65 @@ function PrivateRoute({ children, roles }) {
       </div>
     );
   }
-
   if (!user) return <Navigate to="/login" replace />;
-
   if (roles && !roles.includes(user.role)) {
-    // Redirect to the right home for this role
     return <Navigate to={user.role === 'patient' ? '/' : '/monitor'} replace />;
   }
-
   return children;
 }
 
-// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const { login, setRestored } = useAuthStore();
+  const { theme, fontSize, ageMode, onboardingDone } = useSettingsStore();
 
-  /**
-   * On first load: silently try to refresh the access token using the
-   * httpOnly refresh cookie. If it works → restore session without login.
-   * If not → user goes to /login.
-   */
+  // Apply saved theme + font-size on boot
+  useEffect(() => {
+    applyTheme(theme);
+    applyFontSize(ageMode === 'senior' ? 'large' : fontSize);
+  }, []);
+
+  // Listen for OS theme changes when set to 'system'
+  useEffect(() => {
+    if (theme !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => applyTheme('system');
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [theme]);
+
   useEffect(() => {
     axios
       .post('/api/auth/refresh', {}, { withCredentials: true })
       .then(({ data }) => {
-        // We have a valid session — also fetch user info from the token payload
         const payload = JSON.parse(atob(data.accessToken.split('.')[1]));
         login(data.accessToken, { id: payload.id, name: payload.name, role: payload.role });
       })
-      .catch(() => {
-        // No valid session — let PrivateRoute redirect to /login
-        setRestored();
-      });
+      .catch(() => { setRestored(); });
   }, []);
 
   const { user } = useAuthStore();
-
-  // Sync any offline-queued logs whenever connection is restored
   useOfflineSync();
+
+  // Show onboarding for logged-in patients who haven't completed it
+  if (user?.role === 'patient' && !onboardingDone) {
+    return <Onboarding />;
+  }
 
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public */}
         <Route path="/login" element={<Login />} />
-
-        {/* Patient routes */}
-        <Route
-          path="/"
-          element={
-            <PrivateRoute roles={['patient']}>
-              <DailyLog />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/progress"
-          element={
-            <PrivateRoute roles={['patient']}>
-              <Progress />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <PrivateRoute roles={['patient']}>
-              <Profile />
-            </PrivateRoute>
-          }
-        />
-
-        {/* Monitor / admin routes */}
-        <Route
-          path="/monitor"
-          element={
-            <PrivateRoute roles={['monitor', 'admin']}>
-              <PatientList />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/monitor/:patientId"
-          element={
-            <PrivateRoute roles={['monitor', 'admin']}>
-              <Monitor />
-            </PrivateRoute>
-          }
-        />
-
-        {/* Admin dashboard */}
-        <Route
-          path="/admin"
-          element={
-            <PrivateRoute roles={['admin']}>
-              <AdminDashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/admin/foods"
-          element={
-            <PrivateRoute roles={['admin']}>
-              <AdminFoods />
-            </PrivateRoute>
-          }
-        />
-
-        {/* Settings — any authenticated user */}
-        <Route
-          path="/settings"
-          element={
-            <PrivateRoute>
-              <Settings />
-            </PrivateRoute>
-          }
-        />
-
-        {/* Catch-all → role-appropriate home */}
-        <Route
-          path="*"
-          element={
-            <Navigate
-              to={
-                !user
-                  ? '/login'
-                  : user.role === 'patient'
-                  ? '/'
-                  : user.role === 'admin'
-                  ? '/admin'
-                  : '/monitor'
-              }
-              replace
-            />
-          }
-        />
+        <Route path="/" element={<PrivateRoute roles={['patient']}><DailyLog /></PrivateRoute>} />
+        <Route path="/progress" element={<PrivateRoute roles={['patient']}><Progress /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute roles={['patient']}><Profile /></PrivateRoute>} />
+        <Route path="/monitor" element={<PrivateRoute roles={['monitor','admin']}><PatientList /></PrivateRoute>} />
+        <Route path="/monitor/:patientId" element={<PrivateRoute roles={['monitor','admin']}><Monitor /></PrivateRoute>} />
+        <Route path="/admin" element={<PrivateRoute roles={['admin']}><AdminDashboard /></PrivateRoute>} />
+        <Route path="/admin/foods" element={<PrivateRoute roles={['admin']}><AdminFoods /></PrivateRoute>} />
+        <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+        <Route path="*" element={
+          <Navigate to={!user ? '/login' : user.role === 'patient' ? '/' : user.role === 'admin' ? '/admin' : '/monitor'} replace />
+        } />
       </Routes>
     </BrowserRouter>
   );

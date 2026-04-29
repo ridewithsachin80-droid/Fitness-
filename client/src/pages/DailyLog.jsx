@@ -9,11 +9,12 @@ import {
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
   calcCompliance, getNutrition, RDA_TARGETS,
 } from '../constants';
-import { Card, SectionTitle, CheckRow, OfflineBanner } from '../components/UI';
+import { Card, SectionTitle, CheckRow, OfflineBanner, PatientBottomNav, QuickJump } from '../components/UI';
 import WaterTracker  from '../components/WaterTracker';
 import FoodLog       from '../components/FoodLog';
 import SleepTracker  from '../components/SleepTracker';
 import InstallPrompt from '../components/InstallPrompt';
+import { useSettingsStore, useTerms } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
 
@@ -675,11 +676,16 @@ export default function DailyLog() {
     }).catch(() => {});
   }, []);
 
-  // Fetch coach notes once on mount
+  // Fetch coach notes + profile age once on mount
   const [coachNotes, setCoachNotes] = useState([]);
+  const [profileAge, setProfileAge] = useState(null);
   useEffect(() => {
     getMyProfile().then(({ data }) => {
       if (data?.coach_notes?.length) setCoachNotes(data.coach_notes);
+      if (data?.dob) {
+        const diff = Date.now() - new Date(data.dob).getTime();
+        setProfileAge(Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)));
+      }
     }).catch(() => {});
   }, []);
 
@@ -713,11 +719,42 @@ export default function DailyLog() {
     prevSaved.current = saved;
   }, [saved]);
 
+  const terms = useTerms();
+  const { nutritionView, ageMode, avatarIdx } = useSettingsStore();
+  const AVATARS_LIST = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
+
+  // ── Weight sanity check ───────────────────────────────────────────────────
+  const [weightWarning, setWeightWarning] = useState('');
+  const validateWeight = (val) => {
+    const w = parseFloat(val);
+    const minW = ageMode === 'child' ? 15 : 30;
+    const maxW = ageMode === 'child' ? 100 : 250;
+    if (val && !isNaN(w) && (w < minW || w > maxW)) {
+      setWeightWarning(`${w} kg looks unusual — are you sure? (Expected ${minW}–${maxW} kg)`);
+    } else { setWeightWarning(''); }
+  };
+
+  // ── Auto-save (30-second debounce) ────────────────────────────────────────
+  const autoSaveRef = useRef(null);
+  const [autoSaved, setAutoSaved] = useState(false);
+  const triggerAutoSave = useCallback(() => {
+    clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(async () => {
+      if (date === today()) {
+        try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
+      }
+    }, 30000);
+  }, [saveLog, date]);
+
   const compliance = calcCompliance(log, activeActivities, activeACV, activeSupplements);
   const actDone    = activeActivities.filter(a => log.activities?.[a.id]).length;
   const acvDone    = activeACV.filter(a => log.acv?.[a.id]).length;
   const suppDone   = activeSupplements.filter(s => log.supplements?.[s.id]).length;
-  const update     = useCallback(updateLog, [updateLog]);
+  const update     = useCallback((field, val) => { updateLog(field, val); triggerAutoSave(); }, [updateLog, triggerAutoSave]);
+
+  // ── ACV expand state ───────────────────────────────────────────────────────
+  const [acvExpanded, setAcvExpanded] = useState(false);
+  const [complianceTip, setComplianceTip] = useState(false);
 
   // Sprint 3: pre-fill food log from prescribed meal — MUST be after `update`
   const logMeal = useCallback((meal) => {
@@ -748,39 +785,43 @@ export default function DailyLog() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-xs font-bold tracking-widest uppercase text-[#a78bfa] mb-0.5">FitLife</p>
-              <h1 className="text-xl font-bold">{user?.name}</h1>
-              <p className="text-emerald-300 text-xs mt-0.5">Building healthy habits daily 🌱</p>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                <span>{AVATARS_LIST[avatarIdx]}</span>
+                {user?.name}
+              </h1>
+              <p className="text-emerald-300 text-xs mt-0.5">
+                {ageMode === 'child' ? 'Keep going — great job! ⭐' :
+                 ageMode === 'senior' ? 'Every step counts today 🌿' :
+                 'Building healthy habits daily 🌱'}
+              </p>
+              {/* Auto-save indicator */}
+              {autoSaved && (
+                <p className="text-xs text-[#a78bfa] mt-1 font-medium">
+                  <span className="autosave-dot" />auto-saved ✓
+                </p>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => navigate('/profile')}
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                title="My Profile">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </button>
-              <button onClick={() => navigate('/progress')}
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                title="My Progress">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </button>
-              <button onClick={() => navigate('/settings')}
-                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-            </div>
+            {/* No more icon-only nav buttons — PatientBottomNav handles navigation */}
           </div>
           <div className="bg-white/[0.05] rounded-2xl p-3 flex items-center gap-4 border border-white/[0.06]">
             <ComplianceRing pct={compliance} />
             <div className="flex-1">
-              <div className="text-sm font-semibold">Today's Compliance</div>
+              <div className="text-sm font-semibold flex items-center gap-1.5">
+                {terms.compliance}
+                {/* Tooltip for compliance ring */}
+                <div style={{ position: 'relative' }}>
+                  <button onClick={() => setComplianceTip(v => !v)}
+                    style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>?</button>
+                  {complianceTip && (
+                    <div style={{ position: 'absolute', left: 24, top: -4, zIndex: 50, background: '#1a1a20', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#d8d8de', lineHeight: 1.5, width: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+                      This shows what % of today's activities, ACV doses, and supplements you've completed.
+                      <button onClick={() => setComplianceTip(false)} style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#7c5cfc', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Got it ✓</button>
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="text-xs text-[#ddd6fe] mt-0.5">
-                {`${actDone}/${activeActivities.length}`} activities · {`${acvDone}/${activeACV.length}`} ACV · {`${suppDone}/${activeSupplements.length}`} supps
+                {`${actDone}/${activeActivities.length}`} {terms.activities} · {`${acvDone}/${activeACV.length}`} ACV · {`${suppDone}/${activeSupplements.length}`} {terms.supplements}
               </div>
               {log.weight && <div className="text-xs text-[#c4b5fd] mt-1 font-medium">⚖ {log.weight} kg logged</div>}
             </div>
@@ -789,7 +830,7 @@ export default function DailyLog() {
       </div>
 
       {/* Content */}
-      <div className="max-w-md mx-auto px-4 space-y-3 pb-32 pt-4">
+      <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-32 pt-4 swipe-hint">
 
         {/* Date nav */}
         <Card>
@@ -800,27 +841,36 @@ export default function DailyLog() {
                 d.setDate(d.getDate() - 1);
                 setDate(d.toISOString().split('T')[0]);
               }}
-              className="flex items-center gap-1 text-sm font-semibold text-stone-500 px-3 py-2 rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all"
-            >
-              ← Yesterday
+              style={{ minHeight: 44 }}
+              className="flex items-center gap-1 text-sm font-semibold text-[#4e4e5c] px-3 py-2 rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all">
+              ← Previous
             </button>
             <div className="text-center">
-              <p className="text-sm font-bold text-stone-700">
+              <p className="text-sm font-bold text-[#d8d8de]">
                 {date === today() ? 'Today' : formatDate(date)}
               </p>
-              {date !== today() && (
-                <p className="text-xs text-amber-600 font-medium mt-0.5">Editing past entry</p>
-              )}
+              {date !== today() && <p className="text-xs text-amber-400 font-medium mt-0.5">Editing past entry</p>}
+              <p className="text-[10px] text-[#3a3a46] mt-0.5">← swipe to change →</p>
             </div>
             <button
               onClick={() => setDate(today())}
               disabled={date === today()}
-              className="flex items-center gap-1 text-sm font-semibold text-emerald-600 px-3 py-2 rounded-xl hover:bg-emerald-50 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            >
+              style={{ minHeight: 44 }}
+              className="flex items-center gap-1 text-sm font-semibold text-[#8b5cf6] px-3 py-2 rounded-xl hover:bg-[rgba(124,92,252,0.05)] active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
               Today →
             </button>
           </div>
         </Card>
+
+        {/* Quick jump floating button */}
+        <QuickJump sections={[
+          { id: 'section-weight',      label: 'Weight',      icon: '⚖️' },
+          { id: 'section-activities',  label: 'Activities',  icon: '🏃' },
+          { id: 'section-food',        label: 'Food log',    icon: '🥗' },
+          { id: 'section-water',       label: 'Water',       icon: '💧' },
+          { id: 'section-supplements', label: 'Supplements', icon: '💊' },
+          { id: 'section-sleep',       label: 'Sleep',       icon: '🌙' },
+        ]} />
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
@@ -869,7 +919,22 @@ export default function DailyLog() {
                 </div>
               </Card>
             )}
-            {protocol?.fasting && <FastingBar fasting={protocol.fasting} />}
+            {protocol?.fasting && (() => {
+              // Age guard: warn if user is under 18 or has diabetes-related conditions
+              const isMinor = profileAge !== null && profileAge < 18;
+              const hasRisk = ['pre_diabetic','insulin_resist','hypothyroid'].some(c => (protocol?.conditions || []).includes(c));
+              if (isMinor || hasRisk) {
+                return (
+                  <div className="bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3">
+                    <p className="text-xs font-bold text-amber-400 mb-1">⚠️ Fasting protocol — check with doctor</p>
+                    <p className="text-xs text-[#8e8e9a] leading-relaxed">
+                      {isMinor ? 'Fasting is not recommended for people under 18.' : 'Your health conditions may require a modified fasting approach.'} Please confirm this protocol is approved by your doctor before following it.
+                    </p>
+                  </div>
+                );
+              }
+              return <FastingBar fasting={protocol.fasting} />;
+            })()}
 
             {protocol?.macros && (
               <MacroProgress
@@ -885,40 +950,49 @@ export default function DailyLog() {
 
             {/* Morning Weight */}
             <Card>
-              <SectionTitle icon="⚖️">Morning Weight</SectionTitle>
-              <p className="text-xs text-stone-400 mb-3">After washroom, before food — first thing in the morning</p>
-              <div className="flex items-center gap-3">
-                <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5"
-                  onChange={e => update('weight', e.target.value)}
-                  className="flex-1 text-2xl font-bold text-center border-2 border-stone-200 rounded-2xl py-3 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
-                <span className="text-stone-400 font-bold">kg</span>
-              </div>
-              {log.weight && (() => {
-                const delta = yesterdayWeight != null ? parseFloat(log.weight) - yesterdayWeight : null;
-                return (
-                  <div className="mt-3 space-y-2">
-                    <div className="text-center text-xs font-semibold py-2 rounded-xl bg-emerald-50 text-emerald-700">
-                      ✓ Weight logged — great job tracking!
-                    </div>
-                    {delta != null && (
-                      <div className={`text-center text-xs font-semibold py-2 rounded-xl ${
-                        delta < 0 ? 'bg-blue-50 text-blue-700' :
-                        delta > 0 ? 'bg-amber-50 text-amber-700' : 'bg-stone-50 text-stone-500'
-                      }`}>
-                        {delta < 0
-                          ? `↓ You're down ${Math.abs(delta).toFixed(1)} kg from yesterday! 🎉`
-                          : delta > 0
-                          ? `↑ Up ${delta.toFixed(1)} kg from yesterday.`
-                          : `= Same as yesterday.`}
-                      </div>
-                    )}
+              <div id="section-weight">
+                <SectionTitle icon="⚖️">Morning weight</SectionTitle>
+                <p className="text-xs text-[#4e4e5c] mb-3">After washroom, before food — first thing in the morning</p>
+                <div className="flex items-center gap-3">
+                  <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5"
+                    onChange={e => {
+                      update('weight', e.target.value);
+                      validateWeight(e.target.value);
+                    }}
+                    style={{ minHeight: 56, fontSize: 24 }}
+                    className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-3 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] text-[#ededf0] bg-[#1a1a20]" />
+                  <span className="text-[#4e4e5c] font-bold">kg</span>
+                </div>
+                {weightWarning && (
+                  <div className="mt-2 flex items-start gap-2 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2">
+                    <span className="text-amber-400 text-sm">⚠️</span>
+                    <p className="text-xs text-amber-400 leading-relaxed">{weightWarning}</p>
                   </div>
-                );
-              })()}
+                )}
+                {log.weight && !weightWarning && (() => {
+                  const delta = yesterdayWeight != null ? parseFloat(log.weight) - yesterdayWeight : null;
+                  return (
+                    <div className="mt-3 space-y-2">
+                      <div className="text-center text-xs font-semibold py-2 rounded-xl bg-[rgba(124,92,252,0.1)] text-[#a78bfa]">
+                        ✓ Weight logged — great job tracking!
+                      </div>
+                      {delta != null && (
+                        <div className={`text-center text-xs font-semibold py-2 rounded-xl ${
+                          delta < 0 ? 'bg-blue-400/10 text-blue-400' :
+                          delta > 0 ? 'bg-amber-400/10 text-amber-400' : 'bg-white/[0.04] text-[#4e4e5c]'}`}>
+                          {delta < 0 ? `↓ Down ${Math.abs(delta).toFixed(1)} kg from yesterday! 🎉` :
+                           delta > 0 ? `↑ Up ${delta.toFixed(1)} kg from yesterday.` : '= Same as yesterday.'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </Card>
 
             {/* Activities */}
             <Card>
+              <div id="section-activities">
               {(() => {
                 const weightKg = parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0;
                 const totalBurned = activeActivities.reduce((sum, a) => {
@@ -959,12 +1033,22 @@ export default function DailyLog() {
                   </>
                 );
               })()}
+              </div>
             </Card>
 
             {/* ACV */}
             <Card>
-              <SectionTitle icon="🍶">Apple Cider Vinegar</SectionTitle>
-              <p className="text-xs text-stone-400 mb-3">1 tbsp in 200ml warm water · through a straw · 15 min before meal</p>
+              <div className="flex items-center justify-between mb-1">
+                <SectionTitle icon="🍶">Apple cider vinegar (ACV)</SectionTitle>
+                <button onClick={() => setAcvExpanded(v => !v)}
+                  className="text-xs text-[#7c5cfc] font-semibold hover:underline">{acvExpanded ? 'Hide' : 'What is this?'}</button>
+              </div>
+              {acvExpanded && (
+                <div className="mb-3 bg-[rgba(124,92,252,0.08)] border border-[rgba(124,92,252,0.15)] rounded-xl px-3 py-2.5 text-xs text-[#8e8e9a] leading-relaxed">
+                  <strong className="text-[#c4b5fd]">Why ACV?</strong> Apple cider vinegar mixed in water (before meals) helps stabilise blood sugar after eating, supports digestion, and may reduce appetite. Always drink through a straw to protect teeth enamel.
+                </div>
+              )}
+              <p className="text-xs text-[#4e4e5c] mb-3">1 tbsp in 200ml warm water · through a straw · 15 min before meal</p>
               <div className="space-y-2">
                 {activeACV.map(a => (
                   <CheckRow key={a.id} label={a.label} sub={a.sub}
@@ -981,9 +1065,11 @@ export default function DailyLog() {
 
             {/* Food log */}
             <Card>
-              <SectionTitle icon="🥗">Food Log</SectionTitle>
-              <p className="text-xs text-stone-400 mb-3">Enter raw weight before cooking</p>
-              <FoodLog items={log.food} onChange={v => update('food', v)} />
+              <div id="section-food">
+                <SectionTitle icon="🥗">Food log</SectionTitle>
+                <p className="text-xs text-[#4e4e5c] mb-3">Enter weight before cooking · tap mic for voice input</p>
+                <FoodLog items={log.food} onChange={v => update('food', v)} calorieTarget={protocol?.macros?.kcal} />
+              </div>
             </Card>
 
             {/* Sprint 5: Nutrition summary (3 tabs) — always shows when food has micro data */}
@@ -997,54 +1083,64 @@ export default function DailyLog() {
 
             {/* Water */}
             <Card>
-              <SectionTitle icon="💧">Water Intake</SectionTitle>
-              {(() => {
-                const targetL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
-                return (
-                  <p className="text-xs text-stone-400 mb-3">Target {targetL}L · Stop 1 hr before sleep · Not during meals</p>
-                );
-              })()}
-              <WaterTracker value={log.water} onChange={v => update('water', v)} target={protocol?.water_target || 3000} />
+              <div id="section-water">
+                <SectionTitle icon="💧">{terms.water}</SectionTitle>
+                {(() => {
+                  const targetL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
+                  return (
+                    <p className="text-xs text-[#4e4e5c] mb-3">Target {targetL}L · Stop 1 hr before sleep · Not during meals</p>
+                  );
+                })()}
+                <WaterTracker value={log.water} onChange={v => update('water', v)} target={protocol?.water_target || 3000} />
+              </div>
             </Card>
 
             {/* Supplements */}
             <Card>
-              <SectionTitle icon="💊">Supplements</SectionTitle>
-              <div className="space-y-2">
-                {activeSupplements.map(s => (
-                  <CheckRow key={s.id} label={s.label} sub={s.sub}
-                    checked={!!log.supplements?.[s.id]}
-                    onChange={v => update('supplements', { ...log.supplements, [s.id]: v })} />
-                ))}
+              <div id="section-supplements">
+                <SectionTitle icon="💊"
+                  tooltip="These supplements are prescribed by your coach. They are not medical advice — always check with your doctor if you take other medications.">
+                  {terms.supplements}
+                </SectionTitle>
+                <div className="space-y-2">
+                  {activeSupplements.map(s => (
+                    <CheckRow key={s.id} label={s.label} sub={s.sub}
+                      checked={!!log.supplements?.[s.id]}
+                      onChange={v => update('supplements', { ...log.supplements, [s.id]: v })} />
+                  ))}
+                </div>
               </div>
             </Card>
 
             {/* Sleep */}
             <Card>
-              <SectionTitle icon="🌙">Sleep</SectionTitle>
-              <p className="text-xs text-stone-400 mb-3">Target 10:00 PM → 6:30 AM (8 hrs)</p>
-              <SleepTracker value={log.sleep} onChange={v => update('sleep', v)} />
+              <div id="section-sleep">
+                <SectionTitle icon="🌙">{terms.sleep}</SectionTitle>
+                <p className="text-xs text-[#4e4e5c] mb-3">Target 10:00 PM → 6:30 AM (8 hrs)</p>
+                <SleepTracker value={log.sleep} onChange={v => update('sleep', v)} />
+              </div>
             </Card>
 
             {/* Notes */}
             <Card>
-              <SectionTitle icon="📝">Notes</SectionTitle>
+              <SectionTitle icon="📝">{terms.notes}</SectionTitle>
               <textarea value={log.notes} onChange={e => update('notes', e.target.value)}
-                placeholder="Symptoms, how you felt, energy levels, challenges…" rows={3}
-                className="w-full text-sm text-stone-700 border border-stone-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none placeholder-stone-300" />
+                placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} rows={3}
+                className="w-full text-sm border border-white/[0.12] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] resize-none" />
             </Card>
 
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+            {error && <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
           </>
         )}
       </div>
 
       {/* Sticky save */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0b0b0e] via-[#0b0b0e]/90 to-transparent">
+      <div className="fixed bottom-20 left-0 right-0 px-4 pb-2">
         <div className="max-w-md mx-auto">
           <button onClick={saveLog} disabled={saving || loading}
+            style={{ minHeight: 52 }}
             className={`w-full py-4 rounded-2xl font-bold text-base shadow-float transition-all duration-200 ${
-              saved ? 'bg-[#7c5cfc] text-[#08052a]' : saving ? 'bg-[#7c5cfc]/80 text-[#08052a]' : 'bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] active:scale-98'}`}>
+              saved ? 'bg-[#7c5cfc] text-white' : saving ? 'bg-[#7c5cfc]/80 text-white' : 'bg-[#7c5cfc] hover:bg-[#a78bfa] text-white active:scale-98'}`}>
             {saving ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1054,6 +1150,8 @@ export default function DailyLog() {
           </button>
         </div>
       </div>
+
+      <PatientBottomNav />
 
       <InstallPrompt />
 

@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getMyProfile }  from '../api/logs';
-import { Card, SectionTitle, PageLoader, BackButton } from '../components/UI';
+import { Card, SectionTitle, PageLoader, BackButton, PatientBottomNav } from '../components/UI';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -300,6 +300,7 @@ export default function Profile() {
           Member since {new Date(p.member_since).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
         </p>
       </div>
+      <PatientBottomNav />
     </div>
   );
 }

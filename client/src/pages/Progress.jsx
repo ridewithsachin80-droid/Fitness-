@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import { useAuthStore }  from '../store/authStore';
 import { getLogRange, getMyProfile }   from '../api/logs';
-import { Card, SectionTitle, PageLoader } from '../components/UI';
+import { Card, SectionTitle, PageLoader, PatientBottomNav } from '../components/UI';
 import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -622,6 +622,7 @@ export default function Progress() {
       </div>
 
       {selectedLog && <PastLogModal log={selectedLog} onClose={() => setSelectedLog(null)} />}
+      <PatientBottomNav />
     </div>
   );
 }

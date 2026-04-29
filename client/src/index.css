@@ -190,3 +190,79 @@ input[type='number'] { -moz-appearance: textfield; }
 
 /* ── min-h-screen base ──────────────────────────────────────────────────────── */
 .min-h-screen { background-color: var(--bg-base); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ENHANCED UX — Light mode, large text, accessibility
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Light mode ─────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-base:     #f4f4f2;
+  --bg-surface:  #ffffff;
+  --bg-elevated: #f0eef8;
+  --bg-input:    #ffffff;
+  --border:      rgba(0,0,0,0.08);
+  --border-med:  rgba(0,0,0,0.14);
+  --border-hi:   rgba(0,0,0,0.22);
+  --text-hi:     #1a1a1f;
+  --text-mid:    #4a4a55;
+  --text-lo:     #7a7a85;
+  --accent:      #6c47f0;
+  --accent-dim:  rgba(108,71,240,0.10);
+  color-scheme: light;
+}
+[data-theme="light"] body { color: var(--text-hi); }
+[data-theme="light"] .bg-\\[\\#0b0b0e\\],
+[data-theme="light"] .min-h-screen { background-color: var(--bg-base) !important; }
+[data-theme="light"] .bg-\\[\\#131317\\]  { background-color: var(--bg-surface) !important; }
+[data-theme="light"] .bg-\\[\\#1a1a20\\]  { background-color: #ece9f8 !important; }
+[data-theme="light"] .border-white\\/\\[0\\.07\\] { border-color: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .border-white\\/\\[0\\.1\\]  { border-color: rgba(0,0,0,0.1) !important; }
+[data-theme="light"] .border-white\\/\\[0\\.12\\] { border-color: rgba(0,0,0,0.12) !important; }
+[data-theme="light"] .text-\\[\\#ededf0\\]  { color: #1a1a1f !important; }
+[data-theme="light"] .text-\\[\\#d8d8de\\]  { color: #2e2e38 !important; }
+[data-theme="light"] .text-\\[\\#8e8e9a\\]  { color: #5a5a68 !important; }
+[data-theme="light"] .text-\\[\\#6a6a78\\]  { color: #6a6a78 !important; }
+[data-theme="light"] .text-\\[\\#4e4e5c\\]  { color: #7a7a85 !important; }
+[data-theme="light"] .text-\\[\\#3a3a46\\]  { color: #9a9aa8 !important; }
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  background-color: #ffffff !important;
+  border-color: rgba(0,0,0,0.14) !important;
+  color: #1a1a1f !important;
+}
+[data-theme="light"] .shadow-card {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.06);
+}
+[data-theme="light"] .glass {
+  background: rgba(255,255,255,0.85);
+  border-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .bg-gradient-to-br {
+  background: linear-gradient(135deg, #2d1b6e 0%, #4a2ba0 100%) !important;
+}
+
+/* ── Large text ─────────────────────────────────────────────────────────────── */
+[data-fontsize="large"] body { font-size: 17px; }
+[data-fontsize="large"] .text-xs  { font-size: 13px !important; }
+[data-fontsize="large"] .text-sm  { font-size: 16px !important; }
+[data-fontsize="large"] .text-base{ font-size: 18px !important; }
+[data-fontsize="large"] .text-lg  { font-size: 20px !important; }
+[data-fontsize="large"] .text-xl  { font-size: 23px !important; }
+[data-fontsize="large"] .text-2xl { font-size: 27px !important; }
+[data-fontsize="large"] .text-4xl { font-size: 40px !important; }
+[data-fontsize="large"] input,
+[data-fontsize="large"] textarea  { font-size: 16px !important; min-height: 48px; }
+
+/* ── Auto-save indicator ─────────────────────────────────────────────────────── */
+.autosave-dot {
+  display: inline-block;
+  width: 6px; height: 6px; border-radius: 3px;
+  background: #7c5cfc; margin-right: 4px;
+  animation: blink 1s ease-in-out 3;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* ── Swipe hint ───────────────────────────────────────────────────────────────── */
+.swipe-hint { user-select: none; touch-action: pan-y; }
