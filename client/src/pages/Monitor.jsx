@@ -371,12 +371,13 @@ export default function Monitor() {
   const { patientId } = useParams();
   const navigate      = useNavigate();
   const { user }      = useAuthStore();
-  const [data,       setData]    = useState(null);
-  const [loading,    setLoading] = useState(true);
-  const [showLabForm,setShowLab]     = useState(false);
-  const [showPinForm,setShowPin]     = useState(false);
-  const [showNoteForm,setShowNote]   = useState(false);
-  const [showWeightForm,setShowWeight] = useState(false);
+  const [data,          setData]      = useState(null);
+  const [loading,       setLoading]   = useState(true);
+  const [showLabForm,   setShowLab]   = useState(false);
+  const [showPinForm,   setShowPin]   = useState(false);
+  const [showNoteForm,  setShowNote]  = useState(false);
+  const [showWeightForm,setShowWeight]= useState(false);
+  const [selectedLog,   setSelectedLog] = useState(null); // drill-down — MUST be before early return
 
   // Sprint 13: open a print-ready report in a new tab
   const printReport = () => {
@@ -506,7 +507,6 @@ export default function Monitor() {
     .map(l => ({ date: formatDate(l.log_date), weight: parseFloat(l.weight_kg) }));
 
   // Sprint 6: 30-day compliance bar chart — attach full log so bars are tappable
-  const [selectedLog, setSelectedLog] = useState(null);
   const complianceData = [...logs]
     .slice(0, 30)
     .reverse()

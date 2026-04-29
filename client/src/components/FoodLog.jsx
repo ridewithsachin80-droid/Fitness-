@@ -40,6 +40,7 @@ function smartGrams(foodName) {
   return null; // fall back to leaving the field empty
 }
 
+const MEALS = ['Meal 1', 'Meal 2', 'Meal 3'];
 
 
 function calcMacros(item) {
