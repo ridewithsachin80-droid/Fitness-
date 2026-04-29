@@ -377,7 +377,8 @@ export default function Monitor() {
   const [showPinForm,   setShowPin]   = useState(false);
   const [showNoteForm,  setShowNote]  = useState(false);
   const [showWeightForm,setShowWeight]= useState(false);
-  const [selectedLog,   setSelectedLog] = useState(null); // drill-down — MUST be before early return
+  const [selectedLog,   setSelectedLog] = useState(null); // compliance chart drill-down
+  const [viewDate,      setViewDate]    = useState(null); // selected date in log viewer
 
   // Sprint 13: open a print-ready report in a new tab
   const printReport = () => {
@@ -499,6 +500,11 @@ export default function Monitor() {
   );
 
   const { profile, logs, labs, notes = [] } = data;
+
+  // Date-scoped log viewer — default to most recent log date
+  const sortedLogs   = [...logs].sort((a, b) => b.log_date.localeCompare(a.log_date));
+  const activeDate   = viewDate || sortedLogs[0]?.log_date || null;
+  const activeLog    = sortedLogs.find(l => l.log_date === activeDate) || null;
 
   // Weight chart — reverse so oldest is on left
   const weightData = [...logs]
@@ -821,20 +827,53 @@ export default function Monitor() {
           )}
         </Card>
 
-        {/* Recent logs */}
+        {/* Daily Log Viewer — date chip navigator + single-date detail */}
         <Card>
-          <SectionTitle icon="📋">Recent Logs</SectionTitle>
-          {logs.length === 0 ? (
-            <p className="text-xs text-stone-300 italic text-center py-4">No logs yet</p>
-          ) : (
-            <div className="space-y-2">
-              {logs.map(log => {
-                const score = rowCompliance(log);
-                const badge = score >= 75 ? { bg: 'bg-emerald-100', text: 'text-emerald-700' }
-                            : score >= 50 ? { bg: 'bg-amber-100',   text: 'text-amber-700'   }
-                            :               { bg: 'bg-red-100',     text: 'text-red-700'      };
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle icon="📋">Daily Log</SectionTitle>
+            {activeLog && (
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(44,232,156,0.12)] text-[#2ce89c]' :
+                (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
+                                                      'bg-red-400/10 text-red-400'
+              }`}>{activeLog.compliance_pct||0}%</span>
+            )}
+          </div>
 
-                // Sprint 4: calculate burned kcal from activities + weight
+          {logs.length === 0 ? (
+            <p className="text-xs text-[#4e4e5c] italic text-center py-4">No logs yet</p>
+          ) : (
+            <>
+              {/* Date chip navigator — horizontal scroll, newest first */}
+              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: 'none' }}>
+                {sortedLogs.map(log => {
+                  const d = new Date(log.log_date + 'T00:00:00');
+                  const isToday = log.log_date === new Date().toISOString().split('T')[0];
+                  const isActive = log.log_date === activeDate;
+                  const pct = log.compliance_pct || 0;
+                  const dotColor = pct >= 75 ? '#2ce89c' : pct >= 50 ? '#fbbf24' : '#f87171';
+                  const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                  return (
+                    <button key={log.log_date}
+                      onClick={() => setViewDate(log.log_date)}
+                      className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl
+                        border transition-all text-xs font-semibold ${
+                        isActive
+                          ? 'bg-[rgba(44,232,156,0.10)] border-[rgba(44,232,156,0.30)] text-[#2ce89c]'
+                          : 'bg-[#1a1a20] border-white/[0.07] text-[#6a6a78] hover:border-white/[0.18] hover:text-[#ededf0]'
+                      }`}>
+                      <span>{dayLabel}</span>
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selected day full detail */}
+              {activeLog ? (() => {
+                const log = activeLog;
+                const score = log.compliance_pct || rowCompliance(log);
                 const weightKg = parseFloat(log.weight_kg) || 0;
                 const burnedKcal = weightKg > 0
                   ? ACTIVITIES.reduce((sum, a) => {
@@ -848,66 +887,46 @@ export default function Monitor() {
                 const netKcal = eatenKcal - burnedKcal;
 
                 return (
-                  <div key={log.id} className="bg-stone-50 rounded-2xl p-3 border border-stone-100">
-                    {/* Row 1 — date, weight, score */}
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-stone-700 text-sm">{formatDate(log.log_date)}</span>
-                      <div className="flex items-center gap-2">
-                        {log.weight_kg && (
-                          <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                            {log.weight_kg} kg
-                          </span>
-                        )}
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badge.bg} ${badge.text}`}>
-                          {score}%
-                        </span>
-                      </div>
-                    </div>
+                  <div className="space-y-3">
 
-                    {/* Row 2 — water / sleep / calories + burn */}
-                    <div className="grid grid-cols-3 gap-1.5 mb-2">
+                    {/* Weight + stats row */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <StatPill value={log.weight_kg ? `${log.weight_kg} kg` : '—'} label="Weight" color="emerald" />
                       <StatPill value={`${((log.water_ml || 0) / 1000).toFixed(1)}L`} label="Water" color="blue" />
-                      <StatPill
-                        value={log.sleep?.quality > 0 ? '⭐'.repeat(log.sleep.quality) : '—'}
-                        label="Sleep" color="purple" />
-                      <StatPill
-                        value={`${eatenKcal} kcal`}
-                        label="Eaten" color="stone" />
+                      <StatPill value={log.sleep?.quality > 0 ? '⭐'.repeat(log.sleep.quality) : '—'} label="Sleep" color="purple" />
                     </div>
 
-                    {/* Sprint 4: Burn + Net calorie row */}
+                    {/* Net calorie row */}
                     {burnedKcal > 0 && (
-                      <div className={`flex items-center justify-between text-xs px-3 py-2 rounded-xl mb-2 ${
-                        netKcal <= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                        : netKcal <= 200 ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                        : 'bg-red-50 text-red-700 border border-red-100'
+                      <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
+                        netKcal <= 0 ? 'bg-[rgba(44,232,156,0.07)] border-[rgba(44,232,156,0.20)] text-[#2ce89c]'
+                        : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
+                        : 'bg-red-400/10 border-red-400/20 text-red-400'
                       }`}>
                         <div className="flex gap-3">
                           <span>🍽 <strong>{eatenKcal}</strong> eaten</span>
                           <span>🔥 <strong>{burnedKcal}</strong> burned</span>
                         </div>
-                        <span className="font-bold">
-                          Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal
-                          {netKcal <= 0 && ' 🎯'}
-                        </span>
+                        <span className="font-bold">Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal{netKcal <= 0 && ' 🎯'}</span>
                       </div>
                     )}
-                    {/* Sprint 3: Meal plan adherence indicator */}
+
+                    {/* Meal plan adherence */}
                     {data?.profile?.meal_plan?.length > 0 && (
-                      <div className="mb-2 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-100 overflow-hidden">
-                        <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100">
-                          <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">🍽 Meal Plan Adherence</span>
+                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                        <div className="px-3 py-2 bg-[#1a1a20] border-b border-white/[0.06]">
+                          <span className="text-[10px] font-bold text-[#4e4e5c] uppercase tracking-[0.10em]">🍽 Meal Plan Adherence</span>
                         </div>
-                        <div className="px-3 py-2 flex flex-wrap gap-2">
-                          {data.profile.meal_plan.map((meal) => {
-                            const logged     = (log.food_items || []).map(f => f.name?.toLowerCase());
-                            const total      = (meal.items || []).length;
-                            const matched    = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
-                            const pct        = total > 0 ? matched / total : 0;
-                            const color      = pct >= 0.8 ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                                             : pct >= 0.5 ? 'bg-amber-100 text-amber-700 border-amber-200'
-                                             :              'bg-red-50 text-red-600 border-red-200';
-                            const icon       = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
+                        <div className="px-3 py-2.5 flex flex-wrap gap-2">
+                          {data.profile.meal_plan.map(meal => {
+                            const logged  = (log.food_items || []).map(f => f.name?.toLowerCase());
+                            const total   = (meal.items || []).length;
+                            const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
+                            const pct     = total > 0 ? matched / total : 0;
+                            const color   = pct >= 0.8 ? 'bg-[rgba(44,232,156,0.10)] text-[#2ce89c] border-[rgba(44,232,156,0.22)]'
+                                          : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
+                                          :              'bg-red-400/10 text-red-400 border-red-400/25';
+                            const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
                             return (
                               <div key={meal.id} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
                                 {icon} {meal.name} {total > 0 ? `${matched}/${total}` : ''}
@@ -918,16 +937,12 @@ export default function Monitor() {
                       </div>
                     )}
 
+                    {/* Food log */}
                     {log.food_items?.length > 0 && (
-                      <div className="mb-2 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-100 overflow-hidden">
-                        <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100 flex justify-between">
-                          <span className="text-xs font-bold text-stone-500 uppercase tracking-wide">🥗 Food Log</span>
-                          <span className="text-xs font-bold text-emerald-700">
-                            {log.food_items.reduce((sum, f) => {
-                              const n = calcN(f);
-                              return sum + (n?.cal || 0);
-                            }, 0)} kcal total
-                          </span>
+                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                        <div className="px-3 py-2 bg-[#1a1a20] border-b border-white/[0.06] flex justify-between">
+                          <span className="text-[10px] font-bold text-[#4e4e5c] uppercase tracking-[0.10em]">🥗 Food Log</span>
+                          <span className="text-xs font-bold text-[#2ce89c]">{eatenKcal} kcal total</span>
                         </div>
                         {['Meal 1', 'Meal 2', 'Meal 3'].map(meal => {
                           const mealItems = log.food_items.filter(f => f.meal === meal);
@@ -935,39 +950,37 @@ export default function Monitor() {
                           const mealCal = mealItems.reduce((s, f) => s + (calcN(f)?.cal || 0), 0);
                           return (
                             <div key={meal} className="border-b border-white/[0.05] last:border-0">
-                              <div className="px-3 py-1 flex justify-between items-center bg-stone-50/50">
-                                <span className="text-xs font-semibold text-stone-400">{meal}</span>
-                                <span className="text-xs text-stone-400">{mealCal} kcal</span>
+                              <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
+                                <span className="text-[10px] font-semibold text-[#6a6a78] uppercase tracking-wide">{meal}</span>
+                                <span className="text-xs text-[#4e4e5c]">{mealCal} kcal</span>
                               </div>
                               {mealItems.map((f, i) => {
                                 const n = calcN(f);
                                 return (
-                                  <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-stone-50">
+                                  <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-white/[0.04]">
                                     <div className="min-w-0">
-                                      <div className="text-xs font-semibold text-stone-700 truncate">{f.name}</div>
-                                      <div className="text-xs text-stone-400">{f.grams}g</div>
+                                      <div className="text-sm font-medium text-[#d8d8de] truncate">{f.name}</div>
+                                      <div className="text-xs text-[#4e4e5c]">{f.grams}g</div>
                                     </div>
-                                    {n ? (
-                                      <div className="flex gap-2 text-right flex-shrink-0">
+                                    {n && (
+                                      <div className="flex gap-2.5 text-right flex-shrink-0">
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-orange-600">{n.cal}</div>
-                                          <div className="text-xs text-stone-300">kcal</div>
+                                          <div className="text-xs font-bold text-orange-400">{n.cal}</div>
+                                          <div className="text-[10px] text-[#4e4e5c]">kcal</div>
                                         </div>
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-blue-600">{n.pro}g</div>
-                                          <div className="text-xs text-stone-300">pro</div>
+                                          <div className="text-xs font-bold text-blue-400">{n.pro}g</div>
+                                          <div className="text-[10px] text-[#4e4e5c]">pro</div>
                                         </div>
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-amber-600">{n.carb}g</div>
-                                          <div className="text-xs text-stone-300">carb</div>
+                                          <div className="text-xs font-bold text-amber-400">{n.carb}g</div>
+                                          <div className="text-[10px] text-[#4e4e5c]">carb</div>
                                         </div>
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-purple-600">{n.fat}g</div>
-                                          <div className="text-xs text-stone-300">fat</div>
+                                          <div className="text-xs font-bold text-purple-400">{n.fat}g</div>
+                                          <div className="text-[10px] text-[#4e4e5c]">fat</div>
                                         </div>
                                       </div>
-                                    ) : (
-                                      <span className="text-xs text-stone-300 italic">no data</span>
                                     )}
                                   </div>
                                 );
@@ -975,21 +988,21 @@ export default function Monitor() {
                             </div>
                           );
                         })}
-                        {/* Daily totals row */}
+                        {/* Day total row */}
                         {(() => {
-                          const totals = log.food_items.reduce((acc, f) => {
+                          const t = log.food_items.reduce((acc, f) => {
                             const n = calcN(f);
                             if (!n) return acc;
-                            return { cal: acc.cal + n.cal, pro: acc.pro + n.pro, carb: acc.carb + n.carb, fat: acc.fat + n.fat };
-                          }, { cal: 0, pro: 0, carb: 0, fat: 0 });
+                            return { cal: acc.cal+n.cal, pro: acc.pro+n.pro, carb: acc.carb+n.carb, fat: acc.fat+n.fat };
+                          }, { cal:0, pro:0, carb:0, fat:0 });
                           return (
-                            <div className="px-3 py-2 bg-emerald-50 flex items-center justify-between">
-                              <span className="text-xs font-bold text-emerald-700">Day Total</span>
-                              <div className="flex gap-2">
-                                <span className="text-xs font-bold text-orange-600">{totals.cal} kcal</span>
-                                <span className="text-xs text-blue-600">{totals.pro.toFixed(1)}g P</span>
-                                <span className="text-xs text-amber-600">{totals.carb.toFixed(1)}g C</span>
-                                <span className="text-xs text-purple-600">{totals.fat.toFixed(1)}g F</span>
+                            <div className="px-3 py-2.5 bg-[rgba(44,232,156,0.05)] flex items-center justify-between border-t border-[rgba(44,232,156,0.12)]">
+                              <span className="text-xs font-bold text-[#2ce89c]">Day Total</span>
+                              <div className="flex gap-3 text-xs">
+                                <span className="font-bold text-orange-400">{t.cal} kcal</span>
+                                <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
+                                <span className="text-amber-400">{t.carb.toFixed(1)}g C</span>
+                                <span className="text-purple-400">{t.fat.toFixed(1)}g F</span>
                               </div>
                             </div>
                           );
@@ -997,21 +1010,25 @@ export default function Monitor() {
                       </div>
                     )}
 
-                    {/* Activity pills */}
-                    <div className="flex flex-wrap gap-1">
+                    {/* Activity + ACV pills */}
+                    <div className="flex flex-wrap gap-1.5">
                       {ACTIVITIES.map(a => (
-                        <span key={a.id} className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${
-                          log.activities?.[a.id] ? 'bg-emerald-500 text-white' : 'bg-stone-200 text-stone-400'
+                        <span key={a.id} className={`text-xs px-2 py-1 rounded-lg font-medium border ${
+                          log.activities?.[a.id]
+                            ? 'bg-[rgba(44,232,156,0.10)] border-[rgba(44,232,156,0.22)] text-[#2ce89c]'
+                            : 'bg-white/[0.04] border-white/[0.06] text-[#4e4e5c]'
                         }`}>{a.icon}</span>
                       ))}
                       {ACV_ITEMS.map((a, i) => (
-                        <span key={a.id} className={`text-xs px-1.5 py-0.5 rounded-md font-bold ${
-                          log.acv?.[a.id] ? 'bg-purple-500 text-white' : 'bg-stone-200 text-stone-400'
-                        }`}>ACV{i + 1}</span>
+                        <span key={a.id} className={`text-xs px-2 py-1 rounded-lg font-semibold border ${
+                          log.acv?.[a.id]
+                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                            : 'bg-white/[0.04] border-white/[0.06] text-[#4e4e5c]'
+                        }`}>ACV{i+1}</span>
                       ))}
                     </div>
 
-                    {/* Sprint 5: Micro panel — collapsible per day */}
+                    {/* Key nutrients collapsible */}
                     {(log.food_items || []).some(f => f.per_100g) && (() => {
                       const rdaOv = data?.profile?.rda_overrides || {};
                       const micros = calcMicrosFromItems(log.food_items, log.supplements);
@@ -1023,15 +1040,16 @@ export default function Monitor() {
                         return (micros[k]||0) / rda >= 0.8;
                       }).length;
                       return (
-                        <details className="mt-2 border-t border-stone-100 pt-2">
-                          <summary className="text-xs font-semibold text-stone-500 cursor-pointer hover:text-emerald-700 list-none flex justify-between">
+                        <details className="border border-white/[0.07] rounded-xl overflow-hidden">
+                          <summary className="px-3 py-2.5 text-xs font-semibold text-[#6a6a78] cursor-pointer
+                            hover:text-[#2ce89c] list-none flex justify-between items-center bg-[#1a1a20]">
                             <span>🔬 Key Nutrients</span>
                             <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
-                              met >= KEYS.length*0.8 ? 'bg-emerald-100 text-emerald-700' :
-                              met >= KEYS.length*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
+                              met >= KEYS.length*0.8 ? 'bg-[rgba(44,232,156,0.12)] text-[#2ce89c]' :
+                              met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
                             }`}>{met}/{KEYS.length} ▼</span>
                           </summary>
-                          <div className="mt-2 space-y-1.5">
+                          <div className="px-3 py-3 space-y-2 bg-[#131317]">
                             {KEYS.map(k => {
                               const meta = RDA_TARGETS[k];
                               if (!meta) return null;
@@ -1040,37 +1058,37 @@ export default function Monitor() {
                               const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
                               const val  = +raw.toFixed(dec);
                               const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-emerald-400' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-emerald-600' : pct>=50 ? 'text-amber-600' : 'text-red-500';
+                              const cls  = pct>=80 ? 'bg-[#2ce89c]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
+                              const tcls = pct>=80 ? 'text-[#2ce89c]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
                               return (
                                 <div key={k}>
-                                  <div className="flex justify-between text-xs mb-0.5">
-                                    <span className="text-stone-500">{meta.icon} {meta.label}</span>
-                                    <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit} ({Math.round(pct)}%)</span>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-[#6a6a78]">{meta.icon} {meta.label}</span>
+                                    <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit}</span>
                                   </div>
-                                  <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full ${cls}`} style={{width:`${pct}%`}} />
+                                  <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all ${cls}`} style={{width:`${pct}%`}} />
                                   </div>
                                 </div>
                               );
                             })}
-                            {rdaOv && Object.keys(rdaOv).length > 0 && (
-                              <p className="text-xs text-purple-500 italic">★ Custom targets applied</p>
-                            )}
                           </div>
                         </details>
                       );
                     })()}
 
+                    {/* Notes */}
                     {log.notes && (
-                      <p className="mt-2 text-xs text-stone-500 italic border-t border-stone-100 pt-2">
-                        {log.notes}
+                      <p className="text-xs text-[#6a6a78] italic border-t border-white/[0.06] pt-2.5 leading-relaxed">
+                        📝 {log.notes}
                       </p>
                     )}
                   </div>
                 );
-              })}
-            </div>
+              })() : (
+                <p className="text-xs text-[#4e4e5c] italic text-center py-4">No log for this date</p>
+              )}
+            </>
           )}
         </Card>
       </div>
