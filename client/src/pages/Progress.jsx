@@ -8,9 +8,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  LineChart, Line, BarChart, Bar,
+  LineChart, Line, BarChart, Bar, ComposedChart,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, ReferenceLine,
+  CartesianGrid, ReferenceLine, Legend,
 } from 'recharts';
 import { useAuthStore }  from '../store/authStore';
 import { getLogRange }   from '../api/logs';
@@ -297,6 +297,28 @@ export default function Progress() {
   // Total days logged in 90 days
   const daysLogged = logs.length;
 
+  // Sprint 12: 7-day macro trend — compute kcal/pro/carb/fat per day from food_items
+  const last7 = sorted.slice(-7);
+  const nutritionTrend = last7.map(log => {
+    const items = Array.isArray(log.food_items) ? log.food_items : [];
+    const macros = items.reduce((acc, item) => {
+      if (!item.per_100g) return acc;
+      const f = (item.grams || 0) / 100;
+      const n = item.per_100g;
+      return {
+        kcal: acc.kcal + Math.round((n.calories || 0) * f),
+        pro:  +(acc.pro  + (n.protein    || 0) * f).toFixed(1),
+        carb: +(acc.carb + ((n.net_carbs != null ? n.net_carbs : n.total_carbs) || 0) * f).toFixed(1),
+        fat:  +(acc.fat  + (n.fat        || 0) * f).toFixed(1),
+      };
+    }, { kcal: 0, pro: 0, carb: 0, fat: 0 });
+    const d = new Date(log.log_date + 'T00:00:00');
+    return {
+      date: `${d.getDate()}/${d.getMonth() + 1}`,
+      ...macros,
+    };
+  }).filter(d => d.kcal > 0); // only days with food logged
+
   // Lab highlights — latest per test name
   const labMap = {};
   labs.forEach(l => {
@@ -432,6 +454,66 @@ export default function Progress() {
               <span>Each bar = 1 day</span>
               <span>Green line = 75% target</span>
             </div>
+          </Card>
+        )}
+
+        {/* Sprint 12: 7-day nutrition trend */}
+        {nutritionTrend.length > 1 && (
+          <Card>
+            <SectionTitle icon="🥗">7-Day Nutrition Trend</SectionTitle>
+            <div className="flex gap-3 text-xs mb-3 flex-wrap">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-400 inline-block"/>Calories</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block"/>Protein</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"/>Carbs</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-400 inline-block"/>Fat</span>
+            </div>
+            {/* Calories bar */}
+            <p className="text-xs text-stone-400 font-medium mb-1">Calories (kcal)</p>
+            <ResponsiveContainer width="100%" height={90}>
+              <BarChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']}
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }} />
+                {profile?.macros?.kcal && (
+                  <ReferenceLine y={profile.macros.kcal} stroke="#34d399" strokeDasharray="3 3" />
+                )}
+                <Bar dataKey="kcal" fill="#fb923c" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+
+            {/* Macros line chart */}
+            <p className="text-xs text-stone-400 font-medium mt-3 mb-1">Protein · Carbs · Fat (g)</p>
+            <ResponsiveContainer width="100%" height={110}>
+              <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0efed" />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }}
+                  formatter={(v, name) => [`${v}g`, name.charAt(0).toUpperCase() + name.slice(1)]} />
+                <Line type="monotone" dataKey="pro"  stroke="#60a5fa" strokeWidth={2} dot={{ r: 3, fill: '#60a5fa' }} />
+                <Line type="monotone" dataKey="carb" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3, fill: '#fbbf24' }} />
+                <Line type="monotone" dataKey="fat"  stroke="#c084fc" strokeWidth={2} dot={{ r: 3, fill: '#c084fc' }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+
+            {nutritionTrend.length > 0 && (() => {
+              const avg = nutritionTrend.reduce((a, d) => ({
+                kcal: a.kcal + d.kcal, pro: a.pro + d.pro,
+                carb: a.carb + d.carb, fat: a.fat + d.fat,
+              }), { kcal: 0, pro: 0, carb: 0, fat: 0 });
+              const n = nutritionTrend.length;
+              return (
+                <div className="flex gap-3 text-xs mt-2 px-1 pt-2 border-t border-stone-100 flex-wrap">
+                  <span className="text-stone-400">Avg/day:</span>
+                  <span className="font-bold text-orange-500">{Math.round(avg.kcal/n)} kcal</span>
+                  <span className="text-blue-500">P {(avg.pro/n).toFixed(1)}g</span>
+                  <span className="text-amber-500">C {(avg.carb/n).toFixed(1)}g</span>
+                  <span className="text-purple-500">F {(avg.fat/n).toFixed(1)}g</span>
+                </div>
+              );
+            })()}
           </Card>
         )}
 

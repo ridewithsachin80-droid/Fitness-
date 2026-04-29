@@ -198,4 +198,52 @@ router.get('/range/:from/:to', authMW, async (req, res) => {
   }
 });
 
+// ── GET /api/logs/recent-foods ────────────────────────────────────────────────
+// Sprint 12: Returns the top 8 most-used foods from the member's last 30 logs.
+// Used by FoodLog.jsx to show "Recently used" quick-add shortcuts.
+router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT food_items
+       FROM daily_logs
+       WHERE patient_id = $1 AND food_items IS NOT NULL
+       ORDER BY log_date DESC
+       LIMIT 30`,
+      [req.user.id]
+    );
+
+    // Aggregate: count each food_id/name across all recent logs
+    const freq = {};
+    for (const row of result.rows) {
+      const items = Array.isArray(row.food_items) ? row.food_items : [];
+      for (const item of items) {
+        const key = item.food_id ? `id:${item.food_id}` : `name:${item.name}`;
+        if (!freq[key]) {
+          freq[key] = {
+            food_id:  item.food_id  || null,
+            name:     item.name     || item.food_name,
+            per_100g: item.per_100g || null,
+            count:    0,
+            last_g:   item.grams,
+          };
+        }
+        freq[key].count++;
+        freq[key].last_g = item.grams; // update to most recent gram amount
+      }
+    }
+
+    const top8 = Object.values(freq)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8)
+      .map(({ food_id, name, per_100g, count, last_g }) => ({
+        food_id, name, per_100g, count, last_g,
+      }));
+
+    res.json(top8);
+  } catch (err) {
+    console.error('GET /logs/recent-foods error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch recent foods' });
+  }
+});
+
 module.exports = router;

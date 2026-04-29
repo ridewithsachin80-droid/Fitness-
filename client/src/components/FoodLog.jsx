@@ -14,6 +14,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../api/client';
 import { getNutrition } from '../constants';
+import { getRecentFoods } from '../api/logs';
 
 const MEALS = ['Meal 1', 'Meal 2', 'Meal 3'];
 
@@ -41,6 +42,14 @@ export default function FoodLog({ items = [], onChange }) {
   const [searching, setSearching] = useState(false);
   const [selected, setSelected]   = useState(null);
   const [lookupStatus, setLookupStatus] = useState('');
+  // Sprint 12: recent foods
+  const [recentFoods, setRecentFoods] = useState([]);
+
+  useEffect(() => {
+    getRecentFoods()
+      .then(({ data }) => setRecentFoods(data || []))
+      .catch(() => {}); // silent fail — feature is optional
+  }, []);
 
   const nameRef      = useRef(null);
   const gramsRef     = useRef(null);
@@ -166,6 +175,15 @@ export default function FoodLog({ items = [], onChange }) {
     setLookupStatus(''); setSuggestions([]); setShowSuggestions(false);
   };
 
+  // Sprint 12: quick-add a recently used food — pre-fills name + grams
+  const pickRecent = (food) => {
+    setSelected({ id: food.food_id, name: food.name, per_100g: food.per_100g });
+    setQuery(food.name);
+    setGrams(String(food.last_g || 100));
+    setSuggestions([]); setShowSuggestions(false); setLookupStatus('');
+    setTimeout(() => gramsRef.current?.focus(), 50);
+  };
+
   return (
     <div className="space-y-3">
 
@@ -243,6 +261,30 @@ export default function FoodLog({ items = [], onChange }) {
                 }`}>{m}</button>
             ))}
           </div>
+
+          {/* Sprint 12: Recently used quick-picks — show when query is empty */}
+          {recentFoods.length > 0 && !query && (
+            <div>
+              <p className="text-xs text-stone-400 font-medium mb-1.5">Recently used</p>
+              <div className="flex flex-wrap gap-1.5">
+                {recentFoods.map((food, i) => {
+                  const kcal = food.per_100g?.calories
+                    ? Math.round(food.per_100g.calories * (food.last_g || 100) / 100)
+                    : null;
+                  return (
+                    <button key={i} onClick={() => pickRecent(food)}
+                      className="flex items-center gap-1.5 text-xs bg-white border border-stone-200
+                        hover:border-emerald-300 hover:bg-emerald-50 rounded-xl px-2.5 py-1.5
+                        transition-colors text-stone-700 font-medium max-w-full">
+                      <span className="truncate max-w-[120px]">{food.name}</span>
+                      <span className="text-stone-400 flex-shrink-0">{food.last_g}g</span>
+                      {kcal && <span className="text-orange-500 font-bold flex-shrink-0">{kcal}k</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Food name + autocomplete
               FIX: containerRef on the outer div so clicks inside the dropdown

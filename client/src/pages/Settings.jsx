@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore }    from '../store/authStore';
-import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword } from '../api/logs';
+import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword, getNotifLog } from '../api/logs';
 import { Card, SectionTitle, BackButton } from '../components/UI';
 
 export default function Settings() {
   const navigate       = useNavigate();
   const { user, logout } = useAuthStore();
-  const [subs,   setSubs]    = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [subs,     setSubs]     = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [notifLog, setNotifLog] = useState([]); // Sprint 12: notification history
 
   // Sprint 8: change password state (monitors/admins only)
   const [pwForm,   setPwForm]   = useState({ current: '', next: '', confirm: '' });
@@ -35,10 +36,13 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    getSubscriptions()
-      .then(r => setSubs(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      getSubscriptions().catch(() => ({ data: [] })),
+      getNotifLog().catch(() => ({ data: [] })),
+    ]).then(([subsRes, notifRes]) => {
+      setSubs(subsRes.data || []);
+      setNotifLog(notifRes.data || []);
+    }).finally(() => setLoading(false));
   }, []);
 
   const removeSub = async (endpoint) => {
@@ -186,6 +190,54 @@ export default function Settings() {
           </Card>
         )}
 
+        {/* Sprint 12: Notification history */}
+        {notifLog.length > 0 && (
+          <Card>
+            <SectionTitle icon="🔔">Notification History</SectionTitle>
+            <p className="text-xs text-stone-400 mb-3">Last {notifLog.length} notifications received</p>
+            <div className="space-y-2">
+              {notifLog.map(n => {
+                const typeIcon = {
+                  weight: '⚖️', acv: '🍶', water: '💧',
+                  supplement: '💊', no_log: '📋', admin: '📨',
+                }[n.type] || '🔔';
+                const timeAgo = (() => {
+                  const diff = Date.now() - new Date(n.sent_at).getTime();
+                  const mins = Math.floor(diff / 60000);
+                  const hrs  = Math.floor(mins / 60);
+                  const days = Math.floor(hrs / 24);
+                  if (days > 0)  return `${days}d ago`;
+                  if (hrs > 0)   return `${hrs}h ago`;
+                  if (mins > 0)  return `${mins}m ago`;
+                  return 'just now';
+                })();
+                return (
+                  <div key={n.id}
+                    className={`rounded-2xl px-4 py-3 border ${n.failed
+                      ? 'bg-red-50 border-red-100'
+                      : 'bg-stone-50 border-stone-100'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="text-base flex-shrink-0 mt-0.5">{typeIcon}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-stone-700 truncate">{n.title}</p>
+                          <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{n.body}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span className="text-xs text-stone-400">{timeAgo}</span>
+                        {n.failed && (
+                          <span className="text-xs text-red-500 font-medium">Failed</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
         {/* Logout */}
         <button onClick={handleLogout}
           className="w-full py-3.5 bg-white border border-red-200 text-red-600 font-semibold
@@ -194,7 +246,7 @@ export default function Settings() {
         </button>
 
         <p className="text-center text-xs text-stone-300 pt-2">
-          FitLife · Sprint 8
+          FitLife · Sprint 12
         </p>
       </div>
     </div>

@@ -15,6 +15,8 @@ export const getLog          = (date)           => api.get(`/logs/${date}`);
 export const saveLog         = (date, log)      => api.post(`/logs/${date}`, log);
 export const getLogRange     = (from, to, patientId) =>
   api.get(`/logs/range/${from}/${to}`, { params: patientId ? { patientId } : {} });
+// Sprint 12: member's most-used foods for quick-add
+export const getRecentFoods  = ()               => api.get('/logs/recent-foods');
 
 // ── Patients (monitor/admin only) ─────────────────────────────────────────────
 export const getPatients     = ()               => api.get('/patients');
