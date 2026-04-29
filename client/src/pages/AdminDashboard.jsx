@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
-import { adminResetPin } from '../api/logs';
+import { adminResetPin, adminSendPush } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
 
@@ -1105,6 +1105,92 @@ function EditMemberModal({ member, onClose, onSaved }) {
   );
 }
 
+// ── Push Notification modal (Sprint 11) ──────────────────────────────────────
+function PushModal({ members, onClose }) {
+  const [form,    setForm]    = useState({ patient_id: '', title: '', body: '' });
+  const [sending, setSending] = useState(false);
+  const [result,  setResult]  = useState(null);
+  const [error,   setError]   = useState('');
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const send = async () => {
+    if (!form.title.trim() || !form.body.trim()) { setError('Title and message are required'); return; }
+    setSending(true); setError('');
+    try {
+      const payload = { title: form.title, body: form.body };
+      if (form.patient_id) payload.patient_id = form.patient_id;
+      const { data } = await adminSendPush(payload);
+      setResult(data);
+    } catch (e) {
+      setError(e.response?.data?.error || 'Failed to send');
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal title="Send Push Notification" onClose={onClose}>
+      <div className="space-y-3">
+        {result ? (
+          <div className="text-center py-4 space-y-2">
+            <div className="text-4xl">📨</div>
+            <p className="font-bold text-stone-800">Notification sent!</p>
+            <p className="text-sm text-stone-500">
+              Delivered to <span className="font-semibold text-emerald-600">{result.sent}</span> device{result.sent !== 1 ? 's' : ''}
+              {result.failed > 0 && `, ${result.failed} failed`}
+            </p>
+            <button onClick={onClose} className="mt-2 text-sm font-semibold text-stone-500 hover:text-stone-700">Close</button>
+          </div>
+        ) : (
+          <>
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Recipient</label>
+              <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)}
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm bg-white
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800">
+                <option value="">📢 All active members ({members.filter(m => m.active).length})</option>
+                {members.filter(m => m.active).map(m => (
+                  <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Title</label>
+              <input value={form.title} onChange={e => set('title', e.target.value)}
+                placeholder="e.g. Reminder: Log your weight today"
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Message</label>
+              <textarea value={form.body} onChange={e => set('body', e.target.value)} rows={3}
+                placeholder="e.g. Great work this week! Don't forget to log your morning weight."
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm resize-none
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+              <p className="text-xs text-stone-400 mt-1">{form.body.length}/140 characters</p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+              <p className="text-xs text-amber-700 font-medium">
+                ⚠ Only members with push notifications enabled will receive this.
+              </p>
+            </div>
+
+            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+
+            <button onClick={send} disabled={sending || !form.title.trim() || !form.body.trim()}
+              className="w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-bold
+                rounded-xl transition-colors disabled:opacity-40">
+              {sending ? 'Sending…' : `Send Notification`}
+            </button>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ── Add Monitor modal ─────────────────────────────────────────────────────────
 function AddMonitorModal({ onClose, onAdded }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'monitor' });
@@ -1217,6 +1303,7 @@ export default function AdminDashboard() {
   const [loading,   setLoading]   = useState(true);
   const [showAddMember,  setShowAddMember]  = useState(false);
   const [showAddMonitor, setShowAddMonitor] = useState(false);
+  const [showPush,       setShowPush]       = useState(false);
   const [assignTarget,   setAssignTarget]   = useState(null);
   const [editTarget,     setEditTarget]     = useState(null);
   const [search,    setSearch]    = useState('');
@@ -1523,11 +1610,18 @@ export default function AdminDashboard() {
           <>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-stone-400">{monitors.length} monitor{monitors.length !== 1 ? 's' : ''} registered</p>
-              <button onClick={() => setShowAddMonitor(true)}
-                className="flex items-center gap-1.5 text-xs font-bold text-white bg-stone-800
-                  hover:bg-stone-900 px-3 py-2 rounded-xl transition-colors">
-                + Add Monitor
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setShowPush(true)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-stone-600 bg-stone-100
+                    hover:bg-stone-200 px-3 py-2 rounded-xl transition-colors">
+                  📨 Send Push
+                </button>
+                <button onClick={() => setShowAddMonitor(true)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-stone-800
+                    hover:bg-stone-900 px-3 py-2 rounded-xl transition-colors">
+                  + Add Monitor
+                </button>
+              </div>
             </div>
             {filtered(monitors, 'name').length === 0 ? (
               <div className="text-center py-16 text-stone-400">
@@ -1586,6 +1680,7 @@ export default function AdminDashboard() {
       {/* Modals */}
       {showAddMember  && <AddMemberModal  monitors={monitors} onClose={() => setShowAddMember(false)}  onAdded={u => { setMembers(prev => [u, ...prev]); load(); }} />}
       {showAddMonitor && <AddMonitorModal onClose={() => setShowAddMonitor(false)} onAdded={u => { setMonitors(prev => [u, ...prev]); load(); }} />}
+      {showPush       && <PushModal members={members} onClose={() => setShowPush(false)} />}
       {assignTarget   && <AssignModal member={assignTarget} monitors={monitors}
         onClose={() => setAssignTarget(null)}
         onAssigned={(pid, mid, mname) => {

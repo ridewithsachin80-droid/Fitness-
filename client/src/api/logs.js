@@ -23,14 +23,16 @@ export const createPatient   = (data)           => api.post('/patients', data);
 export const updateProfile   = (id, data)       => api.patch(`/patients/${id}/profile`, data);
 export const addLabValue     = (id, data)       => api.post(`/patients/${id}/labs`, data);
 export const addNote         = (id, data)       => api.post(`/patients/${id}/notes`, data);
-// Sprint 8: set or reset a member's login PIN (from monitor page)
 export const setMemberPin    = (id, pin)        => api.patch(`/patients/${id}/pin`, { pin });
-// Sprint 10: member fetches their own profile
 export const getMyProfile    = ()               => api.get('/patients/me');
+// Sprint 11: monitor logs/corrects a member's weight for a specific date
+export const logWeightForPatient = (id, date, weight_kg) =>
+  api.patch(`/patients/${id}/weight`, { date, weight_kg });
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-// Sprint 9: admin can reset PIN directly from the dashboard
 export const adminResetPin   = (id, pin)        => api.patch(`/admin/members/${id}/pin`, { pin });
+// Sprint 11: admin sends manual push notification
+export const adminSendPush   = (data)           => api.post('/admin/push', data);
 
 // ── Push notifications ────────────────────────────────────────────────────────
 export const subscribePush   = (sub)            => api.post('/notifications/subscribe',   sub);

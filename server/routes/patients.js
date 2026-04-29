@@ -365,4 +365,38 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
   }
 });
 
+// ── PATCH /api/patients/:id/weight ───────────────────────────────────────────
+// Sprint 11: Monitor/admin can log or correct a member's weight for any date.
+// Creates the daily_log row if it doesn't exist yet (upsert on weight only).
+router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  const { date, weight_kg } = req.body;
+  const patientId = req.params.id;
+
+  if (!date || !weight_kg) {
+    return res.status(400).json({ error: 'date and weight_kg are required' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+  }
+  const w = parseFloat(weight_kg);
+  if (isNaN(w) || w < 20 || w > 400) {
+    return res.status(400).json({ error: 'weight_kg must be a realistic value (20–400)' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO daily_logs (patient_id, log_date, weight_kg)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (patient_id, log_date)
+       DO UPDATE SET weight_kg = EXCLUDED.weight_kg
+       RETURNING id, log_date, weight_kg`,
+      [patientId, date, w]
+    );
+    res.json({ message: 'Weight updated', log: result.rows[0] });
+  } catch (err) {
+    console.error('PATCH /patients/:id/weight error:', err.message);
+    res.status(500).json({ error: 'Failed to update weight' });
+  }
+});
+
 module.exports = router;

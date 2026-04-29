@@ -16,7 +16,7 @@ import { useAuthStore }  from '../store/authStore';
 import { getLogRange }   from '../api/logs';
 import api               from '../api/client';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
-import { today } from '../constants';
+import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +54,156 @@ function ComplianceTip({ active, payload }) {
   );
 }
 
+// ── Past Log Viewer Modal (Sprint 11) ─────────────────────────────────────────
+
+function PastLogModal({ log, onClose }) {
+  if (!log) return null;
+
+  const foodItems  = log.food_items  || [];
+  const activities = log.activities  || {};
+  const acv        = log.acv         || {};
+  const supps      = log.supplements || {};
+  const sleep      = log.sleep       || {};
+
+  const checkedActs  = ACTIVITIES.filter(a => activities[a.id]);
+  const checkedAcv   = ACV_ITEMS.filter(a => acv[a.id]);
+  const checkedSupps = SUPPLEMENTS.filter(s => supps[s.id]);
+
+  const kcal = foodItems.reduce((sum, item) => {
+    if (item.per_100g) return sum + Math.round((item.per_100g.calories || 0) * item.grams / 100);
+    return sum;
+  }, 0);
+
+  const dateStr = new Date(log.log_date + 'T00:00:00').toLocaleDateString('en-IN', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2">
+      <div className="bg-white rounded-3xl w-full max-w-md max-h-[88vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 flex-shrink-0">
+          <div>
+            <h3 className="font-bold text-stone-800 text-base">{dateStr}</h3>
+            <div className="flex items-center gap-3 mt-1">
+              {log.weight_kg && (
+                <span className="text-xs font-semibold text-emerald-600">⚖ {log.weight_kg} kg</span>
+              )}
+              {log.compliance_pct != null && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                  log.compliance_pct >= 75 ? 'bg-emerald-100 text-emerald-700' :
+                  log.compliance_pct >= 50 ? 'bg-amber-100 text-amber-700' :
+                  'bg-red-100 text-red-600'}`}>
+                  {log.compliance_pct}% compliance
+                </span>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+
+          {/* Activities */}
+          {checkedActs.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">🏃 Activities</p>
+              <div className="flex flex-wrap gap-1.5">
+                {checkedActs.map(a => (
+                  <span key={a.id} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-full font-medium">
+                    {a.icon} {a.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ACV */}
+          {checkedAcv.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">🍶 ACV</p>
+              <div className="flex flex-wrap gap-1.5">
+                {checkedAcv.map(a => (
+                  <span key={a.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full font-medium">
+                    {a.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Food */}
+          {foodItems.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                🥗 Food {kcal > 0 && <span className="font-normal text-orange-500 normal-case">· {kcal} kcal</span>}
+              </p>
+              <div className="space-y-1">
+                {foodItems.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-stone-50 last:border-0">
+                    <span className="text-stone-700">{item.name || item.food_name}</span>
+                    <span className="text-stone-400 text-xs">{item.grams}g
+                      {item.meal && <span className="ml-1 text-stone-300">· {item.meal}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Water */}
+          {log.water_ml > 0 && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">💧 Water</p>
+              <p className="text-sm text-blue-600 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
+            </div>
+          )}
+
+          {/* Supplements */}
+          {checkedSupps.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">💊 Supplements</p>
+              <div className="flex flex-wrap gap-1.5">
+                {checkedSupps.map(s => (
+                  <span key={s.id} className="text-xs bg-purple-50 text-purple-700 border border-purple-100 px-2.5 py-1 rounded-full font-medium">
+                    {s.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sleep */}
+          {(sleep.bedtime || sleep.waketime) && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">🌙 Sleep</p>
+              <p className="text-sm text-stone-600">
+                {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
+                {sleep.bedtime && sleep.waketime && ' → '}
+                {sleep.waketime && `Wake ${sleep.waketime?.slice(0,5)}`}
+                {sleep.quality && <span className="ml-2 text-amber-500">{'★'.repeat(sleep.quality)}</span>}
+              </p>
+            </div>
+          )}
+
+          {/* Notes */}
+          {log.notes && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">📝 Notes</p>
+              <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{log.notes}</p>
+            </div>
+          )}
+
+          {!checkedActs.length && !foodItems.length && !log.weight_kg && (
+            <p className="text-sm text-stone-400 italic text-center py-4">No data recorded this day.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Stat Card ────────────────────────────────────────────────────────────────
 
 function StatBox({ value, label, sub, color = 'emerald' }) {
@@ -82,6 +232,7 @@ export default function Progress() {
   const [logs,    setLogs]    = useState([]);
   const [profile, setProfile] = useState(null);
   const [labs,    setLabs]    = useState([]);
+  const [selectedLog, setSelectedLog] = useState(null); // Sprint 11: past log viewer
 
   useEffect(() => {
     const from = nDaysAgo(90);
@@ -306,6 +457,48 @@ export default function Progress() {
           </Card>
         )}
 
+        {/* Sprint 11: Log history — last 30 logs */}
+        {sorted.length > 0 && (
+          <Card>
+            <SectionTitle icon="📅">Log History</SectionTitle>
+            <p className="text-xs text-stone-400 mb-3">Tap any day to see the full log</p>
+            <div className="space-y-1.5">
+              {[...sorted].reverse().slice(0, 30).map(log => {
+                const d = new Date(log.log_date + 'T00:00:00');
+                const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', weekday: 'short' });
+                const pct = log.compliance_pct;
+                return (
+                  <button key={log.log_date} onClick={() => setSelectedLog(log)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl
+                      bg-stone-50 hover:bg-stone-100 transition-colors text-left group">
+                    <div className="w-14 flex-shrink-0">
+                      <p className="text-xs font-bold text-stone-700">{label.split(', ')[1] || label}</p>
+                      <p className="text-xs text-stone-400">{label.split(', ')[0]}</p>
+                    </div>
+                    <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${
+                        pct >= 75 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'
+                      }`} style={{ width: `${pct || 0}%` }} />
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {log.weight_kg && (
+                        <span className="text-xs font-semibold text-stone-500">{log.weight_kg}kg</span>
+                      )}
+                      <span className={`text-xs font-bold w-10 text-right ${
+                        pct >= 75 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'
+                      }`}>{pct != null ? `${pct}%` : '—'}</span>
+                      <svg className="w-3.5 h-3.5 text-stone-300 group-hover:text-stone-500 transition-colors"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
         {/* Motivational summary */}
         <Card>
           <SectionTitle icon="🌟">Your Journey</SectionTitle>
@@ -344,6 +537,8 @@ export default function Progress() {
         </Card>
 
       </div>
+
+      {selectedLog && <PastLogModal log={selectedLog} onClose={() => setSelectedLog(null)} />}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { getPatient } from '../api/logs';
 import { addLabValue } from '../api/logs';
-import { setMemberPin, addNote } from '../api/logs';
+import { setMemberPin, addNote, logWeightForPatient } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
 import { useSync } from '../hooks/useSync';
@@ -287,6 +287,85 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
   );
 }
 
+// ── Weight Entry modal (Sprint 11) ───────────────────────────────────────────
+function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [date,    setDate]    = useState(todayStr);
+  const [weight,  setWeight]  = useState('');
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const submit = async () => {
+    const w = parseFloat(weight);
+    if (!weight || isNaN(w) || w < 20 || w > 400) {
+      setError('Enter a valid weight between 20–400 kg');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      const { data } = await logWeightForPatient(patientId, date, w);
+      setSuccess(true);
+      setTimeout(() => { onSaved(data.log); onClose(); }, 1000);
+    } catch (e) {
+      setError(e.response?.data?.error || 'Failed to save weight');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-stone-800">Log Weight</h3>
+            <p className="text-xs text-stone-400 mt-0.5">{patientName}</p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
+        </div>
+
+        {success ? (
+          <div className="text-center py-4">
+            <div className="text-3xl mb-2">✅</div>
+            <p className="font-semibold text-emerald-700">Weight saved!</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-stone-500 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+              Creates or updates the weight entry for the selected date. Other log data is preserved.
+            </p>
+            <div>
+              <label className="block text-xs text-stone-400 font-medium mb-1">Date</label>
+              <input type="date" value={date} max={todayStr}
+                onChange={e => setDate(e.target.value)}
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+            </div>
+            <div>
+              <label className="block text-xs text-stone-400 font-medium mb-1">Weight (kg)</label>
+              <div className="flex items-center gap-2">
+                <input type="number" step="0.1" inputMode="decimal" value={weight}
+                  onChange={e => setWeight(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && submit()}
+                  placeholder="e.g. 84.5"
+                  className="flex-1 text-2xl font-bold text-center border-2 border-stone-200
+                    rounded-2xl py-3 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+                <span className="text-stone-400 font-bold text-lg">kg</span>
+              </div>
+            </div>
+            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+            <button onClick={submit} disabled={saving || !weight}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+                rounded-xl transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save Weight'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Monitor page ──────────────────────────────────────────────────────────────
 export default function Monitor() {
   const { patientId } = useParams();
@@ -294,9 +373,10 @@ export default function Monitor() {
   const { user }      = useAuthStore();
   const [data,       setData]    = useState(null);
   const [loading,    setLoading] = useState(true);
-  const [showLabForm,setShowLab] = useState(false);
-  const [showPinForm,setShowPin] = useState(false);
-  const [showNoteForm,setShowNote] = useState(false);
+  const [showLabForm,setShowLab]     = useState(false);
+  const [showPinForm,setShowPin]     = useState(false);
+  const [showNoteForm,setShowNote]   = useState(false);
+  const [showWeightForm,setShowWeight] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -395,7 +475,7 @@ export default function Monitor() {
             )}
           </div>
 
-          {/* Sprint 8+9: Quick-action buttons */}
+          {/* Sprint 8+9+11: Quick-action buttons */}
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={() => setShowPin(true)}
               className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl
@@ -408,6 +488,11 @@ export default function Monitor() {
               className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
                 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
               📝 Add Note
+            </button>
+            <button onClick={() => setShowWeight(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
+                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
+              ⚖️ Log Weight
             </button>
           </div>
         </div>
@@ -851,6 +936,23 @@ export default function Monitor() {
           patientId={patientId}
           onClose={() => setShowNote(false)}
           onAdded={(newNote) => setData(d => ({ ...d, notes: [newNote, ...(d.notes || [])] }))}
+        />
+      )}
+
+      {/* Sprint 11: Weight entry modal */}
+      {showWeightForm && (
+        <WeightEntryModal
+          patientId={patientId}
+          patientName={profile.name}
+          onClose={() => setShowWeight(false)}
+          onSaved={(log) => {
+            setData(d => ({
+              ...d,
+              logs: d.logs.some(l => l.log_date === log.log_date)
+                ? d.logs.map(l => l.log_date === log.log_date ? { ...l, weight_kg: log.weight_kg } : l)
+                : [log, ...d.logs],
+            }));
+          }}
         />
       )}
 

@@ -449,4 +449,41 @@ router.patch('/members/:id/pin', async (req, res) => {
   }
 });
 
+// ── POST /api/admin/push ──────────────────────────────────────────────────────
+// Sprint 11: Admin sends a manual push notification.
+// patient_id optional — omit to broadcast to ALL active patients.
+router.post('/push', async (req, res) => {
+  const pushService = require('../services/pushService');
+  const { patient_id, title, body } = req.body;
+
+  if (!title?.trim() || !body?.trim()) {
+    return res.status(400).json({ error: 'title and body are required' });
+  }
+
+  try {
+    let recipients;
+    if (patient_id) {
+      recipients = [{ id: patient_id }];
+    } else {
+      const result = await pool.query(
+        `SELECT id FROM users WHERE role = 'patient' AND active = true`
+      );
+      recipients = result.rows;
+    }
+
+    let sent = 0, failed = 0;
+    for (const r of recipients) {
+      try {
+        await pushService.sendToUser(r.id, title.trim(), body.trim(), 'admin');
+        sent++;
+      } catch { failed++; }
+    }
+
+    res.json({ message: 'Push sent', sent, failed, total: recipients.length });
+  } catch (err) {
+    console.error('POST /admin/push error:', err.message);
+    res.status(500).json({ error: 'Failed to send push notifications' });
+  }
+});
+
 module.exports = router;
