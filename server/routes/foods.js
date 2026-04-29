@@ -435,7 +435,7 @@ router.get('/admin/list', authMW, role('admin'), async (req, res) => {
       pool.query(
         `SELECT id, name, name_hindi, name_local, category, source, verified,
            per_100g->>'calories' AS kcal_per_100g
-         FROM foods ${where.replace('$3','$1')} ORDER BY name ASC LIMIT $${q?2:1} OFFSET $${q?3:2}`,
+         FROM foods ${where.replace(/\$3/g,'$1')} ORDER BY name ASC LIMIT $${q?2:1} OFFSET $${q?3:2}`,
         q ? [`%${q.toLowerCase()}%`, limit, offset] : [limit, offset]
       ),
       pool.query(
