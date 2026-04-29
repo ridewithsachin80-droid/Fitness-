@@ -270,26 +270,26 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
               <input value={meal.name} onChange={e => updateMeal(meal.id, 'name', e.target.value)}
                 className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-stone-700" />
               <input type="time" value={meal.time} onChange={e => updateMeal(meal.id, 'time', e.target.value)}
-                className="text-xs bg-white/70 border border-white/50 rounded-lg px-2 py-1 text-stone-600 w-28" />
+                className="text-xs border border-white/[0.15] rounded-lg px-2 py-1 w-28" />
               <button onClick={() => removeMeal(meal.id)} className="text-stone-400 hover:text-red-500 text-sm ml-1">🗑</button>
             </div>
 
             {(meal.items || []).map((item, iIdx) => (
-              <div key={iIdx} className="bg-white/80 rounded-xl px-3 py-2 flex items-center gap-2 group">
-                <span className="text-xs text-stone-700 font-medium flex-1 truncate">{item.food_name}</span>
+              <div key={iIdx} className="bg-black/20 rounded-xl px-3 py-2 flex items-center gap-2 group border border-white/[0.08]">
+                <span className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--text-hi)' }}>{item.food_name}</span>
                 <input type="number" value={item.qty_g}
                   onChange={e => updateItemQty(meal.id, iIdx, parseFloat(e.target.value) || 0)}
-                  className="w-16 text-xs text-center border border-stone-200 rounded-lg px-1 py-1 bg-white" />
-                <span className="text-xs text-stone-400">g</span>
-                <span className="text-xs font-bold text-orange-600 w-10 text-right">{item.kcal}</span>
-                <span className="text-xs text-stone-400">kcal</span>
+                  className="w-16 text-xs text-center border border-white/[0.15] rounded-lg px-1 py-1" />
+                <span className="text-xs" style={{ color: 'var(--text-mid)' }}>g</span>
+                <span className="text-xs font-bold text-orange-500 w-10 text-right">{item.kcal}</span>
+                <span className="text-xs" style={{ color: 'var(--text-mid)' }}>kcal</span>
                 <button onClick={() => removeItem(meal.id, iIdx)}
-                  className="opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-400 ml-1 transition-opacity">×</button>
+                  className="opacity-0 group-hover:opacity-100 ml-1 transition-opacity" style={{ color: 'var(--text-lo)' }}>×</button>
               </div>
             ))}
 
             {(meal.items || []).length > 0 && (
-              <div className="flex gap-3 text-xs px-1 pt-1 border-t border-white/50">
+              <div className="flex gap-3 text-xs px-1 pt-1 border-t border-white/[0.12]">
                 <span className="font-bold text-orange-600">{mealTotal.kcal} kcal</span>
                 <span className="text-blue-700">P {mealTotal.pro.toFixed(1)}g</span>
                 <span className="text-amber-700">C {mealTotal.carb.toFixed(1)}g</span>
