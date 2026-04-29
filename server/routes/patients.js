@@ -18,6 +18,7 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
          pp.start_weight,
          pp.target_weight,
          pp.conditions,
+         (u.password IS NOT NULL AND u.password != '') AS has_pin,
          (SELECT weight_kg  FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
          (SELECT log_date   FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
          (SELECT compliance_pct FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance
@@ -75,7 +76,7 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
       return res.status(403).json({ error: 'Patient not assigned to you' });
     }
 
-    const [profileResult, logsResult, labsResult] = await Promise.all([
+    const [profileResult, logsResult, labsResult, notesResult, pinResult] = await Promise.all([
       pool.query(
         `SELECT u.id, u.name, u.phone, u.email, u.created_at,
                 pp.*
@@ -97,6 +98,20 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
          ORDER BY test_date DESC`,
         [id]
       ),
+      // Sprint 9: fetch all clinical notes for this patient, newest first
+      pool.query(
+        `SELECT mn.*, u.name AS monitor_name
+         FROM monitor_notes mn
+         JOIN users u ON u.id = mn.monitor_id
+         WHERE mn.patient_id = $1
+         ORDER BY mn.note_date DESC, mn.created_at DESC`,
+        [id]
+      ),
+      // Sprint 9: check if member has a PIN set
+      pool.query(
+        `SELECT (password IS NOT NULL AND password != '') AS has_pin FROM users WHERE id = $1`,
+        [id]
+      ),
     ]);
 
     if (!profileResult.rows.length) {
@@ -104,9 +119,10 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     }
 
     res.json({
-      profile: profileResult.rows[0],
+      profile: { ...profileResult.rows[0], has_pin: pinResult.rows[0]?.has_pin ?? false },
       logs:    logsResult.rows,
       labs:    labsResult.rows,
+      notes:   notesResult.rows,
     });
   } catch (err) {
     console.error('GET /patients/:id error:', err);

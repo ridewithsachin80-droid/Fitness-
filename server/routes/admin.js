@@ -28,7 +28,7 @@ router.get('/stats', async (req, res) => {
 // ── GET /api/admin/overview ────────────────────────────────────────────────────
 // Sprint 7: Full admin overview — today's activity, 7-day compliance,
 // member alerts, weight progress totals.
-router.get('/overview', async (req, res) => {
+router.get('/overview', authMW, roleCheck('admin'), async (req, res) => {
   try {
     const [statsRes, todayRes, alertsRes, complianceRes, weightRes] = await Promise.all([
       // Total counts
@@ -138,6 +138,7 @@ router.get('/members', async (req, res) => {
     const result = await pool.query(`
       SELECT u.id, u.name, u.phone, u.active, u.created_at,
         pp.height_cm, pp.start_weight, pp.target_weight, pp.conditions,
+        (u.password IS NOT NULL AND u.password != '') AS has_pin,
         (SELECT weight_kg  FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
         (SELECT log_date   FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
         (SELECT compliance_pct FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,
@@ -423,6 +424,26 @@ router.patch('/monitors/:id/toggle', async (req, res) => {
       [req.params.id]
     );
     res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/admin/members/:id/pin ──────────────────────────────────────────
+// Admin: reset a member's login PIN directly from the admin dashboard.
+router.patch('/members/:id/pin', async (req, res) => {
+  const { pin } = req.body;
+  if (!pin || String(pin).trim().length < 4) {
+    return res.status(400).json({ error: 'PIN must be at least 4 characters' });
+  }
+  try {
+    const hash = await bcrypt.hash(String(pin).trim(), 10);
+    const result = await pool.query(
+      `UPDATE users SET password=$1 WHERE id=$2 AND role='patient' RETURNING id, name`,
+      [hash, req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Member not found' });
+    res.json({ message: 'PIN reset', user: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

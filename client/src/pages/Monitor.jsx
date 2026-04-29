@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { getPatient } from '../api/logs';
 import { addLabValue } from '../api/logs';
+import { setMemberPin, addNote } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
 import { useSync } from '../hooks/useSync';
@@ -141,6 +142,151 @@ function AddLabModal({ patientId, onClose, onAdded }) {
   );
 }
 
+// ── Set PIN modal (Sprint 8) ──────────────────────────────────────────────────
+function SetPinModal({ patientId, patientName, onClose, onSaved }) {
+  const [pin,     setPin]     = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [show,    setShow]    = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const submit = async () => {
+    if (pin.length < 4)     { setError('PIN must be at least 4 characters'); return; }
+    if (pin !== confirm)    { setError('PINs do not match'); return; }
+    setSaving(true); setError('');
+    try {
+      await setMemberPin(patientId, pin);
+      setSuccess(true);
+      setTimeout(() => { onSaved(); onClose(); }, 1200);
+    } catch (e) {
+      setError(e.response?.data?.error || 'Failed to set PIN');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
+        <div className="flex items-center justify-between mb-1">
+          <div>
+            <h3 className="font-bold text-stone-800">Set Login PIN</h3>
+            <p className="text-xs text-stone-400 mt-0.5">{patientName}</p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
+        </div>
+        {success ? (
+          <div className="text-center py-4">
+            <div className="text-3xl mb-2">✅</div>
+            <p className="font-semibold text-emerald-700">PIN set successfully!</p>
+            <p className="text-xs text-stone-400 mt-1">Member can now log in with this PIN</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-stone-500 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+              Share this PIN with the member in person. They use it with their phone number to log in.
+            </p>
+            {[
+              { label: 'New PIN', value: pin, onChange: setPin },
+              { label: 'Confirm PIN', value: confirm, onChange: setConfirm },
+            ].map(({ label, value, onChange }) => (
+              <div key={label}>
+                <label className="block text-xs text-stone-400 font-medium mb-1">{label}</label>
+                <div className="relative">
+                  <input type={show ? 'text' : 'password'} inputMode="numeric" value={value}
+                    onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
+                    placeholder="Min. 4 characters"
+                    className="w-full border border-stone-200 rounded-xl px-3 py-2.5 pr-14 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-emerald-300 tracking-widest" />
+                  {label === 'New PIN' && (
+                    <button type="button" onClick={() => setShow(s => !s)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400 font-medium">
+                      {show ? 'Hide' : 'Show'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+            <button onClick={submit} disabled={saving || !pin || !confirm}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+                rounded-xl transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Set PIN'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Add Note modal (Sprint 9) ─────────────────────────────────────────────────
+function AddNoteModal({ patientId, onClose, onAdded }) {
+  const today = new Date().toISOString().split('T')[0];
+  const [form,    setForm]    = useState({ note_date: today, note: '', flagged: false });
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.note.trim()) { setError('Note cannot be empty'); return; }
+    setSaving(true); setError('');
+    try {
+      const { data } = await addNote(patientId, form);
+      onAdded(data);
+      onClose();
+    } catch (e) {
+      setError(e.response?.data?.error || 'Failed to save note');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-stone-800">Add Clinical Note</h3>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
+        </div>
+
+        <div>
+          <label className="block text-xs text-stone-400 font-medium mb-1">Date</label>
+          <input type="date" value={form.note_date} max={today}
+            onChange={e => set('note_date', e.target.value)}
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+        </div>
+
+        <div>
+          <label className="block text-xs text-stone-400 font-medium mb-1">Note</label>
+          <textarea value={form.note} onChange={e => set('note', e.target.value)}
+            rows={4} placeholder="Clinical observations, progress notes, instructions…"
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none" />
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <input type="checkbox" checked={form.flagged} onChange={e => set('flagged', e.target.checked)}
+            className="w-4 h-4 accent-red-500 rounded" />
+          <div>
+            <span className="text-sm font-semibold text-stone-700">🚩 Flag for follow-up</span>
+            <p className="text-xs text-stone-400">Highlights this note for urgent attention</p>
+          </div>
+        </label>
+
+        {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+
+        <button onClick={submit} disabled={saving || !form.note.trim()}
+          className="w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-bold
+            rounded-xl transition-colors disabled:opacity-50">
+          {saving ? 'Saving…' : 'Save Note'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Monitor page ──────────────────────────────────────────────────────────────
 export default function Monitor() {
   const { patientId } = useParams();
@@ -149,6 +295,8 @@ export default function Monitor() {
   const [data,       setData]    = useState(null);
   const [loading,    setLoading] = useState(true);
   const [showLabForm,setShowLab] = useState(false);
+  const [showPinForm,setShowPin] = useState(false);
+  const [showNoteForm,setShowNote] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -180,7 +328,7 @@ export default function Monitor() {
     </div>
   );
 
-  const { profile, logs, labs } = data;
+  const { profile, logs, labs, notes = [] } = data;
 
   // Weight chart — reverse so oldest is on left
   const weightData = [...logs]
@@ -245,6 +393,22 @@ export default function Monitor() {
                 <div className="text-xs text-emerald-400">lost so far</div>
               </div>
             )}
+          </div>
+
+          {/* Sprint 8+9: Quick-action buttons */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => setShowPin(true)}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl
+                transition-colors border ${profile.has_pin
+                  ? 'text-emerald-100 bg-white/10 hover:bg-white/20 border-white/20'
+                  : 'text-amber-900 bg-amber-400 hover:bg-amber-300 border-amber-300'}`}>
+              🔑 {profile.has_pin ? 'Reset PIN' : '⚠ Set PIN (required to login)'}
+            </button>
+            <button onClick={() => setShowNote(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
+                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
+              📝 Add Note
+            </button>
           </div>
         </div>
       </div>
@@ -363,6 +527,45 @@ export default function Monitor() {
                       {l.status}
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Sprint 9: Clinical Notes */}
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle icon="📝">Clinical Notes</SectionTitle>
+            <button onClick={() => setShowNote(true)}
+              className="text-xs font-semibold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-xl
+                hover:bg-stone-200 transition-colors">
+              + Add
+            </button>
+          </div>
+          {notes.length === 0 ? (
+            <p className="text-xs text-stone-300 italic text-center py-4">No clinical notes yet</p>
+          ) : (
+            <div className="space-y-2">
+              {notes.map(n => (
+                <div key={n.id}
+                  className={`rounded-2xl px-4 py-3 border ${n.flagged
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-stone-50 border-stone-100'}`}>
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {n.flagged && (
+                        <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                          🚩 Follow-up
+                        </span>
+                      )}
+                      <span className="text-xs font-semibold text-stone-500">
+                        {formatDate(n.note_date)}
+                      </span>
+                      <span className="text-xs text-stone-400">· {n.monitor_name}</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{n.note}</p>
                 </div>
               ))}
             </div>
@@ -631,6 +834,26 @@ export default function Monitor() {
           onAdded={(newLab) => setData(d => ({ ...d, labs: [newLab, ...d.labs] }))}
         />
       )}
+
+      {/* Sprint 8: Set PIN modal */}
+      {showPinForm && (
+        <SetPinModal
+          patientId={patientId}
+          patientName={profile.name}
+          onClose={() => setShowPin(false)}
+          onSaved={() => setData(d => ({ ...d, profile: { ...d.profile, has_pin: true } }))}
+        />
+      )}
+
+      {/* Sprint 9: Add note modal */}
+      {showNoteForm && (
+        <AddNoteModal
+          patientId={patientId}
+          onClose={() => setShowNote(false)}
+          onAdded={(newNote) => setData(d => ({ ...d, notes: [newNote, ...(d.notes || [])] }))}
+        />
+      )}
+
       <BottomNav role={user?.role} />
     </div>
   );

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
+import { adminResetPin } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
 
@@ -1478,6 +1479,10 @@ export default function AdminDashboard() {
                         )}
                         {noLog && m.active && (
                           <span className="text-amber-500 font-medium ml-2">· No log today</span>
+                        )}
+                        {/* Sprint 9: PIN status badge */}
+                        {m.has_pin === false && m.active && (
+                          <span className="text-amber-600 font-semibold ml-2">· 🔑 No PIN set</span>
                         )}
                       </div>
                       <div className="flex gap-1.5">

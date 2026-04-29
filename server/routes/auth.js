@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../db/pool');
 const smsService = require('../services/smsService');
+const authMW = require('../middleware/auth');
 
 // ── Token helpers ───────────────────────────────────────────────────────────
 
@@ -237,6 +238,39 @@ router.post('/logout', (req, res) => {
     sameSite: 'strict',
   });
   res.json({ message: 'Logged out successfully' });
+});
+
+// ── PATCH /api/auth/change-password ────────────────────────────────────────
+// Monitor/admin: change their own password. Requires current password to verify.
+router.patch('/change-password', authMW, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM users WHERE id = $1 AND role IN (\'monitor\', \'admin\')',
+      [req.user.id]
+    );
+    const user = rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) return res.status(401).json({ error: 'Current password is incorrect' });
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hash, req.user.id]);
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('change-password error:', err.message);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
 });
 
 module.exports = router;

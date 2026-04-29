@@ -25,6 +25,7 @@ export default function PatientList() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error,   setError]     = useState('');
+  const [search,  setSearch]    = useState('');
   const todayStr = today();
 
   const load = async () => {
@@ -51,8 +52,15 @@ export default function PatientList() {
 
   if (loading) return <PageLoader />;
 
-  const noLogToday  = patients.filter(p => p.last_logged !== todayStr);
-  const loggedToday = patients.filter(p => p.last_logged === todayStr);
+  // Sprint 9: search filter (by name or phone)
+  const filtered    = search.trim()
+    ? patients.filter(p =>
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.phone || '').includes(search))
+    : patients;
+
+  const noLogToday  = filtered.filter(p => p.last_logged !== todayStr);
+  const loggedToday = filtered.filter(p => p.last_logged === todayStr);
 
   return (
     <div className="min-h-screen bg-stone-100">
@@ -98,10 +106,33 @@ export default function PatientList() {
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
         )}
 
-        {patients.length === 0 && !error && (
+        {/* Sprint 9: Search bar */}
+        {patients.length > 0 && (
+          <div className="relative">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name or phone…"
+              className="w-full pl-10 pr-4 py-3 bg-white border border-stone-200 rounded-2xl text-sm
+                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800"
+            />
+            {search && (
+              <button onClick={() => setSearch('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-lg">
+                ×
+              </button>
+            )}
+          </div>
+        )}
+
+        {filtered.length === 0 && !error && (
           <div className="text-center py-16 text-stone-400">
             <div className="text-4xl mb-3">👥</div>
-            <p className="font-medium">No patients assigned yet</p>
+            <p className="font-medium">{search ? `No patients matching "${search}"` : 'No patients assigned yet'}</p>
           </div>
         )}
 
@@ -187,11 +218,19 @@ function PatientCard({ patient: p, todayStr, onClick }) {
             Logged {p.last_logged === todayStr ? 'today' : formatDate(p.last_logged)}
           </span>
         )}
-        <div className="flex items-center gap-1 text-stone-300">
-          <span className="text-xs">Goal: {p.target_weight} kg</span>
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
+        <div className="flex items-center gap-2">
+          {/* Sprint 9: PIN status warning */}
+          {p.has_pin === false && (
+            <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+              🔑 No PIN
+            </span>
+          )}
+          <div className="flex items-center gap-1 text-stone-300">
+            <span className="text-xs">Goal: {p.target_weight} kg</span>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
         </div>
       </div>
     </div>
