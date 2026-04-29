@@ -1,8 +1,9 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLogStore }  from '../store/logStore';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
+import { getMyProfile } from '../api/logs';
 import {
   today, formatDate,
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
@@ -674,6 +675,44 @@ export default function DailyLog() {
     }).catch(() => {});
   }, []);
 
+  // Fetch coach notes once on mount
+  const [coachNotes, setCoachNotes] = useState([]);
+  useEffect(() => {
+    getMyProfile().then(({ data }) => {
+      if (data?.coach_notes?.length) setCoachNotes(data.coach_notes);
+    }).catch(() => {});
+  }, []);
+
+  // Milestone celebration — shown after save completes
+  const [milestone, setMilestone] = useState(null); // { icon, title, body }
+  const prevSaved = useRef(false);
+  useEffect(() => {
+    if (!prevSaved.current && saved && date === today()) {
+      // ── Streak milestone ──────────────────────────────────────────────────
+      const STREAK_KEY = 'fitlife_streak';
+      const stored = (() => { try { return JSON.parse(localStorage.getItem(STREAK_KEY) || '{}'); } catch { return {}; } })();
+      const yStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; })();
+      const streak = stored.lastDate === yStr ? (stored.count || 0) + 1 : 1;
+      localStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: today(), count: streak }));
+
+      // ── Weight milestone ──────────────────────────────────────────────────
+      const startW   = parseFloat(protocol?.start_weight);
+      const currentW = parseFloat(log.weight);
+      const lostKg   = startW && currentW ? +(startW - currentW).toFixed(1) : null;
+      // Find the nearest completed whole-kg milestone (1, 2, 3…)
+      const kgMilestone = lostKg != null && lostKg > 0 ? Math.floor(lostKg) : 0;
+      const prevStored  = stored.lastKgMilestone || 0;
+
+      if (kgMilestone > prevStored && kgMilestone >= 1) {
+        localStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: today(), count: streak, lastKgMilestone: kgMilestone }));
+        setMilestone({ icon: '🏆', title: `${kgMilestone} kg lost!`, body: `You've shed ${kgMilestone} kg since you started. That's real progress — keep going!` });
+      } else if (streak === 7 || streak === 14 || streak === 21 || streak === 30) {
+        setMilestone({ icon: '🔥', title: `${streak}-day streak!`, body: `${streak} days logged in a row. You're building an unstoppable habit!` });
+      }
+    }
+    prevSaved.current = saved;
+  }, [saved]);
+
   const compliance = calcCompliance(log, activeActivities, activeACV, activeSupplements);
   const actDone    = activeActivities.filter(a => log.activities?.[a.id]).length;
   const acvDone    = activeACV.filter(a => log.acv?.[a.id]).length;
@@ -789,6 +828,47 @@ export default function DailyLog() {
           </div>
         ) : (
           <>
+            {/* New member welcome card — shown when coach hasn't set a protocol yet */}
+            {!protocol && (
+              <Card>
+                <div className="text-center py-4">
+                  <div className="text-4xl mb-3">👋</div>
+                  <h2 className="font-bold text-stone-800 text-base mb-1">Welcome to FitLife!</h2>
+                  <p className="text-sm text-stone-500 leading-relaxed">
+                    Your coach will set up your personalised protocol shortly — activities, supplements, macros, and water target will all appear here.
+                  </p>
+                  <p className="text-xs text-stone-400 mt-3">
+                    You can already start logging your weight, food, and water below.
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            {/* Coach notes visible to member — flagged ones show as "Action needed" */}
+            {coachNotes.length > 0 && (
+              <Card>
+                <SectionTitle icon="💬">Message from your coach</SectionTitle>
+                <div className="space-y-2 mt-2">
+                  {coachNotes.slice(0, 3).map(n => (
+                    <div key={n.id} className={`rounded-2xl px-4 py-3 border ${
+                      n.flagged ? 'bg-amber-50 border-amber-200' : 'bg-stone-50 border-stone-100'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {n.flagged && (
+                          <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                            ⚠ Action needed
+                          </span>
+                        )}
+                        <span className="text-xs text-stone-400">
+                          {n.monitor_name} · {new Date(n.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </span>
+                      </div>
+                      <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{n.note}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
             {protocol?.fasting && <FastingBar fasting={protocol.fasting} />}
 
             {protocol?.macros && (
@@ -976,6 +1056,23 @@ export default function DailyLog() {
       </div>
 
       <InstallPrompt />
+
+      {/* Milestone celebration overlay */}
+      {milestone && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
+          onClick={() => setMilestone(null)}>
+          <div className="bg-white rounded-3xl p-8 max-w-xs w-full text-center shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="text-6xl mb-3">{milestone.icon}</div>
+            <h2 className="text-xl font-bold text-stone-800 mb-2">{milestone.title}</h2>
+            <p className="text-sm text-stone-500 leading-relaxed mb-6">{milestone.body}</p>
+            <button onClick={() => setMilestone(null)}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-colors active:scale-95">
+              Let's keep going! 💪
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

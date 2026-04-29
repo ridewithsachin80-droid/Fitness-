@@ -36,6 +36,34 @@ const setRefreshCookie = (res, token) => {
   });
 };
 
+// ── PIN login rate limiter ──────────────────────────────────────────────────
+// Simple in-memory store: { ip -> { count, resetAt } }
+// Limits to 10 attempts per IP per 15-minute window.
+// On success the counter resets so legitimate users aren't penalised.
+const _pinAttempts = new Map();
+const PIN_MAX      = 10;
+const PIN_WINDOW   = 15 * 60 * 1000; // 15 minutes
+
+function checkPinRateLimit(ip) {
+  const now    = Date.now();
+  const record = _pinAttempts.get(ip);
+  if (record && now < record.resetAt) {
+    if (record.count >= PIN_MAX) return false; // blocked
+    record.count++;
+  } else {
+    _pinAttempts.set(ip, { count: 1, resetAt: now + PIN_WINDOW });
+  }
+  return true; // allowed
+}
+
+// Periodically prune expired entries so the map doesn't grow forever
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, r] of _pinAttempts) {
+    if (now >= r.resetAt) _pinAttempts.delete(ip);
+  }
+}, 5 * 60 * 1000);
+
 // ── POST /api/auth/pin-login ────────────────────────────────────────────────
 // Patient: phone number + PIN login (replaces OTP)
 router.post('/pin-login', async (req, res) => {
@@ -43,6 +71,14 @@ router.post('/pin-login', async (req, res) => {
 
   if (!phone || !pin) {
     return res.status(400).json({ error: 'Phone and PIN are required' });
+  }
+
+  // Rate-limit by IP before touching the DB
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  if (!checkPinRateLimit(ip)) {
+    return res.status(429).json({
+      error: 'Too many login attempts. Please wait 15 minutes and try again.',
+    });
   }
 
   try {
@@ -60,6 +96,9 @@ router.post('/pin-login', async (req, res) => {
     if (!isValid) {
       return res.status(401).json({ error: 'Incorrect PIN. Contact your monitor to reset.' });
     }
+
+    // Successful login — clear the rate-limit counter for this IP
+    _pinAttempts.delete(ip);
 
     const { accessToken, refreshToken } = signTokens(user);
     setRefreshCookie(res, refreshToken);

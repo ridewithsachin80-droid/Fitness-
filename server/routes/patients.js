@@ -61,7 +61,7 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
 // MUST be registered BEFORE /:id to prevent "me" being treated as an id.
 router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
   try {
-    const [profileResult, labsResult] = await Promise.all([
+    const [profileResult, labsResult, notesResult] = await Promise.all([
       pool.query(
         `SELECT
            u.id, u.name, u.phone, u.created_at,
@@ -86,6 +86,17 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
         `SELECT * FROM lab_values WHERE patient_id = $1 ORDER BY test_date DESC`,
         [req.user.id]
       ),
+      // Coach notes visible to member — flagged notes first, then newest
+      pool.query(
+        `SELECT mn.id, mn.note_date, mn.note, mn.flagged,
+                u.name AS monitor_name
+         FROM monitor_notes mn
+         JOIN users u ON u.id = mn.monitor_id
+         WHERE mn.patient_id = $1
+         ORDER BY mn.flagged DESC, mn.note_date DESC, mn.created_at DESC
+         LIMIT 20`,
+        [req.user.id]
+      ),
     ]);
 
     if (!profileResult.rows.length) return res.status(404).json({ error: 'Profile not found' });
@@ -108,6 +119,7 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       total_logs:      parseInt(p.total_logs) || 0,
       avg_compliance:  p.avg_compliance_30 ? Math.round(parseFloat(p.avg_compliance_30)) : null,
       labs:            labsResult.rows,
+      coach_notes:     notesResult.rows,
       fasting: p.fasting_start ? {
         start: p.fasting_start,
         end:   p.fasting_end,

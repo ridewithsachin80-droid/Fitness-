@@ -505,7 +505,8 @@ export default function Monitor() {
     .reverse()
     .map(l => ({ date: formatDate(l.log_date), weight: parseFloat(l.weight_kg) }));
 
-  // Sprint 6: 30-day compliance bar chart
+  // Sprint 6: 30-day compliance bar chart — attach full log so bars are tappable
+  const [selectedLog, setSelectedLog] = useState(null);
   const complianceData = [...logs]
     .slice(0, 30)
     .reverse()
@@ -514,6 +515,7 @@ export default function Monitor() {
       return {
         date:  `${d.getDate()}/${d.getMonth()+1}`,
         score: l.compliance_pct || 0,
+        log:   l,           // carry the full log for drill-down
       };
     });
   const avg30 = complianceData.length
@@ -620,7 +622,7 @@ export default function Monitor() {
           </Card>
         )}
 
-        {/* Sprint 6: 30-day compliance chart */}
+        {/* Sprint 6: 30-day compliance chart — tap a bar to drill into that day */}
         {complianceData.length > 1 && (
           <Card>
             <div className="flex items-center justify-between mb-2">
@@ -631,7 +633,8 @@ export default function Monitor() {
               }`}>avg {avg30}%</span>
             </div>
             <ResponsiveContainer width="100%" height={100}>
-              <BarChart data={complianceData} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
+              <BarChart data={complianceData} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}
+                style={{ cursor: 'pointer' }}>
                 <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false}
                   interval={Math.floor(complianceData.length / 5)} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#a8a29e' }} tickLine={false} axisLine={false} />
@@ -640,14 +643,81 @@ export default function Monitor() {
                     ? <div className="bg-white border border-stone-100 rounded-xl px-2 py-1 shadow-sm text-xs">
                         <span className="font-bold text-emerald-600">{payload[0].value}%</span>
                         <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
+                        <span className="text-stone-300 ml-1">· tap to view</span>
                       </div>
                     : null}
                 />
-                <Bar dataKey="score" fill="#10b981" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="score" fill="#10b981" radius={[2, 2, 0, 0]}
+                  onClick={(data) => data?.log && setSelectedLog(data.log)} />
               </BarChart>
             </ResponsiveContainer>
+            <p className="text-xs text-stone-400 mt-1 text-center">Tap any bar to see what they logged that day</p>
           </Card>
         )}
+
+        {/* Drill-down modal — log detail for the tapped bar */}
+        {selectedLog && (() => {
+          const fl    = selectedLog;
+          const dateLabel = new Date(fl.log_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+          const foodItems = fl.food_items || [];
+          const totalKcal = foodItems.reduce((s, i) => s + (calcN(i)?.cal || 0), 0);
+          return (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2"
+              onClick={() => setSelectedLog(null)}>
+              <div className="bg-white rounded-3xl w-full max-w-md max-h-[82vh] flex flex-col"
+                onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 flex-shrink-0">
+                  <div>
+                    <h3 className="font-bold text-stone-800">{dateLabel}</h3>
+                    <div className="flex gap-3 mt-1">
+                      {fl.weight_kg && <span className="text-xs font-semibold text-emerald-600">⚖ {fl.weight_kg} kg</span>}
+                      {fl.compliance_pct != null && (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          fl.compliance_pct >= 75 ? 'bg-emerald-100 text-emerald-700' :
+                          fl.compliance_pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'
+                        }`}>{fl.compliance_pct}%</span>
+                      )}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedLog(null)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+                </div>
+                <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+                  {foodItems.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                        🥗 Food {totalKcal > 0 && <span className="font-normal text-orange-500 normal-case">· {totalKcal} kcal</span>}
+                      </p>
+                      <div className="space-y-1">
+                        {foodItems.map((item, i) => {
+                          const n = calcN(item);
+                          return (
+                            <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-stone-50 last:border-0">
+                              <div>
+                                <span className="text-stone-700 font-medium">{item.name}</span>
+                                <span className="text-xs text-stone-400 ml-1">{item.grams}g{item.meal ? ` · ${item.meal}` : ''}</span>
+                              </div>
+                              {n && <span className="text-xs font-bold text-orange-500">{n.cal} kcal</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {fl.water_ml > 0 && (
+                    <p className="text-sm text-blue-600 font-semibold">💧 {(fl.water_ml / 1000).toFixed(1)} L water</p>
+                  )}
+                  {fl.notes && (
+                    <div>
+                      <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">📝 Notes</p>
+                      <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{fl.notes}</p>
+                    </div>
+                  )}
+                  {!foodItems.length && !fl.weight_kg && <p className="text-sm text-stone-400 italic text-center py-4">No data recorded this day.</p>}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Sprint 6: Lab value trend charts per test */}
         {Object.entries(labByTest).map(([testName, values]) => values.length < 2 ? null : (
@@ -726,7 +796,7 @@ export default function Monitor() {
             <p className="text-xs text-stone-300 italic text-center py-4">No clinical notes yet</p>
           ) : (
             <div className="space-y-2">
-              {notes.map(n => (
+              {[...notes].sort((a, b) => (b.flagged ? 1 : 0) - (a.flagged ? 1 : 0)).map(n => (
                 <div key={n.id}
                   className={`rounded-2xl px-4 py-3 border ${n.flagged
                     ? 'bg-red-50 border-red-200'

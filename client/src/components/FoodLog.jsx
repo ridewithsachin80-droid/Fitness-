@@ -16,7 +16,31 @@ import api from '../api/client';
 import { getNutrition } from '../constants';
 import { getRecentFoods } from '../api/logs';
 
-const MEALS = ['Meal 1', 'Meal 2', 'Meal 3'];
+// Typical portion sizes for common Indian / portioned foods.
+// Used to pre-fill grams when a food is selected for the first time.
+const TYPICAL_GRAMS = {
+  // Eggs / dairy
+  egg: 55, 'boiled egg': 55, 'fried egg': 55, 'poached egg': 55,
+  curd: 100, yogurt: 100, paneer: 100,
+  // Bread / rotis
+  chapati: 30, roti: 30, phulka: 25, paratha: 60, puri: 30,
+  'bread slice': 25, 'brown bread': 25, idli: 40, dosa: 70, uttapam: 80,
+  // Fruits (whole)
+  banana: 120, apple: 150, orange: 130, mango: 200,
+  // Nuts / seeds (small servings)
+  almonds: 28, cashews: 28, walnuts: 28, peanuts: 28,
+};
+
+/** Return a smart default gram value for the given food name (lowercased search) */
+function smartGrams(foodName) {
+  const lc = (foodName || '').toLowerCase();
+  for (const [key, g] of Object.entries(TYPICAL_GRAMS)) {
+    if (lc.includes(key)) return g;
+  }
+  return null; // fall back to leaving the field empty
+}
+
+
 
 function calcMacros(item) {
   if (item.per_100g) {
@@ -86,8 +110,6 @@ export default function FoodLog({ items = [], onChange }) {
 
   // ── Pick suggestion ─────────────────────────────────────────────────────────
   const pickSuggestion = (food) => {
-    // FIX: cancel any pending debounced search so it doesn't re-open the
-    // dropdown 300ms later and block the weight field / Add button
     clearTimeout(debounceRef.current);
 
     setSelected(food);
@@ -96,7 +118,10 @@ export default function FoodLog({ items = [], onChange }) {
     setShowSuggestions(false);
     setLookupStatus('');
 
-    // Move focus to grams field so user can immediately type the weight
+    // Pre-fill a sensible gram default so the user just taps Add for portioned foods
+    const defaultG = smartGrams(food.name);
+    if (defaultG) setGrams(String(defaultG));
+
     setTimeout(() => gramsRef.current?.focus(), 50);
   };
 
@@ -240,6 +265,26 @@ export default function FoodLog({ items = [], onChange }) {
           </div>
         );
       })}
+
+      {/* Day total — shown when at least one item is logged across any meal */}
+      {items.length > 0 && (() => {
+        const dayTotal = items.reduce((acc, item) => {
+          const n = calcMacros(item);
+          if (!n) return acc;
+          return { cal: acc.cal + (n.cal || 0), pro: acc.pro + (n.pro || 0), carb: acc.carb + (n.carb || 0), fat: acc.fat + (n.fat || 0) };
+        }, { cal: 0, pro: 0, carb: 0, fat: 0 });
+        return (
+          <div className="flex items-center justify-between bg-stone-100 rounded-2xl px-4 py-2.5">
+            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Day total</span>
+            <div className="flex gap-3">
+              <span className="text-xs font-bold text-orange-500">{dayTotal.cal} kcal</span>
+              <span className="text-xs text-blue-500">P {dayTotal.pro.toFixed(1)}g</span>
+              <span className="text-xs text-amber-500">C {dayTotal.carb.toFixed(1)}g</span>
+              <span className="text-xs text-purple-500">F {dayTotal.fat.toFixed(1)}g</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Add food form */}
       {!showForm ? (
