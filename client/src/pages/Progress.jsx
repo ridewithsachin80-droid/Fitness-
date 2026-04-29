@@ -13,8 +13,7 @@ import {
   CartesianGrid, ReferenceLine, Legend,
 } from 'recharts';
 import { useAuthStore }  from '../store/authStore';
-import { getLogRange }   from '../api/logs';
-import api               from '../api/client';
+import { getLogRange, getMyProfile }   from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
 
@@ -240,7 +239,7 @@ export default function Progress() {
 
     Promise.all([
       getLogRange(from, to),
-      api.get('/patients/me').catch(() => ({ data: null })),
+      getMyProfile().catch(() => ({ data: null })),
     ])
       .then(([logsRes, profileRes]) => {
         setLogs(logsRes.data || []);

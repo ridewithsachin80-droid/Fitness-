@@ -419,7 +419,10 @@ router.put('/members/:id', async (req, res) => {
        WHERE u.id=$1`,
       [id]
     );
-    res.json(result.rows[0]);
+    const updated = result.rows[0];
+    audit(req.user, 'member_updated', updated.id, updated.name,
+      `Updated profile/protocol for member ${updated.name}`);
+    res.json(updated);
   } catch (err) {
     await client.query('ROLLBACK');
     if (err.code === '23505') return res.status(409).json({ error: 'Phone number already in use' });

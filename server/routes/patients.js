@@ -56,6 +56,78 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
 // ── GET /api/patients/:id ──────────────────────────────────────────────────────
 // Monitor/admin: full patient detail — profile + last 30 logs + all lab values.
 // All three queries run in parallel for speed.
+// ── GET /api/patients/me ──────────────────────────────────────────────────────
+// Patient-facing: own full profile + lab values for Progress page.
+// MUST be registered BEFORE /:id to prevent "me" being treated as an id.
+router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const [profileResult, labsResult] = await Promise.all([
+      pool.query(
+        `SELECT
+           u.id, u.name, u.phone, u.created_at,
+           pp.dob, pp.height_cm, pp.start_weight, pp.target_weight,
+           pp.conditions, pp.diet_notes, pp.water_target,
+           pp.fasting_start, pp.fasting_end, pp.fasting_label, pp.fasting_note,
+           pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
+           (SELECT u2.name FROM monitor_patients mp
+            JOIN users u2 ON u2.id = mp.monitor_id
+            WHERE mp.patient_id = u.id AND mp.active = true LIMIT 1) AS monitor_name,
+           (SELECT COUNT(*) FROM daily_logs WHERE patient_id = u.id) AS total_logs,
+           (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS current_weight,
+           (SELECT AVG(compliance_pct) FROM daily_logs
+            WHERE patient_id = u.id AND log_date >= NOW() - INTERVAL '30 days') AS avg_compliance_30
+         FROM users u
+         JOIN patient_profiles pp ON pp.user_id = u.id
+         WHERE u.id = $1`,
+        [req.user.id]
+      ),
+      // Bug fix: also return labs so Progress.jsx lab highlights work
+      pool.query(
+        `SELECT * FROM lab_values WHERE patient_id = $1 ORDER BY test_date DESC`,
+        [req.user.id]
+      ),
+    ]);
+
+    if (!profileResult.rows.length) return res.status(404).json({ error: 'Profile not found' });
+
+    const p = profileResult.rows[0];
+    res.json({
+      id:              p.id,
+      name:            p.name,
+      phone:           p.phone,
+      member_since:    p.created_at,
+      dob:             p.dob,
+      height_cm:       p.height_cm,
+      start_weight:    p.start_weight,
+      target_weight:   p.target_weight,
+      current_weight:  p.current_weight,
+      conditions:      p.conditions || [],
+      diet_notes:      p.diet_notes || null,
+      water_target:    p.water_target || 3000,
+      monitor_name:    p.monitor_name || null,
+      total_logs:      parseInt(p.total_logs) || 0,
+      avg_compliance:  p.avg_compliance_30 ? Math.round(parseFloat(p.avg_compliance_30)) : null,
+      labs:            labsResult.rows,
+      fasting: p.fasting_start ? {
+        start: p.fasting_start,
+        end:   p.fasting_end,
+        label: p.fasting_label,
+        note:  p.fasting_note,
+      } : null,
+      macros: p.macro_kcal ? {
+        kcal:  p.macro_kcal,
+        pro:   p.macro_pro,
+        carb:  p.macro_carb,
+        fat:   p.macro_fat,
+        phase: p.macro_phase,
+      } : null,
+    });
+  } catch (err) {
+    console.error('GET /patients/me error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
 router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -301,66 +373,6 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), async (req, res
 
 // ── GET /api/patients/me ──────────────────────────────────────────────────────
 // Sprint 10: Patient-facing — returns the logged-in member's own full profile.
-router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT
-         u.id, u.name, u.phone, u.created_at,
-         pp.dob, pp.height_cm, pp.start_weight, pp.target_weight,
-         pp.conditions, pp.diet_notes, pp.water_target,
-         pp.fasting_start, pp.fasting_end, pp.fasting_label, pp.fasting_note,
-         pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
-         (SELECT u2.name FROM monitor_patients mp
-          JOIN users u2 ON u2.id = mp.monitor_id
-          WHERE mp.patient_id = u.id AND mp.active = true LIMIT 1) AS monitor_name,
-         (SELECT COUNT(*) FROM daily_logs WHERE patient_id = u.id) AS total_logs,
-         (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS current_weight,
-         (SELECT AVG(compliance_pct) FROM daily_logs
-          WHERE patient_id = u.id AND log_date >= NOW() - INTERVAL '30 days') AS avg_compliance_30
-       FROM users u
-       JOIN patient_profiles pp ON pp.user_id = u.id
-       WHERE u.id = $1`,
-      [req.user.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Profile not found' });
-
-    const p = rows[0];
-    res.json({
-      id:              p.id,
-      name:            p.name,
-      phone:           p.phone,
-      member_since:    p.created_at,
-      dob:             p.dob,
-      height_cm:       p.height_cm,
-      start_weight:    p.start_weight,
-      target_weight:   p.target_weight,
-      current_weight:  p.current_weight,
-      conditions:      p.conditions || [],
-      diet_notes:      p.diet_notes || null,
-      water_target:    p.water_target || 3000,
-      monitor_name:    p.monitor_name || null,
-      total_logs:      parseInt(p.total_logs) || 0,
-      avg_compliance:  p.avg_compliance_30 ? Math.round(parseFloat(p.avg_compliance_30)) : null,
-      fasting: p.fasting_start ? {
-        start: p.fasting_start,
-        end:   p.fasting_end,
-        label: p.fasting_label,
-        note:  p.fasting_note,
-      } : null,
-      macros: p.macro_kcal ? {
-        kcal:  p.macro_kcal,
-        pro:   p.macro_pro,
-        carb:  p.macro_carb,
-        fat:   p.macro_fat,
-        phase: p.macro_phase,
-      } : null,
-    });
-  } catch (err) {
-    console.error('GET /patients/me error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch profile' });
-  }
-});
-
 // ── PATCH /api/patients/:id/pin ───────────────────────────────────────────────
 // Monitor/admin: set or reset a member's login PIN.
 router.patch('/:id/pin', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
