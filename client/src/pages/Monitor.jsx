@@ -87,7 +87,7 @@ function WeightTooltip({ active, payload, label }) {
 // ── Add lab value modal ───────────────────────────────────────────────────────
 function AddLabModal({ patientId, onClose, onAdded }) {
   const [form, setForm] = useState({
-    test_date: new Date().toISOString().split('T')[0],
+    test_date: (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })(),
     test_name: '', value: '', unit: '', ref_min: '', ref_max: '',
   });
   const [saving, setSaving] = useState(false);
@@ -222,7 +222,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
 
 // ── Add Note modal (Sprint 9) ─────────────────────────────────────────────────
 function AddNoteModal({ patientId, onClose, onAdded }) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
   const [form,    setForm]    = useState({ note_date: today, note: '', flagged: false });
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
@@ -289,7 +289,7 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
 
 // ── Weight Entry modal (Sprint 11) ───────────────────────────────────────────
 function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
   const [date,    setDate]    = useState(todayStr);
   const [weight,  setWeight]  = useState('');
   const [saving,  setSaving]  = useState(false);
@@ -501,6 +501,9 @@ export default function Monitor() {
 
   const { profile, logs, labs, notes = [] } = data;
 
+  // IST-aware "today" for chip labels and comparisons
+  const todayIST = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
+
   // Date-scoped log viewer — default to most recent log date
   const sortedLogs   = [...logs].sort((a, b) => b.log_date.localeCompare(a.log_date));
   const activeDate   = viewDate || sortedLogs[0]?.log_date || null;
@@ -543,7 +546,7 @@ export default function Monitor() {
   return (
     <div className="min-h-screen bg-[#0b0b0e]">
       {/* Header */}
-      <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <BackButton onClick={() => navigate('/monitor')} label="All patients" />
           <div className="mt-3 flex items-start justify-between">
@@ -849,7 +852,7 @@ export default function Monitor() {
                 style={{ scrollbarWidth: 'none' }}>
                 {sortedLogs.map(log => {
                   const d = new Date(log.log_date + 'T00:00:00');
-                  const isToday = log.log_date === new Date().toISOString().split('T')[0];
+                  const isToday = log.log_date === todayIST;
                   const isActive = log.log_date === activeDate;
                   const pct = log.compliance_pct || 0;
                   const dotColor = pct >= 75 ? '#7c5cfc' : pct >= 50 ? '#fbbf24' : '#f87171';

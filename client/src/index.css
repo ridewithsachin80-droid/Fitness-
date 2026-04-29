@@ -90,12 +90,12 @@ body {
 .border-purple-100  { border-color: rgba(192,132,252,0.18); }
 
 /* Header gradients */
-.from-emerald-700 { --tw-gradient-from: #1a1040 var(--tw-gradient-from-position); }
-.to-emerald-900   { --tw-gradient-to:   #08052a var(--tw-gradient-to-position); }
-.from-stone-800   { --tw-gradient-from: #0b0b0e var(--tw-gradient-from-position); }
+.from-emerald-700 { --tw-gradient-from: #0d0b18 var(--tw-gradient-from-position); }
+.to-emerald-900   { --tw-gradient-to:   #07060f var(--tw-gradient-to-position); }
+.from-stone-800   { --tw-gradient-from: #0d0b18 var(--tw-gradient-from-position); }
 .to-stone-900     { --tw-gradient-to:   #060609 var(--tw-gradient-to-position); }
-.from-blue-700    { --tw-gradient-from: #071029 var(--tw-gradient-from-position); }
-.to-blue-900      { --tw-gradient-to:   #030614 var(--tw-gradient-to-position); }
+.from-blue-700    { --tw-gradient-from: #0d0b18 var(--tw-gradient-from-position); }
+.to-blue-900      { --tw-gradient-to:   #07060f var(--tw-gradient-to-position); }
 
 /* White overlay utilities (used in headers) */
 .bg-white\/10 { background-color: rgba(255,255,255,0.06) !important; }

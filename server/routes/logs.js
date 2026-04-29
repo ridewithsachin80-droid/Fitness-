@@ -3,6 +3,18 @@ const pool = require('../db/pool');
 const authMW = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 
+// ── IST date helper ──────────────────────────────────────────────────────────
+// Railway runs in UTC. India is UTC+5:30. Always use IST for business-date
+// comparisons so members aren't rejected for "future date" between midnight
+// and 5:30 AM IST.
+function getISTDate() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().split('T')[0];
+}
+
+
+
 // ── Compliance calculator ────────────────────────────────────────────────────
 // Total possible: 6 activities + 3 ACV + 7 supplements = 16
 const TOTAL_CHECKABLE = 16;
@@ -146,7 +158,7 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     }
 
     // Block future dates
-    const today = new Date().toISOString().split('T')[0];
+    const today = getISTDate();  // IST date — avoids rejecting logs saved between midnight-5:30 AM IST
     if (date > today) {
       return res.status(400).json({ error: 'Cannot log future dates' });
     }

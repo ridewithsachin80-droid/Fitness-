@@ -338,7 +338,7 @@ export default function Progress() {
     <div className="min-h-screen bg-[#0b0b0e] font-sans">
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#071029] to-[#030614] text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <button onClick={() => navigate('/')}
             className="text-[#4e4e5c] text-sm mb-3 hover:text-[#8e8e9a] transition-colors">

@@ -743,7 +743,7 @@ export default function DailyLog() {
       <OfflineBanner />
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#1e1258] to-[#08052a] text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>

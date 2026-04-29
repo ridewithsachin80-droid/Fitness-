@@ -1,4 +1,12 @@
 const cron = require('node-cron');
+// ── IST date helper ─────────────────────────────────────────────────────────
+function getISTDate() {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().split('T')[0];
+}
+
+
 const pool = require('../db/pool');
 const pushService = require('./pushService');
 
@@ -13,7 +21,7 @@ async function getAllPatientIds() {
 
 /** Returns patient IDs who have NOT logged anything today */
 async function getPatientsNotLoggedToday() {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getISTDate();
   const result = await pool.query(
     `SELECT id FROM users
      WHERE role = 'patient' AND active = true
@@ -30,7 +38,7 @@ async function getPatientsNotLoggedToday() {
  * Only patients who haven't yet reached their target today are returned.
  */
 async function getPatientsNeedingWaterNudge() {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getISTDate();
   const result = await pool.query(
     `SELECT u.id,
             COALESCE(pp.water_target, 3000) AS water_target,
@@ -108,7 +116,7 @@ function start() {
 
   // 8:00 PM — Alert monitor if patient hasn't logged today
   cron.schedule('0 20 * * *', async () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getISTDate();
     const result = await pool.query(
       `SELECT u.id, u.name, mp.monitor_id
        FROM users u
