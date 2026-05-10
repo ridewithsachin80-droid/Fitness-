@@ -15,6 +15,7 @@ const patientRoutes = require('./routes/patients');
 const notifRoutes   = require('./routes/notifications');
 const adminRoutes   = require('./routes/admin');
 const foodsRoutes   = require('./routes/foods');
+const aiFoodsRoutes = require('./routes/aiFoods');  // AI food identifier
 
 // ── Service imports ───────────────────────────────────────────────────────────
 const cronService = require('./services/cronService');
@@ -242,6 +243,7 @@ app.use('/api/logs',          logRoutes);
 app.use('/api/patients',      patientRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/admin',         adminRoutes);
+app.use('/api/foods',         aiFoodsRoutes); // must be before foodsRoutes
 app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────

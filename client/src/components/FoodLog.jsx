@@ -14,6 +14,7 @@ import api from '../api/client';
 import { getNutrition } from '../constants';
 import { getRecentFoods } from '../api/logs';
 import { useSettingsStore, haptic } from '../store/settingsStore';
+import AIFoodSearch from './AIFoodSearch';
 
 // ── Extended portion map ──────────────────────────────────────────────────────
 const TYPICAL_GRAMS = {
@@ -157,6 +158,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const [lookupStatus, setLookupStatus] = useState('');
   const [recentFoods, setRecentFoods] = useState([]);
   const [listening, setListening]     = useState(false);
+  const [showAI, setShowAI]           = useState(false);
 
   useEffect(() => {
     getRecentFoods()
@@ -291,6 +293,18 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
     setGrams(String(food.last_g || 100));
     setSuggestions([]); setShowSuggestions(false); setLookupStatus('');
     haptic(15);
+    setTimeout(() => gramsRef.current?.focus(), 50);
+  };
+
+  const handleAISelect = (food) => {
+    setSelected(food);
+    setQuery(food.name);
+    setGrams(String(food.grams || smartGrams(food.name) || 100));
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setShowAI(false);
+    setLookupStatus('found');
+    haptic(25);
     setTimeout(() => gramsRef.current?.focus(), 50);
   };
 
@@ -514,15 +528,40 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
             )}
 
             {!searching && query.length >= 2 && suggestions.length === 0 && !showSuggestions && !selected && (
-              <div className="mt-1.5">
-                {lookupStatus === 'loading'   && <p className="text-xs text-[#6a6a78] px-1">Searching Open Food Facts…</p>}
-                {lookupStatus === 'notfound'  && <p className="text-xs text-red-400 px-1">Not found — you can still add it manually</p>}
-                {lookupStatus === 'found'     && <p className="text-xs text-[#8b5cf6] px-1 font-semibold">✓ Found on Open Food Facts</p>}
-                {lookupStatus === '' && (
-                  <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold px-1 hover:underline">
-                    🔍 Not in local DB — search Open Food Facts
-                  </button>
+              <div className="mt-1.5 space-y-1">
+                {lookupStatus === 'loading'  && <p className="text-xs text-[#6a6a78] px-1">Searching Open Food Facts…</p>}
+                {lookupStatus === 'found'    && <p className="text-xs text-[#8b5cf6] px-1 font-semibold">✓ Found on Open Food Facts</p>}
+                {lookupStatus === 'notfound' && (
+                  <div className="flex flex-col gap-1.5 px-1">
+                    <p className="text-xs text-red-400">Not found on Open Food Facts either</p>
+                    <button onClick={() => setShowAI(true)}
+                      className="text-xs text-left font-semibold text-[#00D49F] hover:underline">
+                      ✨ Ask AI to identify "{query}" with full nutrition
+                    </button>
+                  </div>
                 )}
+                {lookupStatus === '' && (
+                  <div className="flex flex-col gap-1.5 px-1">
+                    <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold hover:underline">
+                      🔍 Not in local DB — search Open Food Facts
+                    </button>
+                    <button onClick={() => setShowAI(true)}
+                      className="text-xs text-[#00D49F] font-semibold hover:underline">
+                      ✨ Identify with AI — get full macros + micros
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showAI && (
+              <div className="mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-[#00D49F]">✨ AI Food Identifier</span>
+                  <button onClick={() => setShowAI(false)}
+                    className="text-xs text-[#6a6a78] hover:text-[#d8d8de]">✕ close</button>
+                </div>
+                <AIFoodSearch mealSlot={meal} onSelect={handleAISelect} t={null} />
               </div>
             )}
           </div>
