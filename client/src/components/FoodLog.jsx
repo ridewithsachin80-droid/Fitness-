@@ -297,15 +297,25 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const handleAISelect = (food) => {
-    setSelected(food);
-    setQuery(food.name);
-    setGrams(String(food.grams || smartGrams(food.name) || 100));
+    // food.grams is the serving size the user chose inside AIFoodSearch
+    const chosenGrams = food.grams || smartGrams(food.name) || 100;
+    // Add directly to log — no need to fill the grams box, AI already asked
+    onChange([...items, {
+      id: Date.now(),
+      name: food.name,
+      grams: chosenGrams,
+      meal,
+      food_id: food.id || null,
+      per_100g: food.per_100g || null,
+    }]);
+    haptic(25);
+    setShowAI(false);
+    setQuery('');
+    setGrams('');
+    setSelected(null);
+    setLookupStatus('');
     setSuggestions([]);
     setShowSuggestions(false);
-    setShowAI(false);
-    setLookupStatus('found');
-    haptic(25);
-    setTimeout(() => gramsRef.current?.focus(), 50);
   };
 
   return (
@@ -561,7 +571,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                   <button onClick={() => setShowAI(false)}
                     className="text-xs text-[#6a6a78] hover:text-[#d8d8de]">✕ close</button>
                 </div>
-                <AIFoodSearch mealSlot={meal} onSelect={handleAISelect} t={null} />
+                <AIFoodSearch initialQuery={query} mealSlot={meal} onSelect={handleAISelect} t={null} />
               </div>
             )}
           </div>
