@@ -297,18 +297,23 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const handleAISelect = (food) => {
-    // food.grams is the serving size the user chose inside AIFoodSearch
+    // food arrives as { ...aiFood, name: userTypedQuery, per_100g: {...}, grams: N }
+    // We call onChange directly — never relies on volatile `selected` state
     const chosenGrams = food.grams || smartGrams(food.name) || 100;
-    // Add directly to log — no need to fill the grams box, AI already asked
+    const per100g     = food.per_100g && (food.per_100g.calories || 0) > 0
+      ? food.per_100g
+      : null;  // reject empty AI response rather than logging 0 kcal
+
     onChange([...items, {
-      id: Date.now(),
-      name: food.name,
-      grams: chosenGrams,
+      id:      Date.now(),
+      name:    food.name,      // user's typed name (e.g. "Ragi mude")
+      grams:   chosenGrams,
       meal,
       food_id: food.id || null,
-      per_100g: food.per_100g || null,
+      per_100g: per100g,       // AI nutrition — explicitly extracted, never lost
     }]);
     haptic(25);
+    // Reset all search state cleanly
     setShowAI(false);
     setQuery('');
     setGrams('');
@@ -316,6 +321,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
     setLookupStatus('');
     setSuggestions([]);
     setShowSuggestions(false);
+    clearTimeout(debounceRef.current);
   };
 
   return (
@@ -571,7 +577,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                   <button onClick={() => setShowAI(false)}
                     className="text-xs text-[#6a6a78] hover:text-[#d8d8de]">✕ close</button>
                 </div>
-                <AIFoodSearch initialQuery={query} mealSlot={meal} onSelect={handleAISelect} t={null} />
+                <AIFoodSearch key={query} initialQuery={query} mealSlot={meal} onSelect={handleAISelect} t={null} />
               </div>
             )}
           </div>
