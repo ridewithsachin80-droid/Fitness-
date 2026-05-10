@@ -198,13 +198,23 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
 
   // ── Search ──────────────────────────────────────────────────────────────────
   const searchFoods = useCallback(async (q) => {
-    if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); setShowAI(false); return; }
     setSearching(true);
     try {
       const { data } = await api.get('/foods/search', { params: { q, limit: 8 } });
       setSuggestions(data);
-      setShowSuggestions(true);
-    } catch { setSuggestions([]); }
+      if (data.length > 0) {
+        setShowSuggestions(true);
+        setShowAI(false);
+      } else {
+        // Nothing in DB — auto-open AI identifier, no button click needed
+        setShowSuggestions(false);
+        setShowAI(true);
+      }
+    } catch {
+      setSuggestions([]);
+      setShowAI(true); // also auto-open on network error
+    }
     finally { setSearching(false); }
   }, []);
 
@@ -543,29 +553,15 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               </div>
             )}
 
-            {!searching && query.length >= 2 && suggestions.length === 0 && !showSuggestions && !selected && (
+            {!searching && query.length >= 2 && suggestions.length === 0 && !showSuggestions && !selected && !showAI && (
               <div className="mt-1.5 space-y-1">
                 {lookupStatus === 'loading'  && <p className="text-xs text-[#6a6a78] px-1">Searching Open Food Facts…</p>}
                 {lookupStatus === 'found'    && <p className="text-xs text-[#8b5cf6] px-1 font-semibold">✓ Found on Open Food Facts</p>}
-                {lookupStatus === 'notfound' && (
-                  <div className="flex flex-col gap-1.5 px-1">
-                    <p className="text-xs text-red-400">Not found on Open Food Facts either</p>
-                    <button onClick={() => setShowAI(true)}
-                      className="text-xs text-left font-semibold text-[#00D49F] hover:underline">
-                      ✨ Ask AI to identify "{query}" with full nutrition
-                    </button>
-                  </div>
-                )}
+                {lookupStatus === 'notfound' && <p className="text-xs text-[#6a6a78] px-1">Not found — searching AI…</p>}
                 {lookupStatus === '' && (
-                  <div className="flex flex-col gap-1.5 px-1">
-                    <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold hover:underline">
-                      🔍 Not in local DB — search Open Food Facts
-                    </button>
-                    <button onClick={() => setShowAI(true)}
-                      className="text-xs text-[#00D49F] font-semibold hover:underline">
-                      ✨ Identify with AI — get full macros + micros
-                    </button>
-                  </div>
+                  <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold px-1 hover:underline">
+                    🔍 Not in local DB — search Open Food Facts
+                  </button>
                 )}
               </div>
             )}

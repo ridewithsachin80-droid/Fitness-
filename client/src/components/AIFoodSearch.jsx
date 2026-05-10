@@ -93,16 +93,29 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
     if (!food || adding) return;
     setAdding(true);
     try {
-      // Save to DB in background — fire and forget
-      api.post('/foods/ai-confirm', { food }).catch(() => {});
-      // Pass to parent with:
-      //   name      = what the user originally typed (e.g. "Ragi mude")
-      //   per_100g  = AI-identified nutrition data (explicit, never lost in spread)
-      //   grams     = serving size the user chose
+      // Build the aliases list: AI aliases + user's typed query
+      // This ensures "Ragi mudde" is findable next time, not just "Finger Millet Ball"
+      const existingAliases = Array.isArray(food.name_aliases) ? food.name_aliases : [];
+      const userQuery = (initialQuery || '').trim();
+      const allAliases = [
+        ...existingAliases,
+        userQuery,
+        food.name,  // also keep canonical as alias so both names are searchable
+      ].filter((v, i, arr) =>
+        v && v.trim() &&
+        arr.findIndex(x => x?.toLowerCase().trim() === v?.toLowerCase().trim()) === i
+      );
+
+      // Save to DB with user's typed name included in aliases — fire and forget
+      api.post('/foods/ai-confirm', {
+        food: { ...food, name_aliases: allAliases }
+      }).catch(() => {});
+
+      // Log it immediately in the selected meal
       onSelect?.({
         ...food,
-        name:    initialQuery || food.name,  // user's typed name, not AI canonical name
-        per_100g: food.per_100g,             // explicit — survives the spread
+        name:     userQuery || food.name,  // show user's typed name in the log
+        per_100g: food.per_100g,           // explicit — never lost
         grams,
       });
     } finally {
