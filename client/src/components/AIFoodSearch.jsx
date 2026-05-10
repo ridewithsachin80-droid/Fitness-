@@ -93,10 +93,18 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
     if (!food || adding) return;
     setAdding(true);
     try {
-      // Save to DB in background (best-effort — don't block the user)
+      // Save to DB in background — fire and forget
       api.post('/foods/ai-confirm', { food }).catch(() => {});
-      // Immediately call parent to log it in the selected meal
-      onSelect?.({ ...food, grams });
+      // Pass to parent with:
+      //   name      = what the user originally typed (e.g. "Ragi mude")
+      //   per_100g  = AI-identified nutrition data (explicit, never lost in spread)
+      //   grams     = serving size the user chose
+      onSelect?.({
+        ...food,
+        name:    initialQuery || food.name,  // user's typed name, not AI canonical name
+        per_100g: food.per_100g,             // explicit — survives the spread
+        grams,
+      });
     } finally {
       setAdding(false);
     }
