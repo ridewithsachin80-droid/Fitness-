@@ -838,9 +838,9 @@ export default function DailyLog() {
           <div className="flex items-center justify-between">
             <button
               onClick={() => {
-                const d = new Date(date + 'T00:00:00');
+                const d = new Date(date + 'T12:00:00');
                 d.setDate(d.getDate() - 1);
-                setDate(d.toISOString().split('T')[0]);
+                setDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
               }}
               style={{ minHeight: 44 }}
               className="flex items-center gap-1 text-sm font-semibold text-[#4e4e5c] px-3 py-2 rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all">
