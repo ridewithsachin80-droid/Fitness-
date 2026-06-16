@@ -24,8 +24,11 @@ const authMW  = require('../middleware/auth');
 
 // Gemini free tier: 15 req/min, 1500 req/day — plenty for food lookups
 // Get free key at: https://aistudio.google.com/apikey
-// gemini-1.5-flash: free tier = 15 RPM, 1M TPM, 1500 RPD
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+// gemini-2.0-flash: free tier = 15 RPM, 1M TPM, 1500 RPD
+// Model is read from GEMINI_MODEL env var so it can be changed without a redeploy.
+// Default: gemini-2.0-flash (current stable free-tier model as of June 2026)
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ── In-memory cache — avoids repeat Gemini calls for same food ──────────────
 // Survives for 24h, max 500 entries, then auto-clears oldest
