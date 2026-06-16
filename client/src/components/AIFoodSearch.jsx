@@ -161,11 +161,19 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
   if (status === 'error') return (
     <div style={{ ...card, textAlign: 'center', padding: 16 }}>
       <div style={{ color: '#EF4444', fontSize: 13, marginBottom: 12, fontFamily: font }}>{error}</div>
-      <button onClick={() => runAI(initialQuery)} style={{
-        padding: '8px 20px', borderRadius: r, background: accent,
-        color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13,
-        fontWeight: 700, fontFamily: font,
-      }}>Try again</button>
+      <button
+        onClick={() => { if (!rateLimited || cooldown <= 0) { setRateLimited(false); runAI(initialQuery); } }}
+        disabled={rateLimited && cooldown > 0}
+        style={{
+          padding: '8px 20px', borderRadius: r,
+          background: (rateLimited && cooldown > 0) ? '#555' : accent,
+          color: '#fff', border: 'none',
+          cursor: (rateLimited && cooldown > 0) ? 'not-allowed' : 'pointer',
+          fontSize: 13, fontWeight: 700, fontFamily: font,
+        }}
+      >
+        {rateLimited && cooldown > 0 ? `Wait ${cooldown}s…` : 'Try again'}
+      </button>
     </div>
   );
 
