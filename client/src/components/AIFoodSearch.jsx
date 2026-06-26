@@ -94,7 +94,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
       setGrams(100);
       setStatus('result');
     } catch (err) {
-      const isRateLimited = err.response?.status === 429;
+      const isRateLimited = err.response?.status === 429 || err.response?.status === 503;
       setError(err.response?.data?.error || 'AI lookup failed. Please try again.');
       setRateLimited(isRateLimited);
       setCooldown(isRateLimited ? 15 : 0);

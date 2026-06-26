@@ -74,8 +74,11 @@ router.get('/ai-test', async (req, res) => {
 
 router.use(authMW);
 
-// ── Retry helper for Gemini rate limits ──────────────────────────────────────
-async function callGeminiWithRetry(apiKey, prompt, maxRetries = 2) {
+// ── Retry helper for Gemini rate limits & overload ───────────────────────────
+// 429 = rate limit, 503 = "high demand / UNAVAILABLE" — both are transient and
+// worth retrying with backoff. 503 in particular is common right after Google
+// rolls out load on a newer free-tier model.
+async function callGeminiWithRetry(apiKey, prompt, maxRetries = 3) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await axios.post(
@@ -91,10 +94,12 @@ async function callGeminiWithRetry(apiKey, prompt, maxRetries = 2) {
       );
       return response;
     } catch (err) {
-      if (err.response?.status === 429 && attempt < maxRetries) {
-        // Wait 4s then 8s before retrying
-        const wait = (attempt + 1) * 4000;
-        console.log(`Gemini 429 — retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
+      const status = err.response?.status;
+      const retryable = status === 429 || status === 503;
+      if (retryable && attempt < maxRetries) {
+        // Wait 2s, 4s, 8s before retrying
+        const wait = (attempt + 1) * 2000;
+        console.log(`Gemini ${status} — retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
@@ -349,10 +354,12 @@ router.post('/ai-identify', async (req, res) => {
       ? 'AI service authentication failed — check GEMINI_API_KEY'
       : upstreamStatus === 429
       ? 'AI rate limit reached — please try in a moment'
+      : upstreamStatus === 503
+      ? 'AI service is busy right now — please try again in a few seconds'
       : 'AI service error — please try again';
-    // Forward the real status so the client can tell a transient rate-limit
-    // (429 — worth a "try again in a bit") apart from a hard failure (502).
-    const statusToSend = (upstreamStatus === 429) ? 429 : 502;
+    // Forward the real status so the client can tell a transient issue
+    // (429/503 — worth a "try again in a bit") apart from a hard failure (502).
+    const statusToSend = (upstreamStatus === 429 || upstreamStatus === 503) ? upstreamStatus : 502;
     return res.status(statusToSend).json({ error: userMsg });
   }
 });
