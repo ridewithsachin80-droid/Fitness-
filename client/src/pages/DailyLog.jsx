@@ -145,17 +145,31 @@ function calcBurned(activities = {}, activeActivities = [], weightKg, overrides 
 const QUICK_MICRO_KEYS = ['fiber','omega3_epa','omega3_dha','vit_b12','vit_d','calcium','iron','magnesium','zinc','folate','potassium'];
 
 // ─── Compliance Ring ──────────────────────────────────────────────────────────
+// The day's single most important number — designed as this screen's signature
+// element. The gradient stroke runs from the brand purple toward warm gold as
+// compliance climbs, so color encodes real progress rather than decorating it.
 
 function ComplianceRing({ pct }) {
-  const r = 24, circ = 2 * Math.PI * r;
+  const r = 26, circ = 2 * Math.PI * r;
+  const isHigh = pct >= 80;
   return (
-    <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
-      <circle cx="28" cy="28" r={r} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="5" />
-      <circle cx="28" cy="28" r={r} fill="none" stroke="#c4b5fd" strokeWidth="5"
-        strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
-        className="transition-all duration-700" />
-      <text x="28" y="28" dominantBaseline="middle" textAnchor="middle"
-        fontSize="11" fontWeight="600" fill="white" transform="rotate(90 28 28)">
+    <svg
+      className={`w-16 h-16 -rotate-90 transition-[filter] duration-700 ${isHigh ? 'drop-shadow-[0_0_10px_rgba(212,175,106,0.45)]' : ''}`}
+      viewBox="0 0 64 64"
+    >
+      <defs>
+        <linearGradient id="complianceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stopColor="#7c5cfc" />
+          <stop offset="60%"  stopColor="#a78bfa" />
+          <stop offset="100%" stopColor={isHigh ? '#d4af6a' : '#c4b5fd'} />
+        </linearGradient>
+      </defs>
+      <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="6" />
+      <circle cx="32" cy="32" r={r} fill="none" stroke="url(#complianceGradient)" strokeWidth="6"
+        strokeDasharray={`${(pct / 100) * circ} ${circ}`} strokeLinecap="round"
+        className="transition-all duration-1000 ease-out" />
+      <text x="32" y="32" dominantBaseline="middle" textAnchor="middle"
+        fontFamily="Fraunces, serif" fontSize="16" fontWeight="600" fill="white" transform="rotate(90 32 32)">
         {pct}%
       </text>
     </svg>
@@ -783,14 +797,14 @@ export default function DailyLog() {
       {/* Header */}
       <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <p className="text-xs font-bold tracking-widest uppercase text-[#a78bfa] mb-0.5">FitLife</p>
-              <h1 className="text-xl font-bold flex items-center gap-2">
+              <p className="text-[10px] font-bold tracking-widest uppercase text-[#a78bfa] mb-1.5">FitLife</p>
+              <h1 className="font-display text-2xl font-medium flex items-center gap-2 leading-tight">
                 <span>{AVATARS_LIST[avatarIdx]}</span>
                 {user?.name}
               </h1>
-              <p className="text-emerald-300 text-xs mt-0.5">
+              <p className="text-emerald-300/90 text-xs mt-1 italic font-display">
                 {ageMode === 'child' ? 'Keep going — great job! ⭐' :
                  ageMode === 'senior' ? 'Every step counts today 🌿' :
                  'Building healthy habits daily 🌱'}
@@ -804,7 +818,7 @@ export default function DailyLog() {
             </div>
             {/* No more icon-only nav buttons — PatientBottomNav handles navigation */}
           </div>
-          <div className="bg-white/[0.05] rounded-2xl p-3 flex items-center gap-4 border border-white/[0.06]">
+          <div className="bg-white/[0.05] rounded-2xl p-3.5 flex items-center gap-4 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <ComplianceRing pct={compliance} />
             <div className="flex-1">
               <div className="text-sm font-semibold flex items-center gap-1.5">

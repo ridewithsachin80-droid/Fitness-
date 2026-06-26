@@ -4,7 +4,7 @@ import { haptic } from '../store/settingsStore';
 
 export function Card({ children, className = '' }) {
   return (
-    <div className={`rounded-2xl p-4 border border-white/[0.07] bg-[#131317] shadow-card ${className}`}>
+    <div className={`rounded-2xl p-4 border border-white/[0.07] bg-[#131317] shadow-card-raised ${className}`}>
       {children}
     </div>
   );
@@ -173,7 +173,7 @@ export function PatientBottomNav() {
                   tab.active ? 'text-[#7c5cfc]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
                 {tab.icon}
                 <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-                {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full" />}
+                {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full shadow-[0_0_6px_rgba(124,92,252,0.8)]" />}
               </button>
             ))}
           </div>
@@ -210,7 +210,7 @@ export function BottomNav({ role }) {
                 className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-[#7c5cfc]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
                 {tab.icon}
                 <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-                {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full" />}
+                {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full shadow-[0_0_6px_rgba(124,92,252,0.8)]" />}
               </button>
             ))}
           </div>
