@@ -310,7 +310,7 @@ router.use(role('admin'));
 router.post('/', async (req, res) => {
   const {
     name, name_hindi, name_local,
-    category, source = 'manual',
+    category, source = 'manual', verified = true,
     per_100g = {},
   } = req.body;
 
@@ -318,7 +318,11 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'name and category are required' });
   }
 
-  const validCategories = ['dairy','grain','vegetable','fruit','nut','oil','supplement','branded','other'];
+  // Kept in sync with the DB CHECK constraint in schema.sql (foods_category_check)
+  const validCategories = [
+    'dairy','grain','vegetable','fruit','nut','oil',
+    'supplement','branded','other','pulse','meat','beverage','spice',
+  ];
   if (!validCategories.includes(category)) {
     return res.status(400).json({ error: `category must be one of: ${validCategories.join(', ')}` });
   }
@@ -328,7 +332,7 @@ router.post('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO foods (name, name_hindi, name_local, category, source, verified, per_100g)
-       VALUES ($1, $2, $3, $4, $5, true, $6)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, name, name_hindi, name_local, category, source, verified, per_100g`,
       [
         name.trim(),
@@ -336,6 +340,7 @@ router.post('/', async (req, res) => {
         name_local  || null,
         category,
         source,
+        !!verified,
         JSON.stringify(normNutrients),
       ]
     );
@@ -375,7 +380,10 @@ router.put('/:id', async (req, res) => {
       ? normaliseNutrients({ ...prev.per_100g, ...per_100g })
       : prev.per_100g;
 
-    const validCategories = ['dairy','grain','vegetable','fruit','nut','oil','supplement','branded','other'];
+    const validCategories = [
+      'dairy','grain','vegetable','fruit','nut','oil',
+      'supplement','branded','other','pulse','meat','beverage','spice',
+    ];
     if (category && !validCategories.includes(category)) {
       return res.status(400).json({ error: `category must be one of: ${validCategories.join(', ')}` });
     }

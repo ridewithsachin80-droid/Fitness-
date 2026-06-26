@@ -9,7 +9,31 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Card, SectionTitle, BackButton } from '../components/UI';
 
-const CATEGORIES = ['grain','vegetable','fruit','protein','dairy','nut','seed','oil','spice','beverage','supplement','other'];
+const CATEGORIES = ['grain','vegetable','fruit','pulse','dairy','meat','nut','oil','spice','beverage','branded','supplement','other'];
+const SOURCES = ['manual','ai','nin','usda','off'];
+
+// Maps Gemini's human-readable category labels (e.g. "Nuts & Seeds") to the
+// exact lowercase values the DB CHECK constraint allows. Mirrors the mapping
+// used server-side in routes/aiFoods.js so AI-suggested foods always save cleanly.
+const AI_CATEGORY_MAP = {
+  'cereals & grains': 'grain', 'cereals and grains': 'grain',
+  'pulses & legumes': 'pulse', 'pulses and legumes': 'pulse', 'legumes': 'pulse',
+  'vegetables': 'vegetable',
+  'fruits': 'fruit',
+  'dairy': 'dairy',
+  'meat & fish': 'meat', 'meat and fish': 'meat', 'meat': 'meat', 'fish': 'meat', 'seafood': 'meat',
+  'nuts & seeds': 'nut', 'nuts and seeds': 'nut', 'nuts': 'nut', 'seeds': 'nut',
+  'oils & fats': 'oil', 'oils and fats': 'oil', 'oils': 'oil', 'fats': 'oil',
+  'beverages': 'beverage',
+  'snacks & sweets': 'branded', 'snacks and sweets': 'branded', 'snacks': 'branded', 'sweets': 'branded',
+  'spices & condiments': 'spice', 'spices and condiments': 'spice', 'spices': 'spice', 'condiments': 'spice',
+  'supplements': 'supplement',
+  'other': 'other',
+};
+function normaliseAiCategory(raw) {
+  if (!raw) return 'other';
+  return AI_CATEGORY_MAP[String(raw).toLowerCase().trim()] || 'other';
+}
 
 const DEFAULT_NUTRIENTS = {
   calories:0, protein:0, total_carbs:0, net_carbs:0, fat:0, fiber:0, sugar:0,
@@ -85,7 +109,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Source</label>
           <select value={form.source} onChange={e => set('source', e.target.value)}
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white">
-            {['manual','nin','usda','ifct','branded','openfoodfacts'].map(s => <option key={s} value={s}>{s}</option>)}
+            {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="col-span-2 flex items-center gap-2">
@@ -142,8 +166,12 @@ export default function AdminFoods() {
   const [pages,     setPages]     = useState(1);
   const [query,     setQuery]     = useState('');
   const [loading,   setLoading]   = useState(true);
-  const [mode,      setMode]      = useState('list'); // list | add | edit
+  const [mode,      setMode]      = useState('list'); // list | add | edit | ai
   const [editing,   setEditing]   = useState(null);
+  const [aiPrefill, setAiPrefill] = useState(null);   // food object from AI, used to prefill the Add form
+  const [aiQuery,   setAiQuery]   = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError,   setAiError]   = useState('');
   const [saving,    setSaving]    = useState(false);
   const [error,     setError]     = useState('');
   const debRef = useRef(null);
@@ -168,6 +196,38 @@ export default function AdminFoods() {
     debRef.current = setTimeout(() => load(v, 1), 400);
   };
 
+  const runAiSearch = async () => {
+    const name = aiQuery.trim();
+    if (name.length < 2) { setAiError('Type at least 2 characters'); return; }
+    setAiLoading(true); setAiError('');
+    try {
+      const { data } = await api.post('/foods/ai-identify', { name });
+      const food = data.food;
+      if (data.alreadyExists) {
+        // Already in the DB — jump straight to editing the existing record instead of creating a duplicate.
+        setEditing(food);
+        setMode('edit');
+        return;
+      }
+      // Map the AI's shape onto the admin form's shape. Admin reviews/edits before saving —
+      // nothing is written to the DB yet (this only calls /ai-identify, not /ai-confirm).
+      setAiPrefill({
+        name: food.name || name,
+        name_hindi: food.name_hindi || '',
+        name_local: food.name_local || '',
+        category: normaliseAiCategory(food.category),
+        source: 'ai',
+        verified: false, // admin should review before marking trusted
+        per_100g: { ...DEFAULT_NUTRIENTS, ...(food.per_100g || {}) },
+      });
+      setMode('add');
+    } catch (e) {
+      setAiError(e.response?.data?.error || 'AI lookup failed. Please try again.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const handleSave = async (form) => {
     setSaving(true); setError('');
     try {
@@ -178,6 +238,8 @@ export default function AdminFoods() {
       }
       setMode('list');
       setEditing(null);
+      setAiPrefill(null);
+      setAiQuery('');
       load(query, page);
     } catch (e) {
       setError(e.response?.data?.error || 'Failed to save');
@@ -206,7 +268,7 @@ export default function AdminFoods() {
               <h1 className="text-xl font-bold">Food Database</h1>
               <p className="text-stone-400 text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
             </div>
-            <button onClick={() => { setEditing(null); setMode('add'); }}
+            <button onClick={() => { setEditing(null); setAiPrefill(null); setMode('add'); }}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-colors">
               + Add Food
             </button>
@@ -218,18 +280,52 @@ export default function AdminFoods() {
 
         {error && <p className="text-red-600 text-xs bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
 
+        {/* AI search — only shown in list mode, lets admin identify a food via AI
+            before reviewing/editing it in the same form used for manual adds. */}
+        {mode === 'list' && (
+          <div className="bg-[#131317] rounded-2xl border border-white/[0.08] px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-bold text-stone-200">✨ Search with AI</span>
+              <span className="text-xs text-stone-500">Identify a food not yet in the database</span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={aiQuery}
+                onChange={e => setAiQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') runAiSearch(); }}
+                placeholder="e.g. Ragi mudde, Brazil nut, Paneer tikka…"
+                disabled={aiLoading}
+                className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm text-stone-100
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-50" />
+              <button onClick={runAiSearch} disabled={aiLoading || aiQuery.trim().length < 2}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
+                {aiLoading ? 'Identifying…' : 'Identify'}
+              </button>
+            </div>
+            {aiError && <p className="text-red-400 text-xs mt-2">{aiError}</p>}
+          </div>
+        )}
+
         {/* Add / Edit form */}
         {(mode === 'add' || mode === 'edit') && (
           <Card>
-            <SectionTitle icon={mode === 'add' ? '➕' : '✏️'}>
-              {mode === 'add' ? 'Add New Food' : `Edit: ${editing?.name}`}
+            <SectionTitle icon={mode === 'add' ? (aiPrefill ? '✨' : '➕') : '✏️'}>
+              {mode === 'add'
+                ? (aiPrefill ? `Review AI Result: ${aiPrefill.name}` : 'Add New Food')
+                : `Edit: ${editing?.name}`}
             </SectionTitle>
+            {mode === 'add' && aiPrefill && (
+              <p className="text-xs text-stone-400 mb-3">
+                ✨ AI-identified — review the fields below, adjust anything that looks off, then save.
+              </p>
+            )}
             <FoodForm
+              key={mode === 'edit' ? `edit-${editing?.id}` : (aiPrefill ? `ai-${aiPrefill.name}` : 'manual')}
               initial={mode === 'edit' && editing
                 ? { ...editing, per_100g: { ...DEFAULT_NUTRIENTS, ...(editing.per_100g || {}) } }
-                : null}
+                : (mode === 'add' && aiPrefill ? aiPrefill : null)}
               onSave={handleSave}
-              onCancel={() => { setMode('list'); setEditing(null); }}
+              onCancel={() => { setMode('list'); setEditing(null); setAiPrefill(null); }}
               saving={saving}
             />
           </Card>
