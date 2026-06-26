@@ -4,11 +4,15 @@
  * AI-powered food identification — fills gaps in our food database
  * automatically when a user searches for something we don't have.
  *
+ * Provider chain: Groq (primary, free) → Gemini (secondary, free).
+ * See the AI PROVIDERS block below for details and env var overrides.
+ *
  * Routes:
- *   POST /api/foods/ai-identify   → Ask Claude for full nutrition of any food
+ *   GET  /api/foods/ai-test       → Diagnostic: tests each configured provider (public)
+ *   POST /api/foods/ai-identify   → Ask AI for full nutrition of any food
  *   POST /api/foods/ai-confirm    → Save AI-identified food to DB permanently
  *
- * Auth: authenticated users only (authMW)
+ * Auth: authenticated users only (authMW) — ai-test is the one public exception.
  * The confirmed food is saved with source='ai', verified=false.
  * Admins can later set verified=true via existing PUT /api/foods/:id route.
  *
@@ -22,15 +26,30 @@ const pool    = require('../db/pool');
 const axios   = require('axios');
 const authMW  = require('../middleware/auth');
 
-// Gemini free tier (June 2026): gemini-2.5-flash-lite = 15 RPM, 1000 RPD — best fit
-// for quick lookups like this. gemini-2.0-flash has been DEPRECATED/retired by Google,
-// which is why it was returning persistent 429s — it's not a real volume rate-limit,
-// the model itself is gone. Switch via GEMINI_MODEL env var without a redeploy if needed.
-// Get a free key at: https://aistudio.google.com/apikey
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// ── AI PROVIDERS (June 2026) ─────────────────────────────────────────────────
+// PRIMARY: Groq — genuinely free ongoing tier (no expiring trial credits), fast
+// LPU inference, OpenAI-compatible chat completions API. Good fit for a quick
+// structured-JSON lookup like this.
+// SECONDARY: Gemini — also a real ongoing free tier, and a separate capacity
+// pool from Groq, so it's a useful fallback when Groq is rate-limited rather
+// than a redundant copy of the same risk.
+// NOT included: OpenAI's "free tier" is trial credits that expire, not an
+// ongoing free option — not a fit for production use without billing enabled.
+// Each provider also has its own internal model fallback chain (in case one
+// specific model is overloaded). All overridable via env vars without a redeploy.
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_MODELS = [
+  process.env.GROQ_MODEL          || 'openai/gpt-oss-120b',
+  process.env.GROQ_FALLBACK_MODEL || 'llama-3.3-70b-versatile',
+].filter(Boolean);
 
-// ── In-memory cache — avoids repeat Gemini calls for same food ──────────────
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL          = process.env.GEMINI_MODEL          || 'gemini-2.5-flash-lite';
+const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash';
+const geminiUrlFor = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+const GEMINI_MODELS = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL].filter(Boolean);
+
+// ── In-memory cache — avoids repeat AI calls for same food ──────────────────
 // Survives for 24h, max 500 entries, then auto-clears oldest
 const aiCache = new Map();
 const AI_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
@@ -52,60 +71,135 @@ function cacheSet(key, food) {
   aiCache.set(key.toLowerCase(), { food, ts: Date.now() });
 }
 
+// ── Single-call helpers, one per provider ────────────────────────────────────
+// Each returns { text, finishReason } so the orchestrator below can treat both
+// providers identically regardless of their very different response shapes.
+async function callGroqOnce(model, prompt) {
+  const response = await axios.post(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+      max_tokens: 1500,
+      response_format: { type: 'json_object' },
+    },
+    {
+      headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
+      timeout: 30000,
+    }
+  );
+  return {
+    text: response.data.choices?.[0]?.message?.content || '',
+    finishReason: response.data.choices?.[0]?.finish_reason,
+  };
+}
+
+async function callGeminiOnce(model, prompt) {
+  const response = await axios.post(
+    `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
+    {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 1500 },
+    },
+    { headers: { 'content-type': 'application/json' }, timeout: 30000 }
+  );
+  const candidate = response.data.candidates?.[0];
+  return {
+    text: candidate?.content?.parts?.map(p => p.text).join('') || '',
+    finishReason: candidate?.finishReason,
+  };
+}
 
 // ── GET /api/foods/ai-test — PUBLIC diagnostic, no auth needed ───────────────
+// Reports the live status of every configured provider, so a key/quota problem
+// on one shows up immediately without having to go through the full app flow.
 router.get('/ai-test', async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.json({ ok: false, error: 'GEMINI_API_KEY not set' });
+  const results = {};
 
-  try {
-    const response = await axios.post(
-      `${GEMINI_URL}?key=${apiKey}`,
-      { contents: [{ parts: [{ text: 'Say hello in one word' }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 10 } },
-      { headers: { 'content-type': 'application/json' }, timeout: 10000 }
-    );
-    const text = response.data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
-    res.json({ ok: true, response: text, model: GEMINI_URL, keyPrefix: apiKey.substring(0, 8) + '...' });
-  } catch (err) {
-    res.json({ ok: false, status: err.response?.status, detail: err.response?.data || err.message, model: GEMINI_URL, keyPrefix: apiKey.substring(0, 8) + '...' });
+  if (GROQ_API_KEY) {
+    try {
+      const { text } = await callGroqOnce(GROQ_MODELS[0], 'Say hello in one word');
+      results.groq = { ok: true, response: text, model: GROQ_MODELS[0], keyPrefix: GROQ_API_KEY.slice(0, 8) + '...' };
+    } catch (err) {
+      results.groq = { ok: false, status: err.response?.status, detail: err.response?.data || err.message, model: GROQ_MODELS[0] };
+    }
+  } else {
+    results.groq = { ok: false, error: 'GROQ_API_KEY not set' };
   }
+
+  if (GEMINI_API_KEY) {
+    try {
+      const { text } = await callGeminiOnce(GEMINI_MODEL, 'Say hello in one word');
+      results.gemini = { ok: true, response: text, model: GEMINI_MODEL, keyPrefix: GEMINI_API_KEY.slice(0, 8) + '...' };
+    } catch (err) {
+      results.gemini = { ok: false, status: err.response?.status, detail: err.response?.data || err.message, model: GEMINI_MODEL };
+    }
+  } else {
+    results.gemini = { ok: false, error: 'GEMINI_API_KEY not set' };
+  }
+
+  res.json(results);
 });
 
 router.use(authMW);
 
-// ── Retry helper for Gemini rate limits & overload ───────────────────────────
-// 429 = rate limit, 503 = "high demand / UNAVAILABLE" — both are transient and
-// worth retrying with backoff. 503 in particular is common right after Google
-// rolls out load on a newer free-tier model.
-async function callGeminiWithRetry(apiKey, prompt, maxRetries = 3) {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await axios.post(
-        `${GEMINI_URL}?key=${apiKey}`,
-        {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1500 },
-        },
-        {
-          headers: { 'content-type': 'application/json' },
-          timeout: 30000,
+// ── Provider + model fallback orchestrator ───────────────────────────────────
+// Tries Groq's model chain first, then Gemini's, retrying transient errors
+// (429 rate-limit, 503 overloaded) with backoff before moving to the next
+// model, and moving to the next provider once a provider's whole chain is
+// exhausted. Returns { text, provider, model } on the first success.
+async function identifyFoodViaAI(prompt) {
+  const providers = [
+    GROQ_API_KEY   && { name: 'groq',   models: GROQ_MODELS,   call: callGroqOnce },
+    GEMINI_API_KEY && { name: 'gemini', models: GEMINI_MODELS, call: callGeminiOnce },
+  ].filter(Boolean);
+
+  if (!providers.length) {
+    const err = new Error('No AI provider configured — set GROQ_API_KEY and/or GEMINI_API_KEY');
+    err.response = { status: 500 };
+    throw err;
+  }
+
+  let lastErr;
+  for (const provider of providers) {
+    for (const model of provider.models) {
+      const maxRetries = 2;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const { text, finishReason } = await provider.call(model, prompt);
+          if (finishReason === 'SAFETY' || finishReason === 'RECITATION' || finishReason === 'content_filter') {
+            const blocked = new Error(`AI blocked the response (${finishReason})`);
+            blocked.response = { status: 502 };
+            throw blocked;
+          }
+          if (!text) {
+            const empty = new Error('AI returned an empty response');
+            empty.response = { status: 502 };
+            throw empty;
+          }
+          if (provider !== providers[0] || model !== provider.models[0]) {
+            console.log(`AI identify succeeded via fallback: ${provider.name}/${model}`);
+          }
+          return { text, provider: provider.name, model };
+        } catch (err) {
+          lastErr = err;
+          const status = err.response?.status;
+          const retryable = status === 429 || status === 503;
+          if (retryable && attempt < maxRetries) {
+            const wait = (attempt + 1) * 2000;
+            console.log(`${provider.name}/${model} ${status} — retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
+            await new Promise(r => setTimeout(r, wait));
+            continue;
+          }
+          if (!retryable) break; // hard failure (auth, blocked content, etc.) — skip straight to next model/provider
+          console.log(`${provider.name}/${model} still ${status} after ${maxRetries} retries — trying next option`);
+          break;
         }
-      );
-      return response;
-    } catch (err) {
-      const status = err.response?.status;
-      const retryable = status === 429 || status === 503;
-      if (retryable && attempt < maxRetries) {
-        // Wait 2s, 4s, 8s before retrying
-        const wait = (attempt + 1) * 2000;
-        console.log(`Gemini ${status} — retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
       }
-      throw err; // re-throw if not 429 or out of retries
     }
   }
+  throw lastErr; // every provider/model in the chain failed
 }
 
 // ── Re-use the normaliser from foods.js ──────────────────────────────────────
@@ -313,49 +407,35 @@ router.post('/ai-identify', async (req, res) => {
     // Non-fatal — continue to AI
   }
 
-  // 2. Call Gemini API (free tier: 1500 calls/day)
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'AI service not configured (missing GEMINI_API_KEY)' });
-
+  // 2. Call AI provider chain (Groq primary, Gemini fallback — see identifyFoodViaAI)
   try {
-    const response = await callGeminiWithRetry(apiKey, buildPrompt(cleanName));
-
-    // Check for safety blocks or empty candidates
-    const candidate = response.data.candidates?.[0];
-    if (!candidate || candidate.finishReason === 'SAFETY' || candidate.finishReason === 'RECITATION') {
-      console.error('Gemini blocked response:', candidate?.finishReason, JSON.stringify(response.data.promptFeedback || {}));
-      return res.status(502).json({ error: 'AI could not identify this food — please try a different name' });
-    }
-
-    const rawText = candidate?.content?.parts?.map(p => p.text).join('') || '';
-    if (!rawText) {
-      console.error('Gemini empty response:', JSON.stringify(response.data));
-      return res.status(502).json({ error: 'AI returned empty response — please try again' });
-    }
+    const { text: rawText, provider, model } = await identifyFoodViaAI(buildPrompt(cleanName));
 
     // Strip markdown fences if model adds them
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    console.log('Gemini raw response preview:', jsonText.substring(0, 100));
+    console.log(`AI (${provider}/${model}) raw response preview:`, jsonText.substring(0, 100));
     const food = JSON.parse(jsonText);
 
     // Normalise the per_100g block to guarantee all 36 fields
     food.per_100g = normaliseNutrients(food.per_100g);
 
     cacheSet(cleanName, food);
-    return res.json({ alreadyExists: false, food });
+    return res.json({ alreadyExists: false, food, aiProvider: provider });
   } catch (err) {
     const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-    console.error('Gemini identify error | status:', err.response?.status, '| detail:', detail);
+    console.error('AI identify error | status:', err.response?.status, '| detail:', detail);
     if (err instanceof SyntaxError) {
       return res.status(502).json({ error: 'AI returned malformed data — please try again' });
     }
     const upstreamStatus = err.response?.status;
     const userMsg = upstreamStatus === 401
-      ? 'AI service authentication failed — check GEMINI_API_KEY'
+      ? 'AI service authentication failed — check GROQ_API_KEY / GEMINI_API_KEY'
       : upstreamStatus === 429
       ? 'AI rate limit reached — please try in a moment'
       : upstreamStatus === 503
       ? 'AI service is busy right now — please try again in a few seconds'
+      : upstreamStatus === 500
+      ? 'AI service not configured — no API key set'
       : 'AI service error — please try again';
     // Forward the real status so the client can tell a transient issue
     // (429/503 — worth a "try again in a bit") apart from a hard failure (502).
