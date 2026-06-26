@@ -22,12 +22,12 @@ const pool    = require('../db/pool');
 const axios   = require('axios');
 const authMW  = require('../middleware/auth');
 
-// Gemini free tier: 15 req/min, 1500 req/day — plenty for food lookups
-// Get free key at: https://aistudio.google.com/apikey
-// gemini-2.0-flash: free tier = 15 RPM, 1M TPM, 1500 RPD
-// Model is read from GEMINI_MODEL env var so it can be changed without a redeploy.
-// Default: gemini-2.0-flash (current stable free-tier model as of June 2026)
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+// Gemini free tier (June 2026): gemini-2.5-flash-lite = 15 RPM, 1000 RPD — best fit
+// for quick lookups like this. gemini-2.0-flash has been DEPRECATED/retired by Google,
+// which is why it was returning persistent 429s — it's not a real volume rate-limit,
+// the model itself is gone. Switch via GEMINI_MODEL env var without a redeploy if needed.
+// Get a free key at: https://aistudio.google.com/apikey
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ── In-memory cache — avoids repeat Gemini calls for same food ──────────────
@@ -344,12 +344,16 @@ router.post('/ai-identify', async (req, res) => {
     if (err instanceof SyntaxError) {
       return res.status(502).json({ error: 'AI returned malformed data — please try again' });
     }
-    const userMsg = err.response?.status === 401
+    const upstreamStatus = err.response?.status;
+    const userMsg = upstreamStatus === 401
       ? 'AI service authentication failed — check GEMINI_API_KEY'
-      : err.response?.status === 429
+      : upstreamStatus === 429
       ? 'AI rate limit reached — please try in a moment'
       : 'AI service error — please try again';
-    return res.status(502).json({ error: userMsg });
+    // Forward the real status so the client can tell a transient rate-limit
+    // (429 — worth a "try again in a bit") apart from a hard failure (502).
+    const statusToSend = (upstreamStatus === 429) ? 429 : 502;
+    return res.status(statusToSend).json({ error: userMsg });
   }
 });
 
