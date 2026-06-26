@@ -53,6 +53,8 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
   const [grams,   setGrams]   = useState(100);
   const [error,   setError]   = useState('');
   const [adding,  setAdding]  = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [cooldown,    setCooldown]    = useState(0);
 
   // Tokens with fallbacks matching FoodLog's existing dark theme
   const accent = t?.accent  || '#00D49F';
@@ -70,9 +72,18 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
     runAI(initialQuery.trim());
   }, [initialQuery]);
 
+  // Tick the rate-limit cooldown down to 0, once per second
+  useEffect(() => {
+    if (!rateLimited || cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown(c => Math.max(0, c - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [rateLimited, cooldown]);
+
   const runAI = async (name) => {
     setStatus('loading');
     setError('');
+    setRateLimited(false);
+    setCooldown(0);
     try {
       const { data } = await api.post('/foods/ai-identify', { name });
       if (data.alreadyExists) {
@@ -83,7 +94,10 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
       setGrams(100);
       setStatus('result');
     } catch (err) {
+      const isRateLimited = err.response?.status === 429;
       setError(err.response?.data?.error || 'AI lookup failed. Please try again.');
+      setRateLimited(isRateLimited);
+      setCooldown(isRateLimited ? 15 : 0);
       setStatus('error');
     }
   };
