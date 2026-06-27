@@ -293,4 +293,84 @@ router.get('/logged-exercises', async (req, res) => {
   }
 });
 
+// ── GET /api/workouts/muscle-coverage ────────────────────────────────────────
+// "Which muscles worked, which are left to do" — one shared dataset feeding
+// three lenses at once: session count this week, total sets (volume) this
+// week, and days since last worked (to flag genuinely stale groups, not just
+// today's gaps). Tracks 6 major groups; full_body exercises (Burpees,
+// Kettlebell Swing, etc.) count toward ALL of them, since that's mechanically
+// accurate — they're not isolated to one area.
+//
+// `today` must be passed by the client (its own IST-correct date string,
+// same convention used everywhere else in this app) rather than relying on
+// the server's own clock, which runs in UTC and would be a few hours off
+// near midnight IST.
+const MUSCLE_GROUPS = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+const LOOKBACK_DAYS = 60; // generous window so "last worked" can detect genuinely stale groups, not just this week's gaps
+
+router.get('/muscle-coverage', async (req, res) => {
+  const patientId = await resolvePatientId(req, res);
+  if (patientId === null) return;
+
+  const today = req.query.today;
+  if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(today)) {
+    return res.status(400).json({ error: 'today (YYYY-MM-DD) is required' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT e.muscle_group, ws.session_date, COUNT(*) AS set_count
+       FROM session_sets s
+       JOIN exercises e ON e.id = s.exercise_id
+       JOIN workout_sessions ws ON ws.id = s.session_id
+       WHERE ws.patient_id = $1
+         AND ws.session_date >= $2::date - INTERVAL '${LOOKBACK_DAYS} days'
+         AND ws.session_date <= $2::date
+       GROUP BY e.muscle_group, ws.session_date`,
+      [patientId, today]
+    );
+
+    // Expand full_body rows to count toward every tracked group, then collapse
+    // everything into per-group { date -> setCount } maps for aggregation.
+    const byGroup = Object.fromEntries(MUSCLE_GROUPS.map(g => [g, new Map()]));
+    for (const row of rows) {
+      const setCount = parseInt(row.set_count) || 0;
+      const targets = row.muscle_group === 'full_body' ? MUSCLE_GROUPS : [row.muscle_group];
+      for (const g of targets) {
+        if (!byGroup[g]) continue; // unrecognised/legacy muscle_group value — skip rather than crash
+        const map = byGroup[g];
+        map.set(row.session_date, (map.get(row.session_date) || 0) + setCount);
+      }
+    }
+
+    const todayDate = new Date(today + 'T00:00:00');
+    const sevenDaysAgo = new Date(todayDate); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const groups = {};
+    for (const g of MUSCLE_GROUPS) {
+      const map = byGroup[g];
+      const dates = [...map.keys()];
+      const within7d = dates.filter(d => new Date(d + 'T00:00:00') >= sevenDaysAgo);
+
+      let lastWorked = null, daysSince = null;
+      if (dates.length > 0) {
+        lastWorked = dates.sort().at(-1); // ISO date strings sort correctly lexicographically
+        daysSince = Math.round((todayDate - new Date(lastWorked + 'T00:00:00')) / 86400000);
+      }
+
+      groups[g] = {
+        sessions7d: within7d.length,
+        sets7d: within7d.reduce((sum, d) => sum + map.get(d), 0),
+        lastWorked,
+        daysSince, // null = never logged within the lookback window at all
+      };
+    }
+
+    res.json({ groups, lookbackDays: LOOKBACK_DAYS });
+  } catch (err) {
+    console.error('GET /workouts/muscle-coverage error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

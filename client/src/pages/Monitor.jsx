@@ -10,6 +10,7 @@ import { setMemberPin, addNote, logWeightForPatient } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
+import MuscleCoverage from '../components/MuscleCoverage';
 import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
 import { useSync } from '../hooks/useSync';
@@ -876,6 +877,8 @@ export default function Monitor() {
             </div>
           )}
         </Card>
+
+        <MuscleCoverage patientId={parseInt(patientId)} />
 
         {/* Daily Log Viewer — date chip navigator + single-date detail */}
         <Card>
