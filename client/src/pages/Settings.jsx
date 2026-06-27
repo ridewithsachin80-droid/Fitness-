@@ -104,7 +104,7 @@ export default function Settings() {
       <div className="bg-[#131317] border-b border-white/[0.07] px-4 pt-10 pb-4">
         <div className="max-w-md mx-auto">
           <BackButton onClick={() => navigate(-1)} />
-          <h1 className="text-xl font-bold text-[#ededf0] mt-2">Settings</h1>
+          <h1 className="font-display text-xl font-medium text-[#ededf0] mt-2">Settings</h1>
         </div>
       </div>
 

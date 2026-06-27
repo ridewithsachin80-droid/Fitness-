@@ -86,35 +86,35 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
         <div className="col-span-2">
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Name *</label>
           <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Brown Rice (Cooked)"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)]" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Hindi Name</label>
           <input value={form.name_hindi} onChange={e => set('name_hindi', e.target.value)} placeholder="ब्राउन राइस"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)]" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Local / Brand Name</label>
           <input value={form.name_local} onChange={e => set('name_local', e.target.value)} placeholder="Aashirvaad Brown Rice"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)]" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Category</label>
           <select value={form.category} onChange={e => set('category', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white">
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)] bg-white">
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Source</label>
           <select value={form.source} onChange={e => set('source', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white">
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)] bg-white">
             {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="col-span-2 flex items-center gap-2">
           <input type="checkbox" id="verified" checked={form.verified} onChange={e => set('verified', e.target.checked)}
-            className="w-4 h-4 accent-emerald-600" />
+            className="w-4 h-4 accent-[#7c5cfc]" />
           <label htmlFor="verified" className="text-sm font-medium text-stone-700">Verified (trusted data source)</label>
         </div>
       </div>
@@ -125,7 +125,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
           {NUTRIENT_GROUPS.map(g => (
             <button key={g.label} onClick={() => setNutrientTab(g.label)}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                nutrientTab === g.label ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500'}`}>
+                nutrientTab === g.label ? 'bg-white text-[#7c5cfc] shadow-sm' : 'text-stone-500'}`}>
               {g.label}
             </button>
           ))}
@@ -138,7 +138,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
               </label>
               <input type="number" step="0.001" value={form.per_100g[k] || ''}
                 onChange={e => setN(k, e.target.value)}
-                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)]" />
             </div>
           ))}
         </div>
@@ -146,7 +146,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
 
       <div className="flex gap-2 pt-2">
         <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()}
-          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl transition-colors">
+          className="flex-1 py-3 bg-[#7c5cfc] hover:bg-[#a78bfa] disabled:opacity-50 text-white font-bold rounded-xl transition-colors">
           {saving ? 'Saving…' : 'Save Food'}
         </button>
         <button onClick={onCancel}
@@ -265,11 +265,11 @@ export default function AdminFoods() {
           <BackButton onClick={() => navigate('/admin')} light />
           <div className="flex items-center justify-between mt-3">
             <div>
-              <h1 className="text-xl font-bold">Food Database</h1>
-              <p className="text-stone-400 text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
+              <h1 className="font-display text-xl font-medium">Food Database</h1>
+              <p className="text-[#9a9aa6] text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
             </div>
             <button onClick={() => { setEditing(null); setAiPrefill(null); setMode('add'); }}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-colors">
+              className="px-4 py-2 bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] font-bold rounded-xl text-sm transition-colors">
               + Add Food
             </button>
           </div>
@@ -296,9 +296,9 @@ export default function AdminFoods() {
                 placeholder="e.g. Ragi mudde, Brazil nut, Paneer tikka…"
                 disabled={aiLoading}
                 className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm text-stone-100
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-50" />
+                  focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)] disabled:opacity-50" />
               <button onClick={runAiSearch} disabled={aiLoading || aiQuery.trim().length < 2}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
+                className="px-4 py-2.5 bg-[#7c5cfc] hover:bg-[#a78bfa] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
                 {aiLoading ? 'Identifying…' : 'Identify'}
               </button>
             </div>
@@ -337,7 +337,7 @@ export default function AdminFoods() {
             <input value={query} onChange={e => handleSearch(e.target.value)}
               placeholder="Search foods by name…"
               className="w-full px-4 py-3 bg-[#1a1a20] border border-white/[0.10] rounded-2xl text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+                focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)] text-stone-800" />
 
             {loading ? (
               <div className="flex justify-center py-12">
@@ -353,7 +353,7 @@ export default function AdminFoods() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-stone-800 text-sm truncate">{food.name}</span>
-                          {food.verified && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">✓</span>}
+                          {food.verified && <span className="text-xs bg-[rgba(124,92,252,0.15)] text-[#7c5cfc] px-1.5 py-0.5 rounded font-semibold">✓</span>}
                           <span className="text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">{food.category}</span>
                           <span className="text-xs text-stone-400">{food.source}</span>
                         </div>
@@ -364,7 +364,7 @@ export default function AdminFoods() {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => { setEditing(food); setMode('edit'); }}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors text-sm">
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-[#7c5cfc] hover:bg-[rgba(124,92,252,0.08)] transition-colors text-sm">
                           ✏️
                         </button>
                         <button onClick={() => handleDelete(food)}

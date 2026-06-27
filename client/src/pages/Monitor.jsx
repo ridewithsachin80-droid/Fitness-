@@ -494,10 +494,10 @@ export default function Monitor() {
 
   if (loading) return <PageLoader />;
   if (!data)   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center p-4">
       <div className="text-center">
-        <p className="text-stone-500 mb-4">Patient not found or not assigned to you.</p>
-        <button onClick={() => navigate('/monitor')} className="text-emerald-600 font-semibold">← Back</button>
+        <p className="text-[#9a9aa6] mb-4">Patient not found or not assigned to you.</p>
+        <button onClick={() => navigate('/monitor')} className="text-[#7c5cfc] font-semibold">← Back</button>
       </div>
     </div>
   );
@@ -557,7 +557,7 @@ export default function Monitor() {
           <BackButton onClick={() => navigate('/monitor')} label="All patients" />
           <div className="mt-3 flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-bold">{profile.name}</h1>
+              <h1 className="font-display text-xl font-medium">{profile.name}</h1>
               <p className="text-emerald-300 text-xs mt-0.5">
                 {profile.height_cm}cm · Start: {profile.start_weight}kg · Goal: {profile.target_weight}kg
               </p>
@@ -573,7 +573,7 @@ export default function Monitor() {
             </div>
             {delta !== null && (
               <div className="text-right flex-shrink-0">
-                <div className={`text-2xl font-bold ${parseFloat(delta) > 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                <div className={`font-display text-2xl font-semibold ${parseFloat(delta) > 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
                   {parseFloat(delta) > 0 ? '↓' : '↑'} {Math.abs(parseFloat(delta))} kg
                 </div>
                 <div className="text-xs text-emerald-400">lost so far</div>

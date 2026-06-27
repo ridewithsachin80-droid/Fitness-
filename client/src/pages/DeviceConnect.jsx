@@ -502,7 +502,7 @@ export default function DeviceConnect() {
           <BackButton onClick={() => navigate(-1)} />
           <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <h1 style={{ color: '#ededf0', fontWeight: 800, fontSize: 22, margin: 0 }}>Connected Devices</h1>
+              <h1 style={{ color: '#ededf0', fontWeight: 600, fontFamily: 'Fraunces, serif', fontSize: 22, margin: 0 }}>Connected Devices</h1>
               <p style={{ color: '#6a6a78', fontSize: 13, margin: '4px 0 0' }}>
                 Sync your fitness tracker to enrich your health data
               </p>

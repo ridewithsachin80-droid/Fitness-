@@ -1354,17 +1354,17 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#0b0b0e]">
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-stone-800 to-stone-900 text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mb-0.5">FitLife Admin</p>
-              <h1 className="text-xl font-bold">Welcome, {user?.name} 👑</h1>
-              <p className="text-stone-400 text-xs mt-0.5">Full access — manage all members & monitors</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-[#a78bfa] mb-1">FitLife Admin</p>
+              <h1 className="font-display text-xl font-medium">Welcome, {user?.name} 👑</h1>
+              <p className="text-[#9a9aa6] text-xs mt-0.5">Full access — manage all members & monitors</p>
             </div>
             <button onClick={() => { logout(); }}
-              className="text-xs text-stone-400 hover:text-white px-3 py-1.5 border border-stone-700
-                hover:border-stone-500 rounded-xl transition-colors">
+              className="text-xs text-[#9a9aa6] hover:text-white px-3 py-1.5 border border-white/[0.10]
+                hover:border-white/[0.20] rounded-xl transition-colors">
               Sign out
             </button>
           </div>
@@ -1393,8 +1393,8 @@ export default function AdminDashboard() {
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 tab === t.id
-                  ? 'bg-white text-stone-800 shadow-card'
-                  : 'text-stone-500 hover:text-stone-700'
+                  ? 'bg-[rgba(124,92,252,0.14)] text-[#c4b5fd] border border-[rgba(124,92,252,0.25)]'
+                  : 'text-[#5a5a68] hover:text-[#9a9aa6]'
               }`}>
               {t.label}
             </button>
@@ -1409,11 +1409,11 @@ export default function AdminDashboard() {
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${tab}…`}
             className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800"
+              focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)] text-[#ededf0] placeholder-[#5a5a68]"
           />
           <button
             onClick={() => tab === 'members' ? setShowAddMember(true) : setShowAddMonitor(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold
+            className="px-4 py-2.5 bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] text-sm font-bold
               rounded-xl transition-colors whitespace-nowrap">
             + Add {tab === 'members' ? 'Member' : 'Monitor'}
           </button>

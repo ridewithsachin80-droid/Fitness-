@@ -36,10 +36,10 @@ function bmi(weightKg, heightCm) {
 function bmiLabel(b) {
   if (!b) return null;
   const v = parseFloat(b);
-  if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-600 bg-blue-50 border-blue-200' };
-  if (v < 25)   return { label: 'Healthy',     cls: 'text-emerald-600 bg-emerald-50 border-emerald-200' };
-  if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-600 bg-amber-50 border-amber-200' };
-  return             { label: 'Obese',          cls: 'text-red-600 bg-red-50 border-red-200' };
+  if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-300 bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.20)]' };
+  if (v < 25)   return { label: 'Healthy',     cls: 'text-[#a78bfa] bg-[rgba(124,92,252,0.10)] border-[rgba(124,92,252,0.20)]' };
+  if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-300 bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.20)]' };
+  return             { label: 'Obese',          cls: 'text-red-300 bg-[rgba(248,113,113,0.10)] border-[rgba(248,113,113,0.20)]' };
 }
 
 const CONDITION_LABELS = {
@@ -56,14 +56,14 @@ const CONDITION_LABELS = {
 
 function StatPill({ label, value, unit, color = 'emerald' }) {
   const colors = {
-    emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
-    blue:    'bg-blue-50 border-blue-100 text-blue-700',
-    amber:   'bg-amber-50 border-amber-100 text-amber-700',
-    stone:   'bg-stone-50 border-stone-100 text-stone-700',
+    emerald: 'bg-[rgba(124,92,252,0.08)] border-[rgba(124,92,252,0.16)] text-[#a78bfa]',
+    blue:    'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300',
+    amber:   'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300',
+    stone:   'bg-white/[0.04] border-white/[0.08] text-[#9a9aa6]',
   };
   return (
     <div className={`rounded-2xl border px-4 py-3 text-center ${colors[color]}`}>
-      <p className="text-2xl font-bold">
+      <p className="font-display text-2xl font-semibold">
         {value ?? '—'}
         {unit && <span className="text-sm font-normal ml-1 opacity-70">{unit}</span>}
       </p>
@@ -91,10 +91,10 @@ export default function Profile() {
   if (loading) return <PageLoader />;
 
   if (error) return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center px-4">
       <div className="text-center">
-        <p className="text-red-500 font-semibold">{error}</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-emerald-600 font-medium text-sm">
+        <p className="text-red-400 font-semibold">{error}</p>
+        <button onClick={() => navigate('/')} className="mt-4 text-[#7c5cfc] font-medium text-sm">
           ← Back to log
         </button>
       </div>
@@ -116,51 +116,56 @@ export default function Profile() {
     : null;
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-[#0b0b0e] font-sans">
 
       {/* ── Header ── */}
-      <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 text-white px-4 pt-10 pb-8">
+      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-8">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <BackButton onClick={() => navigate('/')} label="Back to log" />
             <button onClick={() => navigate('/settings')}
-              className="text-xs font-semibold text-emerald-200 hover:text-white">
+              className="text-xs font-semibold text-[#a78bfa] hover:text-white transition-colors">
               Settings
             </button>
           </div>
 
           {/* Avatar + name */}
           <div className="flex items-center gap-4 mb-5">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl font-bold select-none">
+            <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.10] flex items-center justify-center text-3xl font-display font-semibold select-none">
               {p.name?.[0]?.toUpperCase()}
             </div>
             <div>
-              <h1 className="text-2xl font-bold">{p.name}</h1>
-              <p className="text-emerald-300 text-sm mt-0.5">
+              <h1 className="font-display text-2xl font-medium">{p.name}</h1>
+              <p className="text-[#c4b5fd] text-sm mt-0.5">
                 {p.phone && `+91 ${p.phone}`}
                 {memberAge && ` · ${memberAge} yrs`}
                 {p.height_cm && ` · ${p.height_cm} cm`}
               </p>
               {p.monitor_name && (
-                <p className="text-xs text-emerald-200 mt-1">🏋️ Coach: {p.monitor_name}</p>
+                <p className="text-xs text-[#a78bfa] mt-1">🏋️ Coach: {p.monitor_name}</p>
               )}
             </div>
           </div>
 
           {/* Journey progress bar */}
           {journeyPct !== null && journeyPct >= 0 && (
-            <div className="bg-white/10 rounded-2xl p-3">
-              <div className="flex justify-between text-xs text-emerald-200 mb-1.5">
+            <div className="bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <div className="flex justify-between text-xs text-[#c4b5fd] mb-1.5">
                 <span>Journey progress</span>
                 <span className="font-bold text-white">{journeyPct}%</span>
               </div>
-              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-2 bg-white/[0.10] rounded-full overflow-hidden">
                 <div
-                  className="h-2 bg-emerald-400 rounded-full transition-all"
-                  style={{ width: `${Math.max(2, journeyPct)}%` }}
+                  className="h-2 rounded-full transition-all duration-700"
+                  style={{
+                    width: `${Math.max(2, journeyPct)}%`,
+                    background: journeyPct >= 100
+                      ? 'linear-gradient(90deg, #7c5cfc, #d4af6a)'
+                      : 'linear-gradient(90deg, #7c5cfc, #a78bfa)',
+                  }}
                 />
               </div>
-              <div className="flex justify-between text-xs text-emerald-300 mt-1.5">
+              <div className="flex justify-between text-xs text-[#a78bfa] mt-1.5">
                 <span>Start: {p.start_weight} kg</span>
                 <span>Goal: {p.target_weight} kg</span>
               </div>
@@ -170,7 +175,7 @@ export default function Profile() {
       </div>
 
       {/* ── Body ── */}
-      <div className="max-w-md mx-auto px-4 py-5 space-y-4 pb-10">
+      <div className="max-w-md mx-auto px-4 py-5 space-y-3 pb-10">
 
         {/* Weight stats */}
         <div className="grid grid-cols-3 gap-2">
@@ -196,15 +201,15 @@ export default function Profile() {
           <Card>
             <SectionTitle icon="⚖️">Body Mass Index</SectionTitle>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-3xl font-bold text-stone-800">{currentBmi}</span>
+              <span className="font-display text-3xl font-semibold text-[#ededf0]">{currentBmi}</span>
               <span className={`text-sm font-bold px-3 py-1 rounded-full border ${bmiInfo.cls}`}>
                 {bmiInfo.label}
               </span>
             </div>
-            <div className="mt-3 h-2 bg-stone-100 rounded-full overflow-hidden">
-              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-emerald-400 via-amber-400 to-red-500" />
+            <div className="mt-3 h-2 bg-white/[0.08] rounded-full overflow-hidden">
+              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-[#7c5cfc] via-amber-400 to-red-500" />
             </div>
-            <div className="flex justify-between text-xs text-stone-400 mt-1">
+            <div className="flex justify-between text-xs text-[#5a5a68] mt-1">
               <span>18.5</span><span>25</span><span>30</span><span>35+</span>
             </div>
           </Card>
@@ -217,7 +222,7 @@ export default function Profile() {
             <div className="flex flex-wrap gap-2 mt-2">
               {p.conditions.map(c => (
                 <span key={c}
-                  className="text-sm bg-stone-100 text-stone-700 px-3 py-1.5 rounded-full border border-stone-200 font-medium">
+                  className="text-sm bg-white/[0.05] text-[#d8d8de] px-3 py-1.5 rounded-full border border-white/[0.08] font-medium">
                   {CONDITION_LABELS[c] || c.replace(/_/g, ' ')}
                 </span>
               ))}
@@ -231,20 +236,20 @@ export default function Profile() {
             <SectionTitle icon="⏰">Fasting Protocol</SectionTitle>
             <div className="mt-2 space-y-2">
               {p.fasting.label && (
-                <p className="font-semibold text-stone-700">{p.fasting.label}</p>
+                <p className="font-semibold text-[#d8d8de]">{p.fasting.label}</p>
               )}
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 text-center">
-                  <p className="text-xs text-blue-500 font-medium mb-0.5">Fasting ends</p>
-                  <p className="text-lg font-bold text-blue-700">{fmt12(p.fasting.end)}</p>
+                <div className="bg-[rgba(96,165,250,0.08)] border border-[rgba(96,165,250,0.16)] rounded-xl px-3 py-2 text-center">
+                  <p className="text-xs text-blue-300 font-medium mb-0.5">Fasting ends</p>
+                  <p className="font-display text-lg font-semibold text-blue-200">{fmt12(p.fasting.end)}</p>
                 </div>
-                <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 text-center">
-                  <p className="text-xs text-emerald-500 font-medium mb-0.5">Fasting starts</p>
-                  <p className="text-lg font-bold text-emerald-700">{fmt12(p.fasting.start)}</p>
+                <div className="bg-[rgba(124,92,252,0.08)] border border-[rgba(124,92,252,0.16)] rounded-xl px-3 py-2 text-center">
+                  <p className="text-xs text-[#a78bfa] font-medium mb-0.5">Fasting starts</p>
+                  <p className="font-display text-lg font-semibold text-[#c4b5fd]">{fmt12(p.fasting.start)}</p>
                 </div>
               </div>
               {p.fasting.note && (
-                <p className="text-xs text-stone-500 bg-stone-50 px-3 py-2 rounded-xl border border-stone-100">
+                <p className="text-xs text-[#9a9aa6] bg-white/[0.04] px-3 py-2 rounded-xl border border-white/[0.07]">
                   📌 {p.fasting.note}
                 </p>
               )}
@@ -257,17 +262,17 @@ export default function Profile() {
           <Card>
             <SectionTitle icon="🎯">Daily Macro Targets</SectionTitle>
             {p.macros.phase && (
-              <p className="text-xs text-stone-400 mb-3 mt-1 font-medium">Phase: {p.macros.phase}</p>
+              <p className="text-xs text-[#5a5a68] mb-3 mt-1 font-medium">Phase: {p.macros.phase}</p>
             )}
             <div className="grid grid-cols-2 gap-2 mt-2">
               {[
-                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-orange-50 border-orange-100 text-orange-700' },
-                { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-blue-50 border-blue-100 text-blue-700' },
-                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-amber-50 border-amber-100 text-amber-700' },
-                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-purple-50 border-purple-100 text-purple-700' },
+                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-[rgba(251,146,60,0.08)] border-[rgba(251,146,60,0.16)] text-orange-300' },
+                { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300' },
+                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300' },
+                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-[rgba(192,132,252,0.08)] border-[rgba(192,132,252,0.16)] text-purple-300' },
               ].filter(m => m.value).map(m => (
                 <div key={m.label} className={`rounded-xl border px-3 py-2.5 text-center ${m.color}`}>
-                  <p className="text-xl font-bold">{m.value}<span className="text-xs font-normal ml-1">{m.unit}</span></p>
+                  <p className="font-display text-xl font-semibold">{m.value}<span className="text-xs font-normal ml-1">{m.unit}</span></p>
                   <p className="text-xs font-medium mt-0.5 opacity-70">{m.label}</p>
                 </div>
               ))}
@@ -279,24 +284,24 @@ export default function Profile() {
         <Card>
           <SectionTitle icon="💧">Daily Water Target</SectionTitle>
           <div className="flex items-center gap-3 mt-2">
-            <span className="text-3xl font-bold text-blue-600">{(p.water_target / 1000).toFixed(1)}</span>
-            <span className="text-stone-500 font-medium">litres per day</span>
+            <span className="font-display text-3xl font-semibold text-blue-300">{(p.water_target / 1000).toFixed(1)}</span>
+            <span className="text-[#9a9aa6] font-medium">litres per day</span>
           </div>
-          <p className="text-xs text-stone-400 mt-2">Stop 1 hour before sleep. Not during meals.</p>
+          <p className="text-xs text-[#5a5a68] mt-2">Stop 1 hour before sleep. Not during meals.</p>
         </Card>
 
         {/* Diet notes */}
         {p.diet_notes && (
           <Card>
             <SectionTitle icon="📋">Diet Instructions</SectionTitle>
-            <p className="text-sm text-stone-600 leading-relaxed mt-2 whitespace-pre-wrap">
+            <p className="text-sm text-[#d8d8de] leading-relaxed mt-2 whitespace-pre-wrap">
               {p.diet_notes}
             </p>
           </Card>
         )}
 
         {/* Member since */}
-        <p className="text-center text-xs text-stone-300 pt-2 pb-6">
+        <p className="text-center text-xs text-[#4e4e5c] pt-2 pb-6">
           Member since {new Date(p.member_since).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
         </p>
       </div>

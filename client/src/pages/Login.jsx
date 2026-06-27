@@ -196,8 +196,8 @@ export default function Login() {
               </svg>
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-[#ededf0] tracking-tight">FitLife</h1>
-          <p className="text-[#4e4e5c] text-sm mt-2 font-medium">Your personal health coach, every day</p>
+          <h1 className="font-display text-3xl font-semibold text-[#ededf0] tracking-tight">FitLife</h1>
+          <p className="text-[#4e4e5c] text-sm mt-2 font-medium italic font-display">Your personal health coach, every day</p>
         </div>
 
         {/* Login card */}

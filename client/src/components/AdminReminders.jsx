@@ -104,24 +104,24 @@ export default function AdminReminders({ patients = [] }) {
     borderRadius: 12, padding: 16, marginBottom: 12,
   };
 
-  const btnStyle = (color = '#7c3aed') => ({
-    background: color, color: '#fff', border: 'none',
+  const btnStyle = (color = '#7c5cfc') => ({
+    background: color, color: '#08052a', border: 'none',
     borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
-    fontSize: 13, fontWeight: 600,
+    fontSize: 13, fontWeight: 700,
   });
 
   if (loading) return <div style={{ color: '#aaa', padding: 24 }}>Loading...</div>;
 
   return (
-    <div style={{ color: '#e0e0e0', fontFamily: 'sans-serif', maxWidth: 700 }}>
-      <h2 style={{ color: '#00D49F', marginBottom: 4 }}>🔔 Reminder Schedules</h2>
+    <div style={{ color: '#e0e0e0', maxWidth: 700 }}>
+      <h2 style={{ color: '#c4b5fd', fontFamily: 'Fraunces, serif', fontWeight: 600, fontSize: 20, marginBottom: 4 }}>🔔 Reminder Schedules</h2>
       <p style={{ color: '#888', fontSize: 13, marginBottom: 20 }}>
         Set custom times for water and activity reminders. Repeats every {editing?.retry_interval_min ?? 5} min until client taps OK.
       </p>
 
       {msg && (
-        <div style={{ background: '#1e3a2e', border: '1px solid #00D49F', borderRadius: 8,
-          padding: '10px 16px', marginBottom: 16, color: '#00D49F', fontSize: 14 }}>
+        <div style={{ background: '#1e3a2e', border: '1px solid rgba(124,92,252,0.35)', borderRadius: 8,
+          padding: '10px 16px', marginBottom: 16, color: '#c4b5fd', fontSize: 14 }}>
           {msg}
         </div>
       )}
@@ -131,8 +131,8 @@ export default function AdminReminders({ patients = [] }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#12122a', borderRadius: 16, padding: 24,
-            width: 360, border: '1px solid #7c3aed' }}>
-            <h3 style={{ color: '#00D49F', margin: '0 0 4px' }}>
+            width: 360, border: '1px solid rgba(124,92,252,0.35)' }}>
+            <h3 style={{ color: '#c4b5fd', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
               {editing.type === 'water' ? '💧 Water' : '🏃 Activity'} Reminders
             </h3>
             <p style={{ color: '#888', fontSize: 12, margin: '0 0 16px' }}>
@@ -146,7 +146,7 @@ export default function AdminReminders({ patients = [] }) {
               <div style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>Reminder Times (IST)</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                 {editing.times.map(t => (
-                  <div key={t} style={{ background: '#7c3aed22', border: '1px solid #7c3aed',
+                  <div key={t} style={{ background: 'rgba(124,92,252,0.13)', border: '1px solid #7c5cfc',
                     borderRadius: 20, padding: '4px 12px', fontSize: 13,
                     display: 'flex', alignItems: 'center', gap: 6 }}>
                     {t}
@@ -183,7 +183,7 @@ export default function AdminReminders({ patients = [] }) {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={save} disabled={saving} style={btnStyle('#00D49F')}>
+              <button onClick={save} disabled={saving} style={btnStyle('#7c5cfc')}>
                 {saving ? 'Saving...' : '✅ Save Schedule'}
               </button>
               <button onClick={() => setEditing(null)} style={btnStyle('#444')}>Cancel</button>

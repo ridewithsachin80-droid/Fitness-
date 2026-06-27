@@ -164,7 +164,7 @@ function Logo() {
   return (
     <div style={{ textAlign: 'center', marginBottom: 32 }}>
       <div style={{ fontSize: 48, marginBottom: 8 }}>🏃</div>
-      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: '#7c5cfc', textTransform: 'uppercase' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: '#7c5cfc', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
         FitLife
       </div>
     </div>
@@ -201,7 +201,7 @@ function BackBtn({ onClick }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = {
-  h1:        { fontSize: 24, fontWeight: 700, color: '#ededf0', textAlign: 'center', marginBottom: 8 },
+  h1:        { fontSize: 24, fontWeight: 600, fontFamily: 'Fraunces, serif', color: '#ededf0', textAlign: 'center', marginBottom: 8 },
   sub:       { fontSize: 14, color: '#6a6a78', textAlign: 'center', marginBottom: 28 },
   modeGrid:  { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 8 },
   modeCard:  { borderRadius: 16, padding: '16px 10px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center', minHeight: 140 },
@@ -214,7 +214,7 @@ const s = {
   themeBtn:  { flex: 1, borderRadius: 16, padding: '20px 10px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
   themeLabel:{ fontSize: 14, fontWeight: 600, color: '#ededf0' },
   btnRow:    { display: 'flex', gap: 8 },
-  summaryCard:{ background: 'rgba(124,92,252,0.08)', borderRadius: 20, padding: '20px', textAlign: 'center', border: '1px solid rgba(124,92,252,0.2)' },
-  summaryName:{ fontSize: 18, fontWeight: 700, color: '#ededf0', marginBottom: 6 },
+  summaryCard:{ background: 'linear-gradient(135deg, rgba(124,92,252,0.10), rgba(212,175,106,0.08))', borderRadius: 20, padding: '20px', textAlign: 'center', border: '1px solid rgba(212,175,106,0.20)' },
+  summaryName:{ fontSize: 18, fontWeight: 600, fontFamily: 'Fraunces, serif', color: '#ededf0', marginBottom: 6 },
   summarySub: { fontSize: 13, color: '#8e8e9a', lineHeight: 1.5 },
 };

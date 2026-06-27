@@ -84,7 +84,7 @@ export default function PatientList() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold tracking-widest uppercase text-[#4e4e5c] mb-0.5">Monitor</p>
-              <h1 className="text-xl font-bold">{user?.name}</h1>
+              <h1 className="font-display text-xl font-medium">{user?.name}</h1>
               <p className="text-[#4e4e5c] text-xs mt-0.5">{patients.length} patient{patients.length !== 1 ? 's' : ''} assigned</p>
             </div>
             <button onClick={() => navigate('/settings')}
@@ -104,7 +104,7 @@ export default function PatientList() {
               { label: 'Total',        value: patients.length,    color: 'text-stone-300' },
             ].map(stat => (
               <div key={stat.label} className="bg-white/[0.05] rounded-xl py-2.5 text-center border border-white/[0.06]">
-                <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+                <div className={`font-display text-xl font-semibold ${stat.color}`}>{stat.value}</div>
                 <div className="text-xs text-[#4e4e5c] mt-0.5">{stat.label}</div>
               </div>
             ))}

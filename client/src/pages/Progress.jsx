@@ -212,10 +212,12 @@ function StatBox({ value, label, sub, color = 'emerald' }) {
     orange:  'bg-[rgba(251,146,60,0.08)] text-orange-400 border border-[rgba(251,146,60,0.14)]',
     purple:  'bg-[rgba(192,132,252,0.08)] text-purple-400 border border-[rgba(192,132,252,0.14)]',
     amber:   'bg-[rgba(251,191,36,0.08)] text-amber-400 border border-[rgba(251,191,36,0.14)]',
+    // Reserved for genuine streak/achievement milestones, not routine stats.
+    gold:    'bg-[rgba(212,175,106,0.10)] text-gold-300 border border-[rgba(212,175,106,0.22)] shadow-glow-gold',
   };
   return (
     <div className={`rounded-2xl px-4 py-3 ${colors[color]}`}>
-      <div className="text-2xl font-bold">{value}</div>
+      <div className="font-display text-2xl font-semibold">{value}</div>
       <div className="text-xs font-semibold mt-0.5">{label}</div>
       {sub && <div className="text-xs opacity-70 mt-0.5">{sub}</div>}
     </div>
@@ -346,7 +348,7 @@ export default function Progress() {
             className="text-[#4e4e5c] text-sm mb-3 hover:text-[#8e8e9a] transition-colors">
             ← Back to today
           </button>
-          <h1 className="text-2xl font-bold">My Progress</h1>
+          <h1 className="font-display text-2xl font-medium">My Progress</h1>
           <p className="text-blue-200 text-sm mt-1">Last 90 days · {user?.name}</p>
 
           {/* Journey progress bar */}
@@ -387,7 +389,7 @@ export default function Progress() {
             value={`${streak} days`}
             label="Logging Streak"
             sub={streak >= 7 ? '🔥 On fire!' : streak >= 3 ? '👍 Keep going' : 'Start today'}
-            color="orange"
+            color={streak >= 7 ? 'gold' : 'orange'}
           />
           <StatBox
             value={`${avg30}%`}
