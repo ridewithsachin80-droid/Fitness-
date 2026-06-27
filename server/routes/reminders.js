@@ -4,6 +4,45 @@ const authMW  = require('../middleware/auth');
 
 router.use(authMW);
 
+// ── GET /api/reminders/my-notifications ──────────────────────────────────────
+// Any logged-in user: their own reminder history. This is what lets a patient
+// see a reminder was actually sent even if their phone never displayed it —
+// e.g. Android's per-app notification toggle silently blocking it, browser
+// permission revoked after subscribing, etc. None of those failure modes are
+// visible to the server, so giving the patient an in-app record is the only
+// reliable way for them to actually find out reminders were sent at all.
+router.get('/my-notifications', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, type, title, body, sent_at, opened_at, failed
+       FROM notifications_log
+       WHERE user_id = $1
+       ORDER BY sent_at DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    const unreadCount = rows.filter(r => !r.opened_at).length;
+    res.json({ notifications: rows, unreadCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/reminders/my-notifications/mark-read ───────────────────────────
+// Marks all of the current user's unread notifications as opened.
+router.post('/my-notifications/mark-read', async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE notifications_log SET opened_at = NOW()
+       WHERE user_id = $1 AND opened_at IS NULL`,
+      [req.user.id]
+    );
+    res.json({ marked: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/reminders/schedules ─────────────────────────────────────────────
 // Admin: get all reminder schedules (global + per-patient)
 router.get('/schedules', async (req, res) => {

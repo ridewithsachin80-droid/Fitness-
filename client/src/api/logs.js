@@ -44,5 +44,7 @@ export const getAuditLog     = (limit = 100)    => api.get(`/admin/audit?limit=$
 // ── Push notifications ────────────────────────────────────────────────────────
 export const subscribePush   = (sub)            => api.post('/notifications/subscribe',   sub);
 export const unsubscribePush = (endpoint)       => api.delete('/notifications/unsubscribe', { data: { endpoint } });
+export const getMyNotifications  = ()           => api.get('/reminders/my-notifications');
+export const markNotificationsRead = ()         => api.post('/reminders/my-notifications/mark-read');
 export const getSubscriptions= ()               => api.get('/notifications/subscriptions');
 export const getNotifLog     = ()               => api.get('/notifications/log');

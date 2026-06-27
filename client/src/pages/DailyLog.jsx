@@ -14,6 +14,7 @@ import WaterTracker  from '../components/WaterTracker';
 import FoodLog       from '../components/FoodLog';
 import SleepTracker  from '../components/SleepTracker';
 import InstallPrompt from '../components/InstallPrompt';
+import NotificationBell from '../components/NotificationBell';
 import { useSettingsStore, useTerms } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
@@ -839,7 +840,9 @@ export default function DailyLog() {
                 </p>
               )}
             </div>
-            {/* No more icon-only nav buttons — PatientBottomNav handles navigation */}
+            {/* No more icon-only nav buttons — PatientBottomNav handles navigation.
+                NotificationBell is informational (reminder history), not navigation. */}
+            <NotificationBell />
           </div>
           <div className="bg-white/[0.05] rounded-2xl p-3.5 flex items-center gap-4 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <ComplianceRing pct={compliance} />
