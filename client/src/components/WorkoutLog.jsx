@@ -14,7 +14,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, SectionTitle } from './UI';
 import { haptic } from '../store/settingsStore';
-import { searchExercises, addCustomExercise, getWorkout, saveWorkout } from '../api/workouts';
+import { searchExercises, addCustomExercise, getWorkout, saveWorkout, getExerciseHistory } from '../api/workouts';
 import { getActiveProgram } from '../api/programs';
 import { parseVoiceSet } from '../utils/voiceSetParser';
 
@@ -58,10 +58,95 @@ export default function WorkoutLog({ date }) {
   const [program, setProgram]         = useState(null); // { id, name } or null
   const [programDays, setProgramDays] = useState([]);   // [{ day_number, day_label, exercises: [...] }]
 
+  // "Last time you did this" — Map<exercise_id, { weight_kg, reps, date } | null>.
+  // null (not undefined) means "checked, genuinely no prior history" — that
+  // distinction matters so we don't refetch forever for first-time exercises.
+  const [lastTimeByExerciseId, setLastTimeByExerciseId] = useState(new Map());
+  const fetchingLastTimeRef = useRef(new Set()); // exercise_ids currently being fetched, to avoid duplicate concurrent requests
+
+  // Rest timer — one global countdown (you only rest from one exercise at a
+  // time in practice), manually started so it never fires from an unrelated edit.
+  const [restSeconds, setRestSeconds] = useState(null); // null = not running
+  const [restTotal, setRestTotal]     = useState(90);
+  const restIntervalRef = useRef(null);
+
   const debounceRef   = useRef(null);
   const saveRef        = useRef(null);
   const justLoadedRef  = useRef(false); // true for one render right after a (re)load, to skip the resulting save-effect run
   const voiceSupported = !!getSpeechRecognition();
+
+  // ── Rest timer countdown — single interval, always cleared before a new
+  // one starts and on unmount, so there's no risk of stacking intervals or
+  // leaking one past the component's lifetime. ───────────────────────────────
+  // ── Rest timer countdown — exactly one interval per timer "session," not
+  // one recreated every tick. Keying the effect on (restSeconds === null)
+  // rather than on restSeconds itself means it only re-runs on start/cancel,
+  // since that boolean doesn't change between e.g. 45 and 44. The interval's
+  // own callback handles stopping at zero and clearing itself. ───────────────
+  useEffect(() => {
+    if (restSeconds === null) {
+      clearInterval(restIntervalRef.current);
+      return;
+    }
+    restIntervalRef.current = setInterval(() => {
+      setRestSeconds(s => {
+        if (s === null) return null; // cancelled mid-tick
+        if (s <= 1) { clearInterval(restIntervalRef.current); haptic(60); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(restIntervalRef.current);
+  }, [restSeconds === null]);
+
+  const startRest = (seconds) => { setRestTotal(seconds); setRestSeconds(seconds); haptic(20); };
+  const cancelRest = () => setRestSeconds(null);
+
+  // ── "Last time you did this" — fetch on demand for whatever exercises are
+  // currently in the session, skipping any already fetched (or in flight). ──
+  useEffect(() => {
+    let cancelled = false;
+    const toFetch = exercisesInSession
+      .map(ex => ex.exercise_id)
+      .filter(id => !lastTimeByExerciseId.has(id) && !fetchingLastTimeRef.current.has(id));
+
+    if (toFetch.length === 0) return;
+    toFetch.forEach(id => fetchingLastTimeRef.current.add(id));
+
+    Promise.all(toFetch.map(id =>
+      getExerciseHistory(id, 5)
+        .then(({ data: rows }) => {
+          // Find the most recent session that ISN'T today (today's own
+          // in-progress numbers aren't "last time," they're "right now").
+          const priorDates = [...new Set(rows.map(r => r.session_date).filter(d => d !== date))];
+          if (priorDates.length === 0) return [id, null];
+          const lastDate = priorDates[priorDates.length - 1]; // rows arrive chronological ascending
+          const setsThatDay = rows.filter(r => r.session_date === lastDate);
+          // "Best" set for display purposes: heaviest weight, ties broken by more reps.
+          const best = setsThatDay.reduce((a, b) => {
+            const bw = parseFloat(b.weight_kg) || 0, aw = parseFloat(a.weight_kg) || 0;
+            if (bw !== aw) return bw > aw ? b : a;
+            return (parseInt(b.reps) || 0) > (parseInt(a.reps) || 0) ? b : a;
+          });
+          return [id, { weight_kg: parseFloat(best.weight_kg) || 0, reps: parseInt(best.reps) || 0, date: lastDate }];
+        })
+        .catch(() => [id, null])
+    )).then(results => {
+      // Always clear the in-flight markers, regardless of whether this run
+      // was cancelled — otherwise a cancelled fetch's ids would be
+      // permanently stuck "fetching" forever (excluded from every future
+      // attempt, with no way to ever retry them). Only the actual state
+      // update needs the cancelled guard, to avoid applying stale results.
+      toFetch.forEach(id => fetchingLastTimeRef.current.delete(id));
+      if (cancelled) return;
+      setLastTimeByExerciseId(prev => {
+        const next = new Map(prev);
+        for (const [id, val] of results) next.set(id, val);
+        return next;
+      });
+    });
+
+    return () => { cancelled = true; };
+  }, [exercisesInSession, date, lastTimeByExerciseId]);
 
   // ── Load the patient's active program once (not date-scoped — a program
   // stays assigned across days until the coach changes it) ──────────────────
@@ -88,6 +173,12 @@ export default function WorkoutLog({ date }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    // "Last time" is only meaningful relative to whichever date is currently
+    // being viewed (it means "the most recent session before THIS one") —
+    // switching dates invalidates the whole cache, not just the specific
+    // exercises that differ between the two days.
+    setLastTimeByExerciseId(new Map());
+    fetchingLastTimeRef.current.clear();
     getWorkout(date).then(({ data }) => {
       if (cancelled) return;
       justLoadedRef.current = true;
@@ -238,6 +329,30 @@ export default function WorkoutLog({ date }) {
         Workout Log
       </SectionTitle>
 
+      {/* Rest timer banner — manually started via the ⏱ button on any exercise */}
+      {restSeconds !== null && (
+        <div className={`flex items-center justify-between mb-3 px-3 py-2.5 rounded-xl border transition-colors ${
+          restSeconds <= 0 ? 'bg-[rgba(212,175,106,0.12)] border-[rgba(212,175,106,0.30)]' : 'bg-[rgba(124,92,252,0.10)] border-[rgba(124,92,252,0.20)]'}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⏱</span>
+            <span className={`font-display text-lg font-semibold ${restSeconds <= 0 ? 'text-[#d4af6a]' : 'text-[#ededf0]'}`}>
+              {restSeconds <= 0 ? "Time's up!" : `${restSeconds}s`}
+            </span>
+            {restSeconds > 0 && <span className="text-xs text-[#5a5a68]">resting…</span>}
+          </div>
+          <div className="flex gap-1.5">
+            {restSeconds <= 0 ? (
+              <button onClick={cancelRest} className="text-xs font-semibold text-[#a78bfa] px-2.5 py-1">Dismiss</button>
+            ) : (
+              <>
+                <button onClick={() => setRestSeconds(s => (s || 0) + 30)} className="text-xs font-semibold text-[#9a9aa6] hover:text-[#d8d8de] px-2">+30s</button>
+                <button onClick={cancelRest} className="text-xs font-semibold text-[#5a5a68] hover:text-red-400 px-2">Cancel</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Program day picker — only adds exercises, never replaces anything already logged */}
       {program && programDays.length > 0 && (
         <div className="mb-3">
@@ -300,6 +415,7 @@ export default function WorkoutLog({ date }) {
         <div className="space-y-3">
           {exercisesInSession.map(ex => {
             const target = targetByExerciseId.get(ex.exercise_id);
+            const lastTime = lastTimeByExerciseId.get(ex.exercise_id);
             return (
             <div key={ex.exercise_id} className="border border-white/[0.07] rounded-xl p-3 bg-white/[0.02]">
               <div className="flex items-center justify-between mb-2">
@@ -309,6 +425,11 @@ export default function WorkoutLog({ date }) {
                     <span className="ml-2 text-[10px] font-semibold text-[#a78bfa] bg-[rgba(124,92,252,0.10)] px-1.5 py-0.5 rounded-full">
                       Target: {formatTarget(target)}
                     </span>
+                  )}
+                  {lastTime && (
+                    <p className="text-[10px] text-[#5a5a68] mt-0.5">
+                      Last time: {lastTime.weight_kg} kg × {lastTime.reps}
+                    </p>
                   )}
                 </div>
                 <button onClick={() => removeExercise(ex.exercise_id)} className="text-[#5a5a68] hover:text-red-400 text-xs">Remove</button>
@@ -351,6 +472,12 @@ export default function WorkoutLog({ date }) {
                       : 'bg-white/[0.06] border-white/[0.10] text-[#d8d8de] hover:bg-white/[0.10]'}`}>
                   🎤 {listeningSetKey === ex.exercise_id ? 'Listening…' : 'Say a set'}
                 </button>
+                {ex.sets.length > 0 && (
+                  <button onClick={() => startRest(90)}
+                    className="px-3 py-2 rounded-lg border text-xs font-semibold bg-white/[0.04] border-white/[0.08] text-[#5a5a68] hover:bg-white/[0.08] hover:text-[#9a9aa6] transition-colors">
+                    ⏱
+                  </button>
+                )}
               </div>
             </div>
             );
