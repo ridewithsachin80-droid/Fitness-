@@ -748,7 +748,11 @@ export default function DailyLog() {
     } else { setWeightWarning(''); }
   };
 
-  // ── Auto-save (30-second debounce) ────────────────────────────────────────
+  // ── Auto-save (4-second debounce) ─────────────────────────────────────────
+  // Every field writes through here — this is now the ONLY save path (no more
+  // manual "Save Today's Log" button). 4s feels instant in practice while
+  // still coalescing rapid edits (e.g. dragging the water slider) into one
+  // request instead of firing on every pixel of movement.
   const autoSaveRef = useRef(null);
   const swipeRef = useRef(null);
   const [autoSaved, setAutoSaved] = useState(false);
@@ -758,7 +762,26 @@ export default function DailyLog() {
       if (date === today()) {
         try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
       }
-    }, 30000);
+    }, 4000);
+  }, [saveLog, date]);
+
+  // Safety net: if the debounce hasn't fired yet and the user navigates away,
+  // switches tabs, or closes the app, flush an immediate save so the last few
+  // seconds of edits aren't silently lost.
+  useEffect(() => {
+    const flush = () => {
+      if (autoSaveRef.current && date === today()) {
+        clearTimeout(autoSaveRef.current);
+        saveLog().catch(() => {});
+      }
+    };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [saveLog, date]);
 
   const compliance = calcCompliance(log, activeActivities, activeACV, activeSupplements);
@@ -845,7 +868,7 @@ export default function DailyLog() {
       </div>
 
       {/* Content */}
-      <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-32 pt-4 swipe-hint">
+      <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-4 swipe-hint">
 
         {/* Date nav */}
         <Card>
@@ -1147,23 +1170,6 @@ export default function DailyLog() {
             {error && <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
           </>
         )}
-      </div>
-
-      {/* Sticky save */}
-      <div className="fixed bottom-20 left-0 right-0 px-4 pb-2">
-        <div className="max-w-md mx-auto">
-          <button onClick={saveLog} disabled={saving || loading}
-            style={{ minHeight: 52 }}
-            className={`w-full py-4 rounded-2xl font-bold text-base shadow-float transition-all duration-200 ${
-              saved ? 'bg-[#7c5cfc] text-white' : saving ? 'bg-[#7c5cfc]/80 text-white' : 'bg-[#7c5cfc] hover:bg-[#a78bfa] text-white active:scale-98'}`}>
-            {saving ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving…
-              </span>
-            ) : saved ? '✓ Saved!' : "Save Today's Log"}
-          </button>
-        </div>
       </div>
 
       <PatientBottomNav />
