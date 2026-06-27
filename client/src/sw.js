@@ -5,6 +5,25 @@ import { NetworkFirst } from 'workbox-strategies';
 // Precache all Vite-built assets
 precacheAndRoute(self.__WB_MANIFEST);
 
+// ── Activation ───────────────────────────────────────────────────────────────
+// registerType:'autoUpdate' in vite.config.js relies on this — for the
+// injectManifest strategy (a custom sw.js, as opposed to the auto-generated
+// default), Workbox does NOT add skip-waiting/claim behavior automatically.
+// Without this, a newly deployed service worker sits in "waiting" forever on
+// any device that never fully closes and reopens the PWA, so that device
+// keeps running an old SW indefinitely — including whatever push-notification
+// code (or bugs) existed in it at the time, regardless of how many times the
+// app has been redeployed since.
+self.skipWaiting();
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+// Also respond to an explicit skip-waiting message, in case any future
+// update strategy switches back to prompt-based updates.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 // API routes: network first
 registerRoute(
   ({ url }) => url.pathname.startsWith('/api/logs'),

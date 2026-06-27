@@ -17,6 +17,8 @@ const foodsRoutes     = require('./routes/foods');
 const aiFoodsRoutes   = require('./routes/aiFoods');   // AI food identifier
 const trackerRoutes   = require('./routes/trackers');   // Wearable device integrations
 const remindersRoutes = require('./routes/reminders');  // Custom reminders
+const workoutRoutes   = require('./routes/workouts');   // Resistance training
+const programRoutes   = require('./routes/programs');   // Coach-assigned workout programs
 
 // ── Service imports ───────────────────────────────────────────────────────────
 const cronService = require('./services/cronService');
@@ -48,6 +50,8 @@ app.use('/api/reminders',     remindersRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/foods',         aiFoodsRoutes); // must be before foodsRoutes
 app.use('/api/trackers',      trackerRoutes);
+app.use('/api/workouts',      workoutRoutes);
+app.use('/api/programs',      programRoutes);
 app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────

@@ -124,7 +124,91 @@ async function seedFoodsIfEmpty() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. PATCH FOODS — always runs, inserts missing foods ON CONFLICT DO NOTHING
+// 3b. EXERCISE LIBRARY SEED — only runs when the exercises table is empty
+// ─────────────────────────────────────────────────────────────────────────────
+const BUILT_IN_EXERCISES = [
+  // [name, muscle_group, equipment]
+  ['Barbell Bench Press',      'chest',     'barbell'],
+  ['Incline Bench Press',      'chest',     'barbell'],
+  ['Dumbbell Bench Press',     'chest',     'dumbbell'],
+  ['Decline Bench Press',      'chest',     'barbell'],
+  ['Push-ups',                 'chest',     'bodyweight'],
+  ['Cable Chest Fly',          'chest',     'cable'],
+  ['Dumbbell Flyes',           'chest',     'dumbbell'],
+  ['Chest Dips',               'chest',     'bodyweight'],
+
+  ['Deadlift',                 'back',      'barbell'],
+  ['Barbell Row',              'back',      'barbell'],
+  ['Lat Pulldown',             'back',      'machine'],
+  ['Pull-ups',                 'back',      'bodyweight'],
+  ['Seated Cable Row',         'back',      'cable'],
+  ['T-Bar Row',                'back',      'barbell'],
+  ['Single-Arm Dumbbell Row',  'back',      'dumbbell'],
+
+  ['Back Squat',               'legs',      'barbell'],
+  ['Front Squat',              'legs',      'barbell'],
+  ['Leg Press',                'legs',      'machine'],
+  ['Romanian Deadlift',        'legs',      'barbell'],
+  ['Leg Curl',                 'legs',      'machine'],
+  ['Leg Extension',            'legs',      'machine'],
+  ['Walking Lunges',           'legs',      'dumbbell'],
+  ['Bulgarian Split Squat',    'legs',      'dumbbell'],
+  ['Calf Raise',               'legs',      'machine'],
+  ['Hip Thrust',               'legs',      'barbell'],
+
+  ['Overhead Press',           'shoulders', 'barbell'],
+  ['Dumbbell Shoulder Press',  'shoulders', 'dumbbell'],
+  ['Lateral Raise',            'shoulders', 'dumbbell'],
+  ['Front Raise',              'shoulders', 'dumbbell'],
+  ['Face Pull',                'shoulders', 'cable'],
+  ['Arnold Press',             'shoulders', 'dumbbell'],
+  ['Rear Delt Fly',            'shoulders', 'dumbbell'],
+
+  ['Barbell Curl',             'arms',      'barbell'],
+  ['Dumbbell Curl',            'arms',      'dumbbell'],
+  ['Hammer Curl',               'arms',      'dumbbell'],
+  ['Tricep Pushdown',          'arms',      'cable'],
+  ['Skull Crusher',            'arms',      'barbell'],
+  ['Close-Grip Bench Press',   'arms',      'barbell'],
+  ['Tricep Dips',              'arms',      'bodyweight'],
+
+  ['Plank',                    'core',      'bodyweight'],
+  ['Hanging Leg Raise',        'core',      'bodyweight'],
+  ['Cable Crunch',             'core',      'cable'],
+  ['Russian Twist',            'core',      'bodyweight'],
+  ['Ab Wheel Rollout',         'core',      'bodyweight'],
+
+  ['Clean and Press',          'full_body', 'barbell'],
+  ['Kettlebell Swing',         'full_body', 'kettlebell'],
+  ['Burpees',                  'full_body', 'bodyweight'],
+  ["Farmer's Carry",           'full_body', 'dumbbell'],
+];
+
+async function seedExercisesIfEmpty() {
+  const { rows } = await pool.query('SELECT COUNT(*) FROM exercises');
+  const count = parseInt(rows[0].count);
+
+  if (count > 0) {
+    console.log(`ℹ️  Exercises table already has ${count} rows — skipping seed`);
+    return;
+  }
+
+  console.log('🏋️  Seeding exercise library…');
+  try {
+    for (const [name, muscle_group, equipment] of BUILT_IN_EXERCISES) {
+      await pool.query(
+        `INSERT INTO exercises (name, muscle_group, equipment, created_by)
+         VALUES ($1, $2, $3, NULL)
+         ON CONFLICT (name) DO NOTHING`,
+        [name, muscle_group, equipment]
+      );
+    }
+    console.log(`✅ Exercise library seeded — ${BUILT_IN_EXERCISES.length} exercises`);
+  } catch (err) {
+    console.error('⚠️  Exercise seed error (non-fatal):', err.message);
+  }
+}
+
 //    Add any food here and it will appear on next deploy. Safe to re-run.
 // ─────────────────────────────────────────────────────────────────────────────
 const FOOD_PATCHES = [
@@ -320,6 +404,7 @@ async function main() {
     await runSchema();
     await seedUsers();
     await seedFoodsIfEmpty();
+    await seedExercisesIfEmpty();
     await patchFoods();
     await runKannadaMigration();
   } catch (err) {

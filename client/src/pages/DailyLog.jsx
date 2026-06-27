@@ -12,6 +12,7 @@ import {
 import { Card, SectionTitle, CheckRow, OfflineBanner, PatientBottomNav, QuickJump } from '../components/UI';
 import WaterTracker  from '../components/WaterTracker';
 import FoodLog       from '../components/FoodLog';
+import WorkoutLog    from '../components/WorkoutLog';
 import SleepTracker  from '../components/SleepTracker';
 import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
@@ -1076,6 +1077,8 @@ export default function DailyLog() {
               })()}
               </div>
             </Card>
+
+            <WorkoutLog date={date} />
 
             {/* ACV */}
             <Card>

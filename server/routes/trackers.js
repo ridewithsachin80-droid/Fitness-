@@ -474,7 +474,16 @@ router.get('/status', auth, async (req, res) => {
        FROM tracker_connections WHERE user_id = $1`,
       [req.user.id]
     );
-    res.json({ connections: rows });
+    // Which OAuth providers actually have real credentials configured —
+    // without this, the client has no way to know a "Connect" button would
+    // just redirect to a broken OAuth error (the literal placeholder
+    // fallback values below get rejected by the provider) instead of a
+    // real connection flow.
+    const PLACEHOLDER_IDS = { fitbit: 'FITBIT_CLIENT_ID', whoop: 'WHOOP_CLIENT_ID', polar: 'POLAR_CLIENT_ID' };
+    const available = Object.fromEntries(
+      Object.entries(PROVIDERS).map(([key, cfg]) => [key, cfg.clientId !== PLACEHOLDER_IDS[key]])
+    );
+    res.json({ connections: rows, available });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

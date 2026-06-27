@@ -294,6 +294,50 @@ CREATE TABLE IF NOT EXISTS reminder_acks (
 CREATE INDEX IF NOT EXISTS idx_reminder_acks_pending
   ON reminder_acks(acked, sent_at) WHERE acked = false;
 
+-- ── RESISTANCE TRAINING (Phase 1: freeform logging) ──────────────────────────
+-- Normalized (not JSONB) on purpose — Phase 3's per-exercise volume trends and
+-- 1RM tracking need real SQL aggregation across sessions, which is much
+-- simpler with rows than unpacking JSON arrays in application code.
+
+CREATE TABLE IF NOT EXISTS exercises (
+  id           SERIAL PRIMARY KEY,
+  name         VARCHAR(100) NOT NULL,
+  muscle_group VARCHAR(50),       -- 'chest','back','legs','shoulders','arms','core','full_body'
+  equipment    VARCHAR(50),       -- 'barbell','dumbbell','machine','bodyweight','cable','band'
+  created_by   INT REFERENCES users(id) ON DELETE SET NULL,  -- NULL = built-in seeded exercise
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exercises_muscle_group ON exercises(muscle_group);
+
+CREATE TABLE IF NOT EXISTS workout_sessions (
+  id           SERIAL PRIMARY KEY,
+  patient_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_date DATE NOT NULL,
+  duration_min INT,
+  notes        TEXT,
+  program_id   INT,               -- nullable now; FK added in Phase 2 once workout_programs exists
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(patient_id, session_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_workout_sessions_patient_date
+  ON workout_sessions(patient_id, session_date DESC);
+
+CREATE TABLE IF NOT EXISTS session_sets (
+  id          SERIAL PRIMARY KEY,
+  session_id  INT NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
+  exercise_id INT NOT NULL REFERENCES exercises(id) ON DELETE RESTRICT,
+  set_number  INT NOT NULL,
+  reps        INT NOT NULL,
+  weight_kg   NUMERIC(6,2) NOT NULL DEFAULT 0,  -- 0 = bodyweight-only set
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_sets_session  ON session_sets(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_sets_exercise ON session_sets(exercise_id);
+
 -- ── LIVE CHECK CONSTRAINT MIGRATION ──────────────────────────────────────────
 -- The CREATE TABLE IF NOT EXISTS above won't update CHECK constraints on an
 -- existing table. These DO statements safely drop and re-add the constraints
@@ -316,3 +360,60 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'Check constraint migration skipped: %', SQLERRM;
 END $$;
+
+-- ── WORKOUT SESSIONS UNIQUE CONSTRAINT MIGRATION ─────────────────────────────
+-- Defensive: in case workout_sessions already exists from an earlier deploy
+-- without the UNIQUE(patient_id, session_date) constraint above.
+DO $$
+BEGIN
+  ALTER TABLE workout_sessions ADD CONSTRAINT workout_sessions_patient_date_unique
+    UNIQUE (patient_id, session_date);
+EXCEPTION WHEN duplicate_table THEN NULL;       -- constraint already exists
+WHEN OTHERS THEN
+  RAISE NOTICE 'workout_sessions unique constraint migration skipped: %', SQLERRM;
+END $$;
+
+-- ── RESISTANCE TRAINING (Phase 2: coach-assigned programs) ───────────────────
+CREATE TABLE IF NOT EXISTS workout_programs (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(100) NOT NULL,
+  patient_id INT REFERENCES users(id) ON DELETE CASCADE,  -- NULL = reusable template, not yet assigned to anyone
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  active     BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- At most one ACTIVE program per patient — avoids any ambiguity about which
+-- program is "the" current one (no ORDER BY + LIMIT 1 tie-breaking needed
+-- anywhere in application code). Templates (patient_id IS NULL) are exempt.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_program_per_patient
+  ON workout_programs(patient_id) WHERE active = true AND patient_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS program_exercises (
+  id              SERIAL PRIMARY KEY,
+  program_id      INT NOT NULL REFERENCES workout_programs(id) ON DELETE CASCADE,
+  exercise_id     INT NOT NULL REFERENCES exercises(id) ON DELETE RESTRICT,
+  day_number      INT NOT NULL DEFAULT 1,
+  day_label       VARCHAR(50),       -- e.g. 'Push Day' — UI falls back to 'Day N' if null
+  order_index     INT NOT NULL DEFAULT 0,
+  target_sets     INT NOT NULL DEFAULT 3,
+  target_reps_min INT NOT NULL DEFAULT 8,
+  target_reps_max INT,               -- nullable; if set, UI shows a range like "8-12"
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_program_exercises_program
+  ON program_exercises(program_id, day_number, order_index);
+
+-- ── WORKOUT SESSIONS → PROGRAM FK MIGRATION ──────────────────────────────────
+-- workout_sessions.program_id was added in Phase 1 as a bare column (no FK
+-- yet, since workout_programs didn't exist then). Add the real FK now.
+DO $$
+BEGIN
+  ALTER TABLE workout_sessions ADD CONSTRAINT workout_sessions_program_fk
+    FOREIGN KEY (program_id) REFERENCES workout_programs(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;      -- constraint already exists
+WHEN OTHERS THEN
+  RAISE NOTICE 'workout_sessions program FK migration skipped: %', SQLERRM;
+END $$;
+

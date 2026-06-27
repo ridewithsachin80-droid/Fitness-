@@ -8,6 +8,8 @@ import { getPatient } from '../api/logs';
 import { addLabValue } from '../api/logs';
 import { setMemberPin, addNote, logWeightForPatient } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
+import ProgramBuilderModal from '../components/ProgramBuilderModal';
+import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
 import { useSync } from '../hooks/useSync';
 import { useAuthStore } from '../store/authStore';
@@ -377,8 +379,16 @@ export default function Monitor() {
   const [showPinForm,   setShowPin]   = useState(false);
   const [showNoteForm,  setShowNote]  = useState(false);
   const [showWeightForm,setShowWeight]= useState(false);
+  const [showProgramBuilder, setShowProgramBuilder] = useState(false);
+  const [activeProgram, setActiveProgram] = useState(undefined); // undefined = not loaded yet, null = none assigned
   const [selectedLog,   setSelectedLog] = useState(null); // compliance chart drill-down
   const [viewDate,      setViewDate]    = useState(null); // selected date in log viewer
+
+  // Load the patient's active workout program summary for the new card below
+  useEffect(() => {
+    if (!patientId) return;
+    getActiveProgram(patientId).then(({ data }) => setActiveProgram(data.program ? data : null)).catch(() => setActiveProgram(null));
+  }, [patientId, showProgramBuilder]); // re-fetch after the builder closes (showProgramBuilder flips false→true→false)
 
   // Sprint 13: open a print-ready report in a new tab
   const printReport = () => {
@@ -836,6 +846,36 @@ export default function Monitor() {
           )}
         </Card>
 
+        {/* Phase 2: Workout Program */}
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle icon="🏋️">Workout Program</SectionTitle>
+            <button onClick={() => setShowProgramBuilder(true)}
+              className="text-xs font-semibold text-[#a78bfa] bg-[rgba(124,92,252,0.10)] px-3 py-1.5 rounded-xl
+                hover:bg-[rgba(124,92,252,0.18)] transition-colors">
+              {activeProgram?.program ? 'Edit' : '+ Create'}
+            </button>
+          </div>
+          {activeProgram === undefined ? (
+            <p className="text-xs text-[#5a5a68] text-center py-3">Loading…</p>
+          ) : !activeProgram?.program ? (
+            <p className="text-xs text-[#5a5a68] italic text-center py-3">
+              No program assigned — {profile.name} is logging freeform only.
+            </p>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold text-[#ededf0] mb-2">{activeProgram.program.name}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {activeProgram.days.map(d => (
+                  <span key={d.day_number} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.05] text-[#9a9aa6]">
+                    {d.day_label} <span className="text-[#5a5a68]">· {d.exercises.length} exercises</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+
         {/* Daily Log Viewer — date chip navigator + single-date detail */}
         <Card>
           <div className="flex items-center justify-between mb-3">
@@ -1159,6 +1199,16 @@ export default function Monitor() {
           patientId={patientId}
           onClose={() => setShowNote(false)}
           onAdded={(newNote) => setData(d => ({ ...d, notes: [newNote, ...(d.notes || [])] }))}
+        />
+      )}
+
+      {/* Phase 2: Workout program builder */}
+      {showProgramBuilder && (
+        <ProgramBuilderModal
+          patientId={parseInt(patientId)}
+          patientName={profile.name}
+          onClose={() => setShowProgramBuilder(false)}
+          onSaved={() => {}}
         />
       )}
 

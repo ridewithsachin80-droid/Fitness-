@@ -390,7 +390,7 @@ export default function DeviceConnect() {
       setLocalConnected(prev => new Set([...prev, 'garmin', 'samsung', 'hart', 'ultrahuman']));
       showToast('Health Connect synced!');
     }
-    if (hc.status === 'error' && hc.error) {
+    if ((hc.status === 'error' || hc.status === 'unavailable') && hc.error) {
       showToast(hc.error, 'error');
     }
   }, [hc.status, hc.error]);

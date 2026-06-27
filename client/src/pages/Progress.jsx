@@ -15,6 +15,7 @@ import {
 import { useAuthStore }  from '../store/authStore';
 import { getLogRange, getMyProfile }   from '../api/logs';
 import { Card, SectionTitle, PageLoader, PatientBottomNav } from '../components/UI';
+import StrengthProgress from '../components/StrengthProgress';
 import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -620,6 +621,8 @@ export default function Progress() {
             )}
           </div>
         </Card>
+
+        <StrengthProgress />
 
       </div>
 
