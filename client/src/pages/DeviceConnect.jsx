@@ -12,14 +12,19 @@ const TRACKERS = [
   {
     id: 'hart',
     name: 'HART PRO',
-    subtitle: 'Smart Ring',
+    subtitle: 'Smart Ring (via FITTR app + Health Connect)',
     icon: null,            // rendered as SVG ring
     color: '#22c55e',
     glow: 'rgba(34,197,94,0.25)',
     border: 'rgba(34,197,94,0.3)',
     bg: 'rgba(34,197,94,0.06)',
     metrics: ['Heart Rate', 'SpO₂', 'Sleep', 'Steps', 'HRV'],
-    protocol: 'bluetooth',
+    // FITTR's HART ring doesn't expose a public Bluetooth GATT API — it
+    // talks to the official FITTR HART app over a proprietary protocol.
+    // FITTR's app itself syncs into Health Connect though, so that's the
+    // real working path: ring → FITTR HART app (must be opened periodically
+    // to push fresh data) → Health Connect → here.
+    protocol: 'healthconnect',
     badge: 'Popular',
     badgeColor: '#22c55e',
   },
@@ -62,16 +67,19 @@ const TRACKERS = [
     protocol: 'healthkit',
   },
   {
-    id: 'ultraviolet',
-    name: 'Ultraviolet',
-    subtitle: 'UV Watch',
-    emoji: '🔮',
+    id: 'ultrahuman',
+    name: 'Ultrahuman',
+    subtitle: 'Ring AIR (via Health Connect, Android only)',
+    emoji: '💍',
     color: '#d946ef',
     glow: 'rgba(217,70,239,0.25)',
     border: 'rgba(217,70,239,0.3)',
     bg: 'rgba(217,70,239,0.06)',
-    metrics: ['UV Index', 'Heart Rate', 'Sleep', 'Stress'],
-    protocol: 'bluetooth',
+    metrics: ['HRV', 'Heart Rate', 'Sleep', 'Stress', 'Temperature'],
+    // Ultrahuman doesn't expose a public Bluetooth GATT API either — same
+    // pattern as the HART ring. Their app syncs into Health Connect on
+    // Android (and Apple Health on iOS, which we can't reach from a web app).
+    protocol: 'healthconnect',
     badge: 'Beta',
     badgeColor: '#d946ef',
   },
@@ -306,6 +314,11 @@ export default function DeviceConnect() {
   // Which providers are confirmed connected server-side
   const [serverConnected, setServerConnected] = useState(new Set());
   const [loadingStatus,   setLoadingStatus]   = useState(true);
+  // OAuth providers (fitbit/whoop/polar) that actually have real client
+  // credentials configured server-side — without checking this, tapping
+  // Connect on an unconfigured one silently redirects to a broken OAuth
+  // error page with zero explanation.
+  const [oauthAvailable,  setOauthAvailable]  = useState({});
   // Local optimistic state (union of server + just-connected)
   const [localConnected,  setLocalConnected]  = useState(new Set());
   const [activeModal,     setActiveModal]     = useState(null);
@@ -322,15 +335,22 @@ export default function DeviceConnect() {
   /* ── Load server-side connection status on mount ──────────── */
   useEffect(() => {
     getTrackerStatus()
-      .then(({ connections }) => {
-        const ids = new Set(connections.map(c => {
+      .then(({ connections, available }) => {
+        const ids = new Set();
+        connections.forEach(c => {
           // map DB provider names to tracker IDs
-          if (c.provider === 'ble_ring')      return 'hart';
-          if (c.provider === 'healthconnect') return 'garmin'; // placeholder; HC serves many
-          return c.provider;
-        }));
+          if (c.provider === 'ble_ring')      { ids.add('hart'); return; }
+          if (c.provider === 'healthconnect') {
+            // One Health Connect grant covers all source apps that write
+            // into it — see the live-sync handler for the same reasoning.
+            ids.add('garmin'); ids.add('samsung'); ids.add('hart'); ids.add('ultrahuman');
+            return;
+          }
+          ids.add(c.provider);
+        });
         setServerConnected(ids);
         setLocalConnected(ids);
+        setOauthAvailable(available || {});
       })
       .catch(() => {})
       .finally(() => setLoadingStatus(false));
@@ -363,7 +383,11 @@ export default function DeviceConnect() {
   /* ── Health Connect sync result ───────────────────────────── */
   useEffect(() => {
     if (hc.status === 'done') {
-      setLocalConnected(prev => new Set([...prev, 'garmin', 'samsung']));
+      // One Health Connect permission grant covers all underlying source
+      // apps that write into it — Garmin Connect, Samsung Health, FITTR
+      // HART, and Ultrahuman all funnel through the same store, so a
+      // successful sync marks all four as connected, not just two.
+      setLocalConnected(prev => new Set([...prev, 'garmin', 'samsung', 'hart', 'ultrahuman']));
       showToast('Health Connect synced!');
     }
     if (hc.status === 'error' && hc.error) {
@@ -396,6 +420,13 @@ export default function DeviceConnect() {
     }
 
     if (tracker.protocol === 'oauth') {
+      // Don't redirect to a provider that has no real client credentials
+      // configured — that just hits a broken "invalid client" error on
+      // their side with no explanation. Tell the user plainly instead.
+      if (oauthAvailable[id] === false) {
+        showToast(`${tracker.name} integration isn't set up yet — ask your admin to enable it.`, 'error');
+        return;
+      }
       // Redirect to OAuth flow (fitbit / whoop / polar)
       window.location.href = getOAuthUrl(id);
       return;
@@ -735,13 +766,20 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <p style={{ color: '#ededf0', fontWeight: 700, fontSize: 15, margin: 0 }}>{tracker.name}</p>
-            {tracker.badge && (
-              <span style={{
-                fontSize: 9, fontWeight: 800, color: tracker.badgeColor,
-                background: `${tracker.badgeColor}18`, border: `1px solid ${tracker.badgeColor}44`,
-                borderRadius: 20, padding: '2px 7px', letterSpacing: '0.05em', textTransform: 'uppercase',
-              }}>{tracker.badge}</span>
-            )}
+            {(() => {
+              // Unconfigured OAuth provider takes priority over any static badge —
+              // the user should know this before tapping, not after a failed redirect.
+              const notSetUp = tracker.protocol === 'oauth' && oauthAvailable[tracker.id] === false;
+              const badge = notSetUp ? 'Setup pending' : tracker.badge;
+              const badgeColor = notSetUp ? '#6a6a78' : tracker.badgeColor;
+              return badge && (
+                <span style={{
+                  fontSize: 9, fontWeight: 800, color: badgeColor,
+                  background: `${badgeColor}18`, border: `1px solid ${badgeColor}44`,
+                  borderRadius: 20, padding: '2px 7px', letterSpacing: '0.05em', textTransform: 'uppercase',
+                }}>{badge}</span>
+              );
+            })()}
           </div>
           <p style={{ color: '#6a6a78', fontSize: 12, margin: '1px 0 0' }}>{tracker.subtitle}</p>
         </div>
