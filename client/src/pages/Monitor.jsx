@@ -1019,22 +1019,54 @@ export default function Monitor() {
                       </div>
                     )}
 
-                    {/* Activity + ACV pills */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {ACTIVITIES.map(a => (
-                        <span key={a.id} className={`text-xs px-2 py-1 rounded-lg font-medium border ${
-                          log.activities?.[a.id]
-                            ? 'bg-[rgba(124,92,252,0.10)] border-[rgba(124,92,252,0.22)] text-[#7c5cfc]'
-                            : 'bg-white/[0.04] border-white/[0.06] text-[#4e4e5c]'
-                        }`}>{a.icon}</span>
-                      ))}
-                      {ACV_ITEMS.map((a, i) => (
-                        <span key={a.id} className={`text-xs px-2 py-1 rounded-lg font-semibold border ${
-                          log.acv?.[a.id]
-                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                            : 'bg-white/[0.04] border-white/[0.06] text-[#4e4e5c]'
-                        }`}>ACV{i+1}</span>
-                      ))}
+                    {/* Activities / ACV / Supplements — labeled checklist, not just icons.
+                        Each group shows its own X/Y so the coach can scan exactly what's
+                        missing without having to decode emoji or count cryptic pills. */}
+                    <div className="space-y-3">
+                      {[
+                        { title: '🏃 Activities', items: ACTIVITIES,  done: log.activities },
+                        { title: '🍎 ACV',         items: ACV_ITEMS,  done: log.acv },
+                        { title: '💊 Supplements', items: SUPPLEMENTS, done: log.supplements },
+                      ].map(group => {
+                        const doneCount = group.items.filter(it => group.done?.[it.id]).length;
+                        return (
+                          <div key={group.title}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-bold text-[#6a6a78] uppercase tracking-wide">{group.title}</span>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                doneCount === group.items.length
+                                  ? 'bg-[rgba(124,92,252,0.14)] text-[#a78bfa]'
+                                  : doneCount === 0
+                                  ? 'bg-white/[0.05] text-[#5a5a68]'
+                                  : 'bg-amber-400/10 text-amber-300'
+                              }`}>{doneCount}/{group.items.length}</span>
+                            </div>
+                            <div className="space-y-1">
+                              {group.items.map(it => {
+                                const isDone = !!group.done?.[it.id];
+                                return (
+                                  <div key={it.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${
+                                    isDone ? 'bg-[rgba(124,92,252,0.06)]' : 'bg-white/[0.02]'
+                                  }`}>
+                                    <span className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${
+                                      isDone ? 'bg-[#7c5cfc]' : 'bg-white/[0.08]'
+                                    }`}>
+                                      {isDone && (
+                                        <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <span className={`text-xs font-medium leading-tight ${isDone ? 'text-[#d8d8de]' : 'text-[#5a5a68]'}`}>
+                                      {it.icon && <span className="mr-1">{it.icon}</span>}{it.label}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Key nutrients collapsible */}
