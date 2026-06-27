@@ -96,6 +96,14 @@ router.post('/test', async (req, res) => {
   if (!patient_id || !type) return res.status(400).json({ error: 'patient_id and type required' });
 
   try {
+    // Look up active subscriptions first so we can tell the admin exactly
+    // how many devices this actually reached — "sent!" with zero real
+    // recipients is worse than no message at all.
+    const { rows: subs } = await pool.query(
+      'SELECT device_name FROM push_subscriptions WHERE user_id = $1 AND active = true',
+      [patient_id]
+    );
+
     const pushService = require('../services/pushService');
     await pushService.sendToUser(
       patient_id,
@@ -104,7 +112,46 @@ router.post('/test', async (req, res) => {
       type,
       { ackId: null, requiresAck: true, isTest: true }
     );
-    res.json({ sent: true });
+    res.json({ sent: true, deviceCount: subs.length, devices: subs.map(s => s.device_name) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/reminders/subscriptions/:patientId ────────────────────────────────
+// Admin/monitor: list a patient's registered push devices. Useful for
+// diagnosing "patient didn't get the reminder" — shows exactly which
+// device(s) are actually subscribed, so a stale subscription from testing
+// on a different machine (common with shared test accounts) is visible
+// instead of silently eating notifications meant for the patient's own phone.
+router.get('/subscriptions/:patientId', async (req, res) => {
+  if (!['admin', 'monitor'].includes(req.user.role))
+    return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, device_name, active, created_at
+       FROM push_subscriptions
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [req.params.patientId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/reminders/subscriptions/:id ─────────────────────────────────
+// Admin: remove a stale/wrong push subscription (e.g. one registered from a
+// dev/testing machine instead of the patient's real device).
+router.delete('/subscriptions/:id', async (req, res) => {
+  if (req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    await pool.query('DELETE FROM push_subscriptions WHERE id = $1', [req.params.id]);
+    res.json({ deleted: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

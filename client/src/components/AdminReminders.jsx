@@ -25,6 +25,37 @@ export default function AdminReminders({ patients = [] }) {
   const [editing, setEditing]       = useState(null); // { patient_id, type, times, max_retries, retry_interval_min }
   const [newTime, setNewTime]       = useState('');
 
+  // Devices panel state — lazy-loaded per patient when expanded
+  const [openDevicesFor, setOpenDevicesFor] = useState(null);
+  const [devices, setDevices]               = useState({}); // { [patientId]: [...subs] }
+  const [devicesLoading, setDevicesLoading] = useState(false);
+
+  async function toggleDevices(patientId) {
+    if (openDevicesFor === patientId) { setOpenDevicesFor(null); return; }
+    setOpenDevicesFor(patientId);
+    if (!devices[patientId]) {
+      setDevicesLoading(true);
+      try {
+        const { data } = await api.get(`/reminders/subscriptions/${patientId}`);
+        setDevices(d => ({ ...d, [patientId]: data }));
+      } catch {
+        setDevices(d => ({ ...d, [patientId]: [] }));
+      } finally {
+        setDevicesLoading(false);
+      }
+    }
+  }
+
+  async function removeDevice(patientId, subId) {
+    if (!confirm('Remove this device? It will stop receiving reminders.')) return;
+    try {
+      await api.delete(`/reminders/subscriptions/${subId}`);
+      setDevices(d => ({ ...d, [patientId]: d[patientId].filter(s => s.id !== subId) }));
+    } catch {
+      setMsg('Failed to remove device');
+    }
+  }
+
   const load = useCallback(async () => {
     try {
       const { data } = await api.get('/reminders/schedules');
@@ -87,9 +118,13 @@ export default function AdminReminders({ patients = [] }) {
 
   async function sendTest(patientId, type) {
     try {
-      await api.post('/reminders/test', { patient_id: patientId, type });
-      setMsg(`✅ Test ${type} reminder sent!`);
-      setTimeout(() => setMsg(''), 3000);
+      const { data } = await api.post('/reminders/test', { patient_id: patientId, type });
+      if (!data.deviceCount) {
+        setMsg(`⚠️ No active devices found for this patient — they won't receive anything until they open the app and allow notifications.`);
+      } else {
+        setMsg(`✅ Sent to ${data.deviceCount} device${data.deviceCount > 1 ? 's' : ''}: ${data.devices.filter(Boolean).join(', ') || 'unnamed device'}`);
+      }
+      setTimeout(() => setMsg(''), 6000);
     } catch {
       setMsg('Failed to send test');
     }
@@ -240,6 +275,10 @@ export default function AdminReminders({ patients = [] }) {
               alignItems: 'center', marginBottom: 10 }}>
               <span style={{ fontWeight: 600 }}>{patient.name}</span>
               <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => toggleDevices(patient.id)}
+                  style={{ ...btnStyle(openDevicesFor === patient.id ? '#7c5cfc' : '#374151'), fontSize: 11 }}>
+                  📱 Devices{devices[patient.id] ? ` (${devices[patient.id].length})` : ''}
+                </button>
                 <button onClick={() => sendTest(patient.id, 'water')}
                   style={{ ...btnStyle('#0369a1'), fontSize: 11 }}>
                   💧 Test
@@ -250,6 +289,41 @@ export default function AdminReminders({ patients = [] }) {
                 </button>
               </div>
             </div>
+
+            {/* Devices panel — diagnoses "patient didn't get the reminder" by
+                showing exactly which device(s) are registered for this account. */}
+            {openDevicesFor === patient.id && (
+              <div style={{ background: '#0d0d1a', border: '1px solid #2a2a3e', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                {devicesLoading ? (
+                  <div style={{ fontSize: 12, color: '#888' }}>Loading…</div>
+                ) : !devices[patient.id]?.length ? (
+                  <div style={{ fontSize: 12, color: '#f59e0b' }}>
+                    ⚠️ No devices registered. This patient won't receive any reminders until they
+                    open the app on their own phone and allow notifications when prompted.
+                  </div>
+                ) : (
+                  devices[patient.id].map(sub => (
+                    <div key={sub.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '6px 0', borderBottom: '1px solid #1f1f2e', fontSize: 12,
+                    }}>
+                      <div>
+                        <div style={{ color: sub.active ? '#d8d8de' : '#666' }}>
+                          {sub.device_name || 'Unknown device'} {!sub.active && '(inactive)'}
+                        </div>
+                        <div style={{ color: '#666', fontSize: 10 }}>
+                          Registered {new Date(sub.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </div>
+                      </div>
+                      <button onClick={() => removeDevice(patient.id, sub.id)}
+                        style={{ ...btnStyle('#dc2626'), fontSize: 10, padding: '4px 10px' }}>
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10 }}>
               {TYPES.map(t => {
                 const s = pSchedules.find(x => x.type === t.key);
