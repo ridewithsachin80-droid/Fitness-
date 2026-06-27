@@ -619,6 +619,7 @@ export default function DeviceConnect() {
                   liveMetrics={tracker.protocol === 'bluetooth' ? ble.liveMetrics : {}}
                   onSyncNow={() => handleSyncNow(tracker.id)}
                   onDisconnect={() => handleDisconnect(tracker.id)}
+                  oauthAvailable={oauthAvailable}
                 />
               ))}
             </div>
@@ -643,6 +644,7 @@ export default function DeviceConnect() {
                   onSyncNow={() => {}}
                   onDisconnect={() => {}}
                   onConnect={() => handleConnect(tracker.id)}
+                  oauthAvailable={oauthAvailable}
                 />
               ))}
             </div>
@@ -734,7 +736,7 @@ export default function DeviceConnect() {
 
 
 /* ─── Tracker card ─────────────────────────────────────────────────────────── */
-function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConnect, onDisconnect, onSyncNow }) {
+function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConnect, onDisconnect, onSyncNow, oauthAvailable = {} }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
