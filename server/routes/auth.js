@@ -64,31 +64,39 @@ const setAccessCookie = (res, token) => {
 
 // ── PIN login rate limiter ──────────────────────────────────────────────────
 // Simple in-memory store: { ip -> { count, resetAt } }
-// Limits to 10 attempts per IP per 15-minute window.
-// On success the counter resets so legitimate users aren't penalised.
-const _pinAttempts = new Map();
-const PIN_MAX      = 10;
-const PIN_WINDOW   = 15 * 60 * 1000; // 15 minutes
+// ── Auth rate limiting ───────────────────────────────────────────────────────
+// Hand-rolled, in-memory, per-IP. Deliberately simple (no extra dependency) —
+// fine for this app's scale, and resets automatically so legitimate users
+// who mistype a few times aren't locked out for long.
+// Each protected route gets its own bucket (keyed by "route:ip") so hammering
+// one endpoint doesn't use up the allowance for another.
+const _authAttempts = new Map();
 
-function checkPinRateLimit(ip) {
+function checkRateLimit(bucketKey, max, windowMs) {
   const now    = Date.now();
-  const record = _pinAttempts.get(ip);
+  const record = _authAttempts.get(bucketKey);
   if (record && now < record.resetAt) {
-    if (record.count >= PIN_MAX) return false; // blocked
+    if (record.count >= max) return false; // blocked
     record.count++;
   } else {
-    _pinAttempts.set(ip, { count: 1, resetAt: now + PIN_WINDOW });
+    _authAttempts.set(bucketKey, { count: 1, resetAt: now + windowMs });
   }
   return true; // allowed
+}
+
+function clearRateLimit(bucketKey) {
+  _authAttempts.delete(bucketKey);
 }
 
 // Periodically prune expired entries so the map doesn't grow forever
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, r] of _pinAttempts) {
-    if (now >= r.resetAt) _pinAttempts.delete(ip);
+  for (const [key, r] of _authAttempts) {
+    if (now >= r.resetAt) _authAttempts.delete(key);
   }
 }, 5 * 60 * 1000);
+
+const getIp = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
 
 // ── POST /api/auth/pin-login ────────────────────────────────────────────────
 // Patient: phone number + PIN login (replaces OTP)
@@ -100,8 +108,8 @@ router.post('/pin-login', async (req, res) => {
   }
 
   // Rate-limit by IP before touching the DB
-  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
-  if (!checkPinRateLimit(ip)) {
+  const ip = getIp(req);
+  if (!checkRateLimit(`pin-login:${ip}`, 10, 15 * 60 * 1000)) {
     return res.status(429).json({
       error: 'Too many login attempts. Please wait 15 minutes and try again.',
     });
@@ -124,7 +132,7 @@ router.post('/pin-login', async (req, res) => {
     }
 
     // Successful login — clear the rate-limit counter for this IP
-    _pinAttempts.delete(ip);
+    clearRateLimit(`pin-login:${ip}`);
 
     const { accessToken, refreshToken } = signTokens(user);
     setRefreshCookie(res, refreshToken);
@@ -149,33 +157,39 @@ router.post('/send-otp', async (req, res) => {
     return res.status(400).json({ error: 'Phone number is required' });
   }
 
+  // Rate-limit by IP — OTPs cost money to send (SMS) and this endpoint takes
+  // no password, so without a limit it's an easy spam/cost-abuse vector.
+  const ip = getIp(req);
+  if (!checkRateLimit(`send-otp:${ip}`, 5, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many OTP requests. Please wait 15 minutes and try again.' });
+  }
+
   try {
     const result = await pool.query(
       "SELECT * FROM users WHERE phone = $1 AND role = 'patient' AND active = true",
       [phone]
     );
 
-    if (!result.rows.length) {
-      // Don't reveal whether the number exists — generic error
-      return res.status(404).json({ error: 'No patient account found for this number' });
+    // Always return the same response whether or not the number exists —
+    // sending a distinct 404 here would let an attacker enumerate which
+    // phone numbers are registered. We just skip the actual SMS silently.
+    if (result.rows.length) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const hash = await bcrypt.hash(otp, 10);
+      const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await pool.query(
+        'UPDATE users SET otp_hash = $1, otp_expires = $2 WHERE phone = $3',
+        [hash, expires, phone]
+      );
+
+      await smsService.sendOTP(phone, otp);
     }
 
-    // Generate a 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const hash = await bcrypt.hash(otp, 10);
-    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    await pool.query(
-      'UPDATE users SET otp_hash = $1, otp_expires = $2 WHERE phone = $3',
-      [hash, expires, phone]
-    );
-
-    await smsService.sendOTP(phone, otp);
-
-    res.json({ message: 'OTP sent successfully' });
+    res.json({ message: 'If this number is registered, an OTP has been sent.' });
   } catch (err) {
     console.error('send-otp error:', err);
-    res.status(500).json({ error: err.message || 'Failed to send OTP' });
+    res.status(500).json({ error: 'Failed to send OTP' });
   }
 });
 
@@ -186,6 +200,13 @@ router.post('/verify-otp', async (req, res) => {
 
   if (!phone || !otp) {
     return res.status(400).json({ error: 'Phone and OTP are required' });
+  }
+
+  // A 6-digit OTP has only 1M combinations — rate-limit attempts so it can't
+  // be brute-forced within its 10-minute validity window.
+  const ip = getIp(req);
+  if (!checkRateLimit(`verify-otp:${ip}`, 8, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many attempts. Please wait 15 minutes and try again.' });
   }
 
   try {
@@ -213,6 +234,7 @@ router.post('/verify-otp', async (req, res) => {
       'UPDATE users SET otp_hash = NULL, otp_expires = NULL WHERE id = $1',
       [user.id]
     );
+    clearRateLimit(`verify-otp:${ip}`);
 
     const { accessToken, refreshToken } = signTokens(user);
     setRefreshCookie(res, refreshToken);
@@ -237,6 +259,13 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
+  // This guards admin/monitor accounts — the highest-privilege logins in the
+  // app — so it gets the same protection as the patient PIN login.
+  const ip = getIp(req);
+  if (!checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many login attempts. Please wait 15 minutes and try again.' });
+  }
+
   try {
     const result = await pool.query(
       'SELECT * FROM users WHERE email = $1 AND active = true',
@@ -252,6 +281,9 @@ router.post('/login', async (req, res) => {
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
+
+    // Successful login — clear the rate-limit counter for this IP
+    clearRateLimit(`login:${ip}`);
 
     const { accessToken, refreshToken } = signTokens(user);
     setRefreshCookie(res, refreshToken);

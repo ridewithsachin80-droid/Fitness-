@@ -10,9 +10,9 @@ import AdminReminders from '../components/AdminReminders';
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ value, label, icon, color }) {
   const colors = {
-    emerald: 'bg-emerald-50 text-emerald-700',
-    blue:    'bg-blue-50    text-blue-700',
-    purple:  'bg-purple-50  text-purple-700',
+    emerald: 'bg-[rgba(52,211,153,0.10)] text-emerald-300',
+    blue:    'bg-[rgba(96,165,250,0.10)]    text-blue-300',
+    purple:  'bg-[rgba(192,132,252,0.10)]  text-purple-300',
   };
   return (
     <div className={`rounded-2xl p-4 ${colors[color]}`}>
@@ -28,9 +28,9 @@ function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
       <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100">
-          <h3 className="font-bold text-stone-800 text-base">{title}</h3>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/[0.07]">
+          <h3 className="font-bold text-[#ededf0] text-base">{title}</h3>
+          <button onClick={onClose} className="text-[#9a9aa6] hover:text-[#9a9aa6] text-2xl leading-none">×</button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -42,7 +42,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, type = 'text', value, onChange, placeholder, required }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
@@ -50,8 +50,8 @@ function Field({ label, type = 'text', value, onChange, placeholder, required })
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-          focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800"
+        className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+          focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]"
       />
     </div>
   );
@@ -98,14 +98,14 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
 
         {/* Assign monitor */}
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
             Assign to Monitor
           </label>
           <select
             value={form.monitor_id}
             onChange={e => set('monitor_id', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800 bg-white"
+            className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0] bg-white"
           >
             <option value="">— Unassigned —</option>
             {monitors.map(m => (
@@ -114,7 +114,7 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
           </select>
         </div>
 
-        {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+        {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving}
           className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
@@ -241,11 +241,11 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
        iron:0, magnesium:0, zinc:0, folate:0, potassium:0 });
 
   const colorMap = {
-    emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    blue:    'bg-blue-100 text-blue-700 border-blue-200',
-    orange:  'bg-orange-100 text-orange-700 border-orange-200',
-    purple:  'bg-purple-100 text-purple-700 border-purple-200',
-    rose:    'bg-rose-100 text-rose-700 border-rose-200',
+    emerald: 'bg-[rgba(52,211,153,0.14)] text-emerald-300 border-[rgba(52,211,153,0.25)]',
+    blue:    'bg-[rgba(96,165,250,0.14)] text-blue-300 border-[rgba(96,165,250,0.25)]',
+    orange:  'bg-[rgba(251,146,60,0.14)] text-orange-300 border-[rgba(251,146,60,0.25)]',
+    purple:  'bg-[rgba(192,132,252,0.14)] text-purple-300 border-[rgba(192,132,252,0.25)]',
+    rose:    'bg-[rgba(251,113,133,0.14)] text-rose-300 border-[rgba(251,113,133,0.25)]',
   };
   const dotMap = {
     emerald: 'bg-emerald-500', blue: 'bg-blue-500',
@@ -254,7 +254,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-stone-400">
+      <p className="text-xs text-[#9a9aa6]">
         Build the prescribed meal plan. Member sees cards above the food log — tap to pre-fill.
       </p>
 
@@ -269,10 +269,10 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotMap[meal.color] || dotMap.emerald}`} />
               <input value={meal.name} onChange={e => updateMeal(meal.id, 'name', e.target.value)}
-                className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-stone-700" />
+                className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-[#d8d8de]" />
               <input type="time" value={meal.time} onChange={e => updateMeal(meal.id, 'time', e.target.value)}
                 className="text-xs border border-white/[0.15] rounded-lg px-2 py-1 w-28" />
-              <button onClick={() => removeMeal(meal.id)} className="text-stone-400 hover:text-red-500 text-sm ml-1">🗑</button>
+              <button onClick={() => removeMeal(meal.id)} className="text-[#9a9aa6] hover:text-red-400 text-sm ml-1">🗑</button>
             </div>
 
             {(meal.items || []).map((item, iIdx) => (
@@ -282,7 +282,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                   onChange={e => updateItemQty(meal.id, iIdx, parseFloat(e.target.value) || 0)}
                   className="w-16 text-xs text-center border border-white/[0.15] rounded-lg px-1 py-1" />
                 <span className="text-xs" style={{ color: 'var(--text-mid)' }}>g</span>
-                <span className="text-xs font-bold text-orange-500 w-10 text-right">{item.kcal}</span>
+                <span className="text-xs font-bold text-orange-300 w-10 text-right">{item.kcal}</span>
                 <span className="text-xs" style={{ color: 'var(--text-mid)' }}>kcal</span>
                 <button onClick={() => removeItem(meal.id, iIdx)}
                   className="opacity-0 group-hover:opacity-100 ml-1 transition-opacity" style={{ color: 'var(--text-lo)' }}>×</button>
@@ -292,9 +292,9 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             {(meal.items || []).length > 0 && (
               <div className="flex gap-3 text-xs px-1 pt-1 border-t border-white/[0.12]">
                 <span className="font-bold text-orange-600">{mealTotal.kcal} kcal</span>
-                <span className="text-blue-700">P {mealTotal.pro.toFixed(1)}g</span>
-                <span className="text-amber-700">C {mealTotal.carb.toFixed(1)}g</span>
-                <span className="text-purple-700">F {mealTotal.fat.toFixed(1)}g</span>
+                <span className="text-blue-300">P {mealTotal.pro.toFixed(1)}g</span>
+                <span className="text-amber-300">C {mealTotal.carb.toFixed(1)}g</span>
+                <span className="text-purple-300">F {mealTotal.fat.toFixed(1)}g</span>
               </div>
             )}
 
@@ -303,19 +303,19 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                 <input autoFocus value={foodQuery} onChange={e => handleFoodQuery(e.target.value)}
                   placeholder="Search food…"
                   className="w-full text-xs px-3 py-2 rounded-xl border border-white bg-white
-                    focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-700" />
-                {searchingFood && <span className="absolute right-3 top-2 text-xs text-stone-400">…</span>}
+                    focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#d8d8de]" />
+                {searchingFood && <span className="absolute right-3 top-2 text-xs text-[#9a9aa6]">…</span>}
                 {foodSuggestions.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] rounded-xl border border-white/[0.07] shadow-lg
-                    z-30 border border-stone-100 max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
+                    z-30 border border-white/[0.07] max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
                     {foodSuggestions.map(food => (
                       <button key={food.id}
                         onMouseDown={e => e.preventDefault()}
                         onClick={() => addFoodToMeal(meal.id, food, 100)}
-                        className="w-full text-left px-3 py-2 hover:bg-emerald-50 border-b border-stone-50 last:border-0">
+                        className="w-full text-left px-3 py-2 hover:bg-[rgba(52,211,153,0.10)] border-b border-white/[0.06] last:border-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-stone-700 font-medium truncate">{food.name}</span>
-                          <span className="text-xs font-bold text-orange-500 flex-shrink-0 ml-2">
+                          <span className="text-xs text-[#d8d8de] font-medium truncate">{food.name}</span>
+                          <span className="text-xs font-bold text-orange-300 flex-shrink-0 ml-2">
                             {food.per_100g?.calories || 0} kcal/100g
                           </span>
                         </div>
@@ -324,13 +324,13 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                   </div>
                 )}
                 <button onClick={() => { setActiveMealId(null); setFoodQuery(''); setFoodSugg([]); }}
-                  className="text-xs text-stone-400 mt-1 hover:text-stone-600">Cancel</button>
+                  className="text-xs text-[#9a9aa6] mt-1 hover:text-[#9a9aa6]">Cancel</button>
               </div>
             ) : (
               <button onClick={() => { setActiveMealId(meal.id); setFoodQuery(''); setFoodSugg([]); }}
-                className="w-full py-1.5 text-xs font-semibold text-stone-500 hover:text-emerald-700
-                  bg-white/60 hover:bg-white/90 rounded-xl border border-dashed border-stone-300
-                  hover:border-emerald-400 transition-all">
+                className="w-full py-1.5 text-xs font-semibold text-[#9a9aa6] hover:text-emerald-300
+                  bg-white/60 hover:bg-white/90 rounded-xl border border-dashed border-white/[0.10]
+                  hover:border-[rgba(52,211,153,0.35)] transition-all">
                 + Add food item
               </button>
             )}
@@ -339,15 +339,15 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
       })}
 
       <button onClick={addMeal}
-        className="w-full py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50
-          hover:bg-emerald-100 border-2 border-dashed border-emerald-300
-          hover:border-emerald-500 rounded-2xl transition-all">
+        className="w-full py-2.5 text-sm font-bold text-emerald-300 bg-[rgba(52,211,153,0.10)]
+          hover:bg-[rgba(52,211,153,0.14)] border-2 border-dashed border-[rgba(52,211,153,0.30)]
+          hover:border-[rgba(52,211,153,0.40)] rounded-2xl transition-all">
         + Add meal
       </button>
 
       {mealPlan.length > 0 && (
         <div className="bg-white/[0.08] border border-white/[0.10] text-[#ededf0] rounded-2xl px-4 py-3 space-y-2">
-          <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Day Total</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6]">Day Total</p>
           <div className="flex gap-4 flex-wrap">
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
             <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
@@ -356,7 +356,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             <span className="text-sm text-emerald-300">Fiber {dayTotal.fiber.toFixed(1)}g</span>
           </div>
           {/* Micronutrients */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-stone-700">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-white/[0.15]">
             {[
               ['🐟 Omega-3',    dayTotal.omega3,    1000, 'mg',  1],
               ['💉 B12',        dayTotal.vit_b12,   2.4,  'mcg', 1],
@@ -371,22 +371,22 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             ].map(([label, val, target, unit, dec]) => {
               const v   = +val.toFixed(dec);
               const pct = Math.min(100, (val / target) * 100);
-              const cls = pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400';
+              const cls = pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-300' : 'text-red-400';
               return (
                 <div key={label} className="flex items-center justify-between">
-                  <span className="text-xs text-stone-400">{label}</span>
+                  <span className="text-xs text-[#9a9aa6]">{label}</span>
                   <span className={`text-xs font-bold ${cls}`}>
-                    {v} <span className="text-stone-500 font-normal">{unit}</span>
-                    <span className="text-stone-600 ml-1">({Math.round(pct)}%)</span>
+                    {v} <span className="text-[#9a9aa6] font-normal">{unit}</span>
+                    <span className="text-[#9a9aa6] ml-1">({Math.round(pct)}%)</span>
                   </span>
                 </div>
               );
             })}
           </div>
           {macrosKcal && (
-            <div className="text-xs text-stone-400 pt-1 border-t border-stone-700">
+            <div className="text-xs text-[#9a9aa6] pt-1 border-t border-white/[0.15]">
               Target: {macrosKcal} kcal · Difference:{' '}
-              <span className={Math.abs(dayTotal.kcal - parseInt(macrosKcal)) <= 100 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+              <span className={Math.abs(dayTotal.kcal - parseInt(macrosKcal)) <= 100 ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}>
                 {dayTotal.kcal - parseInt(macrosKcal) > 0 ? '+' : ''}{dayTotal.kcal - parseInt(macrosKcal)} kcal
               </span>
             </div>
@@ -396,7 +396,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
       {mealPlan.length > 0 && (
         <button onClick={() => setMealPlan([])}
-          className="text-xs text-red-400 hover:text-red-600 font-semibold">
+          className="text-xs text-red-400 hover:text-red-400 font-semibold">
           🗑 Clear entire meal plan
         </button>
       )}
@@ -658,35 +658,35 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="space-y-4">
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-[#9a9aa6]">
           Set the fasting window. Member sees a live bar showing exactly where they are right now.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
               Fast Begins ⏸
             </label>
             <input type="time" value={fasting.start} onChange={e => setF('start', e.target.value)}
-              className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+              className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
               Eating Window Opens ▶
             </label>
             <input type="time" value={fasting.end} onChange={e => setF('end', e.target.value)}
-              className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+              className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
           </div>
         </div>
 
         {/* Live preview bar */}
         {hasValues && (
-          <div className="bg-stone-50 rounded-2xl p-3">
-            <div className="flex justify-between text-xs text-stone-500 mb-1.5">
+          <div className="bg-white/[0.04] rounded-2xl p-3">
+            <div className="flex justify-between text-xs text-[#9a9aa6] mb-1.5">
               <span className="font-semibold text-blue-600">🔵 Fasting {fastHrs.toFixed(1)}h</span>
-              <span className="font-semibold text-emerald-600">🟢 Eating {eatHrs.toFixed(1)}h</span>
+              <span className="font-semibold text-emerald-300">🟢 Eating {eatHrs.toFixed(1)}h</span>
             </div>
             <div className="h-5 rounded-full overflow-hidden flex">
               {segments.map((s, i) => (
@@ -694,38 +694,38 @@ function EditMemberModal({ member, onClose, onSaved }) {
                   className={s.type === 'eat' ? 'bg-emerald-400' : 'bg-blue-400'} />
               ))}
             </div>
-            <div className="flex justify-between mt-1 text-xs text-stone-400">
+            <div className="flex justify-between mt-1 text-xs text-[#9a9aa6]">
               <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span><span>12AM</span>
             </div>
-            <p className="text-xs text-stone-500 mt-2 text-center font-medium">
+            <p className="text-xs text-[#9a9aa6] mt-2 text-center font-medium">
               Eating: {fasting.end} – {fasting.start} · Fasting: {fasting.start} – {fasting.end}
             </p>
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
             Protocol Label (shown to member)
           </label>
           <input value={fasting.label} onChange={e => setF('label', e.target.value)}
             placeholder="e.g. 16:8 Intermittent Fasting"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+            className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
             Member-Facing Note
           </label>
           <textarea value={fasting.note} onChange={e => setF('note', e.target.value)} rows={2}
             placeholder="e.g. Water and black coffee allowed during fasting window"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800 resize-none" />
+            className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0] resize-none" />
         </div>
 
         {(fasting.start || fasting.end) && (
           <button onClick={() => setFasting({ start:'', end:'', note:'', label:'' })}
-            className="text-xs text-red-400 hover:text-red-600 font-semibold">
+            className="text-xs text-red-400 hover:text-red-400 font-semibold">
             🗑 Clear fasting window
           </button>
         )}
@@ -746,75 +746,75 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="space-y-3">
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-[#9a9aa6]">
           Set daily targets. Member sees live progress bars that fill as food is logged.
         </p>
 
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
             Daily Calorie Target (kcal)
           </label>
           <input type="number" value={macros.kcal} onChange={e => setM('kcal', e.target.value)}
             placeholder="e.g. 1450"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+            className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           {[['pro','Protein (g)','66'],['carb','Net Carbs (g)','144'],['fat','Fat (g)','57']].map(([k,lbl,ph]) => (
             <div key={k}>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">{lbl}</label>
+              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">{lbl}</label>
               <input type="number" value={macros[k]} onChange={e => setM(k, e.target.value)}
                 placeholder={ph}
-                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
             </div>
           ))}
         </div>
 
         {/* Live macro → kcal calculator */}
         {(p > 0 || c > 0 || f > 0) && (
-          <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+          <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-[rgba(52,211,153,0.10)]' : 'bg-[rgba(251,191,36,0.10)]'}`}>
             <div className="flex justify-between items-center">
-              <span className="text-stone-500">
-                {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-stone-700">{fromMacros} kcal from macros</span>
+              <span className="text-[#9a9aa6]">
+                {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-[#d8d8de]">{fromMacros} kcal from macros</span>
               </span>
               {target > 0 && (
-                <span className={`font-bold ml-2 ${diffOk ? 'text-emerald-600' : 'text-amber-600'}`}>
+                <span className={`font-bold ml-2 ${diffOk ? 'text-emerald-300' : 'text-amber-300'}`}>
                   {diffOk ? '✓ Balanced' : `${diff > 0 ? '+' : ''}${diff} kcal off`}
                 </span>
               )}
             </div>
             {!diffOk && (
-              <p className="text-amber-600 mt-1">⚠️ Macro kcal is {absDiff} kcal away from target — adjust to match.</p>
+              <p className="text-amber-300 mt-1">⚠️ Macro kcal is {absDiff} kcal away from target — adjust to match.</p>
             )}
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
             Phase / Label (shown to member)
           </label>
           <input value={macros.phase} onChange={e => setM('phase', e.target.value)}
             placeholder="e.g. Phase 1 — Fat Loss"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+            className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
         </div>
 
         {(macros.kcal || macros.pro) && (
           <button onClick={() => setMacros({ kcal:'', pro:'', carb:'', fat:'', phase:'' })}
-            className="text-xs text-red-400 hover:text-red-600 font-semibold">
+            className="text-xs text-red-400 hover:text-red-400 font-semibold">
             🗑 Clear macro targets
           </button>
         )}
 
         {/* Sprint 5: Clinical RDA Overrides */}
-        <div className="border-t border-stone-100 pt-3">
+        <div className="border-t border-white/[0.07] pt-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-stone-500 uppercase tracking-wider">★ Clinical RDA Overrides</p>
-            <span className="text-xs text-stone-400">Leave blank = use defaults</span>
+            <p className="text-xs font-bold text-[#9a9aa6] uppercase tracking-wider">★ Clinical RDA Overrides</p>
+            <span className="text-xs text-[#9a9aa6]">Leave blank = use defaults</span>
           </div>
-          <p className="text-xs text-stone-400 mb-3">
+          <p className="text-xs text-[#9a9aa6] mb-3">
             Override default nutrient targets for this member's specific needs (e.g. B12 deficiency, osteoporosis).
           </p>
           <div className="space-y-2">
@@ -824,18 +824,18 @@ function EditMemberModal({ member, onClose, onSaved }) {
               const current = rdaOverrides[key] || '';
               return (
                 <div key={key} className="flex items-center gap-2">
-                  <span className="text-xs text-stone-600 w-28 flex-shrink-0">{meta.icon} {meta.label}</span>
+                  <span className="text-xs text-[#9a9aa6] w-28 flex-shrink-0">{meta.icon} {meta.label}</span>
                   <input
                     type="number"
                     value={current}
                     onChange={e => setRda(key, e.target.value)}
                     placeholder={`${meta.rda} ${meta.unit}`}
                     className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 ${
-                      current ? 'border-purple-300 bg-purple-50 text-purple-800 font-semibold' : 'border-stone-200'}`}
+                      current ? 'border-[rgba(192,132,252,0.40)] bg-[rgba(192,132,252,0.10)] text-purple-300 font-semibold' : 'border-white/[0.08]'}`}
                   />
-                  <span className="text-xs text-stone-400 w-10">{meta.unit}</span>
+                  <span className="text-xs text-[#9a9aa6] w-10">{meta.unit}</span>
                   {current && (
-                    <button onClick={() => setRda(key, '')} className="text-stone-300 hover:text-red-400 text-sm flex-shrink-0">×</button>
+                    <button onClick={() => setRda(key, '')} className="text-[#d8d8de] hover:text-red-400 text-sm flex-shrink-0">×</button>
                   )}
                 </div>
               );
@@ -843,7 +843,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
           </div>
           {Object.keys(rdaOverrides).length > 0 && (
             <button onClick={() => setRdaOverrides({})}
-              className="text-xs text-red-400 hover:text-red-600 font-semibold mt-2">
+              className="text-xs text-red-400 hover:text-red-400 font-semibold mt-2">
               🗑 Clear all overrides
             </button>
           )}
@@ -854,37 +854,37 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
   // ── Inline timing edit form ────────────────────────────────────────────────
   const EditForm = ({ onSave, onCancel }) => (
-    <div className="mt-2 ml-7 space-y-2 p-2.5 bg-stone-50 rounded-xl border border-stone-200">
+    <div className="mt-2 ml-7 space-y-2 p-2.5 bg-white/[0.04] rounded-xl border border-white/[0.08]">
       <div className="flex gap-2">
         <div className="flex-1">
-          <p className="text-xs text-stone-400 mb-1">Label</p>
+          <p className="text-xs text-[#9a9aa6] mb-1">Label</p>
           <input value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
             placeholder="Item name"
-            className="w-full text-sm border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+            className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
         </div>
       </div>
       <div>
-        <p className="text-xs text-stone-400 mb-1">Description (optional)</p>
+        <p className="text-xs text-[#9a9aa6] mb-1">Description (optional)</p>
         <input value={draft.sub} onChange={e => setDraft(d => ({ ...d, sub: e.target.value }))}
           placeholder="e.g. 30 min · 6:30–7:00 AM"
-          className="w-full text-sm border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+          className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <p className="text-xs text-stone-400 mb-1">From</p>
+          <p className="text-xs text-[#9a9aa6] mb-1">From</p>
           <input type="time" value={draft.fromTime} onChange={e => setDraft(d => ({ ...d, fromTime: e.target.value }))}
-            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
         </div>
         <div>
-          <p className="text-xs text-stone-400 mb-1">To</p>
+          <p className="text-xs text-[#9a9aa6] mb-1">To</p>
           <input type="time" value={draft.toTime} onChange={e => setDraft(d => ({ ...d, toTime: e.target.value }))}
-            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
         </div>
         <div>
-          <p className="text-xs text-stone-400 mb-1">Duration</p>
+          <p className="text-xs text-[#9a9aa6] mb-1">Duration</p>
           <input value={draft.totalTime} onChange={e => setDraft(d => ({ ...d, totalTime: e.target.value }))}
             placeholder="30 min"
-            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
         </div>
       </div>
       <div className="flex gap-2 pt-1">
@@ -893,7 +893,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
           ✓ Save
         </button>
         <button onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-700 rounded-lg border border-stone-200">
+          className="px-3 py-1.5 text-xs text-[#9a9aa6] hover:text-[#d8d8de] rounded-lg border border-white/[0.08]">
           Cancel
         </button>
       </div>
@@ -902,36 +902,36 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
   // ── Add new custom item form ───────────────────────────────────────────────
   const AddForm = ({ protoKey }) => (
-    <div className="mt-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2">
-      <p className="text-xs font-semibold text-emerald-700">New item</p>
+    <div className="mt-2 p-2.5 bg-[rgba(52,211,153,0.10)] rounded-xl border border-[rgba(52,211,153,0.25)] space-y-2">
+      <p className="text-xs font-semibold text-emerald-300">New item</p>
       <input autoFocus value={newItem.label}
         onChange={e => setNewItem(n => ({ ...n, label: e.target.value }))}
         onKeyDown={e => e.key === 'Enter' && confirmAddCustom(protoKey)}
         placeholder="Item name (required)"
-        className="w-full text-sm border border-emerald-300 rounded-lg px-2.5 py-1.5 outline-none focus:border-emerald-500 bg-white" />
+        className="w-full text-sm border border-[rgba(52,211,153,0.30)] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(52,211,153,0.40)] bg-white" />
       <input value={newItem.sub}
         onChange={e => setNewItem(n => ({ ...n, sub: e.target.value }))}
         placeholder="Description (optional)"
-        className="w-full text-sm border border-stone-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+        className="w-full text-sm border border-white/[0.08] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <p className="text-xs text-stone-400 mb-1">From</p>
+          <p className="text-xs text-[#9a9aa6] mb-1">From</p>
           <input type="time" value={newItem.fromTime}
             onChange={e => setNewItem(n => ({ ...n, fromTime: e.target.value }))}
-            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
         </div>
         <div>
-          <p className="text-xs text-stone-400 mb-1">To</p>
+          <p className="text-xs text-[#9a9aa6] mb-1">To</p>
           <input type="time" value={newItem.toTime}
             onChange={e => setNewItem(n => ({ ...n, toTime: e.target.value }))}
-            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
         </div>
         <div>
-          <p className="text-xs text-stone-400 mb-1">Duration</p>
+          <p className="text-xs text-[#9a9aa6] mb-1">Duration</p>
           <input value={newItem.totalTime}
             onChange={e => setNewItem(n => ({ ...n, totalTime: e.target.value }))}
             placeholder="30 min"
-            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 outline-none focus:border-emerald-400 bg-white" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
         </div>
       </div>
       <div className="flex gap-2">
@@ -940,7 +940,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
           + Add
         </button>
         <button onClick={() => { setAddingKey(null); setNewItem({ label:'',sub:'',fromTime:'',toTime:'',totalTime:'' }); }}
-          className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-700 rounded-lg border border-stone-200">
+          className="px-3 py-1.5 text-xs text-[#9a9aa6] hover:text-[#d8d8de] rounded-lg border border-white/[0.08]">
           Cancel
         </button>
       </div>
@@ -953,8 +953,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
     const assigned = proto[protoKey] || items.map(i => i.id);
 
     return (
-      <div className="border border-stone-100 rounded-2xl p-3 space-y-1">
-        <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mb-2">{icon} {label}</p>
+      <div className="border border-white/[0.07] rounded-2xl p-3 space-y-1">
+        <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6] mb-2">{icon} {label}</p>
 
         {allItems.map(item => {
           const ov       = overrides[item.id] || {};
@@ -976,20 +976,20 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
                 {/* Label + sub */}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-stone-700 leading-tight">{dispLabel}</div>
-                  {subLine && <div className="text-xs text-stone-400 mt-0.5">{subLine}</div>}
+                  <div className="text-sm font-medium text-[#d8d8de] leading-tight">{dispLabel}</div>
+                  {subLine && <div className="text-xs text-[#9a9aa6] mt-0.5">{subLine}</div>}
                 </div>
 
                 {/* Edit button */}
                 <button onClick={() => isEditing ? setEditingId(null) : startEdit(item)}
                   className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors flex-shrink-0 ${
-                    isEditing ? 'bg-emerald-100 text-emerald-700' : 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50'}`}>
+                    isEditing ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' : 'text-[#9a9aa6] hover:text-emerald-300 hover:bg-[rgba(52,211,153,0.10)]'}`}>
                   ✏️
                 </button>
 
                 {/* Delete button */}
                 <button onClick={() => deleteItem(protoKey, item.id, !!item.custom)}
-                  className="text-xs px-2 py-1 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                  className="text-xs px-2 py-1 rounded-lg text-[#d8d8de] hover:text-red-400 hover:bg-[rgba(248,113,113,0.10)] transition-colors flex-shrink-0">
                   🗑
                 </button>
               </div>
@@ -1005,7 +1005,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
           ? <AddForm protoKey={protoKey} />
           : (
             <button onClick={() => setAddingKey(protoKey)}
-              className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-800 font-semibold mt-2 px-1">
+              className="flex items-center gap-1.5 text-xs text-emerald-300 hover:text-emerald-800 font-semibold mt-2 px-1">
               <span className="text-base leading-none">+</span> Add custom item
             </button>
           )
@@ -1017,11 +1017,11 @@ function EditMemberModal({ member, onClose, onSaved }) {
   return (
     <Modal title={`Edit — ${member.name}`} onClose={onClose}>
       {/* Tab switcher */}
-      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl mb-4">
+      <div className="flex gap-1 bg-white/[0.06] p-1 rounded-xl mb-4">
         {[['identity','👤 Identity'],['protocol','📋 Protocol']].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-              tab === id ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500'}`}>
+              tab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9a9aa6]'}`}>
             {label}
           </button>
         ))}
@@ -1029,16 +1029,16 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
       {tab === 'identity' && (
         <div className="space-y-3">
-          <p className="text-xs font-bold tracking-widest uppercase text-stone-400">Identity</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6]">Identity</p>
           <Field label="Full Name"        value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
           <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
 
-          <div className="border border-stone-100 rounded-2xl p-3 space-y-3">
+          <div className="border border-white/[0.07] rounded-2xl p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold tracking-widest uppercase text-stone-400">PIN / Password</p>
+              <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6]">PIN / Password</p>
               <button onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
                 className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                  showPin ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                  showPin ? 'bg-[rgba(248,113,113,0.10)] text-red-400' : 'bg-[rgba(52,211,153,0.10)] text-emerald-300'}`}>
                 {showPin ? 'Cancel' : '🔑 Change PIN'}
               </button>
             </div>
@@ -1048,11 +1048,11 @@ function EditMemberModal({ member, onClose, onSaved }) {
                 <Field label="Confirm PIN" type="password" value={form.confirmPin} onChange={v=>set('confirmPin',v)} placeholder="Repeat PIN" />
               </>
             ) : (
-              <p className="text-xs text-stone-400">Leave unchanged — member uses existing PIN.</p>
+              <p className="text-xs text-[#9a9aa6]">Leave unchanged — member uses existing PIN.</p>
             )}
           </div>
 
-          <p className="text-xs font-bold tracking-widest uppercase text-stone-400 mt-1">Profile</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6] mt-1">Profile</p>
           <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
           <Field label="Start Weight (kg)"  type="number" value={form.start_weight}  onChange={v=>set('start_weight',v)}  placeholder="85" />
           <Field label="Target Weight (kg)" type="number" value={form.target_weight} onChange={v=>set('target_weight',v)} placeholder="70" />
@@ -1062,11 +1062,11 @@ function EditMemberModal({ member, onClose, onSaved }) {
       {tab === 'protocol' && (
         <div className="space-y-3">
           {/* Protocol sub-tabs */}
-          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
+          <div className="flex gap-1 bg-white/[0.06] p-1 rounded-xl">
             {[['items','📋 Items'],['fasting','⏰ Fasting'],['macros','🎯 Macros'],['meals','🍽 Meal Plan']].map(([id, label]) => (
               <button key={id} onClick={() => setProtoTab(id)}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                  protoTab === id ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>
+                  protoTab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9a9aa6] hover:text-[#d8d8de]'}`}>
                 {label}
               </button>
             ))}
@@ -1074,7 +1074,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
           {protoTab === 'items' && (
             <>
-              <p className="text-xs text-stone-400 bg-amber-50 px-3 py-2 rounded-xl">
+              <p className="text-xs text-[#9a9aa6] bg-[rgba(251,191,36,0.10)] px-3 py-2 rounded-xl">
                 ✅ Check/uncheck to assign. ✏️ Edit label & timing. 🗑 Delete item.
               </p>
               <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />
@@ -1095,7 +1095,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         </div>
       )}
 
-      {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl mt-3">{error}</p>}
+      {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl mt-3">{error}</p>}
 
       <button onClick={submit} disabled={saving}
         className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
@@ -1134,20 +1134,20 @@ function PushModal({ members, onClose }) {
         {result ? (
           <div className="text-center py-4 space-y-2">
             <div className="text-4xl">📨</div>
-            <p className="font-bold text-stone-800">Notification sent!</p>
-            <p className="text-sm text-stone-500">
-              Delivered to <span className="font-semibold text-emerald-600">{result.sent}</span> device{result.sent !== 1 ? 's' : ''}
+            <p className="font-bold text-[#ededf0]">Notification sent!</p>
+            <p className="text-sm text-[#9a9aa6]">
+              Delivered to <span className="font-semibold text-emerald-300">{result.sent}</span> device{result.sent !== 1 ? 's' : ''}
               {result.failed > 0 && `, ${result.failed} failed`}
             </p>
-            <button onClick={onClose} className="mt-2 text-sm font-semibold text-stone-500 hover:text-stone-700">Close</button>
+            <button onClick={onClose} className="mt-2 text-sm font-semibold text-[#9a9aa6] hover:text-[#d8d8de]">Close</button>
           </div>
         ) : (
           <>
             <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Recipient</label>
+              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Recipient</label>
               <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)}
-                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm bg-white
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800">
+                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-white
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]">
                 <option value="">📢 All active members ({members.filter(m => m.active).length})</option>
                 {members.filter(m => m.active).map(m => (
                   <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
@@ -1156,29 +1156,29 @@ function PushModal({ members, onClose }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Title</label>
+              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Title</label>
               <input value={form.title} onChange={e => set('title', e.target.value)}
                 placeholder="e.g. Reminder: Log your weight today"
-                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
+                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Message</label>
+              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Message</label>
               <textarea value={form.body} onChange={e => set('body', e.target.value)} rows={3}
                 placeholder="e.g. Great work this week! Don't forget to log your morning weight."
-                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm resize-none
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
-              <p className="text-xs text-stone-400 mt-1">{form.body.length}/140 characters</p>
+                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm resize-none
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+              <p className="text-xs text-[#9a9aa6] mt-1">{form.body.length}/140 characters</p>
             </div>
 
-            <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-              <p className="text-xs text-amber-700 font-medium">
+            <div className="bg-[rgba(251,191,36,0.10)] border border-[rgba(251,191,36,0.25)] rounded-xl px-3 py-2">
+              <p className="text-xs text-amber-300 font-medium">
                 ⚠ Only members with push notifications enabled will receive this.
               </p>
             </div>
 
-            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
 
             <button onClick={send} disabled={sending || !form.title.trim() || !form.body.trim()}
               className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
@@ -1222,27 +1222,27 @@ function AddMonitorModal({ onClose, onAdded }) {
         <Field label="Password" type="password" value={form.password} onChange={v=>set('password',v)} placeholder="Min 8 characters" required />
 
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Role</label>
+          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Role</label>
           <div className="flex gap-2">
             {['monitor','admin'].map(r => (
               <button key={r} onClick={() => set('role', r)}
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all capitalize ${
                   form.role === r
                     ? 'bg-white/[0.08] border border-white/[0.10] text-[#ededf0] border-stone-800'
-                    : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'
+                    : 'bg-white text-[#9a9aa6] border-white/[0.08] hover:border-white/[0.10]'
                 }`}>
                 {r === 'admin' ? '👑 Admin' : '🏋️ Monitor'}
               </button>
             ))}
           </div>
           {form.role === 'admin' && (
-            <p className="text-xs text-amber-600 mt-1.5 bg-amber-50 px-3 py-1.5 rounded-lg">
+            <p className="text-xs text-amber-300 mt-1.5 bg-[rgba(251,191,36,0.10)] px-3 py-1.5 rounded-lg">
               Admin has full access including creating/managing all users.
             </p>
           )}
         </div>
 
-        {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+        {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving}
           className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
@@ -1275,8 +1275,8 @@ function AssignModal({ member, monitors, onClose, onAssigned }) {
     <Modal title={`Assign Monitor — ${member.name}`} onClose={onClose}>
       <div className="space-y-4">
         <select value={monitorId} onChange={e => setMonitorId(e.target.value)}
-          className="w-full border border-stone-200 rounded-xl px-3 py-3 text-sm
-            focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white text-stone-800">
+          className="w-full border border-white/[0.08] rounded-xl px-3 py-3 text-sm
+            focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white text-[#ededf0]">
           <option value="">— Unassigned —</option>
           {monitors.map(m => (
             <option key={m.id} value={m.id}>{m.name} · {m.role} · {m.patient_count} members</option>
@@ -1430,10 +1430,10 @@ export default function AdminDashboard() {
             {/* Quick stats */}
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'Total Members',    value: overview.stats.total_members,         color: 'bg-blue-50 text-blue-700' },
-                { label: 'Logged Today',     value: `${overview.stats.logged_today} / ${overview.stats.total_members}`, color: 'bg-emerald-50 text-emerald-700' },
-                { label: '7-Day Avg Comply', value: `${overview.stats.avg_compliance_7d}%`, color: overview.stats.avg_compliance_7d >= 75 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' },
-                { label: 'Total Weight Lost',value: `${overview.stats.total_weight_lost_kg} kg`, color: 'bg-purple-50 text-purple-700' },
+                { label: 'Total Members',    value: overview.stats.total_members,         color: 'bg-[rgba(96,165,250,0.10)] text-blue-300' },
+                { label: 'Logged Today',     value: `${overview.stats.logged_today} / ${overview.stats.total_members}`, color: 'bg-[rgba(52,211,153,0.10)] text-emerald-300' },
+                { label: '7-Day Avg Comply', value: `${overview.stats.avg_compliance_7d}%`, color: overview.stats.avg_compliance_7d >= 75 ? 'bg-[rgba(52,211,153,0.10)] text-emerald-300' : 'bg-[rgba(251,191,36,0.10)] text-amber-300' },
+                { label: 'Total Weight Lost',value: `${overview.stats.total_weight_lost_kg} kg`, color: 'bg-[rgba(192,132,252,0.10)] text-purple-300' },
               ].map(s => (
                 <div key={s.label} className={`rounded-2xl px-4 py-3 ${s.color}`}>
                   <div className="text-xl font-bold">{s.value}</div>
@@ -1444,13 +1444,13 @@ export default function AdminDashboard() {
 
             {/* Alerts — members who haven't logged */}
             {overview.alerts.length > 0 && (
-              <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
-                <p className="text-sm font-bold text-red-700 mb-2">⚠️ Needs Attention ({overview.alerts.length})</p>
+              <div className="bg-[rgba(248,113,113,0.10)] border border-[rgba(248,113,113,0.25)] rounded-2xl p-4">
+                <p className="text-sm font-bold text-red-400 mb-2">⚠️ Needs Attention ({overview.alerts.length})</p>
                 <div className="space-y-1">
                   {overview.alerts.map(a => (
                     <div key={a.id} className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-red-800">{a.name}</span>
-                      <span className="text-red-500 font-bold">
+                      <span className="font-medium text-red-300">{a.name}</span>
+                      <span className="text-red-400 font-bold">
                         {a.days_since ? `${a.days_since}d no log` : 'Never logged'}
                       </span>
                     </div>
@@ -1460,23 +1460,23 @@ export default function AdminDashboard() {
             )}
 
             {/* Today's detail per member */}
-            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-stone-100 overflow-hidden">
-              <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100">
-                <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Today's Compliance</span>
+            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-white/[0.07] overflow-hidden">
+              <div className="px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.07]">
+                <span className="text-xs font-bold text-[#9a9aa6] uppercase tracking-wider">Today's Compliance</span>
               </div>
               {overview.today_detail.map(m => {
                 const pct = m.compliance_pct || 0;
                 const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-stone-200';
-                const textColor = pct >= 75 ? 'text-emerald-700' : pct >= 50 ? 'text-amber-700' : pct > 0 ? 'text-red-600' : 'text-stone-400';
+                const textColor = pct >= 75 ? 'text-emerald-300' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-[#9a9aa6]';
                 return (
-                  <div key={m.id} className="flex items-center gap-3 px-4 py-3 border-b border-stone-50 last:border-0">
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] last:border-0">
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-stone-700">{m.name}</span>
-                      {m.monitor_name && <span className="text-xs text-stone-400 ml-2">· {m.monitor_name}</span>}
+                      <span className="text-sm font-medium text-[#d8d8de]">{m.name}</span>
+                      {m.monitor_name && <span className="text-xs text-[#9a9aa6] ml-2">· {m.monitor_name}</span>}
                     </div>
-                    {m.weight_kg && <span className="text-xs font-semibold text-emerald-600">{m.weight_kg} kg</span>}
+                    {m.weight_kg && <span className="text-xs font-semibold text-emerald-300">{m.weight_kg} kg</span>}
                     <div className="flex items-center gap-2">
-                      <div className="w-20 h-2 bg-stone-100 rounded-full overflow-hidden">
+                      <div className="w-20 h-2 bg-white/[0.06] rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
                       </div>
                       <span className={`text-xs font-bold w-8 text-right ${textColor}`}>
@@ -1489,19 +1489,19 @@ export default function AdminDashboard() {
             </div>
 
             {/* 7-day compliance ranking */}
-            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-stone-100 overflow-hidden">
-              <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100">
-                <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">7-Day Average Compliance</span>
+            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-white/[0.07] overflow-hidden">
+              <div className="px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.07]">
+                <span className="text-xs font-bold text-[#9a9aa6] uppercase tracking-wider">7-Day Average Compliance</span>
               </div>
               {overview.compliance_7d.map(m => {
                 const pct = parseFloat(m.avg_7d) || 0;
                 return (
-                  <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-stone-50 last:border-0">
-                    <span className="text-sm text-stone-700 flex-1">{m.name}</span>
-                    <span className="text-xs text-stone-400">{m.days_logged} days</span>
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.06] last:border-0">
+                    <span className="text-sm text-[#d8d8de] flex-1">{m.name}</span>
+                    <span className="text-xs text-[#9a9aa6]">{m.days_logged} days</span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      pct >= 75 ? 'bg-emerald-100 text-emerald-700' :
-                      pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'
+                      pct >= 75 ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' :
+                      pct >= 50 ? 'bg-[rgba(251,191,36,0.14)] text-amber-300' : 'bg-[rgba(248,113,113,0.10)] text-red-400'
                     }`}>{Math.round(pct)}%</span>
                   </div>
                 );
@@ -1512,93 +1512,93 @@ export default function AdminDashboard() {
             <button onClick={() => navigate('/admin/foods')}
               className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
               🥗 Food Database Manager
-              <span className="text-stone-400 text-xs">→</span>
+              <span className="text-[#9a9aa6] text-xs">→</span>
             </button>
           </div>
         )}
 
         {tab === 'overview' && !overview && !loading && (
-          <p className="text-center text-stone-400 py-8">Overview data loading…</p>
+          <p className="text-center text-[#9a9aa6] py-8">Overview data loading…</p>
         )}
 
         {/* ── Members tab ── */}
         {tab === 'members' && (
           <>
             {filtered(members, 'name').length === 0 ? (
-              <div className="text-center py-16 text-stone-400">
+              <div className="text-center py-16 text-[#9a9aa6]">
                 <div className="text-4xl mb-3">👥</div>
                 <p className="font-medium">No members yet</p>
                 <button onClick={() => setShowAddMember(true)}
-                  className="mt-3 text-emerald-600 font-semibold text-sm">+ Add first member</button>
+                  className="mt-3 text-emerald-300 font-semibold text-sm">+ Add first member</button>
               </div>
             ) : (
               filtered(members, 'name').map(m => {
                 const noLog = m.last_logged !== today;
                 return (
                   <div key={m.id} className={`bg-[#131317] rounded-2xl border border-white/[0.08] p-4 shadow-card border
-                    ${!m.active ? 'opacity-50 border-stone-200' : noLog ? 'border-amber-200' : 'border-stone-100'}`}>
+                    ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-stone-800 truncate">{m.name}</h3>
-                          {!m.active && <span className="text-xs bg-stone-100 text-stone-400 px-2 py-0.5 rounded-full">Inactive</span>}
+                          <h3 className="font-bold text-[#ededf0] truncate">{m.name}</h3>
+                          {!m.active && <span className="text-xs bg-white/[0.06] text-[#9a9aa6] px-2 py-0.5 rounded-full">Inactive</span>}
                         </div>
-                        <p className="text-xs text-stone-400 mt-0.5">📱 {m.phone}</p>
+                        <p className="text-xs text-[#9a9aa6] mt-0.5">📱 {m.phone}</p>
                         {m.monitor_name ? (
-                          <p className="text-xs text-emerald-600 mt-0.5 font-medium">🏋️ {m.monitor_name}</p>
+                          <p className="text-xs text-emerald-300 mt-0.5 font-medium">🏋️ {m.monitor_name}</p>
                         ) : (
-                          <p className="text-xs text-amber-500 mt-0.5">⚠ Unassigned</p>
+                          <p className="text-xs text-amber-300 mt-0.5">⚠ Unassigned</p>
                         )}
                       </div>
                       <div className="text-right flex-shrink-0">
                         {m.latest_weight && (
-                          <div className="font-bold text-stone-700 text-sm">{m.latest_weight} kg</div>
+                          <div className="font-bold text-[#d8d8de] text-sm">{m.latest_weight} kg</div>
                         )}
                         {m.last_compliance != null && (
                           <div className={`text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 inline-block ${
-                            m.last_compliance >= 75 ? 'bg-emerald-100 text-emerald-700' :
-                            m.last_compliance >= 50 ? 'bg-amber-100 text-amber-700' :
-                                                       'bg-red-100 text-red-700'
+                            m.last_compliance >= 75 ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' :
+                            m.last_compliance >= 50 ? 'bg-[rgba(251,191,36,0.14)] text-amber-300' :
+                                                       'bg-[rgba(248,113,113,0.14)] text-red-400'
                           }`}>{m.last_compliance}%</div>
                         )}
                       </div>
                     </div>
 
                     {/* Row 2 — target + actions */}
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-50">
-                      <div className="text-xs text-stone-400">
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.06]">
+                      <div className="text-xs text-[#9a9aa6]">
                         {m.start_weight && m.target_weight && (
                           <span>{m.start_weight} kg → {m.target_weight} kg goal</span>
                         )}
                         {noLog && m.active && (
-                          <span className="text-amber-500 font-medium ml-2">· No log today</span>
+                          <span className="text-amber-300 font-medium ml-2">· No log today</span>
                         )}
                         {/* Sprint 9: PIN status badge */}
                         {m.has_pin === false && m.active && (
-                          <span className="text-amber-600 font-semibold ml-2">· 🔑 No PIN set</span>
+                          <span className="text-amber-300 font-semibold ml-2">· 🔑 No PIN set</span>
                         )}
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={() => setAssignTarget(m)}
-                          className="text-xs px-2.5 py-1.5 bg-emerald-50 text-emerald-700 font-semibold
-                            rounded-lg hover:bg-emerald-100 transition-colors">
+                          className="text-xs px-2.5 py-1.5 bg-[rgba(52,211,153,0.10)] text-emerald-300 font-semibold
+                            rounded-lg hover:bg-[rgba(52,211,153,0.14)] transition-colors">
                           Assign
                         </button>
                         <button onClick={() => setEditTarget(m)}
-                          className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-700 font-semibold
-                            rounded-lg hover:bg-blue-100 transition-colors">
+                          className="text-xs px-2.5 py-1.5 bg-[rgba(96,165,250,0.10)] text-blue-300 font-semibold
+                            rounded-lg hover:bg-[rgba(96,165,250,0.14)] transition-colors">
                           ✏️ Edit
                         </button>
                         <button onClick={() => navigate(`/monitor/${m.id}`)}
-                          className="text-xs px-2.5 py-1.5 bg-stone-50 text-stone-600 font-semibold
+                          className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-[#9a9aa6] font-semibold
                             rounded-lg hover:bg-white/[0.05] transition-colors">
                           View
                         </button>
                         <button onClick={() => toggleUser(m.id, 'member')}
                           className={`text-xs px-2.5 py-1.5 font-semibold rounded-lg transition-colors ${
                             m.active
-                              ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                              : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                              ? 'bg-[rgba(248,113,113,0.10)] text-red-400 hover:bg-[rgba(248,113,113,0.14)]'
+                              : 'bg-[rgba(52,211,153,0.10)] text-emerald-300 hover:bg-[rgba(52,211,153,0.14)]'
                           }`}>
                           {m.active ? 'Disable' : 'Enable'}
                         </button>
@@ -1615,10 +1615,10 @@ export default function AdminDashboard() {
         {tab === 'monitors' && (
           <>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-stone-400">{monitors.length} monitor{monitors.length !== 1 ? 's' : ''} registered</p>
+              <p className="text-xs text-[#9a9aa6]">{monitors.length} monitor{monitors.length !== 1 ? 's' : ''} registered</p>
               <div className="flex gap-2">
                 <button onClick={() => setShowPush(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-stone-600 bg-stone-100
+                  className="flex items-center gap-1.5 text-xs font-bold text-[#9a9aa6] bg-white/[0.06]
                     hover:bg-white/[0.08] px-3 py-2 rounded-xl transition-colors">
                   📨 Send Push
                 </button>
@@ -1630,37 +1630,37 @@ export default function AdminDashboard() {
               </div>
             </div>
             {filtered(monitors, 'name').length === 0 ? (
-              <div className="text-center py-16 text-stone-400">
+              <div className="text-center py-16 text-[#9a9aa6]">
                 <div className="text-4xl mb-3">🏋️</div>
                 <p className="font-medium">No monitors yet</p>
                 <button onClick={() => setShowAddMonitor(true)}
-                  className="mt-3 text-emerald-600 font-semibold text-sm">+ Add first monitor</button>
+                  className="mt-3 text-emerald-300 font-semibold text-sm">+ Add first monitor</button>
               </div>
             ) : (
               filtered(monitors, 'name').map(m => (
                 <div key={m.id} className={`bg-[#131317] rounded-2xl border border-white/[0.08] p-4 shadow-card border
-                  ${!m.active ? 'opacity-50 border-stone-200' : 'border-stone-100'}`}>
+                  ${!m.active ? 'opacity-50 border-white/[0.08]' : 'border-white/[0.07]'}`}>
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-stone-800">{m.name}</h3>
+                        <h3 className="font-bold text-[#ededf0]">{m.name}</h3>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${
                           m.role === 'admin'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-blue-100 text-blue-700'
+                            ? 'bg-[rgba(251,191,36,0.14)] text-amber-300'
+                            : 'bg-[rgba(96,165,250,0.14)] text-blue-300'
                         }`}>
                           {m.role === 'admin' ? '👑 admin' : '🏋️ monitor'}
                         </span>
-                        {!m.active && <span className="text-xs bg-stone-100 text-stone-400 px-2 py-0.5 rounded-full">Inactive</span>}
+                        {!m.active && <span className="text-xs bg-white/[0.06] text-[#9a9aa6] px-2 py-0.5 rounded-full">Inactive</span>}
                       </div>
-                      <p className="text-xs text-stone-400 mt-0.5">✉ {m.email}</p>
-                      <p className="text-xs text-emerald-600 mt-0.5 font-medium">
+                      <p className="text-xs text-[#9a9aa6] mt-0.5">✉ {m.email}</p>
+                      <p className="text-xs text-emerald-300 mt-0.5 font-medium">
                         {m.patient_count} member{m.patient_count !== 1 ? 's' : ''} assigned
                       </p>
                     </div>
                     <div className="flex gap-1.5">
                       <button onClick={() => navigate('/monitor')}
-                        className="text-xs px-2.5 py-1.5 bg-stone-50 text-stone-600 font-semibold
+                        className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-[#9a9aa6] font-semibold
                           rounded-lg hover:bg-white/[0.05] transition-colors">
                         View
                       </button>
@@ -1668,8 +1668,8 @@ export default function AdminDashboard() {
                         <button onClick={() => toggleUser(m.id, 'monitor')}
                           className={`text-xs px-2.5 py-1.5 font-semibold rounded-lg transition-colors ${
                             m.active
-                              ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                              : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                              ? 'bg-[rgba(248,113,113,0.10)] text-red-400 hover:bg-[rgba(248,113,113,0.14)]'
+                              : 'bg-[rgba(52,211,153,0.10)] text-emerald-300 hover:bg-[rgba(52,211,153,0.14)]'
                           }`}>
                           {m.active ? 'Disable' : 'Enable'}
                         </button>
@@ -1689,16 +1689,16 @@ export default function AdminDashboard() {
         {tab === 'audit' && (
           <>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-stone-400">{auditLog.length} recent actions</p>
+              <p className="text-xs text-[#9a9aa6]">{auditLog.length} recent actions</p>
               <button onClick={() => getAuditLog(100).then(r => setAuditLog(r.data || []))}
-                className="text-xs font-semibold text-stone-500 hover:text-stone-700 px-3 py-1.5
-                  bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-200 transition-colors">
+                className="text-xs font-semibold text-[#9a9aa6] hover:text-[#d8d8de] px-3 py-1.5
+                  bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-white/[0.08] transition-colors">
                 ↻ Refresh
               </button>
             </div>
 
             {auditLog.length === 0 ? (
-              <div className="text-center py-16 text-stone-400">
+              <div className="text-center py-16 text-[#9a9aa6]">
                 <div className="text-4xl mb-3">🔍</div>
                 <p className="font-medium">No audit events yet</p>
                 <p className="text-sm mt-1">Actions like creating members, resetting PINs, and toggling accounts will appear here.</p>
@@ -1707,15 +1707,15 @@ export default function AdminDashboard() {
               <div className="space-y-2">
                 {auditLog.map(entry => {
                   const actionConfig = {
-                    member_created:   { icon: '➕', color: 'bg-emerald-50 border-emerald-100 text-emerald-700' },
-                    monitor_created:  { icon: '➕', color: 'bg-blue-50 border-blue-100 text-blue-700' },
-                    monitor_assigned: { icon: '🔗', color: 'bg-purple-50 border-purple-100 text-purple-700' },
-                    member_toggled:   { icon: '⚡', color: 'bg-amber-50 border-amber-100 text-amber-700' },
-                    monitor_toggled:  { icon: '⚡', color: 'bg-amber-50 border-amber-100 text-amber-700' },
-                    pin_reset:        { icon: '🔑', color: 'bg-orange-50 border-orange-100 text-orange-700' },
-                    pin_set:          { icon: '🔑', color: 'bg-orange-50 border-orange-100 text-orange-700' },
-                    weight_logged:    { icon: '⚖️', color: 'bg-stone-50 border-stone-100 text-stone-600' },
-                  }[entry.action] || { icon: '📝', color: 'bg-stone-50 border-stone-100 text-stone-600' };
+                    member_created:   { icon: '➕', color: 'bg-[rgba(52,211,153,0.10)] border-[rgba(52,211,153,0.25)] text-emerald-300' },
+                    monitor_created:  { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
+                    monitor_assigned: { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-purple-300' },
+                    member_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
+                    monitor_toggled:  { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
+                    pin_reset:        { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
+                    pin_set:          { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
+                    weight_logged:    { icon: '⚖️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9a9aa6]' },
+                  }[entry.action] || { icon: '📝', color: 'bg-white/[0.04] border-white/[0.07] text-[#9a9aa6]' };
 
                   const timeAgo = (() => {
                     const diff = Date.now() - new Date(entry.created_at).getTime();

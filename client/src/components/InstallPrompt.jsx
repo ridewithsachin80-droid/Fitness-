@@ -20,8 +20,11 @@ export default function InstallPrompt() {
       return;
     }
 
-    // Already dismissed?
-    if (localStorage.getItem('installDismissed')) return;
+    // Already dismissed? Respect it for 14 days, then offer again — a
+    // permanent dismiss means anyone who closes it once (even by accident)
+    // never sees it again, which isn't what most users actually want.
+    const dismissedAt = localStorage.getItem('installDismissedAt');
+    if (dismissedAt && Date.now() - parseInt(dismissedAt) < 14 * 24 * 60 * 60 * 1000) return;
 
     // iOS detection
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
@@ -61,17 +64,17 @@ export default function InstallPrompt() {
 
   const dismiss = () => {
     setShow(false);
-    localStorage.setItem('installDismissed', 'true');
+    localStorage.setItem('installDismissedAt', Date.now().toString());
   };
 
   if (!show || installed) return null;
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 max-w-sm mx-auto bg-stone-900 text-white
-      rounded-2xl p-4 shadow-float z-50 flex items-center gap-3 fade-up">
+    <div className="fixed bottom-24 left-4 right-4 max-w-sm mx-auto bg-[#131317] border border-white/[0.08] text-white
+      rounded-2xl p-4 shadow-card-raised z-50 flex items-center gap-3 fade-up">
 
       {/* Icon */}
-      <div className="w-10 h-10 bg-emerald-500 rounded-xl flex-shrink-0 flex items-center justify-center">
+      <div className="w-10 h-10 bg-[#7c5cfc] rounded-xl flex-shrink-0 flex items-center justify-center">
         <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round"
             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -80,14 +83,14 @@ export default function InstallPrompt() {
 
       {/* Text */}
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-sm">Add to Home Screen</div>
+        <div className="font-display font-semibold text-sm">Add to Home Screen</div>
         {isIOS ? (
-          <div className="text-xs text-stone-400 mt-0.5">
-            Tap <strong className="text-stone-300">Share</strong> then{' '}
-            <strong className="text-stone-300">Add to Home Screen</strong>
+          <div className="text-xs text-[#9a9aa6] mt-0.5">
+            Tap <strong className="text-[#d8d8de]">Share</strong> then{' '}
+            <strong className="text-[#d8d8de]">Add to Home Screen</strong>
           </div>
         ) : (
-          <div className="text-xs text-stone-400 mt-0.5">
+          <div className="text-xs text-[#9a9aa6] mt-0.5">
             Use as an app — works offline too
           </div>
         )}
@@ -97,7 +100,7 @@ export default function InstallPrompt() {
       {!isIOS && (
         <button
           onClick={install}
-          className="px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs
+          className="px-3 py-2 bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] text-xs
             font-bold rounded-xl flex-shrink-0 transition-colors"
         >
           Install
@@ -106,7 +109,7 @@ export default function InstallPrompt() {
 
       <button
         onClick={dismiss}
-        className="text-stone-500 hover:text-stone-300 text-xl leading-none flex-shrink-0 ml-1"
+        className="text-[#5a5a68] hover:text-[#9a9aa6] text-xl leading-none flex-shrink-0 ml-1"
         aria-label="Dismiss"
       >
         ×
