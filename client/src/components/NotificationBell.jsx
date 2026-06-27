@@ -68,22 +68,29 @@ export default function NotificationBell() {
   return (
     <div className="relative" ref={panelRef}>
       <button onClick={toggle} aria-label="Notifications"
-        className="relative w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.10]
-          flex items-center justify-center hover:bg-white/[0.10] transition-colors">
-        <svg className="w-4 h-4 text-[#d8d8de]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+          unreadCount > 0
+            ? 'bg-[#7c5cfc] shadow-glow'
+            : 'bg-white/[0.08] border border-white/[0.14] hover:bg-white/[0.14]'
+        }`}>
+        {unreadCount > 0 && (
+          <span className="absolute inset-0 rounded-full bg-[#7c5cfc] animate-ping opacity-40" />
+        )}
+        <svg className={`relative w-5 h-5 ${unreadCount > 0 ? 'text-white' : 'text-[#d8d8de]'}`}
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round"
             d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#d4af6a]
-            text-[#08052a] text-[10px] font-bold flex items-center justify-center border-2 border-[#0d0b18]">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-[#d4af6a]
+            text-[#08052a] text-xs font-bold flex items-center justify-center border-2 border-[#0d0b18] z-10">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 w-80 max-w-[88vw] bg-[#131317] border border-white/[0.08]
+        <div className="absolute right-0 top-[52px] w-80 max-w-[88vw] bg-[#131317] border border-white/[0.08]
           rounded-2xl shadow-card-raised z-50 max-h-[70vh] overflow-y-auto">
           <div className="px-4 py-3 border-b border-white/[0.07] sticky top-0 bg-[#131317]">
             <span className="text-sm font-semibold text-[#ededf0]">Reminders sent to you</span>
