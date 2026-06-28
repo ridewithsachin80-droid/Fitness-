@@ -220,6 +220,22 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // Real-time: notify monitors watching this patient — same pattern as
+    // logs.js's log_updated, just for workout sessions, which previously had
+    // no live-update path at all (a coach watching a patient's page live
+    // would only see a logged workout after manually refreshing).
+    try {
+      const monitorRows = await pool.query(
+        `SELECT monitor_id FROM monitor_patients WHERE patient_id = $1 AND active = true`,
+        [patientId]
+      );
+      const payload = { patientId, date, exerciseCount: exercises.length };
+      for (const row of monitorRows.rows) {
+        req.io.to(`monitor_${row.monitor_id}`).emit('workout_updated', payload);
+      }
+    } catch (e) { /* non-fatal — the save itself already succeeded */ }
+
     res.json({ saved: true, session_id: sessionId });
   } catch (err) {
     await client.query('ROLLBACK');

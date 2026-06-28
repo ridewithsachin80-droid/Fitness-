@@ -131,7 +131,7 @@ export default function Profile() {
 
           {/* Avatar + name */}
           <div className="flex items-center gap-4 mb-5">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.10] flex items-center justify-center text-3xl font-display font-semibold select-none">
+            <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.1] flex items-center justify-center text-3xl font-display font-semibold select-none">
               {p.name?.[0]?.toUpperCase()}
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function Profile() {
                 <span>Journey progress</span>
                 <span className="font-bold text-white">{journeyPct}%</span>
               </div>
-              <div className="h-2 bg-white/[0.10] rounded-full overflow-hidden">
+              <div className="h-2 bg-white/[0.1] rounded-full overflow-hidden">
                 <div
                   className="h-2 rounded-full transition-all duration-700"
                   style={{

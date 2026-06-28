@@ -81,7 +81,7 @@ function rowCompliance(log) {
 function WeightTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1a1a20] border border-white/[0.10] rounded-xl px-3 py-2 shadow-float text-xs">
+    <div className="bg-[#1a1a20] border border-white/[0.1] rounded-xl px-3 py-2 shadow-float text-xs">
       <p className="text-stone-400 mb-0.5">{label}</p>
       <p className="font-bold text-emerald-700">{payload[0].value} kg</p>
     </div>
@@ -497,12 +497,20 @@ export default function Monitor() {
   // Real-time: reload when this patient saves a new log
   // Guard: don't fire concurrent re-fetches on rapid socket events
   const reloadTimer = useRef(null);
-  useSync((update) => {
-    if (String(update.patientId) === String(patientId)) {
-      clearTimeout(reloadTimer.current);
-      reloadTimer.current = setTimeout(() => load(), 400); // debounce 400ms
+  const [workoutTick, setWorkoutTick] = useState(0); // bumped on workout_updated, passed to workout child components so they refetch
+  useSync(
+    (update) => {
+      if (String(update.patientId) === String(patientId)) {
+        clearTimeout(reloadTimer.current);
+        reloadTimer.current = setTimeout(() => load(), 400); // debounce 400ms
+      }
+    },
+    (update) => {
+      if (String(update.patientId) === String(patientId)) {
+        setWorkoutTick(t => t + 1);
+      }
     }
-  });
+  );
 
   if (loading) return <PageLoader />;
   if (!data)   return (
@@ -878,7 +886,7 @@ export default function Monitor() {
           )}
         </Card>
 
-        <MuscleCoverage patientId={parseInt(patientId)} />
+        <MuscleCoverage patientId={parseInt(patientId)} refreshTick={workoutTick} />
 
         {/* Daily Log Viewer — date chip navigator + single-date detail */}
         <Card>
@@ -1113,7 +1121,7 @@ export default function Monitor() {
                       })}
                     </div>
 
-                    <WorkoutSessionViewer patientId={parseInt(patientId)} date={activeDate} />
+                    <WorkoutSessionViewer patientId={parseInt(patientId)} date={activeDate} refreshTick={workoutTick} />
 
                     {/* Key nutrients collapsible */}
                     {(log.food_items || []).some(f => f.per_100g) && (() => {

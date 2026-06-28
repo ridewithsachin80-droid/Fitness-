@@ -25,7 +25,7 @@ function Field({ label, children }) {
   );
 }
 
-const inputCls = `w-full bg-[#1a1a20] border border-white/[0.10] rounded-xl px-4 py-3 text-[#ededf0]
+const inputCls = `w-full bg-[#1a1a20] border border-white/[0.1] rounded-xl px-4 py-3 text-[#ededf0]
   text-sm font-medium placeholder-[#3a3a46] outline-none
   focus:border-[rgba(124,92,252,0.40)] focus:ring-2 focus:ring-[rgba(124,92,252,0.12)]
   transition-all duration-200`;
@@ -35,7 +35,7 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
   return (
     <div className="space-y-4 fade-up">
       <Field label="Mobile Number">
-        <div className="flex items-center gap-0 border border-white/[0.10] rounded-xl bg-[#1a1a20]
+        <div className="flex items-center gap-0 border border-white/[0.1] rounded-xl bg-[#1a1a20]
           focus-within:border-[rgba(124,92,252,0.40)] focus-within:ring-2 focus-within:ring-[rgba(124,92,252,0.12)]
           transition-all duration-200 overflow-hidden">
           <span className="pl-4 pr-3 text-[#4e4e5c] text-sm font-medium border-r border-white/[0.08] py-3">+91</span>
@@ -114,7 +114,7 @@ function MonitorForm({ email, password, loading, error, onEmail, onPassword, onL
       )}
 
       <button onClick={onLogin} disabled={!email || !password || loading}
-        className="w-full py-3.5 bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.10]
+        className="w-full py-3.5 bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1]
           disabled:opacity-40 disabled:cursor-not-allowed text-[#ededf0] font-bold rounded-xl
           transition-all duration-200 text-sm active:scale-[0.98]">
         {loading

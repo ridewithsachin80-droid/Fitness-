@@ -12,7 +12,7 @@
 import { useState, useEffect } from 'react';
 import { getWorkout } from '../api/workouts';
 
-export default function WorkoutSessionViewer({ patientId, date }) {
+export default function WorkoutSessionViewer({ patientId, date, refreshTick = 0 }) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +24,7 @@ export default function WorkoutSessionViewer({ patientId, date }) {
       .catch(() => !cancelled && setData(null))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [date, patientId]);
+  }, [date, patientId, refreshTick]);
 
   if (loading) return null; // avoid a flash of "nothing logged" while this loads
   if (!data?.exercises?.length) return null; // nothing logged that day — say nothing rather than an empty box

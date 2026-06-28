@@ -76,7 +76,7 @@ function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const s = payload[0].payload;
   return (
-    <div className="bg-[#1a1a20] border border-white/[0.10] rounded-xl px-3 py-2 shadow-card-raised text-xs">
+    <div className="bg-[#1a1a20] border border-white/[0.1] rounded-xl px-3 py-2 shadow-card-raised text-xs">
       <p className="text-[#5a5a68] mb-1">{formatDateShort(s.date)}</p>
       <p className="font-display font-semibold text-[#ededf0]">e1RM: {s.bestE1rm} kg</p>
       <p className="text-[#9a9aa6]">Best set: {s.bestWeight} kg × {s.bestReps}</p>
@@ -147,7 +147,7 @@ export default function StrengthProgress() {
       </div>
 
       <select value={selectedId || ''} onChange={e => setSelectedId(parseInt(e.target.value))}
-        className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm text-[#ededf0]
+        className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm text-[#ededf0]
           focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)] mb-3">
         {exercises.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
       </select>

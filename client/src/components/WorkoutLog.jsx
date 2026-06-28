@@ -12,7 +12,7 @@
  * log — no manual save button anywhere in this app anymore.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Card, SectionTitle } from './UI';
+import { Card, SectionTitle, CardSkeleton } from './UI';
 import { haptic } from '../store/settingsStore';
 import { searchExercises, addCustomExercise, getWorkout, saveWorkout, getExerciseHistory } from '../api/workouts';
 import { getActiveProgram } from '../api/programs';
@@ -321,7 +321,7 @@ export default function WorkoutLog({ date }) {
 
   const handleDurationChange = (val) => setDurationMin(val);
 
-  if (loading) return null; // page-level loader already covers the rest of DailyLog
+  if (loading) return <Card><CardSkeleton lines={3} /></Card>; // page-level loader already covers the rest of DailyLog; this just avoids an abrupt pop-in for this one card
 
   return (
     <Card>
@@ -377,11 +377,11 @@ export default function WorkoutLog({ date }) {
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
             placeholder="Search exercises… e.g. Bench Press"
-            className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm
+            className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm
               text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]"
           />
           {(results.length > 0 || (search.length >= 2 && !searching)) && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] border border-white/[0.10]
+            <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] border border-white/[0.1]
               rounded-xl shadow-card-raised z-20 max-h-56 overflow-y-auto">
               {results.map(r => (
                 <button key={r.id} onClick={() => addExercise(r)}
@@ -401,7 +401,7 @@ export default function WorkoutLog({ date }) {
         </div>
         <button onClick={startSearchVoice} disabled={listeningSearch}
           className={`px-3.5 rounded-xl border flex items-center justify-center transition-colors ${
-            listeningSearch ? 'bg-[#7c5cfc] border-[#7c5cfc] text-white animate-pulse' : 'bg-white/[0.06] border-white/[0.10] text-[#d8d8de] hover:bg-white/[0.10]'}`}>
+            listeningSearch ? 'bg-[#7c5cfc] border-[#7c5cfc] text-white animate-pulse' : 'bg-white/[0.06] border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1]'}`}>
           🎤
         </button>
       </div>
@@ -449,11 +449,11 @@ export default function WorkoutLog({ date }) {
                       <input type="number" inputMode="decimal" value={set.weight_kg}
                         onChange={e => updateSet(ex.exercise_id, i, 'weight_kg', e.target.value)}
                         placeholder="0"
-                        className="flex-1 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.10] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                        className="flex-1 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
                       <input type="number" inputMode="numeric" value={set.reps}
                         onChange={e => updateSet(ex.exercise_id, i, 'reps', e.target.value)}
                         placeholder="0"
-                        className="flex-1 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.10] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                        className="flex-1 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
                       <button onClick={() => removeSet(ex.exercise_id, i)} className="w-6 text-[#5a5a68] hover:text-red-400 text-sm">×</button>
                     </div>
                   ))}
@@ -469,7 +469,7 @@ export default function WorkoutLog({ date }) {
                   className={`px-3.5 py-2 rounded-lg border text-xs font-semibold transition-colors ${
                     listeningSetKey === ex.exercise_id
                       ? 'bg-[#7c5cfc] border-[#7c5cfc] text-white animate-pulse'
-                      : 'bg-white/[0.06] border-white/[0.10] text-[#d8d8de] hover:bg-white/[0.10]'}`}>
+                      : 'bg-white/[0.06] border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1]'}`}>
                   🎤 {listeningSetKey === ex.exercise_id ? 'Listening…' : 'Say a set'}
                 </button>
                 {ex.sets.length > 0 && (
@@ -491,7 +491,7 @@ export default function WorkoutLog({ date }) {
           <span className="text-xs text-[#9a9aa6]">Session duration:</span>
           <input type="number" inputMode="numeric" value={durationMin}
             onChange={e => handleDurationChange(e.target.value)}
-            placeholder="30" className="w-16 px-2 py-1 bg-[#1a1a20] border border-white/[0.10] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+            placeholder="30" className="w-16 px-2 py-1 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
           <span className="text-xs text-[#5a5a68]">min</span>
         </div>
       )}

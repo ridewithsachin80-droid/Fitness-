@@ -7,10 +7,12 @@ import { useAuthStore }     from '../store/authStore';
 let socket = null;
 
 /**
- * Connects to the Socket.io server and listens for log_updated events.
+ * Connects to the Socket.io server and listens for log_updated and
+ * workout_updated events.
  *
  * Monitor usage:
- *   useSync((update) => { ... })  // update = { patientId, date, compliance, weight_kg }
+ *   useSync((update) => { ... })                       // log_updated only
+ *   useSync((update) => { ... }, (update) => { ... })   // + workout_updated
  *
  * Patient usage:
  *   useSync()  // just joins their own room (push ack)
@@ -19,12 +21,14 @@ let socket = null;
  *   monitor_${monitorId}  — monitor sees updates for any of their patients
  *   user_${patientId}     — patient's own room
  */
-export function useSync(onLogUpdated) {
-  const { user }         = useAuthStore();
-  const callbackRef      = useRef(onLogUpdated);
+export function useSync(onLogUpdated, onWorkoutUpdated) {
+  const { user }            = useAuthStore();
+  const callbackRef         = useRef(onLogUpdated);
+  const workoutCallbackRef  = useRef(onWorkoutUpdated);
 
-  // Keep callback ref fresh without re-running effect
+  // Keep callbacks fresh without re-running effect
   useEffect(() => { callbackRef.current = onLogUpdated; }, [onLogUpdated]);
+  useEffect(() => { workoutCallbackRef.current = onWorkoutUpdated; }, [onWorkoutUpdated]);
 
   useEffect(() => {
     if (!user) return;
@@ -63,8 +67,16 @@ export function useSync(onLogUpdated) {
     };
     socket.on('log_updated', handler);
 
+    // Listen for workout_updated events
+    const workoutHandler = (data) => {
+      console.log('📡 workout_updated:', data);
+      if (workoutCallbackRef.current) workoutCallbackRef.current(data);
+    };
+    socket.on('workout_updated', workoutHandler);
+
     return () => {
       socket.off('log_updated', handler);
+      socket.off('workout_updated', workoutHandler);
       // Don't disconnect on unmount — the singleton persists across nav
     };
   }, [user?.id, user?.role]);

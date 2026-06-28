@@ -295,7 +295,7 @@ export default function AdminFoods() {
                 onKeyDown={e => { if (e.key === 'Enter') runAiSearch(); }}
                 placeholder="e.g. Ragi mudde, Brazil nut, Paneer tikka…"
                 disabled={aiLoading}
-                className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm text-stone-100
+                className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm text-stone-100
                   focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)] disabled:opacity-50" />
               <button onClick={runAiSearch} disabled={aiLoading || aiQuery.trim().length < 2}
                 className="px-4 py-2.5 bg-[#7c5cfc] hover:bg-[#a78bfa] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
@@ -336,7 +336,7 @@ export default function AdminFoods() {
           <>
             <input value={query} onChange={e => handleSearch(e.target.value)}
               placeholder="Search foods by name…"
-              className="w-full px-4 py-3 bg-[#1a1a20] border border-white/[0.10] rounded-2xl text-sm
+              className="w-full px-4 py-3 bg-[#1a1a20] border border-white/[0.1] rounded-2xl text-sm
                 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.35)] text-stone-800" />
 
             {loading ? (

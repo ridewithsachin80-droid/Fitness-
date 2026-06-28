@@ -329,7 +329,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             ) : (
               <button onClick={() => { setActiveMealId(meal.id); setFoodQuery(''); setFoodSugg([]); }}
                 className="w-full py-1.5 text-xs font-semibold text-[#9a9aa6] hover:text-emerald-300
-                  bg-white/60 hover:bg-white/90 rounded-xl border border-dashed border-white/[0.10]
+                  bg-white/60 hover:bg-white/90 rounded-xl border border-dashed border-white/[0.1]
                   hover:border-[rgba(52,211,153,0.35)] transition-all">
                 + Add food item
               </button>
@@ -346,7 +346,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
       </button>
 
       {mealPlan.length > 0 && (
-        <div className="bg-white/[0.08] border border-white/[0.10] text-[#ededf0] rounded-2xl px-4 py-3 space-y-2">
+        <div className="bg-white/[0.08] border border-white/[0.1] text-[#ededf0] rounded-2xl px-4 py-3 space-y-2">
           <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6]">Day Total</p>
           <div className="flex gap-4 flex-wrap">
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
@@ -1228,8 +1228,8 @@ function AddMonitorModal({ onClose, onAdded }) {
               <button key={r} onClick={() => set('role', r)}
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all capitalize ${
                   form.role === r
-                    ? 'bg-white/[0.08] border border-white/[0.10] text-[#ededf0] border-stone-800'
-                    : 'bg-white text-[#9a9aa6] border-white/[0.08] hover:border-white/[0.10]'
+                    ? 'bg-white/[0.08] border border-white/[0.1] text-[#ededf0] border-stone-800'
+                    : 'bg-white text-[#9a9aa6] border-white/[0.08] hover:border-white/[0.1]'
                 }`}>
                 {r === 'admin' ? '👑 Admin' : '🏋️ Monitor'}
               </button>
@@ -1363,8 +1363,8 @@ export default function AdminDashboard() {
               <p className="text-[#9a9aa6] text-xs mt-0.5">Full access — manage all members & monitors</p>
             </div>
             <button onClick={() => { logout(); }}
-              className="text-xs text-[#9a9aa6] hover:text-white px-3 py-1.5 border border-white/[0.10]
-                hover:border-white/[0.20] rounded-xl transition-colors">
+              className="text-xs text-[#9a9aa6] hover:text-white px-3 py-1.5 border border-white/[0.1]
+                hover:border-white/[0.2] rounded-xl transition-colors">
               Sign out
             </button>
           </div>
@@ -1408,7 +1408,7 @@ export default function AdminDashboard() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${tab}…`}
-            className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm
+            className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm
               focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)] text-[#ededf0] placeholder-[#5a5a68]"
           />
           <button

@@ -190,7 +190,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
               <div className="flex gap-1.5 flex-wrap">
                 {templates.map(t => (
                   <button key={t.id} onClick={() => handleUseTemplate(t.id)} disabled={saving}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-full bg-white/[0.06] border border-white/[0.10] text-[#d8d8de] hover:bg-white/[0.10] transition-colors disabled:opacity-50">
+                    className="px-3 py-1.5 text-xs font-semibold rounded-full bg-white/[0.06] border border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1] transition-colors disabled:opacity-50">
                     {t.name}
                   </button>
                 ))}
@@ -204,7 +204,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
             <label className="block text-[10px] text-[#5a5a68] font-semibold uppercase tracking-wide mb-1.5">Program name</label>
             <input value={programName} onChange={e => setProgramName(e.target.value)}
               placeholder="e.g. Push / Pull / Legs"
-              className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.10] rounded-xl text-sm text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+              className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
           </div>
 
           {/* Day tabs */}
@@ -213,7 +213,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
               {days.map((d, i) => (
                 <button key={i} onClick={() => setActiveDayIdx(i)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
-                    i === activeDayIdx ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.06] text-[#9a9aa6] hover:bg-white/[0.10]'}`}>
+                    i === activeDayIdx ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.06] text-[#9a9aa6] hover:bg-white/[0.1]'}`}>
                   {d.day_label}
                 </button>
               ))}
@@ -227,7 +227,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
               <div className="flex items-center gap-2 mb-3">
                 <input value={days[activeDayIdx].day_label} onChange={e => updateDayLabel(e.target.value)}
                   placeholder="Day label, e.g. Push Day"
-                  className="flex-1 px-2.5 py-1.5 bg-[#1a1a20] border border-white/[0.10] rounded-lg text-xs text-[#d8d8de] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                  className="flex-1 px-2.5 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-xs text-[#d8d8de] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
                 {days.length > 1 && (
                   <button onClick={() => removeDay(activeDayIdx)} className="text-[#5a5a68] hover:text-red-400 text-xs">Remove day</button>
                 )}
@@ -237,9 +237,9 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
               <div className="relative mb-2">
                 <input value={search} onChange={e => runSearch(e.target.value)}
                   placeholder="Search exercises to add…"
-                  className="w-full px-2.5 py-2 bg-[#1a1a20] border border-white/[0.10] rounded-lg text-xs text-[#d8d8de] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                  className="w-full px-2.5 py-2 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-xs text-[#d8d8de] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
                 {results.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] border border-white/[0.10] rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] border border-white/[0.1] rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
                     {results.map(r => (
                       <button key={r.id} onClick={() => addExerciseToDay(r)}
                         className="w-full text-left px-2.5 py-2 text-xs text-[#d8d8de] hover:bg-white/[0.05]">
@@ -260,11 +260,11 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
                       <span className="flex-1 text-xs text-[#d8d8de]">{ex.exercise_name}</span>
                       <input type="number" min="1" value={ex.target_sets}
                         onChange={e => updateExerciseTarget(ex.exercise_id, 'target_sets', e.target.value)}
-                        className="w-10 px-1 py-1 bg-[#1a1a20] border border-white/[0.10] rounded text-xs text-center text-[#ededf0]" />
+                        className="w-10 px-1 py-1 bg-[#1a1a20] border border-white/[0.1] rounded text-xs text-center text-[#ededf0]" />
                       <span className="text-[#5a5a68] text-xs">×</span>
                       <input type="number" min="1" value={ex.target_reps_min}
                         onChange={e => updateExerciseTarget(ex.exercise_id, 'target_reps_min', e.target.value)}
-                        className="w-10 px-1 py-1 bg-[#1a1a20] border border-white/[0.10] rounded text-xs text-center text-[#ededf0]" />
+                        className="w-10 px-1 py-1 bg-[#1a1a20] border border-white/[0.1] rounded text-xs text-center text-[#ededf0]" />
                       <button onClick={() => removeExerciseFromDay(ex.exercise_id)} className="text-[#5a5a68] hover:text-red-400 text-sm px-1">×</button>
                     </div>
                   ))}

@@ -220,12 +220,28 @@ input[type='number'] { -moz-appearance: textfield; }
 [data-theme="light"] .border-white\\/\\[0\\.07\\] { border-color: rgba(0,0,0,0.08) !important; }
 [data-theme="light"] .border-white\\/\\[0\\.1\\]  { border-color: rgba(0,0,0,0.1) !important; }
 [data-theme="light"] .border-white\\/\\[0\\.12\\] { border-color: rgba(0,0,0,0.12) !important; }
+[data-theme="light"] .border-white\\/\\[0\\.2\\]  { border-color: rgba(0,0,0,0.2) !important; }
 [data-theme="light"] .text-\\[\\#ededf0\\]  { color: #1a1a1f !important; }
 [data-theme="light"] .text-\\[\\#d8d8de\\]  { color: #2e2e38 !important; }
 [data-theme="light"] .text-\\[\\#8e8e9a\\]  { color: #5a5a68 !important; }
 [data-theme="light"] .text-\\[\\#6a6a78\\]  { color: #6a6a78 !important; }
 [data-theme="light"] .text-\\[\\#4e4e5c\\]  { color: #7a7a85 !important; }
 [data-theme="light"] .text-\\[\\#3a3a46\\]  { color: #9a9aa8 !important; }
+/* Added for the resistance-training components (Phases 1-4 + Muscle Coverage)
+   — these two neutral text tones weren't used anywhere before, so they had
+   no light-theme remap at all. Without this, this text would stay light-gray
+   in light mode: light-gray-on-light-background, effectively illegible. */
+[data-theme="light"] .text-\\[\\#5a5a68\\]  { color: #7a7a85 !important; }
+[data-theme="light"] .text-\\[\\#9a9aa6\\]  { color: #52525e !important; }
+[data-theme="light"] .border-white\\/\\[0\\.06\\] { border-color: rgba(0,0,0,0.07) !important; }
+[data-theme="light"] .border-white\\/\\[0\\.08\\] { border-color: rgba(0,0,0,0.09) !important; }
+[data-theme="light"] .border-white\\/\\[0\\.15\\] { border-color: rgba(0,0,0,0.16) !important; }
+[data-theme="light"] .bg-white\\/\\[0\\.02\\] { background-color: rgba(0,0,0,0.03) !important; }
+[data-theme="light"] .bg-white\\/\\[0\\.04\\] { background-color: rgba(0,0,0,0.05) !important; }
+[data-theme="light"] .bg-white\\/\\[0\\.05\\] { background-color: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .bg-white\\/\\[0\\.06\\] { background-color: rgba(0,0,0,0.07) !important; }
+[data-theme="light"] .bg-white\\/\\[0\\.08\\] { background-color: rgba(0,0,0,0.09) !important; }
+[data-theme="light"] .bg-white\\/\\[0\\.1\\]  { background-color: rgba(0,0,0,0.1) !important; }
 [data-theme="light"] input,
 [data-theme="light"] textarea,
 [data-theme="light"] select {

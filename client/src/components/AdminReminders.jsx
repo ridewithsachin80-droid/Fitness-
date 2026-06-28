@@ -145,7 +145,7 @@ export default function AdminReminders({ patients = [] }) {
     fontSize: 13, fontWeight: 700,
   });
 
-  if (loading) return <div style={{ color: '#aaa', padding: 24 }}>Loading...</div>;
+  if (loading) return <div style={{ color: '#5a5a68', padding: 24, fontSize: 14 }}>Loading…</div>;
 
   return (
     <div style={{ color: '#e0e0e0', maxWidth: 700 }}>

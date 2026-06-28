@@ -14,7 +14,7 @@
  * just a different effective patient on the server side.
  */
 import { useState, useEffect } from 'react';
-import { Card, SectionTitle } from './UI';
+import { Card, SectionTitle, CardSkeleton } from './UI';
 import { getMuscleCoverage } from '../api/workouts';
 import { today as getToday } from '../constants';
 
@@ -62,7 +62,7 @@ const STATUS_DOT = {
   stale: 'bg-[#3a3a46]',
 };
 
-export default function MuscleCoverage({ patientId }) {
+export default function MuscleCoverage({ patientId, refreshTick = 0 }) {
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]       = useState('sessions'); // 'sessions' | 'volume' | 'recency'
@@ -75,9 +75,9 @@ export default function MuscleCoverage({ patientId }) {
       .catch(() => !cancelled && setData(null))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [patientId]);
+  }, [patientId, refreshTick]);
 
-  if (loading) return null;
+  if (loading) return <Card><CardSkeleton lines={2} /></Card>;
   if (!data?.groups) return null;
 
   const staleCount = GROUP_ORDER.filter(g => statusColor(data.groups[g], 'recency') === 'stale').length;

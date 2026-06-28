@@ -64,7 +64,7 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
         }`}>
       <div style={{ width: 24, height: 24, minWidth: 24 }}
         className={`rounded-full border-2 flex-shrink-0 flex items-center justify-center
-          transition-all duration-150 ${checked ? 'bg-[#7c5cfc] border-[#7c5cfc]' : 'border-white/[0.20]'}`}>
+          transition-all duration-150 ${checked ? 'bg-[#7c5cfc] border-[#7c5cfc]' : 'border-white/[0.2]'}`}>
         {checked && (
           <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 12 12" fill="none">
             <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.2"
@@ -115,6 +115,21 @@ export function PageLoader() {
         <Spinner size="lg" />
         <p className="text-[#4e4e5c] text-sm font-medium tracking-wide">Loading…</p>
       </div>
+    </div>
+  );
+}
+
+// Lightweight skeleton for cards that load inline (below a page that's
+// already rendered) — avoids the abrupt "nothing, then sudden pop-in" effect
+// that plain `return null` while loading creates, without the cost/risk of
+// a full animation library.
+export function CardSkeleton({ lines = 3, className = '' }) {
+  return (
+    <div className={`animate-pulse space-y-2.5 ${className}`}>
+      <div className="h-3 w-1/3 bg-white/[0.07] rounded-full" />
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className="h-9 bg-white/[0.04] rounded-xl" style={{ width: `${85 - i * 8}%` }} />
+      ))}
     </div>
   );
 }

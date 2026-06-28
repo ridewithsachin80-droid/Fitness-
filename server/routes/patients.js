@@ -38,6 +38,7 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (SELECT weight_kg      FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
            (SELECT log_date       FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
            (SELECT compliance_pct FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,
+           (SELECT MAX(session_date) FROM workout_sessions WHERE patient_id = u.id) AS last_workout,
            (SELECT u2.name FROM monitor_patients mp2
             JOIN users u2 ON u2.id = mp2.monitor_id
             WHERE mp2.patient_id = u.id AND mp2.active = true LIMIT 1) AS monitor_name
@@ -60,7 +61,8 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (u.password IS NOT NULL AND u.password != '') AS has_pin,
            (SELECT weight_kg      FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
            (SELECT log_date       FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
-           (SELECT compliance_pct FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance
+           (SELECT compliance_pct FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,
+           (SELECT MAX(session_date) FROM workout_sessions WHERE patient_id = u.id) AS last_workout
          FROM users u
          JOIN monitor_patients mp ON mp.patient_id = u.id
          LEFT JOIN patient_profiles pp ON pp.user_id = u.id
