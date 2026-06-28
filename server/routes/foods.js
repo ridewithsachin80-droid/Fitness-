@@ -442,7 +442,7 @@ router.delete('/:id', authMW, role('admin'), async (req, res) => {
 router.get('/admin/list', async (req, res) => {
   try {
     const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = Math.min(50, parseInt(req.query.limit) || 30);
+    const limit  = Math.max(1, Math.min(50, parseInt(req.query.limit) || 30));
     const q      = (req.query.q || '').toLowerCase().trim();
     const offset = (page - 1) * limit;
 
