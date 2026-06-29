@@ -20,7 +20,6 @@ export default function Settings() {
   const { user, logout } = useAuthStore();
   const {
     ageMode, setAgeMode,
-    theme, setTheme,
     fontSize, setFontSize,
     nutritionView, setNutritionView,
     guardianEmail, setGuardianEmail,
@@ -113,22 +112,6 @@ export default function Settings() {
         {/* ── Appearance ─────────────────────────────────────────── */}
         <Card>
           <SectionTitle icon="🎨">Appearance</SectionTitle>
-
-          {/* Theme */}
-          <div className="mb-4">
-            <p className="text-xs text-[#6a6a78] mb-2 font-medium uppercase tracking-wider">Theme</p>
-            <div className="flex gap-2">
-              {[['dark','🌙','Dark'],['light','☀️','Light'],['system','🔄','Auto']].map(([id, emoji, label]) => (
-                <button key={id} onClick={() => { setTheme(id); haptic(15); }}
-                  style={{ minHeight: 56, flex: 1 }}
-                  className={`rounded-xl border flex flex-col items-center justify-center gap-1 py-2 transition-all ${
-                    theme === id ? 'border-[rgba(124,92,252,0.5)] bg-[rgba(124,92,252,0.1)]' : 'border-white/[0.07] bg-[#1a1a20]'}`}>
-                  <span style={{ fontSize: 20 }}>{emoji}</span>
-                  <span className="text-xs font-semibold text-[#d8d8de]">{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Font size */}
           <div className="mb-4">

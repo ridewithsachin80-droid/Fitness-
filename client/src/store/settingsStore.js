@@ -2,10 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 // ── Theme / font helpers ──────────────────────────────────────────────────────
-export function applyTheme(theme) {
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const useDark = theme === 'dark' || (theme === 'system' && prefersDark);
-  document.documentElement.setAttribute('data-theme', useDark ? 'dark' : 'light');
+// Dark-only now — no more light/system modes, which also removes the whole
+// class of "light-theme CSS override selector" bugs this app kept hitting.
+export function applyTheme() {
+  document.documentElement.setAttribute('data-theme', 'dark');
 }
 
 export function applyFontSize(size) {
@@ -23,8 +23,6 @@ export const useSettingsStore = create(
     (set, get) => ({
       // 'child' | 'adult' | 'senior' | null (null triggers onboarding)
       ageMode: null,
-      // 'dark' | 'light' | 'system'
-      theme: 'dark',
       // 'normal' | 'large'
       fontSize: 'normal',
       // 'simple' | 'detailed'
@@ -45,10 +43,6 @@ export const useSettingsStore = create(
         if (mode === 'senior') applyFontSize('large');
         else applyFontSize(get().fontSize);
       },
-      setTheme: (theme) => {
-        set({ theme });
-        applyTheme(theme);
-      },
       setFontSize: (size) => {
         set({ fontSize: size });
         applyFontSize(size);
@@ -58,11 +52,11 @@ export const useSettingsStore = create(
       setEmergencyContact: (contact) => set({ emergencyContact: contact }),
       setMealSlots: (slots) => set({ mealSlots: slots }),
       setAvatarIdx: (idx) => set({ avatarIdx: idx }),
-      finishOnboarding: (mode, theme) => {
-        set({ ageMode: mode, theme, onboardingDone: true,
+      finishOnboarding: (mode) => {
+        set({ ageMode: mode, onboardingDone: true,
               fontSize: mode === 'senior' ? 'large' : 'normal',
               nutritionView: mode === 'adult' ? 'detailed' : 'simple' });
-        applyTheme(theme);
+        applyTheme();
         applyFontSize(mode === 'senior' ? 'large' : 'normal');
       },
     }),

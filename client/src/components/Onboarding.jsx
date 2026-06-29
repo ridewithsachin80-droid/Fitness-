@@ -36,22 +36,15 @@ const AGE_MODES = [
   },
 ];
 
-const THEMES = [
-  { id: 'light', label: 'Light', emoji: '☀️' },
-  { id: 'dark',  label: 'Dark',  emoji: '🌙' },
-  { id: 'system',label: 'Auto',  emoji: '🔄' },
-];
-
 export default function Onboarding() {
-  const [step, setStep]         = useState(0); // 0=who, 1=avatar, 2=theme
+  const [step, setStep]         = useState(0); // 0=who, 1=avatar, 2=finish
   const [ageMode, setAgeMode]   = useState(null);
   const [avatarIdx, setAvatarI] = useState(0);
-  const [theme, setTheme]       = useState('system');
   const { finishOnboarding, setAvatarIdx } = useSettingsStore();
 
   const done = () => {
     setAvatarIdx(avatarIdx);
-    finishOnboarding(ageMode, theme);
+    finishOnboarding(ageMode);
   };
 
   // ── Step 0: Who is using the app ───────────────────────────────────────────
@@ -103,26 +96,14 @@ export default function Onboarding() {
     </Screen>
   );
 
-  // ── Step 2: Theme ─────────────────────────────────────────────────────────
+  // ── Step 2: Finish ────────────────────────────────────────────────────────
   if (step === 2) return (
     <Screen>
       <Logo />
-      <h1 style={s.h1}>Choose your theme</h1>
-      <p style={s.sub}>You can change this any time in Settings</p>
-      <div style={s.themeRow}>
-        {THEMES.map(t => (
-          <button key={t.id} style={{
-            ...s.themeBtn,
-            border: theme === t.id ? '2px solid #7c5cfc' : '2px solid rgba(255,255,255,0.1)',
-            background: theme === t.id ? 'rgba(124,92,252,0.15)' : 'rgba(255,255,255,0.04)',
-          }} onClick={() => setTheme(t.id)}>
-            <span style={{ fontSize: 28, marginBottom: 6, display: 'block' }}>{t.emoji}</span>
-            <span style={s.themeLabel}>{t.label}</span>
-          </button>
-        ))}
-      </div>
+      <h1 style={s.h1}>You're all set!</h1>
+      <p style={s.sub}>Let's start building healthy habits</p>
 
-      <div style={{ ...s.summaryCard, marginTop: 24 }}>
+      <div style={{ ...s.summaryCard, marginTop: 8 }}>
         <div style={{ fontSize: 32, marginBottom: 8 }}>{AVATARS[avatarIdx]}</div>
         <div style={s.summaryName}>You're all set!</div>
         <div style={s.summarySub}>
@@ -210,9 +191,6 @@ const s = {
   modeDesc:  { fontSize: 10, color: '#6a6a78', lineHeight: 1.4 },
   avatarGrid:{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 8 },
   avatarBtn: { borderRadius: 14, padding: '12px 8px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
-  themeRow:  { display: 'flex', gap: 10 },
-  themeBtn:  { flex: 1, borderRadius: 16, padding: '20px 10px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
-  themeLabel:{ fontSize: 14, fontWeight: 600, color: '#ededf0' },
   btnRow:    { display: 'flex', gap: 8 },
   summaryCard:{ background: 'linear-gradient(135deg, rgba(124,92,252,0.10), rgba(212,175,106,0.08))', borderRadius: 20, padding: '20px', textAlign: 'center', border: '1px solid rgba(212,175,106,0.20)' },
   summaryName:{ fontSize: 18, fontWeight: 600, fontFamily: 'Fraunces, serif', color: '#ededf0', marginBottom: 6 },

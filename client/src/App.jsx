@@ -35,22 +35,13 @@ function PrivateRoute({ children, roles }) {
 
 export default function App() {
   const { login, setRestored } = useAuthStore();
-  const { theme, fontSize, ageMode, onboardingDone } = useSettingsStore();
+  const { fontSize, ageMode, onboardingDone } = useSettingsStore();
 
-  // Apply saved theme + font-size on boot
+  // Apply dark theme + font-size on boot
   useEffect(() => {
-    applyTheme(theme);
+    applyTheme();
     applyFontSize(ageMode === 'senior' ? 'large' : fontSize);
   }, []);
-
-  // Listen for OS theme changes when set to 'system'
-  useEffect(() => {
-    if (theme !== 'system') return;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => applyTheme('system');
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, [theme]);
 
   useEffect(() => {
     axios

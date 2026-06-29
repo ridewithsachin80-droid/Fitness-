@@ -16,6 +16,28 @@ async function audit(actor, action, targetId, targetName, detail) {
   } catch (e) { /* non-fatal */ }
 }
 
+// Enforces that a monitor may only act on patients actually assigned to
+// them via monitor_patients — admins bypass this entirely. This is the same
+// check GET /:id already did correctly; it was missing from five other
+// routes below (profile, labs, notes, pin, weight), meaning any monitor
+// account could previously read/modify any OTHER monitor's patients just by
+// knowing/guessing a numeric id — including resetting their login PIN.
+async function requirePatientAccess(req, res, next) {
+  if (req.user.role === 'admin') return next();
+  try {
+    const linkCheck = await pool.query(
+      `SELECT 1 FROM monitor_patients WHERE monitor_id = $1 AND patient_id = $2 AND active = true`,
+      [req.user.id, req.params.id]
+    );
+    if (!linkCheck.rows.length) {
+      return res.status(403).json({ error: 'Patient not assigned to you' });
+    }
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to verify patient access' });
+  }
+}
+
 // ── GET /api/patients ─────────────────────────────────────────────────────────
 // Monitor/admin: list all assigned patients with summary stats.
 // Returns: name, phone, start/target weight, latest weight, last logged date, compliance.
@@ -321,7 +343,7 @@ router.post('/', authMW, roleCheck('admin'), async (req, res) => {
 
 // ── PATCH /api/patients/:id/profile ───────────────────────────────────────────
 // Monitor/admin: update patient profile fields.
-router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
     const allowed = ['height_cm', 'start_weight', 'target_weight', 'conditions', 'diet_notes', 'water_target'];
     const updates = [];
@@ -360,7 +382,7 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), async (req, 
 // ── POST /api/patients/:id/labs ────────────────────────────────────────────────
 // Monitor/admin: add a lab test result for a patient.
 // Automatically computes status (low/normal/high) from reference ranges.
-router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
     const { test_date, test_name, value, unit, ref_min, ref_max } = req.body;
 
@@ -391,7 +413,7 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), async (req, res)
 
 // ── POST /api/patients/:id/notes ───────────────────────────────────────────────
 // Monitor: add a clinical note for a patient.
-router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
     const { note_date, note, flagged = false } = req.body;
 
@@ -415,7 +437,7 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), async (req, res
 
 // ── PATCH /api/patients/:id/pin ───────────────────────────────────────────────
 // Monitor/admin: set or reset a member's login PIN.
-router.patch('/:id/pin', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+router.patch('/:id/pin', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   const { pin } = req.body;
   if (!pin || String(pin).trim().length < 4) {
     return res.status(400).json({ error: 'PIN must be at least 4 characters' });
@@ -439,7 +461,7 @@ router.patch('/:id/pin', authMW, roleCheck('monitor', 'admin'), async (req, res)
 // ── PATCH /api/patients/:id/weight ───────────────────────────────────────────
 // Sprint 11: Monitor/admin can log or correct a member's weight for any date.
 // Creates the daily_log row if it doesn't exist yet (upsert on weight only).
-router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   const { date, weight_kg } = req.body;
   const patientId = req.params.id;
 
