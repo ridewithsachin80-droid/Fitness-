@@ -149,13 +149,28 @@ router.get('/:date', authMW, async (req, res) => {
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
     }
 
-    const patientId =
-      req.user.role === 'patient'
-        ? req.user.id
-        : req.query.patientId;
-
-    if (!patientId) {
-      return res.status(400).json({ error: 'patientId query param required for monitors' });
+    let patientId;
+    if (req.user.role === 'patient') {
+      // Patients can only read their own logs — ignore any patientId param
+      patientId = req.user.id;
+    } else {
+      patientId = req.query.patientId;
+      if (!patientId) {
+        return res.status(400).json({ error: 'patientId query param required for monitors' });
+      }
+      // Monitors can only access their assigned patients — admins bypass.
+      // (Same check the /range/:from/:to route above already does correctly;
+      // this route was missing it entirely.)
+      if (req.user.role === 'monitor') {
+        const linkCheck = await pool.query(
+          `SELECT 1 FROM monitor_patients
+           WHERE monitor_id = $1 AND patient_id = $2 AND active = true`,
+          [req.user.id, patientId]
+        );
+        if (!linkCheck.rows.length) {
+          return res.status(403).json({ error: 'Patient not assigned to you' });
+        }
+      }
     }
 
     const [logResult, profileResult] = await Promise.all([
