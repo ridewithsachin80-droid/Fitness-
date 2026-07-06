@@ -141,12 +141,21 @@ function start() {
     }
   }, { timezone: 'Asia/Kolkata' });
 
-  // Daily at midnight IST: clean up old ack records (older than 7 days)
+  // Daily at midnight IST: clean up old records
   cron.schedule('0 0 * * *', async () => {
-    await pool.query(
-      `DELETE FROM reminder_acks WHERE scheduled_for < NOW() - INTERVAL '7 days'`
-    );
-    console.log('🧹 Cleaned old reminder acks');
+    try {
+      // Delete old reminder acks (older than 7 days)
+      const r1 = await pool.query(
+        `DELETE FROM reminder_acks WHERE scheduled_for < NOW() - INTERVAL '7 days'`
+      );
+      // Delete old notification logs (older than 30 days) — prevents unbounded growth
+      const r2 = await pool.query(
+        `DELETE FROM notifications_log WHERE sent_at < NOW() - INTERVAL '30 days'`
+      );
+      console.log(`🧹 Cleanup: ${r1.rowCount} acks, ${r2.rowCount} notif logs deleted`);
+    } catch (err) {
+      console.error('Cleanup error:', err.message);
+    }
   }, { timezone: 'Asia/Kolkata' });
 
   // All reminders are now fully dynamic — configured by admin via reminder_schedules table
