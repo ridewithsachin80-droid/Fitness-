@@ -30,6 +30,11 @@ const server = http.createServer(app);
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const io = new Server(server, {
   cors: { origin: process.env.CLIENT_URL, credentials: true },
+  // Memory optimizations
+  pingTimeout:  20000,   // disconnect idle sockets faster (default 20s)
+  pingInterval: 25000,   // check every 25s (default 25s)
+  maxHttpBufferSize: 1e6, // 1MB max message size (default 1MB)
+  transports: ['websocket', 'polling'], // prefer websocket
 });
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -75,6 +80,18 @@ io.on('connection', (socket) => {
   socket.on('join_monitor_room', (monitorId) => socket.join(`monitor_${monitorId}`));
   socket.on('disconnect', () => {});
 });
+
+// ── Memory monitoring ────────────────────────────────────────────────────────
+// Log memory every 30min and force GC if available
+setInterval(() => {
+  const mem = process.memoryUsage();
+  const mb = (b) => Math.round(b / 1024 / 1024);
+  if (mb(mem.heapUsed) > 400) {
+    console.log(`⚠️  Memory: heap ${mb(mem.heapUsed)}MB / ${mb(mem.heapTotal)}MB, RSS ${mb(mem.rss)}MB`);
+  }
+  // Force GC if available (start node with --expose-gc)
+  if (global.gc) global.gc();
+}, 30 * 60 * 1000);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // startup.js (the Railway entry point) handles all DB setup before requiring

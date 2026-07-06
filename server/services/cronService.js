@@ -3,22 +3,12 @@ const pool        = require('../db/pool');
 const pushService = require('./pushService');
 
 // ── IST helpers ──────────────────────────────────────────────────────────────
-function getISTDate() {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  return ist.toISOString().split('T')[0];
-}
-
 function getISTTime() {
   const now = new Date();
   const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
   return ist.toISOString().substr(11, 5); // "HH:MM"
 }
 
-function getISTDateTime() {
-  const now = new Date();
-  return new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-}
 
 // ── Reminder config per type ─────────────────────────────────────────────────
 const REMINDER_CONFIG = {
@@ -125,35 +115,29 @@ async function sendReminder(patientId, type, retryCount, ackId) {
 // ── Cron jobs ────────────────────────────────────────────────────────────────
 function start() {
 
-  // Every minute: check if any custom reminder is scheduled for this time
+  // Every minute: send scheduled reminders + process retries (merged into one job)
   cron.schedule('* * * * *', async () => {
     try {
-      const timeStr = getISTTime(); // "HH:MM"
-      const schedules = await getSchedulesForTime(timeStr);
+      const timeStr = getISTTime();
 
+      // 1. Send new reminders scheduled for this minute
+      const schedules = await getSchedulesForTime(timeStr);
       for (const s of schedules) {
-        const scheduledFor = new Date(); // now in UTC = the scheduled moment
-        const ackId = await createAckRecord(s.uid, s.type, scheduledFor);
+        const ackId = await createAckRecord(s.uid, s.type, new Date());
         if (ackId) {
           await sendReminder(s.uid, s.type, 0, ackId);
-          console.log(`📢 Reminder sent: ${s.type} → patient ${s.uid} at ${timeStr} IST`);
+          console.log(`📢 Reminder: ${s.type} → patient ${s.uid} at ${timeStr} IST`);
         }
       }
-    } catch (err) {
-      console.error('Reminder scheduler error:', err.message);
-    }
-  }, { timezone: 'Asia/Kolkata' });
 
-  // Every minute: check for unacknowledged reminders needing retry
-  cron.schedule('* * * * *', async () => {
-    try {
+      // 2. Retry unacknowledged reminders
       const pending = await getPendingRetries();
       for (const r of pending) {
         await sendReminder(r.patient_id, r.type, r.retry_count, r.id);
-        console.log(`🔁 Retry ${r.retry_count + 1} for ${r.type} → patient ${r.patient_id}`);
+        console.log(`🔁 Retry ${r.retry_count + 1}/${r.max_retries} for ${r.type} → patient ${r.patient_id}`);
       }
     } catch (err) {
-      console.error('Retry scheduler error:', err.message);
+      console.error('Cron error:', err.message);
     }
   }, { timezone: 'Asia/Kolkata' });
 
