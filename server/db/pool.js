@@ -12,9 +12,9 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: false }  // Required for Railway
     : false,
-  max: 3,                    // 5 users = 3 connections is plenty (was 10)
-  min: 1,                    // keep 1 warm connection always
-  idleTimeoutMillis: 10000,  // release idle connections after 10s (was 30s)
+  max: 3,                    // 3 connections max — enough for 5-10 users
+  min: 0,                    // 0 warm connections — release when idle
+  idleTimeoutMillis: 5000,   // release connection after 5s idle (was 30s)
   connectionTimeoutMillis: 3000,
 });
 
