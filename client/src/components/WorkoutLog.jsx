@@ -493,6 +493,20 @@ export default function WorkoutLog({ date }) {
         </div>
       )}
 
+      {/* Total gym time — informational only. Calories come from volume
+          lifted and cardio MET × time, never from this field, so a stale or
+          mistyped value can no longer distort the estimate. */}
+      {exercisesInSession.length > 0 && (
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/[0.06]">
+          <span className="text-xs text-[#9a9aa6]">Time in gym:</span>
+          <input type="number" inputMode="numeric" value={durationMin}
+            onChange={e => handleDurationChange(e.target.value)}
+            placeholder="30" className="w-16 px-2 py-1 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+          <span className="text-xs text-[#5a5a68]">min</span>
+          <span className="text-[10px] text-[#5a5a68] ml-auto">optional</span>
+        </div>
+      )}
+
       {/* ── Cardio ── */}
       <div className="mt-3 pt-3 border-t border-white/[0.06]">
         <div className="flex items-center justify-between mb-2">
@@ -607,17 +621,6 @@ export default function WorkoutLog({ date }) {
           <p className="text-xs text-[#b6b6c2] leading-relaxed whitespace-pre-wrap bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2.5">
             {sessionNotes}
           </p>
-        </div>
-      )}
-
-      {/* Optional duration */}
-      {(exercisesInSession.length > 0 || sessionNotes) && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/[0.06]">
-          <span className="text-xs text-[#9a9aa6]">Session duration:</span>
-          <input type="number" inputMode="numeric" value={durationMin}
-            onChange={e => handleDurationChange(e.target.value)}
-            placeholder="30" className="w-16 px-2 py-1 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
-          <span className="text-xs text-[#5a5a68]">min</span>
         </div>
       )}
 
