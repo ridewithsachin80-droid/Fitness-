@@ -9,7 +9,7 @@ import {
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
   calcCompliance, getNutrition, RDA_TARGETS,
 } from '../constants';
-import { Card, SectionTitle, OfflineBanner, PatientBottomNav, QuickJump } from '../components/UI';
+import { Card, SectionTitle, OfflineBanner, PatientBottomNav } from '../components/UI';
 import FoodLog       from '../components/FoodLog';
 import WorkoutLog    from '../components/WorkoutLog';
 import InstallPrompt from '../components/InstallPrompt';
@@ -663,8 +663,7 @@ function AIChatFab() {
       onClick={openChat}
       aria-label="Log with AI Chat"
       className="fixed z-40 w-14 h-14 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-xl shadow-[0_4px_24px_rgba(124,92,252,0.5)] border border-white/[0.15] active:scale-90 transition-transform"
-      style={{ right: 16, bottom: 'calc(156px + env(safe-area-inset-bottom))' }}>
-      {/* sits above the QuickJump button (fixed at bottom:100) */}
+      style={{ right: 16, bottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
       ✨
     </button>
   );
@@ -779,7 +778,23 @@ export default function DailyLog() {
   const [autoSaved, setAutoSaved] = useState(false);
 
   // ── Premium hero state ─────────────────────────────────────────────────────
-  const [heroPanel, setHeroPanel] = useState(null);   // 'weight' | 'water' | 'sleep' | null
+  const [heroPanel, setHeroPanel] = useState(null);   // 'weight'|'food'|'protocol'|'water'|'workout'|'sleep'
+  const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null });
+
+  // Workout tile summary — refreshed when the date changes or the panel closes
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/workouts', { params: { date } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setWorkoutSummary({
+          count: (data?.exercises || []).length,
+          duration: data?.session?.duration_min || null,
+        });
+      })
+      .catch(() => { if (!cancelled) setWorkoutSummary({ count: 0, duration: null }); });
+    return () => { cancelled = true; };
+  }, [date, heroPanel]);
   const [streak, setStreak] = useState(0);
   const [chipInfo, setChipInfo] = useState(null);   // { label, sub } — long-press popover
   const chipPressRef = useRef(null);
@@ -946,7 +961,6 @@ export default function DailyLog() {
                   const on  = 'bg-[rgba(124,92,252,0.14)] border-[rgba(124,92,252,0.45)]';
                   const off = 'bg-white/[0.04] border-white/[0.07]';
                   const toggle = (key) => { setHeroPanel(p => (p === key ? null : key)); haptic(10); };
-                  const jump = (id) => { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); haptic(10); };
 
                   const kcal = (log.food || []).reduce((s, it) => {
                     if (it.per_100g?.calories) return s + Math.round(it.per_100g.calories * (it.grams || 0) / 100);
@@ -979,8 +993,9 @@ export default function DailyLog() {
                         </span>
                       </button>
 
-                      {/* Calories → jumps to the food log */}
-                      <button onClick={() => jump('section-food')} className={`${tileBase} ${off}`}>
+                      {/* Food → opens the food log panel */}
+                      <button onClick={() => toggle('food')}
+                        className={`${tileBase} ${heroPanel === 'food' ? on : off}`}>
                         <span className="block text-[13px] font-bold">
                           {protocol?.macros?.kcal
                             ? <>{kcal}<span className="text-[9px] text-[#4e4e5c]"> /{protocol.macros.kcal}</span></>
@@ -989,8 +1004,9 @@ export default function DailyLog() {
                         <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🔥 kcal eaten</span>
                       </button>
 
-                      {/* Protocol → jumps to the protocol card */}
-                      <button onClick={() => jump('section-protocol')} className={`${tileBase} ${off}`}>
+                      {/* Protocol → opens the protocol panel */}
+                      <button onClick={() => toggle('protocol')}
+                        className={`${tileBase} ${heroPanel === 'protocol' ? on : off}`}>
                         <span className="block text-[13px] font-bold">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
                         <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">✓ protocol</span>
                       </button>
@@ -1000,6 +1016,19 @@ export default function DailyLog() {
                         className={`${tileBase} ${heroPanel === 'water' ? on : off}`}>
                         <span className="block text-[13px] font-bold">{((log.water || 0) / 1000).toFixed(1)} L</span>
                         <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                      </button>
+
+                      {/* Workout → opens the workout panel */}
+                      <button onClick={() => toggle('workout')}
+                        className={`${tileBase} ${heroPanel === 'workout' ? on : off}`}>
+                        <span className="block text-[13px] font-bold">
+                          {workoutSummary.count > 0
+                            ? <>{workoutSummary.count}<span className="text-[9px] text-[#4e4e5c]"> {workoutSummary.count === 1 ? 'exercise' : 'exercises'}</span></>
+                            : workoutSummary.duration
+                            ? <>{workoutSummary.duration}<span className="text-[9px] text-[#4e4e5c]"> min</span></>
+                            : <span className="text-[#4e4e5c]">— none</span>}
+                        </span>
+                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🏋️ workout</span>
                       </button>
 
                       {/* Sleep → inline time pickers (full width) */}
@@ -1126,100 +1155,18 @@ export default function DailyLog() {
       {/* Content */}
       <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
 
-        {/* AI logging bar — the primary way to fill the day */}
-        <button onClick={() => { haptic(15); openChat(); }}
-          style={{ minHeight: 52 }}
-          className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.16] to-[#4c2fd8]/[0.08] border border-[#7c5cfc]/40 hover:border-[#7c5cfc]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(124,92,252,0.10)]">
-          <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.5)]">✨</span>
-          <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left">Tell me about your day…</span>
-          <span className="text-[#a78bfa]">🎤</span>
-        </button>
 
-        {/* Quick jump floating button */}
-        <QuickJump sections={[
-          { id: 'section-hero',     label: 'Weight & stats', icon: '⚖️' },
-          { id: 'section-protocol', label: 'Protocol',       icon: '🏃' },
-          { id: 'section-food',     label: 'Food log',       icon: '🥗' },
-          { id: 'section-workout',  label: 'Workout',        icon: '🏋️' },
-          { id: 'section-notes',    label: 'Notes',          icon: '📝' },
-        ]} />
+        {heroPanel && !loading && (
+          <button onClick={() => { setHeroPanel(null); haptic(10); }}
+            style={{ minHeight: 40 }}
+            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#8e8e9a] hover:text-white bg-white/[0.03] border border-white/[0.07] rounded-xl transition-colors">
+            ▲ Close {heroPanel === 'protocol' ? 'protocol' : heroPanel === 'food' ? 'food log' : heroPanel === 'workout' ? 'workout' : heroPanel}
+          </button>
+        )}
 
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <>
-            {/* New member welcome card — shown when coach hasn't set a protocol yet */}
-            {!protocol && (
-              <Card>
-                <div className="text-center py-4">
-                  <div className="text-4xl mb-3">👋</div>
-                  <h2 className="font-bold text-stone-800 text-base mb-1">Welcome to FitLife!</h2>
-                  <p className="text-sm text-stone-500 leading-relaxed">
-                    Your coach will set up your personalised protocol shortly — activities, supplements, macros, and water target will all appear here.
-                  </p>
-                  <p className="text-xs text-stone-400 mt-3">
-                    You can already start logging your weight, food, and water below.
-                  </p>
-                </div>
-              </Card>
-            )}
-
-            {/* Coach notes visible to member — flagged ones show as "Action needed" */}
-            {coachNotes.length > 0 && (
-              <Card>
-                <SectionTitle icon="💬">Message from your coach</SectionTitle>
-                <div className="space-y-2 mt-2">
-                  {coachNotes.slice(0, 3).map(n => (
-                    <div key={n.id} className={`rounded-2xl px-4 py-3 border ${
-                      n.flagged ? 'bg-amber-500/[0.06] border-amber-500/20' : 'bg-[#1a1a20] border-white/[0.07]'
-                    }`}>
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        {n.flagged && (
-                          <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                            ⚠ Action needed
-                          </span>
-                        )}
-                        <span className="text-xs text-stone-400">
-                          {n.monitor_name} · {new Date(n.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                        </span>
-                      </div>
-                      <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{n.note}</p>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-            {protocol?.fasting && (() => {
-              // Age guard: warn if user is under 18 or has diabetes-related conditions
-              const isMinor = profileAge !== null && profileAge < 18;
-              const hasRisk = ['pre_diabetic','insulin_resist','hypothyroid'].some(c => (protocol?.conditions || []).includes(c));
-              if (isMinor || hasRisk) {
-                return (
-                  <div className="bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3">
-                    <p className="text-xs font-bold text-amber-400 mb-1">⚠️ Fasting protocol — check with doctor</p>
-                    <p className="text-xs text-[#8e8e9a] leading-relaxed">
-                      {isMinor ? 'Fasting is not recommended for people under 18.' : 'Your health conditions may require a modified fasting approach.'} Please confirm this protocol is approved by your doctor before following it.
-                    </p>
-                  </div>
-                );
-              }
-              return <FastingBar fasting={protocol.fasting} />;
-            })()}
-
-            {protocol?.macros && (
-              <MacroProgress
-                macros={protocol.macros}
-                foodItems={log.food || []}
-                supplements={log.supplements || {}}
-                activeActivities={activeActivities}
-                activities={log.activities || {}}
-                overrides={protocol?.item_overrides || {}}
-                weightKg={parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0}
-              />
-            )}
-
+        {/* ── Section panels — open from the hero tiles above ── */}
+        {heroPanel === 'protocol' && !loading && (
+          <div>
             {/* ── Today's Protocol — activities, ACV, supplements as tap-chips ── */}
             <Card>
               <div id="section-protocol">
@@ -1329,17 +1276,11 @@ export default function DailyLog() {
                 })()}
               </div>
             </Card>
+          </div>
+        )}
 
-            {/* Long-press chip detail popover */}
-            {chipInfo && (
-              <div onClick={() => setChipInfo(null)}
-                className="fixed left-4 right-4 z-[60] bg-[#1a1a20] border border-[rgba(124,92,252,0.4)] rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)]"
-                style={{ bottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
-                <p className="text-sm font-bold text-white">{chipInfo.label}</p>
-                <p className="text-xs text-[#8e8e9a] mt-0.5 leading-relaxed">{chipInfo.sub}</p>
-              </div>
-            )}
-
+        {heroPanel === 'food' && !loading && (
+          <div className="space-y-3">
             {/* Sprint 3: Prescribed meals */}
             {protocol?.meal_plan?.length > 0 && (
               <PrescribedMeals mealPlan={protocol.meal_plan} foodItems={log.food} onLogMeal={logMeal} />
@@ -1362,11 +1303,122 @@ export default function DailyLog() {
               activities={log.activities || {}}
               rdaOverrides={protocol?.rda_overrides || {}}
             />
+          </div>
+        )}
 
+        {heroPanel === 'workout' && !loading && (
+          <div>
             {/* Resistance training */}
             <div id="section-workout">
               <WorkoutLog date={date} />
             </div>
+          </div>
+        )}
+
+        {/* AI logging bar — the primary way to fill the day */}
+        <button onClick={() => { haptic(15); openChat(); }}
+          style={{ minHeight: 52 }}
+          className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.16] to-[#4c2fd8]/[0.08] border border-[#7c5cfc]/40 hover:border-[#7c5cfc]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(124,92,252,0.10)]">
+          <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.5)]">✨</span>
+          <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left">Tell me about your day…</span>
+          <span className="text-[#a78bfa]">🎤</span>
+        </button>
+
+        {/* Hint when nothing is open — keeps the page from feeling empty */}
+        {!heroPanel && !loading && (
+          <p className="text-center text-[11px] text-[#4e4e5c] py-1">
+            Tap a tile above to open it · or tell the AI your whole day
+          </p>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <>
+            {/* New member welcome card — shown when coach hasn't set a protocol yet */}
+            {!protocol && (
+              <Card>
+                <div className="text-center py-4">
+                  <div className="text-4xl mb-3">👋</div>
+                  <h2 className="font-bold text-stone-800 text-base mb-1">Welcome to FitLife!</h2>
+                  <p className="text-sm text-stone-500 leading-relaxed">
+                    Your coach will set up your personalised protocol shortly — activities, supplements, macros, and water target will all appear here.
+                  </p>
+                  <p className="text-xs text-stone-400 mt-3">
+                    You can already start logging your weight, food, and water below.
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            {/* Coach notes visible to member — flagged ones show as "Action needed" */}
+            {coachNotes.length > 0 && (
+              <Card>
+                <SectionTitle icon="💬">Message from your coach</SectionTitle>
+                <div className="space-y-2 mt-2">
+                  {coachNotes.slice(0, 3).map(n => (
+                    <div key={n.id} className={`rounded-2xl px-4 py-3 border ${
+                      n.flagged ? 'bg-amber-500/[0.06] border-amber-500/20' : 'bg-[#1a1a20] border-white/[0.07]'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {n.flagged && (
+                          <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                            ⚠ Action needed
+                          </span>
+                        )}
+                        <span className="text-xs text-stone-400">
+                          {n.monitor_name} · {new Date(n.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </span>
+                      </div>
+                      <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{n.note}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+            {protocol?.fasting && (() => {
+              // Age guard: warn if user is under 18 or has diabetes-related conditions
+              const isMinor = profileAge !== null && profileAge < 18;
+              const hasRisk = ['pre_diabetic','insulin_resist','hypothyroid'].some(c => (protocol?.conditions || []).includes(c));
+              if (isMinor || hasRisk) {
+                return (
+                  <div className="bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3">
+                    <p className="text-xs font-bold text-amber-400 mb-1">⚠️ Fasting protocol — check with doctor</p>
+                    <p className="text-xs text-[#8e8e9a] leading-relaxed">
+                      {isMinor ? 'Fasting is not recommended for people under 18.' : 'Your health conditions may require a modified fasting approach.'} Please confirm this protocol is approved by your doctor before following it.
+                    </p>
+                  </div>
+                );
+              }
+              return <FastingBar fasting={protocol.fasting} />;
+            })()}
+
+            {protocol?.macros && (
+              <MacroProgress
+                macros={protocol.macros}
+                foodItems={log.food || []}
+                supplements={log.supplements || {}}
+                activeActivities={activeActivities}
+                activities={log.activities || {}}
+                overrides={protocol?.item_overrides || {}}
+                weightKg={parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0}
+              />
+            )}
+
+
+            {/* Long-press chip detail popover */}
+            {chipInfo && (
+              <div onClick={() => setChipInfo(null)}
+                className="fixed left-4 right-4 z-[60] bg-[#1a1a20] border border-[rgba(124,92,252,0.4)] rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)]"
+                style={{ bottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
+                <p className="text-sm font-bold text-white">{chipInfo.label}</p>
+                <p className="text-xs text-[#8e8e9a] mt-0.5 leading-relaxed">{chipInfo.sub}</p>
+              </div>
+            )}
+
+
 
             {/* Notes */}
             <Card>
