@@ -172,6 +172,9 @@ async function request(server, method, path, token, body) {
   check('broadcast reached both members', bc.length === 2, bc);
 
   // 2j: audit trail written
+  // coachAudit is fire-and-forget by design (an audit write must never fail the
+  // member-facing action), so give it a moment before asserting.
+  await new Promise(r => setTimeout(r, 400));
   const { rows: audits } = await pool.query(`SELECT action FROM audit_log ORDER BY id`);
   check('audit rows written', audits.length >= 5 && audits.some(a => a.action === 'coach_ai_update') && audits.some(a => a.action === 'coach_ai_broadcast'), audits.map(a => a.action));
 

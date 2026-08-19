@@ -13,7 +13,7 @@ module.exports = (req, res, next) => {
   const token =
     (authHeader && authHeader.startsWith('Bearer ')
       ? authHeader.split(' ')[1]
-      : null) || req.cookies.accessToken;
+      : null) || req.cookies?.accessToken;   // optional-chain: cookie-parser may not be mounted (e.g. in tests), and a missing cookie jar should be a 401, not a 500
 
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });

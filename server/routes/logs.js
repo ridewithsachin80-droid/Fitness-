@@ -26,14 +26,23 @@ function calcCompliance(activities = {}, acv = {}, supplements = {}, protocolTot
   const suppDone = Object.values(supplements).filter(Boolean).length;
   const done     = actDone + acvDone + suppDone;
 
-  // If client sends the total number of assigned items, use it.
-  // Otherwise derive from the number of keys in each object (keys = assigned items).
+  // If the client sends the total number of assigned items, use it — that is
+  // the only reliable source, since the payload only carries items the member
+  // has interacted with.
+  //
+  // Fallback: derive from the keys present. This is a floor, not a truth: a
+  // payload of {walk:true} alone would otherwise score 100%. Clamping to the
+  // default protocol size (6 activities + 3 ACV + 7 supplements = 16) keeps a
+  // partial payload from inflating the number. The real client always sends
+  // protocol_total, so this path only guards against future callers.
+  const DEFAULT_PROTOCOL_TOTAL = 16;
+  const keyTotal = Object.keys(activities).length + Object.keys(acv).length + Object.keys(supplements).length;
   const total = protocolTotal && protocolTotal > 0
     ? protocolTotal
-    : Object.keys(activities).length + Object.keys(acv).length + Object.keys(supplements).length;
+    : Math.max(keyTotal, DEFAULT_PROTOCOL_TOTAL);
 
   if (!total) return 0;
-  return Math.round((done / total) * 100);
+  return Math.min(100, Math.round((done / total) * 100));
 }
 
 // ── GET /api/logs/recent-foods ────────────────────────────────────────────────
@@ -255,6 +264,17 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     // protocol_total: sent by client = number of assigned checkable items for this patient.
     // Allows server-side compliance to match the patient's actual custom protocol.
     const { protocol_total } = req.body;
+    // Clamp water — it reached the DB unvalidated, so a negative or absurd
+    // value would corrupt the hydration bar and the coach's view of the day.
+    const safeWater = Math.min(20000, Math.max(0, parseInt(water_ml) || 0));
+
+    // Clamp weight to the same range the client warns on, so a fat-fingered
+    // entry can't poison weight trends and BMR/TDEE calculations.
+    const parsedWeight = parseFloat(weight_kg);
+    const safeWeight = Number.isFinite(parsedWeight) && parsedWeight >= 20 && parsedWeight <= 400
+      ? parsedWeight
+      : null;
+
     const compliance_pct = calcCompliance(activities, acv, supplements, protocol_total || null);
     const patientId = req.user.id;
 
@@ -279,11 +299,11 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
       [
         patientId,
         date,
-        weight_kg || null,
+        safeWeight,
         JSON.stringify(activities),
         JSON.stringify(acv),
         JSON.stringify(food_items),
-        water_ml,
+        safeWater,
         JSON.stringify(supplements),
         JSON.stringify(sleep),
         notes,
