@@ -168,9 +168,9 @@ function ComplianceRing({ pct }) {
     >
       <defs>
         <linearGradient id="complianceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%"   stopColor="#7c5cfc" />
-          <stop offset="60%"  stopColor="#a78bfa" />
-          <stop offset="100%" stopColor={isHigh ? '#d4af6a' : '#c4b5fd'} />
+          <stop offset="0%"   stopColor="#c9a227" />
+          <stop offset="60%"  stopColor="#e0c98a" />
+          <stop offset="100%" stopColor={isHigh ? '#d4af6a' : '#f0dfae'} />
         </linearGradient>
       </defs>
       <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="6" />
@@ -304,7 +304,7 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
     { key:'kcal', label:'Calories',  icon:'🔥', unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-orange-400', light:'bg-orange-50', text:'text-orange-600' },
     { key:'pro',  label:'Protein',   icon:'💪', unit:'g',    current:+totals.pro.toFixed(1),  target:macros.pro,  bg:'bg-blue-500',   light:'bg-blue-50',   text:'text-blue-600' },
     { key:'carb', label:'Net Carbs', icon:'🌾', unit:'g',    current:+totals.carb.toFixed(1), target:macros.carb, bg:'bg-amber-400',  light:'bg-amber-50',  text:'text-amber-600' },
-    { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-purple-500', light:'bg-purple-50', text:'text-purple-600' },
+    { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-amber-500', light:'bg-amber-50', text:'text-amber-600' },
   ];
 
   return (
@@ -444,7 +444,7 @@ function NutritionSummary({ foodItems, supplements, activities, activeActivities
       <div key={key}>
         <div className="flex items-center justify-between text-xs mb-1">
           <span className="text-stone-600 font-medium">{meta.icon} {meta.label}
-            {rdaOverrides[key] && <span className="ml-1 text-purple-500 text-xs">★</span>}
+            {rdaOverrides[key] && <span className="ml-1 text-amber-500 text-xs">★</span>}
           </span>
           <div className="flex items-center gap-1.5">
             <span className={`font-bold ${textCls}`}>{val}</span>
@@ -478,7 +478,7 @@ function NutritionSummary({ foodItems, supplements, activities, activeActivities
       <div className="flex items-center justify-between mb-3">
         <SectionTitle icon="🔬">Nutrition Summary</SectionTitle>
         <div className="flex items-center gap-2">
-          {hasOverrides && <span className="text-xs text-purple-600 font-semibold">★ custom targets</span>}
+          {hasOverrides && <span className="text-xs text-amber-600 font-semibold">★ custom targets</span>}
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
             totalMet >= totalAll*0.8 ? 'bg-emerald-100 text-emerald-700' :
             totalMet >= totalAll*0.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
@@ -648,7 +648,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                             <span className={`font-bold ${isChecked?'text-orange-500':'text-stone-400'}`}>{item.kcal} kcal</span>
                             <span className={isChecked?'text-blue-500':'text-stone-300'}>P {item.pro}g</span>
                             <span className={isChecked?'text-amber-500':'text-stone-300'}>C {item.carb}g</span>
-                            <span className={isChecked?'text-purple-500':'text-stone-300'}>F {item.fat}g</span>
+                            <span className={isChecked?'text-amber-500':'text-stone-300'}>F {item.fat}g</span>
                           </div>
                         </button>
                       );
@@ -1001,7 +1001,7 @@ export default function DailyLog() {
         <div className="max-w-md mx-auto" id="section-hero">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[#a78bfa] mb-1.5">FitLife</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-[#e0c98a] mb-1.5">FitLife</p>
               <h1 className="font-display text-2xl font-medium flex items-center gap-2 leading-tight">
                 <span>{AVATARS_LIST[avatarIdx]}</span>
                 {(() => {
@@ -1011,7 +1011,7 @@ export default function DailyLog() {
                 })()}
               </h1>
               {autoSaved && (
-                <p className="text-xs text-[#a78bfa] mt-1 font-medium"><span className="autosave-dot" />auto-saved ✓</p>
+                <p className="text-xs text-[#e0c98a] mt-1 font-medium"><span className="autosave-dot" />auto-saved ✓</p>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -1042,7 +1042,7 @@ export default function DailyLog() {
               onClick={() => setDate(today())}
               disabled={date === today()}
               style={{ minWidth: 44, minHeight: 36 }}
-              className="text-sm font-bold text-[#8b5cf6] rounded-xl hover:bg-[rgba(124,92,252,0.05)] active:scale-95 transition-all disabled:opacity-30">›</button>
+              className="text-sm font-bold text-[#bf9a2e] rounded-xl hover:bg-[rgba(201,162,39,0.05)] active:scale-95 transition-all disabled:opacity-30">›</button>
           </div>
 
           <div className="bg-white/[0.05] rounded-2xl p-3.5 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
@@ -1055,7 +1055,7 @@ export default function DailyLog() {
                 {complianceTip && (
                   <div style={{ position: 'absolute', left: 0, top: 64, zIndex: 50, background: '#1a1a20', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#d8d8de', lineHeight: 1.5, width: 210, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
                     This shows what % of today's {terms.activities}, ACV doses, and {terms.supplements} you've completed.
-                    <button onClick={() => setComplianceTip(false)} style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#7c5cfc', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Got it ✓</button>
+                    <button onClick={() => setComplianceTip(false)} style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#c9a227', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Got it ✓</button>
                   </div>
                 )}
               </div>
@@ -1119,7 +1119,7 @@ export default function DailyLog() {
             <div className="grid grid-cols-2 gap-2">
                 {(() => {
                   const tileBase = 'text-left border rounded-2xl px-3 py-2.5 transition-all active:scale-[0.98] flex items-center justify-between gap-2';
-                  const on  = 'bg-[rgba(124,92,252,0.14)] border-[rgba(124,92,252,0.45)]';
+                  const on  = 'bg-[rgba(201,162,39,0.14)] border-[rgba(201,162,39,0.45)]';
                   const off = 'bg-white/[0.04] border-white/[0.07]';
                   const toggle = (key) => { setHeroPanel(p => (p === key ? null : key)); haptic(10); };
 
@@ -1263,11 +1263,11 @@ export default function DailyLog() {
                   <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5" autoFocus
                     onChange={e => { update('weight', e.target.value); validateWeight(e.target.value); }}
                     style={{ minHeight: 48, fontSize: 20 }}
-                    className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-2 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] text-[#ededf0] bg-[#1a1a20]" />
+                    className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-2 focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] text-[#ededf0] bg-[#1a1a20]" />
                   <span className="text-[#4e4e5c] font-bold">kg</span>
                   <button onClick={() => setHeroPanel(null)}
                     style={{ minHeight: 48 }}
-                    className="px-4 rounded-2xl bg-[#7c5cfc] text-white text-sm font-bold active:scale-95 transition-transform">Done</button>
+                    className="px-4 rounded-2xl bg-[#c9a227] text-white text-sm font-bold active:scale-95 transition-transform">Done</button>
                 </div>
                 {weightWarning && (
                   <div className="mt-2 flex items-start gap-2 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2">
@@ -1284,7 +1284,7 @@ export default function DailyLog() {
                   <p className="text-[10px] text-[#4e4e5c] font-medium">
                     💧 Target {((protocol?.water_target || 3000) / 1000).toFixed(1)}L · stop 1 hr before sleep · not during meals
                   </p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
                 </div>
                 <p className="text-2xl font-extrabold text-[#ededf0] mb-1">
                   {((log.water || 0) / 1000).toFixed(2)}
@@ -1321,7 +1321,7 @@ export default function DailyLog() {
               <div className="mt-3 pt-3 border-t border-white/[0.07]" id="section-sleep">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] text-[#4e4e5c] font-medium">🌙 Target 10:00 PM → 6:30 AM (8 hrs)</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1 min-w-0">
@@ -1329,14 +1329,14 @@ export default function DailyLog() {
                     <input type="time" value={log.sleep?.bedtime || ''}
                       onChange={e => update('sleep', { ...log.sleep, bedtime: e.target.value })}
                       style={{ minHeight: 46 }}
-                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="block text-[9px] font-bold text-[#4e4e5c] uppercase tracking-wider mb-1">Wake time</label>
                     <input type="time" value={log.sleep?.waketime || ''}
                       onChange={e => update('sleep', { ...log.sleep, waketime: e.target.value })}
                       style={{ minHeight: 46 }}
-                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
                   </div>
                 </div>
                 {log.sleep?.bedtime && log.sleep?.waketime && (() => {
@@ -1365,7 +1365,7 @@ export default function DailyLog() {
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] text-[#4e4e5c] font-medium">🏃 Today's protocol</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
                 </div>
                 <div id="section-protocol">
                 {(() => {
@@ -1398,16 +1398,16 @@ export default function DailyLog() {
                       style={{ minHeight: 38 }}
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-all active:scale-95 ${
                         checked
-                          ? 'bg-[rgba(124,92,252,0.16)] border-[rgba(124,92,252,0.5)] text-white'
+                          ? 'bg-[rgba(201,162,39,0.16)] border-[rgba(201,162,39,0.5)] text-white'
                           : auto
                           ? 'bg-white/[0.02] border-dashed border-white/[0.14] text-[#6b6b78]'
                           : 'bg-white/[0.03] border-white/[0.12] text-[#8e8e9a]'
                       }`}>
                       <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-extrabold flex-shrink-0 ${
-                        checked ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
+                        checked ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
                       }`}>✓</span>
                       {item.icon ? `${item.icon} ` : ''}{item.label}
-                      {auto && <span className="text-[9px] font-bold text-[#a78bfa] opacity-80">AUTO</span>}
+                      {auto && <span className="text-[9px] font-bold text-[#e0c98a] opacity-80">AUTO</span>}
 
                     </button>
                   );
@@ -1416,7 +1416,7 @@ export default function DailyLog() {
                     <>
                       <div className="flex items-center justify-between mb-3">
                         <SectionTitle icon="🏃">Today's Protocol</SectionTitle>
-                        <span className="text-xs font-bold text-[#a78bfa]">{totalDone} of {totalItems} done</span>
+                        <span className="text-xs font-bold text-[#e0c98a]">{totalDone} of {totalItems} done</span>
                       </div>
                       <p className="text-[10px] text-[#4e4e5c] mb-3">Tap to mark done · long-press for timing · AUTO items tick from your Workout log</p>
 
@@ -1442,11 +1442,11 @@ export default function DailyLog() {
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🍶 ACV · {acvDone}/{activeACV.length}</span>
                             <button onClick={() => setAcvExpanded(v => !v)}
-                              className="text-[10px] text-[#7c5cfc] font-bold">{acvExpanded ? 'Hide' : '?'}</button>
+                              className="text-[10px] text-[#c9a227] font-bold">{acvExpanded ? 'Hide' : '?'}</button>
                           </div>
                           {acvExpanded && (
-                            <div className="mb-2 bg-[rgba(124,92,252,0.08)] border border-[rgba(124,92,252,0.15)] rounded-xl px-3 py-2.5 text-xs text-[#8e8e9a] leading-relaxed">
-                              <strong className="text-[#c4b5fd]">Why ACV?</strong> 1 tbsp in 200ml warm water, through a straw, 15 min before meals — helps stabilise blood sugar, supports digestion, and may reduce appetite.
+                            <div className="mb-2 bg-[rgba(201,162,39,0.08)] border border-[rgba(201,162,39,0.15)] rounded-xl px-3 py-2.5 text-xs text-[#8e8e9a] leading-relaxed">
+                              <strong className="text-[#f0dfae]">Why ACV?</strong> 1 tbsp in 200ml warm water, through a straw, 15 min before meals — helps stabilise blood sugar, supports digestion, and may reduce appetite.
                             </div>
                           )}
                           <div className="flex flex-wrap gap-1.5">
@@ -1487,7 +1487,7 @@ export default function DailyLog() {
               <div className="mt-3 pt-3 border-t border-white/[0.07] space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] text-[#4e4e5c] font-medium">🥗 Food log</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
                 </div>
             {/* Sprint 3: Prescribed meals */}
             {protocol?.meal_plan?.length > 0 && (
@@ -1508,7 +1508,7 @@ export default function DailyLog() {
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] text-[#4e4e5c] font-medium">🔬 Nutrition</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
                 </div>
             <NutritionSummary
               foodItems={log.food || []}
@@ -1530,7 +1530,7 @@ export default function DailyLog() {
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] text-[#4e4e5c] font-medium">🏋️ Workout log</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
                 </div>
                 <div id="section-workout">
                   <WorkoutLog key={`${date}-${workoutRefreshKey}`} date={date} />
@@ -1576,7 +1576,7 @@ export default function DailyLog() {
                   </SectionTitle>
                   {unreadNotes.length > 1 && (
                     <button onClick={() => markNotesRead(unreadNotes.map(n => n.id))}
-                      className="text-[11px] font-bold text-[#7c5cfc] hover:underline">
+                      className="text-[11px] font-bold text-[#c9a227] hover:underline">
                       Mark all read
                     </button>
                   )}
@@ -1599,7 +1599,7 @@ export default function DailyLog() {
                       <p className="text-sm text-[#d8d8de] leading-relaxed whitespace-pre-wrap">{n.note}</p>
                       <button onClick={() => markNotesRead([n.id])}
                         style={{ minHeight: 36 }}
-                        className="mt-2 w-full text-[11px] font-bold text-[#a78bfa] bg-[rgba(124,92,252,0.10)] border border-[rgba(124,92,252,0.25)] rounded-xl active:scale-[0.98] transition-transform">
+                        className="mt-2 w-full text-[11px] font-bold text-[#e0c98a] bg-[rgba(201,162,39,0.10)] border border-[rgba(201,162,39,0.25)] rounded-xl active:scale-[0.98] transition-transform">
                         Got it ✓
                       </button>
                     </div>
@@ -1648,7 +1648,7 @@ export default function DailyLog() {
             {/* Long-press chip detail popover */}
             {chipInfo && (
               <div onClick={() => setChipInfo(null)}
-                className="fixed left-4 right-4 z-[60] bg-[#1a1a20] border border-[rgba(124,92,252,0.4)] rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)]"
+                className="fixed left-4 right-4 z-[60] bg-[#1a1a20] border border-[rgba(201,162,39,0.4)] rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)]"
                 style={{ bottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
                 <p className="text-sm font-bold text-white">{chipInfo.label}</p>
                 <p className="text-xs text-[#8e8e9a] mt-0.5 leading-relaxed">{chipInfo.sub}</p>
@@ -1663,7 +1663,7 @@ export default function DailyLog() {
               <SectionTitle icon="📝">{terms.notes}</SectionTitle>
               <textarea value={log.notes} onChange={e => update('notes', e.target.value)}
                 placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} rows={3}
-                className="w-full text-sm border border-white/[0.12] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] resize-none" />
+                className="w-full text-sm border border-white/[0.12] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] resize-none" />
             </Card>
 
             {error && <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
@@ -1688,7 +1688,7 @@ export default function DailyLog() {
             <h2 className="text-xl font-bold text-[#ededf0] mb-2">{milestone.title}</h2>
             <p className="text-sm text-[#6a6a78] leading-relaxed mb-6">{milestone.body}</p>
             <button onClick={() => setMilestone(null)}
-              className="w-full py-3 bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] font-bold rounded-2xl transition-colors active:scale-95">
+              className="w-full py-3 bg-[#c9a227] hover:bg-[#e0c98a] text-[#08052a] font-bold rounded-2xl transition-colors active:scale-95">
               Let's keep going! 💪
             </button>
           </div>

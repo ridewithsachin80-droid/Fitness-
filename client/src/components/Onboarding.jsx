@@ -19,9 +19,9 @@ const AGE_MODES = [
     label: 'Adult',
     sub: 'Ages 18–59',
     emoji: '💪',
-    color: 'from-violet-500 to-purple-600',
-    bg: 'bg-violet-50',
-    border: 'border-violet-200',
+    color: 'from-amber-500 to-amber-600',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
     desc: 'Full detail, macros, nutrition science',
   },
   {
@@ -57,8 +57,8 @@ export default function Onboarding() {
         {AGE_MODES.map(m => (
           <button key={m.id} style={{
             ...s.modeCard,
-            border: ageMode === m.id ? '2px solid #7c5cfc' : '2px solid transparent',
-            background: ageMode === m.id ? 'rgba(124,92,252,0.08)' : 'rgba(255,255,255,0.04)',
+            border: ageMode === m.id ? '2px solid #c9a227' : '2px solid transparent',
+            background: ageMode === m.id ? 'rgba(201,162,39,0.08)' : 'rgba(255,255,255,0.04)',
           }} onClick={() => setAgeMode(m.id)}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>{m.emoji}</div>
             <div style={s.modeLabel}>{m.label}</div>
@@ -81,8 +81,8 @@ export default function Onboarding() {
         {AVATARS.map((a, i) => (
           <button key={i} style={{
             ...s.avatarBtn,
-            border: avatarIdx === i ? '2px solid #7c5cfc' : '2px solid transparent',
-            background: avatarIdx === i ? 'rgba(124,92,252,0.15)' : 'rgba(255,255,255,0.04)',
+            border: avatarIdx === i ? '2px solid #c9a227' : '2px solid transparent',
+            background: avatarIdx === i ? 'rgba(201,162,39,0.15)' : 'rgba(255,255,255,0.04)',
             transform: avatarIdx === i ? 'scale(1.1)' : 'scale(1)',
           }} onClick={() => setAvatarI(i)}>
             <span style={{ fontSize: 32 }}>{a}</span>
@@ -145,7 +145,7 @@ function Logo() {
   return (
     <div style={{ textAlign: 'center', marginBottom: 32 }}>
       <div style={{ fontSize: 48, marginBottom: 8 }}>🏃</div>
-      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: '#7c5cfc', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: '#c9a227', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
         FitLife
       </div>
     </div>
@@ -156,7 +156,7 @@ function Btn({ children, onClick, disabled }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       width: '100%', padding: '16px', borderRadius: 16,
-      background: disabled ? 'rgba(124,92,252,0.3)' : '#7c5cfc',
+      background: disabled ? 'rgba(201,162,39,0.3)' : '#c9a227',
       color: '#fff', fontWeight: 700, fontSize: 16,
       border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
       marginTop: 24, transition: 'all .15s',
@@ -192,7 +192,7 @@ const s = {
   avatarGrid:{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 8 },
   avatarBtn: { borderRadius: 14, padding: '12px 8px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
   btnRow:    { display: 'flex', gap: 8 },
-  summaryCard:{ background: 'linear-gradient(135deg, rgba(124,92,252,0.10), rgba(212,175,106,0.08))', borderRadius: 20, padding: '20px', textAlign: 'center', border: '1px solid rgba(212,175,106,0.20)' },
+  summaryCard:{ background: 'linear-gradient(135deg, rgba(201,162,39,0.10), rgba(212,175,106,0.08))', borderRadius: 20, padding: '20px', textAlign: 'center', border: '1px solid rgba(212,175,106,0.20)' },
   summaryName:{ fontSize: 18, fontWeight: 600, fontFamily: 'Fraunces, serif', color: '#ededf0', marginBottom: 6 },
   summarySub: { fontSize: 13, color: '#8e8e9a', lineHeight: 1.5 },
 };

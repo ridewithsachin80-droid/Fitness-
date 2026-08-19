@@ -92,7 +92,7 @@ export default function Settings() {
         {sub && <p className="text-xs text-[#4e4e5c]">{sub}</p>}
       </div>
       <button onClick={() => { onChange(!value); haptic(15); }}
-        style={{ width: 48, height: 28, borderRadius: 14, background: value ? '#7c5cfc' : 'rgba(255,255,255,0.1)', transition: 'all .2s', position: 'relative', border: 'none', cursor: 'pointer' }}>
+        style={{ width: 48, height: 28, borderRadius: 14, background: value ? '#c9a227' : 'rgba(255,255,255,0.1)', transition: 'all .2s', position: 'relative', border: 'none', cursor: 'pointer' }}>
         <div style={{ width: 22, height: 22, borderRadius: 11, background: '#fff', position: 'absolute', top: 3, left: value ? 23 : 3, transition: 'left .2s' }} />
       </button>
     </div>
@@ -121,7 +121,7 @@ export default function Settings() {
                 <button key={id} onClick={() => { setFontSize(id); haptic(15); }}
                   style={{ minHeight: 52, flex: 1 }}
                   className={`rounded-xl border flex items-center justify-center gap-2 py-2 transition-all ${
-                    fontSize === id ? 'border-[rgba(124,92,252,0.5)] bg-[rgba(124,92,252,0.1)]' : 'border-white/[0.07] bg-[#1a1a20]'}`}>
+                    fontSize === id ? 'border-[rgba(201,162,39,0.5)] bg-[rgba(201,162,39,0.1)]' : 'border-white/[0.07] bg-[#1a1a20]'}`}>
                   <span style={{ fontSize: id === 'large' ? 20 : 14, fontWeight: 700, color: '#ededf0' }}>{sample}</span>
                   <span className="text-xs text-[#8e8e9a]">{label}</span>
                 </button>
@@ -137,7 +137,7 @@ export default function Settings() {
                 <button key={id} onClick={() => { setNutritionView(id); haptic(15); }}
                   style={{ minHeight: 52, flex: 1 }}
                   className={`rounded-xl border flex items-center justify-center gap-2 py-2 px-2 transition-all ${
-                    nutritionView === id ? 'border-[rgba(124,92,252,0.5)] bg-[rgba(124,92,252,0.1)]' : 'border-white/[0.07] bg-[#1a1a20]'}`}>
+                    nutritionView === id ? 'border-[rgba(201,162,39,0.5)] bg-[rgba(201,162,39,0.1)]' : 'border-white/[0.07] bg-[#1a1a20]'}`}>
                   <span style={{ fontSize: 16 }}>{emoji}</span>
                   <span className="text-xs text-[#d8d8de] font-medium leading-tight">{label}</span>
                 </button>
@@ -154,7 +154,7 @@ export default function Settings() {
               <button key={m.id} onClick={() => { setAgeMode(m.id); haptic(15); }}
                 style={{ minHeight: 64, flex: 1 }}
                 className={`rounded-xl border flex flex-col items-center justify-center gap-1 py-2 transition-all ${
-                  ageMode === m.id ? 'border-[rgba(124,92,252,0.5)] bg-[rgba(124,92,252,0.1)]' : 'border-white/[0.07] bg-[#1a1a20]'}`}>
+                  ageMode === m.id ? 'border-[rgba(201,162,39,0.5)] bg-[rgba(201,162,39,0.1)]' : 'border-white/[0.07] bg-[#1a1a20]'}`}>
                 <span style={{ fontSize: 22 }}>{m.emoji}</span>
                 <span className="text-xs font-semibold text-[#d8d8de] text-center leading-tight">{m.label}</span>
               </button>
@@ -170,8 +170,8 @@ export default function Settings() {
               <button key={i} onClick={() => { setAvatarIdx(i); haptic(15); }}
                 style={{
                   width: '100%', aspectRatio: '1', borderRadius: 12, fontSize: 24,
-                  border: avatarIdx === i ? '2px solid #7c5cfc' : '2px solid transparent',
-                  background: avatarIdx === i ? 'rgba(124,92,252,0.15)' : 'rgba(255,255,255,0.04)',
+                  border: avatarIdx === i ? '2px solid #c9a227' : '2px solid transparent',
+                  background: avatarIdx === i ? 'rgba(201,162,39,0.15)' : 'rgba(255,255,255,0.04)',
                   cursor: 'pointer', transition: 'all .15s',
                 }}>{a}</button>
             ))}
@@ -187,11 +187,11 @@ export default function Settings() {
                 style={{ minHeight: 44, width: '100%' }}
                 className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-left transition-all ${
                   localMeals.includes(m)
-                    ? 'border-[rgba(124,92,252,0.3)] bg-[rgba(124,92,252,0.06)]'
+                    ? 'border-[rgba(201,162,39,0.3)] bg-[rgba(201,162,39,0.06)]'
                     : 'border-white/[0.07] bg-[#1a1a20]'}`}>
                 <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderColor: localMeals.includes(m) ? '#7c5cfc' : 'rgba(255,255,255,0.2)',
-                  background: localMeals.includes(m) ? '#7c5cfc' : 'transparent' }}>
+                  borderColor: localMeals.includes(m) ? '#c9a227' : 'rgba(255,255,255,0.2)',
+                  background: localMeals.includes(m) ? '#c9a227' : 'transparent' }}>
                   {localMeals.includes(m) && <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span>}
                 </div>
                 <span className="text-sm text-[#d8d8de] font-medium">{m}</span>
@@ -208,24 +208,24 @@ export default function Settings() {
             <div>
               <label className="block text-xs text-[#6a6a78] font-medium mb-1">Emergency contact name</label>
               <input value={ecName} onChange={e => setEcName(e.target.value)} placeholder="e.g. Ravi Kumar"
-                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
             </div>
             <div>
               <label className="block text-xs text-[#6a6a78] font-medium mb-1">Emergency contact phone</label>
               <input value={ecPhone} onChange={e => setEcPhone(e.target.value)} placeholder="+91 98765 43210" type="tel"
-                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
             </div>
             {ageMode === 'child' && (
               <div>
                 <label className="block text-xs text-[#6a6a78] font-medium mb-1">Parent / Guardian email</label>
                 <input value={guarEmail} onChange={e => setGuarEmail(e.target.value)} placeholder="parent@example.com" type="email"
-                  className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                  className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
                 <p className="text-xs text-[#4e4e5c] mt-1">Used only to share your daily log with a parent. Not sent automatically by the app — you must share it manually.</p>
               </div>
             )}
             <button onClick={saveEC}
               style={{ minHeight: 44 }}
-              className="w-full py-2.5 bg-[rgba(124,92,252,0.15)] hover:bg-[rgba(124,92,252,0.25)] text-[#a78bfa] font-semibold rounded-xl text-sm transition-all border border-[rgba(124,92,252,0.2)]">
+              className="w-full py-2.5 bg-[rgba(201,162,39,0.15)] hover:bg-[rgba(201,162,39,0.25)] text-[#e0c98a] font-semibold rounded-xl text-sm transition-all border border-[rgba(201,162,39,0.2)]">
               Save safety contacts
             </button>
             {ecPhone && (
@@ -336,11 +336,11 @@ export default function Settings() {
                   <label className="block text-xs font-medium text-[#4e4e5c] mb-1">{label}</label>
                   <input type="password" value={pwForm[key]} onChange={e => setPw(key, e.target.value)}
                     placeholder={placeholder} onKeyDown={e => e.key === 'Enter' && submitPw()}
-                    className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                    className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
                 </div>
               ))}
               {pwError && <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2 rounded-xl">{pwError}</p>}
-              {pwOk && <p className="text-xs text-[#a78bfa] bg-[rgba(124,92,252,0.1)] border border-[rgba(124,92,252,0.2)] px-3 py-2 rounded-xl font-medium">✓ Password changed successfully</p>}
+              {pwOk && <p className="text-xs text-[#e0c98a] bg-[rgba(201,162,39,0.1)] border border-[rgba(201,162,39,0.2)] px-3 py-2 rounded-xl font-medium">✓ Password changed successfully</p>}
               <button onClick={submitPw} disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
                 style={{ minHeight: 44 }}
                 className="w-full py-2.5 bg-[#0e0e12] hover:bg-[#08080b] text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40">

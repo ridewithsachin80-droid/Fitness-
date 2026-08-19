@@ -540,8 +540,8 @@ export default function DeviceConnect() {
             </div>
             {anyLoading && (
               <div style={{
-                width: 32, height: 32, border: '3px solid rgba(124,92,252,0.2)',
-                borderTopColor: '#7c5cfc', borderRadius: '50%',
+                width: 32, height: 32, border: '3px solid rgba(201,162,39,0.2)',
+                borderTopColor: '#c9a227', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite', flexShrink: 0, marginTop: 4,
               }} />
             )}
@@ -810,7 +810,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
             <div style={{ display: 'flex', gap: 12, marginBottom: 12, padding: '10px 12px', background: 'rgba(34,197,94,0.05)', borderRadius: 10, border: '1px solid rgba(34,197,94,0.15)' }}>
               {liveMetrics.heart_rate && <span style={{ color: '#22c55e', fontSize: 13, fontWeight: 700 }}>❤️ {liveMetrics.heart_rate} bpm</span>}
               {liveMetrics.spo2 && <span style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700 }}>🩸 {liveMetrics.spo2}%</span>}
-              {liveMetrics.hrv && <span style={{ color: '#a78bfa', fontSize: 13, fontWeight: 700 }}>📊 HRV {liveMetrics.hrv}ms</span>}
+              {liveMetrics.hrv && <span style={{ color: '#e0c98a', fontSize: 13, fontWeight: 700 }}>📊 HRV {liveMetrics.hrv}ms</span>}
               {liveMetrics.battery != null && <span style={{ color: '#f59e0b', fontSize: 13, fontWeight: 700 }}>🔋 {liveMetrics.battery}%</span>}
             </div>
           )}
@@ -881,7 +881,7 @@ function SyncToggleRow({ label, sub, defaultOn }) {
       </div>
       <button onClick={() => { setOn(v => !v); haptic(15); }} style={{
         width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
-        background: on ? '#7c5cfc' : 'rgba(255,255,255,0.1)',
+        background: on ? '#c9a227' : 'rgba(255,255,255,0.1)',
         position: 'relative', flexShrink: 0, transition: 'background 0.2s',
       }}>
         <div style={{

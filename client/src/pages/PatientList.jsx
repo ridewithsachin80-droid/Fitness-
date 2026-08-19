@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { getPatients }  from '../api/logs';
 import { today, formatDate } from '../constants';
 import { OfflineBanner, PageLoader, BottomNav } from '../components/UI';
+import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
 import { useSync } from '../hooks/useSync';
 
 function complianceBadge(pct) {
@@ -195,7 +196,7 @@ export default function PatientList() {
         {loggedToday.length > 0 && (
           <div>
             {noLogToday.length > 0 && (
-              <p className="text-[10px] font-semibold text-[#7c5cfc] uppercase tracking-[0.12em] mb-2 mt-4 px-1">
+              <p className="text-[10px] font-semibold text-[#c9a227] uppercase tracking-[0.12em] mb-2 mt-4 px-1">
                 ✓ Logged today ({loggedToday.length})
               </p>
             )}
@@ -204,6 +205,10 @@ export default function PatientList() {
         )}
       </div>
       <BottomNav role={user?.role} />
+
+      {/* Coach AI — manage protocols & messages by chat */}
+      <CoachAIChat onApplied={load} />
+      <CoachAIFab bottomOffset={88} />
     </div>
   );
 }
@@ -274,7 +279,7 @@ function PatientCard({ patient: p, todayStr, onClick }) {
               Muscle Coverage's recency lens for consistency. */}
           {workoutDaysAgo !== null && (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-              workoutDaysAgo === 0 ? 'text-[#a78bfa] bg-[rgba(124,92,252,0.10)]'
+              workoutDaysAgo === 0 ? 'text-[#e0c98a] bg-[rgba(201,162,39,0.10)]'
               : workoutDaysAgo > 10 ? 'text-amber-400 bg-amber-400/10'
               : 'text-[#9a9aa6] bg-white/[0.05]'}`}>
               🏋️ {workoutDaysAgo === 0 ? 'Today' : `${workoutDaysAgo}d ago`}

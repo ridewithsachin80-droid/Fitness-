@@ -14,8 +14,8 @@
   --text-hi:     #ededf0;
   --text-mid:    #8e8e9a;
   --text-lo:     #4e4e5c;
-  --accent:      #7c5cfc;
-  --accent-dim:  rgba(124,92,252,0.12);
+  --accent:      #c9a227;
+  --accent-dim:  rgba(201,162,39,0.12);
 }
 
 /* ── Base ──────────────────────────────────────────────────────────────────── */
@@ -54,36 +54,36 @@ body {
 .text-stone-300 { color: #3a3a46; }
 
 /* Accent text — lighten for readability on dark surfaces */
-.text-emerald-700 { color: #a78bfa; }
-.text-emerald-600 { color: #8b5cf6; }
-.text-emerald-800 { color: #ddd6fe; }
+.text-emerald-700 { color: #e0c98a; }
+.text-emerald-600 { color: #bf9a2e; }
+.text-emerald-800 { color: #f5ead0; }
 .text-red-700, .text-red-600, .text-red-500 { color: #f87171; }
 .text-amber-700, .text-amber-600            { color: #fbbf24; }
 .text-orange-700, .text-orange-600          { color: #fb923c; }
 .text-orange-500                            { color: #fdba74; }
 .text-blue-700, .text-blue-600             { color: #60a5fa; }
 .text-blue-500                             { color: #93c5fd; }
-.text-purple-700, .text-purple-600        { color: #c084fc; }
-.text-purple-500                          { color: #d8b4fe; }
+.text-amber-700, .text-amber-600        { color: #d9b451; }
+.text-amber-500                          { color: #d8b4fe; }
 
 
 /* Remaining emerald shades → purple-tinted so all brand elements unify */
-.text-emerald-400 { color: #a78bfa; }
-.text-emerald-300 { color: #c4b5fd; }
-.text-emerald-200 { color: #ddd6fe; }
+.text-emerald-400 { color: #e0c98a; }
+.text-emerald-300 { color: #f0dfae; }
+.text-emerald-200 { color: #f5ead0; }
 .text-emerald-100 { color: #ede9fe; }
 /* emerald-500 (used for chart dots / active elements) → vivid purple */
-.text-emerald-500 { color: #8b5cf6; }
+.text-emerald-500 { color: #bf9a2e; }
 /* bg-emerald-500 (checkbox fill, meal tabs) → purple */
-.bg-emerald-500 { background-color: #7c5cfc; }
+.bg-emerald-500 { background-color: #c9a227; }
 /* bg-emerald-400 (nutrition bar) — keep as accent purple */
-.bg-emerald-400 { background-color: #8b5cf6; }
+.bg-emerald-400 { background-color: #bf9a2e; }
 /* border-emerald-500 (checkbox border when checked) */
-.border-emerald-500 { border-color: #7c5cfc; }
+.border-emerald-500 { border-color: #c9a227; }
 
 /* Tinted accent backgrounds */
-.bg-emerald-50  { background-color: rgba(124,92,252,0.07); }
-.bg-emerald-100 { background-color: rgba(124,92,252,0.13); }
+.bg-emerald-50  { background-color: rgba(201,162,39,0.07); }
+.bg-emerald-100 { background-color: rgba(201,162,39,0.13); }
 .bg-red-50      { background-color: rgba(248,113,113,0.08); }
 .bg-red-100     { background-color: rgba(248,113,113,0.14); }
 .bg-amber-50    { background-color: rgba(251,191,36,0.08); }
@@ -91,18 +91,18 @@ body {
 .bg-orange-50   { background-color: rgba(251,146,60,0.08); }
 .bg-blue-50     { background-color: rgba(96,165,250,0.08); }
 .bg-blue-100    { background-color: rgba(96,165,250,0.14); }
-.bg-purple-50   { background-color: rgba(192,132,252,0.08); }
-.bg-purple-100  { background-color: rgba(192,132,252,0.14); }
+.bg-amber-50   { background-color: rgba(192,132,252,0.08); }
+.bg-amber-100  { background-color: rgba(192,132,252,0.14); }
 
 /* Accent borders */
-.border-emerald-200 { border-color: rgba(124,92,252,0.22); }
-.border-emerald-100 { border-color: rgba(124,92,252,0.14); }
+.border-emerald-200 { border-color: rgba(201,162,39,0.22); }
+.border-emerald-100 { border-color: rgba(201,162,39,0.14); }
 .border-red-200     { border-color: rgba(248,113,113,0.25); }
 .border-amber-200   { border-color: rgba(251,191,36,0.25); }
 .border-amber-100   { border-color: rgba(251,191,36,0.15); }
 .border-orange-200  { border-color: rgba(251,146,60,0.25); }
 .border-blue-200    { border-color: rgba(96,165,250,0.25); }
-.border-purple-100  { border-color: rgba(192,132,252,0.18); }
+.border-amber-100  { border-color: rgba(192,132,252,0.18); }
 
 /* Header gradients */
 .from-emerald-700 { --tw-gradient-from: #0d0b18 var(--tw-gradient-from-position); }
@@ -136,9 +136,9 @@ input[type='number'] { -moz-appearance: textfield; }
 
 /* Focus */
 .focus\:ring-emerald-300:focus,
-.focus\:ring-emerald-400:focus      { --tw-ring-color: rgba(124,92,252,0.28); }
+.focus\:ring-emerald-400:focus      { --tw-ring-color: rgba(201,162,39,0.28); }
 .focus\:border-emerald-400:focus,
-.focus\:border-emerald-300:focus    { border-color: rgba(124,92,252,0.45) !important; }
+.focus\:border-emerald-300:focus    { border-color: rgba(201,162,39,0.45) !important; }
 
 /* ── Utilities ─────────────────────────────────────────────────────────────── */
 .safe-top    { padding-top:    env(safe-area-inset-top); }
@@ -170,8 +170,8 @@ input[type='number'] { -moz-appearance: textfield; }
 .saved-pulse { animation: saved-pulse 1s ease-in-out 2; }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(124,92,252,0); }
-  50%       { box-shadow: 0 0 0 8px rgba(124,92,252,0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201,162,39,0); }
+  50%       { box-shadow: 0 0 0 8px rgba(201,162,39,0.15); }
 }
 .pulse-glow { animation: pulse-glow 2s ease infinite; }
 
@@ -212,7 +212,7 @@ input[type='number'] { -moz-appearance: textfield; }
 .autosave-dot {
   display: inline-block;
   width: 6px; height: 6px; border-radius: 3px;
-  background: #7c5cfc; margin-right: 4px;
+  background: #c9a227; margin-right: 4px;
   animation: blink 1s ease-in-out 3;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }

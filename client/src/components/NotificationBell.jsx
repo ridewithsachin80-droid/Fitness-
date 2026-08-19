@@ -77,11 +77,11 @@ export default function NotificationBell() {
       <button onClick={toggle} aria-label="Notifications"
         className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-all ${
           unreadCount > 0
-            ? 'bg-[#7c5cfc] shadow-glow'
+            ? 'bg-[#c9a227] shadow-glow'
             : 'bg-white/[0.08] border border-white/[0.14] hover:bg-white/[0.14]'
         }`}>
         {unreadCount > 0 && (
-          <span className="absolute inset-0 rounded-full bg-[#7c5cfc] animate-ping opacity-40" />
+          <span className="absolute inset-0 rounded-full bg-[#c9a227] animate-ping opacity-40" />
         )}
         <svg className={`relative w-5 h-5 ${unreadCount > 0 ? 'text-white' : 'text-[#d8d8de]'}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -103,7 +103,7 @@ export default function NotificationBell() {
             {[['messages', `Messages${messages.length ? ` (${messages.length})` : ''}`], ['reminders', 'Reminders']].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
-                  tab === k ? 'bg-[#7c5cfc] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
+                  tab === k ? 'bg-[#c9a227] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
                 }`}>{label}</button>
             ))}
           </div>
@@ -126,7 +126,7 @@ export default function NotificationBell() {
                         )}
                         <span className="text-[11px] font-semibold text-[#d8d8de]">{m.monitor_name}</span>
                         {!m.read_at && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#7c5cfc]" title="Unread" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227]" title="Unread" />
                         )}
                       </div>
                       <span className="text-[10px] text-[#5a5a68] flex-shrink-0 whitespace-nowrap">

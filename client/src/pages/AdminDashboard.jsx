@@ -13,7 +13,7 @@ function StatCard({ value, label, icon, color }) {
   const colors = {
     emerald: 'bg-[rgba(52,211,153,0.10)] text-emerald-300',
     blue:    'bg-[rgba(96,165,250,0.10)]    text-blue-300',
-    purple:  'bg-[rgba(192,132,252,0.10)]  text-purple-300',
+    purple:  'bg-[rgba(192,132,252,0.10)]  text-amber-300',
   };
   return (
     <div className={`rounded-2xl p-4 ${colors[color]}`}>
@@ -245,12 +245,12 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
     emerald: 'bg-[rgba(52,211,153,0.14)] text-emerald-300 border-[rgba(52,211,153,0.25)]',
     blue:    'bg-[rgba(96,165,250,0.14)] text-blue-300 border-[rgba(96,165,250,0.25)]',
     orange:  'bg-[rgba(251,146,60,0.14)] text-orange-300 border-[rgba(251,146,60,0.25)]',
-    purple:  'bg-[rgba(192,132,252,0.14)] text-purple-300 border-[rgba(192,132,252,0.25)]',
+    purple:  'bg-[rgba(192,132,252,0.14)] text-amber-300 border-[rgba(192,132,252,0.25)]',
     rose:    'bg-[rgba(251,113,133,0.14)] text-rose-300 border-[rgba(251,113,133,0.25)]',
   };
   const dotMap = {
     emerald: 'bg-emerald-500', blue: 'bg-blue-500',
-    orange:  'bg-orange-500',  purple: 'bg-purple-500', rose: 'bg-rose-500',
+    orange:  'bg-orange-500',  purple: 'bg-amber-500', rose: 'bg-rose-500',
   };
 
   return (
@@ -295,7 +295,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                 <span className="font-bold text-orange-600">{mealTotal.kcal} kcal</span>
                 <span className="text-blue-300">P {mealTotal.pro.toFixed(1)}g</span>
                 <span className="text-amber-300">C {mealTotal.carb.toFixed(1)}g</span>
-                <span className="text-purple-300">F {mealTotal.fat.toFixed(1)}g</span>
+                <span className="text-amber-300">F {mealTotal.fat.toFixed(1)}g</span>
               </div>
             )}
 
@@ -353,7 +353,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
             <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
             <span className="text-sm text-amber-300">C {dayTotal.carb.toFixed(1)}g</span>
-            <span className="text-sm text-purple-300">F {dayTotal.fat.toFixed(1)}g</span>
+            <span className="text-sm text-amber-300">F {dayTotal.fat.toFixed(1)}g</span>
             <span className="text-sm text-emerald-300">Fiber {dayTotal.fiber.toFixed(1)}g</span>
           </div>
           {/* Micronutrients */}
@@ -837,8 +837,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
                     value={current}
                     onChange={e => setRda(key, e.target.value)}
                     placeholder={`${meta.rda} ${meta.unit}`}
-                    className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 ${
-                      current ? 'border-[rgba(192,132,252,0.40)] bg-[rgba(192,132,252,0.10)] text-purple-300 font-semibold' : 'border-white/[0.08]'}`}
+                    className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-300 ${
+                      current ? 'border-[rgba(192,132,252,0.40)] bg-[rgba(192,132,252,0.10)] text-amber-300 font-semibold' : 'border-white/[0.08]'}`}
                   />
                   <span className="text-xs text-[#9a9aa6] w-10">{meta.unit}</span>
                   {current && (
@@ -1070,7 +1070,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
                   onClick={() => set('gender', form.gender === val ? '' : val)}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
                     form.gender === val
-                      ? 'bg-[rgba(124,92,252,0.16)] border-[rgba(124,92,252,0.5)] text-white'
+                      ? 'bg-[rgba(201,162,39,0.16)] border-[rgba(201,162,39,0.5)] text-white'
                       : 'border-white/[0.08] text-[#9a9aa6] hover:border-white/[0.15]'
                   }`}>{label}</button>
               ))}
@@ -1418,7 +1418,7 @@ export default function AdminDashboard() {
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[#a78bfa] mb-1">FitLife Admin</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-[#e0c98a] mb-1">FitLife Admin</p>
               <h1 className="font-display text-xl font-medium">Welcome, {user?.name} 👑</h1>
               {stats && (
                 <p className="text-[#9a9aa6] text-xs mt-0.5">
@@ -1436,10 +1436,10 @@ export default function AdminDashboard() {
           {/* AI command bar — the coach's fastest path to any change */}
           <button onClick={() => openCoachAI()}
             style={{ minHeight: 52 }}
-            className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.16] to-[#4c2fd8]/[0.08] border border-[#7c5cfc]/40 hover:border-[#7c5cfc]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(124,92,252,0.10)]">
-            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.5)]">✨</span>
+            className="w-full flex items-center gap-3 bg-gradient-to-r from-[#c9a227]/[0.16] to-[#8a6a1e]/[0.08] border border-[#c9a227]/40 hover:border-[#c9a227]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(201,162,39,0.10)]">
+            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(201,162,39,0.5)]">✨</span>
             <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
-            <span className="text-[#a78bfa]">🎤</span>
+            <span className="text-[#e0c98a]">🎤</span>
           </button>
         </div>
       </div>
@@ -1457,7 +1457,7 @@ export default function AdminDashboard() {
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 tab === t.id
-                  ? 'bg-[rgba(124,92,252,0.14)] text-[#c4b5fd] border border-[rgba(124,92,252,0.25)]'
+                  ? 'bg-[rgba(201,162,39,0.14)] text-[#f0dfae] border border-[rgba(201,162,39,0.25)]'
                   : 'text-[#5a5a68] hover:text-[#9a9aa6]'
               }`}>
               {t.label}
@@ -1473,11 +1473,11 @@ export default function AdminDashboard() {
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${tab}…`}
             className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm
-              focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)] text-[#ededf0] placeholder-[#5a5a68]"
+              focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)] text-[#ededf0] placeholder-[#5a5a68]"
           />
           <button
             onClick={() => tab === 'members' ? setShowAddMember(true) : setShowAddMonitor(true)}
-            className="px-4 py-2.5 bg-[#7c5cfc] hover:bg-[#a78bfa] text-[#08052a] text-sm font-bold
+            className="px-4 py-2.5 bg-[#c9a227] hover:bg-[#e0c98a] text-[#08052a] text-sm font-bold
               rounded-xl transition-colors whitespace-nowrap">
             + Add {tab === 'members' ? 'Member' : 'Monitor'}
           </button>
@@ -1497,7 +1497,7 @@ export default function AdminDashboard() {
                 { label: 'Members',   value: overview.stats.total_members, cls: 'text-blue-300' },
                 { label: 'Logged',    value: `${overview.stats.logged_today}/${overview.stats.total_members}`, cls: 'text-emerald-300' },
                 { label: '7-day avg', value: `${overview.stats.avg_compliance_7d}%`, cls: overview.stats.avg_compliance_7d >= 75 ? 'text-emerald-300' : 'text-amber-300' },
-                { label: 'Lost',      value: `${overview.stats.total_weight_lost_kg}kg`, cls: 'text-purple-300' },
+                { label: 'Lost',      value: `${overview.stats.total_weight_lost_kg}kg`, cls: 'text-amber-300' },
               ].map(s => (
                 <div key={s.label} className="bg-[#131317] border border-white/[0.07] rounded-2xl px-2 py-2.5 text-center">
                   <div className={`text-[15px] font-extrabold ${s.cls}`}>{s.value}</div>
@@ -1526,7 +1526,7 @@ export default function AdminDashboard() {
                           onClick={() => sendRemind([a], a.id)}
                           disabled={remindBusy[a.id]}
                           style={{ minHeight: 34 }}
-                          className="text-[10px] font-extrabold text-[#a78bfa] bg-[rgba(124,92,252,0.12)] border border-[rgba(124,92,252,0.4)] rounded-full px-3 active:scale-95 transition-transform disabled:opacity-50">
+                          className="text-[10px] font-extrabold text-[#e0c98a] bg-[rgba(201,162,39,0.12)] border border-[rgba(201,162,39,0.4)] rounded-full px-3 active:scale-95 transition-transform disabled:opacity-50">
                           {remindBusy[a.id] ? 'Sending…' : '✨ Remind'}
                         </button>
                       )}
@@ -1538,7 +1538,7 @@ export default function AdminDashboard() {
                     onClick={() => sendRemind(overview.alerts.filter(a => !reminded[a.id]), 'all')}
                     disabled={remindBusy['all']}
                     style={{ minHeight: 38 }}
-                    className="w-full mt-2 text-[11px] font-extrabold text-[#a78bfa] border border-[rgba(124,92,252,0.3)] rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50">
+                    className="w-full mt-2 text-[11px] font-extrabold text-[#e0c98a] border border-[rgba(201,162,39,0.3)] rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50">
                     {remindBusy['all'] ? 'Sending…' : '✨ Remind everyone'}
                   </button>
                 )}
@@ -1552,7 +1552,7 @@ export default function AdminDashboard() {
                 {[['today', 'Today'], ['7d', '7-Day Average']].map(([k, l]) => (
                   <button key={k} onClick={() => setComplianceLens(k)}
                     className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                      complianceLens === k ? 'bg-[#7c5cfc] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
+                      complianceLens === k ? 'bg-[#c9a227] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
                     }`}>{l}</button>
                 ))}
               </div>
@@ -1636,7 +1636,7 @@ export default function AdminDashboard() {
                     className={`relative bg-[#131317] rounded-2xl border p-4 shadow-card
                       ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/monitor/${m.id}`)}>
-                      <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#a78bfa]"
+                      <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#e0c98a]"
                         style={{ background: 'linear-gradient(135deg,#2a2150,#1a1633)' }}>
                         {initials}
                       </div>
@@ -1680,7 +1680,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
                           <div className="h-full rounded-full transition-all"
-                            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#7c5cfc,#a78bfa)' }} />
+                            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#c9a227,#e0c98a)' }} />
                         </div>
                       </div>
                     )}
@@ -1696,7 +1696,7 @@ export default function AdminDashboard() {
                             className="w-full text-left px-4 py-3 text-xs font-bold text-blue-300 hover:bg-white/[0.04] border-t border-white/[0.06]">✏️ Edit & protocol</button>
                           <button onClick={() => { setMenuFor(null); sendWeekly(m); }}
                             disabled={weeklyBusy === m.id}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#a78bfa] hover:bg-white/[0.04] border-t border-white/[0.06] disabled:opacity-50">
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#e0c98a] hover:bg-white/[0.04] border-t border-white/[0.06] disabled:opacity-50">
                             {weeklyBusy === m.id ? '📊 Sending…' : weeklySent[m.id] ? '✓ Summary sent' : '📊 Send weekly summary'}
                           </button>
                           <button onClick={() => { setMenuFor(null); toggleUser(m.id, 'member'); }}
@@ -1812,7 +1812,7 @@ export default function AdminDashboard() {
                   const actionConfig = {
                     member_created:   { icon: '➕', color: 'bg-[rgba(52,211,153,0.10)] border-[rgba(52,211,153,0.25)] text-emerald-300' },
                     monitor_created:  { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    monitor_assigned: { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-purple-300' },
+                    monitor_assigned: { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
                     member_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     monitor_toggled:  { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     pin_reset:        { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },

@@ -139,7 +139,7 @@ export default function AdminReminders({ patients = [] }) {
     borderRadius: 12, padding: 16, marginBottom: 12,
   };
 
-  const btnStyle = (color = '#7c5cfc') => ({
+  const btnStyle = (color = '#c9a227') => ({
     background: color, color: '#08052a', border: 'none',
     borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
     fontSize: 13, fontWeight: 700,
@@ -149,14 +149,14 @@ export default function AdminReminders({ patients = [] }) {
 
   return (
     <div style={{ color: '#e0e0e0', maxWidth: 700 }}>
-      <h2 style={{ color: '#c4b5fd', fontFamily: 'Fraunces, serif', fontWeight: 600, fontSize: 20, marginBottom: 4 }}>🔔 Reminder Schedules</h2>
+      <h2 style={{ color: '#f0dfae', fontFamily: 'Fraunces, serif', fontWeight: 600, fontSize: 20, marginBottom: 4 }}>🔔 Reminder Schedules</h2>
       <p style={{ color: '#888', fontSize: 13, marginBottom: 20 }}>
         Set custom times for water and activity reminders. Repeats every {editing?.retry_interval_min ?? 5} min until client taps OK.
       </p>
 
       {msg && (
-        <div style={{ background: '#1e3a2e', border: '1px solid rgba(124,92,252,0.35)', borderRadius: 8,
-          padding: '10px 16px', marginBottom: 16, color: '#c4b5fd', fontSize: 14 }}>
+        <div style={{ background: '#1e3a2e', border: '1px solid rgba(201,162,39,0.35)', borderRadius: 8,
+          padding: '10px 16px', marginBottom: 16, color: '#f0dfae', fontSize: 14 }}>
           {msg}
         </div>
       )}
@@ -166,8 +166,8 @@ export default function AdminReminders({ patients = [] }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#12122a', borderRadius: 16, padding: 24,
-            width: 360, border: '1px solid rgba(124,92,252,0.35)' }}>
-            <h3 style={{ color: '#c4b5fd', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
+            width: 360, border: '1px solid rgba(201,162,39,0.35)' }}>
+            <h3 style={{ color: '#f0dfae', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
               {editing.type === 'water' ? '💧 Water' : '🏃 Activity'} Reminders
             </h3>
             <p style={{ color: '#888', fontSize: 12, margin: '0 0 16px' }}>
@@ -181,7 +181,7 @@ export default function AdminReminders({ patients = [] }) {
               <div style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>Reminder Times (IST)</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                 {editing.times.map(t => (
-                  <div key={t} style={{ background: 'rgba(124,92,252,0.13)', border: '1px solid #7c5cfc',
+                  <div key={t} style={{ background: 'rgba(201,162,39,0.13)', border: '1px solid #c9a227',
                     borderRadius: 20, padding: '4px 12px', fontSize: 13,
                     display: 'flex', alignItems: 'center', gap: 6 }}>
                     {t}
@@ -218,7 +218,7 @@ export default function AdminReminders({ patients = [] }) {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={save} disabled={saving} style={btnStyle('#7c5cfc')}>
+              <button onClick={save} disabled={saving} style={btnStyle('#c9a227')}>
                 {saving ? 'Saving...' : '✅ Save Schedule'}
               </button>
               <button onClick={() => setEditing(null)} style={btnStyle('#444')}>Cancel</button>
@@ -276,7 +276,7 @@ export default function AdminReminders({ patients = [] }) {
               <span style={{ fontWeight: 600 }}>{patient.name}</span>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => toggleDevices(patient.id)}
-                  style={{ ...btnStyle(openDevicesFor === patient.id ? '#7c5cfc' : '#374151'), fontSize: 11 }}>
+                  style={{ ...btnStyle(openDevicesFor === patient.id ? '#c9a227' : '#374151'), fontSize: 11 }}>
                   📱 Devices{devices[patient.id] ? ` (${devices[patient.id].length})` : ''}
                 </button>
                 <button onClick={() => sendTest(patient.id, 'water')}

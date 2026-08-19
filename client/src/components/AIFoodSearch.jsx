@@ -19,7 +19,7 @@ const MACRO_KEYS = [
   { key:'calories',    label:'Calories',  unit:'kcal', color:'#FF6B35' },
   { key:'protein',     label:'Protein',   unit:'g',    color:'#00D49F' },
   { key:'total_carbs', label:'Carbs',     unit:'g',    color:'#F59E0B' },
-  { key:'fat',         label:'Fat',       unit:'g',    color:'#A78BFA' },
+  { key:'fat',         label:'Fat',       unit:'g',    color:'#e0c98a' },
   { key:'fiber',       label:'Fiber',     unit:'g',    color:'#4ADE80' },
   { key:'sugar',       label:'Sugar',     unit:'g',    color:'#FB923C' },
 ];
@@ -299,8 +299,8 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
         </summary>
         <div style={micro}>
           {VITAMIN_KEYS.map(v => (
-            <div key={v.key} style={mBox('#A78BFA')}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#A78BFA', fontFamily: font }}>{sc(food.per_100g?.[v.key])}</div>
+            <div key={v.key} style={mBox('#e0c98a')}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#e0c98a', fontFamily: font }}>{sc(food.per_100g?.[v.key])}</div>
               <div style={{ fontSize: 9, color: muted, marginTop: 1, fontFamily: font }}>{v.label} {v.unit}</div>
             </div>
           ))}

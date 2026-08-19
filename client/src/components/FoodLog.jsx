@@ -100,7 +100,7 @@ function PortionPicker({ baseGrams, onSelect }) {
             style={{ minHeight: 60 }}
             className={`rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
               selected === p.label
-                ? 'border-[rgba(124,92,252,0.5)] bg-[rgba(124,92,252,0.1)]'
+                ? 'border-[rgba(201,162,39,0.5)] bg-[rgba(201,162,39,0.1)]'
                 : 'border-white/[0.1] bg-[#1a1a20] hover:border-white/[0.2]'}`}>
             <span style={{ fontSize: 20 }}>{p.emoji}</span>
             <span className="text-[10px] text-[#8e8e9a] font-medium">{p.label}</span>
@@ -118,7 +118,7 @@ function PortionPicker({ baseGrams, onSelect }) {
 function TrafficBadge({ n, target }) {
   if (!n || !target) return null;
   const pct = (n.cal / target) * 100;
-  const color = pct > 110 ? '#f87171' : pct > 80 ? '#fbbf24' : '#a78bfa';
+  const color = pct > 110 ? '#f87171' : pct > 80 ? '#fbbf24' : '#e0c98a';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
       <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
@@ -345,8 +345,8 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       <button
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
-        className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.14] to-[#4c2fd8]/[0.10] border border-[#7c5cfc]/30 hover:border-[#7c5cfc]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.4)]">✨</span>
+        className="w-full flex items-center gap-3 bg-gradient-to-r from-[#c9a227]/[0.14] to-[#8a6a1e]/[0.10] border border-[#c9a227]/30 hover:border-[#c9a227]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(201,162,39,0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
           <span className="block text-[11px] text-[#8e8e9a] leading-tight truncate">Say your whole day — I'll fill the entire log</span>
@@ -363,7 +363,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               return (
                 <button key={i} onClick={() => { setShowForm(true); setTimeout(() => pickRecent(food), 100); }}
                   style={{ minHeight: 44, whiteSpace: 'nowrap', flexShrink: 0 }}
-                  className="flex items-center gap-2 text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(124,92,252,0.4)] rounded-xl px-3 py-2 transition-colors text-[#d8d8de] font-medium">
+                  className="flex items-center gap-2 text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(201,162,39,0.4)] rounded-xl px-3 py-2 transition-colors text-[#d8d8de] font-medium">
                   <span className="truncate max-w-[100px]">{food.name}</span>
                   {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
                 </button>
@@ -389,7 +389,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                     <>
                       <span className="text-xs text-blue-400">P {totals.pro.toFixed(1)}g</span>
                       <span className="text-xs text-amber-400">C {totals.carb.toFixed(1)}g</span>
-                      <span className="text-xs text-purple-400">F {totals.fat.toFixed(1)}g</span>
+                      <span className="text-xs text-amber-400">F {totals.fat.toFixed(1)}g</span>
                     </>
                   )}
                 </>
@@ -406,7 +406,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-sm font-medium text-[#d8d8de] truncate">{item.name}</span>
-                          <span className="text-xs font-semibold text-[#8b5cf6] flex-shrink-0">{item.grams}g</span>
+                          <span className="text-xs font-semibold text-[#bf9a2e] flex-shrink-0">{item.grams}g</span>
                         </div>
                         {/* Always-visible remove button */}
                         <button onClick={() => remove(item.id)}
@@ -426,7 +426,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                               <span className="text-xs font-bold text-orange-400">{n.cal} kcal</span>
                               <span className="text-xs text-blue-400">P {n.pro}g</span>
                               <span className="text-xs text-amber-400">C {n.carb}g</span>
-                              <span className="text-xs text-purple-400">F {n.fat}g</span>
+                              <span className="text-xs text-amber-400">F {n.fat}g</span>
                             </div>
                           )
                       )}
@@ -453,7 +453,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               <span className="text-xs font-bold text-orange-400">{dayTotal.cal} kcal</span>
               <span className="text-xs text-blue-400">P {dayTotal.pro.toFixed(1)}g</span>
               <span className="text-xs text-amber-400">C {dayTotal.carb.toFixed(1)}g</span>
-              <span className="text-xs text-purple-400">F {dayTotal.fat.toFixed(1)}g</span>
+              <span className="text-xs text-amber-400">F {dayTotal.fat.toFixed(1)}g</span>
             </div>
           </div>
         );
@@ -463,7 +463,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       {!showForm ? (
         <button onClick={() => setShowForm(true)}
           style={{ minHeight: 52 }}
-          className="w-full py-3 rounded-2xl border-2 border-dashed border-[rgba(124,92,252,0.3)] text-[#8b5cf6] text-sm font-semibold hover:bg-[rgba(124,92,252,0.05)] hover:border-[rgba(124,92,252,0.5)] active:scale-98 transition-all">
+          className="w-full py-3 rounded-2xl border-2 border-dashed border-[rgba(201,162,39,0.3)] text-[#bf9a2e] text-sm font-semibold hover:bg-[rgba(201,162,39,0.05)] hover:border-[rgba(201,162,39,0.5)] active:scale-98 transition-all">
           + Add food item
         </button>
       ) : (
@@ -475,7 +475,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               <button key={m} onClick={() => setMeal(m)}
                 style={{ minHeight: 36 }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  meal === m ? 'bg-[#7c5cfc] text-white shadow-sm' : 'bg-white/[0.05] text-[#8e8e9a] hover:bg-white/[0.10]'
+                  meal === m ? 'bg-[#c9a227] text-white shadow-sm' : 'bg-white/[0.05] text-[#8e8e9a] hover:bg-white/[0.10]'
                 }`}>{m}</button>
             ))}
           </div>
@@ -490,7 +490,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                   return (
                     <button key={i} onClick={() => pickRecent(food)}
                       style={{ minHeight: 36 }}
-                      className="flex items-center gap-1.5 text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(124,92,252,0.4)] rounded-xl px-2.5 py-1.5 transition-colors text-[#d8d8de] font-medium">
+                      className="flex items-center gap-1.5 text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(201,162,39,0.4)] rounded-xl px-2.5 py-1.5 transition-colors text-[#d8d8de] font-medium">
                       <span className="truncate max-w-[100px]">{food.name}</span>
                       <span className="text-[#6a6a78]">{food.last_g}g</span>
                       {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
@@ -508,7 +508,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onFocus={() => { if (suggestions.length > 0 && !selected) setShowSuggestions(true); }}
                 placeholder="Food name…"
-                className="flex-1 px-3 py-2.5 rounded-xl border border-[rgba(255,255,255,0.12)] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] text-[#ededf0] font-medium"
+                className="flex-1 px-3 py-2.5 rounded-xl border border-[rgba(255,255,255,0.12)] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] text-[#ededf0] font-medium"
                 autoFocus />
               {/* Voice input button */}
               <button onClick={startVoice}
@@ -523,11 +523,11 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               </button>
               {searching && (
                 <div className="absolute right-14 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-[rgba(124,92,252,0.3)] border-t-[#7c5cfc] rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-[rgba(201,162,39,0.3)] border-t-[#c9a227] rounded-full animate-spin" />
                 </div>
               )}
               {selected && !searching && (
-                <span className="absolute right-14 top-1/2 -translate-y-1/2 text-[#8b5cf6] text-sm font-bold">✓</span>
+                <span className="absolute right-14 top-1/2 -translate-y-1/2 text-[#bf9a2e] text-sm font-bold">✓</span>
               )}
             </div>
             {listening && (
@@ -543,12 +543,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                     onTouchStart={(e) => e.preventDefault()}
                     onClick={() => pickSuggestion(food)}
                     style={{ minHeight: 44 }}
-                    className="w-full text-left px-3 py-2.5 hover:bg-[rgba(124,92,252,0.08)] active:bg-[rgba(124,92,252,0.15)] transition-colors border-b border-white/[0.05] last:border-0">
+                    className="w-full text-left px-3 py-2.5 hover:bg-[rgba(201,162,39,0.08)] active:bg-[rgba(201,162,39,0.15)] transition-colors border-b border-white/[0.05] last:border-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-[#d8d8de] font-medium truncate">{food.name}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {food.verified && (
-                          <span className="text-xs bg-[rgba(124,92,252,0.12)] text-[#7c5cfc] px-1.5 py-0.5 rounded font-semibold">✓</span>
+                          <span className="text-xs bg-[rgba(201,162,39,0.12)] text-[#c9a227] px-1.5 py-0.5 rounded font-semibold">✓</span>
                         )}
                         <span className="text-xs font-bold text-orange-400">{food.per_100g?.calories || 0} kcal</span>
                       </div>
@@ -572,7 +572,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
             {!searching && query.length >= 2 && suggestions.length === 0 && !showSuggestions && !selected && !showAI && (
               <div className="mt-1.5 space-y-1">
                 {lookupStatus === 'loading'  && <p className="text-xs text-[#6a6a78] px-1">Searching Open Food Facts…</p>}
-                {lookupStatus === 'found'    && <p className="text-xs text-[#8b5cf6] px-1 font-semibold">✓ Found on Open Food Facts</p>}
+                {lookupStatus === 'found'    && <p className="text-xs text-[#bf9a2e] px-1 font-semibold">✓ Found on Open Food Facts</p>}
                 {lookupStatus === 'notfound' && <p className="text-xs text-[#6a6a78] px-1">Not found — searching AI…</p>}
                 {lookupStatus === '' && (
                   <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold px-1 hover:underline">
@@ -604,13 +604,13 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
 
           {/* Per-100g preview */}
           {selected?.per_100g && (
-            <div className="bg-[#131317] rounded-xl border border-[rgba(124,92,252,0.2)] px-3 py-2">
+            <div className="bg-[#131317] rounded-xl border border-[rgba(201,162,39,0.2)] px-3 py-2">
               <p className="text-xs text-[#6a6a78] mb-1">Per 100g — {selected.name}</p>
               <div className="flex gap-3 flex-wrap">
                 <span className="text-xs font-bold text-orange-400">{selected.per_100g.calories || 0} kcal</span>
                 <span className="text-xs text-blue-400">P {selected.per_100g.protein || 0}g</span>
                 <span className="text-xs text-amber-400">C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net</span>
-                <span className="text-xs text-purple-400">F {selected.per_100g.fat || 0}g</span>
+                <span className="text-xs text-amber-400">F {selected.per_100g.fat || 0}g</span>
                 {!selected.verified && <span className="text-xs text-[#6a6a78] italic">unverified</span>}
               </div>
             </div>
@@ -623,12 +623,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 onChange={(e) => setGrams(e.target.value)}
                 placeholder="Weight in grams"
                 onKeyDown={(e) => e.key === 'Enter' && add()}
-                className="w-full px-3 py-2.5 pr-8 rounded-xl border border-white/[0.12] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] text-[#ededf0]" />
+                className="w-full px-3 py-2.5 pr-8 rounded-xl border border-white/[0.12] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] text-[#ededf0]" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#4e4e5c]">g</span>
             </div>
             <button onClick={add} disabled={!query.trim() || !grams}
               style={{ minHeight: 44 }}
-              className="px-4 py-2.5 bg-[#7c5cfc] hover:bg-[#9775fa] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-all active:scale-95">
+              className="px-4 py-2.5 bg-[#c9a227] hover:bg-[#9775fa] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-all active:scale-95">
               Add
             </button>
             <button onClick={closeForm}

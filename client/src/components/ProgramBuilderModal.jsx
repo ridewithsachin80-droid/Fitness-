@@ -169,7 +169,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-[#7c5cfc] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-[#c9a227] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -204,7 +204,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
             <label className="block text-[10px] text-[#5a5a68] font-semibold uppercase tracking-wide mb-1.5">Program name</label>
             <input value={programName} onChange={e => setProgramName(e.target.value)}
               placeholder="e.g. Push / Pull / Legs"
-              className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+              className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
           </div>
 
           {/* Day tabs */}
@@ -213,7 +213,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
               {days.map((d, i) => (
                 <button key={i} onClick={() => setActiveDayIdx(i)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
-                    i === activeDayIdx ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.06] text-[#9a9aa6] hover:bg-white/[0.1]'}`}>
+                    i === activeDayIdx ? 'bg-[#c9a227] text-white' : 'bg-white/[0.06] text-[#9a9aa6] hover:bg-white/[0.1]'}`}>
                   {d.day_label}
                 </button>
               ))}
@@ -227,7 +227,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
               <div className="flex items-center gap-2 mb-3">
                 <input value={days[activeDayIdx].day_label} onChange={e => updateDayLabel(e.target.value)}
                   placeholder="Day label, e.g. Push Day"
-                  className="flex-1 px-2.5 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-xs text-[#d8d8de] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                  className="flex-1 px-2.5 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-xs text-[#d8d8de] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
                 {days.length > 1 && (
                   <button onClick={() => removeDay(activeDayIdx)} className="text-[#5a5a68] hover:text-red-400 text-xs">Remove day</button>
                 )}
@@ -237,7 +237,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
               <div className="relative mb-2">
                 <input value={search} onChange={e => runSearch(e.target.value)}
                   placeholder="Search exercises to add…"
-                  className="w-full px-2.5 py-2 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-xs text-[#d8d8de] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                  className="w-full px-2.5 py-2 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-xs text-[#d8d8de] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
                 {results.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] border border-white/[0.1] rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
                     {results.map(r => (
@@ -278,7 +278,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
 
         <div className="px-5 py-4 border-t border-white/[0.07] flex-shrink-0 space-y-2">
           <button onClick={handleSave} disabled={saving}
-            className="w-full py-3 bg-[#7c5cfc] hover:bg-[#a78bfa] text-white font-bold rounded-xl transition-colors disabled:opacity-50">
+            className="w-full py-3 bg-[#c9a227] hover:bg-[#e0c98a] text-white font-bold rounded-xl transition-colors disabled:opacity-50">
             {saving ? 'Saving…' : existingProgramId ? 'Save Changes' : 'Create Program'}
           </button>
           {existingProgramId && (

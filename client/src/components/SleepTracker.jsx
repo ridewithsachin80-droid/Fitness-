@@ -43,7 +43,7 @@ export default function SleepTracker({ value = {}, onChange }) {
               value={val}
               onChange={(e) => update(field, e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm font-medium
-                text-stone-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white
+                text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white
                 transition-colors"
             />
           </div>

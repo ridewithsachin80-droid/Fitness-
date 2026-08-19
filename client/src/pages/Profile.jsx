@@ -38,7 +38,7 @@ function bmiLabel(b) {
   if (!b) return null;
   const v = parseFloat(b);
   if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-300 bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.20)]' };
-  if (v < 25)   return { label: 'Healthy',     cls: 'text-[#a78bfa] bg-[rgba(124,92,252,0.10)] border-[rgba(124,92,252,0.20)]' };
+  if (v < 25)   return { label: 'Healthy',     cls: 'text-[#e0c98a] bg-[rgba(201,162,39,0.10)] border-[rgba(201,162,39,0.20)]' };
   if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-300 bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.20)]' };
   return             { label: 'Obese',          cls: 'text-red-300 bg-[rgba(248,113,113,0.10)] border-[rgba(248,113,113,0.20)]' };
 }
@@ -87,7 +87,7 @@ const CONDITION_LABELS = {
 
 function StatPill({ label, value, unit, color = 'emerald' }) {
   const colors = {
-    emerald: 'bg-[rgba(124,92,252,0.08)] border-[rgba(124,92,252,0.16)] text-[#a78bfa]',
+    emerald: 'bg-[rgba(201,162,39,0.08)] border-[rgba(201,162,39,0.16)] text-[#e0c98a]',
     blue:    'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300',
     amber:   'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300',
     stone:   'bg-white/[0.04] border-white/[0.08] text-[#9a9aa6]',
@@ -125,7 +125,7 @@ export default function Profile() {
     <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center px-4">
       <div className="text-center">
         <p className="text-red-400 font-semibold">{error}</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-[#7c5cfc] font-medium text-sm">
+        <button onClick={() => navigate('/')} className="mt-4 text-[#c9a227] font-medium text-sm">
           ← Back to log
         </button>
       </div>
@@ -155,7 +155,7 @@ export default function Profile() {
           <div className="flex items-center justify-between mb-6">
             <BackButton onClick={() => navigate('/')} label="Back to log" />
             <button onClick={() => navigate('/settings')}
-              className="text-xs font-semibold text-[#a78bfa] hover:text-white transition-colors">
+              className="text-xs font-semibold text-[#e0c98a] hover:text-white transition-colors">
               Settings
             </button>
           </div>
@@ -167,13 +167,13 @@ export default function Profile() {
             </div>
             <div>
               <h1 className="font-display text-2xl font-medium">{p.name}</h1>
-              <p className="text-[#c4b5fd] text-sm mt-0.5">
+              <p className="text-[#f0dfae] text-sm mt-0.5">
                 {p.phone && `+91 ${p.phone}`}
                 {memberAge && ` · ${memberAge} yrs`}
                 {p.height_cm && ` · ${p.height_cm} cm`}
               </p>
               {p.monitor_name && (
-                <p className="text-xs text-[#a78bfa] mt-1">🏋️ Coach: {p.monitor_name}</p>
+                <p className="text-xs text-[#e0c98a] mt-1">🏋️ Coach: {p.monitor_name}</p>
               )}
             </div>
           </div>
@@ -181,7 +181,7 @@ export default function Profile() {
           {/* Journey progress bar */}
           {journeyPct !== null && journeyPct >= 0 && (
             <div className="bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="flex justify-between text-xs text-[#c4b5fd] mb-1.5">
+              <div className="flex justify-between text-xs text-[#f0dfae] mb-1.5">
                 <span>Journey progress</span>
                 <span className="font-bold text-white">{journeyPct}%</span>
               </div>
@@ -191,12 +191,12 @@ export default function Profile() {
                   style={{
                     width: `${Math.max(2, journeyPct)}%`,
                     background: journeyPct >= 100
-                      ? 'linear-gradient(90deg, #7c5cfc, #d4af6a)'
-                      : 'linear-gradient(90deg, #7c5cfc, #a78bfa)',
+                      ? 'linear-gradient(90deg, #c9a227, #d4af6a)'
+                      : 'linear-gradient(90deg, #c9a227, #e0c98a)',
                   }}
                 />
               </div>
-              <div className="flex justify-between text-xs text-[#a78bfa] mt-1.5">
+              <div className="flex justify-between text-xs text-[#e0c98a] mt-1.5">
                 <span>Start: {p.start_weight} kg</span>
                 <span>Goal: {p.target_weight} kg</span>
               </div>
@@ -238,7 +238,7 @@ export default function Profile() {
               </span>
             </div>
             <div className="mt-3 h-2 bg-white/[0.08] rounded-full overflow-hidden">
-              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-[#7c5cfc] via-amber-400 to-red-500" />
+              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-[#c9a227] via-amber-400 to-red-500" />
             </div>
             <div className="flex justify-between text-xs text-[#5a5a68] mt-1">
               <span>18.5</span><span>25</span><span>30</span><span>35+</span>
@@ -303,7 +303,7 @@ export default function Profile() {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-[#5a5a68] mt-0.5">BMR at rest</p>
                 </div>
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
-                  <p className="text-lg font-extrabold text-[#a78bfa]">{totalOut}</p>
+                  <p className="text-lg font-extrabold text-[#e0c98a]">{totalOut}</p>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-[#5a5a68] mt-0.5">Burned today</p>
                 </div>
               </div>
@@ -395,9 +395,9 @@ export default function Profile() {
                   <p className="text-xs text-blue-300 font-medium mb-0.5">Fasting ends</p>
                   <p className="font-display text-lg font-semibold text-blue-200">{fmt12(p.fasting.end)}</p>
                 </div>
-                <div className="bg-[rgba(124,92,252,0.08)] border border-[rgba(124,92,252,0.16)] rounded-xl px-3 py-2 text-center">
-                  <p className="text-xs text-[#a78bfa] font-medium mb-0.5">Fasting starts</p>
-                  <p className="font-display text-lg font-semibold text-[#c4b5fd]">{fmt12(p.fasting.start)}</p>
+                <div className="bg-[rgba(201,162,39,0.08)] border border-[rgba(201,162,39,0.16)] rounded-xl px-3 py-2 text-center">
+                  <p className="text-xs text-[#e0c98a] font-medium mb-0.5">Fasting starts</p>
+                  <p className="font-display text-lg font-semibold text-[#f0dfae]">{fmt12(p.fasting.start)}</p>
                 </div>
               </div>
               {p.fasting.note && (
@@ -421,7 +421,7 @@ export default function Profile() {
                 { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-[rgba(251,146,60,0.08)] border-[rgba(251,146,60,0.16)] text-orange-300' },
                 { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300' },
                 { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300' },
-                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-[rgba(192,132,252,0.08)] border-[rgba(192,132,252,0.16)] text-purple-300' },
+                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-[rgba(192,132,252,0.08)] border-[rgba(192,132,252,0.16)] text-amber-300' },
               ].filter(m => m.value).map(m => (
                 <div key={m.label} className={`rounded-xl border px-3 py-2.5 text-center ${m.color}`}>
                   <p className="font-display text-xl font-semibold">{m.value}<span className="text-xs font-normal ml-1">{m.unit}</span></p>

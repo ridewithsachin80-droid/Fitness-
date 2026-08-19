@@ -38,7 +38,7 @@ export function SectionTitle({ children, icon, tooltip }) {
             }}>
               {tooltip}
               <button onClick={() => setShow(false)} style={{
-                display: 'block', marginTop: 8, fontSize: 11, color: '#7c5cfc',
+                display: 'block', marginTop: 8, fontSize: 11, color: '#c9a227',
                 fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               }}>Got it ✓</button>
             </div>
@@ -60,12 +60,12 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
       className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer select-none
         transition-all duration-150 border ${
           checked
-            ? 'bg-[rgba(124,92,252,0.07)] border-[rgba(124,92,252,0.20)]'
+            ? 'bg-[rgba(201,162,39,0.07)] border-[rgba(201,162,39,0.20)]'
             : 'bg-[#1a1a20] border-white/[0.07] hover:border-white/[0.14]'
         }`}>
       <div style={{ width: 24, height: 24, minWidth: 24 }}
         className={`rounded-full border-2 flex-shrink-0 flex items-center justify-center
-          transition-all duration-150 ${checked ? 'bg-[#7c5cfc] border-[#7c5cfc]' : 'border-white/[0.2]'}`}>
+          transition-all duration-150 ${checked ? 'bg-[#c9a227] border-[#c9a227]' : 'border-white/[0.2]'}`}>
         {checked && (
           <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 12 12" fill="none">
             <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.2"
@@ -98,14 +98,14 @@ export function OfflineBanner() {
     window.addEventListener('offline', goOffline);
     return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
   }, []);
-  if (justOnline) return <div className="bg-[#7c5cfc] text-[#08052a] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
+  if (justOnline) return <div className="bg-[#c9a227] text-[#08052a] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
   if (!offline) return null;
   return <div className="bg-amber-500/90 text-white text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
 }
 
 export function Spinner({ size = 'md', color = 'emerald' }) {
   const sizes  = { sm: 'w-4 h-4 border-2', md: 'w-6 h-6 border-2', lg: 'w-8 h-8 border-[3px]' };
-  const colors = { emerald: 'border-[#7c5cfc]/30 border-t-[#7c5cfc]', white: 'border-white/30 border-t-white', stone: 'border-white/10 border-t-white/40' };
+  const colors = { emerald: 'border-[#c9a227]/30 border-t-[#c9a227]', white: 'border-white/30 border-t-white', stone: 'border-white/10 border-t-white/40' };
   return <div className={`rounded-full animate-spin ${sizes[size]} ${colors[color]}`} />;
 }
 
@@ -137,9 +137,9 @@ export function CardSkeleton({ lines = 3, className = '' }) {
 
 export function StatPill({ value, label, color = 'stone' }) {
   const colors = {
-    stone: 'bg-white/[0.06] text-[#d8d8de]', emerald: 'bg-[rgba(124,92,252,0.10)] text-[#7c5cfc]',
+    stone: 'bg-white/[0.06] text-[#d8d8de]', emerald: 'bg-[rgba(201,162,39,0.10)] text-[#c9a227]',
     amber: 'bg-[rgba(251,191,36,0.10)] text-amber-400', red: 'bg-[rgba(248,113,113,0.10)] text-red-400',
-    blue: 'bg-[rgba(96,165,250,0.10)] text-blue-400', purple: 'bg-[rgba(192,132,252,0.10)] text-purple-400',
+    blue: 'bg-[rgba(96,165,250,0.10)] text-blue-400', purple: 'bg-[rgba(192,132,252,0.10)] text-amber-400',
   };
   return (
     <div className={`text-center rounded-xl py-1.5 px-2 border border-white/[0.06] ${colors[color]}`}>
@@ -191,10 +191,10 @@ export function PatientBottomNav() {
     <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
       style={{ minHeight: 56, flex: 1 }}
       className={`flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${
-        tab.active ? 'text-[#7c5cfc]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
+        tab.active ? 'text-[#c9a227]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
       {tab.icon}
       <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-      {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full shadow-[0_0_6px_rgba(124,92,252,0.8)]" />}
+      {tab.active && <div className="w-1 h-1 bg-[#c9a227] rounded-full shadow-[0_0_6px_rgba(201,162,39,0.8)]" />}
     </button>
   );
 
@@ -212,8 +212,8 @@ export function PatientBottomNav() {
                 onClick={openChatFromNav}
                 aria-label="Log with AI Chat"
                 style={{ width: 56, height: 56, marginTop: -22 }}
-                className="rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-xl
-                  border-4 border-[#0b0b0e] shadow-[0_0_22px_rgba(124,92,252,0.55)] active:scale-90 transition-transform">
+                className="rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-xl
+                  border-4 border-[#0b0b0e] shadow-[0_0_22px_rgba(201,162,39,0.55)] active:scale-90 transition-transform">
                 ✨
               </button>
             </div>
@@ -250,10 +250,10 @@ export function BottomNav({ role }) {
             {tabs.map(tab => (
               <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
                 style={{ minHeight: 56, flex: 1 }}
-                className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-[#7c5cfc]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
+                className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-[#c9a227]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
                 {tab.icon}
                 <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-                {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full shadow-[0_0_6px_rgba(124,92,252,0.8)]" />}
+                {tab.active && <div className="w-1 h-1 bg-[#c9a227] rounded-full shadow-[0_0_6px_rgba(201,162,39,0.8)]" />}
               </button>
             ))}
           </div>
@@ -297,8 +297,8 @@ export function QuickJump({ sections }) {
         </div>
       )}
       <button onClick={() => { setOpen(v => !v); haptic(15); }} style={{
-        width: 44, height: 44, borderRadius: 22, background: '#7c5cfc', color: '#fff', fontSize: 18,
-        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgba(124,92,252,0.5)',
+        width: 44, height: 44, borderRadius: 22, background: '#c9a227', color: '#fff', fontSize: 18,
+        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgba(201,162,39,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>{open ? '✕' : '⚡'}</button>
     </div>

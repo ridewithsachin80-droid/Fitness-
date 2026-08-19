@@ -86,11 +86,11 @@ function ToggleChip({ on, onToggle, children }) {
       style={{ minHeight: 36 }}
       className={`flex items-center gap-1.5 text-xs rounded-full px-3 py-1.5 border transition-all active:scale-95 ${
         on
-          ? 'bg-[#7c5cfc]/[0.16] border-[#7c5cfc]/45 text-white font-semibold'
+          ? 'bg-[#c9a227]/[0.16] border-[#c9a227]/45 text-white font-semibold'
           : 'bg-white/[0.03] border-white/[0.08] text-[#4e4e5c] line-through'
       }`}>
       <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-        on ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
+        on ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
       }`}>✓</span>
       {children}
     </button>
@@ -543,7 +543,7 @@ export default function AIChatLog() {
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(124,92,252,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(201,162,39,0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
             <p className="text-[10px] text-[#4e4e5c] leading-tight">Log your whole day in one message</p>
@@ -575,7 +575,7 @@ export default function AIChatLog() {
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-[#7c5cfc] text-white text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="max-w-[85%] bg-[#c9a227] text-white text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
                 {m.text}
               </div>
             </div>
@@ -682,7 +682,7 @@ export default function AIChatLog() {
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                      f.on ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
+                                      f.on ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
                                     }`}>✓</span>
                                     <div className="min-w-0">
                                       <p className={`text-[13px] font-semibold truncate ${f.on ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
@@ -704,8 +704,8 @@ export default function AIChatLog() {
                               </button>
                             ))}
                             {m.parsed.totals && m.parsed.foods.filter(f => f.on).length > 1 && (
-                              <div className="flex items-center justify-between px-3 py-2 bg-[#7c5cfc]/[0.10] border border-[#7c5cfc]/25 rounded-xl">
-                                <span className="text-[11px] font-bold text-[#a78bfa] uppercase tracking-wider">Food total</span>
+                              <div className="flex items-center justify-between px-3 py-2 bg-[#c9a227]/[0.10] border border-[#c9a227]/25 rounded-xl">
+                                <span className="text-[11px] font-bold text-[#e0c98a] uppercase tracking-wider">Food total</span>
                                 <span className="text-[13px] font-bold text-white">
                                   {m.parsed.foods.filter(f => f.on).reduce((s, f) => s + (f.macros?.cal || 0), 0)} kcal
                                 </span>
@@ -728,7 +728,7 @@ export default function AIChatLog() {
                                 }`}>
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                    w.on ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
+                                    w.on ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
                                   }`}>✓</span>
                                   <div className="min-w-0">
                                     <p className={`text-[12px] font-semibold truncate ${w.on ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
@@ -759,7 +759,7 @@ export default function AIChatLog() {
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
                         <button onClick={() => applyAll(mi)}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#7c5cfc] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#7c5cfc] active:scale-[0.98] shadow-[0_2px_16px_rgba(124,92,252,0.4)] transition-all">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#c9a227] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#c9a227] active:scale-[0.98] shadow-[0_2px_16px_rgba(201,162,39,0.4)] transition-all">
                           Apply {countIncluded(m.parsed)} item{countIncluded(m.parsed) > 1 ? 's' : ''} to today's log
                         </button>
                       )}
@@ -807,9 +807,9 @@ export default function AIChatLog() {
           <div className="flex justify-start">
             <div className="bg-[#16161c] border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#7c5cfc] animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#7c5cfc] animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#7c5cfc] animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -824,7 +824,7 @@ export default function AIChatLog() {
           {SUGGESTION_CHIPS.map((chip, i) => (
             <button key={i} onClick={() => send(chip)}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
-              className="text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(124,92,252,0.4)] rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
+              className="text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(201,162,39,0.4)] rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
               {chip}
             </button>
           ))}
@@ -849,7 +849,7 @@ export default function AIChatLog() {
               aria-label="Log food from a photo"
               style={{ minWidth: 40, minHeight: 40 }}
               className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                photoBusy ? 'text-[#4e4e5c] animate-pulse' : 'text-[#8e8e9a] hover:text-[#a78bfa]'
+                photoBusy ? 'text-[#4e4e5c] animate-pulse' : 'text-[#8e8e9a] hover:text-[#e0c98a]'
               }`}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -863,7 +863,7 @@ export default function AIChatLog() {
               <button onClick={toggleVoice}
                 style={{ minWidth: 40, minHeight: 40 }}
                 className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                  listening ? 'text-red-400 animate-pulse' : 'text-[#8e8e9a] hover:text-[#a78bfa]'
+                  listening ? 'text-red-400 animate-pulse' : 'text-[#8e8e9a] hover:text-[#e0c98a]'
                 }`}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -879,7 +879,7 @@ export default function AIChatLog() {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
-                ? 'bg-[#7c5cfc] text-white shadow-[0_2px_12px_rgba(124,92,252,0.4)] active:scale-95'
+                ? 'bg-[#c9a227] text-white shadow-[0_2px_12px_rgba(201,162,39,0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-[#4e4e5c]'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

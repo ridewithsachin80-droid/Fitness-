@@ -168,7 +168,7 @@ function PastLogModal({ log, onClose }) {
               <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">💊 Supplements</p>
               <div className="flex flex-wrap gap-1.5">
                 {checkedSupps.map(s => (
-                  <span key={s.id} className="text-xs bg-purple-50 text-purple-700 border border-purple-100 px-2.5 py-1 rounded-full font-medium">
+                  <span key={s.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full font-medium">
                     {s.label}
                   </span>
                 ))}
@@ -210,10 +210,10 @@ function PastLogModal({ log, onClose }) {
 
 function StatBox({ value, label, sub, color = 'emerald' }) {
   const colors = {
-    emerald: 'bg-[rgba(124,92,252,0.08)] text-[#7c5cfc] border border-[rgba(124,92,252,0.14)]',
+    emerald: 'bg-[rgba(201,162,39,0.08)] text-[#c9a227] border border-[rgba(201,162,39,0.14)]',
     blue:    'bg-[rgba(96,165,250,0.08)] text-blue-400 border border-[rgba(96,165,250,0.14)]',
     orange:  'bg-[rgba(251,146,60,0.08)] text-orange-400 border border-[rgba(251,146,60,0.14)]',
-    purple:  'bg-[rgba(192,132,252,0.08)] text-purple-400 border border-[rgba(192,132,252,0.14)]',
+    purple:  'bg-[rgba(192,132,252,0.08)] text-amber-400 border border-[rgba(192,132,252,0.14)]',
     amber:   'bg-[rgba(251,191,36,0.08)] text-amber-400 border border-[rgba(251,191,36,0.14)]',
     // Reserved for genuine streak/achievement milestones, not routine stats.
     gold:    'bg-[rgba(212,175,106,0.10)] text-gold-300 border border-[rgba(212,175,106,0.22)] shadow-glow-gold',
@@ -377,7 +377,7 @@ export default function Progress() {
                 />
               </div>
               {lostKg !== null && lostKg > 0 && (
-                <p className="text-center text-xs text-[#7c5cfc] mt-2 font-semibold">
+                <p className="text-center text-xs text-[#c9a227] mt-2 font-semibold">
                   🎉 {lostKg} kg lost · {toGoKg} kg to go
                 </p>
               )}
@@ -428,8 +428,8 @@ export default function Progress() {
                 <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTip />} />
                 {targetW && (
-                  <ReferenceLine y={targetW} stroke="#a78bfa" strokeDasharray="4 4"
-                    label={{ value: `Goal ${targetW}`, position: 'right', fontSize: 9, fill: '#a78bfa' }} />
+                  <ReferenceLine y={targetW} stroke="#e0c98a" strokeDasharray="4 4"
+                    label={{ value: `Goal ${targetW}`, position: 'right', fontSize: 9, fill: '#e0c98a' }} />
                 )}
                 <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2.5}
                   dot={{ fill: '#3b82f6', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
@@ -457,7 +457,7 @@ export default function Progress() {
                   interval={Math.floor(complianceData.length / 6)} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<ComplianceTip />} />
-                <ReferenceLine y={75} stroke="#a78bfa" strokeDasharray="3 3" />
+                <ReferenceLine y={75} stroke="#e0c98a" strokeDasharray="3 3" />
                 <Bar dataKey="score" radius={[3, 3, 0, 0]}
                   fill="#10b981"
                   label={false}
@@ -479,7 +479,7 @@ export default function Progress() {
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-400 inline-block"/>Calories</span>
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block"/>Protein</span>
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"/>Carbs</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-400 inline-block"/>Fat</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"/>Fat</span>
             </div>
             {/* Calories bar */}
             <p className="text-xs text-stone-400 font-medium mb-1">Calories (kcal)</p>
@@ -491,7 +491,7 @@ export default function Progress() {
                 <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']}
                   contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }} />
                 {profile?.macros?.kcal && (
-                  <ReferenceLine y={profile.macros.kcal} stroke="#a78bfa" strokeDasharray="3 3" />
+                  <ReferenceLine y={profile.macros.kcal} stroke="#e0c98a" strokeDasharray="3 3" />
                 )}
                 <Bar dataKey="kcal" fill="#fb923c" radius={[3, 3, 0, 0]} />
               </BarChart>
@@ -508,7 +508,7 @@ export default function Progress() {
                   formatter={(v, name) => [`${v}g`, name.charAt(0).toUpperCase() + name.slice(1)]} />
                 <Line type="monotone" dataKey="pro"  stroke="#60a5fa" strokeWidth={2} dot={{ r: 3, fill: '#60a5fa' }} />
                 <Line type="monotone" dataKey="carb" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3, fill: '#fbbf24' }} />
-                <Line type="monotone" dataKey="fat"  stroke="#c084fc" strokeWidth={2} dot={{ r: 3, fill: '#c084fc' }} />
+                <Line type="monotone" dataKey="fat"  stroke="#d9b451" strokeWidth={2} dot={{ r: 3, fill: '#d9b451' }} />
               </ComposedChart>
             </ResponsiveContainer>
 
@@ -524,7 +524,7 @@ export default function Progress() {
                   <span className="font-bold text-orange-500">{Math.round(avg.kcal/n)} kcal</span>
                   <span className="text-blue-500">P {(avg.pro/n).toFixed(1)}g</span>
                   <span className="text-amber-500">C {(avg.carb/n).toFixed(1)}g</span>
-                  <span className="text-purple-500">F {(avg.fat/n).toFixed(1)}g</span>
+                  <span className="text-amber-500">F {(avg.fat/n).toFixed(1)}g</span>
                 </div>
               );
             })()}
@@ -618,7 +618,7 @@ export default function Progress() {
               </div>
             )}
             {journeyPct !== null && journeyPct >= 25 && (
-              <div className="flex items-center gap-2 bg-purple-50 px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-xl">
                 <span className="text-lg">🎯</span>
                 <span><strong>{journeyPct}%</strong> of the way to your {targetW} kg goal!</span>
               </div>

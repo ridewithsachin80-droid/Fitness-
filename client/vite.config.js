@@ -15,7 +15,7 @@ export default defineConfig({
         name: 'FitLife',
         short_name: 'FitLife',
         description: 'Transform your health, one day at a time',
-        theme_color: '#7c5cfc',
+        theme_color: '#c9a227',
         // Was #ffffff, which flashed a white screen on every cold start before
         // the app painted. Matching the app's own background removes the flash.
         background_color: '#0b0b0e',

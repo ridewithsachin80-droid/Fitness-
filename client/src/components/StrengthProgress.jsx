@@ -69,7 +69,7 @@ function PRDot(props) {
       </g>
     );
   }
-  return <circle cx={cx} cy={cy} r={3} fill="#7c5cfc" />;
+  return <circle cx={cx} cy={cy} r={3} fill="#c9a227" />;
 }
 
 function ChartTooltip({ active, payload }) {
@@ -148,7 +148,7 @@ export default function StrengthProgress() {
 
       <select value={selectedId || ''} onChange={e => setSelectedId(parseInt(e.target.value))}
         className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm text-[#ededf0]
-          focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)] mb-3">
+          focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)] mb-3">
         {exercises.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
       </select>
 
@@ -170,8 +170,8 @@ export default function StrengthProgress() {
               <XAxis dataKey="date" tickFormatter={formatDateShort} tick={{ fontSize: 9, fill: '#5a5a68' }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 9, fill: '#5a5a68' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
               <Tooltip content={<ChartTooltip />} />
-              <Line type="monotone" dataKey="bestE1rm" stroke="#7c5cfc" strokeWidth={2.5}
-                dot={<PRDot />} activeDot={{ r: 5, fill: '#7c5cfc' }} />
+              <Line type="monotone" dataKey="bestE1rm" stroke="#c9a227" strokeWidth={2.5}
+                dot={<PRDot />} activeDot={{ r: 5, fill: '#c9a227' }} />
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-between text-xs text-[#5a5a68] mt-1 px-1">
