@@ -1,24 +1,20 @@
-FitLife — all hero panels now open the same way
-===============================================
+FitLife — AI chat banner in the workout log
+===========================================
 
 1 FILE. Extract, drag the "client" FOLDER onto GitHub at the ROOT of your repo.
 NOTHING TO RENAME. No new packages. No schema change.
 
-client/src/pages/DailyLog.jsx
+client/src/components/WorkoutLog.jsx
 
-THE BUG
-Weight, Water and Sleep opened INSIDE the hero card - attached, seamless, with
-a small "Done" link. Protocol, Food, Nutrition and Workout detached into the
-content area below, separated by a gap and topped with their own "Close X"
-bar. Same gesture, two completely different behaviours.
+WHAT CHANGED
+- Added the "Log with AI Chat" banner to the workout log, matching the one in
+  the food log. Subtitle prompts with workout-specific examples:
+  "Bench press 3 sets of 20kg" or "5 km walk in 1 hour".
+- Removed the duplicated "Workout Log" title. The hero panel header already
+  says "Workout log", so the card repeated it directly underneath.
 
-THE FIX
-All seven panels now render inside the hero card, using the same pattern:
-a top divider, a small label, and a "Done" link on the right.
-
-ALSO CLEANED UP
-- Removed the standalone "Close X" bar entirely.
-- Dropped nested Card wrappers inside the food and nutrition panels - they were
-  a card inside a card, with the title repeated twice.
-- The AI bar and Notes stay in the content area below the hero, where they
-  belong; the panel move had briefly swept the AI bar inside the hero.
+IT USES THE SAME CHAT INSTANCE
+The banner opens the shared AI chat (one mounted instance, opened via a shared
+store), so sets and cardio logged there flow into the same session. Closing the
+chat bumps the refresh key, so anything the AI logs appears in the workout log
+straight away without a manual reload.

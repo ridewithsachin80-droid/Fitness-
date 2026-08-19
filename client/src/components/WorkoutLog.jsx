@@ -12,13 +12,14 @@
  * log — no manual save button anywhere in this app anymore.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Card, SectionTitle, CardSkeleton } from './UI';
+import { Card, CardSkeleton } from './UI';
 import { haptic } from '../store/settingsStore';
 import { searchExercises, addCustomExercise, getWorkout, saveWorkout, getExerciseHistory } from '../api/workouts';
 import { getActiveProgram } from '../api/programs';
 import { parseVoiceSet } from '../utils/voiceSetParser';
 import { CARDIO_TYPES, cardioTypeById, sessionEnergy, distanceFrom } from '../utils/exerciseCalories';
 import { useLogStore } from '../store/logStore';
+import { useAIChat } from './AIChatLog';
 
 function getSpeechRecognition() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -326,15 +327,26 @@ export default function WorkoutLog({ date }) {
     haptic(30);
   };
 
+  const openAIChat = useAIChat(s => s.openChat);
+
   const handleDurationChange = (val) => setDurationMin(val);
 
   if (loading) return <Card><CardSkeleton lines={3} /></Card>; // page-level loader already covers the rest of DailyLog; this just avoids an abrupt pop-in for this one card
 
   return (
     <Card>
-      <SectionTitle icon="🏋️" tooltip="Log your actual sets, reps, and weight for each exercise. This is separate from the Resistance Training checkbox above — use both, or just whichever you prefer.">
-        Workout Log
-      </SectionTitle>
+      {/* AI chat entry point — mirrors the food log's banner so members reach
+          the same assistant from either place. */}
+      <button
+        onClick={() => { haptic(15); openAIChat(); }}
+        style={{ minHeight: 48 }}
+        className="w-full flex items-center gap-3 mb-3 bg-gradient-to-r from-[#7c5cfc]/[0.14] to-[#4c2fd8]/[0.10] border border-[#7c5cfc]/30 hover:border-[#7c5cfc]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.4)]">✨</span>
+        <span className="text-left min-w-0">
+          <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
+          <span className="block text-[11px] text-[#8e8e9a] leading-tight truncate">"Bench press 3 sets of 20kg" or "5 km walk in 1 hour"</span>
+        </span>
+      </button>
 
       {/* Rest timer banner — manually started via the ⏱ button on any exercise */}
       {restSeconds !== null && (
