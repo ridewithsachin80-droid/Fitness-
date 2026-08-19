@@ -1382,28 +1382,17 @@ export default function DailyLog() {
                 })()}
               </div>
             )}
-          </div>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
-
-
-        {['protocol', 'food', 'workout', 'nutrition'].includes(heroPanel) && !loading && (
-          <button onClick={() => { setHeroPanel(null); haptic(10); }}
-            style={{ minHeight: 40 }}
-            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#8e8e9a] hover:text-white bg-white/[0.03] border border-white/[0.07] rounded-xl transition-colors">
-            ▲ Close {heroPanel === 'protocol' ? 'protocol' : heroPanel === 'food' ? 'food log' : heroPanel === 'nutrition' ? 'nutrition' : 'workout'}
-          </button>
-        )}
-
-        {/* ── Section panels — open from the hero tiles above ── */}
-        {heroPanel === 'protocol' && !loading && (
-          <div>
-            {/* ── Today's Protocol — activities, ACV, supplements as tap-chips ── */}
-            <Card>
-              <div id="section-protocol">
+            {/* ── Large panels — rendered INSIDE the hero card so every tile
+                behaves the same way. They used to detach into the content area
+                with their own close bar, which read as a different component. */}
+            {heroPanel === 'protocol' && !loading && (
+              <div className="mt-3 pt-3 border-t border-white/[0.07]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-[#4e4e5c] font-medium">🏃 Today's protocol</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                </div>
+                <div id="section-protocol">
                 {(() => {
                   // Protocol is a compliance checklist — calories live in the
                   // Workout log, so no kcal badges here.
@@ -1515,35 +1504,37 @@ export default function DailyLog() {
                     </>
                   );
                 })()}
+                </div>
               </div>
-            </Card>
-          </div>
-        )}
+            )}
 
-        {heroPanel === 'food' && !loading && (
-          <div className="space-y-3">
+            {heroPanel === 'food' && !loading && (
+              <div className="mt-3 pt-3 border-t border-white/[0.07] space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-[#4e4e5c] font-medium">🥗 Food log</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                </div>
             {/* Sprint 3: Prescribed meals */}
             {protocol?.meal_plan?.length > 0 && (
               <PrescribedMeals mealPlan={protocol.meal_plan} foodItems={log.food} onLogMeal={logMeal} />
             )}
 
-            {/* Food log */}
-            <Card>
-              <div id="section-food">
-                <SectionTitle icon="🥗">Food log</SectionTitle>
-                <p className="text-xs text-[#4e4e5c] mb-3">Enter weight before cooking · tap mic for voice input</p>
-                <FoodLog items={log.food} onChange={v => update('food', v)} calorieTarget={protocol?.macros?.kcal} />
+                <div id="section-food">
+                  <p className="text-[11px] text-[#4e4e5c] mb-2">Enter weight before cooking · tap mic for voice input</p>
+                  <FoodLog items={log.food} onChange={v => update('food', v)} calorieTarget={protocol?.macros?.kcal} />
+                </div>
               </div>
-            </Card>
-
-          </div>
-        )}
+            )}
 
         {/* Nutrition — its own panel, opened from the hero tile. It used to sit
             at the bottom of the food panel, where 31 nutrient rows buried the
             food log itself. */}
-        {heroPanel === 'nutrition' && !loading && (
-          <div>
+            {heroPanel === 'nutrition' && !loading && (
+              <div className="mt-3 pt-3 border-t border-white/[0.07]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-[#4e4e5c] font-medium">🔬 Nutrition</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                </div>
             <NutritionSummary
               foodItems={log.food || []}
               supplements={log.supplements || {}}
@@ -1551,26 +1542,32 @@ export default function DailyLog() {
               activities={log.activities || {}}
               rdaOverrides={protocol?.rda_overrides || {}}
             />
-            {!(log.food || []).some(f => f.per_100g) && (
-              <Card>
-                <SectionTitle icon="🔬">Nutrition</SectionTitle>
-                <p className="text-sm text-[#8e8e9a] mt-2 leading-relaxed">
-                  Log some food first — vitamins, minerals and omega-3s are
-                  calculated from what you eat.
-                </p>
-              </Card>
+                {!(log.food || []).some(f => f.per_100g) && (
+                  <p className="text-xs text-[#8e8e9a] leading-relaxed py-2">
+                    Log some food first — vitamins, minerals and omega-3s are
+                    calculated from what you eat.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {heroPanel === 'workout' && !loading && (
+              <div className="mt-3 pt-3 border-t border-white/[0.07]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-[#4e4e5c] font-medium">🏋️ Workout log</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                </div>
+                <div id="section-workout">
+                  <WorkoutLog key={`${date}-${workoutRefreshKey}`} date={date} />
+                </div>
+              </div>
             )}
           </div>
-        )}
+        </div>
+      </div>
 
-        {heroPanel === 'workout' && !loading && (
-          <div>
-            {/* Resistance training */}
-            <div id="section-workout">
-              <WorkoutLog key={`${date}-${workoutRefreshKey}`} date={date} />
-            </div>
-          </div>
-        )}
+      {/* Content */}
+      <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
 
         {/* AI logging bar — the primary way to fill the day */}
         <button onClick={() => { haptic(15); openChat(); }}
@@ -1580,6 +1577,7 @@ export default function DailyLog() {
           <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left">Tell me about your day…</span>
           <span className="text-[#a78bfa]">🎤</span>
         </button>
+
 
         {/* Hint when nothing is open — keeps the page from feeling empty */}
         {!heroPanel && !loading && (
