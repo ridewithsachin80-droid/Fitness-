@@ -12,6 +12,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { getMyNotifications, markNotificationsRead } from '../api/logs';
+import { getMyProfile } from '../api/logs';
 
 function timeAgo(dateStr) {
   const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -27,6 +28,8 @@ function timeAgo(dateStr) {
 
 export default function NotificationBell() {
   const [open, setOpen]           = useState(false);
+  const [tab, setTab]             = useState('messages');  // 'messages' | 'reminders'
+  const [messages, setMessages]   = useState([]);
   const [items, setItems]         = useState([]);
   const [unreadCount, setUnread]  = useState(0);
   const [loading, setLoading]     = useState(false);
@@ -37,6 +40,10 @@ export default function NotificationBell() {
       const { data } = await getMyNotifications();
       setItems(data.notifications || []);
       setUnread(data.unreadCount || 0);
+      try {
+        const { data: prof } = await getMyProfile();
+        setMessages(prof?.coach_notes || []);
+      } catch { /* messages are supplementary — bell still works without them */ }
     } catch { /* non-fatal — bell just stays at its current state */ }
   };
 
@@ -92,10 +99,48 @@ export default function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-[52px] w-80 max-w-[88vw] bg-[#131317] border border-white/[0.08]
           rounded-2xl shadow-card-raised z-50 max-h-[70vh] overflow-y-auto">
-          <div className="px-4 py-3 border-b border-white/[0.07] sticky top-0 bg-[#131317]">
-            <span className="text-sm font-semibold text-[#ededf0]">Reminders sent to you</span>
+          <div className="flex gap-1 p-1.5 border-b border-white/[0.07] sticky top-0 bg-[#131317] z-10">
+            {[['messages', `Messages${messages.length ? ` (${messages.length})` : ''}`], ['reminders', 'Reminders']].map(([k, label]) => (
+              <button key={k} onClick={() => setTab(k)}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
+                  tab === k ? 'bg-[#7c5cfc] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
+                }`}>{label}</button>
+            ))}
           </div>
-          {loading ? (
+
+          {tab === 'messages' && (
+            messages.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-[#5a5a68]">
+                No messages from your coach yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.06]">
+                {messages.map(m => (
+                  <div key={m.id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {m.flagged && (
+                          <span className="text-[9px] font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded-full">
+                            ⚠ ACTION
+                          </span>
+                        )}
+                        <span className="text-[11px] font-semibold text-[#d8d8de]">{m.monitor_name}</span>
+                        {!m.read_at && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#7c5cfc]" title="Unread" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#5a5a68] flex-shrink-0 whitespace-nowrap">
+                        {new Date(m.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#9a9aa6] leading-relaxed whitespace-pre-wrap">{m.note}</p>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {tab === 'reminders' && (loading ? (
             <div className="px-4 py-8 text-center text-xs text-[#5a5a68]">Loading…</div>
           ) : items.length === 0 ? (
             <div className="px-4 py-8 text-center text-xs text-[#5a5a68]">
@@ -118,7 +163,7 @@ export default function NotificationBell() {
                 </div>
               ))}
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>
