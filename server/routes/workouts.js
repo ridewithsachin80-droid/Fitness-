@@ -94,6 +94,28 @@ router.get('/exercises', async (req, res) => {
 // different people adding the same name would silently collide on the
 // global UNIQUE(name) constraint and steal each other's row. Sharing the
 // library globally sidesteps both.
+// Infer a muscle group from an exercise name when the caller doesn't supply
+// one. AI-chat-created exercises arrive name-only, and a NULL muscle_group is
+// silently skipped by /muscle-coverage — so the exercise would be logged but
+// never counted toward the member's coverage. Keyword match is approximate but
+// far better than NULL; a coach can correct it later.
+const MUSCLE_KEYWORDS = [
+  ['chest',     ['bench', 'chest', 'pec', 'fly', 'push up', 'pushup', 'push-up', 'dip']],
+  ['back',      ['row', 'pull up', 'pullup', 'pull-up', 'lat', 'deadlift', 'back', 'chin up', 'pulldown', 'shrug']],
+  ['legs',      ['squat', 'leg', 'lunge', 'calf', 'quad', 'hamstring', 'glute', 'hip thrust', 'step up']],
+  ['shoulders', ['shoulder', 'overhead', 'military', 'lateral raise', 'front raise', 'delt', 'arnold', 'upright']],
+  ['arms',      ['curl', 'bicep', 'tricep', 'pushdown', 'skull', 'hammer', 'forearm', 'preacher']],
+  ['core',      ['ab', 'core', 'plank', 'crunch', 'sit up', 'situp', 'russian twist', 'leg raise', 'oblique']],
+];
+
+function inferMuscleGroup(name) {
+  const n = String(name || '').toLowerCase();
+  for (const [group, words] of MUSCLE_KEYWORDS) {
+    if (words.some(w => n.includes(w))) return group;
+  }
+  return null;
+}
+
 router.post('/exercises', async (req, res) => {
   const { name, muscle_group, equipment } = req.body;
   if (!name || !name.trim()) {
@@ -101,12 +123,17 @@ router.post('/exercises', async (req, res) => {
   }
 
   try {
+    const resolvedGroup = muscle_group || inferMuscleGroup(name);
+
     const { rows } = await pool.query(
       `INSERT INTO exercises (name, muscle_group, equipment, created_by)
        VALUES ($1, $2, $3, $4)
-       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       ON CONFLICT (name) DO UPDATE SET
+         -- Backfill a missing muscle_group on rows created before this
+         -- inference existed, but never overwrite one already set.
+         muscle_group = COALESCE(exercises.muscle_group, EXCLUDED.muscle_group)
        RETURNING id, name, muscle_group, equipment, created_by`,
-      [name.trim(), muscle_group || null, equipment || null, req.user.id]
+      [name.trim(), resolvedGroup, equipment || null, req.user.id]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
