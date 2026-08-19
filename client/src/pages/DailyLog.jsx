@@ -166,9 +166,11 @@ function ComplianceRing({ pct }) {
         </linearGradient>
       </defs>
       <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="6" />
-      <circle cx="32" cy="32" r={r} fill="none" stroke="url(#complianceGradient)" strokeWidth="6"
-        strokeDasharray={`${(pct / 100) * circ} ${circ}`} strokeLinecap="round"
-        className="transition-all duration-1000 ease-out" />
+      {pct > 0 && (
+        <circle cx="32" cy="32" r={r} fill="none" stroke="url(#complianceGradient)" strokeWidth="6"
+          strokeDasharray={`${(pct / 100) * circ} ${circ}`} strokeLinecap="round"
+          className="transition-all duration-1000 ease-out" />
+      )}
       <text x="32" y="32" dominantBaseline="middle" textAnchor="middle"
         fontFamily="Fraunces, serif" fontSize="16" fontWeight="600" fill="white" transform="rotate(90 32 32)">
         {pct}%
