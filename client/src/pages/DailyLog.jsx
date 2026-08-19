@@ -810,6 +810,15 @@ export default function DailyLog() {
   // ── Premium hero state ─────────────────────────────────────────────────────
   const [heroPanel, setHeroPanel] = useState(null);   // 'weight'|'food'|'protocol'|'water'|'workout'|'sleep'
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null });
+  // Bumped whenever the AI chat closes, so WorkoutLog remounts and picks up
+  // anything the AI just wrote (otherwise an open panel shows stale data).
+  const [workoutRefreshKey, setWorkoutRefreshKey] = useState(0);
+  const chatOpen = useAIChat(s => s.open);
+  const prevChatOpen = useRef(chatOpen);
+  useEffect(() => {
+    if (prevChatOpen.current && !chatOpen) setWorkoutRefreshKey(k => k + 1);
+    prevChatOpen.current = chatOpen;
+  }, [chatOpen]);
 
   // Workout tile summary — refreshed when the date changes or the panel closes
   useEffect(() => {
@@ -824,7 +833,7 @@ export default function DailyLog() {
       })
       .catch(() => { if (!cancelled) setWorkoutSummary({ count: 0, duration: null }); });
     return () => { cancelled = true; };
-  }, [date, heroPanel]);
+  }, [date, heroPanel, workoutRefreshKey]);
   const [streak, setStreak] = useState(0);
   const [chipInfo, setChipInfo] = useState(null);   // { label, sub } — long-press popover
   const chipPressRef = useRef(null);
@@ -1366,7 +1375,7 @@ export default function DailyLog() {
           <div>
             {/* Resistance training */}
             <div id="section-workout">
-              <WorkoutLog date={date} />
+              <WorkoutLog key={`${date}-${workoutRefreshKey}`} date={date} />
             </div>
           </div>
         )}
