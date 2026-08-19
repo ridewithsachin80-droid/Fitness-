@@ -662,8 +662,14 @@ function AIChatFab() {
     <button
       onClick={openChat}
       aria-label="Log with AI Chat"
-      className="fixed z-40 w-14 h-14 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-xl shadow-[0_4px_24px_rgba(124,92,252,0.5)] border border-white/[0.15] active:scale-90 transition-transform"
-      style={{ right: 16, bottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
+      className="fixed z-40 flex items-center justify-center bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] shadow-[0_4px_20px_rgba(124,92,252,0.45)] border border-r-0 border-white/[0.15] active:scale-95 transition-transform"
+      style={{
+        right: 0,
+        bottom: 'calc(120px + env(safe-area-inset-bottom))',
+        width: 46, height: 52,
+        borderTopLeftRadius: 16, borderBottomLeftRadius: 16,
+        paddingRight: 2, fontSize: 20,
+      }}>
       ✨
     </button>
   );
@@ -1033,7 +1039,7 @@ export default function DailyLog() {
 
                       {/* Sleep → inline time pickers (full width) */}
                       <button onClick={() => toggle('sleep')}
-                        className={`${tileBase} col-span-2 ${heroPanel === 'sleep' ? on : off}`}>
+                        className={`${tileBase} ${heroPanel === 'sleep' ? on : off}`}>
                         <span className="block text-[13px] font-bold">
                           {sleepDur || <span className="text-[#4e4e5c]">— set times</span>}
                           {sleepDur && <span className="text-[9px] text-[#4e4e5c] font-semibold"> · {bt} → {wt}</span>}
@@ -1156,11 +1162,11 @@ export default function DailyLog() {
       <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
 
 
-        {heroPanel && !loading && (
+        {['protocol', 'food', 'workout'].includes(heroPanel) && !loading && (
           <button onClick={() => { setHeroPanel(null); haptic(10); }}
             style={{ minHeight: 40 }}
             className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#8e8e9a] hover:text-white bg-white/[0.03] border border-white/[0.07] rounded-xl transition-colors">
-            ▲ Close {heroPanel === 'protocol' ? 'protocol' : heroPanel === 'food' ? 'food log' : heroPanel === 'workout' ? 'workout' : heroPanel}
+            ▲ Close {heroPanel === 'protocol' ? 'protocol' : heroPanel === 'food' ? 'food log' : 'workout'}
           </button>
         )}
 
