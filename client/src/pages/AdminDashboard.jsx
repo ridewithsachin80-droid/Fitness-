@@ -6,6 +6,7 @@ import { adminResetPin, adminSendPush, getAuditLog } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
 import AdminReminders from '../components/AdminReminders';
+import CoachAIChat, { CoachAIFab, useCoachAI } from '../components/CoachAIChat';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ value, label, icon, color }) {
@@ -1297,6 +1298,27 @@ export default function AdminDashboard() {
   const navigate         = useNavigate();
   const { user, logout } = useAuthStore();
   const [tab,       setTab]       = useState('overview');
+  const openCoachAI = useCoachAI(s => s.openChat);
+  const [remindBusy, setRemindBusy] = useState({});   // { [memberId|'all']: true }
+  const [reminded,   setReminded]   = useState({});   // { [memberId]: true } after sent
+  const [complianceLens, setComplianceLens] = useState('today'); // 'today' | '7d'
+  const [menuFor,    setMenuFor]    = useState(null); // member id with open ⋮ menu
+
+  const sendRemind = useCallback(async (list, key) => {
+    if (!list.length) return;
+    setRemindBusy(b => ({ ...b, [key]: true }));
+    try {
+      const { data } = await api.post('/ai-chat/remind', {
+        members: list.map(a => ({ id: a.id, name: a.name })),
+      });
+      const okIds = (data.results || []).filter(r => r.ok).map(r => r.id);
+      setReminded(r => { const n = { ...r }; okIds.forEach(id => { n[id] = true; }); return n; });
+    } catch (e) {
+      console.error('remind failed:', e);
+    } finally {
+      setRemindBusy(b => { const n = { ...b }; delete n[key]; return n; });
+    }
+  }, []);
   const [stats,     setStats]     = useState(null);
   const [overview,  setOverview]  = useState(null);
   const [members,   setMembers]   = useState([]);
@@ -1354,13 +1376,17 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#0b0b0e]">
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-5">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase text-[#a78bfa] mb-1">FitLife Admin</p>
               <h1 className="font-display text-xl font-medium">Welcome, {user?.name} 👑</h1>
-              <p className="text-[#9a9aa6] text-xs mt-0.5">Full access — manage all members & monitors</p>
+              {stats && (
+                <p className="text-[#9a9aa6] text-xs mt-0.5">
+                  {stats.members} members · {stats.monitors} monitors · {stats.logsToday} logged today
+                </p>
+              )}
             </div>
             <button onClick={() => { logout(); }}
               className="text-xs text-[#9a9aa6] hover:text-white px-3 py-1.5 border border-white/[0.1]
@@ -1369,14 +1395,14 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* Stats */}
-          {stats && (
-            <div className="grid grid-cols-3 gap-3">
-              <StatCard value={stats.members}   label="Members"    icon="👥" color="emerald" />
-              <StatCard value={stats.monitors}  label="Monitors"   icon="🏋️" color="blue" />
-              <StatCard value={stats.logsToday} label="Logs today" icon="📋" color="purple" />
-            </div>
-          )}
+          {/* AI command bar — the coach's fastest path to any change */}
+          <button onClick={() => openCoachAI()}
+            style={{ minHeight: 52 }}
+            className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.16] to-[#4c2fd8]/[0.08] border border-[#7c5cfc]/40 hover:border-[#7c5cfc]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(124,92,252,0.10)]">
+            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.5)]">✨</span>
+            <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
+            <span className="text-[#a78bfa]">🎤</span>
+          </button>
         </div>
       </div>
 
@@ -1427,44 +1453,73 @@ export default function AdminDashboard() {
         {/* ── Overview tab ── */}
         {tab === 'overview' && overview && (
           <div className="space-y-3">
-            {/* Quick stats */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Stat strip */}
+            <div className="grid grid-cols-4 gap-1.5">
               {[
-                { label: 'Total Members',    value: overview.stats.total_members,         color: 'bg-[rgba(96,165,250,0.10)] text-blue-300' },
-                { label: 'Logged Today',     value: `${overview.stats.logged_today} / ${overview.stats.total_members}`, color: 'bg-[rgba(52,211,153,0.10)] text-emerald-300' },
-                { label: '7-Day Avg Comply', value: `${overview.stats.avg_compliance_7d}%`, color: overview.stats.avg_compliance_7d >= 75 ? 'bg-[rgba(52,211,153,0.10)] text-emerald-300' : 'bg-[rgba(251,191,36,0.10)] text-amber-300' },
-                { label: 'Total Weight Lost',value: `${overview.stats.total_weight_lost_kg} kg`, color: 'bg-[rgba(192,132,252,0.10)] text-purple-300' },
+                { label: 'Members',   value: overview.stats.total_members, cls: 'text-blue-300' },
+                { label: 'Logged',    value: `${overview.stats.logged_today}/${overview.stats.total_members}`, cls: 'text-emerald-300' },
+                { label: '7-day avg', value: `${overview.stats.avg_compliance_7d}%`, cls: overview.stats.avg_compliance_7d >= 75 ? 'text-emerald-300' : 'text-amber-300' },
+                { label: 'Lost',      value: `${overview.stats.total_weight_lost_kg}kg`, cls: 'text-purple-300' },
               ].map(s => (
-                <div key={s.label} className={`rounded-2xl px-4 py-3 ${s.color}`}>
-                  <div className="text-xl font-bold">{s.value}</div>
-                  <div className="text-xs font-semibold mt-0.5 opacity-80">{s.label}</div>
+                <div key={s.label} className="bg-[#131317] border border-white/[0.07] rounded-2xl px-2 py-2.5 text-center">
+                  <div className={`text-[15px] font-extrabold ${s.cls}`}>{s.value}</div>
+                  <div className="text-[8px] font-bold uppercase tracking-wider text-[#4e4e5c] mt-0.5">{s.label}</div>
                 </div>
               ))}
             </div>
 
-            {/* Alerts — members who haven't logged */}
+            {/* Needs attention — now actionable */}
             {overview.alerts.length > 0 && (
-              <div className="bg-[rgba(248,113,113,0.10)] border border-[rgba(248,113,113,0.25)] rounded-2xl p-4">
-                <p className="text-sm font-bold text-red-400 mb-2">⚠️ Needs Attention ({overview.alerts.length})</p>
-                <div className="space-y-1">
+              <div className="bg-[#131317] border border-[rgba(248,113,113,0.25)] rounded-2xl p-4">
+                <p className="text-sm font-bold text-red-400 mb-1">⚠️ Needs Attention ({overview.alerts.length})</p>
+                <div className="divide-y divide-white/[0.05]">
                   {overview.alerts.map(a => (
-                    <div key={a.id} className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-red-300">{a.name}</span>
-                      <span className="text-red-400 font-bold">
-                        {a.days_since ? `${a.days_since}d no log` : 'Never logged'}
-                      </span>
+                    <div key={a.id} className="flex items-center gap-3 py-2.5">
+                      <button onClick={() => navigate(`/monitor/${a.id}`)} className="flex-1 min-w-0 text-left">
+                        <span className="text-sm font-semibold text-[#ededf0] block truncate">{a.name}</span>
+                        <span className="text-[10px] text-red-400 font-bold">
+                          {a.days_since ? `${a.days_since}d no log` : 'Never logged'}
+                        </span>
+                      </button>
+                      {reminded[a.id] ? (
+                        <span className="text-[10px] font-bold text-emerald-300">✓ Reminded</span>
+                      ) : (
+                        <button
+                          onClick={() => sendRemind([a], a.id)}
+                          disabled={remindBusy[a.id]}
+                          style={{ minHeight: 34 }}
+                          className="text-[10px] font-extrabold text-[#a78bfa] bg-[rgba(124,92,252,0.12)] border border-[rgba(124,92,252,0.4)] rounded-full px-3 active:scale-95 transition-transform disabled:opacity-50">
+                          {remindBusy[a.id] ? 'Sending…' : '✨ Remind'}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
+                {overview.alerts.some(a => !reminded[a.id]) && (
+                  <button
+                    onClick={() => sendRemind(overview.alerts.filter(a => !reminded[a.id]), 'all')}
+                    disabled={remindBusy['all']}
+                    style={{ minHeight: 38 }}
+                    className="w-full mt-2 text-[11px] font-extrabold text-[#a78bfa] border border-[rgba(124,92,252,0.3)] rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50">
+                    {remindBusy['all'] ? 'Sending…' : '✨ Remind everyone'}
+                  </button>
+                )}
+                <p className="text-[9px] text-[#4e4e5c] mt-2">Sends a friendly push + flagged coach message · logged in Audit</p>
               </div>
             )}
 
-            {/* Today's detail per member */}
-            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-white/[0.07] overflow-hidden">
-              <div className="px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.07]">
-                <span className="text-xs font-bold text-[#9a9aa6] uppercase tracking-wider">Today's Compliance</span>
+            {/* Compliance — one list, two lenses */}
+            <div className="bg-[#131317] rounded-2xl border border-white/[0.07] overflow-hidden">
+              <div className="flex bg-white/[0.03] border-b border-white/[0.07] p-1.5 gap-1">
+                {[['today', 'Today'], ['7d', '7-Day Average']].map(([k, l]) => (
+                  <button key={k} onClick={() => setComplianceLens(k)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                      complianceLens === k ? 'bg-[#7c5cfc] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
+                    }`}>{l}</button>
+                ))}
               </div>
-              {overview.today_detail.map(m => {
+
+              {complianceLens === 'today' && overview.today_detail.map(m => {
                 const pct = m.compliance_pct || 0;
                 const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-stone-200';
                 const textColor = pct >= 75 ? 'text-emerald-300' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-[#9a9aa6]';
@@ -1486,14 +1541,8 @@ export default function AdminDashboard() {
                   </div>
                 );
               })}
-            </div>
 
-            {/* 7-day compliance ranking */}
-            <div className="bg-[#131317] rounded-2xl border border-white/[0.08] border border-white/[0.07] overflow-hidden">
-              <div className="px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.07]">
-                <span className="text-xs font-bold text-[#9a9aa6] uppercase tracking-wider">7-Day Average Compliance</span>
-              </div>
-              {overview.compliance_7d.map(m => {
+              {complianceLens === '7d' && overview.compliance_7d.map(m => {
                 const pct = parseFloat(m.avg_7d) || 0;
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.06] last:border-0">
@@ -1534,76 +1583,87 @@ export default function AdminDashboard() {
             ) : (
               filtered(members, 'name').map(m => {
                 const noLog = m.last_logged !== today;
+                const initials = m.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                const pct = m.last_compliance;
+                const ringColor = pct == null ? '#3a3a46' : pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171';
+                const start  = parseFloat(m.start_weight);
+                const latest = parseFloat(m.latest_weight);
+                const goal   = parseFloat(m.target_weight);
+                const hasJourney = Number.isFinite(start) && Number.isFinite(goal) && start !== goal;
+                const cur = Number.isFinite(latest) ? latest : start;
+                const progress = hasJourney ? Math.max(0, Math.min(100, ((start - cur) / (start - goal)) * 100)) : 0;
+                const lost = hasJourney && Number.isFinite(latest) ? +(start - latest).toFixed(1) : null;
                 return (
-                  <div key={m.id} className={`bg-[#131317] rounded-2xl border border-white/[0.08] p-4 shadow-card border
-                    ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
-                    <div className="flex items-start justify-between gap-3">
+                  <div key={m.id}
+                    className={`relative bg-[#131317] rounded-2xl border p-4 shadow-card
+                      ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/monitor/${m.id}`)}>
+                      <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#a78bfa]"
+                        style={{ background: 'linear-gradient(135deg,#2a2150,#1a1633)' }}>
+                        {initials}
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-bold text-[#ededf0] truncate">{m.name}</h3>
-                          {!m.active && <span className="text-xs bg-white/[0.06] text-[#9a9aa6] px-2 py-0.5 rounded-full">Inactive</span>}
+                          {!m.active && <span className="text-[9px] font-bold bg-white/[0.06] text-[#9a9aa6] px-2 py-0.5 rounded-full">INACTIVE</span>}
+                          {noLog && m.active && <span className="text-[9px] font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">NO LOG</span>}
+                          {m.has_pin === false && m.active && <span className="text-[9px] font-bold text-amber-300">🔑 NO PIN</span>}
                         </div>
-                        <p className="text-xs text-[#9a9aa6] mt-0.5">📱 {m.phone}</p>
-                        {m.monitor_name ? (
-                          <p className="text-xs text-emerald-300 mt-0.5 font-medium">🏋️ {m.monitor_name}</p>
-                        ) : (
-                          <p className="text-xs text-amber-300 mt-0.5">⚠ Unassigned</p>
-                        )}
+                        <p className="text-[10px] text-[#9a9aa6] mt-0.5 truncate">
+                          📱 {m.phone}
+                          {m.monitor_name
+                            ? <span className="text-emerald-300"> · 🏋️ {m.monitor_name}</span>
+                            : <span className="text-amber-300"> · ⚠ Unassigned</span>}
+                        </p>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        {m.latest_weight && (
-                          <div className="font-bold text-[#d8d8de] text-sm">{m.latest_weight} kg</div>
-                        )}
-                        {m.last_compliance != null && (
-                          <div className={`text-xs font-bold px-2 py-0.5 rounded-full mt-0.5 inline-block ${
-                            m.last_compliance >= 75 ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' :
-                            m.last_compliance >= 50 ? 'bg-[rgba(251,191,36,0.14)] text-amber-300' :
-                                                       'bg-[rgba(248,113,113,0.14)] text-red-400'
-                          }`}>{m.last_compliance}%</div>
-                        )}
+                      {/* Compliance ring */}
+                      <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center"
+                        style={{ background: pct != null
+                          ? `conic-gradient(${ringColor} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`
+                          : 'rgba(255,255,255,0.06)' }}>
+                        <span className="w-7 h-7 rounded-full bg-[#131317] flex items-center justify-center text-[8px] font-extrabold"
+                          style={{ color: ringColor }}>
+                          {pct != null ? `${pct}%` : '—'}
+                        </span>
                       </div>
+                      {/* ⋮ menu */}
+                      <button onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === m.id ? null : m.id); }}
+                        style={{ minWidth: 36, minHeight: 36 }}
+                        className="flex-shrink-0 flex items-center justify-center rounded-full text-[#4e4e5c] hover:text-white hover:bg-white/[0.06] text-lg font-bold transition-colors">⋮</button>
                     </div>
 
-                    {/* Row 2 — target + actions */}
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.06]">
-                      <div className="text-xs text-[#9a9aa6]">
-                        {m.start_weight && m.target_weight && (
-                          <span>{m.start_weight} kg → {m.target_weight} kg goal</span>
-                        )}
-                        {noLog && m.active && (
-                          <span className="text-amber-300 font-medium ml-2">· No log today</span>
-                        )}
-                        {/* Sprint 9: PIN status badge */}
-                        {m.has_pin === false && m.active && (
-                          <span className="text-amber-300 font-semibold ml-2">· 🔑 No PIN set</span>
-                        )}
+                    {/* Weight journey */}
+                    {hasJourney && (
+                      <div className="mt-3 pt-3 border-t border-white/[0.06]">
+                        <div className="flex items-center justify-between text-[10px] text-[#9a9aa6] mb-1.5">
+                          <span>{start} → <b className="text-[#ededf0]">{Number.isFinite(latest) ? latest : '—'}</b> → {goal} kg</span>
+                          {lost != null && lost > 0 && <span className="font-extrabold text-emerald-300">−{lost} kg</span>}
+                          {lost != null && lost < 0 && <span className="font-extrabold text-amber-300">+{Math.abs(lost)} kg</span>}
+                        </div>
+                        <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
+                          <div className="h-full rounded-full transition-all"
+                            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#7c5cfc,#a78bfa)' }} />
+                        </div>
                       </div>
-                      <div className="flex gap-1.5">
-                        <button onClick={() => setAssignTarget(m)}
-                          className="text-xs px-2.5 py-1.5 bg-[rgba(52,211,153,0.10)] text-emerald-300 font-semibold
-                            rounded-lg hover:bg-[rgba(52,211,153,0.14)] transition-colors">
-                          Assign
-                        </button>
-                        <button onClick={() => setEditTarget(m)}
-                          className="text-xs px-2.5 py-1.5 bg-[rgba(96,165,250,0.10)] text-blue-300 font-semibold
-                            rounded-lg hover:bg-[rgba(96,165,250,0.14)] transition-colors">
-                          ✏️ Edit
-                        </button>
-                        <button onClick={() => navigate(`/monitor/${m.id}`)}
-                          className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-[#9a9aa6] font-semibold
-                            rounded-lg hover:bg-white/[0.05] transition-colors">
-                          View
-                        </button>
-                        <button onClick={() => toggleUser(m.id, 'member')}
-                          className={`text-xs px-2.5 py-1.5 font-semibold rounded-lg transition-colors ${
-                            m.active
-                              ? 'bg-[rgba(248,113,113,0.10)] text-red-400 hover:bg-[rgba(248,113,113,0.14)]'
-                              : 'bg-[rgba(52,211,153,0.10)] text-emerald-300 hover:bg-[rgba(52,211,153,0.14)]'
-                          }`}>
-                          {m.active ? 'Disable' : 'Enable'}
-                        </button>
-                      </div>
-                    </div>
+                    )}
+
+                    {/* Overflow menu */}
+                    {menuFor === m.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setMenuFor(null)} />
+                        <div className="absolute right-3 top-14 z-50 bg-[#1a1a20] border border-white/[0.12] rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.7)] min-w-[150px]">
+                          <button onClick={() => { setMenuFor(null); setAssignTarget(m); }}
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-emerald-300 hover:bg-white/[0.04]">🔗 Assign monitor</button>
+                          <button onClick={() => { setMenuFor(null); setEditTarget(m); }}
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-blue-300 hover:bg-white/[0.04] border-t border-white/[0.06]">✏️ Edit & protocol</button>
+                          <button onClick={() => { setMenuFor(null); toggleUser(m.id, 'member'); }}
+                            className={`w-full text-left px-4 py-3 text-xs font-bold hover:bg-white/[0.04] border-t border-white/[0.06] ${
+                              m.active ? 'text-red-400' : 'text-emerald-300'}`}>
+                            {m.active ? '🚫 Disable' : '✓ Enable'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })
@@ -1769,6 +1829,10 @@ export default function AdminDashboard() {
           setMembers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
           setEditTarget(null);
         }} />}
+
+      {/* Coach AI — manage protocols & messages by chat */}
+      <CoachAIChat onApplied={load} />
+      <CoachAIFab />
     </div>
   );
 }
