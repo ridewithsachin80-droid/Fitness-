@@ -1544,13 +1544,6 @@ export default function DailyLog() {
       {/* Content */}
       <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
 
-        {/* Hint when nothing is open — the AI now lives in the nav orb below */}
-        {!heroPanel && !loading && (
-          <p className="text-center text-[11px] text-[#4e4e5c] py-1">
-            Tap a tile above to open it · or tap ✨ to tell the AI your whole day
-          </p>
-        )}
-
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
