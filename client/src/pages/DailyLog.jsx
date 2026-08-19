@@ -721,6 +721,28 @@ export default function DailyLog() {
   // Fetch coach notes + profile age once on mount
   const [coachNotes, setCoachNotes] = useState([]);
   const [profileAge, setProfileAge] = useState(null);
+
+  // Only unread messages appear on Today; read ones live in the bell.
+  const unreadNotes = coachNotes.filter(n => !n.read_at);
+
+  const markNotesRead = useCallback(async (ids) => {
+    if (!ids?.length) return;
+    haptic(12);
+    // Optimistic — the card disappears immediately, no waiting on the network
+    setCoachNotes(prev => prev.map(n =>
+      ids.includes(n.id) ? { ...n, read_at: new Date().toISOString() } : n
+    ));
+    try {
+      await api.post('/patients/me/notes/read', { ids });
+    } catch (err) {
+      console.error('Failed to mark messages read:', err);
+      // Roll back so the member doesn't silently lose a message
+      setCoachNotes(prev => prev.map(n =>
+        ids.includes(n.id) ? { ...n, read_at: null } : n
+      ));
+    }
+  }, []);
+
   useEffect(() => {
     getMyProfile().then(({ data }) => {
       if (data?.coach_notes?.length) setCoachNotes(data.coach_notes);
@@ -1387,29 +1409,48 @@ export default function DailyLog() {
               </Card>
             )}
 
-            {/* Coach notes visible to member — flagged ones show as "Action needed" */}
-            {coachNotes.length > 0 && (
+            {/* Coach messages — only UNREAD show here; once read they move to
+                the notification bell's message history so Today stays clean. */}
+            {unreadNotes.length > 0 && (
               <Card>
-                <SectionTitle icon="💬">Message from your coach</SectionTitle>
-                <div className="space-y-2 mt-2">
-                  {coachNotes.slice(0, 3).map(n => (
+                <div className="flex items-center justify-between mb-2">
+                  <SectionTitle icon="💬">
+                    {unreadNotes.length > 1 ? `${unreadNotes.length} new messages` : 'Message from your coach'}
+                  </SectionTitle>
+                  {unreadNotes.length > 1 && (
+                    <button onClick={() => markNotesRead(unreadNotes.map(n => n.id))}
+                      className="text-[11px] font-bold text-[#7c5cfc] hover:underline">
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {unreadNotes.slice(0, 3).map(n => (
                     <div key={n.id} className={`rounded-2xl px-4 py-3 border ${
                       n.flagged ? 'bg-amber-500/[0.06] border-amber-500/20' : 'bg-[#1a1a20] border-white/[0.07]'
                     }`}>
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {n.flagged && (
-                          <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                          <span className="text-[10px] font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">
                             ⚠ Action needed
                           </span>
                         )}
-                        <span className="text-xs text-stone-400">
+                        <span className="text-[11px] text-[#8e8e9a]">
                           {n.monitor_name} · {new Date(n.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                         </span>
                       </div>
-                      <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{n.note}</p>
+                      <p className="text-sm text-[#d8d8de] leading-relaxed whitespace-pre-wrap">{n.note}</p>
+                      <button onClick={() => markNotesRead([n.id])}
+                        style={{ minHeight: 36 }}
+                        className="mt-2 w-full text-[11px] font-bold text-[#a78bfa] bg-[rgba(124,92,252,0.10)] border border-[rgba(124,92,252,0.25)] rounded-xl active:scale-[0.98] transition-transform">
+                        Got it ✓
+                      </button>
                     </div>
                   ))}
                 </div>
+                <p className="text-[10px] text-[#4e4e5c] mt-2 text-center">
+                  Read messages stay in the 🔔 bell at the top
+                </p>
               </Card>
             )}
             {protocol?.fasting && (() => {

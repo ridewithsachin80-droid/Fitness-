@@ -283,13 +283,21 @@ export default function Progress() {
     ? (latestW / Math.pow(profile.height_cm / 100, 2)).toFixed(1)
     : null;
 
-  // Streak — consecutive days logged ending today
-  const dateSet  = new Set(logs.map(l => l.log_date));
+  // Streak — consecutive days logged ending today.
+  // NOTE: `ds` must be derived from `d` (which walks backwards); computing
+  // today's date inside the loop made the condition permanently true and
+  // hung the page for anyone who had logged today.
+  const dateSet  = new Set(logs.map(l => String(l.log_date).slice(0, 10)));
+  const istDateStr = (dt) =>
+    new Date(dt.getTime() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
+
   let streak = 0;
   let d = new Date();
-  while (true) {
-    const ds = (() => { const n = new Date(); return new Date(n.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
-    if (!dateSet.has(ds)) break;
+  // A streak can end yesterday if today isn't logged yet
+  if (!dateSet.has(istDateStr(d))) d.setDate(d.getDate() - 1);
+  // Bounded by the data we actually fetched (90 days) — never unbounded
+  for (let i = 0; i < 400; i++) {
+    if (!dateSet.has(istDateStr(d))) break;
     streak++;
     d.setDate(d.getDate() - 1);
   }
