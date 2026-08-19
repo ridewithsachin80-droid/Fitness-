@@ -201,6 +201,12 @@ CREATE INDEX IF NOT EXISTS idx_monitor_patients_monitor
 -- Search query matches against this column so members can type in Kannada.
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS name_aliases JSONB DEFAULT '[]';
 
+-- Coach messages: track when the member has read a note, so the Today page
+-- only shows unread ones and read history moves into the notification bell.
+ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_monitor_notes_patient_unread
+  ON monitor_notes(patient_id, read_at);
+
 -- GIN index for fast containment checks on the array
 CREATE INDEX IF NOT EXISTS idx_foods_name_aliases
   ON foods USING GIN (name_aliases);
