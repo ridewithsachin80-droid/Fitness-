@@ -234,8 +234,22 @@ PARSING RULES:
    calcium, iron, potassium, vit_c (mg).
    Map stated meals (breakfast/lunch/dinner/snack/morning/night or slot names)
    to the CLOSEST slot from the meal slots list, else null.
-8. WORKOUTS — exercise mentions beyond the protocol activities (pushups, cycling,
-   yoga...) go in workouts with estimated kcal burned. Never invent workouts.
+8. WORKOUTS — exercise mentions beyond the protocol activities (bench press,
+   squats, pushups, cycling, yoga...) go in workouts with estimated kcal burned.
+   Never invent workouts.
+   IMPORTANT — if the member states SETS with reps and/or weight (e.g. "bench
+   press 3 sets, first set 20kg 10 reps, second 20kg 10, third 20kg 12"), you
+   MUST break it into a "sets" array with one entry per set:
+   sets: [{ "reps": 10, "weight_kg": 20 }, { "reps": 10, "weight_kg": 20 },
+          { "reps": 12, "weight_kg": 20 }]
+   Use the exact per-set values given. If a weight applies to all sets, repeat it
+   on each set. If reps are a range for a set, use the number stated for that set.
+   Body-weight moves (pushups, squats without weight) → weight_kg: 0.
+   Set "name" to the clean exercise name only ("Bench Press", not "bench press
+   3 sets"). Speech-to-text errors are common — "pen drives"/"drips"/"rapes"
+   almost always mean "reps"; interpret them as reps.
+   For cardio/duration work with no sets (walking, cycling, yoga), omit "sets"
+   and give duration_min instead.
 9. reply — ONE short friendly sentence summarising what was understood. Mention
    food calories if food present. No emojis. No medical advice.
 10. Anything not mentioned → null / empty array. If nothing parseable at all,
@@ -259,7 +273,10 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
     }
   ],
   "workouts": [
-    { "name": "Push-ups", "qty_text": "30 reps", "duration_min": null, "calories_burned": 15 }
+    { "name": "Bench Press", "qty_text": "3 sets of 20 kg", "duration_min": null,
+      "calories_burned": 25,
+      "sets": [{ "reps": 10, "weight_kg": 20 }, { "reps": 10, "weight_kg": 20 }, { "reps": 12, "weight_kg": 20 }] },
+    { "name": "Cycling", "qty_text": "30 min", "duration_min": 30, "calories_burned": 250, "sets": [] }
   ]
 }`;
 }
@@ -403,6 +420,15 @@ router.post('/parse', async (req, res) => {
         qty_text:        String(w.qty_text || '').slice(0, 60),
         duration_min:    parseFloat(w.duration_min) || null,
         calories_burned: Math.round(parseFloat(w.calories_burned)) || null,
+        // Structured sets → the client writes these as real set rows in
+        // workout_sessions rather than a free-text note.
+        sets: (Array.isArray(w.sets) ? w.sets : [])
+          .slice(0, 30)
+          .map(st => ({
+            reps:      Math.min(500, Math.max(1, parseInt(st?.reps) || 0)),
+            weight_kg: Math.min(500, Math.max(0, parseFloat(st?.weight_kg) || 0)),
+          }))
+          .filter(st => st.reps > 0),
       }));
 
     const nothingParsed = !weight_kg && !activities.length && !acv.length &&
