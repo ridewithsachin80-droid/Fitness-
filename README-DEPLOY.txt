@@ -1,27 +1,22 @@
-FitLife — AI orb in the bottom nav
-==================================
+FitLife — AI orb in nav, inline AI bar removed
+==============================================
 
 Extract, drag the "client" FOLDER onto GitHub at the ROOT of your repo.
 NOTHING TO RENAME. No new packages. No schema change.
 
 FILES (3)
-client/src/components/UI.jsx          AI orb added to PatientBottomNav
-client/src/pages/DailyLog.jsx         removed the now-redundant side FAB
-client/src/components/WorkoutLog.jsx  AI banner in the workout log (previous batch,
-                                      included in case it is not deployed yet)
+client/src/pages/DailyLog.jsx         removed the "Tell me about your day" bar
+client/src/components/UI.jsx          AI orb in the bottom nav
+client/src/components/WorkoutLog.jsx  AI banner in the workout log
 
 WHAT CHANGED
-- A raised AI orb now sits in the centre of the bottom nav, between Progress
-  and Profile, with a dark ring so it reads as an action rather than a fifth
-  tab. The nav is fixed, so the orb never scrolls away when a hero panel
-  pushes the page down - which was the problem.
-- It works from every member page. The chat is mounted on Today, so from
-  Progress/Profile/Settings the orb sets the open flag first and then
-  navigates, meaning the chat is already open when Today mounts - no flash of
-  the page before it appears.
-- Removed the edge-docked side FAB from the Today page. Two AI buttons on one
-  screen was clutter, and the orb is easier to reach with a thumb.
+- Removed the "Tell me about your day…" bar from the Today page. The nav orb
+  does the same job and never scrolls away, so the bar was duplicate weight
+  taking up prime space right under the hero.
+- The empty-state hint now points at the orb: "Tap a tile above to open it -
+  or tap ✨ to tell the AI your whole day".
 
-THE COACH SIDE IS UNCHANGED
-Coaches keep their edge-docked FAB, since the admin dashboard uses tabs rather
-than the member bottom nav. Say the word if you want the coach nav to match.
+THREE AI ENTRY POINTS REMAIN, each in context
+  1. Nav orb          - always visible, works from every member page
+  2. Food log banner   - inside the food panel
+  3. Workout log banner - inside the workout panel

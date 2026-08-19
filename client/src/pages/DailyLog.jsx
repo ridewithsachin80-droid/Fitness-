@@ -679,7 +679,6 @@ export default function DailyLog() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { date, log, protocol, loading, saving, saved, error, setDate, updateLog, saveLog } = useLogStore();
-  const openChat = useAIChat(s => s.openChat);
 
   const overrides    = protocol?.item_overrides || {};
   const applyOverride = (item) => {
@@ -1545,20 +1544,10 @@ export default function DailyLog() {
       {/* Content */}
       <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
 
-        {/* AI logging bar — the primary way to fill the day */}
-        <button onClick={() => { haptic(15); openChat(); }}
-          style={{ minHeight: 52 }}
-          className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.16] to-[#4c2fd8]/[0.08] border border-[#7c5cfc]/40 hover:border-[#7c5cfc]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(124,92,252,0.10)]">
-          <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.5)]">✨</span>
-          <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left">Tell me about your day…</span>
-          <span className="text-[#a78bfa]">🎤</span>
-        </button>
-
-
-        {/* Hint when nothing is open — keeps the page from feeling empty */}
+        {/* Hint when nothing is open — the AI now lives in the nav orb below */}
         {!heroPanel && !loading && (
           <p className="text-center text-[11px] text-[#4e4e5c] py-1">
-            Tap a tile above to open it · or tell the AI your whole day
+            Tap a tile above to open it · or tap ✨ to tell the AI your whole day
           </p>
         )}
 
