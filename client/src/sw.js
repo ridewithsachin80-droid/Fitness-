@@ -1,9 +1,29 @@
-import { precacheAndRoute } from 'workbox-precaching';
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
+import { clientsClaim } from 'workbox-core';
 
 // Precache all Vite-built assets (injected by vite-plugin-pwa)
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Delete precaches from previous versions — without this, old hashed bundles
+// linger and can be served after an update.
+cleanupOutdatedCaches();
+
+// ── Update handling ──────────────────────────────────────────────────────────
+// With injectManifest we must wire this ourselves; vite-plugin-pwa only does it
+// automatically for generateSW. Without the SKIP_WAITING listener the new worker
+// stays stuck in "waiting" forever, so updateSW(true) reloads the page while the
+// OLD worker is still in control — the user reloads and still sees the old app.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Take control of already-open pages as soon as this worker activates,
+// instead of waiting for every tab to close first.
+clientsClaim();
 
 // API routes: network first
 registerRoute(
