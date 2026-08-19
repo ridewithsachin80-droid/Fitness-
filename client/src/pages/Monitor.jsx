@@ -10,6 +10,7 @@ import { setMemberPin, addNote, logWeightForPatient } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
+import TrainingSummary from '../components/TrainingSummary';
 import MuscleCoverage from '../components/MuscleCoverage';
 import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
@@ -854,6 +855,19 @@ export default function Monitor() {
               ))}
             </div>
           )}
+        </Card>
+
+        {/* Training summary — volume, cardio and calories the member logged.
+            Previously invisible to the coach despite being captured daily. */}
+        <Card>
+          <SectionTitle icon="🔥">Training Summary</SectionTitle>
+          <div className="mt-2">
+            <TrainingSummary
+              patientId={parseInt(patientId)}
+              bodyWeightKg={weightData.length ? weightData[weightData.length - 1].weight : (parseFloat(data?.profile?.start_weight) || 0)}
+              refreshTick={workoutTick}
+            />
+          </div>
         </Card>
 
         {/* Phase 2: Workout Program */}

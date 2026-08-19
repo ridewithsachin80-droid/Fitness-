@@ -1327,6 +1327,20 @@ export default function AdminDashboard() {
   const [reminded,   setReminded]   = useState({});   // { [memberId]: true } after sent
   const [complianceLens, setComplianceLens] = useState('today'); // 'today' | '7d'
   const [menuFor,    setMenuFor]    = useState(null); // member id with open ⋮ menu
+  const [weeklyBusy, setWeeklyBusy] = useState(null); // member id being summarised
+  const [weeklySent, setWeeklySent] = useState({});   // { [id]: true }
+
+  const sendWeekly = useCallback(async (m) => {
+    setWeeklyBusy(m.id);
+    try {
+      await api.post('/ai-chat/weekly-summary', { member_id: m.id });
+      setWeeklySent(s => ({ ...s, [m.id]: true }));
+    } catch (e) {
+      console.error('weekly summary failed:', e);
+    } finally {
+      setWeeklyBusy(null);
+    }
+  }, []);
 
   const sendRemind = useCallback(async (list, key) => {
     if (!list.length) return;
@@ -1680,6 +1694,11 @@ export default function AdminDashboard() {
                             className="w-full text-left px-4 py-3 text-xs font-bold text-emerald-300 hover:bg-white/[0.04]">🔗 Assign monitor</button>
                           <button onClick={() => { setMenuFor(null); setEditTarget(m); }}
                             className="w-full text-left px-4 py-3 text-xs font-bold text-blue-300 hover:bg-white/[0.04] border-t border-white/[0.06]">✏️ Edit & protocol</button>
+                          <button onClick={() => { setMenuFor(null); sendWeekly(m); }}
+                            disabled={weeklyBusy === m.id}
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#a78bfa] hover:bg-white/[0.04] border-t border-white/[0.06] disabled:opacity-50">
+                            {weeklyBusy === m.id ? '📊 Sending…' : weeklySent[m.id] ? '✓ Summary sent' : '📊 Send weekly summary'}
+                          </button>
                           <button onClick={() => { setMenuFor(null); toggleUser(m.id, 'member'); }}
                             className={`w-full text-left px-4 py-3 text-xs font-bold hover:bg-white/[0.04] border-t border-white/[0.06] ${
                               m.active ? 'text-red-400' : 'text-emerald-300'}`}>

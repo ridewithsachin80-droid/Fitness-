@@ -290,6 +290,68 @@ router.post('/', async (req, res) => {
   }
 });
 
+// ── GET /api/workouts/summary ────────────────────────────────────────────────
+// Per-day training history: volume lifted, set count, cardio minutes.
+// Powers the Progress page's trend charts and the coach's member view.
+// ?days=30 (default 30, max 180). Monitors/admins pass ?patient_id=.
+router.get('/summary', async (req, res) => {
+  const days = Math.min(180, Math.max(1, parseInt(req.query.days) || 30));
+
+  const patientId = await resolvePatientId(req, res);
+  if (patientId === null) return;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT ws.session_date,
+              ws.duration_min,
+              ws.cardio,
+              COALESCE(SUM(ss.reps * ss.weight_kg), 0)            AS volume_kg,
+              COUNT(ss.id)                                        AS set_count,
+              COUNT(DISTINCT ss.exercise_id)                      AS exercise_count
+       FROM workout_sessions ws
+       LEFT JOIN session_sets ss ON ss.session_id = ws.id
+       WHERE ws.patient_id = $1
+         AND ws.session_date >= CURRENT_DATE - ($2::int - 1)
+       GROUP BY ws.id, ws.session_date, ws.duration_min, ws.cardio
+       ORDER BY ws.session_date ASC`,
+      [patientId, days]
+    );
+
+    const sessions = rows.map(r => {
+      const cardio = Array.isArray(r.cardio) ? r.cardio : [];
+      const cardioMin = cardio.reduce((s, c) => s + (parseFloat(c?.duration_min) || 0), 0);
+      return {
+        date:           r.session_date,
+        volume_kg:      Math.round(parseFloat(r.volume_kg) || 0),
+        sets:           parseInt(r.set_count) || 0,
+        exercises:      parseInt(r.exercise_count) || 0,
+        cardio_min:     Math.round(cardioMin),
+        cardio,
+        duration_min:   r.duration_min || null,
+      };
+    });
+
+    // Personal bests — used for the "new PB" badge on the client
+    const bestVolume = sessions.reduce((m, s) => Math.max(m, s.volume_kg), 0);
+    const bestCardio = sessions.reduce((m, s) => Math.max(m, s.cardio_min), 0);
+
+    res.json({
+      days,
+      sessions,
+      totals: {
+        volume_kg:  sessions.reduce((s, x) => s + x.volume_kg, 0),
+        sets:       sessions.reduce((s, x) => s + x.sets, 0),
+        cardio_min: sessions.reduce((s, x) => s + x.cardio_min, 0),
+        session_count: sessions.length,
+      },
+      best: { volume_kg: bestVolume, cardio_min: bestCardio },
+    });
+  } catch (err) {
+    console.error('GET /workouts/summary error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/workouts/history/:exerciseId ────────────────────────────────────
 // Past sets for one exercise, oldest-to-newest — feeds Phase 3's trend
 // charts and PR detection directly (chronological order is what both need).

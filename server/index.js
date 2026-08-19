@@ -43,7 +43,10 @@ app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
 }));
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
-app.use(express.json({ limit: '2mb' }));
+// 12mb: photo food logging posts a base64 image (~1.35x the file size).
+// The client downscales to ~1280px before upload, so real payloads are well
+// under this; the limit is a backstop, and /ai-chat/photo rejects >8MB itself.
+app.use(express.json({ limit: '12mb' }));
 app.use(cookieParser());
 app.use((req, res, next) => { req.io = io; next(); });
 

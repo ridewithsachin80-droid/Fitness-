@@ -332,6 +332,148 @@ function whitelistIds(aiIds, allowedItems) {
   return [...new Set(aiIds.map(String))].filter(id => allowed.has(id));
 }
 
+// ── POST /api/ai-chat/photo ──────────────────────────────────────────────────
+// Photo food logging: member snaps their plate, AI identifies each item with an
+// estimated portion. Vision needs Gemini specifically (Groq's text models can't
+// see images), so this endpoint doesn't use the usual provider chain.
+//
+// Body: { image: "<base64, no data: prefix>", mimeType: "image/jpeg", mealSlots }
+// Returns the same shape as /parse's food list, so the client reuses one
+// preview component for typed, spoken and photographed logging.
+router.post('/photo', async (req, res) => {
+  const { image, mimeType, mealSlots } = req.body;
+
+  if (!image || typeof image !== 'string') {
+    return res.status(400).json({ error: 'Image required' });
+  }
+  // ~8 MB of base64 ≈ 6 MB image. Bigger than that is a phone photo that
+  // should have been downscaled client-side.
+  if (image.length > 8_000_000) {
+    return res.status(413).json({ error: 'Image too large — try a smaller photo' });
+  }
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'Photo logging needs GEMINI_API_KEY to be set' });
+  }
+
+  const slots = Array.isArray(mealSlots) && mealSlots.length
+    ? mealSlots.join(' | ') : 'Meal 1 | Meal 2 | Meal 3';
+
+  const prompt = `You are a nutritionist looking at a photo of an Indian meal.
+
+Identify EVERY distinct food item you can see and estimate its portion in grams
+from visual cues (plate size, bowl size, number of pieces).
+
+Portion guides: 1 chapati/roti≈30g, 1 idli≈40g, 1 dosa≈80g, 1 katori/bowl of
+dal≈150g, 1 katori sabzi≈100g, 1 katori rice≈100g, 1 plate rice≈150g,
+1 glass≈200ml, 1 egg≈55g, 1 piece of chicken≈60g, 1 samosa≈50g.
+
+For each item give accurate per-100g nutrition (USDA / NIN India values, cooked
+as eaten in India): calories(kcal), protein, total_carbs, fat, fiber, sugar in
+grams, and sodium, calcium, iron, potassium, vit_c in mg.
+
+Meal slots available: ${slots}
+
+Be honest about uncertainty: set confidence to "low" when a item is partly
+hidden or hard to identify. If the photo contains no food at all, return an
+empty foods array and say so in reply.
+
+Return ONLY raw JSON, no markdown fences:
+{
+  "reply": "I can see 2 chapatis, dal and a small salad — about 420 kcal.",
+  "foods": [
+    { "name": "Chapati", "qty_text": "2 pieces", "grams": 60, "meal": null,
+      "confidence": "high",
+      "per_100g": { "calories": 297, "protein": 8, "total_carbs": 61, "fat": 3.7,
+        "fiber": 4.9, "sugar": 1.6, "sodium": 298, "calcium": 33, "iron": 2.4,
+        "potassium": 196, "vit_c": 0 } }
+  ]
+}`;
+
+  try {
+    const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
+    let lastErr, parsed = null, usedModel = null;
+
+    for (const model of models) {
+      try {
+        const response = await axios.post(
+          `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
+          {
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: mimeType || 'image/jpeg', data: image } },
+              ],
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 2500 },
+          },
+          { headers: { 'content-type': 'application/json' }, timeout: 45000 }
+        );
+        const cand = response.data.candidates?.[0];
+        const text = cand?.content?.parts?.map(p => p.text).join('') || '';
+        if (!text) throw new Error('Empty response from vision model');
+        parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+        usedModel = model;
+        break;
+      } catch (e) { lastErr = e; }
+    }
+    if (!parsed) throw lastErr || new Error('Vision model failed');
+
+    const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
+    const validFoods = rawFoods
+      .filter(f => f && f.name && (parseFloat(f.grams) || 0) > 0)
+      .slice(0, 20)
+      .map(f => ({
+        name:       String(f.name).trim().slice(0, 100),
+        qty_text:   String(f.qty_text || '').slice(0, 60),
+        grams:      Math.min(3000, Math.round(parseFloat(f.grams))),
+        meal:       f.meal ? String(f.meal).slice(0, 40) : null,
+        confidence: ['high', 'medium', 'low'].includes(f.confidence) ? f.confidence : 'medium',
+        per_100g:   f.per_100g || {},
+      }));
+
+    const foods = await enrichFromDB(validFoods);
+
+    let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
+    for (const f of foods) {
+      const factor = f.grams / 100;
+      f.macros = {
+        cal:  Math.round((f.per_100g.calories || 0) * factor),
+        pro:  +((f.per_100g.protein     || 0) * factor).toFixed(1),
+        carb: +((f.per_100g.total_carbs || 0) * factor).toFixed(1),
+        fat:  +((f.per_100g.fat         || 0) * factor).toFixed(1),
+      };
+      totCal += f.macros.cal; totPro += f.macros.pro;
+      totCarb += f.macros.carb; totFat += f.macros.fat;
+    }
+
+    return res.json({
+      reply: String(parsed.reply || '').slice(0, 400) ||
+        (foods.length ? `I found ${foods.length} item${foods.length > 1 ? 's' : ''} in that photo.`
+                      : "I couldn't spot any food in that photo — try a clearer shot of the plate."),
+      foods,
+      workouts: [], activities: [], acv: [], supplements: [],
+      weight_kg: null, water_ml_add: null, sleep: null,
+      totals: {
+        cal: Math.round(totCal), pro: +totPro.toFixed(1),
+        carb: +totCarb.toFixed(1), fat: +totFat.toFixed(1),
+      },
+      aiProvider: 'gemini-vision', aiModel: usedModel,
+    });
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : err.message;
+    console.error('ai-chat photo error | status:', err.response?.status, '| detail:', detail);
+    if (err instanceof SyntaxError) {
+      return res.status(502).json({ error: 'Could not read the photo result — please try again' });
+    }
+    const st = err.response?.status;
+    return res.status(st === 429 || st === 503 ? st : 502).json({
+      error: st === 429 ? 'AI is busy — try again in a moment'
+           : st === 401 ? 'Photo AI authentication failed — check GEMINI_API_KEY'
+           : 'Could not analyse that photo — please try again',
+    });
+  }
+});
+
 // ── POST /api/ai-chat/parse ──────────────────────────────────────────────────
 // Body: {
 //   message: string,
@@ -1066,6 +1208,94 @@ router.post('/remind', roleCheck('monitor', 'admin'), async (req, res) => {
   }
 
   res.json({ results, sent: results.filter(r => r.ok).length });
+});
+
+// ── POST /api/ai-chat/weekly-summary ─────────────────────────────────────────
+// One-tap weekly recap: builds the message from the member's real week and
+// sends it as a coach note + push. Template-based (no AI call) so it's
+// instant, free and always says the same thing for the same numbers.
+// Body: { member_id, preview?: true }  — preview returns the text without sending.
+router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) => {
+  const memberId = parseInt(req.body?.member_id);
+  const preview  = !!req.body?.preview;
+  if (!Number.isFinite(memberId)) {
+    return res.status(400).json({ error: 'member_id required' });
+  }
+  if (!(await coachCanAccess(req.user, memberId))) {
+    return res.status(403).json({ error: 'Not assigned to you' });
+  }
+
+  try {
+    const [logsRes, workoutRes, userRes] = await Promise.all([
+      pool.query(
+        `SELECT log_date, weight_kg, compliance_pct, food_items
+         FROM daily_logs WHERE patient_id = $1 AND log_date >= CURRENT_DATE - 6
+         ORDER BY log_date ASC`, [memberId]),
+      pool.query(
+        `SELECT ws.session_date, ws.cardio,
+                COALESCE(SUM(ss.reps * ss.weight_kg), 0) AS volume_kg
+         FROM workout_sessions ws
+         LEFT JOIN session_sets ss ON ss.session_id = ws.id
+         WHERE ws.patient_id = $1 AND ws.session_date >= CURRENT_DATE - 6
+         GROUP BY ws.id, ws.session_date, ws.cardio`, [memberId]),
+      pool.query(`SELECT name FROM users WHERE id = $1 AND role='patient'`, [memberId]),
+    ]);
+
+    if (!userRes.rows.length) return res.status(404).json({ error: 'Member not found' });
+    const firstName = userRes.rows[0].name.split(' ')[0];
+
+    const logs = logsRes.rows;
+    const weights = logs.filter(l => l.weight_kg != null).map(l => parseFloat(l.weight_kg));
+    const comps = logs.filter(l => l.compliance_pct != null).map(l => parseFloat(l.compliance_pct));
+    const avgComp = comps.length ? Math.round(comps.reduce((a, b) => a + b, 0) / comps.length) : null;
+    const change = weights.length >= 2 ? +(weights[weights.length - 1] - weights[0]).toFixed(1) : null;
+    const volume = Math.round(workoutRes.rows.reduce((s, w) => s + (parseFloat(w.volume_kg) || 0), 0));
+    const cardioMin = Math.round(workoutRes.rows.reduce((s, w) => {
+      const c = Array.isArray(w.cardio) ? w.cardio : [];
+      return s + c.reduce((t, x) => t + (parseFloat(x?.duration_min) || 0), 0);
+    }, 0));
+
+    const lines = [`Hi ${firstName}, here's your week:`];
+    lines.push(`• Logged ${logs.length} of 7 days`);
+    if (avgComp != null) lines.push(`• Average compliance ${avgComp}%`);
+    if (change != null) {
+      lines.push(change < 0
+        ? `• Weight down ${Math.abs(change)} kg`
+        : change > 0 ? `• Weight up ${change} kg` : `• Weight held steady`);
+    }
+    if (workoutRes.rows.length) lines.push(`• ${workoutRes.rows.length} training session${workoutRes.rows.length > 1 ? 's' : ''}${volume ? `, ${volume.toLocaleString()} kg lifted` : ''}`);
+    if (cardioMin) lines.push(`• ${cardioMin} min of cardio`);
+
+    // Closing line reflects how the week actually went
+    const strong = (avgComp ?? 0) >= 75 || logs.length >= 6;
+    lines.push(strong
+      ? 'Excellent consistency — keep this rhythm going next week.'
+      : 'Let\'s aim for more consistent logging next week — small daily entries add up.');
+
+    const message = lines.join('\n');
+
+    if (preview) return res.json({ message, stats: { days: logs.length, avgComp, change, volume, cardioMin } });
+
+    await pool.query(
+      `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged)
+       VALUES ($1,$2,$3,$4,false)`,
+      [req.user.id, memberId, getISTDate(), message]);
+
+    try {
+      const pushService = require('../services/pushService');
+      await pushService.sendToUser(memberId, 'Your weekly summary 📊',
+        `${logs.length}/7 days logged${change != null && change < 0 ? ` · ${Math.abs(change)} kg down` : ''}`,
+        'weekly-summary');
+    } catch { /* no push subscription — the note still lands */ }
+
+    coachAudit(req.user, 'coach_weekly_summary', memberId, userRes.rows[0].name,
+      `Weekly summary sent (${logs.length}/7 days, ${avgComp ?? '—'}% compliance)`);
+
+    res.json({ sent: true, message });
+  } catch (err) {
+    console.error('weekly-summary error:', err);
+    res.status(500).json({ error: 'Could not build the weekly summary' });
+  }
 });
 
 module.exports = router;

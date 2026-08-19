@@ -17,6 +17,7 @@ import { getLogRange, getMyProfile }   from '../api/logs';
 import { Card, SectionTitle, PageLoader, PatientBottomNav } from '../components/UI';
 import StrengthProgress from '../components/StrengthProgress';
 import MuscleCoverage from '../components/MuscleCoverage';
+import TrainingSummary from '../components/TrainingSummary';
 import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -628,6 +629,17 @@ export default function Progress() {
                 <span>Every day counts. Log today and start your streak!</span>
               </div>
             )}
+          </div>
+        </Card>
+
+        {/* Training trends — volume lifted, cardio and calories over time.
+            Progress previously showed only weight and compliance. */}
+        <Card>
+          <SectionTitle icon="🔥">Training Trends</SectionTitle>
+          <div className="mt-2">
+            <TrainingSummary
+              bodyWeightKg={latestW || parseFloat(profile?.start_weight) || 0}
+            />
           </div>
         </Card>
 

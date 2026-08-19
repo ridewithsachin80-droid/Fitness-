@@ -484,6 +484,64 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientA
   }
 });
 
+// ── GET /api/patients/:id/weekly-summary ─────────────────────────────────────
+// One week of a member's progress, condensed. Feeds the coach's one-tap
+// "send weekly summary" action so they don't have to assemble it by hand.
+router.get('/:id/weekly-summary', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  const id = req.params.id;
+  try {
+    const [logsRes, workoutRes, profileRes] = await Promise.all([
+      pool.query(
+        `SELECT log_date, weight_kg, compliance_pct, food_items
+         FROM daily_logs
+         WHERE patient_id = $1 AND log_date >= CURRENT_DATE - 6
+         ORDER BY log_date ASC`, [id]),
+      pool.query(
+        `SELECT ws.session_date, ws.cardio,
+                COALESCE(SUM(ss.reps * ss.weight_kg), 0) AS volume_kg,
+                COUNT(ss.id) AS set_count
+         FROM workout_sessions ws
+         LEFT JOIN session_sets ss ON ss.session_id = ws.id
+         WHERE ws.patient_id = $1 AND ws.session_date >= CURRENT_DATE - 6
+         GROUP BY ws.id, ws.session_date, ws.cardio`, [id]),
+      pool.query(
+        `SELECT u.name, pp.start_weight, pp.target_weight
+         FROM users u JOIN patient_profiles pp ON pp.user_id = u.id
+         WHERE u.id = $1`, [id]),
+    ]);
+
+    const logs = logsRes.rows;
+    const weights = logs.filter(l => l.weight_kg != null).map(l => parseFloat(l.weight_kg));
+    const compliances = logs.filter(l => l.compliance_pct != null).map(l => parseFloat(l.compliance_pct));
+    const cardioMin = workoutRes.rows.reduce((s, w) => {
+      const c = Array.isArray(w.cardio) ? w.cardio : [];
+      return s + c.reduce((t, x) => t + (parseFloat(x?.duration_min) || 0), 0);
+    }, 0);
+
+    const p = profileRes.rows[0] || {};
+    const first = weights[0], last = weights[weights.length - 1];
+
+    res.json({
+      name:            p.name || 'Member',
+      days_logged:     logs.length,
+      avg_compliance:  compliances.length
+                        ? Math.round(compliances.reduce((a, b) => a + b, 0) / compliances.length) : null,
+      weight_start:    first ?? null,
+      weight_latest:   last ?? null,
+      weight_change:   (first != null && last != null) ? +(last - first).toFixed(1) : null,
+      target_weight:   p.target_weight ? parseFloat(p.target_weight) : null,
+      total_volume_kg: Math.round(workoutRes.rows.reduce((s, w) => s + (parseFloat(w.volume_kg) || 0), 0)),
+      total_sets:      workoutRes.rows.reduce((s, w) => s + (parseInt(w.set_count) || 0), 0),
+      training_days:   workoutRes.rows.length,
+      cardio_min:      Math.round(cardioMin),
+      food_days:       logs.filter(l => Array.isArray(l.food_items) && l.food_items.length).length,
+    });
+  } catch (err) {
+    console.error('GET /patients/:id/weekly-summary error:', err);
+    res.status(500).json({ error: 'Failed to build weekly summary' });
+  }
+});
+
 // ── POST /api/patients/me/notes/read ─────────────────────────────────────────
 // Member marks coach message(s) as read. Once read, a note disappears from the
 // Today page and lives on in the notification bell's message history.

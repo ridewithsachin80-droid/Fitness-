@@ -107,6 +107,8 @@ export default function AIChatLog() {
   const [input, setInput]         = useState('');
   const [busy, setBusy]           = useState(false);
   const [listening, setListening] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef(null);
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
@@ -142,6 +144,63 @@ export default function AIChatLog() {
     haptic(15);
     r.start();
   }, [listening]);
+
+  // ── Photo food logging ─────────────────────────────────────────────────────
+  // Phone photos are 3–8 MB; we downscale to 1280px and re-encode at 0.8 JPEG
+  // before upload. That keeps the request small, the AI just as accurate, and
+  // avoids members on patchy mobile data waiting on a huge upload.
+  const downscale = (file) => new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = () => reject(new Error('Could not read the photo'));
+    img.onload = () => {
+      const MAX = 1280;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.onerror = () => reject(new Error('That file is not a readable image'));
+    reader.readAsDataURL(file);
+  });
+
+  const sendPhoto = useCallback(async (file) => {
+    if (!file || photoBusy) return;
+    setPhotoBusy(true);
+    haptic(10);
+    setMessages(m => [...m, { role: 'user', text: '📷 Photo of my meal' }]);
+    try {
+      const base64 = await downscale(file);
+      const { data } = await api.post('/ai-chat/photo', {
+        image: base64,
+        mimeType: 'image/jpeg',
+        mealSlots,
+      });
+      setMessages(m => [...m, {
+        role: 'ai',
+        text: data.reply,
+        parsed: {
+          weight_kg: null, weightOn: false,
+          activities: [], acv: [], supplements: [],
+          water_ml_add: null, waterOn: false,
+          sleep: null, sleepOn: false,
+          foods: (data.foods || []).map(f => ({ ...f, on: true })),
+          workouts: [],
+          totals: data.totals,
+        },
+        applied: false,
+      }]);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Could not analyse that photo — please try again.';
+      setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
+    } finally {
+      setPhotoBusy(false);
+    }
+  }, [photoBusy, mealSlots]);
 
   // ── Send → parse ───────────────────────────────────────────────────────────
   const send = useCallback(async (textOverride) => {
@@ -501,6 +560,7 @@ export default function AIChatLog() {
             <p className="text-xs text-[#8e8e9a] leading-relaxed mb-3">
               Weight, walks, meals, ACV, water, supplements, sleep — say it all in
               one message and I'll fill your entire log. Review, then tap Apply.
+              Or tap 📷 to log a meal straight from a photo.
             </p>
             <div className="bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2.5">
               <p className="text-[11px] text-[#b6b6c2] leading-relaxed italic">
@@ -784,6 +844,21 @@ export default function AIChatLog() {
               placeholder="Eg: weight 82.5, walk done, 2 chapati for lunch"
               className="flex-1 bg-transparent text-sm text-white placeholder-[#4e4e5c] py-3 outline-none min-w-0"
             />
+            <button onClick={() => fileRef.current?.click()}
+              disabled={photoBusy}
+              aria-label="Log food from a photo"
+              style={{ minWidth: 40, minHeight: 40 }}
+              className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
+                photoBusy ? 'text-[#4e4e5c] animate-pulse' : 'text-[#8e8e9a] hover:text-[#a78bfa]'
+              }`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment"
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
+              style={{ display: 'none' }} />
             {SpeechRecognition && (
               <button onClick={toggleVoice}
                 style={{ minWidth: 40, minHeight: 40 }}
