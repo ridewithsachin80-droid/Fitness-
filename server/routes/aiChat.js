@@ -452,4 +452,572 @@ router.post('/parse', async (req, res) => {
   }
 });
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COACH AI — natural-language protocol management for monitors/admins
+   "Set Bujju's water target to 4L, add evening walk, message him to log daily"
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const roleCheck = require('../middleware/roleCheck');
+
+// Default protocol catalog — ids/labels mirror client/src/constants.js.
+// The AI may ONLY use these ids (plus a member's existing custom item ids,
+// resolved at apply time by label).
+const CATALOG = {
+  activities: [
+    { id: 'walk',       label: 'Morning Walk' },
+    { id: 'sun',        label: 'Sunlight Exposure' },
+    { id: 'steps1',     label: 'Post Meal 1 Steps' },
+    { id: 'resistance', label: 'Resistance Training' },
+    { id: 'steps2',     label: 'Post Meal 2 Steps' },
+    { id: 'steps3',     label: 'Post Meal 3 Steps' },
+  ],
+  acv: [
+    { id: 'acv1', label: 'ACV before Meal 1' },
+    { id: 'acv2', label: 'ACV before Meal 2' },
+    { id: 'acv3', label: 'ACV before Meal 3' },
+  ],
+  supplements: [
+    { id: 'b12',         label: 'Vitamin B12' },
+    { id: 'd3',          label: 'Vitamin D3' },
+    { id: 'fishoil',     label: 'Fish Oil' },
+    { id: 'multi',       label: 'Multivitamin' },
+    { id: 'flax',        label: 'Flaxseed Oil' },
+    { id: 'yeast',       label: 'Nutritional Yeast' },
+    { id: 'electrolyte', label: 'Electrolyte' },
+  ],
+};
+
+function getISTDate() {
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().split('T')[0];
+}
+
+// Members visible to this coach: admin → all active patients, monitor → assigned
+async function coachMembers(user) {
+  if (user.role === 'admin') {
+    const { rows } = await pool.query(
+      `SELECT id, name FROM users WHERE role='patient' AND active=true ORDER BY name`
+    );
+    return rows;
+  }
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name FROM users u
+     JOIN monitor_patients mp ON mp.patient_id = u.id AND mp.active = true
+     WHERE mp.monitor_id = $1 AND u.role='patient' AND u.active=true
+     ORDER BY u.name`,
+    [user.id]
+  );
+  return rows;
+}
+
+async function coachCanAccess(user, memberId) {
+  if (user.role === 'admin') return true;
+  const { rows } = await pool.query(
+    `SELECT 1 FROM monitor_patients WHERE monitor_id=$1 AND patient_id=$2 AND active=true`,
+    [user.id, memberId]
+  );
+  return rows.length > 0;
+}
+
+function coachAudit(actor, action, targetId, targetName, detail) {
+  return pool.query(
+    `INSERT INTO audit_log (actor_id, actor_name, actor_role, action, target_id, target_name, detail)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [actor?.id || null, actor?.name || 'System', actor?.role || 'monitor',
+     action, targetId || null, targetName || null, detail || null]
+  ).catch(e => console.error('coach audit write failed:', e.message));
+}
+
+// ── Coach prompt ─────────────────────────────────────────────────────────────
+function buildCoachPrompt(message, members) {
+  const cat = (list) => list.map(i => `"${i.id}" (${i.label})`).join(', ');
+  return `You are the AI assistant for a fitness COACH managing members in an Indian
+fitness coaching app. The coach typed an instruction in casual language (English,
+Hinglish, or Kannada-English mix). Parse it into structured commands.
+
+Coach's message: "${message}"
+
+MEMBERS (match names loosely — partial/first names are fine):
+${members.map(m => `  - "${m.name}"`).join('\n')}
+
+PROTOCOL ITEM CATALOG (the ONLY valid ids):
+Activities: ${cat(CATALOG.activities)}
+ACV: ${cat(CATALOG.acv)}
+Supplements: ${cat(CATALOG.supplements)}
+
+SUPPORTED OPERATIONS per command:
+- water_target: ml (e.g. "4 litres water"→4000). Range 500–8000.
+- macros: any of { kcal, pro, carb, fat } as daily targets in kcal / grams.
+- target_weight: goal weight in kg (30–250). Only if explicitly a GOAL/target.
+- activities / acv / supplements: {
+    "add": [catalog ids to assign],
+    "remove": [catalog ids to unassign],
+    "add_custom": [{ "label": "Evening Walk", "sub": "20 min after dinner" }]
+      ← use add_custom when the coach wants something NOT in the catalog.
+    "remove_custom": ["label of custom item to remove"]
+  }
+- note: { "text": "...", "flagged": true|false } — a message shown on the
+  member's Today page. flagged=true when urgent/action-needed tone.
+  Write the note text as the coach speaking to the member, polished but
+  keeping the coach's intent. If coach gives exact words, use them.
+- push: { "title": "...", "body": "..." } — instant phone notification.
+  Only when the coach says notify/push/alert immediately.
+
+RULES:
+1. member_name must be copied EXACTLY from the members list. If the coach says
+   "all members" / "everyone", use member_name "ALL" — allowed ONLY for note
+   and push operations.
+2. One command object per member mentioned. Multiple changes for the same
+   member go in ONE command.
+3. If a mentioned name matches nobody in the list, still emit the command with
+   member_name exactly as the coach wrote it — the server will flag it.
+4. Only include operations the coach actually asked for. Never invent.
+5. reply: ONE short sentence summarising the commands. No emojis.
+6. If nothing actionable, return empty commands and a reply asking what they'd
+   like to change.
+
+Return ONLY a raw JSON object, no markdown fences:
+{
+  "reply": "Setting Bujju's water target to 4L and adding an evening walk.",
+  "commands": [
+    {
+      "member_name": "Bujju",
+      "water_target": 4000,
+      "macros": { "kcal": 1600, "pro": 100 },
+      "target_weight": null,
+      "activities": { "add": [], "remove": [], "add_custom": [{ "label": "Evening Walk", "sub": "20 min after dinner" }], "remove_custom": [] },
+      "acv": null,
+      "supplements": null,
+      "note": { "text": "Please log your meals daily — I review them every morning.", "flagged": false },
+      "push": null
+    }
+  ]
+}`;
+}
+
+// ── Command validator/normaliser ─────────────────────────────────────────────
+function normaliseGroupOp(raw, catalogList) {
+  if (!raw || typeof raw !== 'object') return null;
+  const valid = new Set(catalogList.map(i => i.id));
+  const ids = (arr) => (Array.isArray(arr) ? [...new Set(arr.map(String))].filter(id => valid.has(id)) : []);
+  const op = {
+    add:           ids(raw.add),
+    remove:        ids(raw.remove),
+    add_custom:    (Array.isArray(raw.add_custom) ? raw.add_custom : [])
+      .filter(c => c && c.label)
+      .slice(0, 10)
+      .map(c => ({ label: String(c.label).slice(0, 60), sub: c.sub ? String(c.sub).slice(0, 100) : '' })),
+    remove_custom: (Array.isArray(raw.remove_custom) ? raw.remove_custom : [])
+      .map(l => String(l).slice(0, 60)).slice(0, 10),
+  };
+  if (!op.add.length && !op.remove.length && !op.add_custom.length && !op.remove_custom.length) return null;
+  return op;
+}
+
+function labelFor(group, id) {
+  const it = CATALOG[group].find(i => i.id === id);
+  return it ? it.label : id;
+}
+
+// Human-readable change list for the preview UI
+function describeOps(cmd) {
+  const out = [];
+  if (cmd.water_target != null) out.push({ icon: '💧', text: `Water target → ${(cmd.water_target / 1000).toFixed(cmd.water_target % 1000 ? 1 : 0)}L / day` });
+  if (cmd.macros) {
+    const parts = [];
+    if (cmd.macros.kcal != null) parts.push(`${cmd.macros.kcal} kcal`);
+    if (cmd.macros.pro  != null) parts.push(`P ${cmd.macros.pro}g`);
+    if (cmd.macros.carb != null) parts.push(`C ${cmd.macros.carb}g`);
+    if (cmd.macros.fat  != null) parts.push(`F ${cmd.macros.fat}g`);
+    out.push({ icon: '🎯', text: `Macro targets → ${parts.join(' · ')}` });
+  }
+  if (cmd.target_weight != null) out.push({ icon: '⚖️', text: `Goal weight → ${cmd.target_weight} kg` });
+  for (const [group, icon, word] of [['activities', '🏃', 'activity'], ['acv', '🧃', 'ACV'], ['supplements', '💊', 'supplement']]) {
+    const op = cmd[group];
+    if (!op) continue;
+    op.add.forEach(id => out.push({ icon, text: `Assign ${word}: ${labelFor(group, id)}` }));
+    op.remove.forEach(id => out.push({ icon, text: `Remove ${word}: ${labelFor(group, id)}` }));
+    op.add_custom.forEach(c => out.push({ icon, text: `New custom ${word}: ${c.label}${c.sub ? ` (${c.sub})` : ''}` }));
+    op.remove_custom.forEach(l => out.push({ icon, text: `Remove custom ${word}: ${l}` }));
+  }
+  if (cmd.note) out.push({ icon: '💬', text: `${cmd.note.flagged ? 'Flagged message' : 'Message'}: "${cmd.note.text}"` });
+  if (cmd.push) out.push({ icon: '🔔', text: `Push notification: ${cmd.push.title} — ${cmd.push.body}` });
+  return out;
+}
+
+// ── POST /api/ai-chat/coach-parse ────────────────────────────────────────────
+// Body: { message }
+// Returns: { reply, actions: [{ member_id|null, member_name, resolved, is_all,
+//            ops (validated command), changes: [{icon,text}] }] }
+router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
+  const { message } = req.body;
+  if (!message || String(message).trim().length < 2) {
+    return res.status(400).json({ error: 'Message required' });
+  }
+  const cleanMsg = String(message).trim().slice(0, 1200);
+
+  try {
+    const members = await coachMembers(req.user);
+    if (!members.length) {
+      return res.json({ reply: 'You have no active members assigned yet.', actions: [] });
+    }
+
+    const { text: rawText, provider } = await callAI(buildCoachPrompt(cleanMsg, members));
+    const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(jsonText);
+
+    const commands = (Array.isArray(parsed.commands) ? parsed.commands : []).slice(0, 15);
+    const actions = [];
+
+    for (const raw of commands) {
+      if (!raw || !raw.member_name) continue;
+      const nameRaw = String(raw.member_name).trim();
+      const isAll = nameRaw.toUpperCase() === 'ALL';
+
+      // Resolve member (exact → contains, case-insensitive)
+      let member = null;
+      if (!isAll) {
+        const lc = nameRaw.toLowerCase();
+        member =
+          members.find(m => m.name.toLowerCase() === lc) ||
+          members.find(m => m.name.toLowerCase().includes(lc) || lc.includes(m.name.toLowerCase())) ||
+          null;
+      }
+
+      // Validate operations
+      let water_target = parseInt(raw.water_target);
+      if (!Number.isFinite(water_target) || water_target < 500 || water_target > 8000) water_target = null;
+
+      let macros = null;
+      if (raw.macros && typeof raw.macros === 'object') {
+        const mk = (v, max) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 && n <= max ? n : null; };
+        macros = {
+          kcal: mk(raw.macros.kcal, 6000),
+          pro:  mk(raw.macros.pro, 500),
+          carb: mk(raw.macros.carb, 800),
+          fat:  mk(raw.macros.fat, 400),
+        };
+        if (macros.kcal == null && macros.pro == null && macros.carb == null && macros.fat == null) macros = null;
+      }
+
+      let target_weight = parseFloat(raw.target_weight);
+      if (!Number.isFinite(target_weight) || target_weight < 30 || target_weight > 250) target_weight = null;
+      else target_weight = +target_weight.toFixed(1);
+
+      let note = null;
+      if (raw.note && raw.note.text) {
+        note = { text: String(raw.note.text).slice(0, 500), flagged: !!raw.note.flagged };
+      }
+      let push = null;
+      if (raw.push && raw.push.title && raw.push.body) {
+        push = { title: String(raw.push.title).slice(0, 90), body: String(raw.push.body).slice(0, 250) };
+      }
+
+      const ops = {
+        water_target,
+        macros,
+        target_weight,
+        activities:  normaliseGroupOp(raw.activities,  CATALOG.activities),
+        acv:         normaliseGroupOp(raw.acv,         CATALOG.acv),
+        supplements: normaliseGroupOp(raw.supplements, CATALOG.supplements),
+        note,
+        push,
+      };
+
+      // "ALL" may only message/notify — drop protocol ops for safety
+      if (isAll) {
+        ops.water_target = null; ops.macros = null; ops.target_weight = null;
+        ops.activities = null; ops.acv = null; ops.supplements = null;
+      }
+
+      const changes = describeOps(ops);
+      if (!changes.length) continue;
+
+      actions.push({
+        member_id:   member ? member.id : null,
+        member_name: isAll ? 'All members' : (member ? member.name : nameRaw),
+        resolved:    isAll || !!member,
+        is_all:      isAll,
+        ops,
+        changes,
+      });
+    }
+
+    return res.json({
+      reply: String(parsed.reply || '').slice(0, 400) ||
+        (actions.length ? 'Here\'s what I\'ll change — review and apply.' : 'I couldn\'t find an actionable instruction — try e.g. "Set Bujju water target 4L".'),
+      actions,
+      aiProvider: provider,
+    });
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : err.message;
+    console.error('coach-parse error | status:', err.response?.status, '| detail:', detail);
+    if (err instanceof SyntaxError) {
+      return res.status(502).json({ error: 'AI returned malformed data — please try again' });
+    }
+    const s = err.response?.status;
+    return res.status(s === 429 || s === 503 ? s : 502).json({
+      error: s === 429 ? 'AI is busy — try again in a moment'
+           : s === 503 ? 'AI service overloaded — try again shortly'
+           : s === 500 ? 'AI service not configured — no API key set'
+           : 'AI service error — please try again',
+    });
+  }
+});
+
+// ── POST /api/ai-chat/coach-apply ────────────────────────────────────────────
+// Body: { actions: [{ member_id|null, is_all, ops }] }
+// Applies each validated action inside a transaction per member.
+router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
+  const { actions } = req.body;
+  if (!Array.isArray(actions) || !actions.length) {
+    return res.status(400).json({ error: 'actions array required' });
+  }
+
+  const results = [];
+
+  for (const action of actions.slice(0, 15)) {
+    const ops = action?.ops || {};
+
+    // ── Broadcast (note/push to all members this coach can see) ──
+    if (action.is_all) {
+      try {
+        const members = await coachMembers(req.user);
+        let count = 0;
+        for (const m of members) {
+          if (ops.note?.text) {
+            await pool.query(
+              `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged)
+               VALUES ($1,$2,$3,$4,$5)`,
+              [req.user.id, m.id, getISTDate(), ops.note.text, !!ops.note.flagged]
+            );
+          }
+          if (ops.push) {
+            try {
+              const pushService = require('../services/pushService');
+              await pushService.sendToUser(m.id, ops.push.title, ops.push.body, 'coach-ai');
+            } catch { /* member may have no subscription */ }
+          }
+          count++;
+        }
+        coachAudit(req.user, 'coach_ai_broadcast', null, 'All members',
+          `AI broadcast to ${count} members${ops.note ? ` | note: ${ops.note.text.slice(0, 80)}` : ''}${ops.push ? ' | +push' : ''}`);
+        results.push({ member_name: 'All members', ok: true, detail: `Sent to ${count} member${count !== 1 ? 's' : ''}` });
+      } catch (err) {
+        console.error('coach-apply broadcast error:', err.message);
+        results.push({ member_name: 'All members', ok: false, detail: 'Broadcast failed' });
+      }
+      continue;
+    }
+
+    // ── Single member ──
+    const memberId = parseInt(action.member_id);
+    if (!Number.isFinite(memberId)) {
+      results.push({ member_name: action.member_name || '?', ok: false, detail: 'Member not resolved' });
+      continue;
+    }
+    if (!(await coachCanAccess(req.user, memberId))) {
+      results.push({ member_name: action.member_name || '?', ok: false, detail: 'Not assigned to you' });
+      continue;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: urows } = await client.query(
+        `SELECT id, name FROM users WHERE id=$1 AND role='patient'`, [memberId]);
+      if (!urows.length) throw new Error('Member not found');
+      const memberName = urows[0].name;
+
+      // Ensure profile row exists, then load current protocol state
+      await client.query(
+        `INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+        [memberId]);
+      const { rows: prows } = await client.query(
+        `SELECT protocol_activities, protocol_acv, protocol_supplements,
+                custom_activities, custom_acv, custom_supplements
+         FROM patient_profiles WHERE user_id=$1 FOR UPDATE`, [memberId]);
+      const prof = prows[0];
+
+      const appliedBits = [];
+
+      // Merge helper for one group (activities/acv/supplements)
+      const mergeGroup = (group, protoCol, customCol) => {
+        const op = ops[group];
+        if (!op) return null;
+        const defaults  = CATALOG[group].map(i => i.id);
+        let customList  = Array.isArray(prof[customCol]) ? [...prof[customCol]] : [];
+        let protoList   = prof[protoCol]; // null = everything assigned
+
+        // remove_custom by label (or id)
+        if (op.remove_custom?.length) {
+          const lcs = op.remove_custom.map(l => l.toLowerCase());
+          const removedIds = customList
+            .filter(c => lcs.includes(String(c.label || '').toLowerCase()) || lcs.includes(String(c.id || '').toLowerCase()))
+            .map(c => c.id);
+          customList = customList.filter(c => !removedIds.includes(c.id));
+          if (protoList) protoList = protoList.filter(id => !removedIds.includes(id));
+        }
+
+        // add_custom → generate id; if protocol list is explicit, include new id
+        if (op.add_custom?.length) {
+          op.add_custom.forEach((c, i) => {
+            const exists = customList.find(x => String(x.label).toLowerCase() === c.label.toLowerCase());
+            if (exists) { if (protoList && !protoList.includes(exists.id)) protoList.push(exists.id); return; }
+            const id = `cx_${Date.now()}${i}`;
+            customList.push({ id, label: c.label, sub: c.sub || '' });
+            if (protoList) protoList.push(id);
+          });
+        }
+
+        // add/remove catalog ids
+        if (op.remove?.length) {
+          const allIds = [...defaults, ...customList.map(c => c.id)];
+          if (protoList == null) protoList = allIds; // materialise "all" before removing
+          protoList = protoList.filter(id => !op.remove.includes(id));
+        }
+        if (op.add?.length && protoList != null) {
+          op.add.forEach(id => { if (!protoList.includes(id)) protoList.push(id); });
+        }
+        // (add with protoList null = already all assigned → no-op)
+
+        return { protoList, customList };
+      };
+
+      const groups = [
+        ['activities',  'protocol_activities',  'custom_activities'],
+        ['acv',         'protocol_acv',         'custom_acv'],
+        ['supplements', 'protocol_supplements', 'custom_supplements'],
+      ];
+      for (const [group, protoCol, customCol] of groups) {
+        const merged = mergeGroup(group, protoCol, customCol);
+        if (!merged) continue;
+        await client.query(
+          `UPDATE patient_profiles SET ${protoCol}=$1, ${customCol}=$2, updated_at=NOW() WHERE user_id=$3`,
+          [merged.protoList ? JSON.stringify(merged.protoList) : null,
+           JSON.stringify(merged.customList), memberId]);
+        appliedBits.push(group);
+      }
+
+      if (ops.water_target != null) {
+        await client.query(
+          `UPDATE patient_profiles SET water_target=$1, updated_at=NOW() WHERE user_id=$2`,
+          [ops.water_target, memberId]);
+        appliedBits.push(`water ${ops.water_target}ml`);
+      }
+      if (ops.target_weight != null) {
+        await client.query(
+          `UPDATE patient_profiles SET target_weight=$1, updated_at=NOW() WHERE user_id=$2`,
+          [ops.target_weight, memberId]);
+        appliedBits.push(`goal ${ops.target_weight}kg`);
+      }
+      if (ops.macros) {
+        const sets = [];
+        const vals = [];
+        let n = 1;
+        if (ops.macros.kcal != null) { sets.push(`macro_kcal=$${n++}`); vals.push(ops.macros.kcal); }
+        if (ops.macros.pro  != null) { sets.push(`macro_pro=$${n++}`);  vals.push(ops.macros.pro); }
+        if (ops.macros.carb != null) { sets.push(`macro_carb=$${n++}`); vals.push(ops.macros.carb); }
+        if (ops.macros.fat  != null) { sets.push(`macro_fat=$${n++}`);  vals.push(ops.macros.fat); }
+        if (sets.length) {
+          vals.push(memberId);
+          await client.query(
+            `UPDATE patient_profiles SET ${sets.join(', ')}, updated_at=NOW() WHERE user_id=$${n}`,
+            vals);
+          appliedBits.push('macros');
+        }
+      }
+      if (ops.note?.text) {
+        await client.query(
+          `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [req.user.id, memberId, getISTDate(), ops.note.text, !!ops.note.flagged]);
+        appliedBits.push('note');
+      }
+
+      await client.query('COMMIT');
+
+      // Push is post-commit — a push failure must not roll back protocol changes
+      if (ops.push) {
+        try {
+          const pushService = require('../services/pushService');
+          await pushService.sendToUser(memberId, ops.push.title, ops.push.body, 'coach-ai');
+          appliedBits.push('push');
+        } catch (e) {
+          console.error('coach-apply push failed:', e.message);
+        }
+      }
+
+      coachAudit(req.user, 'coach_ai_update', memberId, memberName,
+        `AI chat applied: ${appliedBits.join(', ')}`);
+      results.push({ member_name: memberName, ok: true, detail: appliedBits.join(', ') || 'no changes' });
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('coach-apply error for member', memberId, ':', err.message);
+      results.push({ member_name: action.member_name || `#${memberId}`, ok: false, detail: 'Failed to apply' });
+    } finally {
+      client.release();
+    }
+  }
+
+  res.json({ results });
+});
+
+// ── POST /api/ai-chat/remind ─────────────────────────────────────────────────
+// One-tap "Remind" from the coach dashboard's Needs Attention list.
+// Body: { members: [{ id, name?, days_since? }] }   (max 30)
+// Sends each member a friendly push + a flagged coach message. Template-based
+// (no AI call) so it's instant, free, and deterministic.
+const REMIND_TEMPLATES = [
+  (n) => `Hi ${n}, your coach noticed you haven't logged recently. Even a quick weight + water entry keeps us on track — takes under a minute with AI chat!`,
+  (n) => `${n}, we miss your logs! Open FitLife and just tell the AI what you ate today — it fills everything for you.`,
+  (n) => `Hi ${n}, small steps count. Log today's weight and meals so your coach can guide you better. You've got this!`,
+];
+
+router.post('/remind', roleCheck('monitor', 'admin'), async (req, res) => {
+  const { members } = req.body;
+  if (!Array.isArray(members) || !members.length) {
+    return res.status(400).json({ error: 'members array required' });
+  }
+
+  const results = [];
+  for (const m of members.slice(0, 30)) {
+    const memberId = parseInt(m?.id);
+    if (!Number.isFinite(memberId)) continue;
+    if (!(await coachCanAccess(req.user, memberId))) {
+      results.push({ id: memberId, ok: false, detail: 'Not assigned to you' });
+      continue;
+    }
+    try {
+      const { rows } = await pool.query(
+        `SELECT name FROM users WHERE id=$1 AND role='patient' AND active=true`, [memberId]);
+      if (!rows.length) { results.push({ id: memberId, ok: false, detail: 'Not found' }); continue; }
+      const firstName = rows[0].name.split(' ')[0];
+      const noteText  = REMIND_TEMPLATES[memberId % REMIND_TEMPLATES.length](firstName);
+
+      await pool.query(
+        `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged)
+         VALUES ($1,$2,$3,$4,true)`,
+        [req.user.id, memberId, getISTDate(), noteText]);
+
+      try {
+        const pushService = require('../services/pushService');
+        await pushService.sendToUser(memberId, 'Your coach checked in 👋',
+          `Please log today — it takes under a minute with AI chat.`, 'coach-remind');
+      } catch { /* no push subscription — note still lands */ }
+
+      coachAudit(req.user, 'coach_remind', memberId, rows[0].name, 'One-tap reminder (note + push)');
+      results.push({ id: memberId, name: rows[0].name, ok: true });
+    } catch (err) {
+      console.error('remind error for', memberId, ':', err.message);
+      results.push({ id: memberId, ok: false, detail: 'Failed' });
+    }
+  }
+
+  res.json({ results, sent: results.filter(r => r.ok).length });
+});
+
 module.exports = router;
