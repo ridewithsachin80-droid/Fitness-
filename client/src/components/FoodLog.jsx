@@ -36,7 +36,6 @@ const TYPICAL_GRAMS = {
   banana: 120, apple: 150, orange: 130, mango: 200, papaya: 150,
   watermelon: 200, grapes: 80, pomegranate: 100, guava: 100, pear: 150,
   kiwi: 80, strawberry: 80, blueberry: 80, pineapple: 150, coconut: 40,
-  'coconut water': 240,
   // Vegetables (cooked serving)
   broccoli: 100, spinach: 100, 'palak': 100, carrot: 80, cucumber: 80,
   tomato: 80, onion: 50, 'bell pepper': 80, zucchini: 100, beans: 80,

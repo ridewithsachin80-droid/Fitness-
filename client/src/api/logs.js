@@ -19,8 +19,8 @@ export const getLogRange     = (from, to, patientId) =>
 export const getRecentFoods  = ()               => api.get('/logs/recent-foods');
 
 // ── AI Food Identification ────────────────────────────────────────────────────
-export const aiFoodIdentify  = (name)           => api.post('/foods/ai-identify', { name });
-export const aiFoodConfirm   = (food)           => api.post('/foods/ai-confirm',  { food });
+export const aiFoodIdentify  = (name)           => api.post('/ai-foods/ai-identify', { name });
+export const aiFoodConfirm   = (food)           => api.post('/ai-foods/ai-confirm',  { food });
 
 // ── Patients (monitor/admin only) ─────────────────────────────────────────────
 export const getPatients     = ()               => api.get('/patients');

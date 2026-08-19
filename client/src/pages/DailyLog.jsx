@@ -122,6 +122,9 @@ function addActivityMicros(base, activities = {}, activeActivities = []) {
   return m;
 }
 
+// Key nutrients for the quick summary badge inside MacroProgress
+const QUICK_MICRO_KEYS = ['fiber','omega3_epa','omega3_dha','vit_b12','vit_d','calcium','iron','magnesium','zinc','folate','potassium'];
+
 // ── Auto-derived protocol ticks ───────────────────────────────────────────────
 // The Workout log is the source of truth for exercise, so the matching protocol
 // activities tick themselves and are read-only for the member:
@@ -754,6 +757,25 @@ export default function DailyLog() {
 
   // Milestone celebration — shown after save completes
   const [milestone, setMilestone] = useState(null); // { icon, title, body }
+  // Today's volume, but only when it beats every previous session on record
+  const [volumePB, setVolumePB] = useState(null);
+  useEffect(() => {
+    if (date !== today()) { setVolumePB(null); return; }
+    let cancelled = false;
+    api.get('/workouts/summary', { params: { days: 180 } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const sessions = data?.sessions || [];
+        const todayStr = today();
+        const todaysVol = sessions.find(s => String(s.date).slice(0, 10) === todayStr)?.volume_kg || 0;
+        const priorBest = sessions
+          .filter(s => String(s.date).slice(0, 10) !== todayStr)
+          .reduce((m, s) => Math.max(m, s.volume_kg), 0);
+        setVolumePB(todaysVol > 0 && todaysVol > priorBest ? todaysVol : null);
+      })
+      .catch(() => { if (!cancelled) setVolumePB(null); });
+    return () => { cancelled = true; };
+  }, [date, workoutRefreshKey, heroPanel]);
   const prevSaved = useRef(false);
   useEffect(() => {
     if (!prevSaved.current && saved && date === today()) {
@@ -775,8 +797,17 @@ export default function DailyLog() {
       if (kgMilestone > prevStored && kgMilestone >= 1) {
         localStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: today(), count: streak, lastKgMilestone: kgMilestone }));
         setMilestone({ icon: '🏆', title: `${kgMilestone} kg lost!`, body: `You've shed ${kgMilestone} kg since you started. That's real progress — keep going!` });
-      } else if (streak === 7 || streak === 14 || streak === 21 || streak === 30) {
+      } else if ([7, 14, 21, 30, 50, 100].includes(streak)) {
         setMilestone({ icon: '🔥', title: `${streak}-day streak!`, body: `${streak} days logged in a row. You're building an unstoppable habit!` });
+      } else if (volumePB) {
+        // Training personal best — checked server-side against the member's
+        // own history, so it survives a device change (unlike the localStorage
+        // streak above).
+        setMilestone({
+          icon: '💪',
+          title: 'New personal best!',
+          body: `${volumePB.toLocaleString()} kg lifted today — the most you've ever done in one session. Strong work!`,
+        });
       }
     }
     prevSaved.current = saved;
