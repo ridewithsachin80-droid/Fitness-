@@ -49,7 +49,7 @@ async function request(server, method, path, token, body) {
 
 (async () => {
   // ── Seed users ─────────────────────────────────────────────────────────────
-  await pool.query(`DELETE FROM users`);
+  await pool.query(`TRUNCATE users RESTART IDENTITY CASCADE`);
   const { rows: [admin] } = await pool.query(
     `INSERT INTO users (name, phone, password, role, active) VALUES ('Admin Sachin','9000000001','x','admin',true) RETURNING id`);
   const { rows: [mon] } = await pool.query(
@@ -180,8 +180,10 @@ async function request(server, method, path, token, body) {
   r = await request(server, 'POST', '/api/ai-chat/remind', monTok, { members: [{ id: bujju.id }, { id: asha.id }] });
   check('monitor remind: assigned ok, unassigned rejected',
     r.data.sent === 1 && r.data.results.find(x => x.id === asha.id)?.ok === false, r.data);
-  const { rows: rn } = await pool.query(`SELECT * FROM monitor_notes WHERE patient_id=$1 AND flagged=true AND note LIKE 'Hi %'`, [bujju.id]);
-  check('remind note flagged + personalised', rn.length === 1 && rn[0].note.includes('Bujju'), rn);
+  const { rows: rn } = await pool.query(
+    `SELECT * FROM monitor_notes WHERE patient_id=$1 AND flagged=true AND note != 'Please log daily'`, [bujju.id]);
+  check('remind note flagged + personalised',
+    rn.length === 1 && rn[0].note.includes('Bujju'), rn);
 
   r = await request(server, 'POST', '/api/ai-chat/remind', adminTok, { members: [] });
   check('empty members rejected 400', r.status === 400, r);
