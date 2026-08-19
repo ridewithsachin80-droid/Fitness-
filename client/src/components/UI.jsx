@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '../store/settingsStore';
+import { useAIChat } from './AIChatLog';
 
 export function Card({ children, className = '' }) {
   return (
@@ -151,6 +152,9 @@ export function StatPill({ value, label, color = 'stone' }) {
 // ── Patient Bottom Nav ────────────────────────────────────────────────────────
 export function PatientBottomNav() {
   const navigate = useNavigate();
+  // Shared AI chat store — the chat itself is mounted once on the Today page,
+  // so from anywhere else we navigate there first and it opens on arrival.
+  const openAIChat = useAIChat(s => s.openChat);
   const { pathname } = useLocation();
   const tabs = [
     { label: 'Today', path: '/', active: pathname === '/', icon: (
@@ -175,22 +179,46 @@ export function PatientBottomNav() {
       </svg>
     )},
   ];
+  const openChatFromNav = () => {
+    haptic(20);
+    // Opening the store flag first means the chat is already "open" by the time
+    // the Today page mounts it, so there's no visible delay on arrival.
+    openAIChat();
+    if (pathname !== '/') navigate('/');
+  };
+
+  const renderTab = (tab) => (
+    <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
+      style={{ minHeight: 56, flex: 1 }}
+      className={`flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${
+        tab.active ? 'text-[#7c5cfc]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
+      {tab.icon}
+      <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
+      {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full shadow-[0_0_6px_rgba(124,92,252,0.8)]" />}
+    </button>
+  );
+
   return (
     <>
       <div style={{ height: 80 }} />
       <div className="fixed bottom-0 left-0 right-0 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-md mx-auto px-3 pb-3">
-          <div className="glass rounded-2xl shadow-float flex items-center">
-            {tabs.map(tab => (
-              <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
-                style={{ minHeight: 56, flex: 1 }}
-                className={`flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${
-                  tab.active ? 'text-[#7c5cfc]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
-                {tab.icon}
-                <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-                {tab.active && <div className="w-1 h-1 bg-[#7c5cfc] rounded-full shadow-[0_0_6px_rgba(124,92,252,0.8)]" />}
+          <div className="glass rounded-2xl shadow-float flex items-center relative">
+            {tabs.slice(0, 2).map(renderTab)}
+
+            {/* AI orb — always reachable, never scrolls away with the page */}
+            <div style={{ width: 68, flexShrink: 0 }} className="flex items-start justify-center">
+              <button
+                onClick={openChatFromNav}
+                aria-label="Log with AI Chat"
+                style={{ width: 56, height: 56, marginTop: -22 }}
+                className="rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-xl
+                  border-4 border-[#0b0b0e] shadow-[0_0_22px_rgba(124,92,252,0.55)] active:scale-90 transition-transform">
+                ✨
               </button>
-            ))}
+            </div>
+
+            {tabs.slice(2).map(renderTab)}
           </div>
         </div>
       </div>

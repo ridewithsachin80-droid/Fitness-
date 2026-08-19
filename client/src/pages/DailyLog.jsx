@@ -673,30 +673,6 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
   );
 }
 
-// ─── Floating AI Chat button ──────────────────────────────────────────────────
-// Sits above the bottom nav so a member can log their whole day by chat from
-// anywhere on the page without scrolling to a specific section.
-function AIChatFab() {
-  const openChat = useAIChat(s => s.openChat);
-  const open     = useAIChat(s => s.open);
-  if (open) return null; // hide while the chat itself is on screen
-  return (
-    <button
-      onClick={openChat}
-      aria-label="Log with AI Chat"
-      className="fixed z-40 flex items-center justify-center bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] shadow-[0_4px_20px_rgba(124,92,252,0.45)] border border-r-0 border-white/[0.15] active:scale-95 transition-transform"
-      style={{
-        right: 0,
-        bottom: 'calc(120px + env(safe-area-inset-bottom))',
-        width: 46, height: 52,
-        borderTopLeftRadius: 16, borderBottomLeftRadius: 16,
-        paddingRight: 2, fontSize: 20,
-      }}>
-      ✨
-    </button>
-  );
-}
-
 // ─── Main DailyLog Page ───────────────────────────────────────────────────────
 
 export default function DailyLog() {
@@ -1717,9 +1693,6 @@ export default function DailyLog() {
 
       {/* AI Chat — mounted once; opened from the FAB below or FoodLog banner */}
       <AIChatLog />
-
-      {/* Floating AI logging button — reachable from anywhere on the page */}
-      <AIChatFab />
 
       <InstallPrompt />
 
