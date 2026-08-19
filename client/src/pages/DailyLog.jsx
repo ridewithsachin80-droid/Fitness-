@@ -122,6 +122,26 @@ function addActivityMicros(base, activities = {}, activeActivities = []) {
   return m;
 }
 
+// ── Auto-derived protocol ticks ───────────────────────────────────────────────
+// The Workout log is the source of truth for exercise, so the matching protocol
+// activities tick themselves and are read-only for the member:
+//   walk       ← any foot-based cardio (walking / running / stairs)
+//   resistance ← any strength set logged
+// The remaining items (sunlight, post-meal steps) can't be derived from workout
+// data — a walk entry can't tell us which meal it followed — so those stay
+// manually tappable. Making them read-only would leave them permanently
+// unachievable and would sink the member's compliance score.
+const AUTO_TICK_IDS = ['walk', 'resistance'];
+const FOOT_CARDIO = ['walking', 'running', 'stairs'];
+
+function deriveActivityTicks({ sets = [], cardio = [] }) {
+  const hasSets = sets.some(st => (parseInt(st?.reps) || 0) > 0);
+  const hasFootCardio = cardio.some(
+    c => FOOT_CARDIO.includes(String(c?.type)) && (parseFloat(c?.duration_min) || 0) > 0
+  );
+  return { walk: hasFootCardio, resistance: hasSets };
+}
+
 // ── Energy balance (TDEE) ─────────────────────────────────────────────────────
 // Mirrors the fuller breakdown on the Profile page — same equations, so the two
 // screens can never disagree. BMR: Mifflin-St Jeor; burn from ticked protocol
@@ -888,6 +908,31 @@ export default function DailyLog() {
   const suppDone   = activeSupplements.filter(s => log.supplements?.[s.id]).length;
   const update     = useCallback((field, val) => { updateLog(field, val); triggerAutoSave(); }, [updateLog, triggerAutoSave]);
 
+  // Keep the auto-derived protocol ticks in sync with the Workout log.
+  // Writes only when the derived value actually differs, so this can't loop.
+  // Past dates are skipped: editing an old day shouldn't silently rewrite it.
+  useEffect(() => {
+    if (loading || date !== today()) return;
+    const derived = deriveActivityTicks({
+      sets:   workoutSummary.sets   || [],
+      cardio: workoutSummary.cardio || [],
+    });
+    const cur = log.activities || {};
+    // Only touch ids this member actually has assigned
+    const assigned = new Set(activeActivities.map(a => a.id));
+    // Additive only — we tick, never untick. The AI chat can also set these
+    // (e.g. "walk done" with no distance given, which produces no cardio row),
+    // and un-ticking would silently undo that and damage the member's
+    // compliance score. A stale tick is the safer failure.
+    const patch = {};
+    for (const id of AUTO_TICK_IDS) {
+      if (!assigned.has(id)) continue;
+      if (derived[id] && !cur[id]) patch[id] = true;
+    }
+    if (Object.keys(patch).length) update('activities', { ...cur, ...patch });
+  }, [workoutSummary, log.activities, activeActivities, loading, date, update]);
+
+
   // ── ACV expand state ───────────────────────────────────────────────────────
   const [acvExpanded, setAcvExpanded] = useState(false);
   const [complianceTip, setComplianceTip] = useState(false);
@@ -1281,9 +1326,22 @@ export default function DailyLog() {
                   const totalDone  = actDone + acvDone + suppDone;
                   const totalItems = activeActivities.length + activeACV.length + activeSupplements.length;
 
-                  const Chip = ({ item, checked, onToggle }) => (
+                  const Chip = ({ item, checked, onToggle, auto = false }) => (
                     <button
-                      onClick={() => { onToggle(!checked); haptic(12); }}
+                      onClick={() => {
+                        if (auto) {
+                          // Read-only: derived from the Workout log
+                          setChipInfo({
+                            label: item.label,
+                            sub: item.id === 'resistance'
+                              ? 'Ticks automatically when you log sets in the Workout log.'
+                              : 'Ticks automatically when you log a walk or run in the Workout log.',
+                          });
+                          haptic(10);
+                          return;
+                        }
+                        onToggle(!checked); haptic(12);
+                      }}
                       onTouchStart={() => chipPressStart(item)}
                       onTouchEnd={chipPressEnd}
                       onTouchMove={chipPressEnd}
@@ -1293,12 +1351,15 @@ export default function DailyLog() {
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-all active:scale-95 ${
                         checked
                           ? 'bg-[rgba(124,92,252,0.16)] border-[rgba(124,92,252,0.5)] text-white'
+                          : auto
+                          ? 'bg-white/[0.02] border-dashed border-white/[0.14] text-[#6b6b78]'
                           : 'bg-white/[0.03] border-white/[0.12] text-[#8e8e9a]'
                       }`}>
                       <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-extrabold flex-shrink-0 ${
                         checked ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
                       }`}>✓</span>
                       {item.icon ? `${item.icon} ` : ''}{item.label}
+                      {auto && <span className="text-[9px] font-bold text-[#a78bfa] opacity-80">AUTO</span>}
 
                     </button>
                   );
@@ -1309,7 +1370,7 @@ export default function DailyLog() {
                         <SectionTitle icon="🏃">Today's Protocol</SectionTitle>
                         <span className="text-xs font-bold text-[#a78bfa]">{totalDone} of {totalItems} done</span>
                       </div>
-                      <p className="text-[10px] text-[#4e4e5c] mb-3">Tap to mark done · long-press for timing details</p>
+                      <p className="text-[10px] text-[#4e4e5c] mb-3">Tap to mark done · long-press for timing · AUTO items tick from your Workout log</p>
 
                       {activeActivities.length > 0 && (
                         <div className="mb-3.5">
@@ -1320,6 +1381,7 @@ export default function DailyLog() {
                           <div className="flex flex-wrap gap-1.5">
                             {activeActivities.map(a => (
                               <Chip key={a.id} item={a}
+                                auto={AUTO_TICK_IDS.includes(a.id)}
                                 checked={!!log.activities?.[a.id]}
                                 onToggle={v => update('activities', { ...log.activities, [a.id]: v })} />
                             ))}
