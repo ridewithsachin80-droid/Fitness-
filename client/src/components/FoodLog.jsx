@@ -15,6 +15,7 @@ import { getNutrition } from '../constants';
 import { getRecentFoods } from '../api/logs';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import AIFoodSearch from './AIFoodSearch';
+import AIChatLog from './AIChatLog';
 
 // ── Extended portion map ──────────────────────────────────────────────────────
 const TYPICAL_GRAMS = {
@@ -160,6 +161,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const [listening, setListening]     = useState(false);
   const [showAI, setShowAI]           = useState(false);
   const [aiQuery, setAiQuery]         = useState('');
+  const [showChat, setShowChat]       = useState(false);  // AI chat logging
 
   useEffect(() => {
     getRecentFoods()
@@ -339,6 +341,26 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
 
   return (
     <div className="space-y-3">
+
+      {/* AI Chat logging — Fittr-style: type everything you ate, AI logs it */}
+      <button
+        onClick={() => { haptic(15); setShowChat(true); }}
+        style={{ minHeight: 48 }}
+        className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.14] to-[#4c2fd8]/[0.10] border border-[#7c5cfc]/30 hover:border-[#7c5cfc]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.4)]">✨</span>
+        <span className="text-left min-w-0">
+          <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
+          <span className="block text-[11px] text-[#8e8e9a] leading-tight truncate">"2 chapati, 1 bowl dal" — I'll calculate everything</span>
+        </span>
+      </button>
+
+      <AIChatLog
+        open={showChat}
+        onClose={() => setShowChat(false)}
+        items={items}
+        onChange={onChange}
+        currentMeal={meal}
+      />
 
       {/* Quick re-add strip — always visible when we have recent foods */}
       {recentFoods.length > 0 && !showForm && (
