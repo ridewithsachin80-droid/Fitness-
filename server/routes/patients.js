@@ -141,7 +141,7 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       // Coach notes visible to member — flagged notes first, then newest
       pool.query(
         `SELECT mn.id, mn.note_date, mn.note, mn.flagged,
-                u.name AS monitor_name
+                mn.read_at, u.name AS monitor_name
          FROM monitor_notes mn
          JOIN users u ON u.id = mn.monitor_id
          WHERE mn.patient_id = $1
@@ -432,6 +432,41 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientA
   } catch (err) {
     console.error('POST /patients/:id/notes error:', err);
     res.status(500).json({ error: 'Failed to add note' });
+  }
+});
+
+// ── POST /api/patients/me/notes/read ─────────────────────────────────────────
+// Member marks coach message(s) as read. Once read, a note disappears from the
+// Today page and lives on in the notification bell's message history.
+// Body: { ids: [1,2,3] }  — omit ids to mark ALL of the member's notes read.
+router.post('/me/notes/read', authMW, async (req, res) => {
+  if (req.user.role !== 'patient') {
+    return res.status(403).json({ error: 'Members only' });
+  }
+  const { ids } = req.body || {};
+  try {
+    let result;
+    if (Array.isArray(ids) && ids.length) {
+      const clean = ids.map(n => parseInt(n)).filter(Number.isFinite).slice(0, 100);
+      if (!clean.length) return res.json({ updated: 0 });
+      result = await pool.query(
+        `UPDATE monitor_notes SET read_at = NOW()
+         WHERE patient_id = $1 AND read_at IS NULL AND id = ANY($2::int[])
+         RETURNING id`,
+        [req.user.id, clean]
+      );
+    } else {
+      result = await pool.query(
+        `UPDATE monitor_notes SET read_at = NOW()
+         WHERE patient_id = $1 AND read_at IS NULL
+         RETURNING id`,
+        [req.user.id]
+      );
+    }
+    res.json({ updated: result.rowCount, ids: result.rows.map(r => r.id) });
+  } catch (err) {
+    console.error('POST /patients/me/notes/read error:', err);
+    res.status(500).json({ error: 'Failed to mark messages read' });
   }
 });
 
