@@ -112,6 +112,7 @@ export default function AIChatLog() {
   const inputRef  = useRef(null);
   const recogRef  = useRef(null);
   const undoRef   = useRef(null);   // snapshot of log fields before last apply
+  const workoutUndoRef = useRef(null);  // snapshot of workout_sessions before last apply
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -180,7 +181,7 @@ export default function AIChatLog() {
           sleep:        data.sleep,
           sleepOn:      !!data.sleep,
           foods:        (data.foods || []).map(f => ({ ...f, on: true })),
-          workouts:     data.workouts || [],
+          workouts:     (data.workouts || []).map(w => ({ ...w, on: true })),
           totals:       data.totals,
         },
         applied: false,
@@ -228,6 +229,57 @@ export default function AIChatLog() {
     if (!newLog.sleep?.bedtime || !newLog.sleep?.waketime) pending.push('sleep times');
 
     return pending.slice(0, 3);
+  }, []);
+
+  // ── Workouts — SAFE merge into workout_sessions ────────────────────────────
+  // POST /api/workouts REPLACES the whole day's session (all exercises/sets),
+  // so we always GET the current session first and resend its exercises
+  // unchanged — never silently wiping a manually-logged workout. We only add
+  // duration + a note line; freeform AI-parsed workouts don't map to a named
+  // exercise_id, so they live in the session's `notes` field for now (visible
+  // to the member and their coach) rather than inventing exercise rows.
+  const applyWorkouts = useCallback(async (workoutsOn) => {
+    if (!workoutsOn.length) return { ok: true };
+    const date = useLogStore.getState().date;
+    try {
+      const { data: existing } = await api.get('/workouts', { params: { date } });
+      const prevSession = existing?.session || null;
+      const prevExercises = (existing?.exercises || []).map(ex => ({
+        exercise_id: ex.exercise_id,
+        sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })),
+      }));
+
+      // Snapshot exactly what we'd need to restore on Undo — either the prior
+      // duration/notes/exercises, or (if there was no session at all) a flag
+      // so undo knows to clear it back to nothing.
+      workoutUndoRef.current = {
+        date,
+        hadSession: !!prevSession,
+        duration_min: prevSession?.duration_min ?? null,
+        notes: prevSession?.notes ?? null,
+        exercises: prevExercises,
+      };
+
+      const addedMinutes = workoutsOn.reduce((s, w) => s + (parseFloat(w.duration_min) || 0), 0);
+      const newDuration = (prevSession?.duration_min || 0) + addedMinutes || prevSession?.duration_min || null;
+
+      const newLines = workoutsOn.map(w =>
+        `✨ ${w.name}${w.qty_text ? ` — ${w.qty_text}` : ''}${w.calories_burned ? ` (~${w.calories_burned} kcal)` : ''}`
+      );
+      const combinedNotes = [prevSession?.notes, ...newLines].filter(Boolean).join('\n').slice(0, 2000);
+
+      await api.post('/workouts', {
+        date,
+        duration_min: newDuration,
+        notes: combinedNotes,
+        exercises: prevExercises,   // unchanged — protects any manually-logged sets
+      });
+      return { ok: true };
+    } catch (err) {
+      console.error('AI chat: failed to save workouts:', err);
+      workoutUndoRef.current = null;   // nothing to undo if the write itself failed
+      return { ok: false };
+    }
   }, []);
 
   // ── Apply everything included to today's log ───────────────────────────────
@@ -297,12 +349,15 @@ export default function AIChatLog() {
     haptic(30);
     saveLog().catch(() => {});
 
+    const workoutsOn = p.workouts.filter(w => w.on);
+    const workoutResult = await applyWorkouts(workoutsOn);
+
     setMessages(prev => {
       const next = [...prev];
-      next[mi] = { ...next[mi], applied: true, pending: computePending(newLog) };
+      next[mi] = { ...next[mi], applied: true, workoutSaveFailed: workoutsOn.length > 0 && !workoutResult.ok, pending: computePending(newLog) };
       return next;
     });
-  }, [messages, mealSlots, computePending]);
+  }, [messages, mealSlots, computePending, applyWorkouts]);
 
   // ── Undo last apply ────────────────────────────────────────────────────────
   const undo = useCallback((mi) => {
@@ -313,6 +368,26 @@ export default function AIChatLog() {
     undoRef.current = null;
     haptic(20);
     saveLog().catch(() => {});
+
+    // Restore workout_sessions to its pre-apply state, if we changed it
+    const wSnap = workoutUndoRef.current;
+    if (wSnap) {
+      workoutUndoRef.current = null;
+      if (wSnap.hadSession) {
+        api.post('/workouts', {
+          date: wSnap.date,
+          duration_min: wSnap.duration_min,
+          notes: wSnap.notes,
+          exercises: wSnap.exercises,
+        }).catch(err => console.error('AI chat: workout undo failed:', err));
+      }
+      // If there was no session before, the one we created via applyWorkouts
+      // stays — there's no delete endpoint, and an empty/duration-only
+      // session is harmless (it just won't show in the Workout section
+      // until it has notes or sets, which it still does — acceptable
+      // trade-off vs. adding a destructive DELETE path just for undo).
+    }
+
     setMessages(prev => {
       const next = [...prev];
       next[mi] = { ...next[mi], applied: false, undone: true, pending: null };
@@ -330,7 +405,8 @@ export default function AIChatLog() {
     p.supplements.filter(s => s.on).length +
     (p.waterOn && p.water_ml_add ? 1 : 0) +
     (p.sleepOn && p.sleep ? 1 : 0) +
-    p.foods.filter(f => f.on).length;
+    p.foods.filter(f => f.on).length +
+    p.workouts.filter(w => w.on).length;
 
   return (
     <div className="fixed inset-0 z-[70] bg-[#0d0d11] flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -390,7 +466,7 @@ export default function AIChatLog() {
                 }`}>
                   <p className="leading-relaxed">{m.text}</p>
 
-                  {m.parsed && countIncluded(m.parsed) + m.parsed.workouts.length > 0 && (
+                  {m.parsed && (countIncluded(m.parsed) > 0 || m.parsed.workouts.length > 0) && (
                     <div className="mt-3 space-y-3">
 
                       {/* ⚖ Weight */}
@@ -516,23 +592,32 @@ export default function AIChatLog() {
                         </div>
                       )}
 
-                      {/* 💪 Workouts — info only */}
+                      {/* 💪 Workouts — now actually saved to the Workout section */}
                       {m.parsed.workouts.length > 0 && (
                         <div>
-                          <GroupHeader icon="💪" title="Workouts noted" />
+                          <GroupHeader icon="💪" title="Workouts" count={m.parsed.workouts.filter(w => w.on).length} />
                           <div className="space-y-1.5">
                             {m.parsed.workouts.map((w, wi) => (
-                              <div key={wi} className="flex items-center justify-between bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2">
-                                <p className="text-[12px] text-[#d8d8de]">
-                                  {w.name}{w.qty_text ? ` — ${w.qty_text}` : ''}
-                                </p>
+                              <button key={wi} onClick={() => toggleListItem(mi, 'workouts', wi)}
+                                disabled={m.applied}
+                                className={`w-full flex items-center justify-between bg-[#0d0d11] border rounded-xl px-3 py-2.5 transition-all ${
+                                  w.on ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-40'
+                                }`}>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
+                                    w.on ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
+                                  }`}>✓</span>
+                                  <p className={`text-[12px] font-semibold truncate ${w.on ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
+                                    {w.name}{w.qty_text ? ` — ${w.qty_text}` : ''}
+                                  </p>
+                                </div>
                                 {w.calories_burned != null && (
-                                  <p className="text-[11px] font-semibold text-emerald-400">~{w.calories_burned} kcal</p>
+                                  <p className="text-[11px] font-semibold text-emerald-400 flex-shrink-0">~{w.calories_burned} kcal</p>
                                 )}
-                              </div>
+                              </button>
                             ))}
                             <p className="text-[10px] text-[#4e4e5c] px-1">
-                              Log sets & reps in the Workout section.
+                              Saved as a note on today's session · add exact sets & reps in the Workout section anytime.
                             </p>
                           </div>
                         </div>
@@ -548,14 +633,23 @@ export default function AIChatLog() {
                       )}
 
                       {m.applied && (
-                        <div className="bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl px-3.5 py-3 space-y-2">
+                        <div className={`border rounded-xl px-3.5 py-3 space-y-2 ${
+                          m.workoutSaveFailed ? 'bg-amber-500/[0.08] border-amber-500/25' : 'bg-emerald-500/[0.08] border-emerald-500/25'
+                        }`}>
                           <div className="flex items-center justify-between">
-                            <p className="text-[13px] font-bold text-emerald-400">✓ Applied & saved</p>
+                            <p className={`text-[13px] font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-emerald-400'}`}>
+                              {m.workoutSaveFailed ? '⚠ Applied — workout not saved' : '✓ Applied & saved'}
+                            </p>
                             <button onClick={() => undo(mi)}
                               className="text-[11px] font-semibold text-[#8e8e9a] hover:text-white underline underline-offset-2 transition-colors">
                               Undo
                             </button>
                           </div>
+                          {m.workoutSaveFailed && (
+                            <p className="text-[11px] text-amber-300 leading-relaxed">
+                              Everything else saved, but the workout note couldn't be saved — check your connection and log it in the Workout section.
+                            </p>
+                          )}
                           {m.pending?.length > 0 ? (
                             <p className="text-[11px] text-[#b6b6c2] leading-relaxed">
                               Still pending today: {m.pending.join(' · ')}
