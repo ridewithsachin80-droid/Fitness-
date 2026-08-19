@@ -65,31 +65,6 @@ function calcBMR({ weightKg, heightCm, age, gender }) {
   return Math.round(base - 78); // sex unknown — midpoint
 }
 
-// MET values for the standard protocol activities (Compendium of Physical
-// Activities). kcal = MET × weight(kg) × hours.
-const ACTIVITY_MET = {
-  walk:       { met: 3.5, min: 30 },
-  sun:        { met: 2.0, min: 20 },
-  steps1:     { met: 3.0, min: 20 },
-  steps2:     { met: 3.0, min: 20 },
-  steps3:     { met: 3.0, min: 20 },
-  resistance: { met: 5.0, min: 30 },
-};
-
-function calcActivityBurn(activities = {}, weightKg) {
-  if (!weightKg) return 0;
-  return Object.entries(activities).reduce((sum, [id, done]) => {
-    if (!done) return sum;
-    const a = ACTIVITY_MET[id];
-    if (!a) return sum;                       // custom items have no MET
-    // (MET − 1): resting burn for these minutes is already in BMR × 1.2
-    return sum + Math.round((a.met - 1) * weightKg * (a.min / 60));
-  }, 0);
-}
-
-// Workout burn now comes from the shared model in utils/exerciseCalories.js —
-// strength from volume lifted, cardio from MET × time. See that file for why.
-
 function calcFoodKcal(items = []) {
   return items.reduce((sum, it) => {
     const cal = it?.per_100g?.calories;
@@ -300,20 +275,16 @@ export default function Profile() {
 
           const e = p.today_energy || {};
           const restingTdee  = Math.round(bmr * 1.2);              // sedentary baseline
+          // All exercise calories come from the Workout log: strength by volume
+          // lifted, cardio by MET × time. Protocol checkboxes are a compliance
+          // record only — counting them too would bill the same walk twice.
           const work = sessionEnergy({
             exercises: [{ sets: e.workout_sets || [] }],
             cardio:    e.cardio || [],
             bodyWeightKg: weightKg,
           });
           const workoutBurn = work.totalKcal;
-          // Don't count the "Resistance Training" protocol checkbox when a real
-          // session is logged — the session already measures that work, and
-          // counting both inflated the day's burn.
-          const activityInput = workoutBurn > 0
-            ? Object.fromEntries(Object.entries(e.activities || {}).filter(([id]) => id !== 'resistance'))
-            : (e.activities || {});
-          const activityBurn = calcActivityBurn(activityInput, weightKg);
-          const totalOut     = restingTdee + activityBurn + workoutBurn;
+          const totalOut     = restingTdee + workoutBurn;
           const totalIn      = calcFoodKcal(e.food_items);
           const balance      = totalIn - totalOut;
           const logged       = totalIn > 0;
@@ -340,7 +311,6 @@ export default function Profile() {
               <div className="space-y-1.5 mb-3">
                 {[
                   ['Resting (BMR × 1.2)', restingTdee, 'text-[#8e8e9a]'],
-                  ['Protocol activities', activityBurn, 'text-emerald-300'],
                   [work.cardioMin > 0 && work.sets > 0
                     ? `Workout (${work.sets} sets + ${work.cardioMin} min cardio)`
                     : work.sets > 0

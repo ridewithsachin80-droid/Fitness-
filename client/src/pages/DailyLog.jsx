@@ -122,37 +122,6 @@ function addActivityMicros(base, activities = {}, activeActivities = []) {
   return m;
 }
 
-function calcBurned(activities = {}, activeActivities = [], weightKg, overrides = {}) {
-  if (!weightKg || weightKg <= 0) return { items: [], total: 0 };
-  const items = [];
-  let total = 0;
-  activeActivities.forEach(act => {
-    if (!activities[act.id]) return;
-    const met = act.met || 3.0;
-    let mins = act.durationMin || 30;
-    const ov = overrides[act.id];
-    if (ov?.totalTime) {
-      const m = String(ov.totalTime).match(/(\d+)/);
-      if (m) mins = parseInt(m[1]);
-    }
-    // (met − 1): 1 MET is resting metabolism, already counted in BMR × 1.2,
-    // so charging the full MET value here would double-count those minutes.
-    const kcal = Math.round(Math.max(0, met - 1) * weightKg * (mins / 60));
-    items.push({ id: act.id, label: act.label, kcal, mins });
-    total += kcal;
-  });
-  return { items, total };
-}
-
-// Key nutrients for the quick summary badge inside MacroProgress
-// Full detail is in the standalone NutritionSummary card below food log
-const QUICK_MICRO_KEYS = ['fiber','omega3_epa','omega3_dha','vit_b12','vit_d','calcium','iron','magnesium','zinc','folate','potassium'];
-
-// ─── Compliance Ring ──────────────────────────────────────────────────────────
-// The day's single most important number — designed as this screen's signature
-// element. The gradient stroke runs from the brand purple toward warm gold as
-// compliance climbs, so color encodes real progress rather than decorating it.
-
 // ── Energy balance (TDEE) ─────────────────────────────────────────────────────
 // Mirrors the fuller breakdown on the Profile page — same equations, so the two
 // screens can never disagree. BMR: Mifflin-St Jeor; burn from ticked protocol
@@ -285,7 +254,7 @@ function FastingBar({ fasting }) {
 
 // ─── Macro + Micro Progress ───────────────────────────────────────────────────
 
-function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, weightKg }) {
+function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, weightKg, workoutKcal = 0 }) {
   const totals     = calcFoodMacros(foodItems);
   const rawMicros  = calcMicros(foodItems);
   const withSupps  = addSupplementMicros(rawMicros, supplements);
@@ -303,8 +272,10 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
   }).length : 0;
   const quickTotal = QUICK_MICRO_KEYS.filter(k => k !== 'omega3_dha').length;
 
-  const burn   = calcBurned(activities, activeActivities, weightKg, overrides);
-  const netKcal = Math.round(totals.kcal) - burn.total;
+  // Exercise burn now comes from the Workout log (passed in), not from
+  // protocol checkboxes — those are compliance only.
+  const burnTotal = Math.round(workoutKcal) || 0;
+  const netKcal = Math.round(totals.kcal) - burnTotal;
 
   const bars = [
     { key:'kcal', label:'Calories',  icon:'🔥', unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-orange-400', light:'bg-orange-50', text:'text-orange-600' },
@@ -323,12 +294,12 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
       </div>
 
       {/* Net calorie banner */}
-      {burn.total > 0 && (
+      {burnTotal > 0 && (
         <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl mb-3 ${
           netKcal <= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
           <div className="flex gap-3">
             <span>🍽 Eaten <strong>{Math.round(totals.kcal)}</strong></span>
-            <span>🔥 Burned <strong>{burn.total}</strong></span>
+            <span>🔥 Burned <strong>{burnTotal}</strong></span>
           </div>
           <span className="font-bold">Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal{netKcal <= 0 && ' 🎯'}</span>
         </div>
@@ -360,22 +331,7 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
         })}
       </div>
 
-      {/* Activity burn breakdown */}
-      {burn.items.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-stone-100 space-y-1">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">🔥 Calories Burned</p>
-          {burn.items.map(item => (
-            <div key={item.id} className="flex justify-between text-xs">
-              <span className="text-stone-500">{item.label} ({item.mins} min)</span>
-              <span className="font-bold text-orange-500">−{item.kcal} kcal</span>
-            </div>
-          ))}
-          <div className="flex justify-between text-xs font-bold pt-1 border-t border-stone-100">
-            <span className="text-stone-600">Total burned</span>
-            <span className="text-orange-600">−{burn.total} kcal</span>
-          </div>
-        </div>
-      )}
+      {/* Full burn breakdown lives in the Workout log, which owns the data */}
 
       {/* Total eaten */}
       {totals.kcal > 0 && (
@@ -1045,20 +1001,17 @@ export default function DailyLog() {
                     return <p className="text-[11px] text-[#8e8e9a] mt-0.5">Tap any tile below to open it</p>;
                   }
 
+                  // Exercise calories come exclusively from the Workout log —
+                  // strength by volume lifted, cardio by MET × time. Protocol
+                  // ticks are compliance only; counting both double-billed the
+                  // same walk or gym session.
                   const work = sessionEnergy({
                     exercises: [{ sets: workoutSummary.sets || [] }],
                     cardio:    workoutSummary.cardio || [],
                     bodyWeightKg: weightKg,
                   });
                   const workoutBurn = work.totalKcal;
-                  // A logged session already measures resistance work, so don't
-                  // also count the protocol's "Resistance Training" checkbox.
-                  const actsForBurn = workoutBurn > 0
-                    ? activeActivities.filter(a => a.id !== 'resistance')
-                    : activeActivities;
-                  const burned = calcBurned(
-                    log.activities || {}, actsForBurn, weightKg, protocol?.item_overrides || {}
-                  ).total;
+                  const burned = 0;
                   const out = Math.round(bmr * 1.2) + burned + workoutBurn;
                   const balance = kcalIn - out;
                   const surplus = balance > 0;
@@ -1093,6 +1046,14 @@ export default function DailyLog() {
                     if (it.per_100g?.calories) return s + Math.round(it.per_100g.calories * (it.grams || 0) / 100);
                     const n = getNutrition(it.name, it.grams); return s + (n?.cal || 0);
                   }, 0);
+
+                  // Calories burned today — strength volume + cardio, from the
+                  // Workout log (protocol ticks are compliance only).
+                  const workoutKcal = sessionEnergy({
+                    exercises: [{ sets: workoutSummary.sets || [] }],
+                    cardio:    workoutSummary.cardio || [],
+                    bodyWeightKg: parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0,
+                  }).totalKcal;
 
                   const bt = log.sleep?.bedtime, wt = log.sleep?.waketime;
                   let sleepDur = '';
@@ -1162,13 +1123,13 @@ export default function DailyLog() {
                         className={`${tileBase} ${heroPanel === 'workout' ? on : off}`}>
                         <div className="min-w-0">
                           <span className="block text-[17px] font-extrabold leading-tight">
-                          {workoutSummary.count > 0
-                            ? <>{workoutSummary.count}<span className="text-[11px] text-[#4e4e5c]"> {workoutSummary.count === 1 ? 'exercise' : 'exercises'}</span></>
-                            : workoutSummary.duration
-                            ? <>{workoutSummary.duration}<span className="text-[11px] text-[#4e4e5c]"> min</span></>
+                          {workoutKcal > 0
+                            ? <>{workoutKcal}<span className="text-[11px] text-[#4e4e5c]"> kcal</span></>
                             : <span className="text-[#4e4e5c]">— none</span>}
                         </span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🏋️ workout</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">
+                          🏋️ {workoutKcal > 0 ? 'burned' : 'workout'}
+                        </span>
                         </div>
                         <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
@@ -1315,19 +1276,12 @@ export default function DailyLog() {
             <Card>
               <div id="section-protocol">
                 {(() => {
-                  const weightKg = parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0;
-                  const burnFor = (a) => {
-                    if (!a.met || !weightKg) return 0;
-                    const ov = (protocol?.item_overrides || {})[a.id];
-                    let mins = a.durationMin || 30;
-                    if (ov?.totalTime) { const m = String(ov.totalTime).match(/(\d+)/); if (m) mins = parseInt(m[1]); }
-                    return Math.round(a.met * weightKg * (mins / 60));
-                  };
-                  const totalBurned = activeActivities.reduce((s, a) => s + (log.activities?.[a.id] ? burnFor(a) : 0), 0);
+                  // Protocol is a compliance checklist — calories live in the
+                  // Workout log, so no kcal badges here.
                   const totalDone  = actDone + acvDone + suppDone;
                   const totalItems = activeActivities.length + activeACV.length + activeSupplements.length;
 
-                  const Chip = ({ item, checked, onToggle, burn }) => (
+                  const Chip = ({ item, checked, onToggle }) => (
                     <button
                       onClick={() => { onToggle(!checked); haptic(12); }}
                       onTouchStart={() => chipPressStart(item)}
@@ -1345,7 +1299,7 @@ export default function DailyLog() {
                         checked ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
                       }`}>✓</span>
                       {item.icon ? `${item.icon} ` : ''}{item.label}
-                      {checked && burn > 0 && <span className="text-orange-400 font-bold">🔥{burn}</span>}
+
                     </button>
                   );
 
@@ -1361,15 +1315,12 @@ export default function DailyLog() {
                         <div className="mb-3.5">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🏃 {terms.activities} · {actDone}/{activeActivities.length}</span>
-                            {totalBurned > 0 && (
-                              <span className="text-[10px] font-bold text-orange-400">🔥 {totalBurned} kcal burned</span>
-                            )}
+
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {activeActivities.map(a => (
                               <Chip key={a.id} item={a}
                                 checked={!!log.activities?.[a.id]}
-                                burn={burnFor(a)}
                                 onToggle={v => update('activities', { ...log.activities, [a.id]: v })} />
                             ))}
                           </div>
@@ -1560,6 +1511,11 @@ export default function DailyLog() {
 
             {protocol?.macros && (
               <MacroProgress
+                workoutKcal={sessionEnergy({
+                  exercises: [{ sets: workoutSummary.sets || [] }],
+                  cardio:    workoutSummary.cardio || [],
+                  bodyWeightKg: parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0,
+                }).totalKcal}
                 macros={protocol.macros}
                 foodItems={log.food || []}
                 supplements={log.supplements || {}}

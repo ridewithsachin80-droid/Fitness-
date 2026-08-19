@@ -256,6 +256,7 @@ export default function AIChatLog() {
         duration_min: prevSession?.duration_min ?? null,
         notes: prevSession?.notes ?? null,
         exercises: prevExercises,
+        cardio: Array.isArray(existing?.cardio) ? existing.cardio : [],
       };
 
       // Resolve an exercise by name, creating it if the library doesn't have it.
@@ -278,10 +279,13 @@ export default function AIChatLog() {
         }
       };
 
-      // Split: workouts WITH sets become real exercise rows; the rest
-      // (walks, cycling, yoga) stay as a session note + duration.
+      // Three buckets:
+      //   sets      → real exercise rows (volume-based calories)
+      //   cardio    → real cardio rows on the session (MET × time calories)
+      //   freeform  → anything we can't structure, kept as a session note
       const structured = workoutsOn.filter(w => w.sets?.length);
-      const freeform   = workoutsOn.filter(w => !w.sets?.length);
+      const cardioIn   = workoutsOn.filter(w => !w.sets?.length && w.cardio_type);
+      const freeform   = workoutsOn.filter(w => !w.sets?.length && !w.cardio_type);
 
       const mergedExercises = [...prevExercises];
       for (const w of structured) {
@@ -293,8 +297,32 @@ export default function AIChatLog() {
         else mergedExercises.push({ exercise_id: exId, sets });
       }
 
-      const addedMinutes = workoutsOn.reduce((s, w) => s + (parseFloat(w.duration_min) || 0), 0);
-      const newDuration = (prevSession?.duration_min || 0) + addedMinutes || prevSession?.duration_min || null;
+      // Duration only comes from FREEFORM work (a 30-min walk, an hour of
+      // cycling). Set-based lifts must not add duration — each apply would
+      // stack another block of minutes onto the session, and since burn is
+      // duration × MET that inflates calories without limit. A member logging
+      // "bench press 3 sets" twice was ending up with a 4-hour session.
+      // Merge new cardio with what's already on the session, skipping exact
+      // duplicates so re-applying the same message can't double the day.
+      const prevCardio = Array.isArray(existing?.cardio) ? existing.cardio : [];
+      const newCardio = cardioIn
+        .map(w => ({
+          type:         w.cardio_type,
+          duration_min: parseFloat(w.duration_min) || 0,
+          speed_kmh:    w.speed_kmh ?? null,
+          distance_km:  w.distance_km ?? null,
+        }))
+        .filter(c => c.duration_min > 0)
+        .filter(c => !prevCardio.some(p =>
+          p.type === c.type && Number(p.duration_min) === Number(c.duration_min)
+        ));
+      const mergedCardio = [...prevCardio, ...newCardio];
+
+      const addedMinutes = freeform.reduce((s, w) => s + (parseFloat(w.duration_min) || 0), 0);
+      const rawDuration = (prevSession?.duration_min || 0) + addedMinutes;
+      // 8 h is a generous ceiling for one day's training; beyond that the value
+      // is almost certainly an accumulation bug rather than a real session.
+      const newDuration = rawDuration > 0 ? Math.min(480, rawDuration) : (prevSession?.duration_min || null);
 
       const newLines = freeform.map(w =>
         `\u2728 ${w.name}${w.qty_text ? ` \u2014 ${w.qty_text}` : ''}${w.calories_burned ? ` (~${w.calories_burned} kcal)` : ''}`
@@ -306,8 +334,9 @@ export default function AIChatLog() {
         duration_min: newDuration,
         notes: combinedNotes,
         exercises: mergedExercises,
+        cardio: mergedCardio,
       });
-      return { ok: true, exercisesAdded: structured.length };
+      return { ok: true, exercisesAdded: structured.length, cardioAdded: newCardio.length };
     } catch (err) {
       console.error('AI chat: failed to save workouts:', err);
       workoutUndoRef.current = null;
@@ -412,6 +441,7 @@ export default function AIChatLog() {
           duration_min: wSnap.duration_min,
           notes: wSnap.notes,
           exercises: wSnap.exercises,
+          cardio: wSnap.cardio || [],
         }).catch(err => console.error('AI chat: workout undo failed:', err));
       }
       // If there was no session before, the one we created via applyWorkouts

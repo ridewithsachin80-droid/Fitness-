@@ -248,8 +248,19 @@ PARSING RULES:
    Set "name" to the clean exercise name only ("Bench Press", not "bench press
    3 sets"). Speech-to-text errors are common — "pen drives"/"drips"/"rapes"
    almost always mean "reps"; interpret them as reps.
-   For cardio/duration work with no sets (walking, cycling, yoga), omit "sets"
-   and give duration_min instead.
+   For CARDIO (walking, running, cycling, swimming, rowing, elliptical, stairs,
+   skipping, yoga) omit "sets" and instead give:
+     cardio_type: one of walking|running|cycling|swimming|elliptical|rowing|
+                  stairs|skipping|yoga|other
+     duration_min: minutes
+     speed_kmh:    if stated, or computed from distance ÷ time
+     distance_km:  if stated
+   Example: "5 km walk in 1 hour" → cardio_type "walking", duration_min 60,
+   distance_km 5, speed_kmh 5. Always include cardio_type for cardio so it can
+   be logged in the member's workout log with an accurate calorie estimate.
+   IMPORTANT: a cardio mention should ALSO tick the matching protocol activity
+   in activity_ids (e.g. a morning walk ticks the walking activity) — the
+   protocol tick records compliance, the cardio entry records the actual work.
 9. reply — ONE short friendly sentence summarising what was understood. Mention
    food calories if food present. No emojis. No medical advice.
 10. Anything not mentioned → null / empty array. If nothing parseable at all,
@@ -276,7 +287,9 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
     { "name": "Bench Press", "qty_text": "3 sets of 20 kg", "duration_min": null,
       "calories_burned": 25,
       "sets": [{ "reps": 10, "weight_kg": 20 }, { "reps": 10, "weight_kg": 20 }, { "reps": 12, "weight_kg": 20 }] },
-    { "name": "Cycling", "qty_text": "30 min", "duration_min": 30, "calories_burned": 250, "sets": [] }
+    { "name": "Morning walk", "qty_text": "5 km in 1 hour", "duration_min": 60,
+      "calories_burned": 200, "sets": [],
+      "cardio_type": "walking", "speed_kmh": 5, "distance_km": 5 }
   ]
 }`;
 }
@@ -422,6 +435,15 @@ router.post('/parse', async (req, res) => {
         calories_burned: Math.round(parseFloat(w.calories_burned)) || null,
         // Structured sets → the client writes these as real set rows in
         // workout_sessions rather than a free-text note.
+        // Cardio descriptors — the client turns these into real cardio rows on
+        // the workout session (MET × time calories), not just a text note.
+        cardio_type: ['walking','running','cycling','swimming','elliptical',
+                      'rowing','stairs','skipping','yoga','other']
+                      .includes(String(w.cardio_type)) ? String(w.cardio_type) : null,
+        speed_kmh:   Number.isFinite(parseFloat(w.speed_kmh))
+                      ? Math.min(60, Math.max(0, parseFloat(w.speed_kmh))) : null,
+        distance_km: Number.isFinite(parseFloat(w.distance_km))
+                      ? Math.min(500, Math.max(0, parseFloat(w.distance_km))) : null,
         sets: (Array.isArray(w.sets) ? w.sets : [])
           .slice(0, 30)
           .map(st => ({
