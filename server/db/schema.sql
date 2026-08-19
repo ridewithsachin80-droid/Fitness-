@@ -210,6 +210,12 @@ ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
 -- the member to ask their coach to set it.
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
 
+-- Cardio entries on a workout session, e.g.
+-- [{ "type":"running", "duration_min":30, "speed_kmh":9, "distance_km":4.5 }]
+-- Stored as JSONB rather than its own table: entries are always read and
+-- written with their session, and never queried independently.
+ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
+
 -- Backfill muscle_group for exercises created without one (AI chat used to
 -- create name-only rows, which /muscle-coverage silently skipped). Idempotent:
 -- only touches rows still NULL, and never overwrites a coach's own value.

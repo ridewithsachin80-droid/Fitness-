@@ -154,14 +154,14 @@ router.get('/', async (req, res) => {
 
   try {
     const sessionRes = await pool.query(
-      `SELECT id, session_date, duration_min, notes
+      `SELECT id, session_date, duration_min, notes, cardio
        FROM workout_sessions
        WHERE patient_id = $1 AND session_date = $2
        ORDER BY id DESC LIMIT 1`,
       [patientId, date]
     );
     const session = sessionRes.rows[0];
-    if (!session) return res.json({ session: null, exercises: [] });
+    if (!session) return res.json({ session: null, exercises: [], cardio: [] });
 
     const setsRes = await pool.query(
       `SELECT s.id, s.exercise_id, e.name AS exercise_name, e.muscle_group,
@@ -189,7 +189,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    res.json({ session, exercises: [...byExercise.values()] });
+    res.json({ session, exercises: [...byExercise.values()], cardio: session.cardio || [] });
   } catch (err) {
     console.error('GET /workouts error:', err);
     res.status(500).json({ error: err.message });
@@ -202,7 +202,22 @@ router.get('/', async (req, res) => {
 // Replacing rather than diffing keeps this simple and matches how the rest of
 // the app's daily log already works (full save on each change, auto-saved).
 router.post('/', async (req, res) => {
-  const { date, duration_min, notes, exercises = [] } = req.body;
+  const { date, duration_min, notes, exercises = [], cardio = [] } = req.body;
+
+  // Validate cardio entries server-side — the client computes calories from
+  // these, so out-of-range values would produce nonsense figures.
+  const VALID_CARDIO = ['walking','running','cycling','swimming','elliptical',
+                        'rowing','stairs','skipping','yoga','other'];
+  const cleanCardio = (Array.isArray(cardio) ? cardio : [])
+    .slice(0, 20)
+    .map(c => ({
+      type:         VALID_CARDIO.includes(String(c?.type)) ? String(c.type) : 'other',
+      duration_min: Math.min(600, Math.max(0, parseFloat(c?.duration_min) || 0)),
+      speed_kmh:    c?.speed_kmh != null ? Math.min(60, Math.max(0, parseFloat(c.speed_kmh) || 0)) : null,
+      distance_km:  c?.distance_km != null ? Math.min(500, Math.max(0, parseFloat(c.distance_km) || 0)) : null,
+      note:         c?.note ? String(c.note).slice(0, 120) : null,
+    }))
+    .filter(c => c.duration_min > 0);
   if (!date) return res.status(400).json({ error: 'date is required' });
 
   const patientId = await resolvePatientId(req, res);
@@ -217,12 +232,14 @@ router.post('/', async (req, res) => {
     // retry firing twice) can't create duplicate session rows the way a
     // separate SELECT-then-INSERT-or-UPDATE could.
     const upserted = await client.query(
-      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes, cardio)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (patient_id, session_date)
-       DO UPDATE SET duration_min = EXCLUDED.duration_min, notes = EXCLUDED.notes
+       DO UPDATE SET duration_min = EXCLUDED.duration_min,
+                     notes        = EXCLUDED.notes,
+                     cardio       = EXCLUDED.cardio
        RETURNING id`,
-      [patientId, date, duration_min || null, notes || null]
+      [patientId, date, duration_min || null, notes || null, JSON.stringify(cleanCardio)]
     );
     const sessionId = upserted.rows[0].id;
 

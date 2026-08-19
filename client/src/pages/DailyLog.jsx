@@ -15,6 +15,7 @@ import WorkoutLog    from '../components/WorkoutLog';
 import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
 import AIChatLog, { useAIChat } from '../components/AIChatLog';
+import { sessionEnergy } from '../utils/exerciseCalories';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
@@ -134,7 +135,9 @@ function calcBurned(activities = {}, activeActivities = [], weightKg, overrides 
       const m = String(ov.totalTime).match(/(\d+)/);
       if (m) mins = parseInt(m[1]);
     }
-    const kcal = Math.round(met * weightKg * (mins / 60));
+    // (met − 1): 1 MET is resting metabolism, already counted in BMR × 1.2,
+    // so charging the full MET value here would double-count those minutes.
+    const kcal = Math.round(Math.max(0, met - 1) * weightKg * (mins / 60));
     items.push({ id: act.id, label: act.label, kcal, mins });
     total += kcal;
   });
@@ -829,7 +832,7 @@ export default function DailyLog() {
 
   // ── Premium hero state ─────────────────────────────────────────────────────
   const [heroPanel, setHeroPanel] = useState(null);   // 'weight'|'food'|'protocol'|'water'|'workout'|'sleep'
-  const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null });
+  const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });
   // Bumped whenever the AI chat closes, so WorkoutLog remounts and picks up
   // anything the AI just wrote (otherwise an open panel shows stale data).
   const [workoutRefreshKey, setWorkoutRefreshKey] = useState(0);
@@ -849,9 +852,13 @@ export default function DailyLog() {
         setWorkoutSummary({
           count: (data?.exercises || []).length,
           duration: data?.session?.duration_min || null,
+          // Raw sets + cardio feed the shared calorie model (volume-based for
+          // strength, MET × time for cardio)
+          sets: (data?.exercises || []).flatMap(ex => ex.sets || []),
+          cardio: Array.isArray(data?.cardio) ? data.cardio : [],
         });
       })
-      .catch(() => { if (!cancelled) setWorkoutSummary({ count: 0, duration: null }); });
+      .catch(() => { if (!cancelled) setWorkoutSummary({ count: 0, duration: null, sets: [], cardio: [] }); });
     return () => { cancelled = true; };
   }, [date, heroPanel, workoutRefreshKey]);
   const [streak, setStreak] = useState(0);
@@ -1038,11 +1045,20 @@ export default function DailyLog() {
                     return <p className="text-[11px] text-[#8e8e9a] mt-0.5">Tap any tile below to open it</p>;
                   }
 
+                  const work = sessionEnergy({
+                    exercises: [{ sets: workoutSummary.sets || [] }],
+                    cardio:    workoutSummary.cardio || [],
+                    bodyWeightKg: weightKg,
+                  });
+                  const workoutBurn = work.totalKcal;
+                  // A logged session already measures resistance work, so don't
+                  // also count the protocol's "Resistance Training" checkbox.
+                  const actsForBurn = workoutBurn > 0
+                    ? activeActivities.filter(a => a.id !== 'resistance')
+                    : activeActivities;
                   const burned = calcBurned(
-                    log.activities || {}, activeActivities, weightKg, protocol?.item_overrides || {}
+                    log.activities || {}, actsForBurn, weightKg, protocol?.item_overrides || {}
                   ).total;
-                  const workoutBurn = workoutSummary.duration
-                    ? Math.round(6.0 * weightKg * (workoutSummary.duration / 60)) : 0;
                   const out = Math.round(bmr * 1.2) + burned + workoutBurn;
                   const balance = kcalIn - out;
                   const surplus = balance > 0;

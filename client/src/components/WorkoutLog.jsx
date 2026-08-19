@@ -17,6 +17,8 @@ import { haptic } from '../store/settingsStore';
 import { searchExercises, addCustomExercise, getWorkout, saveWorkout, getExerciseHistory } from '../api/workouts';
 import { getActiveProgram } from '../api/programs';
 import { parseVoiceSet } from '../utils/voiceSetParser';
+import { CARDIO_TYPES, cardioTypeById, sessionEnergy, distanceFrom } from '../utils/exerciseCalories';
+import { useLogStore } from '../store/logStore';
 
 function getSpeechRecognition() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -48,6 +50,7 @@ export default function WorkoutLog({ date }) {
   const [exercisesInSession, setExercisesInSession] = useState([]); // [{exercise_id, exercise_name, sets:[{reps,weight_kg}]}]
   const [durationMin, setDurationMin] = useState('');
   const [sessionNotes, setSessionNotes] = useState('');
+  const [cardio, setCardio] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch]       = useState('');
@@ -186,6 +189,7 @@ export default function WorkoutLog({ date }) {
       setExercisesInSession(data.exercises || []);
       setDurationMin(data.session?.duration_min || '');
       setSessionNotes(data.session?.notes || '');
+      setCardio(Array.isArray(data.cardio) ? data.cardio : []);
     }).catch(() => {}).finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -208,10 +212,11 @@ export default function WorkoutLog({ date }) {
         date,
         duration_min: durationMin ? parseInt(durationMin) : null,
         exercises: exercisesInSession.map(ex => ({ exercise_id: ex.exercise_id, sets: ex.sets })),
+        cardio,
       }).catch(() => {});
     }, 4000);
     return () => clearTimeout(saveRef.current);
-  }, [exercisesInSession, durationMin, date]);
+  }, [exercisesInSession, durationMin, date, cardio]);
 
   // ── Exercise search ─────────────────────────────────────────────────────────
   const runSearch = useCallback(async (q) => {
@@ -487,6 +492,112 @@ export default function WorkoutLog({ date }) {
           })}
         </div>
       )}
+
+      {/* ── Cardio ── */}
+      <div className="mt-3 pt-3 border-t border-white/[0.06]">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-bold text-[#5a5a68] uppercase tracking-wider">Cardio</span>
+          <button onClick={() => setCardio(c => [...c, { type: 'walking', duration_min: 30, speed_kmh: 5 }])}
+            style={{ minHeight: 32 }}
+            className="text-[11px] font-bold text-[#a78bfa] bg-[rgba(124,92,252,0.10)] border border-[rgba(124,92,252,0.25)] rounded-lg px-3 active:scale-95 transition-transform">
+            + Add cardio
+          </button>
+        </div>
+
+        {cardio.length === 0 ? (
+          <p className="text-[11px] text-[#5a5a68]">No cardio logged — add a walk, run, cycle or swim.</p>
+        ) : (
+          <div className="space-y-2">
+            {cardio.map((c, i) => {
+              const t = cardioTypeById(c.type);
+              const dist = c.distance_km ?? distanceFrom(c.speed_kmh, c.duration_min);
+              const patch = (field, val) => setCardio(list =>
+                list.map((row, idx) => (idx === i ? { ...row, [field]: val } : row))
+              );
+              return (
+                <div key={i} className="bg-[#0d0d11] border border-white/[0.06] rounded-xl p-2.5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <select value={c.type}
+                      onChange={e => patch('type', e.target.value)}
+                      style={{ minHeight: 36 }}
+                      className="flex-1 min-w-0 text-xs font-semibold bg-[#1a1a20] border border-white/[0.1] rounded-lg px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]">
+                      {CARDIO_TYPES.map(o => (
+                        <option key={o.id} value={o.id}>{o.icon} {o.label}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => setCardio(list => list.filter((_, idx) => idx !== i))}
+                      className="w-6 flex-shrink-0 text-[#5a5a68] hover:text-red-400 text-sm">×</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <label className="flex-1 min-w-0">
+                      <span className="block text-[9px] text-[#5a5a68] uppercase tracking-wider mb-1">Minutes</span>
+                      <input type="number" inputMode="numeric" value={c.duration_min ?? ''}
+                        onChange={e => patch('duration_min', e.target.value)}
+                        placeholder="30"
+                        className="w-full px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                    </label>
+                    {t.speed && (
+                      <label className="flex-1 min-w-0">
+                        <span className="block text-[9px] text-[#5a5a68] uppercase tracking-wider mb-1">Speed km/h</span>
+                        <input type="number" inputMode="decimal" step="0.5" value={c.speed_kmh ?? ''}
+                          onChange={e => patch('speed_kmh', e.target.value)}
+                          placeholder="5"
+                          className="w-full px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                      </label>
+                    )}
+                  </div>
+                  {t.speed && dist != null && (
+                    <p className="text-[10px] text-[#5a5a68] mt-1.5">≈ {dist} km covered</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Calories burned ── */}
+      {(() => {
+        const bodyWeightKg =
+          parseFloat(useLogStore.getState().log?.weight) ||
+          parseFloat(useLogStore.getState().protocol?.start_weight) || 0;
+        const e = sessionEnergy({ exercises: exercisesInSession, cardio, bodyWeightKg });
+        if (e.totalKcal === 0 && e.sets === 0 && e.cardioMin === 0) return null;
+        return (
+          <div className="mt-3 pt-3 border-t border-white/[0.06]">
+            <div className="bg-[rgba(124,92,252,0.08)] border border-[rgba(124,92,252,0.22)] rounded-xl px-3.5 py-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-[#a78bfa] uppercase tracking-wider">Calories burned</span>
+                <span className="font-display text-xl font-bold text-orange-400">{e.totalKcal} kcal</span>
+              </div>
+              <div className="space-y-0.5">
+                {e.sets > 0 && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[#8e8e9a]">
+                      Strength · {e.sets} set{e.sets > 1 ? 's' : ''} · {e.volumeKg.toLocaleString()} kg lifted
+                    </span>
+                    <span className="font-bold text-[#d8d8de]">{e.strengthKcal} kcal</span>
+                  </div>
+                )}
+                {e.cardioMin > 0 && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[#8e8e9a]">Cardio · {e.cardioMin} min</span>
+                    <span className="font-bold text-[#d8d8de]">{e.cardioKcal} kcal</span>
+                  </div>
+                )}
+              </div>
+              {!bodyWeightKg && (
+                <p className="text-[10px] text-amber-300/80 mt-1.5">
+                  Log today's weight for an accurate cardio estimate.
+                </p>
+              )}
+              <p className="text-[10px] text-[#5a5a68] mt-1.5 leading-relaxed">
+                Strength from volume lifted; cardio from MET × time. Estimates only.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Session notes — includes freeform workouts logged via AI chat
           (walks, cycling, yoga). Without this they were saved but invisible. */}

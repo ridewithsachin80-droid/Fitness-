@@ -147,10 +147,16 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
          LIMIT 1`,
         [req.user.id]
       ),
-      // Today's workout session (duration feeds the exercise-burn estimate)
+      // Today's workout session — sets (for volume-based strength calories)
+      // and cardio entries (MET × time). Duration alone was a poor proxy: it
+      // counts rest between sets and can't distinguish 3 sets from 20.
       pool.query(
-        `SELECT ws.session_date, ws.duration_min,
-                (SELECT COUNT(*) FROM session_sets ss WHERE ss.session_id = ws.id) AS set_count
+        `SELECT ws.session_date, ws.duration_min, ws.cardio,
+                COALESCE(
+                  (SELECT json_agg(json_build_object('reps', ss.reps, 'weight_kg', ss.weight_kg))
+                   FROM session_sets ss WHERE ss.session_id = ws.id),
+                  '[]'::json
+                ) AS sets
          FROM workout_sessions ws
          WHERE ws.patient_id = $1
          ORDER BY ws.session_date DESC
@@ -210,7 +216,9 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
           activities:    logDate === istToday && log.activities ? log.activities : {},
           weight_kg:     log?.weight_kg ? parseFloat(log.weight_kg) : null,
           workout_min:   wsDate === istToday ? (ws.duration_min || 0) : 0,
-          workout_sets:  wsDate === istToday ? parseInt(ws.set_count) || 0 : 0,
+          // Raw sets + cardio so the client can apply the shared calorie model
+          workout_sets:  wsDate === istToday && Array.isArray(ws.sets) ? ws.sets : [],
+          cardio:        wsDate === istToday && Array.isArray(ws.cardio) ? ws.cardio : [],
         };
       })(),
       fasting: p.fasting_start ? {

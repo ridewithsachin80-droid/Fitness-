@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getMyProfile }  from '../api/logs';
 import { Card, SectionTitle, PageLoader, BackButton, PatientBottomNav } from '../components/UI';
+import { sessionEnergy } from '../utils/exerciseCalories';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -81,15 +82,13 @@ function calcActivityBurn(activities = {}, weightKg) {
     if (!done) return sum;
     const a = ACTIVITY_MET[id];
     if (!a) return sum;                       // custom items have no MET
-    return sum + Math.round(a.met * weightKg * (a.min / 60));
+    // (MET − 1): resting burn for these minutes is already in BMR × 1.2
+    return sum + Math.round((a.met - 1) * weightKg * (a.min / 60));
   }, 0);
 }
 
-// Resistance training averages ~6 METs; used for logged workout duration.
-function calcWorkoutBurn(minutes, weightKg) {
-  if (!minutes || !weightKg) return 0;
-  return Math.round(6.0 * weightKg * (minutes / 60));
-}
+// Workout burn now comes from the shared model in utils/exerciseCalories.js —
+// strength from volume lifted, cardio from MET × time. See that file for why.
 
 function calcFoodKcal(items = []) {
   return items.reduce((sum, it) => {
@@ -301,8 +300,19 @@ export default function Profile() {
 
           const e = p.today_energy || {};
           const restingTdee  = Math.round(bmr * 1.2);              // sedentary baseline
-          const activityBurn = calcActivityBurn(e.activities, weightKg);
-          const workoutBurn  = calcWorkoutBurn(e.workout_min, weightKg);
+          const work = sessionEnergy({
+            exercises: [{ sets: e.workout_sets || [] }],
+            cardio:    e.cardio || [],
+            bodyWeightKg: weightKg,
+          });
+          const workoutBurn = work.totalKcal;
+          // Don't count the "Resistance Training" protocol checkbox when a real
+          // session is logged — the session already measures that work, and
+          // counting both inflated the day's burn.
+          const activityInput = workoutBurn > 0
+            ? Object.fromEntries(Object.entries(e.activities || {}).filter(([id]) => id !== 'resistance'))
+            : (e.activities || {});
+          const activityBurn = calcActivityBurn(activityInput, weightKg);
           const totalOut     = restingTdee + activityBurn + workoutBurn;
           const totalIn      = calcFoodKcal(e.food_items);
           const balance      = totalIn - totalOut;
@@ -331,7 +341,14 @@ export default function Profile() {
                 {[
                   ['Resting (BMR × 1.2)', restingTdee, 'text-[#8e8e9a]'],
                   ['Protocol activities', activityBurn, 'text-emerald-300'],
-                  ['Workout session',     workoutBurn,  'text-emerald-300'],
+                  [work.cardioMin > 0 && work.sets > 0
+                    ? `Workout (${work.sets} sets + ${work.cardioMin} min cardio)`
+                    : work.sets > 0
+                    ? `Strength (${work.volumeKg.toLocaleString()} kg lifted)`
+                    : work.cardioMin > 0
+                    ? `Cardio (${work.cardioMin} min)`
+                    : 'Workout session',
+                   workoutBurn,  'text-emerald-300'],
                 ].map(([label, val, cls]) => (
                   <div key={label} className="flex items-center justify-between text-xs">
                     <span className="text-[#8e8e9a]">{label}</span>
