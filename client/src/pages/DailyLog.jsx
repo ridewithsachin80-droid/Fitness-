@@ -9,15 +9,13 @@ import {
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
   calcCompliance, getNutrition, RDA_TARGETS,
 } from '../constants';
-import { Card, SectionTitle, CheckRow, OfflineBanner, PatientBottomNav, QuickJump } from '../components/UI';
-import WaterTracker  from '../components/WaterTracker';
+import { Card, SectionTitle, OfflineBanner, PatientBottomNav, QuickJump } from '../components/UI';
 import FoodLog       from '../components/FoodLog';
 import WorkoutLog    from '../components/WorkoutLog';
-import SleepTracker  from '../components/SleepTracker';
 import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
 import AIChatLog, { useAIChat } from '../components/AIChatLog';
-import { useSettingsStore, useTerms } from '../store/settingsStore';
+import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
 
@@ -665,7 +663,8 @@ function AIChatFab() {
       onClick={openChat}
       aria-label="Log with AI Chat"
       className="fixed z-40 w-14 h-14 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-xl shadow-[0_4px_24px_rgba(124,92,252,0.5)] border border-white/[0.15] active:scale-90 transition-transform"
-      style={{ right: 16, bottom: 'calc(88px + env(safe-area-inset-bottom))' }}>
+      style={{ right: 16, bottom: 'calc(156px + env(safe-area-inset-bottom))' }}>
+      {/* sits above the QuickJump button (fixed at bottom:100) */}
       ✨
     </button>
   );
@@ -677,6 +676,7 @@ export default function DailyLog() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { date, log, protocol, loading, saving, saved, error, setDate, updateLog, saveLog } = useLogStore();
+  const openChat = useAIChat(s => s.openChat);
 
   const overrides    = protocol?.item_overrides || {};
   const applyOverride = (item) => {
@@ -777,6 +777,46 @@ export default function DailyLog() {
   const autoSaveRef = useRef(null);
   const swipeRef = useRef(null);
   const [autoSaved, setAutoSaved] = useState(false);
+
+  // ── Premium hero state ─────────────────────────────────────────────────────
+  const [showWeightEdit, setShowWeightEdit] = useState(false);
+  const [streak, setStreak] = useState(0);
+  const [chipInfo, setChipInfo] = useState(null);   // { label, sub } — long-press popover
+  const chipPressRef = useRef(null);
+
+  // Logging streak: consecutive saved days ending today or yesterday
+  useEffect(() => {
+    const from = new Date(); from.setDate(from.getDate() - 14);
+    const fStr = `${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,'0')}-${String(from.getDate()).padStart(2,'0')}`;
+    api.get(`/logs/range/${fStr}/${today()}`).then(({ data }) => {
+      const logged = new Set((data || []).map(l => (l.log_date || '').slice(0, 10)));
+      let s = 0;
+      const d = new Date();
+      // A streak may end yesterday if today isn't logged yet
+      if (!logged.has(today())) d.setDate(d.getDate() - 1);
+      for (let i = 0; i < 14; i++) {
+        const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if (!logged.has(ds)) break;
+        s++; d.setDate(d.getDate() - 1);
+      }
+      setStreak(s);
+    }).catch(() => {});
+  }, []);
+
+  // Long-press on a protocol chip shows its timing/instructions
+  const chipPressStart = useCallback((item) => {
+    clearTimeout(chipPressRef.current);
+    chipPressRef.current = setTimeout(() => {
+      if (item.sub) { setChipInfo({ label: item.label, sub: item.sub }); haptic(20); }
+    }, 420);
+  }, []);
+  const chipPressEnd = useCallback(() => clearTimeout(chipPressRef.current), []);
+  useEffect(() => {
+    if (!chipInfo) return;
+    const t = setTimeout(() => setChipInfo(null), 3000);
+    return () => clearTimeout(t);
+  }, [chipInfo]);
+
   const triggerAutoSave = useCallback(() => {
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = setTimeout(async () => {
@@ -838,99 +878,151 @@ export default function DailyLog() {
     <div className="min-h-screen bg-[#0b0b0e] font-sans">
       <OfflineBanner />
 
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-5">
+      {/* ── Hero — greeting, date, compliance, glance stats, weight editor ── */}
+      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-5">
+        <div className="max-w-md mx-auto" id="section-hero">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase text-[#a78bfa] mb-1.5">FitLife</p>
               <h1 className="font-display text-2xl font-medium flex items-center gap-2 leading-tight">
                 <span>{AVATARS_LIST[avatarIdx]}</span>
-                {user?.name}
+                {(() => {
+                  const h = new Date().getHours();
+                  const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+                  return `${greet}, ${user?.name?.split(' ')[0] || ''}`;
+                })()}
               </h1>
-              <p className="text-emerald-300/90 text-xs mt-1 italic font-display">
-                {ageMode === 'child' ? 'Keep going — great job! ⭐' :
-                 ageMode === 'senior' ? 'Every step counts today 🌿' :
-                 'Building healthy habits daily 🌱'}
-              </p>
-              {/* Auto-save indicator */}
               {autoSaved && (
-                <p className="text-xs text-[#a78bfa] mt-1 font-medium">
-                  <span className="autosave-dot" />auto-saved ✓
-                </p>
+                <p className="text-xs text-[#a78bfa] mt-1 font-medium"><span className="autosave-dot" />auto-saved ✓</p>
               )}
             </div>
-            {/* No more icon-only nav buttons — PatientBottomNav handles navigation.
-                NotificationBell is informational (reminder history), not navigation. */}
-            <NotificationBell />
-          </div>
-          <div className="bg-white/[0.05] rounded-2xl p-3.5 flex items-center gap-4 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <ComplianceRing pct={compliance} />
-            <div className="flex-1">
-              <div className="text-sm font-semibold flex items-center gap-1.5">
-                {terms.compliance}
-                {/* Tooltip for compliance ring */}
-                <div style={{ position: 'relative' }}>
-                  <button onClick={() => setComplianceTip(v => !v)}
-                    style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>?</button>
-                  {complianceTip && (
-                    <div style={{ position: 'absolute', left: 24, top: -4, zIndex: 50, background: '#1a1a20', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#d8d8de', lineHeight: 1.5, width: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
-                      This shows what % of today's activities, ACV doses, and supplements you've completed.
-                      <button onClick={() => setComplianceTip(false)} style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#7c5cfc', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Got it ✓</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="text-xs text-[#ddd6fe] mt-0.5">
-                {`${actDone}/${activeActivities.length}`} {terms.activities} · {`${acvDone}/${activeACV.length}`} ACV · {`${suppDone}/${activeSupplements.length}`} {terms.supplements}
-              </div>
-              {log.weight && <div className="text-xs text-[#c4b5fd] mt-1 font-medium">⚖ {log.weight} kg logged</div>}
+            <div className="flex items-center gap-2">
+              {streak >= 2 && (
+                <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full px-2.5 py-1">
+                  🔥 {streak}-day streak
+                </span>
+              )}
+              <NotificationBell />
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-4 swipe-hint">
-
-        {/* Date nav */}
-        <Card>
-          <div className="flex items-center justify-between">
+          {/* Compact date nav */}
+          <div className="flex items-center justify-between mb-3">
             <button
               onClick={() => {
                 const d = new Date(date + 'T12:00:00');
                 d.setDate(d.getDate() - 1);
                 setDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
               }}
-              style={{ minHeight: 44 }}
-              className="flex items-center gap-1 text-sm font-semibold text-[#4e4e5c] px-3 py-2 rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all">
-              ← Previous
-            </button>
+              style={{ minWidth: 44, minHeight: 36 }}
+              className="text-sm font-bold text-[#4e4e5c] rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all">‹</button>
             <div className="text-center">
-              <p className="text-sm font-bold text-[#d8d8de]">
-                {date === today() ? 'Today' : formatDate(date)}
-              </p>
-              {date !== today() && <p className="text-xs text-amber-400 font-medium mt-0.5">Editing past entry</p>}
-              <p className="text-[10px] text-[#3a3a46] mt-0.5">← swipe to change →</p>
+              <p className="text-sm font-bold text-[#d8d8de]">{date === today() ? 'Today' : formatDate(date)}</p>
+              {date !== today() && <p className="text-[10px] text-amber-400 font-medium">Editing past entry</p>}
             </div>
             <button
               onClick={() => setDate(today())}
               disabled={date === today()}
-              style={{ minHeight: 44 }}
-              className="flex items-center gap-1 text-sm font-semibold text-[#8b5cf6] px-3 py-2 rounded-xl hover:bg-[rgba(124,92,252,0.05)] active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-              Today →
-            </button>
+              style={{ minWidth: 44, minHeight: 36 }}
+              className="text-sm font-bold text-[#8b5cf6] rounded-xl hover:bg-[rgba(124,92,252,0.05)] active:scale-95 transition-all disabled:opacity-30">›</button>
           </div>
-        </Card>
+
+          <div className="bg-white/[0.05] rounded-2xl p-3.5 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <div className="flex items-center gap-3.5">
+              <div className="relative">
+                <ComplianceRing pct={compliance} />
+                <button onClick={() => setComplianceTip(v => !v)}
+                  style={{ position: 'absolute', top: -4, right: -4, width: 17, height: 17, borderRadius: 9, background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: 9, cursor: 'pointer', fontWeight: 700 }}>?</button>
+                {complianceTip && (
+                  <div style={{ position: 'absolute', left: 0, top: 64, zIndex: 50, background: '#1a1a20', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#d8d8de', lineHeight: 1.5, width: 210, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+                    This shows what % of today's {terms.activities}, ACV doses, and {terms.supplements} you've completed.
+                    <button onClick={() => setComplianceTip(false)} style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#7c5cfc', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Got it ✓</button>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 grid grid-cols-2 gap-1.5">
+                <button onClick={() => { setShowWeightEdit(v => !v); haptic(10); }}
+                  className="text-left bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5 active:scale-[0.98] transition-transform">
+                  <span className="block text-[13px] font-bold">{log.weight ? `${log.weight} kg` : '— kg'}</span>
+                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">
+                    ⚖ {(() => {
+                      if (!log.weight || yesterdayWeight == null) return 'Tap to log';
+                      const d = parseFloat(log.weight) - yesterdayWeight;
+                      return d < 0 ? `↓ ${Math.abs(d).toFixed(1)} vs yest` : d > 0 ? `↑ ${d.toFixed(1)} vs yest` : '= yesterday';
+                    })()}
+                  </span>
+                </button>
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5">
+                  <span className="block text-[13px] font-bold">
+                    {(() => {
+                      const kcal = (log.food || []).reduce((s, it) => {
+                        if (it.per_100g?.calories) return s + Math.round(it.per_100g.calories * (it.grams || 0) / 100);
+                        const n = getNutrition(it.name, it.grams); return s + (n?.cal || 0);
+                      }, 0);
+                      return protocol?.macros?.kcal
+                        ? <>{kcal}<span className="text-[9px] text-[#4e4e5c]"> /{protocol.macros.kcal}</span></>
+                        : kcal;
+                    })()}
+                  </span>
+                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🔥 kcal eaten</span>
+                </div>
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5">
+                  <span className="block text-[13px] font-bold">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
+                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">✓ protocol</span>
+                </div>
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5">
+                  <span className="block text-[13px] font-bold">{((log.water || 0) / 1000).toFixed(1)} L</span>
+                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Inline weight editor — opens from the weight stat */}
+            {showWeightEdit && (
+              <div className="mt-3 pt-3 border-t border-white/[0.07]">
+                <p className="text-[10px] text-[#4e4e5c] mb-2 font-medium">⚖ Morning weight — after washroom, before food</p>
+                <div className="flex items-center gap-3">
+                  <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5" autoFocus
+                    onChange={e => { update('weight', e.target.value); validateWeight(e.target.value); }}
+                    style={{ minHeight: 48, fontSize: 20 }}
+                    className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-2 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] text-[#ededf0] bg-[#1a1a20]" />
+                  <span className="text-[#4e4e5c] font-bold">kg</span>
+                  <button onClick={() => setShowWeightEdit(false)}
+                    style={{ minHeight: 48 }}
+                    className="px-4 rounded-2xl bg-[#7c5cfc] text-white text-sm font-bold active:scale-95 transition-transform">Done</button>
+                </div>
+                {weightWarning && (
+                  <div className="mt-2 flex items-start gap-2 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2">
+                    <span className="text-amber-400 text-sm">⚠️</span>
+                    <p className="text-xs text-amber-400 leading-relaxed">{weightWarning}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
+
+        {/* AI logging bar — the primary way to fill the day */}
+        <button onClick={() => { haptic(15); openChat(); }}
+          style={{ minHeight: 52 }}
+          className="w-full flex items-center gap-3 bg-gradient-to-r from-[#7c5cfc]/[0.16] to-[#4c2fd8]/[0.08] border border-[#7c5cfc]/40 hover:border-[#7c5cfc]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(124,92,252,0.10)]">
+          <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(124,92,252,0.5)]">✨</span>
+          <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left">Tell me about your day…</span>
+          <span className="text-[#a78bfa]">🎤</span>
+        </button>
 
         {/* Quick jump floating button */}
         <QuickJump sections={[
-          { id: 'section-weight',      label: 'Weight',      icon: '⚖️' },
-          { id: 'section-activities',  label: 'Activities',  icon: '🏃' },
-          { id: 'section-food',        label: 'Food log',    icon: '🥗' },
-          { id: 'section-water',       label: 'Water',       icon: '💧' },
-          { id: 'section-supplements', label: 'Supplements', icon: '💊' },
-          { id: 'section-sleep',       label: 'Sleep',       icon: '🌙' },
+          { id: 'section-hero',     label: 'Weight',   icon: '⚖️' },
+          { id: 'section-protocol', label: 'Protocol', icon: '🏃' },
+          { id: 'section-food',     label: 'Food log', icon: '🥗' },
+          { id: 'section-water',    label: 'Water',    icon: '💧' },
+          { id: 'section-sleep',    label: 'Sleep',    icon: '🌙' },
+          { id: 'section-workout',  label: 'Workout',  icon: '🏋️' },
         ]} />
 
         {loading ? (
@@ -1009,117 +1101,189 @@ export default function DailyLog() {
               />
             )}
 
-            {/* Morning Weight */}
+            {/* ── Today's Protocol — activities, ACV, supplements as tap-chips ── */}
             <Card>
-              <div id="section-weight">
-                <SectionTitle icon="⚖️">Morning weight</SectionTitle>
-                <p className="text-xs text-[#4e4e5c] mb-3">After washroom, before food — first thing in the morning</p>
-                <div className="flex items-center gap-3">
-                  <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5"
-                    onChange={e => {
-                      update('weight', e.target.value);
-                      validateWeight(e.target.value);
-                    }}
-                    style={{ minHeight: 56, fontSize: 24 }}
-                    className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-3 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] text-[#ededf0] bg-[#1a1a20]" />
-                  <span className="text-[#4e4e5c] font-bold">kg</span>
-                </div>
-                {weightWarning && (
-                  <div className="mt-2 flex items-start gap-2 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2">
-                    <span className="text-amber-400 text-sm">⚠️</span>
-                    <p className="text-xs text-amber-400 leading-relaxed">{weightWarning}</p>
-                  </div>
-                )}
-                {log.weight && !weightWarning && (() => {
-                  const delta = yesterdayWeight != null ? parseFloat(log.weight) - yesterdayWeight : null;
+              <div id="section-protocol">
+                {(() => {
+                  const weightKg = parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0;
+                  const burnFor = (a) => {
+                    if (!a.met || !weightKg) return 0;
+                    const ov = (protocol?.item_overrides || {})[a.id];
+                    let mins = a.durationMin || 30;
+                    if (ov?.totalTime) { const m = String(ov.totalTime).match(/(\d+)/); if (m) mins = parseInt(m[1]); }
+                    return Math.round(a.met * weightKg * (mins / 60));
+                  };
+                  const totalBurned = activeActivities.reduce((s, a) => s + (log.activities?.[a.id] ? burnFor(a) : 0), 0);
+                  const totalDone  = actDone + acvDone + suppDone;
+                  const totalItems = activeActivities.length + activeACV.length + activeSupplements.length;
+
+                  const Chip = ({ item, checked, onToggle, burn }) => (
+                    <button
+                      onClick={() => { onToggle(!checked); haptic(12); }}
+                      onTouchStart={() => chipPressStart(item)}
+                      onTouchEnd={chipPressEnd}
+                      onTouchMove={chipPressEnd}
+                      onContextMenu={e => { e.preventDefault(); if (item.sub) setChipInfo({ label: item.label, sub: item.sub }); }}
+                      title={item.sub || ''}
+                      style={{ minHeight: 38 }}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-all active:scale-95 ${
+                        checked
+                          ? 'bg-[rgba(124,92,252,0.16)] border-[rgba(124,92,252,0.5)] text-white'
+                          : 'bg-white/[0.03] border-white/[0.12] text-[#8e8e9a]'
+                      }`}>
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-extrabold flex-shrink-0 ${
+                        checked ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
+                      }`}>✓</span>
+                      {item.icon ? `${item.icon} ` : ''}{item.label}
+                      {checked && burn > 0 && <span className="text-orange-400 font-bold">🔥{burn}</span>}
+                    </button>
+                  );
+
                   return (
-                    <div className="mt-3 space-y-2">
-                      <div className="text-center text-xs font-semibold py-2 rounded-xl bg-[rgba(124,92,252,0.1)] text-[#a78bfa]">
-                        ✓ Weight logged — great job tracking!
+                    <>
+                      <div className="flex items-center justify-between mb-3">
+                        <SectionTitle icon="🏃">Today's Protocol</SectionTitle>
+                        <span className="text-xs font-bold text-[#a78bfa]">{totalDone} of {totalItems} done</span>
                       </div>
-                      {delta != null && (
-                        <div className={`text-center text-xs font-semibold py-2 rounded-xl ${
-                          delta < 0 ? 'bg-blue-400/10 text-blue-400' :
-                          delta > 0 ? 'bg-amber-400/10 text-amber-400' : 'bg-white/[0.04] text-[#4e4e5c]'}`}>
-                          {delta < 0 ? `↓ Down ${Math.abs(delta).toFixed(1)} kg from yesterday! 🎉` :
-                           delta > 0 ? `↑ Up ${delta.toFixed(1)} kg from yesterday.` : '= Same as yesterday.'}
+                      <p className="text-[10px] text-[#4e4e5c] mb-3">Tap to mark done · long-press for timing details</p>
+
+                      {activeActivities.length > 0 && (
+                        <div className="mb-3.5">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🏃 {terms.activities} · {actDone}/{activeActivities.length}</span>
+                            {totalBurned > 0 && (
+                              <span className="text-[10px] font-bold text-orange-400">🔥 {totalBurned} kcal burned</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {activeActivities.map(a => (
+                              <Chip key={a.id} item={a}
+                                checked={!!log.activities?.[a.id]}
+                                burn={burnFor(a)}
+                                onToggle={v => update('activities', { ...log.activities, [a.id]: v })} />
+                            ))}
+                          </div>
                         </div>
                       )}
-                    </div>
+
+                      {activeACV.length > 0 && (
+                        <div className="mb-3.5">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🍶 ACV · {acvDone}/{activeACV.length}</span>
+                            <button onClick={() => setAcvExpanded(v => !v)}
+                              className="text-[10px] text-[#7c5cfc] font-bold">{acvExpanded ? 'Hide' : '?'}</button>
+                          </div>
+                          {acvExpanded && (
+                            <div className="mb-2 bg-[rgba(124,92,252,0.08)] border border-[rgba(124,92,252,0.15)] rounded-xl px-3 py-2.5 text-xs text-[#8e8e9a] leading-relaxed">
+                              <strong className="text-[#c4b5fd]">Why ACV?</strong> 1 tbsp in 200ml warm water, through a straw, 15 min before meals — helps stabilise blood sugar, supports digestion, and may reduce appetite.
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {activeACV.map(a => (
+                              <Chip key={a.id} item={a}
+                                checked={!!log.acv?.[a.id]}
+                                onToggle={v => update('acv', { ...log.acv, [a.id]: v })} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {activeSupplements.length > 0 && (
+                        <div>
+                          <div className="mb-2">
+                            <SectionTitle icon="💊"
+                              tooltip="These supplements are prescribed by your coach. They are not medical advice — always check with your doctor if you take other medications.">
+                              <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">{terms.supplements} · {suppDone}/{activeSupplements.length}</span>
+                            </SectionTitle>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {activeSupplements.map(s => (
+                              <Chip key={s.id} item={s}
+                                checked={!!log.supplements?.[s.id]}
+                                onToggle={v => update('supplements', { ...log.supplements, [s.id]: v })} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
               </div>
             </Card>
 
-            {/* Activities */}
-            <Card>
-              <div id="section-activities">
-              {(() => {
-                const weightKg = parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0;
-                const totalBurned = activeActivities.reduce((sum, a) => {
-                  if (!log.activities?.[a.id] || !a.met || !weightKg) return sum;
-                  const ov = (protocol?.item_overrides || {})[a.id];
-                  let mins = a.durationMin || 30;
-                  if (ov?.totalTime) { const m = String(ov.totalTime).match(/(\d+)/); if (m) mins = parseInt(m[1]); }
-                  return sum + Math.round(a.met * weightKg * (mins / 60));
-                }, 0);
-                return (
-                  <>
-                    <div className="flex items-center justify-between mb-3">
-                      <SectionTitle icon="🏃">Physical Activity</SectionTitle>
-                      {totalBurned > 0 && (
-                        <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
-                          🔥 {totalBurned} kcal burned
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      {activeActivities.map(a => {
-                        const isChecked = !!log.activities?.[a.id];
-                        let burnKcal = 0;
-                        if (a.met && weightKg > 0) {
-                          const ov = (protocol?.item_overrides || {})[a.id];
-                          let mins = a.durationMin || 30;
-                          if (ov?.totalTime) { const m = String(ov.totalTime).match(/(\d+)/); if (m) mins = parseInt(m[1]); }
-                          burnKcal = Math.round(a.met * weightKg * (mins / 60));
-                        }
-                        return (
-                          <CheckRow key={a.id} label={a.label} sub={a.sub} icon={a.icon}
-                            checked={isChecked}
-                            burnKcal={burnKcal}
-                            onChange={v => update('activities', { ...log.activities, [a.id]: v })} />
-                        );
-                      })}
-                    </div>
-                  </>
-                );
-              })()}
+            {/* Long-press chip detail popover */}
+            {chipInfo && (
+              <div onClick={() => setChipInfo(null)}
+                className="fixed left-4 right-4 z-[60] bg-[#1a1a20] border border-[rgba(124,92,252,0.4)] rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)]"
+                style={{ bottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
+                <p className="text-sm font-bold text-white">{chipInfo.label}</p>
+                <p className="text-xs text-[#8e8e9a] mt-0.5 leading-relaxed">{chipInfo.sub}</p>
               </div>
-            </Card>
+            )}
 
-            <WorkoutLog date={date} />
-
-            {/* ACV */}
-            <Card>
-              <div className="flex items-center justify-between mb-1">
-                <SectionTitle icon="🍶">Apple cider vinegar (ACV)</SectionTitle>
-                <button onClick={() => setAcvExpanded(v => !v)}
-                  className="text-xs text-[#7c5cfc] font-semibold hover:underline">{acvExpanded ? 'Hide' : 'What is this?'}</button>
-              </div>
-              {acvExpanded && (
-                <div className="mb-3 bg-[rgba(124,92,252,0.08)] border border-[rgba(124,92,252,0.15)] rounded-xl px-3 py-2.5 text-xs text-[#8e8e9a] leading-relaxed">
-                  <strong className="text-[#c4b5fd]">Why ACV?</strong> Apple cider vinegar mixed in water (before meals) helps stabilise blood sugar after eating, supports digestion, and may reduce appetite. Always drink through a straw to protect teeth enamel.
+            {/* ── Water + Sleep tiles ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <Card>
+                <div id="section-water">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">💧 {terms.water}</span>
+                    {(log.water || 0) > 0 && (
+                      <button onClick={() => { update('water', Math.max(0, (log.water || 0) - 250)); haptic(10); }}
+                        className="text-[10px] font-bold text-[#4e4e5c] hover:text-red-400">−250</button>
+                    )}
+                  </div>
+                  <p className="text-lg font-extrabold text-[#ededf0]">
+                    {((log.water || 0) / 1000).toFixed(2)}
+                    <span className="text-[10px] text-[#4e4e5c] font-bold"> / {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                  </p>
+                  <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden my-2">
+                    <div className="h-full rounded-full bg-blue-400 transition-all"
+                      style={{ width: `${Math.min(100, ((log.water || 0) / (protocol?.water_target || 3000)) * 100)}%` }} />
+                  </div>
+                  <div className="flex gap-1.5">
+                    {[250, 500].map(ml => (
+                      <button key={ml}
+                        onClick={() => { update('water', Math.min(10000, (log.water || 0) + ml)); haptic(12); }}
+                        style={{ minHeight: 36 }}
+                        className="flex-1 text-[11px] font-bold text-blue-300 bg-blue-400/[0.08] border border-blue-400/25 rounded-xl active:scale-95 transition-transform">
+                        +{ml}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              )}
-              <p className="text-xs text-[#4e4e5c] mb-3">1 tbsp in 200ml warm water · through a straw · 15 min before meal</p>
-              <div className="space-y-2">
-                {activeACV.map(a => (
-                  <CheckRow key={a.id} label={a.label} sub={a.sub}
-                    checked={!!log.acv?.[a.id]}
-                    onChange={v => update('acv', { ...log.acv, [a.id]: v })} />
-                ))}
-              </div>
-            </Card>
+              </Card>
+              <Card>
+                <div id="section-sleep">
+                  <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🌙 {terms.sleep}</span>
+                  {(() => {
+                    const bt = log.sleep?.bedtime, wt = log.sleep?.waketime;
+                    let dur = '';
+                    if (bt && wt) {
+                      const [bh, bm] = bt.split(':').map(Number);
+                      const [wh, wm] = wt.split(':').map(Number);
+                      let mins = (wh * 60 + wm) - (bh * 60 + bm);
+                      if (mins <= 0) mins += 24 * 60;
+                      dur = `${Math.floor(mins / 60)}h ${mins % 60}m`;
+                    }
+                    return (
+                      <p className="text-lg font-extrabold text-[#ededf0] mt-1">
+                        {dur || <span className="text-[#4e4e5c]">— set times</span>}
+                      </p>
+                    );
+                  })()}
+                  <div className="flex gap-1.5 mt-2">
+                    <input type="time" value={log.sleep?.bedtime || ''}
+                      onChange={e => update('sleep', { ...log.sleep, bedtime: e.target.value })}
+                      style={{ minHeight: 36 }}
+                      className="flex-1 min-w-0 text-[11px] font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-1.5 text-[#ededf0] focus:outline-none focus:ring-1 focus:ring-[rgba(124,92,252,0.4)]" />
+                    <input type="time" value={log.sleep?.waketime || ''}
+                      onChange={e => update('sleep', { ...log.sleep, waketime: e.target.value })}
+                      style={{ minHeight: 36 }}
+                      className="flex-1 min-w-0 text-[11px] font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-1.5 text-[#ededf0] focus:outline-none focus:ring-1 focus:ring-[rgba(124,92,252,0.4)]" />
+                  </div>
+                </div>
+              </Card>
+            </div>
 
             {/* Sprint 3: Prescribed meals */}
             {protocol?.meal_plan?.length > 0 && (
@@ -1144,45 +1308,10 @@ export default function DailyLog() {
               rdaOverrides={protocol?.rda_overrides || {}}
             />
 
-            {/* Water */}
-            <Card>
-              <div id="section-water">
-                <SectionTitle icon="💧">{terms.water}</SectionTitle>
-                {(() => {
-                  const targetL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
-                  return (
-                    <p className="text-xs text-[#4e4e5c] mb-3">Target {targetL}L · Stop 1 hr before sleep · Not during meals</p>
-                  );
-                })()}
-                <WaterTracker value={log.water} onChange={v => update('water', v)} target={protocol?.water_target || 3000} />
-              </div>
-            </Card>
-
-            {/* Supplements */}
-            <Card>
-              <div id="section-supplements">
-                <SectionTitle icon="💊"
-                  tooltip="These supplements are prescribed by your coach. They are not medical advice — always check with your doctor if you take other medications.">
-                  {terms.supplements}
-                </SectionTitle>
-                <div className="space-y-2">
-                  {activeSupplements.map(s => (
-                    <CheckRow key={s.id} label={s.label} sub={s.sub}
-                      checked={!!log.supplements?.[s.id]}
-                      onChange={v => update('supplements', { ...log.supplements, [s.id]: v })} />
-                  ))}
-                </div>
-              </div>
-            </Card>
-
-            {/* Sleep */}
-            <Card>
-              <div id="section-sleep">
-                <SectionTitle icon="🌙">{terms.sleep}</SectionTitle>
-                <p className="text-xs text-[#4e4e5c] mb-3">Target 10:00 PM → 6:30 AM (8 hrs)</p>
-                <SleepTracker value={log.sleep} onChange={v => update('sleep', v)} />
-              </div>
-            </Card>
+            {/* Resistance training */}
+            <div id="section-workout">
+              <WorkoutLog date={date} />
+            </div>
 
             {/* Notes */}
             <Card>
