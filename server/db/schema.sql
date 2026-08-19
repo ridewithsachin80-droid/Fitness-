@@ -204,6 +204,11 @@ ALTER TABLE foods ADD COLUMN IF NOT EXISTS name_aliases JSONB DEFAULT '[]';
 -- Coach messages: track when the member has read a note, so the Today page
 -- only shows unread ones and read history moves into the notification bell.
 ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+
+-- Biological sex — required by the Mifflin-St Jeor BMR equation used for TDEE.
+-- Nullable: when unset, the app falls back to a sex-neutral average and tells
+-- the member to ask their coach to set it.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
 CREATE INDEX IF NOT EXISTS idx_monitor_notes_patient_unread
   ON monitor_notes(patient_id, read_at);
 
