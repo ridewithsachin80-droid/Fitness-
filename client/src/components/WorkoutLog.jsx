@@ -47,6 +47,7 @@ function listenOnce() {
 export default function WorkoutLog({ date }) {
   const [exercisesInSession, setExercisesInSession] = useState([]); // [{exercise_id, exercise_name, sets:[{reps,weight_kg}]}]
   const [durationMin, setDurationMin] = useState('');
+  const [sessionNotes, setSessionNotes] = useState('');
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch]       = useState('');
@@ -184,6 +185,7 @@ export default function WorkoutLog({ date }) {
       justLoadedRef.current = true;
       setExercisesInSession(data.exercises || []);
       setDurationMin(data.session?.duration_min || '');
+      setSessionNotes(data.session?.notes || '');
     }).catch(() => {}).finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -486,8 +488,19 @@ export default function WorkoutLog({ date }) {
         </div>
       )}
 
+      {/* Session notes — includes freeform workouts logged via AI chat
+          (walks, cycling, yoga). Without this they were saved but invisible. */}
+      {sessionNotes && (
+        <div className="mt-3 pt-3 border-t border-white/[0.06]">
+          <p className="text-[10px] font-bold text-[#5a5a68] uppercase tracking-wider mb-1.5">Session notes</p>
+          <p className="text-xs text-[#b6b6c2] leading-relaxed whitespace-pre-wrap bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2.5">
+            {sessionNotes}
+          </p>
+        </div>
+      )}
+
       {/* Optional duration */}
-      {exercisesInSession.length > 0 && (
+      {(exercisesInSession.length > 0 || sessionNotes) && (
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/[0.06]">
           <span className="text-xs text-[#9a9aa6]">Session duration:</span>
           <input type="number" inputMode="numeric" value={durationMin}

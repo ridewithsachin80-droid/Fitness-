@@ -249,9 +249,7 @@ export default function AIChatLog() {
         sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })),
       }));
 
-      // Snapshot exactly what we'd need to restore on Undo — either the prior
-      // duration/notes/exercises, or (if there was no session at all) a flag
-      // so undo knows to clear it back to nothing.
+      // Snapshot for Undo
       workoutUndoRef.current = {
         date,
         hadSession: !!prevSession,
@@ -260,11 +258,46 @@ export default function AIChatLog() {
         exercises: prevExercises,
       };
 
+      // Resolve an exercise by name, creating it if the library doesn't have it.
+      // The library is shared globally, and POST /exercises upserts on name,
+      // so this is safe to call for an existing name too.
+      const resolveExerciseId = async (name) => {
+        try {
+          const { data: found } = await api.get('/workouts/exercises', { params: { q: name } });
+          const exact = (found || []).find(
+            e => e.name.toLowerCase() === name.toLowerCase()
+          );
+          if (exact) return exact.id;
+        } catch { /* fall through to create */ }
+        try {
+          const { data: created } = await api.post('/workouts/exercises', { name });
+          return created?.id || null;
+        } catch (err) {
+          console.error('AI chat: could not resolve exercise', name, err);
+          return null;
+        }
+      };
+
+      // Split: workouts WITH sets become real exercise rows; the rest
+      // (walks, cycling, yoga) stay as a session note + duration.
+      const structured = workoutsOn.filter(w => w.sets?.length);
+      const freeform   = workoutsOn.filter(w => !w.sets?.length);
+
+      const mergedExercises = [...prevExercises];
+      for (const w of structured) {
+        const exId = await resolveExerciseId(w.name);
+        if (!exId) { freeform.push(w); continue; }  // fall back to a note
+        const sets = w.sets.map(st => ({ reps: st.reps, weight_kg: st.weight_kg }));
+        const already = mergedExercises.find(e => e.exercise_id === exId);
+        if (already) already.sets = [...already.sets, ...sets];  // append, never replace
+        else mergedExercises.push({ exercise_id: exId, sets });
+      }
+
       const addedMinutes = workoutsOn.reduce((s, w) => s + (parseFloat(w.duration_min) || 0), 0);
       const newDuration = (prevSession?.duration_min || 0) + addedMinutes || prevSession?.duration_min || null;
 
-      const newLines = workoutsOn.map(w =>
-        `✨ ${w.name}${w.qty_text ? ` — ${w.qty_text}` : ''}${w.calories_burned ? ` (~${w.calories_burned} kcal)` : ''}`
+      const newLines = freeform.map(w =>
+        `\u2728 ${w.name}${w.qty_text ? ` \u2014 ${w.qty_text}` : ''}${w.calories_burned ? ` (~${w.calories_burned} kcal)` : ''}`
       );
       const combinedNotes = [prevSession?.notes, ...newLines].filter(Boolean).join('\n').slice(0, 2000);
 
@@ -272,12 +305,12 @@ export default function AIChatLog() {
         date,
         duration_min: newDuration,
         notes: combinedNotes,
-        exercises: prevExercises,   // unchanged — protects any manually-logged sets
+        exercises: mergedExercises,
       });
-      return { ok: true };
+      return { ok: true, exercisesAdded: structured.length };
     } catch (err) {
       console.error('AI chat: failed to save workouts:', err);
-      workoutUndoRef.current = null;   // nothing to undo if the write itself failed
+      workoutUndoRef.current = null;
       return { ok: false };
     }
   }, []);
@@ -607,9 +640,16 @@ export default function AIChatLog() {
                                   <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
                                     w.on ? 'bg-[#7c5cfc] text-white' : 'bg-white/[0.08] text-transparent'
                                   }`}>✓</span>
-                                  <p className={`text-[12px] font-semibold truncate ${w.on ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
-                                    {w.name}{w.qty_text ? ` — ${w.qty_text}` : ''}
-                                  </p>
+                                  <div className="min-w-0">
+                                    <p className={`text-[12px] font-semibold truncate ${w.on ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
+                                      {w.name}{w.qty_text ? ` — ${w.qty_text}` : ''}
+                                    </p>
+                                    {w.sets?.length > 0 && (
+                                      <p className="text-[10px] text-[#8e8e9a] truncate">
+                                        {w.sets.map((st, si) => `${st.reps}×${st.weight_kg || 'BW'}${st.weight_kg ? 'kg' : ''}`).join(' · ')}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                                 {w.calories_burned != null && (
                                   <p className="text-[11px] font-semibold text-emerald-400 flex-shrink-0">~{w.calories_burned} kcal</p>
@@ -617,7 +657,9 @@ export default function AIChatLog() {
                               </button>
                             ))}
                             <p className="text-[10px] text-[#4e4e5c] px-1">
-                              Saved as a note on today's session · add exact sets & reps in the Workout section anytime.
+                              {m.parsed.workouts.some(w => w.on && w.sets?.length)
+                                ? 'Sets and reps go straight into your Workout log.'
+                                : "Saved to today's session · add exact sets & reps in the Workout section anytime."}
                             </p>
                           </div>
                         </div>
