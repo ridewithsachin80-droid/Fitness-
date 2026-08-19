@@ -16,6 +16,7 @@ import WorkoutLog    from '../components/WorkoutLog';
 import SleepTracker  from '../components/SleepTracker';
 import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
+import AIChatLog, { useAIChat } from '../components/AIChatLog';
 import { useSettingsStore, useTerms } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
@@ -652,6 +653,24 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
   );
 }
 
+// ─── Floating AI Chat button ──────────────────────────────────────────────────
+// Sits above the bottom nav so a member can log their whole day by chat from
+// anywhere on the page without scrolling to a specific section.
+function AIChatFab() {
+  const openChat = useAIChat(s => s.openChat);
+  const open     = useAIChat(s => s.open);
+  if (open) return null; // hide while the chat itself is on screen
+  return (
+    <button
+      onClick={openChat}
+      aria-label="Log with AI Chat"
+      className="fixed z-40 w-14 h-14 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-xl shadow-[0_4px_24px_rgba(124,92,252,0.5)] border border-white/[0.15] active:scale-90 transition-transform"
+      style={{ right: 16, bottom: 'calc(88px + env(safe-area-inset-bottom))' }}>
+      ✨
+    </button>
+  );
+}
+
 // ─── Main DailyLog Page ───────────────────────────────────────────────────────
 
 export default function DailyLog() {
@@ -1179,6 +1198,12 @@ export default function DailyLog() {
       </div>
 
       <PatientBottomNav />
+
+      {/* AI Chat — mounted once; opened from the FAB below or FoodLog banner */}
+      <AIChatLog />
+
+      {/* Floating AI logging button — reachable from anywhere on the page */}
+      <AIChatFab />
 
       <InstallPrompt />
 
