@@ -425,6 +425,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
     pin:           '',
     confirmPin:    '',
     height_cm:     member.height_cm     || '',
+    dob:           member.dob ? String(member.dob).slice(0, 10) : '',
+    gender:        member.gender        || '',
     start_weight:  member.start_weight  || '',
     target_weight: member.target_weight || '',
   });
@@ -435,6 +437,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
     setForm(f => ({
       ...f,
       height_cm:     data.height_cm     || '',
+      dob:           data.dob ? String(data.dob).slice(0, 10) : '',
+      gender:        data.gender        || '',
       start_weight:  data.start_weight  || '',
       target_weight: data.target_weight || '',
     }));
@@ -599,6 +603,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
         phone:         form.phone.trim(),
         pin:           form.pin || undefined,
         height_cm:     form.height_cm     || null,
+        dob:           form.dob           || null,
+        gender:        form.gender        || null,
         start_weight:  form.start_weight  || null,
         target_weight: form.target_weight || null,
         protocol_activities:  proto.activities,
@@ -1055,6 +1061,24 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
           <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6] mt-1">Profile</p>
           <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
+          <Field label="Date of birth"      type="date"   value={form.dob}           onChange={v=>set('dob',v)} />
+          <div>
+            <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Sex</label>
+            <div className="flex gap-2">
+              {[['male','Male'],['female','Female']].map(([val,label]) => (
+                <button key={val} type="button"
+                  onClick={() => set('gender', form.gender === val ? '' : val)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                    form.gender === val
+                      ? 'bg-[rgba(124,92,252,0.16)] border-[rgba(124,92,252,0.5)] text-white'
+                      : 'border-white/[0.08] text-[#9a9aa6] hover:border-white/[0.15]'
+                  }`}>{label}</button>
+              ))}
+            </div>
+            <p className="text-[10px] text-[#5a5a68] mt-1.5">
+              Date of birth and sex are required for the member's TDEE calculation.
+            </p>
+          </div>
           <Field label="Start Weight (kg)"  type="number" value={form.start_weight}  onChange={v=>set('start_weight',v)}  placeholder="85" />
           <Field label="Target Weight (kg)" type="number" value={form.target_weight} onChange={v=>set('target_weight',v)} placeholder="70" />
         </div>

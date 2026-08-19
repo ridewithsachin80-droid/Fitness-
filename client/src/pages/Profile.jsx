@@ -279,12 +279,21 @@ export default function Profile() {
           const heightCm = p.height_cm ? parseFloat(p.height_cm) : null;
           const bmr = calcBMR({ weightKg, heightCm, age: ageYrs, gender: p.gender });
           if (!bmr) {
+            // Name exactly what's missing — "we need height, DOB and weight" is
+            // confusing when two of the three are already filled in.
+            const missing = [
+              !heightCm && 'height',
+              ageYrs == null && 'date of birth',
+              !weightKg && 'a logged weight',
+            ].filter(Boolean);
             return (
               <Card>
                 <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
                 <p className="text-sm text-[#8e8e9a] mt-2 leading-relaxed">
-                  To calculate this we need your height, date of birth and latest weight.
-                  Ask your coach to complete your profile.
+                  Still needed: <span className="text-[#d8d8de] font-semibold">{missing.join(', ')}</span>.
+                  {missing.includes('a logged weight')
+                    ? ' Log your morning weight on the Today page.'
+                    : ' Ask your coach to add this to your profile.'}
                 </p>
               </Card>
             );
