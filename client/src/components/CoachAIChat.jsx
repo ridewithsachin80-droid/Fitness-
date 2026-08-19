@@ -40,9 +40,9 @@ const SUGGESTION_CHIPS = [
   'Message all members: please log daily',
 ];
 
-/** Floating action button — export so pages can drop it in one line.
- *  Pass bottomOffset (px) on pages with a fixed bottom nav so the FAB sits above it. */
-export function CoachAIFab({ bottomOffset = 24 }) {
+/** Edge-docked side tab — export so pages can drop it in one line.
+ *  Pass bottomOffset (px) on pages with a fixed bottom nav so it clears the nav. */
+export function CoachAIFab({ bottomOffset = 40 }) {
   const openChat = useCoachAI(s => s.openChat);
   const open     = useCoachAI(s => s.open);
   if (open) return null;
@@ -50,8 +50,14 @@ export function CoachAIFab({ bottomOffset = 24 }) {
     <button
       onClick={openChat}
       aria-label="Coach AI"
-      className="fixed z-40 w-14 h-14 rounded-full bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] flex items-center justify-center text-xl shadow-[0_4px_24px_rgba(124,92,252,0.5)] border border-white/[0.15] active:scale-90 transition-transform"
-      style={{ right: 16, bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))` }}>
+      className="fixed z-40 flex items-center justify-center bg-gradient-to-br from-[#7c5cfc] to-[#4c2fd8] shadow-[0_4px_20px_rgba(124,92,252,0.45)] border border-r-0 border-white/[0.15] active:scale-95 transition-transform"
+      style={{
+        right: 0,
+        bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))`,
+        width: 46, height: 52,
+        borderTopLeftRadius: 16, borderBottomLeftRadius: 16,
+        paddingRight: 2, fontSize: 20,
+      }}>
       ✨
     </button>
   );
