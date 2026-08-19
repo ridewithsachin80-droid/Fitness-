@@ -311,6 +311,7 @@ router.post('/assign', async (req, res) => {
 router.put('/members/:id', async (req, res) => {
   const { id } = req.params;
   const { name, phone, pin, height_cm, start_weight, target_weight, conditions,
+          gender, dob,
           protocol_activities, protocol_acv, protocol_supplements,
           custom_activities, custom_acv, custom_supplements,
           item_overrides,
@@ -349,8 +350,8 @@ router.put('/members/:id', async (req, res) => {
         custom_activities, custom_acv, custom_supplements, item_overrides,
         fasting_start, fasting_end, fasting_note, fasting_label,
         macro_kcal, macro_pro, macro_carb, macro_fat, macro_phase,
-        meal_plan, rda_overrides)
-      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        meal_plan, rda_overrides, gender, dob)
+      VALUES ($1,$2,$3,$4,$5,3000,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
       ON CONFLICT (user_id) DO UPDATE SET
         height_cm            = EXCLUDED.height_cm,
         start_weight         = EXCLUDED.start_weight,
@@ -374,6 +375,8 @@ router.put('/members/:id', async (req, res) => {
         macro_phase          = EXCLUDED.macro_phase,
         meal_plan            = EXCLUDED.meal_plan,
         rda_overrides        = EXCLUDED.rda_overrides,
+        gender               = EXCLUDED.gender,
+        dob                  = EXCLUDED.dob,
         updated_at           = NOW()
     `, [
       id,
@@ -400,6 +403,10 @@ router.put('/members/:id', async (req, res) => {
       meal_plan   ? JSON.stringify(meal_plan) : null,
       rda_overrides && Object.keys(rda_overrides).length > 0
         ? JSON.stringify(rda_overrides) : '{}',
+      // Sex + DOB feed the member's TDEE calculation on their Profile page
+      ['male', 'female'].includes(String(gender || '').toLowerCase())
+        ? String(gender).toLowerCase() : null,
+      dob || null,
     ]);
 
     await client.query('COMMIT');
@@ -407,7 +414,7 @@ router.put('/members/:id', async (req, res) => {
     // Return updated member
     const result = await client.query(
       `SELECT u.id, u.name, u.phone, u.active,
-         pp.height_cm, pp.start_weight, pp.target_weight,
+         pp.height_cm, pp.gender, pp.dob, pp.start_weight, pp.target_weight,
          pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
          pp.custom_activities, pp.custom_acv, pp.custom_supplements,
          pp.item_overrides,

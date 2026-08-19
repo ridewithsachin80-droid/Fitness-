@@ -113,11 +113,11 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
 // MUST be registered BEFORE /:id to prevent "me" being treated as an id.
 router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
   try {
-    const [profileResult, labsResult, notesResult] = await Promise.all([
+    const [profileResult, labsResult, todayLogResult, workoutResult, notesResult] = await Promise.all([
       pool.query(
         `SELECT
            u.id, u.name, u.phone, u.created_at,
-           pp.dob, pp.height_cm, pp.start_weight, pp.target_weight,
+           pp.dob, pp.gender, pp.height_cm, pp.start_weight, pp.target_weight,
            pp.conditions, pp.diet_notes, pp.water_target,
            pp.fasting_start, pp.fasting_end, pp.fasting_label, pp.fasting_note,
            pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
@@ -136,6 +136,25 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       // Bug fix: also return labs so Progress.jsx lab highlights work
       pool.query(
         `SELECT * FROM lab_values WHERE patient_id = $1 ORDER BY test_date DESC`,
+        [req.user.id]
+      ),
+      // Today's log — powers the TDEE energy-balance card (calories in vs out)
+      pool.query(
+        `SELECT log_date, weight_kg, food_items, activities, compliance_pct
+         FROM daily_logs
+         WHERE patient_id = $1
+         ORDER BY log_date DESC
+         LIMIT 1`,
+        [req.user.id]
+      ),
+      // Today's workout session (duration feeds the exercise-burn estimate)
+      pool.query(
+        `SELECT ws.session_date, ws.duration_min,
+                (SELECT COUNT(*) FROM session_sets ss WHERE ss.session_id = ws.id) AS set_count
+         FROM workout_sessions ws
+         WHERE ws.patient_id = $1
+         ORDER BY ws.session_date DESC
+         LIMIT 1`,
         [req.user.id]
       ),
       // Coach notes visible to member — flagged notes first, then newest
@@ -160,6 +179,7 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       phone:           p.phone,
       member_since:    p.created_at,
       dob:             p.dob,
+      gender:          p.gender || null,
       height_cm:       p.height_cm,
       start_weight:    p.start_weight,
       target_weight:   p.target_weight,
@@ -172,6 +192,27 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       avg_compliance:  p.avg_compliance_30 ? Math.round(parseFloat(p.avg_compliance_30)) : null,
       labs:            labsResult.rows,
       coach_notes:     notesResult.rows,
+      // Today's energy in/out — the Profile page turns this into a TDEE
+      // surplus/deficit figure. Sent raw so the client owns the maths.
+      today_energy: (() => {
+        const log = todayLogResult.rows[0] || null;
+        const ws  = workoutResult.rows[0] || null;
+        const istToday = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+          .toISOString().split('T')[0];
+        const logDate = log?.log_date
+          ? new Date(log.log_date).toISOString().split('T')[0] : null;
+        const wsDate = ws?.session_date
+          ? new Date(ws.session_date).toISOString().split('T')[0] : null;
+        return {
+          date:          istToday,
+          is_today:      logDate === istToday,
+          food_items:    logDate === istToday && Array.isArray(log.food_items) ? log.food_items : [],
+          activities:    logDate === istToday && log.activities ? log.activities : {},
+          weight_kg:     log?.weight_kg ? parseFloat(log.weight_kg) : null,
+          workout_min:   wsDate === istToday ? (ws.duration_min || 0) : 0,
+          workout_sets:  wsDate === istToday ? parseInt(ws.set_count) || 0 : 0,
+        };
+      })(),
       fasting: p.fasting_start ? {
         start: p.fasting_start,
         end:   p.fasting_end,
