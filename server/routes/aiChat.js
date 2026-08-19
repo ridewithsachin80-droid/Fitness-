@@ -1,22 +1,30 @@
 /**
- * server/routes/aiChat.js
+ * server/routes/aiChat.js  (v2 — full-day logging)
  *
- * AI Chat food logging — Fittr-style natural language logging.
- * Member types "2 chapati, 1 bowl dal, 1 glass milk" and the AI parses
- * every item, estimates grams from Indian portion words (katori, glass,
- * piece, plate), and returns full nutrition so the client can add all
- * items to the daily log in one tap.
+ * AI Chat logging — the member types ONE message describing their whole day:
+ *   "weight 82.5, morning walk done, 2 chapati and dal for lunch,
+ *    acv before meal 2, drank 1 litre water, took b12 and d3,
+ *    slept 10:30 to 6:30"
+ * and the AI parses it into every field of daily_logs: weight, activity
+ * checkboxes, ACV, supplements, water, sleep, and food items with full
+ * nutrition. The client shows a grouped preview and applies it in one tap.
+ *
+ * The client sends the member's ASSIGNED protocol items (ids + labels) with
+ * each message, so the AI maps free text onto the exact per-member protocol —
+ * including coach-customised labels — and the server whitelists every id it
+ * returns against that list. The AI can never tick an item the member does
+ * not have.
  *
  * Provider chain: Groq (primary, free) → Gemini (secondary, free).
- * Same pattern as routes/aiFoods.js — self-contained on purpose so a
- * change here can never break the existing single-food AI search.
+ * Self-contained on purpose so a change here can never break the existing
+ * single-food AI search in routes/aiFoods.js.
  *
  * Routes:
- *   POST /api/ai-chat/parse   → Parse free text into logged food items + workouts
+ *   POST /api/ai-chat/parse   → Parse free text into a full-day log preview
  *
  * Auth: authenticated users only.
  *
- * How it plugs in — add to server/index.js:
+ * Mounted in server/index.js:
  *   const aiChatRoutes = require('./routes/aiChat');
  *   app.use('/api/ai-chat', aiChatRoutes);
  */
@@ -49,7 +57,7 @@ async function callGroqOnce(model, prompt) {
       model,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
-      max_tokens: 2500,
+      max_tokens: 3000,
       response_format: { type: 'json_object' },
     },
     {
@@ -68,7 +76,7 @@ async function callGeminiOnce(model, prompt) {
     `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
     {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 2500 },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 3000 },
     },
     { headers: { 'content-type': 'application/json' }, timeout: 30000 }
   );
@@ -120,7 +128,6 @@ async function callAI(prompt) {
             await new Promise(r => setTimeout(r, wait));
             continue;
           }
-          if (!retryable) break;
           break;
         }
       }
@@ -130,8 +137,6 @@ async function callAI(prompt) {
 }
 
 // ── Nutrition normaliser — guarantees all 36 fields exist ────────────────────
-// Same shape used by aiFoods.js / NutritionSummary, so chat-logged foods
-// participate fully in the micro-nutrient summary.
 function normaliseNutrients(raw = {}) {
   const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
   const fiber     = num(raw.fiber);
@@ -165,57 +170,92 @@ function normaliseNutrients(raw = {}) {
   };
 }
 
-// ── Prompt builder ───────────────────────────────────────────────────────────
-function buildParsePrompt(message, mealSlots) {
-  const slots = Array.isArray(mealSlots) && mealSlots.length
-    ? mealSlots.join(' | ')
-    : 'Meal 1 | Meal 2 | Meal 3';
+// ── Context sanitiser ────────────────────────────────────────────────────────
+// The client sends the member's assigned protocol items. Cap counts + string
+// lengths so a malicious client can't balloon the prompt.
+function sanitiseItems(list, max = 30) {
+  if (!Array.isArray(list)) return [];
+  return list.slice(0, max)
+    .filter(i => i && i.id && i.label)
+    .map(i => ({
+      id:    String(i.id).slice(0, 40),
+      label: String(i.label).slice(0, 60),
+      sub:   i.sub ? String(i.sub).slice(0, 80) : '',
+    }));
+}
 
-  return `You are a professional Indian nutritionist AI inside a fitness tracking app.
-A member typed what they ate and/or exercised, in casual language (English, Hinglish,
-or Kannada-English mix). Parse it into structured log entries.
+// ── Prompt builder ───────────────────────────────────────────────────────────
+function buildParsePrompt(message, ctx) {
+  const slots = ctx.mealSlots.length ? ctx.mealSlots.join(' | ') : 'Meal 1 | Meal 2 | Meal 3';
+  const listBlock = (items) =>
+    items.length
+      ? items.map(i => `  - id:"${i.id}" → ${i.label}${i.sub ? ` (${i.sub})` : ''}`).join('\n')
+      : '  (none assigned)';
+
+  return `You are the AI logging assistant inside an Indian fitness coaching app.
+A member typed what they did today, in casual language (English, Hinglish, or
+Kannada-English mix). Parse the message into structured daily-log entries.
 
 Member's message: "${message}"
 
-The app's meal slots are: ${slots}
+MEMBER'S ASSIGNED PROTOCOL (use ONLY these ids — never invent ids):
+Meal slots: ${slots}
+Activities:
+${listBlock(ctx.activities)}
+ACV doses:
+${listBlock(ctx.acv)}
+Supplements:
+${listBlock(ctx.supplements)}
+Daily water target: ${ctx.waterTargetMl} ml
 
-RULES:
-1. Extract EVERY food item mentioned with its quantity.
-2. Convert Indian portion words to grams using realistic values:
+PARSING RULES:
+1. WEIGHT — "weight 82.5" / "82.5kg today" → weight_kg: 82.5. Must be 20–300 kg,
+   else null. Only when explicitly stated as body weight.
+2. ACTIVITIES — map mentions to activity ids by MEANING, not exact words:
+   "did my walk"→the walking activity, "post lunch steps"→the steps item after
+   the midday meal, "gym done"/"workout done"→resistance/training item.
+   "all activities done" → every activity id. Only include ids from the list.
+3. ACV — "acv before lunch"→the ACV dose nearest the midday meal. "all acv done"
+   or "acv done" (unqualified) → every ACV id.
+4. SUPPLEMENTS — "took b12 and d3"→those ids. "took my supplements" /
+   "supplements done" (unqualified) → ALL assigned supplement ids.
+5. WATER — "drank 1 litre"→water_ml_add: 1000. "2 glasses"→500 (1 glass≈250ml).
+   Amount ADDED, 0–6000. If they say "finished my water target", use ${ctx.waterTargetMl}.
+6. SLEEP — "slept 10:30 to 6:30"→bedtime "22:30", waketime "06:30" (24h HH:MM).
+   Evening times without am/pm are PM for bedtime; morning times are AM for wake.
+7. FOOD — extract EVERY food with quantity. Indian portions:
    1 chapati/roti≈30g, 1 phulka≈25g, 1 paratha≈60g, 1 idli≈40g, 1 dosa≈80g,
    1 katori/bowl dal≈150g, 1 katori sabzi≈100g, 1 katori rice≈100g, 1 plate rice≈150g,
-   1 glass milk≈200g, 1 glass buttermilk≈200g, 1 cup tea/coffee≈150g, 1 cup≈240ml,
-   1 egg≈55g, 1 banana≈120g, 1 apple≈150g, 1 tbsp≈15g, 1 tsp≈5g, 1 slice bread≈25g,
-   handful nuts≈28g, 1 scoop protein powder≈30g, 1 piece sweet≈30g.
-   If the user gives explicit grams/ml, use those.
-3. For each food give accurate per-100g nutrition (USDA / NIN India values, cooked
-   form as commonly eaten in India). Include calories(kcal), protein, total_carbs,
-   fat, fiber, sugar (grams) and sodium, calcium, iron, potassium, vit_c (mg).
-4. If the member indicates a meal (breakfast/lunch/dinner/snack/morning/night or a
-   slot name), map it to the CLOSEST slot from the list above, else null.
-5. If the member mentions exercise (walk, pushups, gym, yoga, cycling...), list it
-   under workouts with estimated calories burned for an average adult. Do NOT invent
-   workouts that were not mentioned.
-6. reply: ONE short friendly sentence summarising what you understood (mention total
-   calories). No emojis. No medical advice.
-7. If the message contains NO food and NO exercise, return empty arrays and a reply
-   asking them to describe what they ate.
+   1 glass milk/buttermilk≈200g, 1 cup tea/coffee≈150g, 1 egg≈55g, 1 banana≈120g,
+   1 apple≈150g, 1 tbsp≈15g, 1 tsp≈5g, 1 slice bread≈25g, handful nuts≈28g,
+   1 scoop protein powder≈30g, 1 piece sweet≈30g. Explicit grams/ml win.
+   Per-100g nutrition from USDA/NIN India (cooked form as eaten in India):
+   calories(kcal), protein, total_carbs, fat, fiber, sugar (g) and sodium,
+   calcium, iron, potassium, vit_c (mg).
+   Map stated meals (breakfast/lunch/dinner/snack/morning/night or slot names)
+   to the CLOSEST slot from the meal slots list, else null.
+8. WORKOUTS — exercise mentions beyond the protocol activities (pushups, cycling,
+   yoga...) go in workouts with estimated kcal burned. Never invent workouts.
+9. reply — ONE short friendly sentence summarising what was understood. Mention
+   food calories if food present. No emojis. No medical advice.
+10. Anything not mentioned → null / empty array. If nothing parseable at all,
+   return empty everything and a reply asking them to describe their day.
 
 Return ONLY a raw JSON object, no markdown fences, exactly this structure:
 {
-  "reply": "Got it — 2 chapatis and a bowl of dal, about 290 kcal.",
+  "reply": "Got it — weight 82.5, walk done, lunch logged at 290 kcal, 1L water.",
+  "weight_kg": 82.5,
+  "activity_ids": ["walk"],
+  "acv_ids": ["acv2"],
+  "supplement_ids": ["b12", "d3"],
+  "water_ml_add": 1000,
+  "sleep": { "bedtime": "22:30", "waketime": "06:30" },
   "foods": [
     {
-      "name": "Chapati",
-      "qty_text": "2 pieces",
-      "grams": 60,
-      "meal": null,
-      "confidence": "high",
-      "per_100g": {
-        "calories": 297, "protein": 8.0, "total_carbs": 61, "fat": 3.7,
-        "fiber": 4.9, "sugar": 1.6, "sodium": 298, "calcium": 33,
-        "iron": 2.4, "potassium": 196, "vit_c": 0
-      }
+      "name": "Chapati", "qty_text": "2 pieces", "grams": 60, "meal": null,
+      "per_100g": { "calories": 297, "protein": 8.0, "total_carbs": 61, "fat": 3.7,
+        "fiber": 4.9, "sugar": 1.6, "sodium": 298, "calcium": 33, "iron": 2.4,
+        "potassium": 196, "vit_c": 0 }
     }
   ],
   "workouts": [
@@ -224,10 +264,7 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
 }`;
 }
 
-// ── DB enrichment ────────────────────────────────────────────────────────────
-// For each AI-parsed food, try to find it in our foods table. A DB hit gives
-// us the food_id + our own (often verified) full 36-field nutrition, which is
-// preferred over the AI's estimate.
+// ── DB enrichment for foods ──────────────────────────────────────────────────
 async function enrichFromDB(foods) {
   const out = [];
   for (const f of foods) {
@@ -249,7 +286,6 @@ async function enrichFromDB(foods) {
         source  = rows[0].verified ? 'db-verified' : 'db';
       }
     } catch (e) {
-      // DB lookup is best-effort — AI values are fine on their own
       console.error('ai-chat DB enrich failed for', f.name, e.message);
     }
     out.push({ ...f, food_id, per_100g: per100g, source });
@@ -257,44 +293,94 @@ async function enrichFromDB(foods) {
   return out;
 }
 
+// ── Validators ───────────────────────────────────────────────────────────────
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function whitelistIds(aiIds, allowedItems) {
+  if (!Array.isArray(aiIds)) return [];
+  const allowed = new Set(allowedItems.map(i => i.id));
+  return [...new Set(aiIds.map(String))].filter(id => allowed.has(id));
+}
+
 // ── POST /api/ai-chat/parse ──────────────────────────────────────────────────
-// Body:    { message: string, mealSlots?: string[] }
-// Returns: { reply, foods: [{name, qty_text, grams, meal, food_id, source,
-//                            per_100g, macros:{cal,pro,carb,fat}}],
-//            workouts: [...], totals: {cal,pro,carb,fat} }
+// Body: {
+//   message: string,
+//   context: {
+//     mealSlots:    string[],
+//     activities:   [{id,label,sub}],   ← member's ACTIVE protocol items
+//     acv:          [{id,label,sub}],
+//     supplements:  [{id,label,sub}],
+//     waterTargetMl: number
+//   }
+// }
+// Returns: { reply, weight_kg, activities:[{id,label}], acv:[...],
+//            supplements:[...], water_ml_add, sleep, foods:[...],
+//            workouts:[...], totals:{cal,pro,carb,fat} }
 router.post('/parse', async (req, res) => {
-  const { message, mealSlots } = req.body;
+  const { message, context } = req.body;
 
   if (!message || String(message).trim().length < 2) {
     return res.status(400).json({ error: 'Message required' });
   }
-  const cleanMsg = String(message).trim().slice(0, 1000); // hard cap — keeps prompt small
+  const cleanMsg = String(message).trim().slice(0, 1200);
+
+  const ctx = {
+    mealSlots:     Array.isArray(context?.mealSlots) ? context.mealSlots.slice(0, 8).map(s => String(s).slice(0, 40)) : [],
+    activities:    sanitiseItems(context?.activities),
+    acv:           sanitiseItems(context?.acv),
+    supplements:   sanitiseItems(context?.supplements),
+    waterTargetMl: Math.min(8000, Math.max(500, parseInt(context?.waterTargetMl) || 3000)),
+  };
 
   try {
-    const { text: rawText, provider, model } = await callAI(buildParsePrompt(cleanMsg, mealSlots));
+    const { text: rawText, provider, model } = await callAI(buildParsePrompt(cleanMsg, ctx));
 
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed   = JSON.parse(jsonText);
 
-    const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
-    const workouts = Array.isArray(parsed.workouts) ? parsed.workouts : [];
+    // ── Weight ──
+    let weight_kg = parseFloat(parsed.weight_kg);
+    if (!Number.isFinite(weight_kg) || weight_kg < 20 || weight_kg > 300) weight_kg = null;
+    else weight_kg = +weight_kg.toFixed(1);
 
-    // Drop garbage rows (no name or no grams)
-    const validFoods = rawFoods.filter(
-      f => f && f.name && (parseFloat(f.grams) || 0) > 0
-    ).map(f => ({
-      name:     String(f.name).trim().slice(0, 100),
-      qty_text: String(f.qty_text || '').slice(0, 60),
-      grams:    Math.min(5000, Math.round(parseFloat(f.grams))), // sanity cap
-      meal:     f.meal ? String(f.meal).slice(0, 40) : null,
-      confidence: f.confidence || 'medium',
-      per_100g: f.per_100g || {},
-    }));
+    // ── Checkbox groups — whitelist against the member's actual protocol ──
+    const label = (items) => (id) => {
+      const it = items.find(i => i.id === id);
+      return { id, label: it?.label || id };
+    };
+    const activities  = whitelistIds(parsed.activity_ids,   ctx.activities).map(label(ctx.activities));
+    const acv         = whitelistIds(parsed.acv_ids,        ctx.acv).map(label(ctx.acv));
+    const supplements = whitelistIds(parsed.supplement_ids, ctx.supplements).map(label(ctx.supplements));
+
+    // ── Water ──
+    let water_ml_add = Math.round(parseFloat(parsed.water_ml_add));
+    if (!Number.isFinite(water_ml_add) || water_ml_add <= 0) water_ml_add = null;
+    else water_ml_add = Math.min(6000, water_ml_add);
+
+    // ── Sleep ──
+    let sleep = null;
+    if (parsed.sleep && (parsed.sleep.bedtime || parsed.sleep.waketime)) {
+      const bt = HHMM.test(parsed.sleep.bedtime  || '') ? parsed.sleep.bedtime  : null;
+      const wt = HHMM.test(parsed.sleep.waketime || '') ? parsed.sleep.waketime : null;
+      if (bt || wt) sleep = { bedtime: bt, waketime: wt };
+    }
+
+    // ── Foods ──
+    const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
+    const validFoods = rawFoods
+      .filter(f => f && f.name && (parseFloat(f.grams) || 0) > 0)
+      .slice(0, 25)
+      .map(f => ({
+        name:     String(f.name).trim().slice(0, 100),
+        qty_text: String(f.qty_text || '').slice(0, 60),
+        grams:    Math.min(5000, Math.round(parseFloat(f.grams))),
+        meal:     f.meal ? String(f.meal).slice(0, 40) : null,
+        per_100g: f.per_100g || {},
+      }));
 
     const foods = await enrichFromDB(validFoods);
 
-    // Compute per-item macros + day totals server-side so the client never
-    // has to trust AI arithmetic.
+    // Per-item macros + totals computed server-side — never trust AI arithmetic
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
     for (const f of foods) {
       const factor = f.grams / 100;
@@ -308,18 +394,33 @@ router.post('/parse', async (req, res) => {
       totCarb += f.macros.carb; totFat += f.macros.fat;
     }
 
-    const cleanWorkouts = workouts.filter(w => w && w.name).map(w => ({
-      name:            String(w.name).trim().slice(0, 100),
-      qty_text:        String(w.qty_text || '').slice(0, 60),
-      duration_min:    parseFloat(w.duration_min) || null,
-      calories_burned: Math.round(parseFloat(w.calories_burned)) || null,
-    }));
+    // ── Workouts (info only) ──
+    const workouts = (Array.isArray(parsed.workouts) ? parsed.workouts : [])
+      .filter(w => w && w.name)
+      .slice(0, 10)
+      .map(w => ({
+        name:            String(w.name).trim().slice(0, 100),
+        qty_text:        String(w.qty_text || '').slice(0, 60),
+        duration_min:    parseFloat(w.duration_min) || null,
+        calories_burned: Math.round(parseFloat(w.calories_burned)) || null,
+      }));
+
+    const nothingParsed = !weight_kg && !activities.length && !acv.length &&
+      !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length;
 
     return res.json({
       reply: String(parsed.reply || '').slice(0, 400) ||
-             (foods.length ? `Logged ${foods.length} item${foods.length > 1 ? 's' : ''}.` : "I couldn't find any food in that — try e.g. \"2 chapati and 1 bowl dal\"."),
+        (nothingParsed
+          ? 'I couldn\'t find anything to log in that — try e.g. "weight 82.5, walk done, 2 chapati for lunch, 1L water".'
+          : 'Here\'s what I understood — review and apply.'),
+      weight_kg,
+      activities,
+      acv,
+      supplements,
+      water_ml_add,
+      sleep,
       foods,
-      workouts: cleanWorkouts,
+      workouts,
       totals: {
         cal:  Math.round(totCal),
         pro:  +totPro.toFixed(1),
