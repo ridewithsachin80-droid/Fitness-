@@ -19,6 +19,7 @@ const trackerRoutes   = require('./routes/trackers');   // Wearable device integ
 const remindersRoutes = require('./routes/reminders');  // Custom reminders
 const workoutRoutes   = require('./routes/workouts');   // Resistance training
 const programRoutes   = require('./routes/programs');   // Coach-assigned workout programs
+const aiChatRoutes    = require('./routes/aiChat');     // AI chat natural-language food logging
 
 // ── Service imports ───────────────────────────────────────────────────────────
 const cronService = require('./services/cronService');
@@ -57,6 +58,7 @@ app.use('/api/foods',         aiFoodsRoutes); // must be before foodsRoutes
 app.use('/api/trackers',      trackerRoutes);
 app.use('/api/workouts',      workoutRoutes);
 app.use('/api/programs',      programRoutes);
+app.use('/api/ai-chat',       aiChatRoutes);  // Fittr-style AI chat logging
 app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
