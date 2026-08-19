@@ -779,7 +779,7 @@ export default function DailyLog() {
   const [autoSaved, setAutoSaved] = useState(false);
 
   // ── Premium hero state ─────────────────────────────────────────────────────
-  const [showWeightEdit, setShowWeightEdit] = useState(false);
+  const [heroPanel, setHeroPanel] = useState(null);   // 'weight' | 'water' | 'sleep' | null
   const [streak, setStreak] = useState(0);
   const [chipInfo, setChipInfo] = useState(null);   // { label, sub } — long-press popover
   const chipPressRef = useRef(null);
@@ -941,44 +941,84 @@ export default function DailyLog() {
                 )}
               </div>
               <div className="flex-1 grid grid-cols-2 gap-1.5">
-                <button onClick={() => { setShowWeightEdit(v => !v); haptic(10); }}
-                  className="text-left bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5 active:scale-[0.98] transition-transform">
-                  <span className="block text-[13px] font-bold">{log.weight ? `${log.weight} kg` : '— kg'}</span>
-                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">
-                    ⚖ {(() => {
-                      if (!log.weight || yesterdayWeight == null) return 'Tap to log';
-                      const d = parseFloat(log.weight) - yesterdayWeight;
-                      return d < 0 ? `↓ ${Math.abs(d).toFixed(1)} vs yest` : d > 0 ? `↑ ${d.toFixed(1)} vs yest` : '= yesterday';
-                    })()}
-                  </span>
-                </button>
-                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5">
-                  <span className="block text-[13px] font-bold">
-                    {(() => {
-                      const kcal = (log.food || []).reduce((s, it) => {
-                        if (it.per_100g?.calories) return s + Math.round(it.per_100g.calories * (it.grams || 0) / 100);
-                        const n = getNutrition(it.name, it.grams); return s + (n?.cal || 0);
-                      }, 0);
-                      return protocol?.macros?.kcal
-                        ? <>{kcal}<span className="text-[9px] text-[#4e4e5c]"> /{protocol.macros.kcal}</span></>
-                        : kcal;
-                    })()}
-                  </span>
-                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🔥 kcal eaten</span>
-                </div>
-                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5">
-                  <span className="block text-[13px] font-bold">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
-                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">✓ protocol</span>
-                </div>
-                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-2.5 py-1.5">
-                  <span className="block text-[13px] font-bold">{((log.water || 0) / 1000).toFixed(1)} L</span>
-                  <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
-                </div>
+                {(() => {
+                  const tileBase = 'text-left border rounded-xl px-2.5 py-1.5 transition-all active:scale-[0.98]';
+                  const on  = 'bg-[rgba(124,92,252,0.14)] border-[rgba(124,92,252,0.45)]';
+                  const off = 'bg-white/[0.04] border-white/[0.07]';
+                  const toggle = (key) => { setHeroPanel(p => (p === key ? null : key)); haptic(10); };
+                  const jump = (id) => { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); haptic(10); };
+
+                  const kcal = (log.food || []).reduce((s, it) => {
+                    if (it.per_100g?.calories) return s + Math.round(it.per_100g.calories * (it.grams || 0) / 100);
+                    const n = getNutrition(it.name, it.grams); return s + (n?.cal || 0);
+                  }, 0);
+
+                  const bt = log.sleep?.bedtime, wt = log.sleep?.waketime;
+                  let sleepDur = '';
+                  if (bt && wt) {
+                    const [bh, bm] = bt.split(':').map(Number);
+                    const [wh, wm] = wt.split(':').map(Number);
+                    let mins = (wh * 60 + wm) - (bh * 60 + bm);
+                    if (mins <= 0) mins += 24 * 60;
+                    sleepDur = `${Math.floor(mins / 60)}h ${mins % 60}m`;
+                  }
+
+                  return (
+                    <>
+                      {/* Weight → inline editor */}
+                      <button onClick={() => toggle('weight')}
+                        className={`${tileBase} ${heroPanel === 'weight' ? on : off}`}>
+                        <span className="block text-[13px] font-bold">{log.weight ? `${log.weight} kg` : '— kg'}</span>
+                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">
+                          ⚖ {(() => {
+                            if (!log.weight) return 'Tap to log';
+                            if (yesterdayWeight == null) return 'Logged';
+                            const d = parseFloat(log.weight) - yesterdayWeight;
+                            return d < 0 ? `↓ ${Math.abs(d).toFixed(1)} vs yest` : d > 0 ? `↑ ${d.toFixed(1)} vs yest` : '= yesterday';
+                          })()}
+                        </span>
+                      </button>
+
+                      {/* Calories → jumps to the food log */}
+                      <button onClick={() => jump('section-food')} className={`${tileBase} ${off}`}>
+                        <span className="block text-[13px] font-bold">
+                          {protocol?.macros?.kcal
+                            ? <>{kcal}<span className="text-[9px] text-[#4e4e5c]"> /{protocol.macros.kcal}</span></>
+                            : kcal}
+                        </span>
+                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🔥 kcal eaten</span>
+                      </button>
+
+                      {/* Protocol → jumps to the protocol card */}
+                      <button onClick={() => jump('section-protocol')} className={`${tileBase} ${off}`}>
+                        <span className="block text-[13px] font-bold">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
+                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">✓ protocol</span>
+                      </button>
+
+                      {/* Water → inline quick-add */}
+                      <button onClick={() => toggle('water')}
+                        className={`${tileBase} ${heroPanel === 'water' ? on : off}`}>
+                        <span className="block text-[13px] font-bold">{((log.water || 0) / 1000).toFixed(1)} L</span>
+                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                      </button>
+
+                      {/* Sleep → inline time pickers (full width) */}
+                      <button onClick={() => toggle('sleep')}
+                        className={`${tileBase} col-span-2 ${heroPanel === 'sleep' ? on : off}`}>
+                        <span className="block text-[13px] font-bold">
+                          {sleepDur || <span className="text-[#4e4e5c]">— set times</span>}
+                          {sleepDur && <span className="text-[9px] text-[#4e4e5c] font-semibold"> · {bt} → {wt}</span>}
+                        </span>
+                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🌙 {terms.sleep}</span>
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
-            {/* Inline weight editor — opens from the weight stat */}
-            {showWeightEdit && (
+            {/* ── Inline panels — open from the stat tiles above ── */}
+            {heroPanel === 'weight' && (
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
                 <p className="text-[10px] text-[#4e4e5c] mb-2 font-medium">⚖ Morning weight — after washroom, before food</p>
                 <div className="flex items-center gap-3">
@@ -987,7 +1027,7 @@ export default function DailyLog() {
                     style={{ minHeight: 48, fontSize: 20 }}
                     className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-2 focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)] text-[#ededf0] bg-[#1a1a20]" />
                   <span className="text-[#4e4e5c] font-bold">kg</span>
-                  <button onClick={() => setShowWeightEdit(false)}
+                  <button onClick={() => setHeroPanel(null)}
                     style={{ minHeight: 48 }}
                     className="px-4 rounded-2xl bg-[#7c5cfc] text-white text-sm font-bold active:scale-95 transition-transform">Done</button>
                 </div>
@@ -997,6 +1037,86 @@ export default function DailyLog() {
                     <p className="text-xs text-amber-400 leading-relaxed">{weightWarning}</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {heroPanel === 'water' && (
+              <div className="mt-3 pt-3 border-t border-white/[0.07]" id="section-water">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-[#4e4e5c] font-medium">
+                    💧 Target {((protocol?.water_target || 3000) / 1000).toFixed(1)}L · stop 1 hr before sleep · not during meals
+                  </p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                </div>
+                <p className="text-2xl font-extrabold text-[#ededf0] mb-1">
+                  {((log.water || 0) / 1000).toFixed(2)}
+                  <span className="text-xs text-[#4e4e5c] font-bold"> / {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                  <span className="text-[10px] text-[#4e4e5c] font-semibold float-right mt-2">
+                    {Math.round((log.water || 0) / 250)} glasses
+                  </span>
+                </p>
+                <div className="h-2 rounded-full bg-white/[0.07] overflow-hidden mb-2.5">
+                  <div className="h-full rounded-full bg-blue-400 transition-all"
+                    style={{ width: `${Math.min(100, ((log.water || 0) / (protocol?.water_target || 3000)) * 100)}%` }} />
+                </div>
+                <div className="flex gap-1.5">
+                  {[250, 500, 750, 1000].map(ml => (
+                    <button key={ml}
+                      onClick={() => { update('water', Math.min(10000, (log.water || 0) + ml)); haptic(12); }}
+                      style={{ minHeight: 44 }}
+                      className="flex-1 text-[11px] font-bold text-blue-300 bg-blue-400/[0.08] border border-blue-400/25 rounded-xl active:scale-95 transition-transform">
+                      +{ml >= 1000 ? '1L' : ml}
+                    </button>
+                  ))}
+                </div>
+                {(log.water || 0) > 0 && (
+                  <button onClick={() => { update('water', Math.max(0, (log.water || 0) - 250)); haptic(10); }}
+                    style={{ minHeight: 38 }}
+                    className="w-full mt-1.5 text-[10px] font-bold text-[#4e4e5c] hover:text-red-400 rounded-xl border border-white/[0.06] transition-colors">
+                    − Remove 250ml
+                  </button>
+                )}
+              </div>
+            )}
+
+            {heroPanel === 'sleep' && (
+              <div className="mt-3 pt-3 border-t border-white/[0.07]" id="section-sleep">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-[#4e4e5c] font-medium">🌙 Target 10:00 PM → 6:30 AM (8 hrs)</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#7c5cfc]">Done</button>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-[9px] font-bold text-[#4e4e5c] uppercase tracking-wider mb-1">Bedtime</label>
+                    <input type="time" value={log.sleep?.bedtime || ''}
+                      onChange={e => update('sleep', { ...log.sleep, bedtime: e.target.value })}
+                      style={{ minHeight: 46 }}
+                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-[9px] font-bold text-[#4e4e5c] uppercase tracking-wider mb-1">Wake time</label>
+                    <input type="time" value={log.sleep?.waketime || ''}
+                      onChange={e => update('sleep', { ...log.sleep, waketime: e.target.value })}
+                      style={{ minHeight: 46 }}
+                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.3)]" />
+                  </div>
+                </div>
+                {log.sleep?.bedtime && log.sleep?.waketime && (() => {
+                  const [bh, bm] = log.sleep.bedtime.split(':').map(Number);
+                  const [wh, wm] = log.sleep.waketime.split(':').map(Number);
+                  let mins = (wh * 60 + wm) - (bh * 60 + bm);
+                  if (mins <= 0) mins += 24 * 60;
+                  const hrs = mins / 60;
+                  return (
+                    <div className={`mt-2 text-center text-[11px] font-bold py-2 rounded-xl ${
+                      hrs >= 7 && hrs <= 9 ? 'bg-emerald-400/10 text-emerald-300'
+                      : hrs < 6 ? 'bg-amber-400/10 text-amber-300'
+                      : 'bg-white/[0.04] text-[#8e8e9a]'}`}>
+                      {Math.floor(mins / 60)}h {mins % 60}m
+                      {hrs >= 7 && hrs <= 9 ? ' — great sleep 🌙' : hrs < 6 ? ' — try for 7+ hours' : ''}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -1017,12 +1137,11 @@ export default function DailyLog() {
 
         {/* Quick jump floating button */}
         <QuickJump sections={[
-          { id: 'section-hero',     label: 'Weight',   icon: '⚖️' },
-          { id: 'section-protocol', label: 'Protocol', icon: '🏃' },
-          { id: 'section-food',     label: 'Food log', icon: '🥗' },
-          { id: 'section-water',    label: 'Water',    icon: '💧' },
-          { id: 'section-sleep',    label: 'Sleep',    icon: '🌙' },
-          { id: 'section-workout',  label: 'Workout',  icon: '🏋️' },
+          { id: 'section-hero',     label: 'Weight & stats', icon: '⚖️' },
+          { id: 'section-protocol', label: 'Protocol',       icon: '🏃' },
+          { id: 'section-food',     label: 'Food log',       icon: '🥗' },
+          { id: 'section-workout',  label: 'Workout',        icon: '🏋️' },
+          { id: 'section-notes',    label: 'Notes',          icon: '📝' },
         ]} />
 
         {loading ? (
@@ -1221,70 +1340,6 @@ export default function DailyLog() {
               </div>
             )}
 
-            {/* ── Water + Sleep tiles ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <Card>
-                <div id="section-water">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">💧 {terms.water}</span>
-                    {(log.water || 0) > 0 && (
-                      <button onClick={() => { update('water', Math.max(0, (log.water || 0) - 250)); haptic(10); }}
-                        className="text-[10px] font-bold text-[#4e4e5c] hover:text-red-400">−250</button>
-                    )}
-                  </div>
-                  <p className="text-lg font-extrabold text-[#ededf0]">
-                    {((log.water || 0) / 1000).toFixed(2)}
-                    <span className="text-[10px] text-[#4e4e5c] font-bold"> / {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
-                  </p>
-                  <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden my-2">
-                    <div className="h-full rounded-full bg-blue-400 transition-all"
-                      style={{ width: `${Math.min(100, ((log.water || 0) / (protocol?.water_target || 3000)) * 100)}%` }} />
-                  </div>
-                  <div className="flex gap-1.5">
-                    {[250, 500].map(ml => (
-                      <button key={ml}
-                        onClick={() => { update('water', Math.min(10000, (log.water || 0) + ml)); haptic(12); }}
-                        style={{ minHeight: 36 }}
-                        className="flex-1 text-[11px] font-bold text-blue-300 bg-blue-400/[0.08] border border-blue-400/25 rounded-xl active:scale-95 transition-transform">
-                        +{ml}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-              <Card>
-                <div id="section-sleep">
-                  <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🌙 {terms.sleep}</span>
-                  {(() => {
-                    const bt = log.sleep?.bedtime, wt = log.sleep?.waketime;
-                    let dur = '';
-                    if (bt && wt) {
-                      const [bh, bm] = bt.split(':').map(Number);
-                      const [wh, wm] = wt.split(':').map(Number);
-                      let mins = (wh * 60 + wm) - (bh * 60 + bm);
-                      if (mins <= 0) mins += 24 * 60;
-                      dur = `${Math.floor(mins / 60)}h ${mins % 60}m`;
-                    }
-                    return (
-                      <p className="text-lg font-extrabold text-[#ededf0] mt-1">
-                        {dur || <span className="text-[#4e4e5c]">— set times</span>}
-                      </p>
-                    );
-                  })()}
-                  <div className="flex gap-1.5 mt-2">
-                    <input type="time" value={log.sleep?.bedtime || ''}
-                      onChange={e => update('sleep', { ...log.sleep, bedtime: e.target.value })}
-                      style={{ minHeight: 36 }}
-                      className="flex-1 min-w-0 text-[11px] font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-1.5 text-[#ededf0] focus:outline-none focus:ring-1 focus:ring-[rgba(124,92,252,0.4)]" />
-                    <input type="time" value={log.sleep?.waketime || ''}
-                      onChange={e => update('sleep', { ...log.sleep, waketime: e.target.value })}
-                      style={{ minHeight: 36 }}
-                      className="flex-1 min-w-0 text-[11px] font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-1.5 text-[#ededf0] focus:outline-none focus:ring-1 focus:ring-[rgba(124,92,252,0.4)]" />
-                  </div>
-                </div>
-              </Card>
-            </div>
-
             {/* Sprint 3: Prescribed meals */}
             {protocol?.meal_plan?.length > 0 && (
               <PrescribedMeals mealPlan={protocol.meal_plan} foodItems={log.food} onLogMeal={logMeal} />
@@ -1315,6 +1370,7 @@ export default function DailyLog() {
 
             {/* Notes */}
             <Card>
+              <div id="section-notes" />
               <SectionTitle icon="📝">{terms.notes}</SectionTitle>
               <textarea value={log.notes} onChange={e => update('notes', e.target.value)}
                 placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} rows={3}
