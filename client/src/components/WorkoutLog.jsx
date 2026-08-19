@@ -439,8 +439,9 @@ export default function WorkoutLog({ date }) {
                 <div className="space-y-1.5 mb-2">
                   <div className="flex gap-2 text-[10px] text-[#5a5a68] uppercase font-semibold px-1">
                     <span className="w-8">Set</span>
-                    <span className="flex-1">Weight (kg)</span>
-                    <span className="flex-1">Reps</span>
+                    <span className="flex-1 min-w-0 text-center">Weight (kg)</span>
+                    <span className="flex-1 min-w-0 text-center">Reps</span>
+                    <span className="w-6" />
                     <span className="w-6" />
                   </div>
                   {ex.sets.map((set, i) => (
@@ -449,12 +450,12 @@ export default function WorkoutLog({ date }) {
                       <input type="number" inputMode="decimal" value={set.weight_kg}
                         onChange={e => updateSet(ex.exercise_id, i, 'weight_kg', e.target.value)}
                         placeholder="0"
-                        className="flex-1 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                        className="flex-1 min-w-0 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
                       <input type="number" inputMode="numeric" value={set.reps}
                         onChange={e => updateSet(ex.exercise_id, i, 'reps', e.target.value)}
                         placeholder="0"
-                        className="flex-1 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
-                      <button onClick={() => removeSet(ex.exercise_id, i)} className="w-6 text-[#5a5a68] hover:text-red-400 text-sm">×</button>
+                        className="flex-1 min-w-0 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(124,92,252,0.30)]" />
+                      <button onClick={() => removeSet(ex.exercise_id, i)} className="w-6 flex-shrink-0 text-[#5a5a68] hover:text-red-400 text-sm">×</button>
                     </div>
                   ))}
                 </div>
