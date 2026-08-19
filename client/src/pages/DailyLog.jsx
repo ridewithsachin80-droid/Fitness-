@@ -759,23 +759,6 @@ export default function DailyLog() {
   const [milestone, setMilestone] = useState(null); // { icon, title, body }
   // Today's volume, but only when it beats every previous session on record
   const [volumePB, setVolumePB] = useState(null);
-  useEffect(() => {
-    if (date !== today()) { setVolumePB(null); return; }
-    let cancelled = false;
-    api.get('/workouts/summary', { params: { days: 180 } })
-      .then(({ data }) => {
-        if (cancelled) return;
-        const sessions = data?.sessions || [];
-        const todayStr = today();
-        const todaysVol = sessions.find(s => String(s.date).slice(0, 10) === todayStr)?.volume_kg || 0;
-        const priorBest = sessions
-          .filter(s => String(s.date).slice(0, 10) !== todayStr)
-          .reduce((m, s) => Math.max(m, s.volume_kg), 0);
-        setVolumePB(todaysVol > 0 && todaysVol > priorBest ? todaysVol : null);
-      })
-      .catch(() => { if (!cancelled) setVolumePB(null); });
-    return () => { cancelled = true; };
-  }, [date, workoutRefreshKey, heroPanel]);
   const prevSaved = useRef(false);
   useEffect(() => {
     if (!prevSaved.current && saved && date === today()) {
@@ -849,6 +832,28 @@ export default function DailyLog() {
     if (prevChatOpen.current && !chatOpen) setWorkoutRefreshKey(k => k + 1);
     prevChatOpen.current = chatOpen;
   }, [chatOpen]);
+
+  // Personal-best detection. Declared here, AFTER heroPanel and
+  // workoutRefreshKey exist — its dependency array reads them on every
+  // render, so placing it above their declarations threw a temporal
+  // dead-zone ReferenceError and blanked the whole page.
+  useEffect(() => {
+    if (date !== today()) { setVolumePB(null); return; }
+    let cancelled = false;
+    api.get('/workouts/summary', { params: { days: 180 } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const sessions = data?.sessions || [];
+        const todayStr = today();
+        const todaysVol = sessions.find(s => String(s.date).slice(0, 10) === todayStr)?.volume_kg || 0;
+        const priorBest = sessions
+          .filter(s => String(s.date).slice(0, 10) !== todayStr)
+          .reduce((m, s) => Math.max(m, s.volume_kg), 0);
+        setVolumePB(todaysVol > 0 && todaysVol > priorBest ? todaysVol : null);
+      })
+      .catch(() => { if (!cancelled) setVolumePB(null); });
+    return () => { cancelled = true; };
+  }, [date, workoutRefreshKey, heroPanel]);
 
   // Workout tile summary — refreshed when the date changes or the panel closes
   useEffect(() => {
