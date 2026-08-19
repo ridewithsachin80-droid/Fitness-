@@ -209,6 +209,35 @@ ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
 -- Nullable: when unset, the app falls back to a sex-neutral average and tells
 -- the member to ask their coach to set it.
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
+
+-- Backfill muscle_group for exercises created without one (AI chat used to
+-- create name-only rows, which /muscle-coverage silently skipped). Idempotent:
+-- only touches rows still NULL, and never overwrites a coach's own value.
+UPDATE exercises SET muscle_group = 'chest'
+  WHERE muscle_group IS NULL AND (name ILIKE '%bench%' OR name ILIKE '%chest%'
+    OR name ILIKE '%pec%' OR name ILIKE '%fly%' OR name ILIKE '%push up%'
+    OR name ILIKE '%pushup%' OR name ILIKE '%push-up%' OR name ILIKE '%dip%');
+UPDATE exercises SET muscle_group = 'back'
+  WHERE muscle_group IS NULL AND (name ILIKE '%row%' OR name ILIKE '%pull up%'
+    OR name ILIKE '%pullup%' OR name ILIKE '%pull-up%' OR name ILIKE '%lat %'
+    OR name ILIKE '%deadlift%' OR name ILIKE '%back%' OR name ILIKE '%pulldown%'
+    OR name ILIKE '%shrug%');
+UPDATE exercises SET muscle_group = 'legs'
+  WHERE muscle_group IS NULL AND (name ILIKE '%squat%' OR name ILIKE '%leg%'
+    OR name ILIKE '%lunge%' OR name ILIKE '%calf%' OR name ILIKE '%quad%'
+    OR name ILIKE '%hamstring%' OR name ILIKE '%glute%' OR name ILIKE '%hip thrust%');
+UPDATE exercises SET muscle_group = 'shoulders'
+  WHERE muscle_group IS NULL AND (name ILIKE '%shoulder%' OR name ILIKE '%overhead%'
+    OR name ILIKE '%military%' OR name ILIKE '%lateral raise%' OR name ILIKE '%delt%'
+    OR name ILIKE '%arnold%' OR name ILIKE '%upright%');
+UPDATE exercises SET muscle_group = 'arms'
+  WHERE muscle_group IS NULL AND (name ILIKE '%curl%' OR name ILIKE '%bicep%'
+    OR name ILIKE '%tricep%' OR name ILIKE '%pushdown%' OR name ILIKE '%hammer%'
+    OR name ILIKE '%forearm%' OR name ILIKE '%preacher%');
+UPDATE exercises SET muscle_group = 'core'
+  WHERE muscle_group IS NULL AND (name ILIKE '%abs%' OR name ILIKE '%core%'
+    OR name ILIKE '%plank%' OR name ILIKE '%crunch%' OR name ILIKE '%sit up%'
+    OR name ILIKE '%situp%' OR name ILIKE '%oblique%' OR name ILIKE '%leg raise%');
 CREATE INDEX IF NOT EXISTS idx_monitor_notes_patient_unread
   ON monitor_notes(patient_id, read_at);
 
