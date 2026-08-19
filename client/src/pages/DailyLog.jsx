@@ -382,6 +382,33 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
 
 // ─── Sprint 5: Nutrition Summary Panel (3 tabs) ───────────────────────────────
 
+// Micro-nutrient key groups — shared by the hero tile and the summary panel so
+// the "20/31" badge and the panel can never disagree.
+const MICRO_VITAMINS = ['vit_a','vit_b1','vit_b2','vit_b3','vit_b5','vit_b6','vit_b12','vit_c','vit_d','vit_e','vit_k','folate','biotin','choline'];
+const MICRO_MINERALS = ['calcium','iron','magnesium','phosphorus','potassium','sodium','zinc','copper','manganese','selenium'];
+const MICRO_SPECIALS = ['fiber','omega3_ala','omega3_epa','omega3_dha','omega6','lycopene','beta_glucan'];
+const MICRO_TOTAL = MICRO_VITAMINS.length + MICRO_MINERALS.length + MICRO_SPECIALS.length;
+
+/** How many micro-nutrient targets are met today (same rules as the panel). */
+function countMicrosMet({ foodItems = [], supplements = {}, activities = {}, activeActivities = [], rdaOverrides = {} }) {
+  if (!foodItems.some(f => f.per_100g)) return { met: 0, total: MICRO_TOTAL, hasData: false };
+  const raw   = calcMicros(foodItems);
+  const withS = addSupplementMicros(raw, supplements);
+  const micros = addActivityMicros(withS, activities, activeActivities);
+
+  const met = [...MICRO_VITAMINS, ...MICRO_MINERALS, ...MICRO_SPECIALS].filter(key => {
+    const meta = RDA_TARGETS[key];
+    if (!meta) return false;
+    const rda = rdaOverrides[key] ? parseFloat(rdaOverrides[key]) : meta.rda;
+    const val = micros[key] || 0;
+    const pct = (val / rda) * 100;
+    // Upper-limit nutrients (e.g. sodium) count as met while UNDER the cap
+    return meta.upper ? pct <= 100 : pct >= 80;
+  }).length;
+
+  return { met, total: MICRO_TOTAL, hasData: true };
+}
+
 function NutritionSummary({ foodItems, supplements, activities, activeActivities, rdaOverrides = {} }) {
   const [tab, setTab] = useState('vitamins');
 
@@ -391,9 +418,7 @@ function NutritionSummary({ foodItems, supplements, activities, activeActivities
   const hasMicros  = foodItems.some(f => f.per_100g);
   if (!hasMicros) return null;
 
-  const VITAMINS = ['vit_a','vit_b1','vit_b2','vit_b3','vit_b5','vit_b6','vit_b12','vit_c','vit_d','vit_e','vit_k','folate','biotin','choline'];
-  const MINERALS = ['calcium','iron','magnesium','phosphorus','potassium','sodium','zinc','copper','manganese','selenium'];
-  const SPECIALS = ['fiber','omega3_ala','omega3_epa','omega3_dha','omega6','lycopene','beta_glucan'];
+  const VITAMINS = MICRO_VITAMINS, MINERALS = MICRO_MINERALS, SPECIALS = MICRO_SPECIALS;
 
   const getRda = (key) => {
     const meta = RDA_TARGETS[key];
@@ -1136,6 +1161,14 @@ export default function DailyLog() {
                     bodyWeightKg: parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0,
                   }).totalKcal;
 
+                  const micro = countMicrosMet({
+                    foodItems: log.food || [],
+                    supplements: log.supplements || {},
+                    activities: log.activities || {},
+                    activeActivities,
+                    rdaOverrides: protocol?.rda_overrides || {},
+                  });
+
                   const bt = log.sleep?.bedtime, wt = log.sleep?.waketime;
                   let sleepDur = '';
                   if (bt && wt) {
@@ -1227,6 +1260,21 @@ export default function DailyLog() {
                         </div>
                         <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
+
+                      {/* Nutrition → micro-nutrient panel (full width, 7th tile) */}
+                      <button onClick={() => toggle('nutrition')}
+                        className={`${tileBase} col-span-2 ${heroPanel === 'nutrition' ? on : off}`}>
+                        <div className="min-w-0">
+                          <span className="block text-[17px] font-extrabold leading-tight">
+                            {micro.hasData
+                              ? <>{micro.met}<span className="text-[11px] text-[#4e4e5c]"> / {micro.total} targets met</span></>
+                              : <span className="text-[#4e4e5c]">— log food first</span>}
+                          </span>
+                          <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🔬 nutrition</span>
+                        </div>
+                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                      </button>
+
                     </>
                   );
                 })()}
@@ -1342,11 +1390,11 @@ export default function DailyLog() {
       <div ref={swipeRef} className="max-w-md mx-auto px-4 space-y-3 pb-24 pt-3 swipe-hint">
 
 
-        {['protocol', 'food', 'workout'].includes(heroPanel) && !loading && (
+        {['protocol', 'food', 'workout', 'nutrition'].includes(heroPanel) && !loading && (
           <button onClick={() => { setHeroPanel(null); haptic(10); }}
             style={{ minHeight: 40 }}
             className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#8e8e9a] hover:text-white bg-white/[0.03] border border-white/[0.07] rounded-xl transition-colors">
-            ▲ Close {heroPanel === 'protocol' ? 'protocol' : heroPanel === 'food' ? 'food log' : 'workout'}
+            ▲ Close {heroPanel === 'protocol' ? 'protocol' : heroPanel === 'food' ? 'food log' : heroPanel === 'nutrition' ? 'nutrition' : 'workout'}
           </button>
         )}
 
@@ -1488,7 +1536,14 @@ export default function DailyLog() {
               </div>
             </Card>
 
-            {/* Sprint 5: Nutrition summary (3 tabs) — always shows when food has micro data */}
+          </div>
+        )}
+
+        {/* Nutrition — its own panel, opened from the hero tile. It used to sit
+            at the bottom of the food panel, where 31 nutrient rows buried the
+            food log itself. */}
+        {heroPanel === 'nutrition' && !loading && (
+          <div>
             <NutritionSummary
               foodItems={log.food || []}
               supplements={log.supplements || {}}
@@ -1496,6 +1551,15 @@ export default function DailyLog() {
               activities={log.activities || {}}
               rdaOverrides={protocol?.rda_overrides || {}}
             />
+            {!(log.food || []).some(f => f.per_100g) && (
+              <Card>
+                <SectionTitle icon="🔬">Nutrition</SectionTitle>
+                <p className="text-sm text-[#8e8e9a] mt-2 leading-relaxed">
+                  Log some food first — vitamins, minerals and omega-3s are
+                  calculated from what you eat.
+                </p>
+              </Card>
+            )}
           </div>
         )}
 
