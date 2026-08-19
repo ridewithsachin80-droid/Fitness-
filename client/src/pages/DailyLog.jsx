@@ -150,6 +150,19 @@ const QUICK_MICRO_KEYS = ['fiber','omega3_epa','omega3_dha','vit_b12','vit_d','c
 // element. The gradient stroke runs from the brand purple toward warm gold as
 // compliance climbs, so color encodes real progress rather than decorating it.
 
+// ── Energy balance (TDEE) ─────────────────────────────────────────────────────
+// Mirrors the fuller breakdown on the Profile page — same equations, so the two
+// screens can never disagree. BMR: Mifflin-St Jeor; burn from ticked protocol
+// activities (MET × kg × hours) plus logged workout minutes at 6 MET.
+function calcBMR({ weightKg, heightCm, age, gender }) {
+  if (!weightKg || !heightCm || age == null) return null;
+  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+  const g = String(gender || '').toLowerCase();
+  if (g === 'male')   return Math.round(base + 5);
+  if (g === 'female') return Math.round(base - 161);
+  return Math.round(base - 78); // sex unknown — midpoint of the two constants
+}
+
 function ComplianceRing({ pct }) {
   const r = 26, circ = 2 * Math.PI * r;
   const isHigh = pct >= 80;
@@ -743,6 +756,9 @@ export default function DailyLog() {
     }
   }, []);
 
+  // Height + sex power the hero's energy-balance chip (see calcBMR below)
+  const [bodyStats, setBodyStats] = useState({ height_cm: null, gender: null });
+
   useEffect(() => {
     getMyProfile().then(({ data }) => {
       if (data?.coach_notes?.length) setCoachNotes(data.coach_notes);
@@ -750,6 +766,10 @@ export default function DailyLog() {
         const diff = Date.now() - new Date(data.dob).getTime();
         setProfileAge(Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)));
       }
+      setBodyStats({
+        height_cm: data?.height_cm ? parseFloat(data.height_cm) : null,
+        gender:    data?.gender || null,
+      });
     }).catch(() => {});
   }, []);
 
@@ -999,7 +1019,50 @@ export default function DailyLog() {
                 <p className="text-sm font-bold text-[#ededf0] leading-tight">
                   {actDone + acvDone + suppDone} of {activeActivities.length + activeACV.length + activeSupplements.length} done today
                 </p>
-                <p className="text-[11px] text-[#8e8e9a] mt-0.5">Tap any tile below to open it</p>
+                {(() => {
+                  const weightKg = parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0;
+                  const bmr = calcBMR({
+                    weightKg,
+                    heightCm: bodyStats.height_cm,
+                    age: profileAge,
+                    gender: bodyStats.gender,
+                  });
+                  const kcalIn = (log.food || []).reduce((sum, it) => {
+                    if (it.per_100g?.calories) return sum + Math.round(it.per_100g.calories * (it.grams || 0) / 100);
+                    const n = getNutrition(it.name, it.grams); return sum + (n?.cal || 0);
+                  }, 0);
+
+                  // Needs BMR inputs and at least some food logged, else the
+                  // "deficit" would just be the whole day's TDEE and mislead.
+                  if (!bmr || kcalIn === 0) {
+                    return <p className="text-[11px] text-[#8e8e9a] mt-0.5">Tap any tile below to open it</p>;
+                  }
+
+                  const burned = calcBurned(
+                    log.activities || {}, activeActivities, weightKg, protocol?.item_overrides || {}
+                  ).total;
+                  const workoutBurn = workoutSummary.duration
+                    ? Math.round(6.0 * weightKg * (workoutSummary.duration / 60)) : 0;
+                  const out = Math.round(bmr * 1.2) + burned + workoutBurn;
+                  const balance = kcalIn - out;
+                  const surplus = balance > 0;
+
+                  return (
+                    <button onClick={() => { setHeroPanel(p => (p === 'food' ? null : 'food')); haptic(10); }}
+                      className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 border transition-all active:scale-95 ${
+                        surplus
+                          ? 'bg-amber-400/10 border-amber-400/30'
+                          : 'bg-emerald-400/10 border-emerald-400/30'
+                      }`}>
+                      <span className={`text-[11px] font-extrabold ${surplus ? 'text-amber-300' : 'text-emerald-300'}`}>
+                        {surplus ? '↑' : '↓'} {surplus ? '+' : '−'}{Math.abs(balance).toLocaleString()} kcal
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#8e8e9a]">
+                        {surplus ? 'surplus' : 'deficit'}
+                      </span>
+                    </button>
+                  );
+                })()}
               </div>
             </div>
 
