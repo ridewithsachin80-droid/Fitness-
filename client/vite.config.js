@@ -16,22 +16,42 @@ export default defineConfig({
         short_name: 'FitLife',
         description: 'Transform your health, one day at a time',
         theme_color: '#7c5cfc',
-        background_color: '#ffffff',
+        // Was #ffffff, which flashed a white screen on every cold start before
+        // the app painted. Matching the app's own background removes the flash.
+        background_color: '#0b0b0e',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
         scope: '/',
         icons: [
+          // "any" and "maskable" are split deliberately. A single icon marked
+          // 'any maskable' gets its rounded corners cropped by launchers that
+          // apply a circular mask, because the art runs to the edge. The
+          // maskable files below keep the artwork inside the centre 80% safe
+          // zone and fill the rest with the background colour.
           {
             src: '/icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
+            purpose: 'any',
           },
           {
             src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-192-maskable.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/icons/icon-512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
           {
             src: '/icons/apple-touch-icon.png',
