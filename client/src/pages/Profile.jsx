@@ -42,6 +42,63 @@ function bmiLabel(b) {
   return             { label: 'Obese',          cls: 'text-red-300 bg-[rgba(248,113,113,0.10)] border-[rgba(248,113,113,0.20)]' };
 }
 
+// ── TDEE (Total Daily Energy Expenditure) ─────────────────────────────────────
+//
+// BMR uses Mifflin-St Jeor (1990), the equation most widely recommended for
+// healthy adults — more accurate than Harris-Benedict for modern populations:
+//   Male:   BMR = 10×weight(kg) + 6.25×height(cm) − 5×age + 5
+//   Female: BMR = 10×weight(kg) + 6.25×height(cm) − 5×age − 161
+// When sex isn't recorded we average the two constants (−78) and flag it,
+// since guessing either way skews the result by ~166 kcal.
+//
+// TDEE = BMR × activity factor. We use 1.2 (sedentary baseline) and add the
+// day's ACTUAL measured burn from protocol activities and logged workouts on
+// top, rather than guessing a lifestyle multiplier — the member is already
+// logging what they did, so we use it.
+function calcBMR({ weightKg, heightCm, age, gender }) {
+  if (!weightKg || !heightCm || age == null) return null;
+  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+  const g = String(gender || '').toLowerCase();
+  if (g === 'male')   return Math.round(base + 5);
+  if (g === 'female') return Math.round(base - 161);
+  return Math.round(base - 78); // sex unknown — midpoint
+}
+
+// MET values for the standard protocol activities (Compendium of Physical
+// Activities). kcal = MET × weight(kg) × hours.
+const ACTIVITY_MET = {
+  walk:       { met: 3.5, min: 30 },
+  sun:        { met: 2.0, min: 20 },
+  steps1:     { met: 3.0, min: 20 },
+  steps2:     { met: 3.0, min: 20 },
+  steps3:     { met: 3.0, min: 20 },
+  resistance: { met: 5.0, min: 30 },
+};
+
+function calcActivityBurn(activities = {}, weightKg) {
+  if (!weightKg) return 0;
+  return Object.entries(activities).reduce((sum, [id, done]) => {
+    if (!done) return sum;
+    const a = ACTIVITY_MET[id];
+    if (!a) return sum;                       // custom items have no MET
+    return sum + Math.round(a.met * weightKg * (a.min / 60));
+  }, 0);
+}
+
+// Resistance training averages ~6 METs; used for logged workout duration.
+function calcWorkoutBurn(minutes, weightKg) {
+  if (!minutes || !weightKg) return 0;
+  return Math.round(6.0 * weightKg * (minutes / 60));
+}
+
+function calcFoodKcal(items = []) {
+  return items.reduce((sum, it) => {
+    const cal = it?.per_100g?.calories;
+    if (!cal) return sum;
+    return sum + Math.round(cal * ((it.grams || 0) / 100));
+  }, 0);
+}
+
 const CONDITION_LABELS = {
   fatty_liver:    '🫀 Fatty Liver',
   pre_diabetic:   '🩸 Pre-Diabetic',
@@ -214,6 +271,105 @@ export default function Profile() {
             </div>
           </Card>
         )}
+
+        {/* ── TDEE & today's energy balance ── */}
+        {(() => {
+          const ageYrs   = p.dob ? age(p.dob) : null;
+          const weightKg = p.current_weight ? parseFloat(p.current_weight) : null;
+          const heightCm = p.height_cm ? parseFloat(p.height_cm) : null;
+          const bmr = calcBMR({ weightKg, heightCm, age: ageYrs, gender: p.gender });
+          if (!bmr) {
+            return (
+              <Card>
+                <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
+                <p className="text-sm text-[#8e8e9a] mt-2 leading-relaxed">
+                  To calculate this we need your height, date of birth and latest weight.
+                  Ask your coach to complete your profile.
+                </p>
+              </Card>
+            );
+          }
+
+          const e = p.today_energy || {};
+          const restingTdee  = Math.round(bmr * 1.2);              // sedentary baseline
+          const activityBurn = calcActivityBurn(e.activities, weightKg);
+          const workoutBurn  = calcWorkoutBurn(e.workout_min, weightKg);
+          const totalOut     = restingTdee + activityBurn + workoutBurn;
+          const totalIn      = calcFoodKcal(e.food_items);
+          const balance      = totalIn - totalOut;
+          const logged       = totalIn > 0;
+
+          return (
+            <Card>
+              <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
+              <p className="text-xs text-[#5a5a68] mb-3">
+                Mifflin-St Jeor BMR × 1.2, plus today's logged activity
+                {!p.gender && ' · sex not set — ask your coach to add it for an exact figure'}
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
+                  <p className="text-lg font-extrabold text-[#ededf0]">{bmr}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#5a5a68] mt-0.5">BMR at rest</p>
+                </div>
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
+                  <p className="text-lg font-extrabold text-[#a78bfa]">{totalOut}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#5a5a68] mt-0.5">Burned today</p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 mb-3">
+                {[
+                  ['Resting (BMR × 1.2)', restingTdee, 'text-[#8e8e9a]'],
+                  ['Protocol activities', activityBurn, 'text-emerald-300'],
+                  ['Workout session',     workoutBurn,  'text-emerald-300'],
+                ].map(([label, val, cls]) => (
+                  <div key={label} className="flex items-center justify-between text-xs">
+                    <span className="text-[#8e8e9a]">{label}</span>
+                    <span className={`font-bold ${cls}`}>{val > 0 ? `+${val}` : val} kcal</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-white/[0.06]">
+                  <span className="text-[#8e8e9a]">Food eaten today</span>
+                  <span className="font-bold text-orange-400">{totalIn} kcal</span>
+                </div>
+              </div>
+
+              {logged ? (
+                <div className={`rounded-xl px-3.5 py-3 border ${
+                  balance > 0
+                    ? 'bg-amber-400/[0.08] border-amber-400/25'
+                    : 'bg-emerald-400/[0.08] border-emerald-400/25'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm font-bold ${balance > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                      {balance > 0 ? 'Surplus' : 'Deficit'}
+                    </span>
+                    <span className={`font-display text-xl font-bold ${balance > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                      {balance > 0 ? '+' : ''}{balance} kcal
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#8e8e9a] mt-1 leading-relaxed">
+                    {balance > 0
+                      ? `You've eaten ${balance} kcal more than you burned today. A sustained surplus adds weight (~7,700 kcal ≈ 1 kg).`
+                      : `You've burned ${Math.abs(balance)} kcal more than you ate. A sustained deficit of this size is roughly ${(Math.abs(balance) * 7 / 7700).toFixed(2)} kg per week.`}
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl px-3.5 py-3 bg-white/[0.03] border border-white/[0.07]">
+                  <p className="text-xs text-[#8e8e9a] leading-relaxed">
+                    Log today's food to see whether you're in a surplus or deficit.
+                  </p>
+                </div>
+              )}
+
+              <p className="text-[10px] text-[#5a5a68] mt-2.5 leading-relaxed">
+                Estimates only — actual needs vary with body composition, medication and
+                health conditions. Follow your coach's plan over these numbers.
+              </p>
+            </Card>
+          );
+        })()}
 
         {/* Conditions */}
         {p.conditions?.length > 0 && (
