@@ -949,8 +949,9 @@ export default function DailyLog() {
           </div>
 
           <div className="bg-white/[0.05] rounded-2xl p-3.5 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <div className="flex items-center gap-3.5">
-              <div className="relative">
+            {/* Compliance strip — ring + summary on one line, so tiles get full width */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative flex-shrink-0">
                 <ComplianceRing pct={compliance} />
                 <button onClick={() => setComplianceTip(v => !v)}
                   style={{ position: 'absolute', top: -4, right: -4, width: 17, height: 17, borderRadius: 9, background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: 9, cursor: 'pointer', fontWeight: 700 }}>?</button>
@@ -961,9 +962,17 @@ export default function DailyLog() {
                   </div>
                 )}
               </div>
-              <div className="flex-1 grid grid-cols-2 gap-1.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-[#ededf0] leading-tight">
+                  {actDone + acvDone + suppDone} of {activeActivities.length + activeACV.length + activeSupplements.length} done today
+                </p>
+                <p className="text-[11px] text-[#8e8e9a] mt-0.5">Tap any tile below to open it</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
                 {(() => {
-                  const tileBase = 'text-left border rounded-xl px-2.5 py-1.5 transition-all active:scale-[0.98]';
+                  const tileBase = 'text-left border rounded-2xl px-3 py-2.5 transition-all active:scale-[0.98] flex items-center justify-between gap-2';
                   const on  = 'bg-[rgba(124,92,252,0.14)] border-[rgba(124,92,252,0.45)]';
                   const off = 'bg-white/[0.04] border-white/[0.07]';
                   const toggle = (key) => { setHeroPanel(p => (p === key ? null : key)); haptic(10); };
@@ -988,8 +997,9 @@ export default function DailyLog() {
                       {/* Weight → inline editor */}
                       <button onClick={() => toggle('weight')}
                         className={`${tileBase} ${heroPanel === 'weight' ? on : off}`}>
-                        <span className="block text-[13px] font-bold">{log.weight ? `${log.weight} kg` : '— kg'}</span>
-                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">
+                        <div className="min-w-0">
+                          <span className="block text-[17px] font-extrabold leading-tight">{log.weight ? `${log.weight} kg` : '— kg'}</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">
                           ⚖ {(() => {
                             if (!log.weight) return 'Tap to log';
                             if (yesterdayWeight == null) return 'Logged';
@@ -997,60 +1007,76 @@ export default function DailyLog() {
                             return d < 0 ? `↓ ${Math.abs(d).toFixed(1)} vs yest` : d > 0 ? `↑ ${d.toFixed(1)} vs yest` : '= yesterday';
                           })()}
                         </span>
+                        </div>
+                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Food → opens the food log panel */}
                       <button onClick={() => toggle('food')}
                         className={`${tileBase} ${heroPanel === 'food' ? on : off}`}>
-                        <span className="block text-[13px] font-bold">
+                        <div className="min-w-0">
+                          <span className="block text-[17px] font-extrabold leading-tight">
                           {protocol?.macros?.kcal
-                            ? <>{kcal}<span className="text-[9px] text-[#4e4e5c]"> /{protocol.macros.kcal}</span></>
+                            ? <>{kcal}<span className="text-[11px] text-[#4e4e5c]"> /{protocol.macros.kcal}</span></>
                             : kcal}
                         </span>
-                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🔥 kcal eaten</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🔥 kcal eaten</span>
+                        </div>
+                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Protocol → opens the protocol panel */}
                       <button onClick={() => toggle('protocol')}
                         className={`${tileBase} ${heroPanel === 'protocol' ? on : off}`}>
-                        <span className="block text-[13px] font-bold">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
-                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">✓ protocol</span>
+                        <div className="min-w-0">
+                          <span className="block text-[17px] font-extrabold leading-tight">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">✓ protocol</span>
+                        </div>
+                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Water → inline quick-add */}
                       <button onClick={() => toggle('water')}
                         className={`${tileBase} ${heroPanel === 'water' ? on : off}`}>
-                        <span className="block text-[13px] font-bold">{((log.water || 0) / 1000).toFixed(1)} L</span>
-                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                        <div className="min-w-0">
+                          <span className="block text-[17px] font-extrabold leading-tight">{((log.water || 0) / 1000).toFixed(1)} L</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                        </div>
+                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Workout → opens the workout panel */}
                       <button onClick={() => toggle('workout')}
                         className={`${tileBase} ${heroPanel === 'workout' ? on : off}`}>
-                        <span className="block text-[13px] font-bold">
+                        <div className="min-w-0">
+                          <span className="block text-[17px] font-extrabold leading-tight">
                           {workoutSummary.count > 0
-                            ? <>{workoutSummary.count}<span className="text-[9px] text-[#4e4e5c]"> {workoutSummary.count === 1 ? 'exercise' : 'exercises'}</span></>
+                            ? <>{workoutSummary.count}<span className="text-[11px] text-[#4e4e5c]"> {workoutSummary.count === 1 ? 'exercise' : 'exercises'}</span></>
                             : workoutSummary.duration
-                            ? <>{workoutSummary.duration}<span className="text-[9px] text-[#4e4e5c]"> min</span></>
+                            ? <>{workoutSummary.duration}<span className="text-[11px] text-[#4e4e5c]"> min</span></>
                             : <span className="text-[#4e4e5c]">— none</span>}
                         </span>
-                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🏋️ workout</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🏋️ workout</span>
+                        </div>
+                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Sleep → inline time pickers (full width) */}
                       <button onClick={() => toggle('sleep')}
                         className={`${tileBase} ${heroPanel === 'sleep' ? on : off}`}>
-                        <span className="block text-[13px] font-bold">
+                        <div className="min-w-0">
+                          <span className="block text-[17px] font-extrabold leading-tight">
                           {sleepDur || <span className="text-[#4e4e5c]">— set times</span>}
-                          {sleepDur && <span className="text-[9px] text-[#4e4e5c] font-semibold"> · {bt} → {wt}</span>}
+                          {sleepDur && <span className="text-[11px] text-[#4e4e5c] font-semibold"> · {bt} → {wt}</span>}
                         </span>
-                        <span className="block text-[8px] font-bold tracking-wider text-[#4e4e5c] uppercase">🌙 {terms.sleep}</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🌙 {terms.sleep}</span>
+                        </div>
+                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
                       </button>
                     </>
                   );
                 })()}
               </div>
-            </div>
 
             {/* ── Inline panels — open from the stat tiles above ── */}
             {heroPanel === 'weight' && (
