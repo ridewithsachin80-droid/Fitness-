@@ -14,26 +14,31 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
                             : (fail++, console.log('  \u2717 ' + n + ' ' + JSON.stringify(e || '').slice(0, 160))); };
 
 async function lookup(name) {
-  const q = String(name).trim();
+  const ql = String(name).trim().toLowerCase();
   const { rows } = await pool.query(
-    `SELECT id, name, per_100g, verified,
+    `WITH c AS (
+       SELECT id, name, per_100g, verified,
+              LOWER(BTRIM(SPLIT_PART(name, '(', 1))) AS base
+       FROM foods
+       WHERE LOWER(name)       = $1
+          OR LOWER(name_local) = $1
+          OR LOWER(name_hindi) = $1
+          OR LOWER(name_aliases::text) LIKE $2
+          OR LOWER(name)       LIKE $3
+     )
+     SELECT id, name, per_100g, verified,
             CASE
-              WHEN LOWER(name)       = LOWER($1) THEN 0
-              WHEN LOWER(name_local) = LOWER($1) THEN 1
-              WHEN LOWER(name_hindi) = LOWER($1) THEN 2
-              WHEN LOWER(name_aliases::text) LIKE LOWER($2) THEN 3
-              WHEN LOWER(name)       LIKE LOWER($3) THEN 4
+              WHEN LOWER(name) = $1                  THEN 0
+              WHEN base = $1                         THEN 1
+              WHEN base IN ($1 || 's', $1 || 'es')   THEN 2
+              WHEN RTRIM($1, 's') = RTRIM(base, 's') THEN 2
+              WHEN base LIKE $1 || ' %'              THEN 4
               ELSE 5
-            END AS match_rank
-     FROM foods
-     WHERE LOWER(name)       = LOWER($1)
-        OR LOWER(name_local) = LOWER($1)
-        OR LOWER(name_hindi) = LOWER($1)
-        OR LOWER(name_aliases::text) LIKE LOWER($2)
-        OR LOWER(name)       LIKE LOWER($3)
-     ORDER BY match_rank ASC, verified DESC, LENGTH(name) ASC, id ASC
+            END AS rank
+     FROM c
+     ORDER BY rank ASC, verified DESC, LENGTH(base) ASC, id ASC
      LIMIT 1`,
-    [q, `%"${q.toLowerCase()}"%`, `${q.toLowerCase()}%`]
+    [ql, `%"${ql}"%`, `${ql}%`]
   );
   return rows[0] || null;
 }
@@ -43,12 +48,17 @@ const suspect = (name, cal) => DENSE.test(name) && cal < 300;
 
 (async () => {
   await pool.query('DELETE FROM foods');
+  // The real seed names, including the ones that caused the bug
   const seed = [
-    ['Whey Protein (Unflavoured)', 'Whey Protein', 400, 80],
-    ['Whey Protein (Chocolate)',   'Whey Choco',   390, 75],
-    ['Egg (Whole, Boiled)',        'Egg',          155, 13],
-    ['Okra (Bhindi, Cooked)',      'Okra',          33, 1.9],
-    ['Groundnut Oil',              'Oil',          900, 0],
+    ['Whey Protein (Unflavoured)',   'Whey Protein', 400, 80],
+    ['Whey Protein (Chocolate)',     'Whey Choco',   390, 75],
+    ['Eggs (Whole, Raw)',            'Muttai',       155, 12.6],
+    ['Egg White (Raw)',              'Egg White',     52, 10.9],
+    ['Egg Yolk (Raw)',               'Egg Yolk',     322, 15.9],
+    ['Egg Bhurji (Scrambled Egg)',   'Muttai Bhurji',185, 13.0],
+    ['Eggplant / Brinjal (Baingan)', 'Kathirikai',    25, 1.0],
+    ['Okra (Bhindi, Cooked)',        'Okra',          33, 1.9],
+    ['Groundnut Oil',                'Oil',          900, 0],
   ];
   for (const [name, local, cal, pro] of seed) {
     await pool.query(
@@ -67,11 +77,23 @@ const suspect = (name, cal) => DENSE.test(name) && cal < 300;
   const pro30 = r ? +(r.per_100g.protein * 30 / 100).toFixed(1) : 0;
   ck('30g scoop = 24g protein (was 7.2)', pro30 === 24, pro30);
 
-  console.log('\n[2] the other logged items still resolve');
-  for (const [typed, expect] of [['Egg', 'Egg (Whole, Boiled)'], ['Okra', 'Okra (Bhindi, Cooked)']]) {
+  console.log('\n[2] the egg family — a component must never beat the food');
+  const cases = [
+    ['Egg',        'Eggs (Whole, Raw)'],
+    ['Eggs',       'Eggs (Whole, Raw)'],
+    ['Egg White',  'Egg White (Raw)'],
+    ['Egg Yolk',   'Egg Yolk (Raw)'],
+    ['Egg Bhurji', 'Egg Bhurji (Scrambled Egg)'],
+    ['Eggplant',   'Eggplant / Brinjal (Baingan)'],
+    ['Okra',       'Okra (Bhindi, Cooked)'],
+  ];
+  for (const [typed, expect] of cases) {
     const m = await lookup(typed);
     ck(`"${typed}" -> ${expect}`, m && m.name === expect, m && m.name);
   }
+  const egg = await lookup('Egg');
+  const k165 = egg ? Math.round(egg.per_100g.calories * 165 / 100) : 0;
+  ck('165g of "Egg" = 256 kcal (was 531)', k165 === 256, k165);
 
   console.log('\n[3] exact names still win over prefix matches');
   const exact = await lookup('Whey Protein (Chocolate)');

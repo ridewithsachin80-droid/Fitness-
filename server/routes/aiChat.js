@@ -346,26 +346,51 @@ async function enrichFromDB(foods) {
       // Ordering matters: exact hits first, then a prefix match, so "Whey
       // Protein" prefers the plain entry over "Whey Protein (Chocolate)".
       const q = String(f.name || '').trim();
+      const ql = q.toLowerCase();
+
+      // Match against the BASE name — the part before any bracket — so "Egg"
+      // is compared with "Eggs", not with the whole string "Egg Yolk (Raw)".
+      //
+      // The earlier version ranked prefix matches by LENGTH(name), which
+      // looks sensible and is wrong: for "Egg" the shortest prefix match is
+      // "Egg Yolk (Raw)" (14 chars), shorter than "Eggs (Whole, Raw)" (17).
+      // That logged 165g of egg as 531 kcal instead of 256. A component of a
+      // food must never win over the food itself.
+      //
+      // Rank order:
+      //   0  exact full name
+      //   1  exact everyday name (name_local / name_hindi)
+      //   2  base name equals the query, singular or plural  <- "Eggs" for "Egg"
+      //   3  declared alias
+      //   4  base name starts with the query AND a word break follows
+      //      ("Egg Bhurji" yes, "Eggplant" no)
+      //   5  anything else that matched
       const { rows } = await pool.query(
-        `SELECT id, name, per_100g, verified,
+        `WITH c AS (
+           SELECT id, name, per_100g, verified,
+                  LOWER(BTRIM(SPLIT_PART(name, '(', 1))) AS base
+           FROM foods
+           WHERE LOWER(name)       = $1
+              OR LOWER(name_local) = $1
+              OR LOWER(name_hindi) = $1
+              OR LOWER(name_aliases::text) LIKE $2
+              OR LOWER(name)       LIKE $3
+         )
+         SELECT id, name, per_100g, verified,
                 CASE
-                  WHEN LOWER(name)       = LOWER($1) THEN 0
-                  WHEN LOWER(name_local) = LOWER($1) THEN 1
-                  WHEN LOWER(name_hindi) = LOWER($1) THEN 2
-                  WHEN LOWER(name_aliases::text) LIKE LOWER($2) THEN 3
-                  WHEN LOWER(name)       LIKE LOWER($3) THEN 4
+                  WHEN LOWER(name) = $1                              THEN 0
+                  WHEN base = $1                                     THEN 1
+                  WHEN base IN ($1 || 's', $1 || 'es')               THEN 2
+                  WHEN RTRIM($1, 's') = RTRIM(base, 's')             THEN 2
+                  WHEN base LIKE $1 || ' %'                          THEN 4
                   ELSE 5
-                END AS match_rank
-         FROM foods
-         WHERE LOWER(name)       = LOWER($1)
-            OR LOWER(name_local) = LOWER($1)
-            OR LOWER(name_hindi) = LOWER($1)
-            OR LOWER(name_aliases::text) LIKE LOWER($2)
-            OR LOWER(name)       LIKE LOWER($3)
-         ORDER BY match_rank ASC, verified DESC, LENGTH(name) ASC, id ASC
+                END AS rank
+         FROM c
+         ORDER BY rank ASC, verified DESC, LENGTH(base) ASC, id ASC
          LIMIT 1`,
-        [q, `%"${q.toLowerCase()}"%`, `${q.toLowerCase()}%`]
+        [ql, `%"${ql}"%`, `${ql}%`]
       );
+
       if (rows.length && rows[0].per_100g && (parseFloat(rows[0].per_100g.calories) || 0) > 0) {
         food_id = rows[0].id;
         per100g = normaliseNutrients(rows[0].per_100g);
