@@ -1,53 +1,58 @@
-FitLife — AI-first, premium pass
-================================
+FitLife — wrong calories on AI-logged foods
+===========================================
 
-Extract, drag the "client" FOLDER onto GitHub at the ROOT of your repo.
-NOTHING TO RENAME. No new packages. No schema change. No API calls added.
+Extract, drag the "client" and "server" FOLDERS onto GitHub at the ROOT of
+your repo. NOTHING TO RENAME. No new packages. No schema change.
 
-FILES (4)
-client/src/utils/dailyRead.js   NEW - the daily read generator
-client/src/pages/DailyLog.jsx   read wired in, serif numerals, streak context
-client/src/components/UI.jsx    breathing orb
-client/src/index.css            orb animation
+YOU WERE RIGHT, AND IT WAS ONE ITEM
+Checked all five foods in Subramanya's log against reference values:
 
-1 · TODAY'S READ
-One coaching sentence at the top of the hero, written from the member's own
-numbers. Examples it produces:
+  Egg     110g  171 kcal  correct
+  Okra     50g   17 kcal  correct
+  Yoghurt 100g   60 kcal  correct
+  Upma    150g  212 kcal  correct
+  Whey     30g   36 kcal  WRONG - should be 120 kcal, 24g protein
 
-  "Fresh day. Start with your morning weight - it takes ten seconds."
-  "You're 1,014 under and 88% through the protocol. 2 ACV doses and sleep
-   times still to go."
-  "259 kcal burned and 750 kg lifted. Log your meals so I can show the full
-   picture."
-  "Everything logged, and 9 days straight - your best run this month."
+Whey was out by a factor of 3.3. The day's total was understated by ~84 kcal
+and 17g of protein.
 
-This is the change that makes the app feel AI-first: intelligence arrives
-unprompted instead of waiting behind a button.
+ROOT CAUSE
+Two failures stacked.
 
-It is TEMPLATE-BASED, not AI-generated. Three reasons: it renders instantly
-with no network call, it costs nothing on every page view, and it can never
-say anything unexpected about someone's health. The AI budget is better spent
-in the chat, where variety actually matters.
+1. The database lookup never matched. The food seeds store the full product
+   name in `name` ("Whey Protein (Unflavoured)") and the everyday name in
+   `name_local` ("Whey Protein") - but the lookup only searched `name` and
+   `name_aliases`. So the food members actually type never matched, and we
+   silently fell back to the AI's own estimate. This affected every seeded
+   food, not just whey; the others happened to be close enough that nobody
+   noticed.
 
-Seventeen branches, ordered by what matters most at that moment - time of day,
-what is missing, energy balance, what is still open. It returns nothing at all
-when there is nothing worth saying; silence beats filler.
+2. The AI read a per-scoop label. Supplement labels print nutrition per 30g
+   scoop, so it returned 120 kcal / 24g protein as if that were per 100g. The
+   client then took 30% of it, giving 36 kcal.
 
-Tone: honest, never guilt-tripping. "Nothing logged today" is useful.
-Nothing in it shames a missed day.
+THREE FIXES
+1. The lookup now searches name, name_local, name_hindi and aliases, plus a
+   prefix match, ranked so exact hits win and "Whey Protein" prefers the plain
+   entry over the chocolate one.
+2. Both AI prompts now state explicitly that per_100g means per 100 grams of
+   the food, never per scoop or serving, with reference points (whey ~400
+   kcal/100g, oil ~900, peanut butter ~590) and the rule that a dry powder
+   under 300 kcal/100g means the label was misread.
+3. A server-side guard flags dense foods that come back under 300 kcal/100g as
+   low-confidence, with a warning shown in the chat preview before the member
+   applies it. Flagged, not auto-corrected - guessing a correction would be
+   worse than telling someone to check.
 
-2 · SERIF NUMERALS
-Hero tile values now use Fraunces, which was already in the app for headings.
-Numbers in a serif read editorial rather than dashboard. The labels stay on
-Outfit, so this remains a deliberate accent and not a typeface swap.
+The guard is deliberately narrow: it only looks at foods whose names suggest
+concentrated powders or fats, so genuinely low-calorie foods are never
+flagged. Verified okra at 33 kcal and yoghurt at 61 kcal stay clean.
 
-3 · BREATHING ORB
-A 3.2-second pulse on the AI orb. Long enough to read as "alive and listening"
-rather than "demanding attention" - anything faster becomes a notification
-badge and stops feeling premium. It honours prefers-reduced-motion, since a
-permanent ambient pulse is exactly what people turn that setting on for.
+TESTS
+New scripts/test-food-lookup.js, 13 assertions covering the exact bug, the
+other four foods, exact-vs-prefix ranking, and the guard's false-positive
+cases. Full regression: 130 assertions across five suites, all passing.
 
-4 · STREAK IN CONTEXT
-The badge now reads "6 days · best this month" rather than "6-day streak". The
-window widened from 14 to 30 days so the current run can be compared against
-the best one in it. A raw number means little; being told it is your best does.
+AFTER DEPLOYING
+Ask Subramanya to delete and re-log the whey entry - the stored figure will
+not correct itself. New logs will be right.

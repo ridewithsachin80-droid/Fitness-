@@ -73,8 +73,8 @@ function GroupHeader({ icon, title, count }) {
   return (
     <div className="flex items-center gap-1.5 mb-1.5">
       <span className="text-xs">{icon}</span>
-      <span className="text-[10px] font-bold text-[#8e8e9a] uppercase tracking-widest">{title}</span>
-      {count != null && <span className="text-[10px] text-[#4e4e5c]">· {count}</span>}
+      <span className="text-[10px] font-bold text-[#9EA3B0] uppercase tracking-widest">{title}</span>
+      {count != null && <span className="text-[10px] text-[#7E8596]">· {count}</span>}
     </div>
   );
 }
@@ -86,11 +86,11 @@ function ToggleChip({ on, onToggle, children }) {
       style={{ minHeight: 36 }}
       className={`flex items-center gap-1.5 text-xs rounded-full px-3 py-1.5 border transition-all active:scale-95 ${
         on
-          ? 'bg-[#c9a227]/[0.16] border-[#c9a227]/45 text-white font-semibold'
-          : 'bg-white/[0.03] border-white/[0.08] text-[#4e4e5c] line-through'
+          ? 'bg-[#D4AF37]/[0.16] border-[#D4AF37]/45 text-white font-semibold'
+          : 'bg-white/[0.03] border-white/[0.08] text-[#7E8596] line-through'
       }`}>
       <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-        on ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
+        on ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.08] text-transparent'
       }`}>✓</span>
       {children}
     </button>
@@ -531,22 +531,22 @@ export default function AIChatLog() {
     p.workouts.filter(w => w.on).length;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-[#0d0d11] flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className="fixed inset-0 z-[70] bg-[#121316] flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
 
       {/* ── Header ── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#111116]">
         <button onClick={closeChat}
           style={{ minWidth: 44, minHeight: 44 }}
-          className="flex items-center justify-center rounded-full text-[#8e8e9a] hover:text-white hover:bg-white/[0.06] transition-colors">
+          className="flex items-center justify-center rounded-full text-[#9EA3B0] hover:text-white hover:bg-white/[0.06] transition-colors">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(201,162,39,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8C6D37] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
-            <p className="text-[10px] text-[#4e4e5c] leading-tight">Log your whole day in one message</p>
+            <p className="text-[10px] text-[#7E8596] leading-tight">Log your whole day in one message</p>
           </div>
         </div>
       </div>
@@ -555,15 +555,15 @@ export default function AIChatLog() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 
         {messages.length === 0 && (
-          <div className="bg-[#16161c] border border-white/[0.07] rounded-2xl p-4">
+          <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl p-4">
             <p className="text-sm font-semibold text-white mb-1.5">Hi! Tell me about your day 🌤</p>
-            <p className="text-xs text-[#8e8e9a] leading-relaxed mb-3">
+            <p className="text-xs text-[#9EA3B0] leading-relaxed mb-3">
               Weight, walks, meals, ACV, water, supplements, sleep — say it all in
               one message and I'll fill your entire log. Review, then tap Apply.
               Or tap 📷 to log a meal straight from a photo.
             </p>
-            <div className="bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2.5">
-              <p className="text-[11px] text-[#b6b6c2] leading-relaxed italic">
+            <div className="bg-[#121316] border border-white/[0.06] rounded-xl px-3 py-2.5">
+              <p className="text-[11px] text-[#9EA3B0] leading-relaxed italic">
                 "weight 82.5, morning walk done, 2 chapati and dal for lunch,
                 acv before meal 2, drank 1 litre water, took my supplements,
                 slept 10:30 to 6:30"
@@ -575,7 +575,7 @@ export default function AIChatLog() {
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-[#c9a227] text-white text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="max-w-[85%] bg-[#D4AF37] text-white text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
                 {m.text}
               </div>
             </div>
@@ -585,7 +585,7 @@ export default function AIChatLog() {
                 <div className={`text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
                   m.error
                     ? 'bg-red-500/[0.08] border-red-500/25 text-red-300'
-                    : 'bg-[#16161c] border-white/[0.07] text-[#d8d8de]'
+                    : 'bg-[#1A1C20] border-white/[0.07] text-[#FFFFFF]'
                 }`}>
                   <p className="leading-relaxed">{m.text}</p>
 
@@ -676,27 +676,30 @@ export default function AIChatLog() {
                           <div className="space-y-1.5">
                             {m.parsed.foods.map((f, fi) => (
                               <button key={fi} onClick={() => toggleListItem(mi, 'foods', fi)}
-                                className={`w-full text-left bg-[#0d0d11] border rounded-xl px-3 py-2.5 transition-all active:scale-[0.99] ${
+                                className={`w-full text-left bg-[#121316] border rounded-xl px-3 py-2.5 transition-all active:scale-[0.99] ${
                                   f.on ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-40'
                                 }`}>
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                      f.on ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
+                                      f.on ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.08] text-transparent'
                                     }`}>✓</span>
                                     <div className="min-w-0">
-                                      <p className={`text-[13px] font-semibold truncate ${f.on ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
+                                      <p className={`text-[13px] font-semibold truncate ${f.on ? 'text-white' : 'text-[#9EA3B0] line-through'}`}>
                                         {f.name}
                                       </p>
-                                      <p className="text-[11px] text-[#4e4e5c]">
+                                      <p className="text-[11px] text-[#7E8596]">
                                         {f.qty_text ? `${f.qty_text} · ` : ''}{f.grams}g · {f.meal || 'Meal 1'}
                                         {f.source === 'db-verified' && <span className="text-emerald-400"> · verified</span>}
                                       </p>
+                                      {f.warning && (
+                                        <p className="text-[10px] text-amber-300 leading-snug mt-0.5">⚠ {f.warning}</p>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="text-right flex-shrink-0">
                                     <p className="text-[13px] font-bold text-orange-400">{f.macros?.cal ?? 0} kcal</p>
-                                    <p className="text-[10px] text-[#8e8e9a]">
+                                    <p className="text-[10px] text-[#9EA3B0]">
                                       P {f.macros?.pro ?? 0} · C {f.macros?.carb ?? 0} · F {f.macros?.fat ?? 0}
                                     </p>
                                   </div>
@@ -704,8 +707,8 @@ export default function AIChatLog() {
                               </button>
                             ))}
                             {m.parsed.totals && m.parsed.foods.filter(f => f.on).length > 1 && (
-                              <div className="flex items-center justify-between px-3 py-2 bg-[#c9a227]/[0.10] border border-[#c9a227]/25 rounded-xl">
-                                <span className="text-[11px] font-bold text-[#e0c98a] uppercase tracking-wider">Food total</span>
+                              <div className="flex items-center justify-between px-3 py-2 bg-[#D4AF37]/[0.10] border border-[#D4AF37]/25 rounded-xl">
+                                <span className="text-[11px] font-bold text-[#F0E2B6] uppercase tracking-wider">Food total</span>
                                 <span className="text-[13px] font-bold text-white">
                                   {m.parsed.foods.filter(f => f.on).reduce((s, f) => s + (f.macros?.cal || 0), 0)} kcal
                                 </span>
@@ -723,19 +726,19 @@ export default function AIChatLog() {
                             {m.parsed.workouts.map((w, wi) => (
                               <button key={wi} onClick={() => toggleListItem(mi, 'workouts', wi)}
                                 disabled={m.applied}
-                                className={`w-full flex items-center justify-between bg-[#0d0d11] border rounded-xl px-3 py-2.5 transition-all ${
+                                className={`w-full flex items-center justify-between bg-[#121316] border rounded-xl px-3 py-2.5 transition-all ${
                                   w.on ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-40'
                                 }`}>
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                    w.on ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
+                                    w.on ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.08] text-transparent'
                                   }`}>✓</span>
                                   <div className="min-w-0">
-                                    <p className={`text-[12px] font-semibold truncate ${w.on ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
+                                    <p className={`text-[12px] font-semibold truncate ${w.on ? 'text-white' : 'text-[#9EA3B0] line-through'}`}>
                                       {w.name}{w.qty_text ? ` — ${w.qty_text}` : ''}
                                     </p>
                                     {w.sets?.length > 0 && (
-                                      <p className="text-[10px] text-[#8e8e9a] truncate">
+                                      <p className="text-[10px] text-[#9EA3B0] truncate">
                                         {w.sets.map((st, si) => `${st.reps}×${st.weight_kg || 'BW'}${st.weight_kg ? 'kg' : ''}`).join(' · ')}
                                       </p>
                                     )}
@@ -746,7 +749,7 @@ export default function AIChatLog() {
                                 )}
                               </button>
                             ))}
-                            <p className="text-[10px] text-[#4e4e5c] px-1">
+                            <p className="text-[10px] text-[#7E8596] px-1">
                               {m.parsed.workouts.some(w => w.on && w.sets?.length)
                                 ? 'Sets and reps go straight into your Workout log.'
                                 : "Saved to today's session · add exact sets & reps in the Workout section anytime."}
@@ -759,7 +762,7 @@ export default function AIChatLog() {
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
                         <button onClick={() => applyAll(mi)}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#c9a227] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#c9a227] active:scale-[0.98] shadow-[0_2px_16px_rgba(201,162,39,0.4)] transition-all">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#D4AF37] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#D4AF37] active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
                           Apply {countIncluded(m.parsed)} item{countIncluded(m.parsed) > 1 ? 's' : ''} to today's log
                         </button>
                       )}
@@ -773,7 +776,7 @@ export default function AIChatLog() {
                               {m.workoutSaveFailed ? '⚠ Applied — workout not saved' : '✓ Applied & saved'}
                             </p>
                             <button onClick={() => undo(mi)}
-                              className="text-[11px] font-semibold text-[#8e8e9a] hover:text-white underline underline-offset-2 transition-colors">
+                              className="text-[11px] font-semibold text-[#9EA3B0] hover:text-white underline underline-offset-2 transition-colors">
                               Undo
                             </button>
                           </div>
@@ -783,17 +786,17 @@ export default function AIChatLog() {
                             </p>
                           )}
                           {m.pending?.length > 0 ? (
-                            <p className="text-[11px] text-[#b6b6c2] leading-relaxed">
+                            <p className="text-[11px] text-[#9EA3B0] leading-relaxed">
                               Still pending today: {m.pending.join(' · ')}
                             </p>
                           ) : (
-                            <p className="text-[11px] text-[#b6b6c2]">Everything's logged for today — great job! 🎉</p>
+                            <p className="text-[11px] text-[#9EA3B0]">Everything's logged for today — great job! 🎉</p>
                           )}
                         </div>
                       )}
 
                       {m.undone && (
-                        <p className="text-[11px] text-[#8e8e9a] text-center">Changes reverted.</p>
+                        <p className="text-[11px] text-[#9EA3B0] text-center">Changes reverted.</p>
                       )}
                     </div>
                   )}
@@ -805,11 +808,11 @@ export default function AIChatLog() {
 
         {busy && (
           <div className="flex justify-start">
-            <div className="bg-[#16161c] border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -824,7 +827,7 @@ export default function AIChatLog() {
           {SUGGESTION_CHIPS.map((chip, i) => (
             <button key={i} onClick={() => send(chip)}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
-              className="text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(201,162,39,0.4)] rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
+              className="text-xs bg-[#1A1C20] border border-white/[0.10] hover:border-[rgba(212,175,55,0.4)] rounded-full px-3.5 py-1.5 text-[#9EA3B0] transition-colors">
               {chip}
             </button>
           ))}
@@ -835,21 +838,21 @@ export default function AIChatLog() {
       <div className="px-4 py-3 border-t border-white/[0.06] bg-[#111116]"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         <div className="flex items-end gap-2">
-          <div className="flex-1 flex items-center bg-[#1a1a20] border border-white/[0.10] rounded-2xl px-3">
+          <div className="flex-1 flex items-center bg-[#1A1C20] border border-white/[0.10] rounded-2xl px-3">
             <input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
               placeholder="Eg: weight 82.5, walk done, 2 chapati for lunch"
-              className="flex-1 bg-transparent text-sm text-white placeholder-[#4e4e5c] py-3 outline-none min-w-0"
+              className="flex-1 bg-transparent text-sm text-white placeholder-[#7E8596] py-3 outline-none min-w-0"
             />
             <button onClick={() => fileRef.current?.click()}
               disabled={photoBusy}
               aria-label="Log food from a photo"
               style={{ minWidth: 40, minHeight: 40 }}
               className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                photoBusy ? 'text-[#4e4e5c] animate-pulse' : 'text-[#8e8e9a] hover:text-[#e0c98a]'
+                photoBusy ? 'text-[#7E8596] animate-pulse' : 'text-[#9EA3B0] hover:text-[#F0E2B6]'
               }`}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -863,7 +866,7 @@ export default function AIChatLog() {
               <button onClick={toggleVoice}
                 style={{ minWidth: 40, minHeight: 40 }}
                 className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                  listening ? 'text-red-400 animate-pulse' : 'text-[#8e8e9a] hover:text-[#e0c98a]'
+                  listening ? 'text-red-400 animate-pulse' : 'text-[#9EA3B0] hover:text-[#F0E2B6]'
                 }`}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -879,8 +882,8 @@ export default function AIChatLog() {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
-                ? 'bg-[#c9a227] text-white shadow-[0_2px_12px_rgba(201,162,39,0.4)] active:scale-95'
-                : 'bg-white/[0.05] text-[#4e4e5c]'
+                ? 'bg-[#D4AF37] text-white shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
+                : 'bg-white/[0.05] text-[#7E8596]'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />

@@ -232,6 +232,18 @@ PARSING RULES:
    Per-100g nutrition from USDA/NIN India (cooked form as eaten in India):
    calories(kcal), protein, total_carbs, fat, fiber, sugar (g) and sodium,
    calcium, iron, potassium, vit_c (mg).
+   CRITICAL — per_100g means PER 100 GRAMS OF THE FOOD ITSELF, never per
+   serving, per scoop, per piece or per packet. Supplement and powder labels
+   are printed per scoop, and copying those numbers understates the food by
+   3-4x. Reference points to check yourself against:
+     whey protein powder  ~400 kcal, 80g protein per 100g  (NOT ~120/24, that
+                          is one 30g scoop)
+     peanut butter        ~590 kcal per 100g
+     any oil / ghee       ~900 kcal per 100g
+     sugar                ~400 kcal per 100g
+   If a dry powder or fat comes out under 300 kcal per 100g, you have almost
+   certainly copied a per-serving label — recalculate for 100g.
+
    Map stated meals (breakfast/lunch/dinner/snack/morning/night or slot names)
    to the CLOSEST slot from the meal slots list, else null.
 8. WORKOUTS — exercise mentions beyond the protocol activities (bench press,
@@ -294,6 +306,29 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
 }`;
 }
 
+// ── Per-serving sanity guard ─────────────────────────────────────────────────
+// Supplement and powder labels are printed per scoop, and the model sometimes
+// copies those numbers straight into per_100g — which understates the food by
+// 3-4x and quietly corrupts the day's calorie total.
+//
+// Atwater arithmetic can't catch it (a per-scoop row is still internally
+// consistent), so we check the energy density instead: a dry powder or fat
+// that comes back under 300 kcal per 100g is almost certainly a serving label.
+// Flagged items are marked low-confidence rather than silently rewritten —
+// guessing a correction would be worse than telling the member to check.
+const DENSE_FOOD = /\b(whey|casein|protein powder|protein isolate|oil|ghee|butter|peanut butter|almond butter|nut butter|sugar|jaggery|honey|mayonnaise|nuts?|almond|cashew|walnut|seeds?)\b/i;
+
+function flagSuspectDensity(food) {
+  const cal = parseFloat(food?.per_100g?.calories) || 0;
+  if (!DENSE_FOOD.test(food.name || '')) return food;
+  if (cal >= 300) return food;
+  return {
+    ...food,
+    confidence: 'low',
+    warning: 'These figures look like a per-serving label rather than per 100g — check before applying.',
+  };
+}
+
 // ── DB enrichment for foods ──────────────────────────────────────────────────
 async function enrichFromDB(foods) {
   const out = [];
@@ -302,13 +337,34 @@ async function enrichFromDB(foods) {
     let per100g = normaliseNutrients(f.per_100g);
     let source  = 'ai';
     try {
+      // Match on every name column the seeds populate, not just `name`.
+      // The seeds put the everyday name in `name_local` ("Whey Protein") and
+      // the full product name in `name` ("Whey Protein (Unflavoured)"), so a
+      // name-only lookup missed exactly the foods members type — and we fell
+      // back to the AI's estimate for them.
+      //
+      // Ordering matters: exact hits first, then a prefix match, so "Whey
+      // Protein" prefers the plain entry over "Whey Protein (Chocolate)".
+      const q = String(f.name || '').trim();
       const { rows } = await pool.query(
-        `SELECT id, name, per_100g, verified FROM foods
-         WHERE LOWER(name) = LOWER($1)
+        `SELECT id, name, per_100g, verified,
+                CASE
+                  WHEN LOWER(name)       = LOWER($1) THEN 0
+                  WHEN LOWER(name_local) = LOWER($1) THEN 1
+                  WHEN LOWER(name_hindi) = LOWER($1) THEN 2
+                  WHEN LOWER(name_aliases::text) LIKE LOWER($2) THEN 3
+                  WHEN LOWER(name)       LIKE LOWER($3) THEN 4
+                  ELSE 5
+                END AS match_rank
+         FROM foods
+         WHERE LOWER(name)       = LOWER($1)
+            OR LOWER(name_local) = LOWER($1)
+            OR LOWER(name_hindi) = LOWER($1)
             OR LOWER(name_aliases::text) LIKE LOWER($2)
-         ORDER BY verified DESC, id ASC
+            OR LOWER(name)       LIKE LOWER($3)
+         ORDER BY match_rank ASC, verified DESC, LENGTH(name) ASC, id ASC
          LIMIT 1`,
-        [String(f.name || '').trim(), `%"${String(f.name || '').trim().toLowerCase()}"%`]
+        [q, `%"${q.toLowerCase()}"%`, `${q.toLowerCase()}%`]
       );
       if (rows.length && rows[0].per_100g && (parseFloat(rows[0].per_100g.calories) || 0) > 0) {
         food_id = rows[0].id;
@@ -318,7 +374,7 @@ async function enrichFromDB(foods) {
     } catch (e) {
       console.error('ai-chat DB enrich failed for', f.name, e.message);
     }
-    out.push({ ...f, food_id, per_100g: per100g, source });
+    out.push(flagSuspectDensity({ ...f, food_id, per_100g: per100g, source }));
   }
   return out;
 }
@@ -370,6 +426,18 @@ dal≈150g, 1 katori sabzi≈100g, 1 katori rice≈100g, 1 plate rice≈150g,
 For each item give accurate per-100g nutrition (USDA / NIN India values, cooked
 as eaten in India): calories(kcal), protein, total_carbs, fat, fiber, sugar in
 grams, and sodium, calcium, iron, potassium, vit_c in mg.
+   CRITICAL — per_100g means PER 100 GRAMS OF THE FOOD ITSELF, never per
+   serving, per scoop, per piece or per packet. Supplement and powder labels
+   are printed per scoop, and copying those numbers understates the food by
+   3-4x. Reference points to check yourself against:
+     whey protein powder  ~400 kcal, 80g protein per 100g  (NOT ~120/24, that
+                          is one 30g scoop)
+     peanut butter        ~590 kcal per 100g
+     any oil / ghee       ~900 kcal per 100g
+     sugar                ~400 kcal per 100g
+   If a dry powder or fat comes out under 300 kcal per 100g, you have almost
+   certainly copied a per-serving label — recalculate for 100g.
+
 
 Meal slots available: ${slots}
 
