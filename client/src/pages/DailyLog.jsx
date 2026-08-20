@@ -16,6 +16,7 @@ import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
 import AIChatLog, { useAIChat } from '../components/AIChatLog';
 import { sessionEnergy } from '../utils/exerciseCalories';
+import { dailyRead } from '../utils/dailyRead';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
@@ -168,9 +169,9 @@ function ComplianceRing({ pct }) {
     >
       <defs>
         <linearGradient id="complianceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%"   stopColor="#c9a227" />
-          <stop offset="60%"  stopColor="#e0c98a" />
-          <stop offset="100%" stopColor={isHigh ? '#d4af6a' : '#f0dfae'} />
+          <stop offset="0%"   stopColor="#D4AF37" />
+          <stop offset="60%"  stopColor="#F0E2B6" />
+          <stop offset="100%" stopColor={isHigh ? '#d4af6a' : '#F0E2B6'} />
         </linearGradient>
       </defs>
       <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="6" />
@@ -606,7 +607,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                     <span className="text-sm font-bold text-stone-700">{meal.name}</span>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                   </div>
-                  <p className="text-xs text-[#4e4e5c] mt-0.5">
+                  <p className="text-xs text-[#7E8596] mt-0.5">
                     {(meal.items||[]).length} items · <span className="font-bold text-orange-500">{mealKcal} kcal</span>
                     {isOpen && checkedCount>0 && <span className="text-emerald-600 font-semibold ml-2">· {checkedCount} selected · {checkedKcal} kcal</span>}
                   </p>
@@ -634,7 +635,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
                             isChecked  ? 'bg-emerald-50 border border-emerald-200' :
                             alreadyIn  ? 'bg-stone-100 border border-stone-200 opacity-60' :
-                                         'bg-[#1a1a20] border border-white/[0.07] hover:border-stone-200'}`}>
+                                         'bg-[#1A1C20] border border-white/[0.07] hover:border-stone-200'}`}>
                           <span className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                             isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-300 bg-white'}`}>
                             {isChecked && <span className="text-xs font-bold">✓</span>}
@@ -877,9 +878,11 @@ export default function DailyLog() {
   const [chipInfo, setChipInfo] = useState(null);   // { label, sub } — long-press popover
   const chipPressRef = useRef(null);
 
-  // Logging streak: consecutive saved days ending today or yesterday
+  // Logging streak, plus whether the current run is the best of the last month
+  // — "6-day streak" means little on its own; "best this month" is the reward.
+  const [streakIsBest, setStreakIsBest] = useState(false);
   useEffect(() => {
-    const from = new Date(); from.setDate(from.getDate() - 14);
+    const from = new Date(); from.setDate(from.getDate() - 30);
     const fStr = `${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,'0')}-${String(from.getDate()).padStart(2,'0')}`;
     api.get(`/logs/range/${fStr}/${today()}`).then(({ data }) => {
       const logged = new Set((data || []).map(l => (l.log_date || '').slice(0, 10)));
@@ -887,12 +890,23 @@ export default function DailyLog() {
       const d = new Date();
       // A streak may end yesterday if today isn't logged yet
       if (!logged.has(today())) d.setDate(d.getDate() - 1);
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < 30; i++) {
         const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         if (!logged.has(ds)) break;
         s++; d.setDate(d.getDate() - 1);
       }
       setStreak(s);
+
+      // Longest run anywhere in the window, to compare the current one against
+      let best = 0, run = 0;
+      const walk = new Date(); walk.setDate(walk.getDate() - 29);
+      for (let i = 0; i < 30; i++) {
+        const ds = `${walk.getFullYear()}-${String(walk.getMonth()+1).padStart(2,'0')}-${String(walk.getDate()).padStart(2,'0')}`;
+        run = logged.has(ds) ? run + 1 : 0;
+        best = Math.max(best, run);
+        walk.setDate(walk.getDate() + 1);
+      }
+      setStreakIsBest(s > 0 && s >= best);
     }).catch(() => {});
   }, []);
 
@@ -993,15 +1007,15 @@ export default function DailyLog() {
   }, [log.food, update]);
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e] font-sans">
+    <div className="min-h-screen bg-[#121316] font-sans">
       <OfflineBanner />
 
       {/* ── Hero — greeting, date, compliance, glance stats, weight editor ── */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-5">
+      <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-5">
         <div className="max-w-md mx-auto" id="section-hero">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[#e0c98a] mb-1.5">FitLife</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-[#F0E2B6] mb-1.5">FitLife</p>
               <h1 className="font-display text-2xl font-medium flex items-center gap-2 leading-tight">
                 <span>{AVATARS_LIST[avatarIdx]}</span>
                 {(() => {
@@ -1011,13 +1025,13 @@ export default function DailyLog() {
                 })()}
               </h1>
               {autoSaved && (
-                <p className="text-xs text-[#e0c98a] mt-1 font-medium"><span className="autosave-dot" />auto-saved ✓</p>
+                <p className="text-xs text-[#F0E2B6] mt-1 font-medium"><span className="autosave-dot" />auto-saved ✓</p>
               )}
             </div>
             <div className="flex items-center gap-2">
               {streak >= 2 && (
-                <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full px-2.5 py-1">
-                  🔥 {streak}-day streak
+                <span className="text-[10px] font-bold text-[#D4AF37] bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.28)] rounded-full px-2.5 py-1">
+                  🔥 {streak} days{streakIsBest && streak >= 3 ? ' · best this month' : ''}
                 </span>
               )}
               <NotificationBell />
@@ -1033,19 +1047,85 @@ export default function DailyLog() {
                 setDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
               }}
               style={{ minWidth: 44, minHeight: 36 }}
-              className="text-sm font-bold text-[#4e4e5c] rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all">‹</button>
+              className="text-sm font-bold text-[#7E8596] rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all">‹</button>
             <div className="text-center">
-              <p className="text-sm font-bold text-[#d8d8de]">{date === today() ? 'Today' : formatDate(date)}</p>
+              <p className="text-sm font-bold text-[#FFFFFF]">{date === today() ? 'Today' : formatDate(date)}</p>
               {date !== today() && <p className="text-[10px] text-amber-400 font-medium">Editing past entry</p>}
             </div>
             <button
               onClick={() => setDate(today())}
               disabled={date === today()}
               style={{ minWidth: 44, minHeight: 36 }}
-              className="text-sm font-bold text-[#bf9a2e] rounded-xl hover:bg-[rgba(201,162,39,0.05)] active:scale-95 transition-all disabled:opacity-30">›</button>
+              className="text-sm font-bold text-[#C5A059] rounded-xl hover:bg-[rgba(212,175,55,0.05)] active:scale-95 transition-all disabled:opacity-30">›</button>
           </div>
 
           <div className="bg-white/[0.05] rounded-2xl p-3.5 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            {/* Today's read — one coaching sentence, generated from the day's
+                own numbers. This is what makes the app feel like it already
+                looked at your day rather than waiting to be asked. */}
+            {(() => {
+              const weightKg = parseFloat(log.weight) || parseFloat(protocol?.start_weight) || 0;
+              const kcalIn = (log.food || []).reduce((sum, it) => {
+                if (it.per_100g?.calories) return sum + Math.round(it.per_100g.calories * (it.grams || 0) / 100);
+                const n = getNutrition(it.name, it.grams); return sum + (n?.cal || 0);
+              }, 0);
+
+              const bmr = calcBMR({
+                weightKg, heightCm: bodyStats.height_cm,
+                age: profileAge, gender: bodyStats.gender,
+              });
+              const work = sessionEnergy({
+                exercises: [{ sets: workoutSummary.sets || [] }],
+                cardio: workoutSummary.cardio || [],
+                bodyWeightKg: weightKg,
+              });
+              const balance = (bmr && kcalIn > 0)
+                ? kcalIn - (Math.round(bmr * 1.2) + work.totalKcal)
+                : null;
+
+              // What's genuinely still open, phrased the way a coach would say it
+              const pending = [];
+              const actLeft = activeActivities.filter(a => !log.activities?.[a.id]).length;
+              const acvLeft = activeACV.filter(a => !log.acv?.[a.id]).length;
+              const supLeft = activeSupplements.filter(x => !log.supplements?.[x.id]).length;
+              if (actLeft) pending.push(`${actLeft} ${terms.activities.toLowerCase()}`);
+              if (acvLeft) pending.push(`${acvLeft} ACV dose${acvLeft > 1 ? 's' : ''}`);
+              if (supLeft) pending.push(`${supLeft} supplement${supLeft > 1 ? 's' : ''}`);
+              if (!log.sleep?.bedtime || !log.sleep?.waketime) pending.push('sleep times');
+
+              const read = dailyRead({
+                isToday: date === today(),
+                weight: log.weight || null,
+                kcalIn,
+                kcalTarget: protocol?.macros?.kcal || null,
+                balance,
+                protocolDone: actDone + acvDone + suppDone,
+                protocolTotal: activeActivities.length + activeACV.length + activeSupplements.length,
+                waterMl: log.water || 0,
+                waterTarget: protocol?.water_target || 3000,
+                foodCount: (log.food || []).length,
+                workoutKcal: work.totalKcal,
+                volumeKg: work.volumeKg,
+                sleepSet: !!(log.sleep?.bedtime && log.sleep?.waketime),
+                streak, streakIsBest,
+                pendingLabels: pending,
+              });
+              if (!read) return null;
+
+              return (
+                <div className={`rounded-2xl px-3.5 py-3 mb-3 border ${
+                  read.tone === 'win'
+                    ? 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.40)]'
+                    : 'bg-[rgba(212,175,55,0.05)] border-[rgba(212,175,55,0.24)]'
+                }`}>
+                  <p className="text-[9px] font-bold tracking-[0.14em] text-[#D4AF37] uppercase mb-1">
+                    Today's read
+                  </p>
+                  <p className="text-[12.5px] text-[#FFFFFF] leading-relaxed">{read.text}</p>
+                </div>
+              );
+            })()}
+
             {/* Compliance strip — ring + summary on one line, so tiles get full width */}
             <div className="flex items-center gap-3 mb-3">
               <div className="relative flex-shrink-0">
@@ -1053,14 +1133,14 @@ export default function DailyLog() {
                 <button onClick={() => setComplianceTip(v => !v)}
                   style={{ position: 'absolute', top: -4, right: -4, width: 17, height: 17, borderRadius: 9, background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: 9, cursor: 'pointer', fontWeight: 700 }}>?</button>
                 {complianceTip && (
-                  <div style={{ position: 'absolute', left: 0, top: 64, zIndex: 50, background: '#1a1a20', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#d8d8de', lineHeight: 1.5, width: 210, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+                  <div style={{ position: 'absolute', left: 0, top: 64, zIndex: 50, background: '#1A1C20', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#FFFFFF', lineHeight: 1.5, width: 210, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
                     This shows what % of today's {terms.activities}, ACV doses, and {terms.supplements} you've completed.
-                    <button onClick={() => setComplianceTip(false)} style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#c9a227', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Got it ✓</button>
+                    <button onClick={() => setComplianceTip(false)} style={{ display: 'block', marginTop: 8, fontSize: 11, color: '#D4AF37', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Got it ✓</button>
                   </div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-[#ededf0] leading-tight">
+                <p className="text-sm font-bold text-[#FFFFFF] leading-tight">
                   {actDone + acvDone + suppDone} of {activeActivities.length + activeACV.length + activeSupplements.length} done today
                 </p>
                 {(() => {
@@ -1079,7 +1159,7 @@ export default function DailyLog() {
                   // Needs BMR inputs and at least some food logged, else the
                   // "deficit" would just be the whole day's TDEE and mislead.
                   if (!bmr || kcalIn === 0) {
-                    return <p className="text-[11px] text-[#8e8e9a] mt-0.5">Tap any tile below to open it</p>;
+                    return <p className="text-[11px] text-[#9EA3B0] mt-0.5">Tap any tile below to open it</p>;
                   }
 
                   // Exercise calories come exclusively from the Workout log —
@@ -1107,7 +1187,7 @@ export default function DailyLog() {
                       <span className={`text-[11px] font-extrabold ${surplus ? 'text-amber-300' : 'text-emerald-300'}`}>
                         {surplus ? '↑' : '↓'} {surplus ? '+' : '−'}{Math.abs(balance).toLocaleString()} kcal
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#8e8e9a]">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#9EA3B0]">
                         {surplus ? 'surplus' : 'deficit'}
                       </span>
                     </button>
@@ -1119,7 +1199,7 @@ export default function DailyLog() {
             <div className="grid grid-cols-2 gap-2">
                 {(() => {
                   const tileBase = 'text-left border rounded-2xl px-3 py-2.5 transition-all active:scale-[0.98] flex items-center justify-between gap-2';
-                  const on  = 'bg-[rgba(201,162,39,0.14)] border-[rgba(201,162,39,0.45)]';
+                  const on  = 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.45)]';
                   const off = 'bg-white/[0.04] border-white/[0.07]';
                   const toggle = (key) => { setHeroPanel(p => (p === key ? null : key)); haptic(10); };
 
@@ -1160,8 +1240,8 @@ export default function DailyLog() {
                       <button onClick={() => toggle('weight')}
                         className={`${tileBase} ${heroPanel === 'weight' ? on : off}`}>
                         <div className="min-w-0">
-                          <span className="block text-[17px] font-extrabold leading-tight">{log.weight ? `${log.weight} kg` : '— kg'}</span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">
+                          <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">{log.weight ? `${log.weight} kg` : '— kg'}</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">
                           ⚖ {(() => {
                             if (!log.weight) return 'Tap to log';
                             if (yesterdayWeight == null) return 'Logged';
@@ -1170,84 +1250,84 @@ export default function DailyLog() {
                           })()}
                         </span>
                         </div>
-                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                        <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Food → opens the food log panel */}
                       <button onClick={() => toggle('food')}
                         className={`${tileBase} ${heroPanel === 'food' ? on : off}`}>
                         <div className="min-w-0">
-                          <span className="block text-[17px] font-extrabold leading-tight">
+                          <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">
                           {protocol?.macros?.kcal
-                            ? <>{kcal}<span className="text-[11px] text-[#4e4e5c]"> /{protocol.macros.kcal}</span></>
+                            ? <>{kcal}<span className="text-[11px] text-[#7E8596]"> /{protocol.macros.kcal}</span></>
                             : kcal}
                         </span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🔥 kcal eaten</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">🔥 kcal eaten</span>
                         </div>
-                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                        <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Protocol → opens the protocol panel */}
                       <button onClick={() => toggle('protocol')}
                         className={`${tileBase} ${heroPanel === 'protocol' ? on : off}`}>
                         <div className="min-w-0">
-                          <span className="block text-[17px] font-extrabold leading-tight">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">✓ protocol</span>
+                          <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">✓ protocol</span>
                         </div>
-                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                        <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Water → inline quick-add */}
                       <button onClick={() => toggle('water')}
                         className={`${tileBase} ${heroPanel === 'water' ? on : off}`}>
                         <div className="min-w-0">
-                          <span className="block text-[17px] font-extrabold leading-tight">{((log.water || 0) / 1000).toFixed(1)} L</span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                          <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">{((log.water || 0) / 1000).toFixed(1)} L</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
                         </div>
-                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                        <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Workout → opens the workout panel */}
                       <button onClick={() => toggle('workout')}
                         className={`${tileBase} ${heroPanel === 'workout' ? on : off}`}>
                         <div className="min-w-0">
-                          <span className="block text-[17px] font-extrabold leading-tight">
+                          <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">
                           {workoutKcal > 0
-                            ? <>{workoutKcal}<span className="text-[11px] text-[#4e4e5c]"> kcal</span></>
-                            : <span className="text-[#4e4e5c]">— none</span>}
+                            ? <>{workoutKcal}<span className="text-[11px] text-[#7E8596]"> kcal</span></>
+                            : <span className="text-[#7E8596]">— none</span>}
                         </span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">
+                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">
                           🏋️ {workoutKcal > 0 ? 'burned' : 'workout'}
                         </span>
                         </div>
-                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                        <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Sleep → inline time pickers (full width) */}
                       <button onClick={() => toggle('sleep')}
                         className={`${tileBase} ${heroPanel === 'sleep' ? on : off}`}>
                         <div className="min-w-0">
-                          <span className="block text-[17px] font-extrabold leading-tight">
-                          {sleepDur || <span className="text-[#4e4e5c]">— set times</span>}
-                          {sleepDur && <span className="text-[11px] text-[#4e4e5c] font-semibold"> · {bt} → {wt}</span>}
+                          <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">
+                          {sleepDur || <span className="text-[#7E8596]">— set times</span>}
+                          {sleepDur && <span className="text-[11px] text-[#7E8596] font-semibold"> · {bt} → {wt}</span>}
                         </span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🌙 {terms.sleep}</span>
+                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">🌙 {terms.sleep}</span>
                         </div>
-                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                        <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
 
                       {/* Nutrition → micro-nutrient panel (full width, 7th tile) */}
                       <button onClick={() => toggle('nutrition')}
                         className={`${tileBase} col-span-2 ${heroPanel === 'nutrition' ? on : off}`}>
                         <div className="min-w-0">
-                          <span className="block text-[17px] font-extrabold leading-tight">
+                          <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">
                             {micro.hasData
-                              ? <>{micro.met}<span className="text-[11px] text-[#4e4e5c]"> / {micro.total} targets met</span></>
-                              : <span className="text-[#4e4e5c]">— log food first</span>}
+                              ? <>{micro.met}<span className="text-[11px] text-[#7E8596]"> / {micro.total} targets met</span></>
+                              : <span className="text-[#7E8596]">— log food first</span>}
                           </span>
-                          <span className="block text-[10px] font-bold tracking-wider text-[#8e8e9a] uppercase mt-0.5">🔬 nutrition</span>
+                          <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">🔬 nutrition</span>
                         </div>
-                        <span className="text-[#4e4e5c] text-sm flex-shrink-0">›</span>
+                        <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
 
                     </>
@@ -1258,16 +1338,16 @@ export default function DailyLog() {
             {/* ── Inline panels — open from the stat tiles above ── */}
             {heroPanel === 'weight' && (
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
-                <p className="text-[10px] text-[#4e4e5c] mb-2 font-medium">⚖ Morning weight — after washroom, before food</p>
+                <p className="text-[10px] text-[#7E8596] mb-2 font-medium">⚖ Morning weight — after washroom, before food</p>
                 <div className="flex items-center gap-3">
                   <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5" autoFocus
                     onChange={e => { update('weight', e.target.value); validateWeight(e.target.value); }}
                     style={{ minHeight: 48, fontSize: 20 }}
-                    className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-2 focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] text-[#ededf0] bg-[#1a1a20]" />
-                  <span className="text-[#4e4e5c] font-bold">kg</span>
+                    className="flex-1 font-bold text-center border-2 border-white/[0.15] rounded-2xl py-2 focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)] text-[#FFFFFF] bg-[#1A1C20]" />
+                  <span className="text-[#7E8596] font-bold">kg</span>
                   <button onClick={() => setHeroPanel(null)}
                     style={{ minHeight: 48 }}
-                    className="px-4 rounded-2xl bg-[#c9a227] text-white text-sm font-bold active:scale-95 transition-transform">Done</button>
+                    className="px-4 rounded-2xl bg-[#D4AF37] text-white text-sm font-bold active:scale-95 transition-transform">Done</button>
                 </div>
                 {weightWarning && (
                   <div className="mt-2 flex items-start gap-2 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2">
@@ -1281,15 +1361,15 @@ export default function DailyLog() {
             {heroPanel === 'water' && (
               <div className="mt-3 pt-3 border-t border-white/[0.07]" id="section-water">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-[#4e4e5c] font-medium">
+                  <p className="text-[10px] text-[#7E8596] font-medium">
                     💧 Target {((protocol?.water_target || 3000) / 1000).toFixed(1)}L · stop 1 hr before sleep · not during meals
                   </p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#D4AF37]">Done</button>
                 </div>
-                <p className="text-2xl font-extrabold text-[#ededf0] mb-1">
+                <p className="text-2xl font-extrabold text-[#FFFFFF] mb-1">
                   {((log.water || 0) / 1000).toFixed(2)}
-                  <span className="text-xs text-[#4e4e5c] font-bold"> / {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
-                  <span className="text-[10px] text-[#4e4e5c] font-semibold float-right mt-2">
+                  <span className="text-xs text-[#7E8596] font-bold"> / {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                  <span className="text-[10px] text-[#7E8596] font-semibold float-right mt-2">
                     {Math.round((log.water || 0) / 250)} glasses
                   </span>
                 </p>
@@ -1310,7 +1390,7 @@ export default function DailyLog() {
                 {(log.water || 0) > 0 && (
                   <button onClick={() => { update('water', Math.max(0, (log.water || 0) - 250)); haptic(10); }}
                     style={{ minHeight: 38 }}
-                    className="w-full mt-1.5 text-[10px] font-bold text-[#4e4e5c] hover:text-red-400 rounded-xl border border-white/[0.06] transition-colors">
+                    className="w-full mt-1.5 text-[10px] font-bold text-[#7E8596] hover:text-red-400 rounded-xl border border-white/[0.06] transition-colors">
                     − Remove 250ml
                   </button>
                 )}
@@ -1320,23 +1400,23 @@ export default function DailyLog() {
             {heroPanel === 'sleep' && (
               <div className="mt-3 pt-3 border-t border-white/[0.07]" id="section-sleep">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-[#4e4e5c] font-medium">🌙 Target 10:00 PM → 6:30 AM (8 hrs)</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
+                  <p className="text-[10px] text-[#7E8596] font-medium">🌙 Target 10:00 PM → 6:30 AM (8 hrs)</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#D4AF37]">Done</button>
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1 min-w-0">
-                    <label className="block text-[9px] font-bold text-[#4e4e5c] uppercase tracking-wider mb-1">Bedtime</label>
+                    <label className="block text-[9px] font-bold text-[#7E8596] uppercase tracking-wider mb-1">Bedtime</label>
                     <input type="time" value={log.sleep?.bedtime || ''}
                       onChange={e => update('sleep', { ...log.sleep, bedtime: e.target.value })}
                       style={{ minHeight: 46 }}
-                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
+                      className="w-full text-sm font-bold bg-[#1A1C20] border border-white/[0.12] rounded-xl px-2 text-[#FFFFFF] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <label className="block text-[9px] font-bold text-[#4e4e5c] uppercase tracking-wider mb-1">Wake time</label>
+                    <label className="block text-[9px] font-bold text-[#7E8596] uppercase tracking-wider mb-1">Wake time</label>
                     <input type="time" value={log.sleep?.waketime || ''}
                       onChange={e => update('sleep', { ...log.sleep, waketime: e.target.value })}
                       style={{ minHeight: 46 }}
-                      className="w-full text-sm font-bold bg-[#1a1a20] border border-white/[0.12] rounded-xl px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)]" />
+                      className="w-full text-sm font-bold bg-[#1A1C20] border border-white/[0.12] rounded-xl px-2 text-[#FFFFFF] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)]" />
                   </div>
                 </div>
                 {log.sleep?.bedtime && log.sleep?.waketime && (() => {
@@ -1349,7 +1429,7 @@ export default function DailyLog() {
                     <div className={`mt-2 text-center text-[11px] font-bold py-2 rounded-xl ${
                       hrs >= 7 && hrs <= 9 ? 'bg-emerald-400/10 text-emerald-300'
                       : hrs < 6 ? 'bg-amber-400/10 text-amber-300'
-                      : 'bg-white/[0.04] text-[#8e8e9a]'}`}>
+                      : 'bg-white/[0.04] text-[#9EA3B0]'}`}>
                       {Math.floor(mins / 60)}h {mins % 60}m
                       {hrs >= 7 && hrs <= 9 ? ' — great sleep 🌙' : hrs < 6 ? ' — try for 7+ hours' : ''}
                     </div>
@@ -1364,8 +1444,8 @@ export default function DailyLog() {
             {heroPanel === 'protocol' && !loading && (
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-[#4e4e5c] font-medium">🏃 Today's protocol</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
+                  <p className="text-[10px] text-[#7E8596] font-medium">🏃 Today's protocol</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#D4AF37]">Done</button>
                 </div>
                 <div id="section-protocol">
                 {(() => {
@@ -1398,16 +1478,16 @@ export default function DailyLog() {
                       style={{ minHeight: 38 }}
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-all active:scale-95 ${
                         checked
-                          ? 'bg-[rgba(201,162,39,0.16)] border-[rgba(201,162,39,0.5)] text-white'
+                          ? 'bg-[rgba(212,175,55,0.16)] border-[rgba(212,175,55,0.5)] text-white'
                           : auto
-                          ? 'bg-white/[0.02] border-dashed border-white/[0.14] text-[#6b6b78]'
-                          : 'bg-white/[0.03] border-white/[0.12] text-[#8e8e9a]'
+                          ? 'bg-white/[0.02] border-dashed border-white/[0.14] text-[#7E8596]'
+                          : 'bg-white/[0.03] border-white/[0.12] text-[#9EA3B0]'
                       }`}>
                       <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-extrabold flex-shrink-0 ${
-                        checked ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
+                        checked ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.08] text-transparent'
                       }`}>✓</span>
                       {item.icon ? `${item.icon} ` : ''}{item.label}
-                      {auto && <span className="text-[9px] font-bold text-[#e0c98a] opacity-80">AUTO</span>}
+                      {auto && <span className="text-[9px] font-bold text-[#F0E2B6] opacity-80">AUTO</span>}
 
                     </button>
                   );
@@ -1416,14 +1496,14 @@ export default function DailyLog() {
                     <>
                       <div className="flex items-center justify-between mb-3">
                         <SectionTitle icon="🏃">Today's Protocol</SectionTitle>
-                        <span className="text-xs font-bold text-[#e0c98a]">{totalDone} of {totalItems} done</span>
+                        <span className="text-xs font-bold text-[#F0E2B6]">{totalDone} of {totalItems} done</span>
                       </div>
-                      <p className="text-[10px] text-[#4e4e5c] mb-3">Tap to mark done · long-press for timing · AUTO items tick from your Workout log</p>
+                      <p className="text-[10px] text-[#7E8596] mb-3">Tap to mark done · long-press for timing · AUTO items tick from your Workout log</p>
 
                       {activeActivities.length > 0 && (
                         <div className="mb-3.5">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🏃 {terms.activities} · {actDone}/{activeActivities.length}</span>
+                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#7E8596] uppercase">🏃 {terms.activities} · {actDone}/{activeActivities.length}</span>
 
                           </div>
                           <div className="flex flex-wrap gap-1.5">
@@ -1440,13 +1520,13 @@ export default function DailyLog() {
                       {activeACV.length > 0 && (
                         <div className="mb-3.5">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">🍶 ACV · {acvDone}/{activeACV.length}</span>
+                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#7E8596] uppercase">🍶 ACV · {acvDone}/{activeACV.length}</span>
                             <button onClick={() => setAcvExpanded(v => !v)}
-                              className="text-[10px] text-[#c9a227] font-bold">{acvExpanded ? 'Hide' : '?'}</button>
+                              className="text-[10px] text-[#D4AF37] font-bold">{acvExpanded ? 'Hide' : '?'}</button>
                           </div>
                           {acvExpanded && (
-                            <div className="mb-2 bg-[rgba(201,162,39,0.08)] border border-[rgba(201,162,39,0.15)] rounded-xl px-3 py-2.5 text-xs text-[#8e8e9a] leading-relaxed">
-                              <strong className="text-[#f0dfae]">Why ACV?</strong> 1 tbsp in 200ml warm water, through a straw, 15 min before meals — helps stabilise blood sugar, supports digestion, and may reduce appetite.
+                            <div className="mb-2 bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.15)] rounded-xl px-3 py-2.5 text-xs text-[#9EA3B0] leading-relaxed">
+                              <strong className="text-[#F0E2B6]">Why ACV?</strong> 1 tbsp in 200ml warm water, through a straw, 15 min before meals — helps stabilise blood sugar, supports digestion, and may reduce appetite.
                             </div>
                           )}
                           <div className="flex flex-wrap gap-1.5">
@@ -1464,7 +1544,7 @@ export default function DailyLog() {
                           <div className="mb-2">
                             <SectionTitle icon="💊"
                               tooltip="These supplements are prescribed by your coach. They are not medical advice — always check with your doctor if you take other medications.">
-                              <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#4e4e5c] uppercase">{terms.supplements} · {suppDone}/{activeSupplements.length}</span>
+                              <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#7E8596] uppercase">{terms.supplements} · {suppDone}/{activeSupplements.length}</span>
                             </SectionTitle>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
@@ -1486,8 +1566,8 @@ export default function DailyLog() {
             {heroPanel === 'food' && !loading && (
               <div className="mt-3 pt-3 border-t border-white/[0.07] space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-[#4e4e5c] font-medium">🥗 Food log</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
+                  <p className="text-[10px] text-[#7E8596] font-medium">🥗 Food log</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#D4AF37]">Done</button>
                 </div>
             {/* Sprint 3: Prescribed meals */}
             {protocol?.meal_plan?.length > 0 && (
@@ -1495,7 +1575,7 @@ export default function DailyLog() {
             )}
 
                 <div id="section-food">
-                  <p className="text-[11px] text-[#4e4e5c] mb-2">Enter weight before cooking · tap mic for voice input</p>
+                  <p className="text-[11px] text-[#7E8596] mb-2">Enter weight before cooking · tap mic for voice input</p>
                   <FoodLog items={log.food} onChange={v => update('food', v)} calorieTarget={protocol?.macros?.kcal} />
                 </div>
               </div>
@@ -1507,8 +1587,8 @@ export default function DailyLog() {
             {heroPanel === 'nutrition' && !loading && (
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-[#4e4e5c] font-medium">🔬 Nutrition</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
+                  <p className="text-[10px] text-[#7E8596] font-medium">🔬 Nutrition</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#D4AF37]">Done</button>
                 </div>
             <NutritionSummary
               foodItems={log.food || []}
@@ -1518,7 +1598,7 @@ export default function DailyLog() {
               rdaOverrides={protocol?.rda_overrides || {}}
             />
                 {!(log.food || []).some(f => f.per_100g) && (
-                  <p className="text-xs text-[#8e8e9a] leading-relaxed py-2">
+                  <p className="text-xs text-[#9EA3B0] leading-relaxed py-2">
                     Log some food first — vitamins, minerals and omega-3s are
                     calculated from what you eat.
                   </p>
@@ -1529,8 +1609,8 @@ export default function DailyLog() {
             {heroPanel === 'workout' && !loading && (
               <div className="mt-3 pt-3 border-t border-white/[0.07]">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] text-[#4e4e5c] font-medium">🏋️ Workout log</p>
-                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#c9a227]">Done</button>
+                  <p className="text-[10px] text-[#7E8596] font-medium">🏋️ Workout log</p>
+                  <button onClick={() => setHeroPanel(null)} className="text-[10px] font-bold text-[#D4AF37]">Done</button>
                 </div>
                 <div id="section-workout">
                   <WorkoutLog key={`${date}-${workoutRefreshKey}`} date={date} />
@@ -1576,7 +1656,7 @@ export default function DailyLog() {
                   </SectionTitle>
                   {unreadNotes.length > 1 && (
                     <button onClick={() => markNotesRead(unreadNotes.map(n => n.id))}
-                      className="text-[11px] font-bold text-[#c9a227] hover:underline">
+                      className="text-[11px] font-bold text-[#D4AF37] hover:underline">
                       Mark all read
                     </button>
                   )}
@@ -1584,7 +1664,7 @@ export default function DailyLog() {
                 <div className="space-y-2">
                   {unreadNotes.slice(0, 3).map(n => (
                     <div key={n.id} className={`rounded-2xl px-4 py-3 border ${
-                      n.flagged ? 'bg-amber-500/[0.06] border-amber-500/20' : 'bg-[#1a1a20] border-white/[0.07]'
+                      n.flagged ? 'bg-amber-500/[0.06] border-amber-500/20' : 'bg-[#1A1C20] border-white/[0.07]'
                     }`}>
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {n.flagged && (
@@ -1592,20 +1672,20 @@ export default function DailyLog() {
                             ⚠ Action needed
                           </span>
                         )}
-                        <span className="text-[11px] text-[#8e8e9a]">
+                        <span className="text-[11px] text-[#9EA3B0]">
                           {n.monitor_name} · {new Date(n.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                         </span>
                       </div>
-                      <p className="text-sm text-[#d8d8de] leading-relaxed whitespace-pre-wrap">{n.note}</p>
+                      <p className="text-sm text-[#FFFFFF] leading-relaxed whitespace-pre-wrap">{n.note}</p>
                       <button onClick={() => markNotesRead([n.id])}
                         style={{ minHeight: 36 }}
-                        className="mt-2 w-full text-[11px] font-bold text-[#e0c98a] bg-[rgba(201,162,39,0.10)] border border-[rgba(201,162,39,0.25)] rounded-xl active:scale-[0.98] transition-transform">
+                        className="mt-2 w-full text-[11px] font-bold text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.25)] rounded-xl active:scale-[0.98] transition-transform">
                         Got it ✓
                       </button>
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-[#4e4e5c] mt-2 text-center">
+                <p className="text-[10px] text-[#7E8596] mt-2 text-center">
                   Read messages stay in the 🔔 bell at the top
                 </p>
               </Card>
@@ -1618,7 +1698,7 @@ export default function DailyLog() {
                 return (
                   <div className="bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3">
                     <p className="text-xs font-bold text-amber-400 mb-1">⚠️ Fasting protocol — check with doctor</p>
-                    <p className="text-xs text-[#8e8e9a] leading-relaxed">
+                    <p className="text-xs text-[#9EA3B0] leading-relaxed">
                       {isMinor ? 'Fasting is not recommended for people under 18.' : 'Your health conditions may require a modified fasting approach.'} Please confirm this protocol is approved by your doctor before following it.
                     </p>
                   </div>
@@ -1648,10 +1728,10 @@ export default function DailyLog() {
             {/* Long-press chip detail popover */}
             {chipInfo && (
               <div onClick={() => setChipInfo(null)}
-                className="fixed left-4 right-4 z-[60] bg-[#1a1a20] border border-[rgba(201,162,39,0.4)] rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)]"
+                className="fixed left-4 right-4 z-[60] bg-[#1A1C20] border border-[rgba(212,175,55,0.4)] rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)]"
                 style={{ bottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
                 <p className="text-sm font-bold text-white">{chipInfo.label}</p>
-                <p className="text-xs text-[#8e8e9a] mt-0.5 leading-relaxed">{chipInfo.sub}</p>
+                <p className="text-xs text-[#9EA3B0] mt-0.5 leading-relaxed">{chipInfo.sub}</p>
               </div>
             )}
 
@@ -1663,7 +1743,7 @@ export default function DailyLog() {
               <SectionTitle icon="📝">{terms.notes}</SectionTitle>
               <textarea value={log.notes} onChange={e => update('notes', e.target.value)}
                 placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} rows={3}
-                className="w-full text-sm border border-white/[0.12] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] resize-none" />
+                className="w-full text-sm border border-white/[0.12] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)] resize-none" />
             </Card>
 
             {error && <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
@@ -1682,13 +1762,13 @@ export default function DailyLog() {
       {milestone && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6"
           onClick={() => setMilestone(null)}>
-          <div className="bg-[#131317] rounded-3xl border border-white/[0.08] p-8 max-w-xs w-full text-center shadow-2xl"
+          <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] p-8 max-w-xs w-full text-center shadow-2xl"
             onClick={e => e.stopPropagation()}>
             <div className="text-6xl mb-3">{milestone.icon}</div>
-            <h2 className="text-xl font-bold text-[#ededf0] mb-2">{milestone.title}</h2>
+            <h2 className="text-xl font-bold text-[#FFFFFF] mb-2">{milestone.title}</h2>
             <p className="text-sm text-[#6a6a78] leading-relaxed mb-6">{milestone.body}</p>
             <button onClick={() => setMilestone(null)}
-              className="w-full py-3 bg-[#c9a227] hover:bg-[#e0c98a] text-[#08052a] font-bold rounded-2xl transition-colors active:scale-95">
+              className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] font-bold rounded-2xl transition-colors active:scale-95">
               Let's keep going! 💪
             </button>
           </div>

@@ -5,7 +5,7 @@ import { useAIChat } from './AIChatLog';
 
 export function Card({ children, className = '' }) {
   return (
-    <div className={`rounded-2xl p-4 border border-white/[0.07] bg-[#131317] shadow-card-raised ${className}`}>
+    <div className={`rounded-2xl p-4 border border-white/[0.07] bg-[#1A1C20] shadow-card-raised ${className}`}>
       {children}
     </div>
   );
@@ -26,19 +26,19 @@ export function SectionTitle({ children, icon, tooltip }) {
             style={{
               width: 20, height: 20, borderRadius: '50%',
               background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-              color: '#8e8e9a', fontSize: 11, fontWeight: 700,
+              color: '#9EA3B0', fontSize: 11, fontWeight: 700,
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>?</button>
           {show && (
             <div style={{
               position: 'absolute', right: 0, top: 26, zIndex: 50,
-              background: '#1a1a20', border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#d8d8de',
+              background: '#1A1C20', border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#FFFFFF',
               lineHeight: 1.5, width: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
             }}>
               {tooltip}
               <button onClick={() => setShow(false)} style={{
-                display: 'block', marginTop: 8, fontSize: 11, color: '#c9a227',
+                display: 'block', marginTop: 8, fontSize: 11, color: '#D4AF37',
                 fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               }}>Got it ✓</button>
             </div>
@@ -60,12 +60,12 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
       className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer select-none
         transition-all duration-150 border ${
           checked
-            ? 'bg-[rgba(201,162,39,0.07)] border-[rgba(201,162,39,0.20)]'
-            : 'bg-[#1a1a20] border-white/[0.07] hover:border-white/[0.14]'
+            ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.20)]'
+            : 'bg-[#1A1C20] border-white/[0.07] hover:border-white/[0.14]'
         }`}>
       <div style={{ width: 24, height: 24, minWidth: 24 }}
         className={`rounded-full border-2 flex-shrink-0 flex items-center justify-center
-          transition-all duration-150 ${checked ? 'bg-[#c9a227] border-[#c9a227]' : 'border-white/[0.2]'}`}>
+          transition-all duration-150 ${checked ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-white/[0.2]'}`}>
         {checked && (
           <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 12 12" fill="none">
             <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.2"
@@ -74,10 +74,10 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-medium leading-tight ${checked ? 'text-[#ededf0]' : 'text-[#d8d8de]'}`}>
+        <div className={`text-sm font-medium leading-tight ${checked ? 'text-[#FFFFFF]' : 'text-[#FFFFFF]'}`}>
           {icon && <span className="mr-1">{icon}</span>}{label}
         </div>
-        {sub && <div className="text-xs text-[#4e4e5c] mt-0.5 leading-tight">{sub}</div>}
+        {sub && <div className="text-xs text-[#7E8596] mt-0.5 leading-tight">{sub}</div>}
       </div>
       {checked && burnKcal > 0 && (
         <span className="flex-shrink-0 text-xs font-semibold text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">
@@ -98,23 +98,23 @@ export function OfflineBanner() {
     window.addEventListener('offline', goOffline);
     return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
   }, []);
-  if (justOnline) return <div className="bg-[#c9a227] text-[#08052a] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
+  if (justOnline) return <div className="bg-[#D4AF37] text-[#08052a] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
   if (!offline) return null;
   return <div className="bg-amber-500/90 text-white text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
 }
 
 export function Spinner({ size = 'md', color = 'emerald' }) {
   const sizes  = { sm: 'w-4 h-4 border-2', md: 'w-6 h-6 border-2', lg: 'w-8 h-8 border-[3px]' };
-  const colors = { emerald: 'border-[#c9a227]/30 border-t-[#c9a227]', white: 'border-white/30 border-t-white', stone: 'border-white/10 border-t-white/40' };
+  const colors = { emerald: 'border-[#D4AF37]/30 border-t-[#D4AF37]', white: 'border-white/30 border-t-white', stone: 'border-white/10 border-t-white/40' };
   return <div className={`rounded-full animate-spin ${sizes[size]} ${colors[color]}`} />;
 }
 
 export function PageLoader() {
   return (
-    <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center">
+    <div className="min-h-screen bg-[#121316] flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <Spinner size="lg" />
-        <p className="text-[#4e4e5c] text-sm font-medium tracking-wide">Loading…</p>
+        <p className="text-[#7E8596] text-sm font-medium tracking-wide">Loading…</p>
       </div>
     </div>
   );
@@ -137,7 +137,7 @@ export function CardSkeleton({ lines = 3, className = '' }) {
 
 export function StatPill({ value, label, color = 'stone' }) {
   const colors = {
-    stone: 'bg-white/[0.06] text-[#d8d8de]', emerald: 'bg-[rgba(201,162,39,0.10)] text-[#c9a227]',
+    stone: 'bg-white/[0.06] text-[#FFFFFF]', emerald: 'bg-[rgba(212,175,55,0.10)] text-[#D4AF37]',
     amber: 'bg-[rgba(251,191,36,0.10)] text-amber-400', red: 'bg-[rgba(248,113,113,0.10)] text-red-400',
     blue: 'bg-[rgba(96,165,250,0.10)] text-blue-400', purple: 'bg-[rgba(192,132,252,0.10)] text-amber-400',
   };
@@ -191,10 +191,10 @@ export function PatientBottomNav() {
     <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
       style={{ minHeight: 56, flex: 1 }}
       className={`flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${
-        tab.active ? 'text-[#c9a227]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
+        tab.active ? 'text-[#D4AF37]' : 'text-[#7E8596] hover:text-[#9EA3B0]'}`}>
       {tab.icon}
       <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-      {tab.active && <div className="w-1 h-1 bg-[#c9a227] rounded-full shadow-[0_0_6px_rgba(201,162,39,0.8)]" />}
+      {tab.active && <div className="w-1 h-1 bg-[#D4AF37] rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
     </button>
   );
 
@@ -212,8 +212,9 @@ export function PatientBottomNav() {
                 onClick={openChatFromNav}
                 aria-label="Log with AI Chat"
                 style={{ width: 56, height: 56, marginTop: -22 }}
-                className="rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-xl
-                  border-4 border-[#0b0b0e] shadow-[0_0_22px_rgba(201,162,39,0.55)] active:scale-90 transition-transform">
+                className="orb-breathe rounded-full bg-gradient-to-br from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                  flex items-center justify-center text-xl border-4 border-[#121316]
+                  active:scale-90 transition-transform">
                 ✨
               </button>
             </div>
@@ -250,10 +251,10 @@ export function BottomNav({ role }) {
             {tabs.map(tab => (
               <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
                 style={{ minHeight: 56, flex: 1 }}
-                className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-[#c9a227]' : 'text-[#4e4e5c] hover:text-[#8e8e9a]'}`}>
+                className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-[#D4AF37]' : 'text-[#7E8596] hover:text-[#9EA3B0]'}`}>
                 {tab.icon}
                 <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-                {tab.active && <div className="w-1 h-1 bg-[#c9a227] rounded-full shadow-[0_0_6px_rgba(201,162,39,0.8)]" />}
+                {tab.active && <div className="w-1 h-1 bg-[#D4AF37] rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
               </button>
             ))}
           </div>
@@ -267,7 +268,7 @@ export function BackButton({ onClick, label = 'Back' }) {
   return (
     <button onClick={onClick}
       style={{ minHeight: 44 }}
-      className="flex items-center gap-1.5 text-[#4e4e5c] hover:text-[#8e8e9a] transition-colors text-sm font-medium py-1">
+      className="flex items-center gap-1.5 text-[#7E8596] hover:text-[#9EA3B0] transition-colors text-sm font-medium py-1">
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
       </svg>
@@ -283,22 +284,22 @@ export function QuickJump({ sections }) {
     <div style={{ position: 'fixed', right: 16, bottom: 100, zIndex: 40 }}>
       {open && (
         <div style={{
-          position: 'absolute', bottom: 52, right: 0, background: '#1a1a20',
+          position: 'absolute', bottom: 52, right: 0, background: '#1A1C20',
           border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '8px 0', minWidth: 160,
           boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
         }}>
           {sections.map(s => (
             <button key={s.id} onClick={() => scrollTo(s.id)} style={{
               display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
-              background: 'none', border: 'none', color: '#d8d8de', fontSize: 13, cursor: 'pointer',
+              background: 'none', border: 'none', color: '#FFFFFF', fontSize: 13, cursor: 'pointer',
               borderBottom: '1px solid rgba(255,255,255,0.06)',
             }}>{s.icon} {s.label}</button>
           ))}
         </div>
       )}
       <button onClick={() => { setOpen(v => !v); haptic(15); }} style={{
-        width: 44, height: 44, borderRadius: 22, background: '#c9a227', color: '#fff', fontSize: 18,
-        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgba(201,162,39,0.5)',
+        width: 44, height: 44, borderRadius: 22, background: '#D4AF37', color: '#fff', fontSize: 18,
+        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgba(212,175,55,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>{open ? '✕' : '⚡'}</button>
     </div>
