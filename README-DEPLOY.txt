@@ -1,44 +1,43 @@
-FitLife — gold logo + matching theme
-====================================
+FitLife — real logo on the login screen
+=======================================
 
 Extract, drag the "client" FOLDER onto GitHub at the ROOT of your repo.
 NOTHING TO RENAME. No new packages. No schema change.
 
-This replaces the whole client/src tree plus icons, so it is a larger upload
-than usual - the colour change touches 38 files.
+FILES (3)
+client/src/pages/Login.jsx   uses the logo lockup
+client/public/logo-full.png  mark + FITLIFE wordmark, transparent
+client/public/logo-mark.png  mark only, transparent (for future use)
 
-THE ICON
-Built from your FL monogram. The source artwork is a mockup - the logo shot on
-a textured wall with directional lighting - so cropping it straight into an
-icon would drag the wall texture and light falloff along with it, which looks
-muddy at 48px.
+LOGIN SCREEN
+The heart icon and the typed "FitLife" heading are replaced by your actual
+lockup. The <h1> is gone deliberately - the logo already contains the word
+FITLIFE, so keeping the heading would have printed the name twice. The
+tagline stays, and the pulse rings now scale around the larger logo.
 
-Instead the mark is extracted: gold is isolated by channel difference (red
-meaningfully above blue), which separates metal from the neutral wall whatever
-the lighting; the alpha shape is kept and the photographed colour discarded;
-then it is re-filled with a clean gold gradient and given a rim light, and
-composited onto the app's dark ground. The metal is rendered, not photographed.
-Verified legible down to 48px and clip-free under circular and squircle masks.
+Both PNGs are extracted from your artwork, not cropped: the metal is isolated
+by channel difference so the mockup's wall texture and lighting are left
+behind, then re-rendered with the brand gradient (#F0E2B6 -> #D4AF37 ->
+#8C6D37) on transparency. They will sit correctly on any background.
 
-THE THEME
-Violet accent swapped for the logo's gold across the app, keeping the same
-three-step ramp so hierarchy survives:
+THE CHROME BADGE ON THE HOME-SCREEN ICON
+That badge is Android's marker for a SHORTCUT rather than an installed app.
+It is not a manifest fault - I audited all ten WebAPK installability criteria
+against the built manifest and every one passes (name, short_name, start_url,
+standalone display, 192 and 512 icons, a maskable icon, an any-purpose icon,
+theme and background colour, plus a service worker with a fetch handler).
 
-  #7c5cfc  primary   -> #c9a227  gold
-  #a78bfa  light     -> #e0c98a  light gold
-  #c4b5fd  pale      -> #f0dfae  pale gold
-  #4c2fd8  deep      -> #8a6a1e  bronze (gradient fills only, never text)
-  Tailwind purple/violet/indigo utilities -> amber
+It happens when the icon is added via "Add to Home screen", or when it was
+added at a time the manifest was not yet complete - which is the case here,
+since your icon predates the maskable-icon fix.
 
-CONTRAST IMPROVED, NOT JUST CHANGED
-  gold  #c9a227 on the page background: 8.12:1
-  violet #7c5cfc on the same background: 4.49:1
-WCAG AA needs 4.5:1 for body text - the old violet was scraping past it, the
-gold clears it comfortably. Light and pale gold sit at 12:1 and 14:1.
+TO REMOVE IT
+  1. Long-press the FitLife icon and remove it from the home screen.
+  2. Deploy this build and open the site in Chrome.
+  3. Chrome menu -> "Install app" (or "Add to Home screen" if it now offers
+     to install). The app's own install banner also triggers the correct path.
+  4. The new icon appears with no Chrome badge.
 
-logo-source.png is kept in client/ so the icon can be regenerated with
-make_icons.py if the mark is ever revised.
-
-AFTER DEPLOYING
-Android caches home-screen icons hard. Remove FitLife from the home screen and
-re-add it from the browser menu; a reload will not update it.
+If the menu still only offers "Add to Home screen", clear the site data once
+(Settings -> Site settings -> fitness.upscale-app.com -> Clear and reset) so
+Chrome re-reads the manifest, then try again.

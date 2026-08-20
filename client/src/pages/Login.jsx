@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 function PulseRing({ delay = 0, size = 80, opacity = 0.06 }) {
   return (
     <div
-      className="absolute rounded-full border border-[#c9a227] animate-ping"
+      className="absolute rounded-full border border-[#D4AF37] animate-ping"
       style={{ width: size, height: size, opacity, animationDuration: '3s', animationDelay: `${delay}s` }}
     />
   );
@@ -17,7 +17,7 @@ function PulseRing({ delay = 0, size = 80, opacity = 0.06 }) {
 function Field({ label, children }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-[10px] font-semibold text-[#4e4e5c] uppercase tracking-[0.12em]">
+      <label className="block text-[10px] font-semibold text-[#7E8596] uppercase tracking-[0.12em]">
         {label}
       </label>
       {children}
@@ -25,9 +25,9 @@ function Field({ label, children }) {
   );
 }
 
-const inputCls = `w-full bg-[#1a1a20] border border-white/[0.1] rounded-xl px-4 py-3 text-[#ededf0]
-  text-sm font-medium placeholder-[#3a3a46] outline-none
-  focus:border-[rgba(201,162,39,0.40)] focus:ring-2 focus:ring-[rgba(201,162,39,0.12)]
+const inputCls = `w-full bg-[#1A1C20] border border-white/[0.1] rounded-xl px-4 py-3 text-[#FFFFFF]
+  text-sm font-medium placeholder-[#4A4E5A] outline-none
+  focus:border-[rgba(212,175,55,0.40)] focus:ring-2 focus:ring-[rgba(212,175,55,0.12)]
   transition-all duration-200`;
 
 // ── Member PIN form ───────────────────────────────────────────────────────────
@@ -35,15 +35,15 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
   return (
     <div className="space-y-4 fade-up">
       <Field label="Mobile Number">
-        <div className="flex items-center gap-0 border border-white/[0.1] rounded-xl bg-[#1a1a20]
-          focus-within:border-[rgba(201,162,39,0.40)] focus-within:ring-2 focus-within:ring-[rgba(201,162,39,0.12)]
+        <div className="flex items-center gap-0 border border-white/[0.1] rounded-xl bg-[#1A1C20]
+          focus-within:border-[rgba(212,175,55,0.40)] focus-within:ring-2 focus-within:ring-[rgba(212,175,55,0.12)]
           transition-all duration-200 overflow-hidden">
-          <span className="pl-4 pr-3 text-[#4e4e5c] text-sm font-medium border-r border-white/[0.08] py-3">+91</span>
+          <span className="pl-4 pr-3 text-[#7E8596] text-sm font-medium border-r border-white/[0.08] py-3">+91</span>
           <input
             type="tel" inputMode="numeric" maxLength={10} value={phone}
             onChange={e => onPhone(e.target.value.replace(/\D/g, ''))}
             placeholder="10-digit number"
-            className="flex-1 px-3 py-3 bg-transparent text-[#ededf0] text-sm font-medium placeholder-[#3a3a46] outline-none"
+            className="flex-1 px-3 py-3 bg-transparent text-[#FFFFFF] text-sm font-medium placeholder-[#4A4E5A] outline-none"
             onKeyDown={e => e.key === 'Enter' && onLogin()}
           />
         </div>
@@ -59,11 +59,11 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
             autoComplete="current-password"
           />
           <button type="button" onClick={onTogglePin}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#4e4e5c] hover:text-[#8e8e9a] text-xs font-semibold transition-colors">
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7E8596] hover:text-[#9EA3B0] text-xs font-semibold transition-colors">
             {showPin ? 'Hide' : 'Show'}
           </button>
         </div>
-        <p className="text-[11px] text-[#3a3a46] mt-1">Set by your health coach</p>
+        <p className="text-[11px] text-[#4A4E5A] mt-1">Set by your health coach</p>
       </Field>
 
       {error && (
@@ -71,10 +71,10 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
       )}
 
       <button onClick={onLogin} disabled={phone.length !== 10 || !pin || loading}
-        className="w-full py-3.5 bg-[#c9a227] hover:bg-[#e0c98a] disabled:opacity-40
+        className="w-full py-3.5 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-40
           disabled:cursor-not-allowed text-[#08052a] font-bold rounded-xl
           transition-all duration-200 text-sm tracking-wide active:scale-[0.98]
-          shadow-[0_0_24px_rgba(201,162,39,0.35)]">
+          shadow-[0_0_24px_rgba(212,175,55,0.35)]">
         {loading
           ? <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-[#08052a]/30 border-t-[#08052a] rounded-full animate-spin" />
@@ -103,7 +103,7 @@ function MonitorForm({ email, password, loading, error, onEmail, onPassword, onL
             className={`${inputCls} pr-16`}
             onKeyDown={e => e.key === 'Enter' && onLogin()} />
           <button type="button" onClick={() => setShowPw(s => !s)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#4e4e5c] hover:text-[#8e8e9a] text-xs font-semibold transition-colors">
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7E8596] hover:text-[#9EA3B0] text-xs font-semibold transition-colors">
             {showPw ? 'Hide' : 'Show'}
           </button>
         </div>
@@ -115,7 +115,7 @@ function MonitorForm({ email, password, loading, error, onEmail, onPassword, onL
 
       <button onClick={onLogin} disabled={!email || !password || loading}
         className="w-full py-3.5 bg-white/[0.08] hover:bg-white/[0.13] border border-white/[0.1]
-          disabled:opacity-40 disabled:cursor-not-allowed text-[#ededf0] font-bold rounded-xl
+          disabled:opacity-40 disabled:cursor-not-allowed text-[#FFFFFF] font-bold rounded-xl
           transition-all duration-200 text-sm active:scale-[0.98]">
         {loading
           ? <span className="flex items-center justify-center gap-2">
@@ -171,37 +171,36 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e] flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-[#121316] flex flex-col items-center justify-center px-4 py-12">
 
       {/* Ambient background glow */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2
           w-[400px] h-[400px] rounded-full opacity-[0.04]"
-          style={{ background: 'radial-gradient(circle, #c9a227, #e0c98a 30%, transparent 70%)' }} />
+          style={{ background: 'radial-gradient(circle, #D4AF37, #F0E2B6 30%, transparent 70%)' }} />
       </div>
 
       <div className="w-full max-w-sm relative">
 
         {/* Logo mark */}
         <div className="text-center mb-10 fade-up">
-          <div className="relative inline-flex items-center justify-center w-16 h-16 mb-5">
-            <PulseRing delay={0} size={64} opacity={0.08} />
-            <PulseRing delay={0.8} size={80} opacity={0.05} />
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1e1258] to-[#08052a]
-              border border-[rgba(201,162,39,0.20)] flex items-center justify-center
-              shadow-[0_0_30px_rgba(201,162,39,0.12)] relative">
-              <svg className="w-7 h-7 text-[#c9a227]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-                <path strokeLinecap="round" strokeLinejoin="round"
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </div>
+          {/* The lockup carries the wordmark, so no separate <h1> — a text
+              "FitLife" beside the logo's own FITLIFE read as a duplicate. */}
+          <div className="relative inline-flex items-center justify-center mb-4">
+            <PulseRing delay={0} size={150} opacity={0.07} />
+            <PulseRing delay={0.8} size={180} opacity={0.04} />
+            <img
+              src="/logo-full.png"
+              alt="FitLife"
+              className="relative w-[150px] h-auto select-none"
+              draggable="false"
+            />
           </div>
-          <h1 className="font-display text-3xl font-semibold text-[#ededf0] tracking-tight">FitLife</h1>
-          <p className="text-[#4e4e5c] text-sm mt-2 font-medium italic font-display">Your personal health coach, every day</p>
+          <p className="text-[#9EA3B0] text-sm font-medium italic font-display">Your personal health coach, every day</p>
         </div>
 
         {/* Login card */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#131317]
+        <div className="rounded-2xl border border-white/[0.08] bg-[#1A1C20]
           shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.7)]
           overflow-hidden scale-up">
 
@@ -216,12 +215,12 @@ export default function Login() {
                   mode === tab.id ? '' : 'hover:bg-white/[0.03]'
                 }`}>
                 <div className={`text-sm font-semibold transition-colors ${
-                  mode === tab.id ? 'text-[#c9a227]' : 'text-[#4e4e5c]'
+                  mode === tab.id ? 'text-[#D4AF37]' : 'text-[#7E8596]'
                 }`}>{tab.label}</div>
-                <div className="text-[10px] text-[#3a3a46] mt-0.5 font-medium">{tab.sub}</div>
+                <div className="text-[10px] text-[#4A4E5A] mt-0.5 font-medium">{tab.sub}</div>
                 {mode === tab.id && (
-                  <div className="absolute bottom-0 left-4 right-4 h-[1.5px] bg-[#c9a227] rounded-full
-                    shadow-[0_0_10px_rgba(201,162,39,0.70)]" />
+                  <div className="absolute bottom-0 left-4 right-4 h-[1.5px] bg-[#D4AF37] rounded-full
+                    shadow-[0_0_10px_rgba(212,175,55,0.70)]" />
                 )}
               </button>
             ))}
@@ -238,7 +237,7 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-[#3a3a46] mt-6 tracking-wide">
+        <p className="text-center text-[11px] text-[#4A4E5A] mt-6 tracking-wide">
           All health data is encrypted and private
         </p>
       </div>
