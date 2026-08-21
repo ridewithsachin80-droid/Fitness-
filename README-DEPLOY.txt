@@ -1,47 +1,62 @@
-FitLife — "Egg" was matching Egg Yolk
-=====================================
+FitLife — full nutrition audit
+==============================
 
 Extract, drag the "server" FOLDER onto GitHub at the ROOT of your repo.
-NOTHING TO RENAME. No new packages. No schema change. Client untouched.
+ONE RENAME: server/server-package.json -> package.json (in server/)
+No new packages. No schema change. Client untouched.
 
-THE BUG, AND IT WAS MINE
-Egg 165g logged as 531 kcal. That works out at 322 kcal per 100g, which is
-exactly egg YOLK. Whole egg is 155.
+WHAT I DID
+Built a validator and ran it over all 579 seeded foods, checking:
 
-  logged     165g  531 kcal  P26.2  F43.7   = 322 kcal/100g  (egg yolk)
-  correct    165g  256 kcal  P20.8  F17.5   = 155 kcal/100g  (whole egg)
+  ATWATER     calories must agree with 4·protein + 4·carbs + 9·fat
+  MASS        protein + carbs + fat cannot exceed 100g per 100g
+  SUBSET      fibre and sugar cannot exceed total carbs; saturated and trans
+              fat cannot exceed total fat
+  DENSITY     per-category ceilings and floors (nothing beats pure fat at
+              900 kcal/100g; a declared oil under 700 means a unit mix-up)
+  MICROS      plausible per-100g bounds, to catch mg-where-mcg-was-meant
+  DUPLICATES  same food seeded twice with materially different numbers
 
-Yesterday's fix widened the food lookup so it would stop missing the database,
-and I ranked the prefix matches by LENGTH(name) - shortest wins. That looks
-sensible and is wrong. For "Egg" the candidates are:
+RESULT: 2 genuine data errors in 579 foods, both fixed.
 
-  14  Egg Yolk (Raw)              <- shortest, so it won
-  15  Egg White (Raw)
-  17  Eggs (Whole, Raw)           <- what it should be
-  26  Egg Bhurji (Scrambled Egg)
-  28  Eggplant / Brinjal (Baingan)
+  Cluster Beans (Gavar)   16 kcal stated, but its own macros give 60.
+                          Most of the carbohydrate is fibre; the metabolisable
+                          figure is ~40. USDA lists guar beans at 45.
+                          16 -> 40 kcal.
 
-A component of a food beat the food itself purely on name length.
+  Pointed Gourd (Parwal)  carbs 2.2g sat BELOW its own fibre 3.0g, which is
+                          impossible - fibre is a subset of carbohydrate.
+                          Reference total carbohydrate is 4.2g.
+                          2.2 -> 4.2g carbs.
 
-THE FIX
-Matching now compares against the BASE name - the part before any bracket - so
-"Egg" is compared with "Eggs", not with the whole string "Egg Yolk (Raw)".
-Singular and plural are treated as the same word. Ranking is now:
+A THIRD LOOKUP BUG, FOUND BY THE AUDIT
+Five foods are seeded twice, once per 100g and once per serving:
 
-  0  exact full name
-  1  base name equals the query
-  2  base equals the plural or singular of the query   <- "Eggs" for "Egg"
-  3  declared alias
-  4  base starts with the query AND a word break follows
-     ("Egg Bhurji" qualifies, "Eggplant" does not)
+  Flaxseed Oil (Alsi Tel) 884   vs  Flaxseed Oil (1 tsp / 5ml) 44   20x
+  Psyllium Husk           200   vs  Psyllium Husk (Isabgol, 5g) 10  20x
+  Moringa Powder          205   vs  Moringa Powder (per 5g)     10  20x
+  Collagen Peptides       380   vs  Collagen Peptides (10g)     35  11x
+  Wheat Germ              382   vs  Wheat Germ (2 tbsp)         76   5x
 
-The word-break rule is what stops "Egg" matching "Eggplant".
+Both rows share a base name, so a plain query could land on the per-serving
+row - the same class of fault as whey and egg, and worse in magnitude. The
+lookup now always prefers the per-100g row unless the member names the unit
+row exactly.
 
-TESTS
-test-food-lookup.js now seeds the real egg family and asserts every variant
-resolves to itself while the bare word resolves to whole egg. 19 assertions.
-Full regression: 147 across five suites, all passing.
+THE 21 REMAINING WARNINGS ARE CORRECT DATA
+They are two legitimate patterns, left alone deliberately:
+  · Spices and husks where stated calories sit below the Atwater figure -
+    coriander, cinnamon, cloves, psyllium, ajwain, kalonji. These are mostly
+    indigestible fibre, so metabolisable energy really is lower than 4/4/9
+    predicts. NIN reports it this way.
+  · Raw-versus-cooked pairs - dal at 334 raw and 105 cooked is correct, since
+    cooking absorbs water.
 
-AFTER DEPLOYING
-Ask Subramanya to delete and re-log the 165g egg - the stored figure will not
-correct itself. It should come back as 256 kcal.
+ONGOING PROTECTION
+  cd server
+  npm run validate:foods   fails the build on any nutrition error
+  npm run test:foods       23 assertions on food matching
+
+Run validate:foods after any seed edit. It needs no database.
+
+FULL REGRESSION: 151 assertions across five suites, all passing.

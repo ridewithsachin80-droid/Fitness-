@@ -384,9 +384,16 @@ async function enrichFromDB(foods) {
                   WHEN RTRIM($1, 's') = RTRIM(base, 's')             THEN 2
                   WHEN base LIKE $1 || ' %'                          THEN 4
                   ELSE 5
-                END AS rank
+                END AS rank,
+                -- Some foods are seeded twice: once per 100g and once per
+                -- serving ("Flaxseed Oil (Alsi Tel)" 884 vs "Flaxseed Oil
+                -- (1 tsp / 5ml)" 44). Both share a base name, so a plain
+                -- query could land on the per-serving row and be wrong by
+                -- 20x. Per-100g always wins unless the member asked for the
+                -- unit explicitly — which the exact-name rank above handles.
+                CASE WHEN name ~ '[(]([ ]*per[ ]|[ ]*[0-9])' THEN 1 ELSE 0 END AS per_unit
          FROM c
-         ORDER BY rank ASC, verified DESC, LENGTH(base) ASC, id ASC
+         ORDER BY rank ASC, per_unit ASC, verified DESC, LENGTH(base) ASC, id ASC
          LIMIT 1`,
         [ql, `%"${ql}"%`, `${ql}%`]
       );

@@ -34,9 +34,10 @@ async function lookup(name) {
               WHEN RTRIM($1, 's') = RTRIM(base, 's') THEN 2
               WHEN base LIKE $1 || ' %'              THEN 4
               ELSE 5
-            END AS rank
+            END AS rank,
+            CASE WHEN name ~ '[(]([ ]*per[ ]|[ ]*[0-9])' THEN 1 ELSE 0 END AS per_unit
      FROM c
-     ORDER BY rank ASC, verified DESC, LENGTH(base) ASC, id ASC
+     ORDER BY rank ASC, per_unit ASC, verified DESC, LENGTH(base) ASC, id ASC
      LIMIT 1`,
     [ql, `%"${ql}"%`, `${ql}%`]
   );
@@ -59,6 +60,12 @@ const suspect = (name, cal) => DENSE.test(name) && cal < 300;
     ['Eggplant / Brinjal (Baingan)', 'Kathirikai',    25, 1.0],
     ['Okra (Bhindi, Cooked)',        'Okra',          33, 1.9],
     ['Groundnut Oil',                'Oil',          900, 0],
+    // per-100g and per-serving rows of the same food, the third instance of
+    // this bug class after whey and egg
+    ['Flaxseed Oil (Alsi Tel)',      'Alsi Tel',     884, 0],
+    ['Flaxseed Oil (1 tsp / 5ml)',   'Flaxseed 5ml',  44, 0],
+    ['Moringa Powder',               'Moringa',      205, 27.1],
+    ['Moringa Powder (per 5g)',      'Moringa 5g',    10, 1.4],
   ];
   for (const [name, local, cal, pro] of seed) {
     await pool.query(
@@ -95,11 +102,24 @@ const suspect = (name, cal) => DENSE.test(name) && cal < 300;
   const k165 = egg ? Math.round(egg.per_100g.calories * 165 / 100) : 0;
   ck('165g of "Egg" = 256 kcal (was 531)', k165 === 256, k165);
 
-  console.log('\n[3] exact names still win over prefix matches');
+  console.log('\n[3] per-100g rows beat per-serving rows');
+  for (const [typed, expect] of [
+    ['Flaxseed Oil',   'Flaxseed Oil (Alsi Tel)'],
+    ['Moringa Powder', 'Moringa Powder'],
+  ]) {
+    const m = await lookup(typed);
+    ck(`"${typed}" -> ${expect}`, m && m.name === expect, m && m.name);
+  }
+  const fo = await lookup('Flaxseed Oil');
+  ck('flaxseed oil is 884 kcal/100g, not 44', fo && fo.per_100g.calories === 884, fo && fo.per_100g.calories);
+  const exactUnit = await lookup('Flaxseed Oil (1 tsp / 5ml)');
+  ck('asking for the unit row explicitly still works', exactUnit && exactUnit.name === 'Flaxseed Oil (1 tsp / 5ml)', exactUnit && exactUnit.name);
+
+  console.log('\n[4] exact names still win over prefix matches');
   const exact = await lookup('Whey Protein (Chocolate)');
   ck('full product name matches itself', exact && exact.name === 'Whey Protein (Chocolate)', exact && exact.name);
 
-  console.log('\n[4] per-serving guard');
+  console.log('\n[5] per-serving guard');
   ck('whey at 120 kcal/100g flagged', suspect('Whey Protein', 120) === true);
   ck('whey at 400 kcal/100g not flagged', suspect('Whey Protein', 400) === false);
   ck('oil at 90 kcal/100g flagged', suspect('Groundnut Oil', 90) === true);
