@@ -232,6 +232,10 @@ PARSING RULES:
    Per-100g nutrition from USDA/NIN India (cooked form as eaten in India):
    calories(kcal), protein, total_carbs, fat, fiber, sugar (g) and sodium,
    calcium, iron, potassium, vit_c (mg).
+   Also give "category", one of: dairy, grain, vegetable, fruit, nut, oil,
+   supplement, branded, other, pulse, meat, beverage, spice. It is used to file
+   the food in the shared database.
+
    CRITICAL — per_100g means PER 100 GRAMS OF THE FOOD ITSELF, never per
    serving, per scoop, per piece or per packet. Supplement and powder labels
    are printed per scoop, and copying those numbers understates the food by
@@ -290,6 +294,7 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
   "foods": [
     {
       "name": "Chapati", "qty_text": "2 pieces", "grams": 60, "meal": null,
+      "category": "grain",
       "per_100g": { "calories": 297, "protein": 8.0, "total_carbs": 61, "fat": 3.7,
         "fiber": 4.9, "sugar": 1.6, "sodium": 298, "calcium": 33, "iron": 2.4,
         "potassium": 196, "vit_c": 0 }
@@ -304,6 +309,71 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
       "cardio_type": "walking", "speed_kmh": 5, "distance_km": 5 }
   ]
 }`;
+}
+
+// ── Learning back into the food database ─────────────────────────────────────
+// The chat used to read from `foods` but never write to it, so a member could
+// log "upma" every morning and the AI would re-estimate it from scratch every
+// time — the same guess, never reviewed, never improving. The AI Food Search
+// path already saved its results; the chat quietly did not.
+//
+// Foods the chat estimates are now saved with source 'ai' and verified=false,
+// which is the same contract the search path uses: usable immediately, clearly
+// marked as unverified, and visible to a coach in the Food Database Manager to
+// confirm or correct. Seeded NIN/USDA rows are untouched — the unique index is
+// on (lower(name), source), so an AI row can never overwrite a verified one.
+//
+// Deliberately NOT saved:
+//   · anything that already matched the database (nothing to learn)
+//   · anything flagged by the per-serving guard (saving a suspect value would
+//     bake the error in for every future member)
+//   · implausible energy density, as a second line of defence
+const CATEGORY_VALUES = ['dairy','grain','vegetable','fruit','nut','oil',
+                         'supplement','branded','other','pulse','meat','beverage','spice'];
+
+function guessCategory(name) {
+  const n = String(name || '').toLowerCase();
+  if (/\b(milk|curd|yoghurt|yogurt|paneer|cheese|butter|ghee|lassi|buttermilk)\b/.test(n)) return 'dairy';
+  if (/\b(rice|roti|chapati|paratha|bread|poha|upma|idli|dosa|oats|wheat|millet|quinoa|noodle|pasta)\b/.test(n)) return 'grain';
+  if (/\b(dal|daal|lentil|chana|rajma|beans?|sprouts?|moong|toor|urad|chickpea)\b/.test(n)) return 'pulse';
+  if (/\b(chicken|mutton|fish|egg|prawn|meat|beef|pork)\b/.test(n)) return 'meat';
+  if (/\b(oil|ghee)\b/.test(n)) return 'oil';
+  if (/\b(almond|cashew|walnut|peanut|nuts?|seeds?)\b/.test(n)) return 'nut';
+  if (/\b(juice|tea|coffee|water|shake|smoothie|soda)\b/.test(n)) return 'beverage';
+  if (/\b(whey|protein powder|supplement|capsule|tablet)\b/.test(n)) return 'supplement';
+  if (/\b(apple|banana|mango|orange|grape|papaya|melon|berry|fruit)\b/.test(n)) return 'fruit';
+  if (/\b(masala|powder|spice|jeera|haldi|turmeric)\b/.test(n)) return 'spice';
+  return 'other';
+}
+
+/**
+ * Save AI-estimated foods so the database compounds instead of re-guessing.
+ * Fire-and-forget: a failure here must never break the member's log.
+ */
+async function learnFoods(foods) {
+  for (const f of foods) {
+    if (f.food_id) continue;                       // already known
+    if (f.warning) continue;                       // suspect per-serving values
+    const cal = parseFloat(f.per_100g?.calories) || 0;
+    if (cal <= 0 || cal > 920) continue;           // implausible energy density
+    const name = String(f.name || '').trim();
+    if (name.length < 2 || name.length > 100) continue;
+
+    const category = CATEGORY_VALUES.includes(f.category) ? f.category : guessCategory(name);
+    try {
+      await pool.query(
+        `INSERT INTO foods (name, category, source, verified, per_100g)
+         VALUES ($1, $2, 'ai', false, $3)
+         ON CONFLICT (lower(name), source) DO UPDATE
+           SET per_100g = EXCLUDED.per_100g
+         RETURNING id`,
+        [name, category, JSON.stringify(f.per_100g)]
+      );
+    } catch (err) {
+      // A learning failure is not worth failing the member's log over
+      console.error('learnFoods: could not save', name, err.message);
+    }
+  }
 }
 
 // ── Per-serving sanity guard ─────────────────────────────────────────────────
@@ -481,7 +551,7 @@ Return ONLY raw JSON, no markdown fences:
 {
   "reply": "I can see 2 chapatis, dal and a small salad — about 420 kcal.",
   "foods": [
-    { "name": "Chapati", "qty_text": "2 pieces", "grams": 60, "meal": null,
+    { "name": "Chapati", "qty_text": "2 pieces", "grams": 60, "meal": null, "category": "grain",
       "confidence": "high",
       "per_100g": { "calories": 297, "protein": 8, "total_carbs": 61, "fat": 3.7,
         "fiber": 4.9, "sugar": 1.6, "sodium": 298, "calcium": 33, "iron": 2.4,
@@ -527,11 +597,16 @@ Return ONLY raw JSON, no markdown fences:
         qty_text:   String(f.qty_text || '').slice(0, 60),
         grams:      Math.min(3000, Math.round(parseFloat(f.grams))),
         meal:       f.meal ? String(f.meal).slice(0, 40) : null,
+        category:   f.category ? String(f.category).toLowerCase().trim() : null,
         confidence: ['high', 'medium', 'low'].includes(f.confidence) ? f.confidence : 'medium',
         per_100g:   f.per_100g || {},
       }));
 
     const foods = await enrichFromDB(validFoods);
+
+    // Feed anything new back into the food database. Not awaited — the member
+    // gets their preview immediately and the learning happens behind it.
+    learnFoods(foods).catch(err => console.error('learnFoods failed:', err.message));
 
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
     for (const f of foods) {
@@ -647,10 +722,15 @@ router.post('/parse', async (req, res) => {
         qty_text: String(f.qty_text || '').slice(0, 60),
         grams:    Math.min(5000, Math.round(parseFloat(f.grams))),
         meal:     f.meal ? String(f.meal).slice(0, 40) : null,
+        category: f.category ? String(f.category).toLowerCase().trim() : null,
         per_100g: f.per_100g || {},
       }));
 
     const foods = await enrichFromDB(validFoods);
+
+    // Feed anything new back into the food database. Not awaited — the member
+    // gets their preview immediately and the learning happens behind it.
+    learnFoods(foods).catch(err => console.error('learnFoods failed:', err.message));
 
     // Per-item macros + totals computed server-side — never trust AI arithmetic
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
