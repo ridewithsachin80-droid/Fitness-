@@ -188,7 +188,7 @@ export default function AIChatLog() {
           activities: [], acv: [], supplements: [],
           water_ml_add: null, waterOn: false,
           sleep: null, sleepOn: false,
-          foods: (data.foods || []).map(f => ({ ...f, on: true })),
+          foods: (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
           workouts: [],
           totals: data.totals,
         },
@@ -239,7 +239,7 @@ export default function AIChatLog() {
           waterOn:      data.water_ml_add != null,
           sleep:        data.sleep,
           sleepOn:      !!data.sleep,
-          foods:        (data.foods || []).map(f => ({ ...f, on: true })),
+          foods:        (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
           workouts:     (data.workouts || []).map(w => ({ ...w, on: true })),
           totals:       data.totals,
         },
@@ -263,6 +263,28 @@ export default function AIChatLog() {
       return next;
     });
   }, []);
+
+  const setGrams = useCallback((mi, idx, value) => {
+    const g = Math.min(5000, Math.max(0, parseInt(value) || 0));
+    patchParsed(mi, p => ({
+      ...p,
+      foods: p.foods.map((f, i) => {
+        if (i !== idx) return f;
+        const factor = g / 100;
+        return {
+          ...f,
+          grams: g,
+          // Recompute this row's macros so the totals stay honest as they type
+          macros: {
+            cal:  Math.round((f.per_100g?.calories    || 0) * factor),
+            pro:  +((f.per_100g?.protein     || 0) * factor).toFixed(1),
+            carb: +((f.per_100g?.total_carbs || 0) * factor).toFixed(1),
+            fat:  +((f.per_100g?.fat         || 0) * factor).toFixed(1),
+          },
+        };
+      }),
+    }));
+  }, [patchParsed]);
 
   const toggleListItem = (mi, key, idx) =>
     patchParsed(mi, p => ({
@@ -469,6 +491,16 @@ export default function AIChatLog() {
 
     haptic(30);
     saveLog().catch(() => {});
+
+    // Teach the app this member's real portion sizes. Only rows they actually
+    // corrected, and only where the AI gave a recognisable unit phrase.
+    const corrections = foodsOn
+      .filter(f => f.portion_phrase && Number(f.grams) > 0 && Number(f.grams) !== Number(f.ai_grams))
+      .map(f => ({ phrase: f.portion_phrase, grams: Number(f.grams) }));
+    if (corrections.length) {
+      api.post('/ai-chat/portions', { corrections })
+        .catch(err => console.error('portion learning failed:', err));
+    }
 
     const workoutsOn = p.workouts.filter(w => w.on);
     const workoutResult = await applyWorkouts(workoutsOn);
@@ -688,10 +720,26 @@ export default function AIChatLog() {
                                       <p className={`text-[13px] font-semibold truncate ${f.on ? 'text-white' : 'text-[#9EA3B0] line-through'}`}>
                                         {f.name}
                                       </p>
-                                      <p className="text-[11px] text-[#7E8596]">
-                                        {f.qty_text ? `${f.qty_text} · ` : ''}{f.grams}g · {f.meal || 'Meal 1'}
-                                        {f.source === 'db-verified' && <span className="text-emerald-400"> · verified</span>}
-                                      </p>
+                                      <div className="flex items-center gap-1.5 text-[11px] text-[#7E8596] flex-wrap">
+                                        {f.qty_text ? <span>{f.qty_text} ·</span> : null}
+                                        {/* Editable: the portion guess is the biggest source of
+                                            error in the whole chain, and every correction teaches
+                                            the app this member's actual bowl and glass sizes. */}
+                                        <input
+                                          type="number" inputMode="numeric" value={f.grams}
+                                          onClick={e => e.stopPropagation()}
+                                          onChange={e => setGrams(mi, fi, e.target.value)}
+                                          disabled={m.applied}
+                                          style={{ width: 54, minHeight: 26 }}
+                                          className="bg-[#121316] border border-white/[0.14] rounded-md px-1 text-center
+                                            text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-[rgba(212,175,55,0.5)]"
+                                        />
+                                        <span>g · {f.meal || 'Meal 1'}</span>
+                                        {f.source === 'db-verified' && <span className="text-emerald-400">· verified</span>}
+                                        {Number(f.grams) !== Number(f.ai_grams) && (
+                                          <span className="text-[#D4AF37]">· I'll remember this</span>
+                                        )}
+                                      </div>
                                       {f.warning && (
                                         <p className="text-[10px] text-amber-300 leading-snug mt-0.5">⚠ {f.warning}</p>
                                       )}

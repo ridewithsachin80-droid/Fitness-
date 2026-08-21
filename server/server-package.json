@@ -9,7 +9,8 @@
     "test:aichat": "node scripts/test-aichat.js",
     "validate:foods": "node scripts/validate-foods.js --strict",
     "test:foods": "node scripts/test-food-lookup.js",
-    "test:learning": "node scripts/test-food-learning.js"
+    "test:learning": "node scripts/test-food-learning.js",
+    "test:portions": "node scripts/test-portion-memory.js"
   },
   "keywords": [],
   "author": "",

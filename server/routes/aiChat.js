@@ -185,7 +185,7 @@ function sanitiseItems(list, max = 30) {
 }
 
 // ── Prompt builder ───────────────────────────────────────────────────────────
-function buildParsePrompt(message, ctx) {
+function buildParsePrompt(message, ctx, portions = []) {
   const slots = ctx.mealSlots.length ? ctx.mealSlots.join(' | ') : 'Meal 1 | Meal 2 | Meal 3';
   const listBlock = (items) =>
     items.length
@@ -197,6 +197,13 @@ A member typed what they did today, in casual language (English, Hinglish, or
 Kannada-English mix). Parse the message into structured daily-log entries.
 
 Member's message: "${message}"
+
+THIS MEMBER'S OWN PORTION SIZES (measured from their past corrections — use
+these exact grams when the phrase matches, in preference to the generic table
+below; they reflect the actual size of this member's bowls and glasses):
+${portions.length
+  ? portions.map(p => `  ${p.phrase} = ${p.grams}g`).join('\n')
+  : '  (none recorded yet — use the generic conversions)'}
 
 MEMBER'S ASSIGNED PROTOCOL (use ONLY these ids — never invent ids):
 Meal slots: ${slots}
@@ -309,6 +316,74 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
       "cardio_type": "walking", "speed_kmh": 5, "distance_km": 5 }
   ]
 }`;
+}
+
+// ── Per-member portion memory ────────────────────────────────────────────────
+// "1 katori" is not a fixed weight. It depends on whose kitchen the katori
+// came from, and portion estimation is the single biggest source of error in
+// the whole logging chain — far bigger than the nutrition values themselves.
+//
+// So when a member corrects the grams the AI proposed, we remember it against
+// a normalised phrase ("katori dal", "glass milk") and feed their own figures
+// back into the next prompt. The unit is what's being learned, not the food.
+
+const UNIT_WORDS = /\b(katori|bowl|cup|glass|plate|piece|pieces|slice|slices|scoop|scoops|tbsp|tablespoon|tsp|teaspoon|handful|packet|bottle|roti|chapati|idli|dosa|egg|eggs)\b/i;
+
+/** "2 katori" + "Dal" -> "katori dal". Returns null when there's no unit. */
+function portionPhrase(qtyText, foodName) {
+  const unit = String(qtyText || '').match(UNIT_WORDS)?.[1]?.toLowerCase();
+  if (!unit) return null;
+  const food = String(foodName || '').toLowerCase().replace(/\s*\(.*$/, '').trim();
+  if (!food) return null;
+  // Singularise the obvious plurals so "2 pieces" and "1 piece" share memory
+  const u = unit.replace(/(pieces|slices|scoops|eggs)$/, m => m.slice(0, -1));
+  return `${u} ${food}`.slice(0, 80);
+}
+
+/** How many grams the member's own history says this phrase is worth. */
+async function loadPortions(patientId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT phrase, grams, samples FROM member_portions
+       WHERE patient_id = $1
+       ORDER BY samples DESC, updated_at DESC
+       LIMIT 40`,
+      [patientId]
+    );
+    return rows.map(r => ({ phrase: r.phrase, grams: Math.round(r.grams), samples: r.samples }));
+  } catch (err) {
+    console.error('loadPortions failed:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Record a correction. Kept as a running average rather than a straight
+ * overwrite, so one mistyped number can't permanently skew a member's
+ * portions — but `samples` is capped at 8 so the average stays responsive
+ * if they genuinely change bowl size.
+ */
+async function recordPortions(patientId, corrections) {
+  for (const c of corrections) {
+    const phrase = String(c?.phrase || '').trim().toLowerCase();
+    const grams = parseFloat(c?.grams);
+    if (!phrase || !Number.isFinite(grams) || grams <= 0 || grams > 5000) continue;
+    try {
+      await pool.query(
+        `INSERT INTO member_portions (patient_id, phrase, grams, samples)
+         VALUES ($1, $2, $3, 1)
+         ON CONFLICT (patient_id, phrase) DO UPDATE
+           SET grams = ROUND(
+                 (member_portions.grams * LEAST(member_portions.samples, 8) + EXCLUDED.grams)
+                 / (LEAST(member_portions.samples, 8) + 1), 1),
+               samples = LEAST(member_portions.samples + 1, 99),
+               updated_at = NOW()`,
+        [patientId, phrase, grams]
+      );
+    } catch (err) {
+      console.error('recordPortions failed for', phrase, err.message);
+    }
+  }
 }
 
 // ── Learning back into the food database ─────────────────────────────────────
@@ -610,6 +685,9 @@ Return ONLY raw JSON, no markdown fences:
 
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
     for (const f of foods) {
+      // The phrase this food's portion would be remembered under, so the
+      // client can report a correction without re-deriving it
+      f.portion_phrase = portionPhrase(f.qty_text, f.name);
       const factor = f.grams / 100;
       f.macros = {
         cal:  Math.round((f.per_100g.calories || 0) * factor),
@@ -680,7 +758,8 @@ router.post('/parse', async (req, res) => {
   };
 
   try {
-    const { text: rawText, provider, model } = await callAI(buildParsePrompt(cleanMsg, ctx));
+    const portions = await loadPortions(req.user.id);
+    const { text: rawText, provider, model } = await callAI(buildParsePrompt(cleanMsg, ctx, portions));
 
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed   = JSON.parse(jsonText);
@@ -735,6 +814,9 @@ router.post('/parse', async (req, res) => {
     // Per-item macros + totals computed server-side — never trust AI arithmetic
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
     for (const f of foods) {
+      // The phrase this food's portion would be remembered under, so the
+      // client can report a correction without re-deriving it
+      f.portion_phrase = portionPhrase(f.qty_text, f.name);
       const factor = f.grams / 100;
       f.macros = {
         cal:  Math.round((f.per_100g.calories || 0) * factor),
@@ -1016,6 +1098,27 @@ function describeOps(cmd) {
   if (cmd.push) out.push({ icon: '🔔', text: `Push notification: ${cmd.push.title} — ${cmd.push.body}` });
   return out;
 }
+
+// ── POST /api/ai-chat/portions ───────────────────────────────────────────────
+// Records what a member's own "1 katori" or "1 glass" actually weighs, from
+// the corrections they make in the chat preview.
+// Body: { corrections: [{ phrase: "katori dal", grams: 200 }] }
+router.post('/portions', async (req, res) => {
+  const { corrections } = req.body || {};
+  if (!Array.isArray(corrections) || !corrections.length) {
+    return res.status(400).json({ error: 'corrections array required' });
+  }
+  await recordPortions(req.user.id, corrections.slice(0, 25));
+  const portions = await loadPortions(req.user.id);
+  res.json({ learned: portions.length, portions });
+});
+
+// ── GET /api/ai-chat/portions ────────────────────────────────────────────────
+// What the app has learned about this member's portions, so it can be shown
+// back to them — learning they cannot see feels like the app guessing.
+router.get('/portions', async (req, res) => {
+  res.json({ portions: await loadPortions(req.user.id) });
+});
 
 // ── POST /api/ai-chat/coach-parse ────────────────────────────────────────────
 // Body: { message }

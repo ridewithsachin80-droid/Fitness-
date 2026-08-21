@@ -216,6 +216,24 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
 -- written with their session, and never queried independently.
 ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
 
+-- Per-member portion memory. "1 katori" is not a fixed weight — it depends on
+-- whose kitchen the katori came from. When a member corrects the grams the AI
+-- suggested, we remember it and use their figure next time.
+--
+-- Keyed on a normalised phrase ("katori dal", "glass milk") rather than the
+-- food id, because the unit is the thing being learned, not the food.
+CREATE TABLE IF NOT EXISTS member_portions (
+  id          SERIAL PRIMARY KEY,
+  patient_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phrase      VARCHAR(80)  NOT NULL,
+  grams       NUMERIC(7,1) NOT NULL,
+  samples     INT          DEFAULT 1,
+  updated_at  TIMESTAMPTZ  DEFAULT NOW(),
+  UNIQUE (patient_id, phrase)
+);
+CREATE INDEX IF NOT EXISTS idx_member_portions_patient
+  ON member_portions(patient_id);
+
 -- Backfill muscle_group for exercises created without one (AI chat used to
 -- create name-only rows, which /muscle-coverage silently skipped). Idempotent:
 -- only touches rows still NULL, and never overwrites a coach's own value.
