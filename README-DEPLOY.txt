@@ -1,40 +1,61 @@
-FitLife — reference ranges on lab values
+FitLife — lab analysis and diet guidance
 ========================================
 
-1 FILE. Extract, drag the "client" FOLDER onto GitHub at the repo ROOT.
-NOTHING TO RENAME. No new packages. No schema change. Server untouched —
-the API already returned ref_min and ref_max, they were simply not displayed.
+Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
+ONE RENAME: server/server-package.json -> package.json (in server/)
+No new packages. No schema change.
 
-WHAT CHANGED
-Each lab value now shows its reference range beneath the result:
+WHAT IT DOES
+A coach opens a member's Lab Results and taps "Analyse this panel". For each
+out-of-range marker with a real dietary lever it returns what the marker
+measures in plain language, the specific food change, and how long before a
+retest could show movement — plus three meal ideas that fit the member's
+existing calorie and protein targets.
 
-    HbA1C - Glycated Haemoglobin        5.90 %   high
-    Wed, 12 Aug                         ref 4.0-5.6 %
+WHERE I DREW THE LINE, AND WHY
 
-Ranges written as an upper or lower bound only are rendered as "< 200" or
-"> 40" rather than a half-empty range.
+IN SCOPE — nutritional interpretation. A nutritionist looks at ferritin, B12,
+vitamin D, HbA1c, lipids and uric acid and changes what someone eats. Those
+markers have genuine dietary levers and the advice is standard practice.
 
-A POSITION BAR, WHICH IS THE MORE USEFUL PART
-When both bounds are known, a thin bar shows where the result actually sits
-inside the range, with the normal band shaded green and a dot for the value.
+OUT OF SCOPE — explaining WHY a marker is abnormal. That is differential
+diagnosis. It needs medication history, symptoms and examination. "ALT is high
+because of fatty liver" could equally be hepatitis, a statin, or last weekend.
+The app does not know, so it does not say.
 
-Two results can both read "normal" while one sits at the very edge of the
-range and the other in the middle. From Harsha's own panel:
+THE RULE LAYER RUNS BEFORE THE AI
+The dangerous failure is not poor diet advice. It is offering diet advice at
+all when the number needs a doctor this week. A member with haemoglobin of 7
+does not need spinach recipes, and receiving them is an implicit reassurance.
 
-    PCV 40.3, range 40-50   -> normal, but sitting right on the lower bound
-    MCV 86.2, range 83-101  -> normal, comfortably mid-range
+So deterministic thresholds classify every marker first. Anything urgent —
+haemoglobin under 9, fasting glucose over 180, HbA1c over 9, creatinine over
+2.0, potassium outside 3.0-5.5, ALT or AST over 120, TSH over 10 or under 0.1,
+platelets or white cells well out of range — escalates, and the AI is never
+called at all. Advice is withheld for the WHOLE panel, not just that marker.
 
-The status badge calls both "normal". The bar shows they are not the same
-situation, and that difference is what a coach acts on.
+CLINICAL LANGUAGE IS BLOCKED, NOT DISCOURAGED
+The prompt forbids naming conditions, but a prompt is a request. The server
+scans the response and DISCARDS it entirely if it contains disease names,
+diagnostic phrasing, "you have", or any medication or dosage language. Better
+to show nothing than something that reads like a diagnosis.
 
-Out-of-range values stay visible rather than clamping invisibly to the edge:
-the bar is drawn with a 35% margin either side, so the normal band occupies
-the middle and a high or low result sits clearly outside it. Verified across
-seven positions including far-out values.
+THE COACH IS THE GATE
+Coach-only endpoint. Members cannot generate it, cannot read it, and see
+nothing until their coach chooses to act on it. Asserted in tests.
 
-THE PRINTED REPORT NOW CARRIES RANGES TOO
-Print Report gained a Reference column. A clinical PDF listing values without
-their ranges is not much use to whoever reads it next.
+TESTS — 44 assertions, and the safety ones are the point
+  · 7 red-flag values each correctly suppress all advice
+  · one urgent finding suppresses the whole panel even when other markers
+    are perfectly actionable
+  · urgent values never appear in the prompt sent to the AI
+  · 7 clinical phrases rejected, 4 legitimate nutrition phrases allowed
+  · Indian report naming resolved: SGPT, SGOT, Glycosylated Hb, 25-OH Vitamin D
+  · only the newest result per marker is used, so a superseded low value
+    cannot trigger advice
+  · members blocked on every route
 
-TESTS
-Regression: 107 assertions across the two affected suites, all passing.
+  npm run test:insight
+Regression: 177 assertions across the four affected suites, all passing.
+
+REQUIRES GEMINI_API_KEY, which you already have set.

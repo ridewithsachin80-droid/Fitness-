@@ -43,6 +43,8 @@ export default function LabResults({ patientId = null }) {
   const [adding, setAdding]   = useState(false);
   const [saving, setSaving]   = useState(false);
   const [notice, setNotice]   = useState(null);
+  const [insight, setInsight] = useState(null);
+  const [thinking, setThinking] = useState(false);
   const [error, setError]     = useState(null);
 
   const [testDate, setTestDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -61,6 +63,16 @@ export default function LabResults({ patientId = null }) {
   }, [patientId, isCoach]);
 
   useEffect(() => { load(); }, [load]);
+
+  const generateInsight = async () => {
+    setThinking(true); setInsight(null);
+    try {
+      const { data } = await api.post(`/patients/${patientId}/lab-insight`);
+      setInsight(data);
+    } catch (err) {
+      setInsight({ error: err.response?.data?.error || 'Could not generate the analysis' });
+    } finally { setThinking(false); }
+  };
 
   const setRow = (i, field, value) =>
     setRows(rs => rs.map((r, j) => (j === i ? { ...r, [field]: value } : r)));
@@ -123,6 +135,97 @@ export default function LabResults({ patientId = null }) {
           <p className="text-[10px] text-[#7E8596] mt-1.5 leading-relaxed">
             Discuss anything outside range with the doctor who ordered the test.
           </p>
+        </div>
+      )}
+
+      {/* Nutritional analysis — coach only. The engine drafts, the coach decides
+          what reaches the member. */}
+      {isCoach && (
+        <div className="mb-3">
+          {!insight && (
+            <button onClick={generateInsight} disabled={thinking} style={{ minHeight: 42 }}
+              className="w-full rounded-xl text-xs font-bold text-[#D4AF37]
+                bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.28)]
+                active:scale-[0.98] disabled:opacity-60">
+              {thinking ? 'Analysing…' : '🔬 Analyse this panel'}
+            </button>
+          )}
+
+          {insight?.error && <p className="text-xs text-red-400">{insight.error}</p>}
+
+          {/* Urgent findings replace the analysis entirely rather than sitting
+              alongside it — diet tips beside "see a doctor" dilutes the only
+              message that matters. */}
+          {insight && !insight.error && insight.urgent?.length > 0 && (
+            <div className="bg-red-500/[0.08] border border-red-500/35 rounded-xl px-3.5 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-red-300 mb-1.5">
+                Needs medical review first
+              </p>
+              <p className="text-[12px] text-[#FFFFFF] leading-relaxed mb-2">{insight.summary}</p>
+              <div className="space-y-1 mb-2">
+                {insight.urgent.map((u, i) => (
+                  <div key={i} className="flex justify-between text-[11px]">
+                    <span className="text-[#FFFFFF]">{u.test_name}</span>
+                    <span className="text-red-300 font-bold">
+                      {u.value}{u.unit ? ` ${u.unit}` : ''} · {u.why}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-[#9EA3B0] leading-relaxed">{insight.note}</p>
+            </div>
+          )}
+
+          {insight?.generated && (
+            <div className="bg-[#121316] border border-white/[0.08] rounded-xl p-3.5">
+              <p className="text-[12px] text-[#FFFFFF] leading-relaxed mb-3">{insight.summary}</p>
+
+              {(insight.markers || []).map((m, i) => (
+                <div key={i} className="mb-3 pb-3 border-b border-white/[0.06] last:border-0 last:pb-0">
+                  <p className="text-[11px] font-bold text-[#D4AF37] mb-1">{m.test_name}</p>
+                  <p className="text-[11px] text-[#9EA3B0] leading-relaxed mb-1">{m.what_it_is}</p>
+                  <p className="text-[11px] text-[#FFFFFF] leading-relaxed">{m.diet_change}</p>
+                  {m.timeframe && (
+                    <p className="text-[10px] text-[#7E8596] mt-1">{m.timeframe}</p>
+                  )}
+                </div>
+              ))}
+
+              {(insight.meal_ideas || []).length > 0 && (
+                <>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-1.5">
+                    Meal ideas
+                  </p>
+                  <div className="space-y-1.5 mb-3">
+                    {insight.meal_ideas.map((m, i) => (
+                      <div key={i} className="bg-[#1A1C20] border border-white/[0.06] rounded-lg px-3 py-2">
+                        <p className="text-[11px] font-bold text-[#FFFFFF]">{m.meal}</p>
+                        <p className="text-[11px] text-[#9EA3B0] leading-relaxed">{m.idea}</p>
+                        {m.why && <p className="text-[10px] text-[#D4AF37] mt-0.5">{m.why}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {(insight.raise_with_doctor || []).length > 0 && (
+                <p className="text-[11px] text-amber-300 leading-relaxed mb-2">
+                  Raise with their doctor: {insight.raise_with_doctor.join(', ')}
+                </p>
+              )}
+
+              <p className="text-[10px] text-[#7E8596] leading-relaxed">{insight.caveat}</p>
+
+              <button onClick={generateInsight} disabled={thinking}
+                className="text-[11px] font-bold text-[#D4AF37] mt-2">
+                {thinking ? 'Analysing…' : 'Regenerate'}
+              </button>
+            </div>
+          )}
+
+          {insight && !insight.error && !insight.generated && !insight.urgent?.length && (
+            <p className="text-xs text-[#9EA3B0] leading-relaxed">{insight.summary}</p>
+          )}
         </div>
       )}
 

@@ -611,6 +611,108 @@ router.get('/:id/lab-analysis', authMW, roleCheck('monitor', 'admin'), requirePa
   }
 });
 
+// ── Lab insight (coach only) ─────────────────────────────────────────────────
+// Nutritional guidance from a lab panel. A deterministic rule layer runs first
+// and can suppress the AI entirely; see services/labInsight.js for where the
+// line between nutrition and diagnosis is drawn and why.
+const { triage: triageLabs, buildPrompt: buildLabPrompt } = require('../services/labInsight');
+const axios = require('axios');
+
+// Phrases that must never reach a coach or member from this endpoint. The
+// prompt forbids them, but a prompt is a request, not a guarantee — this is
+// the enforcement.
+const FORBIDDEN = /\b(diabet\w*|prediabet\w*|an(a)?emi\w*|fatty liver|hepatit\w*|thyroid disease|hypothyroid\w*|hyperthyroid\w*|kidney disease|renal failure|cancer|deficiency disease|metabolic syndrome|you have|diagnos\w*|prescrib\w*|\bmg\b ?(daily|per day)|\bdose\b|\bdosage\b)/i;
+
+router.post('/:id/lab-insight', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try {
+    const [labsRes, profRes] = await Promise.all([
+      pool.query(`SELECT * FROM lab_values WHERE patient_id = $1 ORDER BY test_date DESC`, [req.params.id]),
+      pool.query(`SELECT u.name, pp.macro_kcal, pp.macro_pro, pp.conditions
+                  FROM users u LEFT JOIN patient_profiles pp ON pp.user_id = u.id
+                  WHERE u.id = $1`, [req.params.id]),
+    ]);
+
+    if (!labsRes.rows.length) {
+      return res.status(400).json({ error: 'No lab results on file for this member' });
+    }
+
+    const t = triageLabs(labsRes.rows);
+    const p = profRes.rows[0] || {};
+
+    // Urgent findings short-circuit everything. Diet advice alongside "this
+    // needs a doctor promptly" dilutes the only message that matters.
+    if (!t.safe_to_advise) {
+      return res.json({
+        generated: false,
+        urgent: t.urgent,
+        summary: `${t.urgent.length} result${t.urgent.length > 1 ? 's' : ''} on this panel ` +
+                 `should be reviewed by a doctor before any dietary plan is built around it.`,
+        note: 'Nutritional guidance is withheld while these are outstanding. Once a doctor has reviewed them, generate again.',
+      });
+    }
+
+    if (!t.actionable.length) {
+      return res.json({
+        generated: false,
+        urgent: [],
+        other: t.other,
+        summary: t.other.length
+          ? 'Nothing on this panel has a clear dietary lever. The out-of-range markers below are worth raising with their doctor.'
+          : 'Everything on this panel sits within its reference range.',
+      });
+    }
+
+    if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
+      return res.status(500).json({ error: 'AI is not configured on this server' });
+    }
+
+    const prompt = buildLabPrompt(t, {
+      name: p.name || 'the member',
+      diet: Array.isArray(p.conditions) && p.conditions.length ? p.conditions.join(', ') : 'not recorded',
+      kcal: p.macro_kcal, protein: p.macro_pro,
+    });
+
+    const { data } = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_DOC_MODEL || 'gemini-2.5-flash'}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      { contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4000, responseMimeType: 'application/json' } },
+      { headers: { 'content-type': 'application/json' }, timeout: 50000 }
+    );
+
+    const text = data.candidates?.[0]?.content?.parts?.map(x => x.text).join('') || '';
+    let parsed;
+    try {
+      const first = text.indexOf('{'), last = text.lastIndexOf('}');
+      parsed = JSON.parse(first !== -1 ? text.slice(first, last + 1) : text);
+    } catch {
+      return res.status(502).json({ error: 'Could not generate the analysis — please try again' });
+    }
+
+    // Enforcement, not trust. If the model named a condition anywhere, the
+    // whole response is rejected rather than partially shown.
+    const flat = JSON.stringify(parsed);
+    if (FORBIDDEN.test(flat)) {
+      console.warn('lab-insight: response rejected, contained clinical language');
+      return res.status(502).json({
+        error: 'The analysis strayed into clinical territory and was discarded. Try generating again.',
+      });
+    }
+
+    res.json({
+      generated: true,
+      urgent: [],
+      other: t.other,
+      markers_addressed: t.actionable.map(a => a.test_name),
+      ...parsed,
+      caveat: 'Nutritional guidance only. It does not interpret why a marker is abnormal, ' +
+              'and it is not a substitute for the doctor who ordered the test.',
+    });
+  } catch (err) {
+    console.error('POST /patients/:id/lab-insight error:', err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not generate the analysis — please try again' });
+  }
+});
+
 // ── Cross-member learning ────────────────────────────────────────────────────
 // Every member with enough data tells us something about the population the
 // clinic actually serves. Mifflin-St Jeor was fitted on a Western sample in

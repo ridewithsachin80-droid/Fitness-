@@ -14,7 +14,8 @@
     "test:adaptive": "node scripts/test-adaptive.js",
     "test:macrolab": "node scripts/test-macrolab.js",
     "test:model": "node scripts/test-learning-model.js",
-    "test:labs": "node scripts/test-labs.js"
+    "test:labs": "node scripts/test-labs.js",
+    "test:insight": "node scripts/test-lab-insight.js"
   },
   "keywords": [],
   "author": "",
