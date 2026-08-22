@@ -143,6 +143,28 @@ const L = (name, value, lo, hi, unit) =>
   ck('urgent panel returns without calling the AI', x.status === 200 && x.data.generated === false, x.data);
   ck('and says advice is withheld', /withheld/i.test(x.data.note || ''), x.data.note);
 
+  console.log('\n[10] NaN reference bounds never reach the database');
+  const badBounds = ['-', '< 100', 'N/A', '', undefined, null, 'abc'];
+  const finiteOrNull = v => {
+    if (v === undefined || v === null || v === '') return null;
+    const n = parseFloat(v); return Number.isFinite(n) ? n : null;
+  };
+  ck('non-numeric bounds all become null', badBounds.every(b => finiteOrNull(b) === null), badBounds.map(finiteOrNull));
+  ck('real numbers still pass', finiteOrNull('13.5') === 13.5 && finiteOrNull(0) === 0, null);
+
+  // Prove the storage path, since Postgres NUMERIC accepts NaN happily
+  const { rows: [u2] } = await pool.query(
+    `INSERT INTO users (name,phone,password,role,active) VALUES ('N','9199','x','patient',true) RETURNING id`);
+  await pool.query(`INSERT INTO patient_profiles (user_id) VALUES ($1)`, [u2.id]);
+  await pool.query(
+    `INSERT INTO lab_values (patient_id,test_date,test_name,value,unit,ref_min,ref_max,status)
+     VALUES ($1,'2026-08-12','LDL Cholesterol',156.7,'mg/dL','NaN'::numeric,100,'high')`, [u2.id]);
+  await pool.query(`UPDATE lab_values SET ref_min = NULL WHERE ref_min IS NOT NULL AND ref_min = 'NaN'::numeric`);
+  const { rows: [ldl] } = await pool.query(
+    `SELECT ref_min, ref_max FROM lab_values WHERE patient_id=$1 AND test_name='LDL Cholesterol'`, [u2.id]);
+  ck('migration clears a stored NaN bound', ldl.ref_min === null, ldl);
+  ck('the real bound survives', parseFloat(ldl.ref_max) === 100, ldl);
+
   srv.close();
   console.log(`\n\u2550\u2550\u2550 LAB INSIGHT: ${pass} passed, ${fail} failed \u2550\u2550\u2550`);
   process.exit(fail ? 1 : 0);

@@ -464,8 +464,11 @@ router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
       test_name: String(r.test_name).trim().slice(0, 100),
       value: parseFloat(r.value),
       unit: r.unit ? String(r.unit).trim().slice(0, 30) : null,
-      ref_min: r.ref_min !== undefined && r.ref_min !== '' ? parseFloat(r.ref_min) : null,
-      ref_max: r.ref_max !== undefined && r.ref_max !== '' ? parseFloat(r.ref_max) : null,
+      // Postgres NUMERIC accepts NaN as a legitimate value, so parseFloat('-')
+      // or parseFloat('< 100') stores a real NaN that then renders as
+      // "ref NaN–100". Only finite numbers get through.
+      ref_min: finiteOrNull(r.ref_min),
+      ref_max: finiteOrNull(r.ref_max),
     }))
     .filter(r => Number.isFinite(r.value));
 
@@ -575,6 +578,13 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientA
 // ── Lab results ──────────────────────────────────────────────────────────────
 const { analyseLabs } = require('../services/labAnalysis');
 
+/** Only a finite number survives; anything else becomes null. */
+function finiteOrNull(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function classify(value, refMin, refMax) {
   if (refMin == null || refMax == null) return 'normal';
   const v = parseFloat(value);
@@ -675,17 +685,42 @@ router.post('/:id/lab-insight', authMW, roleCheck('monitor', 'admin'), requirePa
     const { data } = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_DOC_MODEL || 'gemini-2.5-flash'}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       { contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4000, responseMimeType: 'application/json' } },
-      { headers: { 'content-type': 'application/json' }, timeout: 50000 }
+        // A panel with six actionable markers produces three paragraphs each
+        // plus meal ideas. 4000 tokens truncated it mid-object, which arrives
+        // as unparseable JSON — the same fault that broke the PDF reader.
+        generationConfig: { temperature: 0.2, maxOutputTokens: 12000, responseMimeType: 'application/json' } },
+      { headers: { 'content-type': 'application/json' }, timeout: 60000 }
     );
 
-    const text = data.candidates?.[0]?.content?.parts?.map(x => x.text).join('') || '';
+    const cand = data.candidates?.[0];
+    const finish = cand?.finishReason;
+    const text = cand?.content?.parts?.map(x => x.text).join('') || '';
+
+    if (!text.trim()) {
+      console.warn('lab-insight: empty response, finishReason=', finish);
+      return res.status(502).json({
+        error: finish === 'SAFETY'
+          ? 'The AI declined to analyse this panel. Review it manually with the member\'s doctor.'
+          : 'The analysis came back empty — please try again.' });
+    }
+
     let parsed;
     try {
-      const first = text.indexOf('{'), last = text.lastIndexOf('}');
-      parsed = JSON.parse(first !== -1 ? text.slice(first, last + 1) : text);
-    } catch {
-      return res.status(502).json({ error: 'Could not generate the analysis — please try again' });
+      const cleaned = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+      try { parsed = JSON.parse(cleaned); }
+      catch {
+        const first = cleaned.indexOf('{'), last = cleaned.lastIndexOf('}');
+        if (first === -1 || last <= first) throw new Error('no object found');
+        parsed = JSON.parse(cleaned.slice(first, last + 1));
+      }
+    } catch (e) {
+      const opens = (text.match(/{/g) || []).length, closes = (text.match(/}/g) || []).length;
+      console.warn('lab-insight: parse failed |', finish, '| opens', opens, 'closes', closes,
+                   '| starts:', text.slice(0, 120));
+      return res.status(502).json({
+        error: opens > closes
+          ? 'This panel has too many markers to analyse in one pass — try again, or remove older results.'
+          : 'Could not generate the analysis — please try again.' });
     }
 
     // Enforcement, not trust. If the model named a condition anywhere, the

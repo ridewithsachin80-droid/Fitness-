@@ -271,6 +271,22 @@ ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS entered_role VARCHAR(10);
 ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS lab_name VARCHAR(120);
 ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS notes TEXT;
 
+-- Clean reference bounds that were stored as NaN. Postgres NUMERIC accepts
+-- NaN as a legitimate value, so a non-numeric bound on a report ("< 100", "-")
+-- became parseFloat(...) = NaN and was stored happily, then rendered as
+-- "ref NaN-100.00". Null is the honest representation of "not printed".
+UPDATE lab_values SET ref_min = NULL WHERE ref_min IS NOT NULL AND ref_min = 'NaN'::numeric;
+UPDATE lab_values SET ref_max = NULL WHERE ref_max IS NOT NULL AND ref_max = 'NaN'::numeric;
+
+-- Recompute status for any row whose bounds have just changed, so a value
+-- previously compared against NaN is not left mislabelled.
+UPDATE lab_values SET status = CASE
+    WHEN ref_min IS NOT NULL AND value < ref_min THEN 'low'
+    WHEN ref_max IS NOT NULL AND value > ref_max THEN 'high'
+    ELSE 'normal' END
+  WHERE status IS NULL OR status NOT IN ('low','normal','high')
+     OR (ref_min IS NULL AND ref_max IS NULL AND status <> 'normal');
+
 -- Backfill muscle_group for exercises created without one (AI chat used to
 -- create name-only rows, which /muscle-coverage silently skipped). Idempotent:
 -- only touches rows still NULL, and never overwrites a coach's own value.

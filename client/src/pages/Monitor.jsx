@@ -821,15 +821,22 @@ export default function Monitor() {
                       {/* The reference range is what makes a number mean
                           anything — "5.90%" alone tells a coach nothing
                           without knowing the lab's own cut-off. */}
-                      {(l.ref_min != null || l.ref_max != null) && (
-                        <div className="text-[11px] text-stone-400 mt-0.5">
-                          ref{' '}
-                          {l.ref_min != null && l.ref_max != null
-                            ? `${l.ref_min}–${l.ref_max}`
-                            : l.ref_max != null ? `< ${l.ref_max}` : `> ${l.ref_min}`}
-                          {l.unit ? ` ${l.unit}` : ''}
-                        </div>
-                      )}
+                      {(() => {
+                        // Treat a non-finite bound as absent. Postgres NUMERIC
+                        // can hold NaN, and rendering "ref NaN–100" is worse
+                        // than showing no lower bound at all.
+                        const lo = Number.isFinite(parseFloat(l.ref_min)) ? parseFloat(l.ref_min) : null;
+                        const hi = Number.isFinite(parseFloat(l.ref_max)) ? parseFloat(l.ref_max) : null;
+                        if (lo == null && hi == null) return null;
+                        return (
+                          <div className="text-[11px] text-stone-400 mt-0.5">
+                            ref{' '}
+                            {lo != null && hi != null ? `${lo}–${hi}`
+                              : hi != null ? `< ${hi}` : `> ${lo}`}
+                            {l.unit ? ` ${l.unit}` : ''}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -837,8 +844,8 @@ export default function Monitor() {
                       Two results can both read "normal" while one sits at the
                       very edge — that difference is what a coach acts on. */}
                   {(() => {
-                    const lo = l.ref_min != null ? parseFloat(l.ref_min) : null;
-                    const hi = l.ref_max != null ? parseFloat(l.ref_max) : null;
+                    const lo = Number.isFinite(parseFloat(l.ref_min)) ? parseFloat(l.ref_min) : null;
+                    const hi = Number.isFinite(parseFloat(l.ref_max)) ? parseFloat(l.ref_max) : null;
                     const v  = parseFloat(l.value);
                     if (lo == null || hi == null || !(hi > lo) || !Number.isFinite(v)) return null;
 
