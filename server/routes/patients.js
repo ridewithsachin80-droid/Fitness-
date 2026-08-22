@@ -625,16 +625,20 @@ router.get('/:id/lab-analysis', authMW, roleCheck('monitor', 'admin'), requirePa
 // Nutritional guidance from a lab panel. A deterministic rule layer runs first
 // and can suppress the AI entirely; see services/labInsight.js for where the
 // line between nutrition and diagnosis is drawn and why.
-const { triage: triageLabs, buildPrompt: buildLabPrompt, screenClinical } = require('../services/labInsight');
+const { triage: triageLabs, buildPrompt: buildLabPrompt, screenClinical, macroTargets } = require('../services/labInsight');
 const axios = require('axios');
 
 router.post('/:id/lab-insight', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
-    const [labsRes, profRes] = await Promise.all([
+    const [labsRes, profRes, wRes] = await Promise.all([
       pool.query(`SELECT * FROM lab_values WHERE patient_id = $1 ORDER BY test_date DESC`, [req.params.id]),
-      pool.query(`SELECT u.name, pp.macro_kcal, pp.macro_pro, pp.conditions
+      pool.query(`SELECT u.name, pp.macro_kcal, pp.macro_pro, pp.conditions,
+                         pp.height_cm, pp.dob, pp.gender, pp.start_weight, pp.target_weight
                   FROM users u LEFT JOIN patient_profiles pp ON pp.user_id = u.id
                   WHERE u.id = $1`, [req.params.id]),
+      pool.query(`SELECT weight_kg FROM daily_logs
+                  WHERE patient_id = $1 AND weight_kg IS NOT NULL
+                  ORDER BY log_date DESC LIMIT 1`, [req.params.id]),
     ]);
 
     if (!labsRes.rows.length) {
@@ -731,10 +735,31 @@ router.post('/:id/lab-insight', authMW, roleCheck('monitor', 'admin'), requirePa
       });
     }
 
+    // Macro targets are computed here, not by the model. Dividing calories
+    // into grams is arithmetic, and a language model doing arithmetic produces
+    // plausible-looking errors that nobody catches.
+    let macros = null;
+    const bw = parseFloat(wRes.rows[0]?.weight_kg) || parseFloat(p.start_weight) || null;
+    if (bw && p.height_cm && p.dob) {
+      const age = Math.floor((Date.now() - new Date(p.dob)) / (1000 * 60 * 60 * 24 * 365.25));
+      const base = 10 * bw + 6.25 * parseFloat(p.height_cm) - 5 * age;
+      const g = String(p.gender || '').toLowerCase();
+      const bmr = Math.round(g === 'male' ? base + 5 : g === 'female' ? base - 161 : base - 78);
+      const goal = p.target_weight && bw > parseFloat(p.target_weight) ? 'loss'
+                 : p.target_weight && bw < parseFloat(p.target_weight) ? 'gain' : 'maintain';
+      macros = macroTargets({
+        weightKg: bw,
+        maintenanceKcal: Math.round(bmr * 1.35),   // light activity baseline
+        goal,
+        actionable: t.actionable,
+      });
+    }
+
     res.json({
       generated: true,
       urgent: [],
       other: t.other,
+      macro_targets: macros,
       markers_addressed: t.actionable.map(a => a.test_name),
       ...parsed,
       caveat: 'Nutritional guidance only. It does not interpret why a marker is abnormal, ' +

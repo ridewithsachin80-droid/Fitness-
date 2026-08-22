@@ -259,6 +259,57 @@ export default function LabResults({ patientId = null, memberName = '' }) {
                 </div>
               ))}
 
+              {/* Macro targets — computed from body weight and maintenance,
+                  adjusted for what the panel showed. Shown as both grams and
+                  percentages: grams are what a member shops and cooks to,
+                  percentages are how a coach reads a plan at a glance. */}
+              {insight.macro_targets && (
+                <div className="bg-[#1A1C20] border border-[rgba(212,175,55,0.25)] rounded-xl p-3 mb-3">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">
+                      Macro target
+                    </p>
+                    <p className="text-[13px] font-extrabold text-[#FFFFFF]">
+                      {insight.macro_targets.kcal.toLocaleString()} kcal
+                    </p>
+                  </div>
+
+                  {/* Proportional bar — the split is easier to judge as a
+                      shape than as three numbers. */}
+                  <div className="flex h-2 rounded-full overflow-hidden mb-2">
+                    <div style={{ width: `${insight.macro_targets.protein_pct}%` }} className="bg-[#D4AF37]" />
+                    <div style={{ width: `${insight.macro_targets.carbs_pct}%` }} className="bg-[#8C6D37]" />
+                    <div style={{ width: `${insight.macro_targets.fat_pct}%` }} className="bg-[#F0E2B6]" />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    {[
+                      ['Protein', insight.macro_targets.protein_g, insight.macro_targets.protein_pct, 'text-[#D4AF37]'],
+                      ['Carbs',   insight.macro_targets.carbs_g,   insight.macro_targets.carbs_pct,   'text-[#C5A059]'],
+                      ['Fat',     insight.macro_targets.fat_g,     insight.macro_targets.fat_pct,     'text-[#F0E2B6]'],
+                    ].map(([label, g, pctv, cls]) => (
+                      <div key={label}>
+                        <p className={`text-sm font-extrabold ${cls}`}>{pctv}%</p>
+                        <p className="text-[11px] text-[#FFFFFF]">{g}g</p>
+                        <p className="text-[9px] uppercase tracking-wider text-[#7E8596]">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-[#7E8596] mt-2">
+                    {insight.macro_targets.protein_per_kg} g protein per kg body weight
+                  </p>
+
+                  {(insight.macro_targets.reasons || []).length > 0 && (
+                    <ul className="mt-2 space-y-0.5">
+                      {insight.macro_targets.reasons.map((r, i) => (
+                        <li key={i} className="text-[10px] text-[#9EA3B0] leading-relaxed">· {r}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               {(insight.meal_ideas || []).length > 0 && (
                 <>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-1.5">

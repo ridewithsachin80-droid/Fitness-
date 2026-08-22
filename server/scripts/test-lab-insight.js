@@ -176,6 +176,51 @@ const L = (name, value, lo, hi, unit) =>
   ck('migration clears a stored NaN bound', ldl.ref_min === null, ldl);
   ck('the real bound survives', parseFloat(ldl.ref_max) === 100, ldl);
 
+  console.log('\n[11] macro targets are computed, not guessed');
+  const { macroTargets } = require('../services/labInsight');
+  const A = (c, st) => ({ canonical: c, state: st });
+  const base = macroTargets({ weightKg: 75, maintenanceKcal: 2200, goal: 'loss', actionable: [] });
+
+  ck('percentages sum to exactly 100',
+     base.protein_pct + base.carbs_pct + base.fat_pct === 100,
+     [base.protein_pct, base.carbs_pct, base.fat_pct]);
+  ck('grams reconcile with the calorie target',
+     Math.abs(base.computed_kcal - base.kcal) < 30, { from: base.computed_kcal, target: base.kcal });
+  ck('protein lands in 1.6-2.4 g/kg',
+     base.protein_per_kg >= 1.6 && base.protein_per_kg <= 2.4, base.protein_per_kg);
+  ck('deficit applied for a loss goal', base.kcal < 2200, base.kcal);
+
+  // Each lever must actually move the numbers. An earlier version reported
+  // adjustments in its reasoning that a binding floor had silently cancelled.
+  const hba1c = macroTargets({ weightKg: 75, maintenanceKcal: 2200, goal: 'loss', actionable: [A('hba1c','high')] });
+  ck('raised HbA1c lowers the carb share', hba1c.carbs_pct < base.carbs_pct, { base: base.carbs_pct, hba1c: hba1c.carbs_pct });
+  ck('and raises protein', hba1c.protein_g > base.protein_g, { base: base.protein_g, hba1c: hba1c.protein_g });
+
+  const trig = macroTargets({ weightKg: 75, maintenanceKcal: 2200, goal: 'loss', actionable: [A('triglycerides','high')] });
+  ck('high triglycerides lowers the carb share', trig.carbs_pct < base.carbs_pct, { base: base.carbs_pct, trig: trig.carbs_pct });
+
+  const hdl = macroTargets({ weightKg: 75, maintenanceKcal: 2200, goal: 'loss', actionable: [A('hdl','low')] });
+  ck('low HDL raises the fat share', hdl.fat_pct > base.fat_pct, { base: base.fat_pct, hdl: hdl.fat_pct });
+
+  const ldlOnly = macroTargets({ weightKg: 75, maintenanceKcal: 2200, goal: 'loss', actionable: [A('ldl','high')] });
+  ck('high LDL alone changes nothing — the lever is not the ratio',
+     ldlOnly.carbs_pct === base.carbs_pct && ldlOnly.fat_pct === base.fat_pct, { ldlOnly, base });
+  ck('but LDL is still explained', ldlOnly.reasons.some(r => /LDL/.test(r)), ldlOnly.reasons);
+
+  const full = macroTargets({ weightKg: 75, maintenanceKcal: 2200, goal: 'loss',
+    actionable: [A('hba1c','high'), A('triglycerides','high'), A('hdl','low'), A('ldl','high'),
+                 A('b12','low'), A('vitamin_d','low')] });
+  ck('carbohydrate never falls below its floor', full.carbs_g >= 90, full.carbs_g);
+  ck('every stated reason corresponds to a real adjustment',
+     full.reasons.length >= 4 && full.carbs_pct < base.carbs_pct && full.fat_pct > base.fat_pct, full);
+  ck('micronutrient findings alone move nothing', (() => {
+    const micro = macroTargets({ weightKg: 75, maintenanceKcal: 2200, goal: 'loss',
+      actionable: [A('b12','low'), A('vitamin_d','low'), A('ferritin','low')] });
+    return micro.carbs_pct === base.carbs_pct && micro.protein_g === base.protein_g;
+  })());
+  ck('missing weight returns null rather than a guess',
+     macroTargets({ weightKg: null, maintenanceKcal: 2200 }) === null);
+
   srv.close();
   console.log(`\n\u2550\u2550\u2550 LAB INSIGHT: ${pass} passed, ${fail} failed \u2550\u2550\u2550`);
   process.exit(fail ? 1 : 0);

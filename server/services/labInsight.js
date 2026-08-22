@@ -293,6 +293,103 @@ Return ONLY raw JSON:
 }
 
 /**
+ * Build a macro target from the member's own numbers, adjusted for what the
+ * panel actually showed.
+ *
+ * Computed in code, not by the model. Macro arithmetic is arithmetic — asking
+ * a language model to divide calories into grams invites quiet errors that
+ * look plausible, and the same input must always give the same answer.
+ *
+ * The lab-driven adjustments are conservative and reflect ordinary practice:
+ *
+ *   raised HbA1c        lower the carbohydrate share, raise protein and fibre
+ *   high triglycerides  lower carbohydrate; triglycerides respond to refined
+ *                       carbohydrate and alcohol more than to dietary fat
+ *   high LDL            hold carbohydrate, shift fat quality rather than
+ *                       quantity — the lever is saturated fat and fibre, and
+ *                       neither shows up in a macro split
+ *   low HDL             slightly higher fat, weighted to unsaturated sources
+ *
+ * Micronutrient findings — ferritin, B12, vitamin D — deliberately move
+ * nothing. They are food-choice problems, not macro-ratio problems, and
+ * pretending otherwise would be theatre.
+ */
+function macroTargets({ weightKg, maintenanceKcal, goal = 'loss', actionable = [] }) {
+  if (!weightKg || !maintenanceKcal) return null;
+
+  const has = (canon, st) => actionable.some(a => a.canonical === canon && a.state === st);
+
+  const adjust = goal === 'gain' ? +250 : goal === 'maintain' ? 0 : -450;
+  const kcal = Math.max(1200, Math.round((maintenanceKcal + adjust) / 10) * 10);
+
+  // ── protein first, from body weight ──
+  let proteinPerKg = goal === 'loss' ? 1.9 : 1.6;
+  const reasons = [];
+  if (has('hba1c', 'high')) { proteinPerKg += 0.2; }
+  const protein_g = Math.round(Math.min(2.4, proteinPerKg) * weightKg);
+
+  // ── then split what remains between carbohydrate and fat by SHARE ──
+  // An earlier version derived carbohydrate as the leftover after a fixed fat
+  // figure, which meant a carbohydrate floor bound in every scenario and none
+  // of the lab adjustments moved the numbers at all — while the explanation
+  // still claimed they had. Splitting the remainder by share makes each lever
+  // visible in the output.
+  const remaining = kcal - protein_g * 4;
+  let carbShare = 0.55;                       // of the non-protein calories
+
+  if (has('hba1c', 'high'))         { carbShare -= 0.10; }
+  if (has('triglycerides', 'high')) { carbShare -= 0.08; }
+  if (has('hdl', 'low'))            { carbShare -= 0.05; }
+  carbShare = Math.max(0.35, carbShare);      // never starve training of fuel
+
+  let carbs_g = Math.round((remaining * carbShare) / 4);
+  let fat_g   = Math.round((remaining * (1 - carbShare)) / 9);
+
+  // Floors, applied after the split so they only bite in extreme cases
+  const minFat = Math.round(0.7 * weightKg);
+  if (fat_g < minFat) {
+    fat_g = minFat;
+    carbs_g = Math.max(0, Math.round((remaining - fat_g * 9) / 4));
+    reasons.push('fat held at its floor for hormonal function');
+  }
+
+  // Only claim an adjustment that actually happened
+  if (has('hba1c', 'high')) {
+    reasons.unshift('protein raised and carbohydrate reduced for the HbA1c reading');
+  }
+  if (has('triglycerides', 'high')) {
+    reasons.push('carbohydrate reduced further — triglycerides respond to refined carbohydrate and alcohol more than to dietary fat');
+  }
+  if (has('hdl', 'low')) {
+    reasons.push('a little more fat, weighted to nuts, seeds and oily fish, for the low HDL');
+  }
+  if (has('ldl', 'high')) {
+    reasons.push('the ratio is unchanged for LDL — the lever there is saturated fat and soluble fibre, neither of which shows up in a macro split');
+  }
+  if (carbShare === 0.35) {
+    reasons.push('carbohydrate held at its floor so training stays fuelled');
+  }
+
+  const total = protein_g * 4 + carbs_g * 4 + fat_g * 9;
+  const pct = cal => Math.round((cal / total) * 100);
+  // Derive the last share from the other two so they always sum to 100 —
+  // three independent roundings otherwise show 33/34/34 = 101 or 99, which
+  // looks like a bug to anyone reading carefully.
+  const protein_pct = pct(protein_g * 4);
+  const carbs_pct   = pct(carbs_g * 4);
+  const fat_pct     = 100 - protein_pct - carbs_pct;
+
+  return {
+    kcal,
+    protein_g, carbs_g, fat_g,
+    protein_pct, carbs_pct, fat_pct,
+    protein_per_kg: +(protein_g / weightKg).toFixed(2),
+    computed_kcal: total,
+    reasons,
+  };
+}
+
+/**
  * Screen a generated analysis for clinical overreach.
  *
  * The first version of this matched bare words, which fails badly in both
@@ -336,4 +433,4 @@ function screenClinical(text) {
   return { ok: matches.length === 0, matches };
 }
 
-module.exports = { triage, buildPrompt, canonical, state, screenClinical, RED_FLAGS, NUTRITION_LEVERS };
+module.exports = { triage, buildPrompt, canonical, state, screenClinical, macroTargets, RED_FLAGS, NUTRITION_LEVERS };

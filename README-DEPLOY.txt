@@ -1,47 +1,53 @@
-FitLife — download lab results as PDF and CSV
-=============================================
+FitLife — macro targets as percentages
+======================================
 
-Extract, drag the "client" FOLDER onto GitHub at the repo ROOT.
-NOTHING TO RENAME. No new packages. No schema change. Server untouched.
+Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
+NOTHING TO RENAME. No new packages. No schema change.
 
-THREE BUTTONS ON THE LAB RESULTS CARD
+WHAT'S NEW
+The lab analysis now ends with a macro target: calories, grams, and the split
+as percentages, with a proportional bar so the shape reads at a glance.
 
-  PDF       a formatted report: every panel by test date, the interval
-            comparisons, and — for coaches — the nutritional guidance
-  CSV       one row per lab value: test, result, unit, reference range,
-            status, date, lab, who entered it
-  Changes   one row per interval comparison, including the average intake,
-            protein, weight change, training and cardio in that window,
-            and what percentage of the window was actually logged
+    1,750 kcal      36% P · 22% C · 42% F
+                    158g     98g     81g
+                    2.11 g protein per kg
 
-MEMBERS GET THESE TOO
-A PDF of their own results is exactly what someone needs to hand a doctor at
-their next appointment. Members see values and comparisons; the nutritional
-guidance stays coach-only, as it was.
+Percentages also now appear on the adaptive engine's targets, derived from the
+same grams so the two can never disagree.
 
-WHY PRINT-TO-PDF RATHER THAN A PDF LIBRARY
-jsPDF and its peers add roughly a quarter of a megabyte to a bundle whose
-members are often on patchy mobile data, and the browser already has a
-competent PDF writer. The app already uses this pattern for the coach's Print
-Report, so behaviour stays consistent.
+Both are shown because they answer different questions. Grams are what a member
+shops and cooks to. Percentages are how a coach reads a plan in one glance.
 
-The cost is one extra tap: the print dialog opens and you choose "Save as
-PDF". Chrome on Android and Safari on iOS both offer it. If that tap matters
-more than the payload, say so and I will swap in a real library.
+COMPUTED IN CODE, NOT BY THE MODEL
+Dividing calories into grams is arithmetic. A language model doing arithmetic
+produces plausible-looking errors nobody catches, and the same panel must
+always give the same answer. So the split is deterministic; the model only
+writes the surrounding explanation.
 
-The CSV is a genuine one-click download with no dialog.
+HOW THE PANEL MOVES THE SPLIT
+  raised HbA1c        protein up, carbohydrate share down
+  high triglycerides  carbohydrate down further — they respond to refined
+                      carbohydrate and alcohol more than to dietary fat
+  low HDL             a little more fat, weighted to unsaturated sources
+  high LDL            NOTHING CHANGES, and the card says why: the lever there
+                      is saturated fat and soluble fibre, neither of which
+                      shows up in a macro ratio
+  B12, vitamin D,     nothing changes. These are food-choice problems, not
+  ferritin            macro-ratio problems, and pretending otherwise would be
+                      theatre
 
-DETAILS THAT MATTER IN PRACTICE
-· The CSV carries a UTF-8 byte-order mark, without which Excel renders Indian
-  test names and the µ in µg as mojibake — which reads as corrupted data.
-· Fields containing commas, quotes or newlines are quoted and escaped
-  properly. Verified against a test name containing both a comma and quotes.
-· NaN reference bounds render as "< 100" rather than "NaN - 100", matching
-  the on-screen fix.
-· Out-of-range rows are shaded in the PDF so they are findable at a glance.
-· If pop-ups are blocked the button says so instead of failing silently.
-· Filenames include the member name and date: harsha-lab-results-2026-08-22.csv
+A BUG CAUGHT WHILE BUILDING IT
+The first version derived carbohydrate as whatever remained after a fixed fat
+figure. A carbohydrate floor then bound in every single scenario, so none of
+the lab adjustments moved the numbers at all — while the explanation still
+claimed they had. Reasoning that describes changes which did not happen is
+worse than no reasoning. Rebuilt to split the non-protein calories by share,
+and there is now a test asserting every stated reason corresponds to a real
+change.
+
+Also fixed: three independent roundings made the percentages sum to 99 or 101.
+The last share is now derived from the other two.
 
 TESTS
-CSV escaping verified against awkward real values. Regression: 160 assertions
-across the three affected suites, all passing.
+  npm run test:insight   67 assertions, 14 of them on the macro maths alone
+Regression: 226 across five suites, all passing.

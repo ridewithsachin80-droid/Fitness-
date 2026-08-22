@@ -152,19 +152,44 @@ export default function MetabolicInsight({ patientId = null, onApplied = null, c
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37] mb-2">
                 Suggested targets
               </p>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                {[
-                  ['kcal', data.targets.kcal],
-                  ['P',    `${data.targets.protein_g}g`],
-                  ['C',    `${data.targets.carbs_g}g`],
-                  ['F',    `${data.targets.fat_g}g`],
-                ].map(([k, v]) => (
-                  <div key={k}>
-                    <p className="text-sm font-extrabold text-[#FFFFFF]">{v}</p>
-                    <p className="text-[9px] text-[#7E8596] uppercase">{k}</p>
-                  </div>
-                ))}
-              </div>
+              {(() => {
+                // Percentages alongside grams, for the same reason as the lab
+                // card: grams are what a member cooks to, percentages are how
+                // a coach reads a plan at a glance. Derived from the grams so
+                // the two can never disagree, with the last share taken as the
+                // remainder so they always sum to 100.
+                const t = data.targets;
+                const total = t.protein_g * 4 + t.carbs_g * 4 + t.fat_g * 9;
+                const pP = Math.round((t.protein_g * 4 / total) * 100);
+                const pC = Math.round((t.carbs_g * 4 / total) * 100);
+                const pF = 100 - pP - pC;
+                return (
+                  <>
+                    <div className="flex h-2 rounded-full overflow-hidden mb-2">
+                      <div style={{ width: `${pP}%` }} className="bg-[#D4AF37]" />
+                      <div style={{ width: `${pC}%` }} className="bg-[#8C6D37]" />
+                      <div style={{ width: `${pF}%` }} className="bg-[#F0E2B6]" />
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div>
+                        <p className="text-sm font-extrabold text-[#FFFFFF]">{t.kcal}</p>
+                        <p className="text-[9px] text-[#7E8596] uppercase">kcal</p>
+                      </div>
+                      {[
+                        ['Protein', t.protein_g, pP, 'text-[#D4AF37]'],
+                        ['Carbs',   t.carbs_g,   pC, 'text-[#C5A059]'],
+                        ['Fat',     t.fat_g,     pF, 'text-[#F0E2B6]'],
+                      ].map(([label, g, pctv, cls]) => (
+                        <div key={label}>
+                          <p className={`text-sm font-extrabold ${cls}`}>{pctv}%</p>
+                          <p className="text-[10px] text-[#FFFFFF]">{g}g</p>
+                          <p className="text-[9px] text-[#7E8596] uppercase">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
               <p className="text-[10px] text-[#7E8596] mt-2 leading-relaxed">
                 Aimed at {Math.abs(data.targets.weekly_change_kg)} kg/week
                 {data.targets.weekly_change_kg < 0 ? ' loss' : ' gain'}, from {data.targets.basis}.
