@@ -467,8 +467,11 @@ export default function Monitor() {
     </tbody></table>
 
     ${labs.length ? `<h2>🧪 Lab Values</h2>
-    <table><thead><tr><th>Test</th><th>Value</th><th>Unit</th><th>Status</th><th>Date</th></tr></thead><tbody>
+    <table><thead><tr><th>Test</th><th>Value</th><th>Unit</th><th>Reference</th><th>Status</th><th>Date</th></tr></thead><tbody>
     ${labs.map(l => `<tr><td>${l.test_name}</td><td>${l.value}</td><td>${l.unit||'—'}</td>
+      <td>${l.ref_min != null && l.ref_max != null ? `${l.ref_min}–${l.ref_max}`
+            : l.ref_max != null ? `&lt; ${l.ref_max}`
+            : l.ref_min != null ? `&gt; ${l.ref_min}` : '—'}</td>
       <td><span class="badge ${l.status==='normal'?'ok':l.status==='high'?'bad':'warn'}">${l.status||'—'}</span></td>
       <td>${new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</td></tr>`).join('')}
     </tbody></table>` : ''}
@@ -796,25 +799,72 @@ export default function Monitor() {
           ) : (
             <div className="space-y-0 divide-y divide-stone-50">
               {labs.map(l => (
-                <div key={l.id} className="flex items-center justify-between py-2.5">
-                  <div>
-                    <div className="text-sm font-semibold text-stone-700">{l.test_name}</div>
-                    <div className="text-xs text-stone-400">{formatDate(l.test_date)}</div>
-                  </div>
-                  <div className="text-right">
-                    <span className={`font-bold text-sm ${
-                      l.status === 'high' ? 'text-red-600' :
-                      l.status === 'low'  ? 'text-blue-600' : 'text-emerald-600'
-                    }`}>
-                      {l.value} {l.unit}
-                    </span>
-                    <div className={`text-xs mt-0.5 font-medium px-1.5 py-0.5 rounded-full inline-block ml-1 ${
-                      l.status === 'high' ? 'bg-red-50 text-red-600' :
-                      l.status === 'low'  ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
-                    }`}>
-                      {l.status}
+                <div key={l.id} className="py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-stone-700">{l.test_name}</div>
+                      <div className="text-xs text-stone-400">{formatDate(l.test_date)}</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className={`font-bold text-sm ${
+                        l.status === 'high' ? 'text-red-600' :
+                        l.status === 'low'  ? 'text-blue-600' : 'text-emerald-600'
+                      }`}>
+                        {l.value} {l.unit}
+                      </span>
+                      <div className={`text-xs mt-0.5 font-medium px-1.5 py-0.5 rounded-full inline-block ml-1 ${
+                        l.status === 'high' ? 'bg-red-50 text-red-600' :
+                        l.status === 'low'  ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
+                      }`}>
+                        {l.status}
+                      </div>
+                      {/* The reference range is what makes a number mean
+                          anything — "5.90%" alone tells a coach nothing
+                          without knowing the lab's own cut-off. */}
+                      {(l.ref_min != null || l.ref_max != null) && (
+                        <div className="text-[11px] text-stone-400 mt-0.5">
+                          ref{' '}
+                          {l.ref_min != null && l.ref_max != null
+                            ? `${l.ref_min}–${l.ref_max}`
+                            : l.ref_max != null ? `< ${l.ref_max}` : `> ${l.ref_min}`}
+                          {l.unit ? ` ${l.unit}` : ''}
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Position within the range, when both bounds are known.
+                      Two results can both read "normal" while one sits at the
+                      very edge — that difference is what a coach acts on. */}
+                  {(() => {
+                    const lo = l.ref_min != null ? parseFloat(l.ref_min) : null;
+                    const hi = l.ref_max != null ? parseFloat(l.ref_max) : null;
+                    const v  = parseFloat(l.value);
+                    if (lo == null || hi == null || !(hi > lo) || !Number.isFinite(v)) return null;
+
+                    // Draw the band with a margin either side so out-of-range
+                    // values stay visible instead of clamping to the edge.
+                    const span = hi - lo;
+                    const from = lo - span * 0.35;
+                    const to   = hi + span * 0.35;
+                    const pct  = x => Math.max(0, Math.min(100, ((x - from) / (to - from)) * 100));
+
+                    return (
+                      <div className="mt-2 ml-0.5">
+                        <div className="relative h-1.5 rounded-full bg-stone-100">
+                          <div className="absolute h-full rounded-full bg-emerald-100"
+                            style={{ left: `${pct(lo)}%`, width: `${pct(hi) - pct(lo)}%` }} />
+                          <div className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full ring-2 ring-white ${
+                            l.status === 'high' ? 'bg-red-500' :
+                            l.status === 'low'  ? 'bg-blue-500' : 'bg-emerald-500'
+                          }`} style={{ left: `${pct(v)}%` }} />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-stone-300 mt-0.5">
+                          <span>{lo}</span><span>{hi}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
