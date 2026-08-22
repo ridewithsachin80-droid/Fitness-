@@ -565,6 +565,37 @@ function whitelistIds(aiIds, allowedItems) {
   return [...new Set(aiIds.map(String))].filter(id => allowed.has(id));
 }
 
+/**
+ * Pull JSON out of a model response that may not be pure JSON.
+ *
+ * Stripping ``` fences is not enough on its own: models occasionally prepend a
+ * sentence, and a truncated response leaves an unclosed object. Slicing from
+ * the first brace to the last recovers the common cases, and the caller gets a
+ * typed reason when it genuinely cannot be salvaged.
+ */
+function extractJSON(text) {
+  if (!text || !text.trim()) {
+    const e = new Error('empty response'); e.kind = 'empty'; throw e;
+  }
+  const cleaned = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+
+  try { return JSON.parse(cleaned); } catch { /* fall through */ }
+
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  if (first !== -1 && last > first) {
+    try { return JSON.parse(cleaned.slice(first, last + 1)); } catch { /* fall through */ }
+  }
+
+  // An unclosed object almost always means the answer was cut off mid-write
+  const opens = (cleaned.match(/{/g) || []).length;
+  const closes = (cleaned.match(/}/g) || []).length;
+  const e = new Error('unparseable model response');
+  e.kind = opens > closes ? 'truncated' : 'malformed';
+  e.sample = cleaned.slice(0, 400);
+  throw e;
+}
+
 // ── POST /api/ai-chat/lab-report ─────────────────────────────────────────────
 // Reads a lab report — PDF or a photo of a printout — and extracts the markers,
 // so a member doesn't have to type twenty rows off a page.
@@ -634,7 +665,14 @@ Return ONLY raw JSON, no markdown fences:
 }`;
 
   try {
-    const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
+    // Document extraction is harder than chat, so the full model leads here
+    // rather than the lite one the text paths use. A lab panel with thirty
+    // markers is a long structured answer, and lite models truncate it.
+    const models = [...new Set([
+      process.env.GEMINI_DOC_MODEL || 'gemini-2.5-flash',
+      ...GEMINI_MODELS,
+    ])].filter(Boolean);
+
     let parsed = null, usedModel = null, lastErr;
 
     for (const model of models) {
@@ -646,17 +684,38 @@ Return ONLY raw JSON, no markdown fences:
               { text: prompt },
               { inline_data: { mime_type: mt, data: file } },
             ] }],
-            generationConfig: { temperature: 0, maxOutputTokens: 4000 },
+            generationConfig: {
+              temperature: 0,
+              // 4000 was not enough for a full panel — the answer was being cut
+              // off mid-object, which arrives as unparseable JSON.
+              maxOutputTokens: 16000,
+              // Ask the API itself to guarantee JSON rather than trusting the
+              // prompt. This is the single biggest reliability win here.
+              responseMimeType: 'application/json',
+            },
           },
-          { headers: { 'content-type': 'application/json' }, timeout: 60000 }
+          { headers: { 'content-type': 'application/json' }, timeout: 90000 }
         );
+
         const cand = response.data.candidates?.[0];
+        const finish = cand?.finishReason;
         const text = cand?.content?.parts?.map(p => p.text).join('') || '';
-        if (!text) throw new Error('Empty response from the reader');
-        parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+
+        if (finish && !['STOP', 'MAX_TOKENS'].includes(finish)) {
+          const e = new Error(`model stopped: ${finish}`); e.kind = 'blocked'; throw e;
+        }
+        parsed = extractJSON(text);
         usedModel = model;
+        if (finish === 'MAX_TOKENS') {
+          console.warn(`lab-report: ${model} hit the token ceiling — results may be partial`);
+        }
         break;
-      } catch (e) { lastErr = e; }
+      } catch (e) {
+        lastErr = e;
+        // Log enough to diagnose without dumping a patient's blood work
+        console.warn(`lab-report: ${model} failed —`, e.kind || e.message,
+                     e.sample ? `| starts: ${e.sample.slice(0, 120)}` : '');
+      }
     }
     if (!parsed) throw lastErr || new Error('Could not read the report');
 
@@ -700,10 +759,27 @@ Return ONLY raw JSON, no markdown fences:
   } catch (err) {
     const detail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : err.message;
     console.error('lab-report read error | status:', err.response?.status, '| detail:', detail);
-    if (err instanceof SyntaxError) {
-      return res.status(502).json({ error: 'Could not read that report — please try again' });
-    }
     const st = err.response?.status;
+
+    // Distinguish the failures so the member knows whether to retry, crop the
+    // file, or give up and type it — "please try again" on a report that will
+    // never parse just wastes their time.
+    if (err.kind === 'truncated') {
+      return res.status(502).json({
+        error: 'That report has more results than I can read in one go — try uploading one page at a time.' });
+    }
+    if (err.kind === 'blocked') {
+      return res.status(502).json({
+        error: "The reader wouldn't process that file. If it's a scan, a clearer photo of the results table usually works." });
+    }
+    if (err.kind === 'empty' || err.kind === 'malformed' || err instanceof SyntaxError) {
+      return res.status(502).json({
+        error: 'I couldn\'t make sense of that report. A photo of just the results table often works better than the full PDF.' });
+    }
+    if (st === 400) {
+      return res.status(502).json({
+        error: 'That file type was rejected. Try exporting the report as a PDF, or photograph the results page.' });
+    }
     return res.status(st === 429 || st === 503 ? st : 502).json({
       error: st === 429 ? 'Busy right now — try again in a moment'
            : st === 401 ? 'Report reading authentication failed — check GEMINI_API_KEY'
