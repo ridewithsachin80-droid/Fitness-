@@ -11,6 +11,9 @@ import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from 
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
 import TrainingSummary from '../components/TrainingSummary';
+import MetabolicInsight from '../components/MetabolicInsight';
+import MacroLab from '../components/MacroLab';
+import LabResults from '../components/LabResults';
 import MuscleCoverage from '../components/MuscleCoverage';
 import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
@@ -82,7 +85,7 @@ function rowCompliance(log) {
 function WeightTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1a1a20] border border-white/[0.1] rounded-xl px-3 py-2 shadow-float text-xs">
+    <div className="bg-[#1A1C20] border border-white/[0.1] rounded-xl px-3 py-2 shadow-float text-xs">
       <p className="text-stone-400 mb-0.5">{label}</p>
       <p className="font-bold text-emerald-700">{payload[0].value} kg</p>
     </div>
@@ -117,7 +120,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-bold text-stone-800">Add Lab Value</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
@@ -131,7 +134,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
           { key: 'ref_max',   label: 'Ref max',   type: 'number', placeholder: '5.6' },
         ].map(({ key, label, type, placeholder }) => (
           <div key={key}>
-            <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
+            <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
             <input type={type} value={form[key]} placeholder={placeholder}
               onChange={e => set(key, e.target.value)}
               className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
@@ -139,7 +142,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
         ))}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-[#c9a227] hover:bg-[#e0c98a] text-[#08052a] font-bold rounded-xl transition-colors disabled:opacity-50">
+          className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] font-bold rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Add Lab Value'}
         </button>
       </div>
@@ -172,7 +175,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between mb-1">
           <div>
             <h3 className="font-bold text-stone-800">Set Login PIN</h3>
@@ -183,7 +186,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-[#c9a227]">PIN set successfully!</p>
+            <p className="font-semibold text-[#D4AF37]">PIN set successfully!</p>
             <p className="text-xs text-stone-400 mt-1">Member can now log in with this PIN</p>
           </div>
         ) : (
@@ -196,7 +199,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
               { label: 'Confirm PIN', value: confirm, onChange: setConfirm },
             ].map(({ label, value, onChange }) => (
               <div key={label}>
-                <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
+                <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
                 <div className="relative">
                   <input type={show ? 'text' : 'password'} inputMode="numeric" value={value}
                     onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
@@ -249,14 +252,14 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-stone-800">Add Clinical Note</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
         </div>
 
         <div>
-          <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
+          <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
           <input type="date" value={form.note_date} max={today}
             onChange={e => set('note_date', e.target.value)}
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
@@ -264,7 +267,7 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
         </div>
 
         <div>
-          <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Note</label>
+          <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Note</label>
           <textarea value={form.note} onChange={e => set('note', e.target.value)}
             rows={4} placeholder="Clinical observations, progress notes, instructions…"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
@@ -283,7 +286,7 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
         {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving || !form.note.trim()}
-          className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
+          className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-bold
             rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Save Note'}
         </button>
@@ -320,7 +323,7 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-bold text-stone-800">Log Weight</h3>
@@ -332,7 +335,7 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-[#c9a227]">Weight saved!</p>
+            <p className="font-semibold text-[#D4AF37]">Weight saved!</p>
           </div>
         ) : (
           <>
@@ -340,14 +343,14 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
               Creates or updates the weight entry for the selected date. Other log data is preserved.
             </p>
             <div>
-              <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
+              <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
               <input type="date" value={date} max={todayStr}
                 onChange={e => setDate(e.target.value)}
                 className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
                   focus:outline-none focus:ring-2 focus:ring-emerald-300" />
             </div>
             <div>
-              <label className="block text-[10px] text-[#4e4e5c] font-semibold uppercase tracking-[0.10em] mb-1.5">Weight (kg)</label>
+              <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Weight (kg)</label>
               <div className="flex items-center gap-2">
                 <input type="number" step="0.1" inputMode="decimal" value={weight}
                   onChange={e => setWeight(e.target.value)}
@@ -515,10 +518,10 @@ export default function Monitor() {
 
   if (loading) return <PageLoader />;
   if (!data)   return (
-    <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#121316] flex items-center justify-center p-4">
       <div className="text-center">
-        <p className="text-[#9a9aa6] mb-4">Patient not found or not assigned to you.</p>
-        <button onClick={() => navigate('/monitor')} className="text-[#c9a227] font-semibold">← Back</button>
+        <p className="text-[#9EA3B0] mb-4">Patient not found or not assigned to you.</p>
+        <button onClick={() => navigate('/monitor')} className="text-[#D4AF37] font-semibold">← Back</button>
       </div>
     </div>
   );
@@ -571,9 +574,9 @@ export default function Monitor() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e]">
+    <div className="min-h-screen bg-[#121316]">
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <BackButton onClick={() => navigate('/monitor')} label="All patients" />
           <div className="mt-3 flex items-start justify-between">
@@ -640,16 +643,16 @@ export default function Monitor() {
             <ResponsiveContainer width="100%" height={160}>
               <LineChart data={weightData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTooltip />} />
                 {profile.start_weight && (
                   <ReferenceLine y={parseFloat(profile.start_weight)} stroke="#f87171"
                     strokeDasharray="4 4" label={{ value: 'Start', position: 'right', fontSize: 9, fill: '#f87171' }} />
                 )}
                 {profile.target_weight && (
-                  <ReferenceLine y={parseFloat(profile.target_weight)} stroke="#e0c98a"
-                    strokeDasharray="4 4" label={{ value: 'Goal', position: 'right', fontSize: 9, fill: '#e0c98a' }} />
+                  <ReferenceLine y={parseFloat(profile.target_weight)} stroke="#F0E2B6"
+                    strokeDasharray="4 4" label={{ value: 'Goal', position: 'right', fontSize: 9, fill: '#F0E2B6' }} />
                 )}
                 <Line type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={2.5}
                   dot={{ fill: '#10b981', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
@@ -671,12 +674,12 @@ export default function Monitor() {
             <ResponsiveContainer width="100%" height={100}>
               <BarChart data={complianceData} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}
                 style={{ cursor: 'pointer' }}>
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false}
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false}
                   interval={Math.floor(complianceData.length / 5)} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   content={({ active, payload }) => active && payload?.length
-                    ? <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
+                    ? <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
                         <span className="font-bold text-emerald-600">{payload[0].value}%</span>
                         <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
                         <span className="text-stone-300 ml-1">· tap to view</span>
@@ -687,7 +690,7 @@ export default function Monitor() {
                   onClick={(data) => data?.log && setSelectedLog(data.log)} />
               </BarChart>
             </ResponsiveContainer>
-            <p className="text-[10px] text-[#4e4e5c] mt-1.5 text-center">Tap any bar to see what they logged that day</p>
+            <p className="text-[10px] text-[#7E8596] mt-1.5 text-center">Tap any bar to see what they logged that day</p>
           </Card>
         )}
 
@@ -700,7 +703,7 @@ export default function Monitor() {
           return (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2"
               onClick={() => setSelectedLog(null)}>
-              <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[82vh] flex flex-col"
+              <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[82vh] flex flex-col"
                 onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 flex-shrink-0">
                   <div>
@@ -762,11 +765,11 @@ export default function Monitor() {
             <ResponsiveContainer width="100%" height={100}>
               <LineChart data={values} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   content={({ active, payload }) => active && payload?.length
-                    ? <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
+                    ? <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
                         <span className="font-bold text-blue-600">{payload[0].value}</span>
                         <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
                       </div>
@@ -857,6 +860,32 @@ export default function Monitor() {
           )}
         </Card>
 
+        {/* What their own data says about their metabolism — the engine
+            proposes targets, the coach decides whether to apply them. */}
+        <Card>
+          <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
+          <div className="mt-2">
+            <MetabolicInsight patientId={parseInt(patientId)} canApply onApplied={load} />
+          </div>
+        </Card>
+
+        {/* Their blood work, and what they were doing between tests */}
+        <Card>
+          <SectionTitle icon="🩸">Lab Results</SectionTitle>
+          <div className="mt-2">
+            <LabResults patientId={parseInt(patientId)} />
+          </div>
+        </Card>
+
+        {/* Macro Lab — adherence patterns and controlled trials. Coach-only:
+            there is no member-facing route for any of this. */}
+        <Card>
+          <SectionTitle icon="🔬">Macro Lab</SectionTitle>
+          <div className="mt-2">
+            <MacroLab patientId={parseInt(patientId)} onChanged={load} />
+          </div>
+        </Card>
+
         {/* Training summary — volume, cardio and calories the member logged.
             Previously invisible to the coach despite being captured daily. */}
         <Card>
@@ -875,24 +904,24 @@ export default function Monitor() {
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="🏋️">Workout Program</SectionTitle>
             <button onClick={() => setShowProgramBuilder(true)}
-              className="text-xs font-semibold text-[#e0c98a] bg-[rgba(201,162,39,0.10)] px-3 py-1.5 rounded-xl
-                hover:bg-[rgba(201,162,39,0.18)] transition-colors">
+              className="text-xs font-semibold text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] px-3 py-1.5 rounded-xl
+                hover:bg-[rgba(212,175,55,0.18)] transition-colors">
               {activeProgram?.program ? 'Edit' : '+ Create'}
             </button>
           </div>
           {activeProgram === undefined ? (
-            <p className="text-xs text-[#5a5a68] text-center py-3">Loading…</p>
+            <p className="text-xs text-[#7E8596] text-center py-3">Loading…</p>
           ) : !activeProgram?.program ? (
-            <p className="text-xs text-[#5a5a68] italic text-center py-3">
+            <p className="text-xs text-[#7E8596] italic text-center py-3">
               No program assigned — {profile.name} is logging freeform only.
             </p>
           ) : (
             <div>
-              <p className="text-sm font-semibold text-[#ededf0] mb-2">{activeProgram.program.name}</p>
+              <p className="text-sm font-semibold text-[#FFFFFF] mb-2">{activeProgram.program.name}</p>
               <div className="flex flex-wrap gap-1.5">
                 {activeProgram.days.map(d => (
-                  <span key={d.day_number} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.05] text-[#9a9aa6]">
-                    {d.day_label} <span className="text-[#5a5a68]">· {d.exercises.length} exercises</span>
+                  <span key={d.day_number} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.05] text-[#9EA3B0]">
+                    {d.day_label} <span className="text-[#7E8596]">· {d.exercises.length} exercises</span>
                   </span>
                 ))}
               </div>
@@ -908,7 +937,7 @@ export default function Monitor() {
             <SectionTitle icon="📋">Daily Log</SectionTitle>
             {activeLog && (
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(201,162,39,0.12)] text-[#c9a227]' :
+                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
                 (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
                                                       'bg-red-400/10 text-red-400'
               }`}>{activeLog.compliance_pct||0}%</span>
@@ -916,7 +945,7 @@ export default function Monitor() {
           </div>
 
           {logs.length === 0 ? (
-            <p className="text-xs text-[#4e4e5c] italic text-center py-4">No logs yet</p>
+            <p className="text-xs text-[#7E8596] italic text-center py-4">No logs yet</p>
           ) : (
             <>
               {/* Date chip navigator — horizontal scroll, newest first */}
@@ -927,7 +956,7 @@ export default function Monitor() {
                   const isToday = log.log_date === todayIST;
                   const isActive = log.log_date === activeDate;
                   const pct = log.compliance_pct || 0;
-                  const dotColor = pct >= 75 ? '#c9a227' : pct >= 50 ? '#fbbf24' : '#f87171';
+                  const dotColor = pct >= 75 ? '#D4AF37' : pct >= 50 ? '#fbbf24' : '#f87171';
                   const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
                   return (
                     <button key={log.log_date}
@@ -935,8 +964,8 @@ export default function Monitor() {
                       className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl
                         border transition-all text-xs font-semibold ${
                         isActive
-                          ? 'bg-[rgba(201,162,39,0.10)] border-[rgba(201,162,39,0.30)] text-[#c9a227]'
-                          : 'bg-[#1a1a20] border-white/[0.07] text-[#6a6a78] hover:border-white/[0.18] hover:text-[#ededf0]'
+                          ? 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.30)] text-[#D4AF37]'
+                          : 'bg-[#1A1C20] border-white/[0.07] text-[#6a6a78] hover:border-white/[0.18] hover:text-[#FFFFFF]'
                       }`}>
                       <span>{dayLabel}</span>
                       <div className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
@@ -974,7 +1003,7 @@ export default function Monitor() {
                     {/* Net calorie row */}
                     {burnedKcal > 0 && (
                       <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
-                        netKcal <= 0 ? 'bg-[rgba(201,162,39,0.07)] border-[rgba(201,162,39,0.20)] text-[#c9a227]'
+                        netKcal <= 0 ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.20)] text-[#D4AF37]'
                         : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
                         : 'bg-red-400/10 border-red-400/20 text-red-400'
                       }`}>
@@ -989,8 +1018,8 @@ export default function Monitor() {
                     {/* Meal plan adherence */}
                     {data?.profile?.meal_plan?.length > 0 && (
                       <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                        <div className="px-3 py-2 bg-[#1a1a20] border-b border-white/[0.06]">
-                          <span className="text-[10px] font-bold text-[#4e4e5c] uppercase tracking-[0.10em]">🍽 Meal Plan Adherence</span>
+                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06]">
+                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🍽 Meal Plan Adherence</span>
                         </div>
                         <div className="px-3 py-2.5 flex flex-wrap gap-2">
                           {data.profile.meal_plan.map(meal => {
@@ -998,7 +1027,7 @@ export default function Monitor() {
                             const total   = (meal.items || []).length;
                             const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
                             const pct     = total > 0 ? matched / total : 0;
-                            const color   = pct >= 0.8 ? 'bg-[rgba(201,162,39,0.10)] text-[#c9a227] border-[rgba(201,162,39,0.22)]'
+                            const color   = pct >= 0.8 ? 'bg-[rgba(212,175,55,0.10)] text-[#D4AF37] border-[rgba(212,175,55,0.22)]'
                                           : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
                                           :              'bg-red-400/10 text-red-400 border-red-400/25';
                             const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
@@ -1015,9 +1044,9 @@ export default function Monitor() {
                     {/* Food log */}
                     {log.food_items?.length > 0 && (
                       <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                        <div className="px-3 py-2 bg-[#1a1a20] border-b border-white/[0.06] flex justify-between">
-                          <span className="text-[10px] font-bold text-[#4e4e5c] uppercase tracking-[0.10em]">🥗 Food Log</span>
-                          <span className="text-xs font-bold text-[#c9a227]">{eatenKcal} kcal total</span>
+                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06] flex justify-between">
+                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🥗 Food Log</span>
+                          <span className="text-xs font-bold text-[#D4AF37]">{eatenKcal} kcal total</span>
                         </div>
                         {['Meal 1', 'Meal 2', 'Meal 3'].map(meal => {
                           const mealItems = log.food_items.filter(f => f.meal === meal);
@@ -1027,33 +1056,33 @@ export default function Monitor() {
                             <div key={meal} className="border-b border-white/[0.05] last:border-0">
                               <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
                                 <span className="text-[10px] font-semibold text-[#6a6a78] uppercase tracking-wide">{meal}</span>
-                                <span className="text-xs text-[#4e4e5c]">{mealCal} kcal</span>
+                                <span className="text-xs text-[#7E8596]">{mealCal} kcal</span>
                               </div>
                               {mealItems.map((f, i) => {
                                 const n = calcN(f);
                                 return (
                                   <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-white/[0.04]">
                                     <div className="min-w-0">
-                                      <div className="text-sm font-medium text-[#d8d8de] truncate">{f.name}</div>
-                                      <div className="text-xs text-[#4e4e5c]">{f.grams}g</div>
+                                      <div className="text-sm font-medium text-[#FFFFFF] truncate">{f.name}</div>
+                                      <div className="text-xs text-[#7E8596]">{f.grams}g</div>
                                     </div>
                                     {n && (
                                       <div className="flex gap-2.5 text-right flex-shrink-0">
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-orange-400">{n.cal}</div>
-                                          <div className="text-[10px] text-[#4e4e5c]">kcal</div>
+                                          <div className="text-[10px] text-[#7E8596]">kcal</div>
                                         </div>
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-blue-400">{n.pro}g</div>
-                                          <div className="text-[10px] text-[#4e4e5c]">pro</div>
+                                          <div className="text-[10px] text-[#7E8596]">pro</div>
                                         </div>
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-amber-400">{n.carb}g</div>
-                                          <div className="text-[10px] text-[#4e4e5c]">carb</div>
+                                          <div className="text-[10px] text-[#7E8596]">carb</div>
                                         </div>
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-amber-400">{n.fat}g</div>
-                                          <div className="text-[10px] text-[#4e4e5c]">fat</div>
+                                          <div className="text-[10px] text-[#7E8596]">fat</div>
                                         </div>
                                       </div>
                                     )}
@@ -1071,8 +1100,8 @@ export default function Monitor() {
                             return { cal: acc.cal+n.cal, pro: acc.pro+n.pro, carb: acc.carb+n.carb, fat: acc.fat+n.fat };
                           }, { cal:0, pro:0, carb:0, fat:0 });
                           return (
-                            <div className="px-3 py-2.5 bg-[rgba(201,162,39,0.05)] flex items-center justify-between border-t border-[rgba(201,162,39,0.12)]">
-                              <span className="text-xs font-bold text-[#c9a227]">Day Total</span>
+                            <div className="px-3 py-2.5 bg-[rgba(212,175,55,0.05)] flex items-center justify-between border-t border-[rgba(212,175,55,0.12)]">
+                              <span className="text-xs font-bold text-[#D4AF37]">Day Total</span>
                               <div className="flex gap-3 text-xs">
                                 <span className="font-bold text-orange-400">{t.cal} kcal</span>
                                 <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
@@ -1101,9 +1130,9 @@ export default function Monitor() {
                               <span className="text-xs font-bold text-[#6a6a78] uppercase tracking-wide">{group.title}</span>
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                 doneCount === group.items.length
-                                  ? 'bg-[rgba(201,162,39,0.14)] text-[#e0c98a]'
+                                  ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6]'
                                   : doneCount === 0
-                                  ? 'bg-white/[0.05] text-[#5a5a68]'
+                                  ? 'bg-white/[0.05] text-[#7E8596]'
                                   : 'bg-amber-400/10 text-amber-300'
                               }`}>{doneCount}/{group.items.length}</span>
                             </div>
@@ -1112,10 +1141,10 @@ export default function Monitor() {
                                 const isDone = !!group.done?.[it.id];
                                 return (
                                   <div key={it.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${
-                                    isDone ? 'bg-[rgba(201,162,39,0.06)]' : 'bg-white/[0.02]'
+                                    isDone ? 'bg-[rgba(212,175,55,0.06)]' : 'bg-white/[0.02]'
                                   }`}>
                                     <span className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${
-                                      isDone ? 'bg-[#c9a227]' : 'bg-white/[0.08]'
+                                      isDone ? 'bg-[#D4AF37]' : 'bg-white/[0.08]'
                                     }`}>
                                       {isDone && (
                                         <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
@@ -1123,7 +1152,7 @@ export default function Monitor() {
                                         </svg>
                                       )}
                                     </span>
-                                    <span className={`text-xs font-medium leading-tight ${isDone ? 'text-[#d8d8de]' : 'text-[#5a5a68]'}`}>
+                                    <span className={`text-xs font-medium leading-tight ${isDone ? 'text-[#FFFFFF]' : 'text-[#7E8596]'}`}>
                                       {it.icon && <span className="mr-1">{it.icon}</span>}{it.label}
                                     </span>
                                   </div>
@@ -1151,14 +1180,14 @@ export default function Monitor() {
                       return (
                         <details className="border border-white/[0.07] rounded-xl overflow-hidden">
                           <summary className="px-3 py-2.5 text-xs font-semibold text-[#6a6a78] cursor-pointer
-                            hover:text-[#c9a227] list-none flex justify-between items-center bg-[#1a1a20]">
+                            hover:text-[#D4AF37] list-none flex justify-between items-center bg-[#1A1C20]">
                             <span>🔬 Key Nutrients</span>
                             <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
-                              met >= KEYS.length*0.8 ? 'bg-[rgba(201,162,39,0.12)] text-[#c9a227]' :
+                              met >= KEYS.length*0.8 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
                               met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
                             }`}>{met}/{KEYS.length} ▼</span>
                           </summary>
-                          <div className="px-3 py-3 space-y-2 bg-[#131317]">
+                          <div className="px-3 py-3 space-y-2 bg-[#1A1C20]">
                             {KEYS.map(k => {
                               const meta = RDA_TARGETS[k];
                               if (!meta) return null;
@@ -1167,8 +1196,8 @@ export default function Monitor() {
                               const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
                               const val  = +raw.toFixed(dec);
                               const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-[#c9a227]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-[#c9a227]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
+                              const cls  = pct>=80 ? 'bg-[#D4AF37]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
+                              const tcls = pct>=80 ? 'text-[#D4AF37]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
                               return (
                                 <div key={k}>
                                   <div className="flex justify-between text-xs mb-1">
@@ -1195,7 +1224,7 @@ export default function Monitor() {
                   </div>
                 );
               })() : (
-                <p className="text-xs text-[#4e4e5c] italic text-center py-4">No log for this date</p>
+                <p className="text-xs text-[#7E8596] italic text-center py-4">No log for this date</p>
               )}
             </>
           )}

@@ -241,6 +241,17 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
   }
 });
 
+// Declared BEFORE '/:id' — Express matches in order, and '/:id' would
+// otherwise capture 'population' as a member id.
+// What the clinic as a whole has learned
+router.get('/population/prior', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  try { res.json(await populationPrior()); }
+  catch (err) {
+    console.error('GET /patients/population/prior error:', err);
+    res.status(500).json({ error: 'Could not compute the prior' });
+  }
+});
+
 router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -431,6 +442,83 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatie
 // ── POST /api/patients/:id/labs ────────────────────────────────────────────────
 // Monitor/admin: add a lab test result for a patient.
 // Automatically computes status (low/normal/high) from reference ranges.
+// Declared BEFORE '/:id/labs' — Express matches in declaration order, and
+// the parameterised route would otherwise capture 'me' as a member id and
+// reject the member for not being a coach.
+// Members can now enter their own results. Their own medical data, so they may
+// both add and read it; `entered_role` records who typed it, because a coach
+// transcribing a PDF and a member typing from a phone deserve different trust.
+router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
+  const { test_date, results, lab_name, notes } = req.body || {};
+  if (!test_date || !Array.isArray(results) || !results.length) {
+    return res.status(400).json({ error: 'test_date and a results array are required' });
+  }
+  if (new Date(test_date) > new Date()) {
+    return res.status(400).json({ error: 'Test date cannot be in the future' });
+  }
+
+  const clean = results
+    .filter(r => r && r.test_name && r.value !== undefined && r.value !== '')
+    .slice(0, 60)
+    .map(r => ({
+      test_name: String(r.test_name).trim().slice(0, 100),
+      value: parseFloat(r.value),
+      unit: r.unit ? String(r.unit).trim().slice(0, 30) : null,
+      ref_min: r.ref_min !== undefined && r.ref_min !== '' ? parseFloat(r.ref_min) : null,
+      ref_max: r.ref_max !== undefined && r.ref_max !== '' ? parseFloat(r.ref_max) : null,
+    }))
+    .filter(r => Number.isFinite(r.value));
+
+  if (!clean.length) return res.status(400).json({ error: 'No usable results — each needs a name and a numeric value' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const saved = [];
+    for (const r of clean) {
+      const { rows } = await client.query(
+        `INSERT INTO lab_values
+           (patient_id, test_date, test_name, value, unit, ref_min, ref_max, status,
+            entered_by, entered_role, lab_name, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'patient',$10,$11)
+         RETURNING *`,
+        [req.user.id, test_date, r.test_name, r.value, r.unit, r.ref_min, r.ref_max,
+         classify(r.value, r.ref_min, r.ref_max), req.user.id,
+         lab_name ? String(lab_name).slice(0, 120) : null,
+         notes ? String(notes).slice(0, 500) : null]);
+      saved.push(rows[0]);
+    }
+    await client.query('COMMIT');
+
+    const abnormal = saved.filter(r => r.status !== 'normal');
+    res.status(201).json({
+      saved: saved.length,
+      results: saved,
+      // Stated plainly rather than interpreted. The app must not tell someone
+      // what an out-of-range marker means about their health.
+      notice: abnormal.length
+        ? `${abnormal.length} result${abnormal.length > 1 ? 's are' : ' is'} outside the reference range. Your coach can see these — discuss anything abnormal with the doctor who ordered the test.`
+        : null,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('POST /patients/me/labs error:', err);
+    res.status(500).json({ error: 'Could not save the results' });
+  } finally { client.release(); }
+});
+
+router.get('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM lab_values WHERE patient_id = $1
+       ORDER BY test_date DESC, test_name ASC`, [req.user.id]);
+    res.json({ labs: rows });
+  } catch (err) {
+    console.error('GET /patients/me/labs error:', err);
+    res.status(500).json({ error: 'Could not load your results' });
+  }
+});
+
 router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
     const { test_date, test_name, value, unit, ref_min, ref_max } = req.body;
@@ -481,6 +569,351 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientA
   } catch (err) {
     console.error('POST /patients/:id/notes error:', err);
     res.status(500).json({ error: 'Failed to add note' });
+  }
+});
+
+// ── Lab results ──────────────────────────────────────────────────────────────
+const { analyseLabs } = require('../services/labAnalysis');
+
+function classify(value, refMin, refMax) {
+  if (refMin == null || refMax == null) return 'normal';
+  const v = parseFloat(value);
+  if (v < parseFloat(refMin)) return 'low';
+  if (v > parseFloat(refMax)) return 'high';
+  return 'normal';
+}
+
+async function labContext(patientId) {
+  const [labs, logs, sess] = await Promise.all([
+    pool.query(`SELECT * FROM lab_values WHERE patient_id=$1 ORDER BY test_date ASC`, [patientId]),
+    pool.query(`SELECT log_date, weight_kg, food_items, supplements
+                FROM daily_logs WHERE patient_id=$1 ORDER BY log_date ASC`, [patientId]),
+    pool.query(`SELECT session_date, cardio FROM workout_sessions WHERE patient_id=$1`, [patientId]),
+  ]);
+  return analyseLabs(labs.rows, logs.rows, sess.rows);
+}
+
+// Member: the same analysis of their own results
+router.get('/me/lab-analysis', authMW, roleCheck('patient'), async (req, res) => {
+  try { res.json(await labContext(req.user.id)); }
+  catch (err) {
+    console.error('GET /patients/me/lab-analysis error:', err);
+    res.status(500).json({ error: 'Could not analyse your results' });
+  }
+});
+
+// Coach: the full interval analysis
+router.get('/:id/lab-analysis', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try { res.json(await labContext(req.params.id)); }
+  catch (err) {
+    console.error('GET /patients/:id/lab-analysis error:', err);
+    res.status(500).json({ error: 'Could not analyse the results' });
+  }
+});
+
+// ── Cross-member learning ────────────────────────────────────────────────────
+// Every member with enough data tells us something about the population the
+// clinic actually serves. Mifflin-St Jeor was fitted on a Western sample in
+// 1990; whether it runs high or low for these members is an empirical question
+// this answers, and the answer improves every time someone reaches enough data.
+//
+// New members inherit that correction as their starting estimate, so they get
+// a clinic-calibrated prediction from day one instead of a textbook one.
+const { learn } = require('../services/learningModel');
+const { analyse: analyseAdaptive } = require('../services/adaptiveEngine');
+
+let PRIOR_CACHE = { at: 0, value: null };
+
+async function populationPrior() {
+  // Recomputed at most hourly — it moves slowly and the query touches everyone
+  if (PRIOR_CACHE.value && Date.now() - PRIOR_CACHE.at < 3600_000) return PRIOR_CACHE.value;
+
+  const { rows: members } = await pool.query(
+    `SELECT u.id, pp.dob, pp.gender, pp.height_cm, pp.start_weight
+     FROM users u JOIN patient_profiles pp ON pp.user_id = u.id
+     WHERE u.role = 'patient' AND u.active = true
+       AND pp.height_cm IS NOT NULL AND pp.dob IS NOT NULL`);
+
+  const ratios = [];
+  for (const m of members) {
+    const { rows: logs } = await pool.query(
+      `SELECT log_date, weight_kg, food_items FROM daily_logs
+       WHERE patient_id = $1 AND log_date >= CURRENT_DATE - 90
+       ORDER BY log_date ASC`, [m.id]);
+    if (logs.length < 14) continue;
+
+    const age = Math.floor((Date.now() - new Date(m.dob)) / (1000 * 60 * 60 * 24 * 365.25));
+    const w = logs.filter(l => l.weight_kg).slice(-1)[0]?.weight_kg || m.start_weight;
+    if (!w) continue;
+    const base = 10 * parseFloat(w) + 6.25 * parseFloat(m.height_cm) - 5 * age;
+    const g = String(m.gender || '').toLowerCase();
+    const bmr = Math.round(g === 'male' ? base + 5 : g === 'female' ? base - 161 : base - 78);
+
+    const a = analyseAdaptive(logs, { bmr });
+    // Only members whose own estimate is trustworthy contribute to the prior
+    if (a.observed_tdee && ['high', 'moderate'].includes(a.confidence) && a.predicted_tdee) {
+      ratios.push(a.observed_tdee / a.predicted_tdee);
+    }
+  }
+
+  let value;
+  if (ratios.length < 3) {
+    value = { factor: 1, n: ratios.length, basis: 'not enough calibrated members yet — using the textbook formula unadjusted' };
+  } else {
+    // Median, not mean: one badly under-logging member should not drag the
+    // clinic-wide correction with them.
+    const sorted = [...ratios].sort((a, b) => a - b);
+    const median = sorted.length % 2
+      ? sorted[(sorted.length - 1) / 2]
+      : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+    value = {
+      factor: +median.toFixed(3),
+      n: ratios.length,
+      basis: `median of ${ratios.length} members whose own metabolism is well measured`,
+    };
+  }
+  PRIOR_CACHE = { at: Date.now(), value };
+  return value;
+}
+
+// The continuous model — what all of this member's natural variation implies
+router.get('/:id/model', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try {
+    const { rows: logs } = await pool.query(
+      `SELECT log_date, weight_kg, food_items FROM daily_logs
+       WHERE patient_id = $1 AND log_date >= CURRENT_DATE - $2::int
+       ORDER BY log_date ASC`, [req.params.id, parseInt(req.query.days) || 180]);
+
+    const { rows: sess } = await pool.query(
+      `SELECT ws.session_date, ws.cardio,
+              COALESCE(SUM(ss.reps * ss.weight_kg), 0) AS volume
+       FROM workout_sessions ws
+       LEFT JOIN session_sets ss ON ss.session_id = ws.id
+       WHERE ws.patient_id = $1 AND ws.session_date >= CURRENT_DATE - $2::int
+       GROUP BY ws.id, ws.session_date, ws.cardio`,
+      [req.params.id, parseInt(req.query.days) || 180]);
+
+    const { rows: prof } = await pool.query(
+      `SELECT start_weight FROM patient_profiles WHERE user_id = $1`, [req.params.id]);
+
+    // Rough per-day exercise calories: volume-based strength plus cardio minutes
+    const byDate = {};
+    for (const s of sess) {
+      const d = String(s.session_date).slice(0, 10);
+      const cardioMin = (Array.isArray(s.cardio) ? s.cardio : [])
+        .reduce((t, c) => t + (parseFloat(c?.duration_min) || 0), 0);
+      byDate[d] = Math.round(parseFloat(s.volume) * 0.08) + Math.round(cardioMin * 5);
+    }
+
+    const latest = logs.filter(l => l.weight_kg).slice(-1)[0]?.weight_kg || prof[0]?.start_weight;
+    res.json(learn(logs, { bodyWeightKg: latest ? parseFloat(latest) : null, workoutKcalByDate: byDate }));
+  } catch (err) {
+    console.error('GET /patients/:id/model error:', err);
+    res.status(500).json({ error: 'Could not build the model' });
+  }
+});
+
+// ── Macro Lab (coach only) ───────────────────────────────────────────────────
+// Adherence patterns and controlled macro trials. Deliberately has no member
+// -facing route: a member told mid-trial how they're doing changes their
+// behaviour, which destroys the measurement. They see only their targets.
+const { adherence, compareArms } = require('../services/macroLab');
+
+async function logsFor(patientId, days = 180) {
+  const { rows } = await pool.query(
+    `SELECT log_date, weight_kg, food_items
+     FROM daily_logs
+     WHERE patient_id = $1 AND log_date >= CURRENT_DATE - $2::int
+     ORDER BY log_date ASC`, [patientId, days]);
+  return rows;
+}
+
+// What split does this member actually sustain? No trial required.
+router.get('/:id/adherence', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try {
+    const { rows: prof } = await pool.query(
+      `SELECT macro_kcal FROM patient_profiles WHERE user_id = $1`, [req.params.id]);
+    const logs = await logsFor(req.params.id, parseInt(req.query.days) || 90);
+    res.json(adherence(logs, { kcalTarget: prof[0]?.macro_kcal || null }));
+  } catch (err) {
+    console.error('GET /patients/:id/adherence error:', err);
+    res.status(500).json({ error: 'Could not analyse adherence' });
+  }
+});
+
+// Current or most recent trial, with the comparison if there is enough data
+router.get('/:id/trial', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM macro_trials WHERE patient_id = $1
+       ORDER BY created_at DESC LIMIT 1`, [req.params.id]);
+    if (!rows.length) return res.json({ trial: null });
+
+    const trial = rows[0];
+    const logs = await logsFor(req.params.id, 240);
+    const comparison = trial.b_started_on ? compareArms(logs, trial) : null;
+
+    // Day counters so the coach knows when an arm is ready to switch
+    const daysSince = d => d ? Math.floor((Date.now() - new Date(d)) / 86400000) : null;
+    res.json({
+      trial,
+      days_in_arm: trial.current_arm === 'A'
+        ? daysSince(trial.a_started_on) : daysSince(trial.b_started_on),
+      comparison,
+    });
+  } catch (err) {
+    console.error('GET /patients/:id/trial error:', err);
+    res.status(500).json({ error: 'Could not load the trial' });
+  }
+});
+
+// Start a trial. Applies arm A's macros to the protocol immediately.
+router.post('/:id/trial', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  const { arm_a, arm_b, arm_days = 28, washout_days = 10 } = req.body || {};
+  const valid = a => a && [a.kcal, a.protein_g, a.carbs_g, a.fat_g].every(v => Number.isFinite(parseFloat(v)));
+  if (!valid(arm_a) || !valid(arm_b)) {
+    return res.status(400).json({ error: 'Both arms need kcal, protein_g, carbs_g and fat_g' });
+  }
+  // The comparison is only interpretable if these are held constant, so refuse
+  // to start a trial that could never produce an attributable answer.
+  if (Math.abs(arm_a.kcal - arm_b.kcal) > Math.max(100, arm_a.kcal * 0.06)) {
+    return res.status(400).json({ error: 'Both arms must use the same calorie target — otherwise any difference is from calories, not the split' });
+  }
+  if (Math.abs(arm_a.protein_g - arm_b.protein_g) > 20) {
+    return res.status(400).json({ error: 'Both arms must use the same protein target' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE macro_trials SET status='abandoned'
+       WHERE patient_id = $1 AND status='running'`, [req.params.id]);
+    const { rows } = await client.query(
+      `INSERT INTO macro_trials
+         (patient_id, coach_id, arm_a, arm_b, arm_days, washout_days, current_arm, a_started_on)
+       VALUES ($1,$2,$3,$4,$5,$6,'A',CURRENT_DATE) RETURNING *`,
+      [req.params.id, req.user.id, JSON.stringify(arm_a), JSON.stringify(arm_b),
+       parseInt(arm_days), parseInt(washout_days)]);
+
+    await client.query(
+      `UPDATE patient_profiles
+       SET macro_kcal=$1, macro_pro=$2, macro_carb=$3, macro_fat=$4, updated_at=NOW()
+       WHERE user_id=$5`,
+      [arm_a.kcal, arm_a.protein_g, arm_a.carbs_g, arm_a.fat_g, req.params.id]);
+    await client.query('COMMIT');
+    res.json({ trial: rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('POST /patients/:id/trial error:', err);
+    res.status(500).json({ error: 'Could not start the trial' });
+  } finally { client.release(); }
+});
+
+// Switch to arm B, or finish. Applying arm B's macros is part of switching.
+router.post('/:id/trial/advance', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT * FROM macro_trials WHERE patient_id=$1 AND status='running'
+       ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, [req.params.id]);
+    if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No running trial' }); }
+    const trial = rows[0];
+
+    if (trial.current_arm === 'A') {
+      const b = trial.arm_b;
+      await client.query(
+        `UPDATE macro_trials SET current_arm='B', b_started_on=CURRENT_DATE WHERE id=$1`, [trial.id]);
+      await client.query(
+        `UPDATE patient_profiles
+         SET macro_kcal=$1, macro_pro=$2, macro_carb=$3, macro_fat=$4, updated_at=NOW()
+         WHERE user_id=$5`,
+        [b.kcal, b.protein_g, b.carbs_g, b.fat_g, req.params.id]);
+      await client.query('COMMIT');
+      return res.json({ moved_to: 'B' });
+    }
+
+    const logs = await logsFor(req.params.id, 240);
+    const result = compareArms(logs, trial);
+    await client.query(
+      `UPDATE macro_trials SET status='completed', completed_on=CURRENT_DATE, result=$2 WHERE id=$1`,
+      [trial.id, JSON.stringify(result)]);
+    await client.query('COMMIT');
+    res.json({ completed: true, result });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('POST /patients/:id/trial/advance error:', err);
+    res.status(500).json({ error: 'Could not advance the trial' });
+  } finally { client.release(); }
+});
+
+// ── Adaptive metabolic analysis ──────────────────────────────────────────────
+// Derives a member's real maintenance calories from how their weight actually
+// responded to what they ate, rather than trusting a population formula. See
+// services/adaptiveEngine.js for the reasoning and its limits.
+const { analyse } = require('../services/adaptiveEngine');
+
+async function buildAdaptive(patientId, days = 60) {
+  const [profileRes, logsRes] = await Promise.all([
+    pool.query(
+      `SELECT u.name, pp.dob, pp.gender, pp.height_cm, pp.start_weight, pp.target_weight
+       FROM users u LEFT JOIN patient_profiles pp ON pp.user_id = u.id
+       WHERE u.id = $1`, [patientId]),
+    pool.query(
+      `SELECT log_date, weight_kg, food_items
+       FROM daily_logs
+       WHERE patient_id = $1 AND log_date >= CURRENT_DATE - $2::int
+       ORDER BY log_date ASC`, [patientId, days]),
+  ]);
+
+  const p = profileRes.rows[0] || {};
+  let bmr = null;
+  if (p.height_cm && p.dob) {
+    const age = Math.floor((Date.now() - new Date(p.dob)) / (1000 * 60 * 60 * 24 * 365.25));
+    const w = logsRes.rows.filter(r => r.weight_kg).slice(-1)[0]?.weight_kg
+              || p.start_weight;
+    if (w) {
+      const base = 10 * parseFloat(w) + 6.25 * parseFloat(p.height_cm) - 5 * age;
+      const g = String(p.gender || '').toLowerCase();
+      bmr = Math.round(g === 'male' ? base + 5 : g === 'female' ? base - 161 : base - 78);
+    }
+  }
+
+  const result = analyse(logsRes.rows, { bmr, goalWeight: p.target_weight });
+
+  // Before a member has enough of their own history, fall back on what the
+  // clinic's other members have shown about how well the formula fits them.
+  if (!result.observed_tdee && result.predicted_tdee) {
+    try {
+      const prior = await populationPrior();
+      if (prior.factor !== 1) {
+        result.clinic_adjusted_tdee = Math.round(result.predicted_tdee * prior.factor);
+        result.prior = prior;
+      }
+    } catch { /* the prior is a nicety, never a requirement */ }
+  }
+
+  return { name: p.name || 'Member', ...result };
+}
+
+// Member's own view
+router.get('/me/adaptive', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    res.json(await buildAdaptive(req.user.id, parseInt(req.query.days) || 60));
+  } catch (err) {
+    console.error('GET /patients/me/adaptive error:', err);
+    res.status(500).json({ error: 'Could not build the analysis' });
+  }
+});
+
+// Coach's view of a member
+router.get('/:id/adaptive', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try {
+    res.json(await buildAdaptive(req.params.id, parseInt(req.query.days) || 60));
+  } catch (err) {
+    console.error('GET /patients/:id/adaptive error:', err);
+    res.status(500).json({ error: 'Could not build the analysis' });
   }
 });
 

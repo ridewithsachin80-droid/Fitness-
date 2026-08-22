@@ -109,6 +109,8 @@ export default function AIChatLog() {
   const [listening, setListening] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef(null);
+  const labRef  = useRef(null);
+  const [labBusy, setLabBusy] = useState(false);
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
@@ -201,6 +203,83 @@ export default function AIChatLog() {
       setPhotoBusy(false);
     }
   }, [photoBusy, mealSlots]);
+
+  // ── Lab report reading ─────────────────────────────────────────────────────
+  // PDFs go up untouched: rasterising one client-side would throw away the text
+  // layer and turn a clean extraction into OCR guesswork on medical numbers.
+  // Photos of printouts get the same downscale as food photos.
+  const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1]);
+    r.onerror = () => reject(new Error('Could not read that file'));
+    r.readAsDataURL(file);
+  });
+
+  const sendLabReport = useCallback(async (file) => {
+    if (!file || labBusy) return;
+    setLabBusy(true);
+    haptic(10);
+    const isPdf = file.type === 'application/pdf';
+    setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 Lab report (PDF)' : '📄 Photo of my lab report' }]);
+    try {
+      const base64 = isPdf ? await readFileAsBase64(file) : await downscale(file);
+      const { data } = await api.post('/ai-chat/lab-report', {
+        file: base64,
+        mimeType: isPdf ? 'application/pdf' : 'image/jpeg',
+      });
+      setMessages(m => [...m, {
+        role: 'ai',
+        text: data.reply,
+        lab: {
+          test_date: data.test_date || new Date().toISOString().slice(0, 10),
+          lab_name: data.lab_name || '',
+          results: (data.results || []).map(r => ({ ...r, on: r.value !== null })),
+          needs_review: data.needs_review || 0,
+        },
+        applied: false,
+      }]);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Could not read that report — please try again.';
+      setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
+    } finally { setLabBusy(false); }
+  }, [labBusy]);
+
+  const patchLab = useCallback((mi, fn) => {
+    setMessages(prev => {
+      const next = [...prev];
+      const m = next[mi];
+      if (!m?.lab || m.applied) return prev;
+      next[mi] = { ...m, lab: fn(m.lab) };
+      return next;
+    });
+  }, []);
+
+  const saveLabs = useCallback(async (mi) => {
+    const m = messages[mi];
+    if (!m?.lab || m.applied) return;
+    const rows = m.lab.results.filter(r => r.on && r.value !== null && r.value !== '');
+    if (!rows.length) return;
+    setLabBusy(true);
+    try {
+      const { data } = await api.post('/patients/me/labs', {
+        test_date: m.lab.test_date,
+        lab_name: m.lab.lab_name || null,
+        results: rows.map(r => ({
+          test_name: r.test_name, value: r.value, unit: r.unit,
+          ref_min: r.ref_min, ref_max: r.ref_max,
+        })),
+      });
+      haptic(30);
+      setMessages(prev => {
+        const next = [...prev];
+        next[mi] = { ...next[mi], applied: true, labSaved: data.saved, labNotice: data.notice };
+        return next;
+      });
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Could not save those results.';
+      setMessages(prev => [...prev, { role: 'ai', text: msg, error: true }]);
+    } finally { setLabBusy(false); }
+  }, [messages]);
 
   // ── Send → parse ───────────────────────────────────────────────────────────
   const send = useCallback(async (textOverride) => {
@@ -592,7 +671,7 @@ export default function AIChatLog() {
             <p className="text-xs text-[#9EA3B0] leading-relaxed mb-3">
               Weight, walks, meals, ACV, water, supplements, sleep — say it all in
               one message and I'll fill your entire log. Review, then tap Apply.
-              Or tap 📷 to log a meal straight from a photo.
+              Tap 📷 to log a meal from a photo, or 📄 to upload a lab report.
             </p>
             <div className="bg-[#121316] border border-white/[0.06] rounded-xl px-3 py-2.5">
               <p className="text-[11px] text-[#9EA3B0] leading-relaxed italic">
@@ -620,6 +699,95 @@ export default function AIChatLog() {
                     : 'bg-[#1A1C20] border-white/[0.07] text-[#FFFFFF]'
                 }`}>
                   <p className="leading-relaxed">{m.text}</p>
+
+                  {/* Lab report draft — nothing is saved until confirmed. A
+                      misread decimal on a blood test is a different order of
+                      mistake from a misread portion size. */}
+                  {m.lab && (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input type="date" value={m.lab.test_date}
+                          max={new Date().toISOString().slice(0, 10)}
+                          disabled={m.applied}
+                          onChange={e => patchLab(mi, l => ({ ...l, test_date: e.target.value }))}
+                          style={{ minHeight: 32 }}
+                          className="bg-[#121316] border border-white/[0.12] rounded-lg px-2 text-[11px] text-white" />
+                        <input value={m.lab.lab_name} placeholder="Lab name"
+                          disabled={m.applied}
+                          onChange={e => patchLab(mi, l => ({ ...l, lab_name: e.target.value }))}
+                          style={{ minHeight: 32 }}
+                          className="flex-1 min-w-0 bg-[#121316] border border-white/[0.12] rounded-lg px-2 text-[11px] text-white placeholder-[#7E8596]" />
+                      </div>
+
+                      {m.lab.needs_review > 0 && !m.applied && (
+                        <p className="text-[10px] text-amber-300 mb-2 leading-relaxed">
+                          ⚠ {m.lab.needs_review} row{m.lab.needs_review > 1 ? 's' : ''} came out unclear —
+                          check the highlighted ones against your report before saving.
+                        </p>
+                      )}
+
+                      <div className="space-y-1.5">
+                        {m.lab.results.map((r, ri) => (
+                          <div key={ri}
+                            className={`bg-[#121316] border rounded-xl px-3 py-2 ${
+                              r.confidence === 'low' || r.value === null
+                                ? 'border-amber-400/35' : 'border-white/[0.06]'
+                            } ${r.on ? '' : 'opacity-40'}`}>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => patchLab(mi, l => ({
+                                  ...l, results: l.results.map((x, j) => j === ri ? { ...x, on: !x.on } : x) }))}
+                                disabled={m.applied}
+                                className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
+                                  r.on ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'}`}>✓</button>
+                              <span className="text-[11px] font-semibold text-white flex-1 min-w-0 truncate">
+                                {r.test_name}
+                              </span>
+                              <input
+                                value={r.value ?? ''} inputMode="decimal"
+                                placeholder="?"
+                                disabled={m.applied}
+                                onChange={e => patchLab(mi, l => ({
+                                  ...l, results: l.results.map((x, j) => j === ri
+                                    ? { ...x, value: e.target.value === '' ? null : parseFloat(e.target.value), on: e.target.value !== '' } : x) }))}
+                                style={{ width: 62, minHeight: 28 }}
+                                className={`rounded-md px-1 text-center text-[11px] border bg-[#1A1C20] text-white
+                                  ${r.value === null ? 'border-amber-400/50' : 'border-white/[0.12]'}`} />
+                              <span className="text-[10px] text-[#7E8596] w-12 truncate">{r.unit || ''}</span>
+                            </div>
+                            {(r.ref_min != null || r.ref_max != null) && (
+                              <p className="text-[9px] text-[#7E8596] ml-6 mt-0.5">
+                                ref {r.ref_min ?? '−'}–{r.ref_max ?? '−'}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {m.applied ? (
+                        <div className="mt-2 bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl px-3.5 py-3">
+                          <p className="text-[13px] font-bold text-emerald-400">✓ {m.labSaved} results saved</p>
+                          {m.labNotice && (
+                            <p className="text-[11px] text-amber-200 mt-1 leading-relaxed">{m.labNotice}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <button onClick={() => saveLabs(mi)} disabled={labBusy}
+                            style={{ minHeight: 44 }}
+                            className="w-full mt-2 rounded-xl text-sm font-bold text-[#121316]
+                              bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                              active:scale-[0.98] transition-transform disabled:opacity-60">
+                            {labBusy ? 'Saving…' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
+                          </button>
+                          <p className="text-[10px] text-[#7E8596] mt-1.5 leading-relaxed">
+                            Read from your report by AI — check the numbers before saving.
+                            Nothing is stored until you do.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {m.parsed && (countIncluded(m.parsed) > 0 || m.parsed.workouts.length > 0) && (
                     <div className="mt-3 space-y-3">
@@ -895,6 +1063,22 @@ export default function AIChatLog() {
               placeholder="Eg: weight 82.5, walk done, 2 chapati for lunch"
               className="flex-1 bg-transparent text-sm text-white placeholder-[#7E8596] py-3 outline-none min-w-0"
             />
+            <button onClick={() => labRef.current?.click()}
+              disabled={labBusy}
+              aria-label="Upload a lab report"
+              style={{ minWidth: 40, minHeight: 40 }}
+              className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
+                labBusy ? 'text-[#7E8596] animate-pulse' : 'text-[#9EA3B0] hover:text-[#D4AF37]'
+              }`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="9" y1="15" x2="15" y2="15" />
+              </svg>
+            </button>
+            <input ref={labRef} type="file" accept="application/pdf,image/*"
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendLabReport(f); }}
+              style={{ display: 'none' }} />
             <button onClick={() => fileRef.current?.click()}
               disabled={photoBusy}
               aria-label="Log food from a photo"

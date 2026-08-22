@@ -565,6 +565,153 @@ function whitelistIds(aiIds, allowedItems) {
   return [...new Set(aiIds.map(String))].filter(id => allowed.has(id));
 }
 
+// ── POST /api/ai-chat/lab-report ─────────────────────────────────────────────
+// Reads a lab report — PDF or a photo of a printout — and extracts the markers,
+// so a member doesn't have to type twenty rows off a page.
+//
+// Gemini handles PDFs natively as inline data, which matters: rasterising a PDF
+// client-side would lose the text layer and turn a clean extraction into OCR
+// guesswork on medical numbers.
+//
+// NOTHING IS SAVED HERE. Extraction returns a preview the member confirms,
+// because a misread decimal point on a blood test is a different order of
+// mistake from a misread portion size. The client posts confirmed rows to
+// /patients/me/labs as if they had been typed.
+router.post('/lab-report', async (req, res) => {
+  const { file, mimeType } = req.body || {};
+
+  if (!file || typeof file !== 'string') {
+    return res.status(400).json({ error: 'A report file is required' });
+  }
+  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+  const mt = allowed.includes(mimeType) ? mimeType : 'application/pdf';
+  if (file.length > 10_000_000) {
+    return res.status(413).json({ error: 'Report too large — try a single-page export or a photo' });
+  }
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'Reading reports needs GEMINI_API_KEY to be set' });
+  }
+
+  const prompt = `You are reading a pathology lab report from an Indian laboratory.
+
+Extract EVERY numeric test result. For each one give:
+  test_name  the marker as printed, cleaned up (e.g. "HbA1c", "Vitamin D",
+             "Total Cholesterol"). Expand obvious abbreviations. Do not invent
+             markers that are not on the page.
+  value      the numeric result only, no units, no symbols
+  unit       as printed (%, mg/dL, ng/mL, pg/mL, U/L, mIU/L, g/dL ...)
+  ref_min    lower bound of the printed reference range, null if absent
+  ref_max    upper bound, null if absent
+  confidence "high" when the row is clean and unambiguous, "low" when the scan
+             is unclear, the number is partly obscured, or you are unsure you
+             read it correctly
+
+Also extract:
+  test_date  the SAMPLE COLLECTION date in YYYY-MM-DD. Indian reports usually
+             print DD/MM/YYYY — read it as day first, never month first. If
+             both collection and report dates appear, use collection. null if
+             you cannot find it.
+  lab_name   the laboratory's name if printed.
+
+RULES
+· Ranges printed as "13.0 - 17.0" give ref_min 13 and ref_max 17.
+· Ranges printed as "< 200" give ref_min null and ref_max 200.
+· Ranges printed as "> 40" give ref_min 40 and ref_max null.
+· Skip qualitative results (Positive/Negative/Nil) — numeric only.
+· Skip calculated ratios unless a numeric reference range is printed.
+· If a value is illegible, still list the row with value null and confidence
+  "low" so the member can fill it in, rather than omitting the test silently.
+· Never estimate or infer a value that is not printed.
+
+Return ONLY raw JSON, no markdown fences:
+{
+  "test_date": "2026-08-14",
+  "lab_name": "Metropolis",
+  "results": [
+    { "test_name": "HbA1c", "value": 5.8, "unit": "%", "ref_min": 4.0,
+      "ref_max": 5.6, "confidence": "high" }
+  ]
+}`;
+
+  try {
+    const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
+    let parsed = null, usedModel = null, lastErr;
+
+    for (const model of models) {
+      try {
+        const response = await axios.post(
+          `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
+          {
+            contents: [{ parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mt, data: file } },
+            ] }],
+            generationConfig: { temperature: 0, maxOutputTokens: 4000 },
+          },
+          { headers: { 'content-type': 'application/json' }, timeout: 60000 }
+        );
+        const cand = response.data.candidates?.[0];
+        const text = cand?.content?.parts?.map(p => p.text).join('') || '';
+        if (!text) throw new Error('Empty response from the reader');
+        parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+        usedModel = model;
+        break;
+      } catch (e) { lastErr = e; }
+    }
+    if (!parsed) throw lastErr || new Error('Could not read the report');
+
+    const nOrNull = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+    const results = (Array.isArray(parsed.results) ? parsed.results : [])
+      .filter(r => r && r.test_name)
+      .slice(0, 80)
+      .map(r => ({
+        test_name:  String(r.test_name).trim().slice(0, 100),
+        value:      nOrNull(r.value),
+        unit:       r.unit ? String(r.unit).trim().slice(0, 30) : null,
+        ref_min:    nOrNull(r.ref_min),
+        ref_max:    nOrNull(r.ref_max),
+        confidence: r.confidence === 'low' ? 'low' : 'high',
+      }));
+
+    // A future or nonsensical date is more likely a DD/MM misread than a real
+    // one, so drop it rather than carry it into the member's history.
+    let testDate = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(parsed.test_date || '')) {
+      const d = new Date(parsed.test_date);
+      const tenYearsAgo = new Date(); tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+      if (d <= new Date() && d >= tenYearsAgo) testDate = parsed.test_date;
+    }
+
+    const unreadable = results.filter(r => r.value === null).length;
+    const lowConf = results.filter(r => r.confidence === 'low').length;
+
+    res.json({
+      test_date: testDate,
+      lab_name: parsed.lab_name ? String(parsed.lab_name).slice(0, 120) : null,
+      results,
+      needs_review: unreadable + lowConf,
+      // Deliberately explicit: this is a draft, not a saved record.
+      reply: results.length
+        ? `Found ${results.length} result${results.length > 1 ? 's' : ''}${testDate ? ` from ${testDate}` : ''}. ` +
+          `Check them against your report${unreadable + lowConf ? ` — ${unreadable + lowConf} need${unreadable + lowConf > 1 ? '' : 's'} your attention` : ''}, then save.`
+        : "I couldn't find any numeric results on that page — try the page with the test table on it.",
+      aiModel: usedModel,
+    });
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : err.message;
+    console.error('lab-report read error | status:', err.response?.status, '| detail:', detail);
+    if (err instanceof SyntaxError) {
+      return res.status(502).json({ error: 'Could not read that report — please try again' });
+    }
+    const st = err.response?.status;
+    return res.status(st === 429 || st === 503 ? st : 502).json({
+      error: st === 429 ? 'Busy right now — try again in a moment'
+           : st === 401 ? 'Report reading authentication failed — check GEMINI_API_KEY'
+           : 'Could not read that report — a clearer scan or the PDF itself usually works',
+    });
+  }
+});
+
 // ── POST /api/ai-chat/photo ──────────────────────────────────────────────────
 // Photo food logging: member snaps their plate, AI identifies each item with an
 // estimated portion. Vision needs Gemini specifically (Groq's text models can't

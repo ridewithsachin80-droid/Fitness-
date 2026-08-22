@@ -234,6 +234,43 @@ CREATE TABLE IF NOT EXISTS member_portions (
 CREATE INDEX IF NOT EXISTS idx_member_portions_patient
   ON member_portions(patient_id);
 
+-- Macro trials. Coach-facing only: members never see the trial, only their
+-- targets changing. Blinding is deliberate — a member told mid-trial that
+-- they're doing worse on the current arm changes their behaviour, which
+-- destroys the measurement being taken.
+--
+-- Arms are stored with their full macro targets so the analysis can prove
+-- calories and protein were actually held constant, which is the whole basis
+-- for attributing any difference to the carb/fat split.
+CREATE TABLE IF NOT EXISTS macro_trials (
+  id            SERIAL PRIMARY KEY,
+  patient_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  coach_id      INT REFERENCES users(id) ON DELETE SET NULL,
+  status        VARCHAR(12) NOT NULL DEFAULT 'running'
+                CHECK (status IN ('running','completed','abandoned')),
+  arm_a         JSONB NOT NULL,          -- { label, kcal, protein_g, carbs_g, fat_g }
+  arm_b         JSONB NOT NULL,
+  arm_days      INT  NOT NULL DEFAULT 28,
+  washout_days  INT  NOT NULL DEFAULT 10, -- discarded at the start of each arm
+  current_arm   CHAR(1) DEFAULT 'A' CHECK (current_arm IN ('A','B')),
+  a_started_on  DATE NOT NULL,
+  b_started_on  DATE,
+  completed_on  DATE,
+  result        JSONB,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_macro_trials_patient
+  ON macro_trials(patient_id, status);
+
+-- Members can now enter their own lab results, so we record who did.
+-- `entered_by` matters for trust: a coach transcribing from a PDF and a member
+-- typing from their phone deserve different confidence, and the analysis
+-- surfaces which it was rather than presenting all values as equal.
+ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS entered_by INT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS entered_role VARCHAR(10);
+ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS lab_name VARCHAR(120);
+ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS notes TEXT;
+
 -- Backfill muscle_group for exercises created without one (AI chat used to
 -- create name-only rows, which /muscle-coverage silently skipped). Idempotent:
 -- only touches rows still NULL, and never overwrites a coach's own value.

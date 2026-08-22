@@ -11,6 +11,9 @@ import { useAuthStore } from '../store/authStore';
 import { getMyProfile }  from '../api/logs';
 import { Card, SectionTitle, PageLoader, BackButton, PatientBottomNav } from '../components/UI';
 import { sessionEnergy } from '../utils/exerciseCalories';
+import MetabolicInsight from '../components/MetabolicInsight';
+import LabResults from '../components/LabResults';
+import api from '../api/client';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,9 +41,63 @@ function bmiLabel(b) {
   if (!b) return null;
   const v = parseFloat(b);
   if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-300 bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.20)]' };
-  if (v < 25)   return { label: 'Healthy',     cls: 'text-[#e0c98a] bg-[rgba(201,162,39,0.10)] border-[rgba(201,162,39,0.20)]' };
+  if (v < 25)   return { label: 'Healthy',     cls: 'text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.20)]' };
   if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-300 bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.20)]' };
   return             { label: 'Obese',          cls: 'text-red-300 bg-[rgba(248,113,113,0.10)] border-[rgba(248,113,113,0.20)]' };
+}
+
+/**
+ * What the app has learned about this member's own portion sizes.
+ *
+ * The learning was already happening — corrections in the AI chat were being
+ * stored and fed back into the next prompt — but the member had no way to see
+ * any of it. Invisible personalisation is indistinguishable from the app
+ * guessing, so it earns no trust. This shows the ledger.
+ */
+function PortionMemory() {
+  const [portions, setPortions] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/ai-chat/portions')
+      .then(({ data }) => { if (!cancelled) setPortions(data.portions || []); })
+      .catch(() => { if (!cancelled) setPortions([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (portions === null) return null;
+
+  return (
+    <Card>
+      <SectionTitle icon="🥣">Your Portion Sizes</SectionTitle>
+      {portions.length === 0 ? (
+        <p className="text-sm text-[#9EA3B0] mt-2 leading-relaxed">
+          Nothing learned yet. When you correct a weight in the AI chat — changing
+          "1 katori dal" from 150g to the amount your bowl actually holds — it's
+          remembered and used next time.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-[#7E8596] mt-1 mb-3">
+            Measured from your own corrections, and used instead of the generic table.
+          </p>
+          <div className="space-y-1.5">
+            {portions.map(p => (
+              <div key={p.phrase} className="flex items-center justify-between bg-[#121316]
+                border border-white/[0.06] rounded-xl px-3 py-2">
+                <span className="text-[12px] text-[#FFFFFF] capitalize">{p.phrase}</span>
+                <span className="text-[12px] font-bold text-[#D4AF37]">
+                  {p.grams}g
+                  <span className="text-[10px] font-medium text-[#7E8596] ml-1.5">
+                    {p.samples} correction{p.samples > 1 ? 's' : ''}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
 }
 
 // ── TDEE (Total Daily Energy Expenditure) ─────────────────────────────────────
@@ -87,10 +144,10 @@ const CONDITION_LABELS = {
 
 function StatPill({ label, value, unit, color = 'emerald' }) {
   const colors = {
-    emerald: 'bg-[rgba(201,162,39,0.08)] border-[rgba(201,162,39,0.16)] text-[#e0c98a]',
+    emerald: 'bg-[rgba(212,175,55,0.08)] border-[rgba(212,175,55,0.16)] text-[#F0E2B6]',
     blue:    'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300',
     amber:   'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300',
-    stone:   'bg-white/[0.04] border-white/[0.08] text-[#9a9aa6]',
+    stone:   'bg-white/[0.04] border-white/[0.08] text-[#9EA3B0]',
   };
   return (
     <div className={`rounded-2xl border px-4 py-3 text-center ${colors[color]}`}>
@@ -122,10 +179,10 @@ export default function Profile() {
   if (loading) return <PageLoader />;
 
   if (error) return (
-    <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#121316] flex items-center justify-center px-4">
       <div className="text-center">
         <p className="text-red-400 font-semibold">{error}</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-[#c9a227] font-medium text-sm">
+        <button onClick={() => navigate('/')} className="mt-4 text-[#D4AF37] font-medium text-sm">
           ← Back to log
         </button>
       </div>
@@ -147,15 +204,15 @@ export default function Profile() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e] font-sans">
+    <div className="min-h-screen bg-[#121316] font-sans">
 
       {/* ── Header ── */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-8">
+      <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-8">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <BackButton onClick={() => navigate('/')} label="Back to log" />
             <button onClick={() => navigate('/settings')}
-              className="text-xs font-semibold text-[#e0c98a] hover:text-white transition-colors">
+              className="text-xs font-semibold text-[#F0E2B6] hover:text-white transition-colors">
               Settings
             </button>
           </div>
@@ -167,13 +224,13 @@ export default function Profile() {
             </div>
             <div>
               <h1 className="font-display text-2xl font-medium">{p.name}</h1>
-              <p className="text-[#f0dfae] text-sm mt-0.5">
+              <p className="text-[#F0E2B6] text-sm mt-0.5">
                 {p.phone && `+91 ${p.phone}`}
                 {memberAge && ` · ${memberAge} yrs`}
                 {p.height_cm && ` · ${p.height_cm} cm`}
               </p>
               {p.monitor_name && (
-                <p className="text-xs text-[#e0c98a] mt-1">🏋️ Coach: {p.monitor_name}</p>
+                <p className="text-xs text-[#F0E2B6] mt-1">🏋️ Coach: {p.monitor_name}</p>
               )}
             </div>
           </div>
@@ -181,7 +238,7 @@ export default function Profile() {
           {/* Journey progress bar */}
           {journeyPct !== null && journeyPct >= 0 && (
             <div className="bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="flex justify-between text-xs text-[#f0dfae] mb-1.5">
+              <div className="flex justify-between text-xs text-[#F0E2B6] mb-1.5">
                 <span>Journey progress</span>
                 <span className="font-bold text-white">{journeyPct}%</span>
               </div>
@@ -191,12 +248,12 @@ export default function Profile() {
                   style={{
                     width: `${Math.max(2, journeyPct)}%`,
                     background: journeyPct >= 100
-                      ? 'linear-gradient(90deg, #c9a227, #d4af6a)'
-                      : 'linear-gradient(90deg, #c9a227, #e0c98a)',
+                      ? 'linear-gradient(90deg, #D4AF37, #d4af6a)'
+                      : 'linear-gradient(90deg, #D4AF37, #F0E2B6)',
                   }}
                 />
               </div>
-              <div className="flex justify-between text-xs text-[#e0c98a] mt-1.5">
+              <div className="flex justify-between text-xs text-[#F0E2B6] mt-1.5">
                 <span>Start: {p.start_weight} kg</span>
                 <span>Goal: {p.target_weight} kg</span>
               </div>
@@ -232,15 +289,15 @@ export default function Profile() {
           <Card>
             <SectionTitle icon="⚖️">Body Mass Index</SectionTitle>
             <div className="flex items-center justify-between mt-1">
-              <span className="font-display text-3xl font-semibold text-[#ededf0]">{currentBmi}</span>
+              <span className="font-display text-3xl font-semibold text-[#FFFFFF]">{currentBmi}</span>
               <span className={`text-sm font-bold px-3 py-1 rounded-full border ${bmiInfo.cls}`}>
                 {bmiInfo.label}
               </span>
             </div>
             <div className="mt-3 h-2 bg-white/[0.08] rounded-full overflow-hidden">
-              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-[#c9a227] via-amber-400 to-red-500" />
+              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-[#D4AF37] via-amber-400 to-red-500" />
             </div>
-            <div className="flex justify-between text-xs text-[#5a5a68] mt-1">
+            <div className="flex justify-between text-xs text-[#7E8596] mt-1">
               <span>18.5</span><span>25</span><span>30</span><span>35+</span>
             </div>
           </Card>
@@ -263,8 +320,8 @@ export default function Profile() {
             return (
               <Card>
                 <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
-                <p className="text-sm text-[#8e8e9a] mt-2 leading-relaxed">
-                  Still needed: <span className="text-[#d8d8de] font-semibold">{missing.join(', ')}</span>.
+                <p className="text-sm text-[#9EA3B0] mt-2 leading-relaxed">
+                  Still needed: <span className="text-[#FFFFFF] font-semibold">{missing.join(', ')}</span>.
                   {missing.includes('a logged weight')
                     ? ' Log your morning weight on the Today page.'
                     : ' Ask your coach to add this to your profile.'}
@@ -292,25 +349,25 @@ export default function Profile() {
           return (
             <Card>
               <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
-              <p className="text-xs text-[#5a5a68] mb-3">
+              <p className="text-xs text-[#7E8596] mb-3">
                 Mifflin-St Jeor BMR × 1.2, plus today's logged activity
                 {!p.gender && ' · sex not set — ask your coach to add it for an exact figure'}
               </p>
 
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
-                  <p className="text-lg font-extrabold text-[#ededf0]">{bmr}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#5a5a68] mt-0.5">BMR at rest</p>
+                  <p className="text-lg font-extrabold text-[#FFFFFF]">{bmr}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mt-0.5">BMR at rest</p>
                 </div>
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
-                  <p className="text-lg font-extrabold text-[#e0c98a]">{totalOut}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#5a5a68] mt-0.5">Burned today</p>
+                  <p className="text-lg font-extrabold text-[#F0E2B6]">{totalOut}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mt-0.5">Burned today</p>
                 </div>
               </div>
 
               <div className="space-y-1.5 mb-3">
                 {[
-                  ['Resting (BMR × 1.2)', restingTdee, 'text-[#8e8e9a]'],
+                  ['Resting (BMR × 1.2)', restingTdee, 'text-[#9EA3B0]'],
                   [work.cardioMin > 0 && work.sets > 0
                     ? `Workout (${work.sets} sets + ${work.cardioMin} min cardio)`
                     : work.sets > 0
@@ -321,12 +378,12 @@ export default function Profile() {
                    workoutBurn,  'text-emerald-300'],
                 ].map(([label, val, cls]) => (
                   <div key={label} className="flex items-center justify-between text-xs">
-                    <span className="text-[#8e8e9a]">{label}</span>
+                    <span className="text-[#9EA3B0]">{label}</span>
                     <span className={`font-bold ${cls}`}>{val > 0 ? `+${val}` : val} kcal</span>
                   </div>
                 ))}
                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-white/[0.06]">
-                  <span className="text-[#8e8e9a]">Food eaten today</span>
+                  <span className="text-[#9EA3B0]">Food eaten today</span>
                   <span className="font-bold text-orange-400">{totalIn} kcal</span>
                 </div>
               </div>
@@ -345,7 +402,7 @@ export default function Profile() {
                       {balance > 0 ? '+' : ''}{balance} kcal
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#8e8e9a] mt-1 leading-relaxed">
+                  <p className="text-[11px] text-[#9EA3B0] mt-1 leading-relaxed">
                     {balance > 0
                       ? `You've eaten ${balance} kcal more than you burned today. A sustained surplus adds weight (~7,700 kcal ≈ 1 kg).`
                       : `You've burned ${Math.abs(balance)} kcal more than you ate. A sustained deficit of this size is roughly ${(Math.abs(balance) * 7 / 7700).toFixed(2)} kg per week.`}
@@ -353,19 +410,38 @@ export default function Profile() {
                 </div>
               ) : (
                 <div className="rounded-xl px-3.5 py-3 bg-white/[0.03] border border-white/[0.07]">
-                  <p className="text-xs text-[#8e8e9a] leading-relaxed">
+                  <p className="text-xs text-[#9EA3B0] leading-relaxed">
                     Log today's food to see whether you're in a surplus or deficit.
                   </p>
                 </div>
               )}
 
-              <p className="text-[10px] text-[#5a5a68] mt-2.5 leading-relaxed">
+              <p className="text-[10px] text-[#7E8596] mt-2.5 leading-relaxed">
                 Estimates only — actual needs vary with body composition, medication and
                 health conditions. Follow your coach's plan over these numbers.
               </p>
             </Card>
           );
         })()}
+
+        {/* Blood work — members enter their own and see what changed alongside */}
+        <Card>
+          <SectionTitle icon="🩸">Lab Results</SectionTitle>
+          <div className="mt-2">
+            <LabResults />
+          </div>
+        </Card>
+
+        {/* What the app has learned about their kitchen */}
+        <PortionMemory />
+
+        {/* Their metabolism as measured, not predicted */}
+        <Card>
+          <SectionTitle icon="🧬">Your Metabolism</SectionTitle>
+          <div className="mt-2">
+            <MetabolicInsight />
+          </div>
+        </Card>
 
         {/* Conditions */}
         {p.conditions?.length > 0 && (
@@ -374,7 +450,7 @@ export default function Profile() {
             <div className="flex flex-wrap gap-2 mt-2">
               {p.conditions.map(c => (
                 <span key={c}
-                  className="text-sm bg-white/[0.05] text-[#d8d8de] px-3 py-1.5 rounded-full border border-white/[0.08] font-medium">
+                  className="text-sm bg-white/[0.05] text-[#FFFFFF] px-3 py-1.5 rounded-full border border-white/[0.08] font-medium">
                   {CONDITION_LABELS[c] || c.replace(/_/g, ' ')}
                 </span>
               ))}
@@ -388,20 +464,20 @@ export default function Profile() {
             <SectionTitle icon="⏰">Fasting Protocol</SectionTitle>
             <div className="mt-2 space-y-2">
               {p.fasting.label && (
-                <p className="font-semibold text-[#d8d8de]">{p.fasting.label}</p>
+                <p className="font-semibold text-[#FFFFFF]">{p.fasting.label}</p>
               )}
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-[rgba(96,165,250,0.08)] border border-[rgba(96,165,250,0.16)] rounded-xl px-3 py-2 text-center">
                   <p className="text-xs text-blue-300 font-medium mb-0.5">Fasting ends</p>
                   <p className="font-display text-lg font-semibold text-blue-200">{fmt12(p.fasting.end)}</p>
                 </div>
-                <div className="bg-[rgba(201,162,39,0.08)] border border-[rgba(201,162,39,0.16)] rounded-xl px-3 py-2 text-center">
-                  <p className="text-xs text-[#e0c98a] font-medium mb-0.5">Fasting starts</p>
-                  <p className="font-display text-lg font-semibold text-[#f0dfae]">{fmt12(p.fasting.start)}</p>
+                <div className="bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.16)] rounded-xl px-3 py-2 text-center">
+                  <p className="text-xs text-[#F0E2B6] font-medium mb-0.5">Fasting starts</p>
+                  <p className="font-display text-lg font-semibold text-[#F0E2B6]">{fmt12(p.fasting.start)}</p>
                 </div>
               </div>
               {p.fasting.note && (
-                <p className="text-xs text-[#9a9aa6] bg-white/[0.04] px-3 py-2 rounded-xl border border-white/[0.07]">
+                <p className="text-xs text-[#9EA3B0] bg-white/[0.04] px-3 py-2 rounded-xl border border-white/[0.07]">
                   📌 {p.fasting.note}
                 </p>
               )}
@@ -414,7 +490,7 @@ export default function Profile() {
           <Card>
             <SectionTitle icon="🎯">Daily Macro Targets</SectionTitle>
             {p.macros.phase && (
-              <p className="text-xs text-[#5a5a68] mb-3 mt-1 font-medium">Phase: {p.macros.phase}</p>
+              <p className="text-xs text-[#7E8596] mb-3 mt-1 font-medium">Phase: {p.macros.phase}</p>
             )}
             <div className="grid grid-cols-2 gap-2 mt-2">
               {[
@@ -437,23 +513,23 @@ export default function Profile() {
           <SectionTitle icon="💧">Daily Water Target</SectionTitle>
           <div className="flex items-center gap-3 mt-2">
             <span className="font-display text-3xl font-semibold text-blue-300">{(p.water_target / 1000).toFixed(1)}</span>
-            <span className="text-[#9a9aa6] font-medium">litres per day</span>
+            <span className="text-[#9EA3B0] font-medium">litres per day</span>
           </div>
-          <p className="text-xs text-[#5a5a68] mt-2">Stop 1 hour before sleep. Not during meals.</p>
+          <p className="text-xs text-[#7E8596] mt-2">Stop 1 hour before sleep. Not during meals.</p>
         </Card>
 
         {/* Diet notes */}
         {p.diet_notes && (
           <Card>
             <SectionTitle icon="📋">Diet Instructions</SectionTitle>
-            <p className="text-sm text-[#d8d8de] leading-relaxed mt-2 whitespace-pre-wrap">
+            <p className="text-sm text-[#FFFFFF] leading-relaxed mt-2 whitespace-pre-wrap">
               {p.diet_notes}
             </p>
           </Card>
         )}
 
         {/* Member since */}
-        <p className="text-center text-xs text-[#4e4e5c] pt-2 pb-6">
+        <p className="text-center text-xs text-[#7E8596] pt-2 pb-6">
           Member since {new Date(p.member_since).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
         </p>
       </div>

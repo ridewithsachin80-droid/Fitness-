@@ -10,7 +10,11 @@
     "validate:foods": "node scripts/validate-foods.js --strict",
     "test:foods": "node scripts/test-food-lookup.js",
     "test:learning": "node scripts/test-food-learning.js",
-    "test:portions": "node scripts/test-portion-memory.js"
+    "test:portions": "node scripts/test-portion-memory.js",
+    "test:adaptive": "node scripts/test-adaptive.js",
+    "test:macrolab": "node scripts/test-macrolab.js",
+    "test:model": "node scripts/test-learning-model.js",
+    "test:labs": "node scripts/test-labs.js"
   },
   "keywords": [],
   "author": "",
