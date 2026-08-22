@@ -1,55 +1,51 @@
-FitLife — HOTFIX: lab report PDF failing to read
-================================================
+FitLife — HOTFIX 2: the browser was giving up before the server answered
+=======================================================================
 
-1 FILE. Extract, drag the "server" FOLDER onto GitHub at the repo ROOT.
+Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
 NOTHING TO RENAME. No new packages. No schema change.
 
-server/routes/aiChat.js
+INCLUDES HOTFIX 1 (the model, token ceiling and JSON parsing fixes). If you
+have not deployed that yet, this supersedes it.
 
-WHAT WAS WRONG
-The error you saw — "Could not read that report" with a 502 in the console —
-came from the JSON-parse branch. Gemini did respond; it just did not respond
-with parseable JSON. Four causes stacked up.
+WHAT THE SECOND SCREENSHOT SHOWED
+The error text ended with a full stop — "please try again." — and that exact
+string only exists in the CLIENT. The server's messages have no trailing
+period. So the browser never received a JSON error body at all, which is a
+different failure from the first one. The console agreed: no 502 this time.
 
-1. THE WRONG MODEL WAS READING IT
-   Documents were going to gemini-2.5-flash-lite, the same light model the
-   text chat uses. Lite models are noticeably weaker at long structured
-   extraction. The full model now leads for documents, with lite as fallback.
+THE CAUSE
+The shared API client aborts every request at 35 seconds. Hotfix 1 raised the
+server's Gemini timeout to 90 seconds. So the browser was hanging up at 35s
+while the server was still working, and the member saw a read error for a
+request that had not failed — and might have been about to succeed.
 
-2. THE ANSWER WAS BEING CUT OFF
-   maxOutputTokens was 4000. A full pathology panel with thirty markers, each
-   with name, value, unit and two reference bounds, does not fit. The response
-   ended mid-object, and half a JSON object is unparseable. Raised to 16000,
-   and the timeout from 60s to 90s to match.
+THE FIX — the timeout chain now nests properly
 
-3. JSON WAS REQUESTED BUT NOT ENFORCED
-   The prompt asked for raw JSON and hoped. The API can guarantee it —
-   responseMimeType 'application/json' is now set, which is the single biggest
-   reliability improvement here.
+    50s   each Gemini attempt          (was 90s)
+   100s   server worst case, 2 models
+   120s   browser, lab report only     (was 35s)
 
-4. EXTRACTION WAS TOO FRAGILE
-   The old code only stripped ``` fences. One sentence of preamble and it
-   failed. Extraction now recovers from preamble, trailing text, fences, and
-   partial output, and reports WHY when it genuinely cannot.
-   Tested against seven real failure shapes, all handled.
+Each layer now outlasts the one inside it. Two model attempts fit inside the
+browser's ceiling with 20 seconds to spare.
 
-ERROR MESSAGES NOW SAY SOMETHING USEFUL
-"Please try again" on a report that will never parse just wastes the member's
-time. The reader now distinguishes:
-  · too many results   -> "try uploading one page at a time"
-  · file rejected      -> "export as PDF, or photograph the results page"
-  · unreadable content -> "a photo of just the results table often works better"
-  · busy / auth        -> as before
+THE PHOTO PATH HAD THE SAME EXPOSURE
+Vision calls also ran against the 35s default. Raised to 60s, with the server
+side comfortably inside it. Nobody had reported this yet; it would have failed
+the same way on a slow connection.
 
-DIAGNOSTICS
-Failures now log the model, the failure kind and the first 120 characters of
-what came back — enough to diagnose, not enough to spill someone's blood work
-into the logs. If it still fails after this, the Railway logs will say why.
+TWO OTHER THINGS FIXED
+· A progress line now appears while reading: "Reading your report… a full
+  panel can take up to a minute." Without it the screen sat blank and members
+  re-uploaded the same file, doubling the load and making it slower still.
+· Files over 8MB are refused instantly with a clear message instead of after
+  a long upload. Express caps the body at 12MB and base64 inflates by a third,
+  so anything larger was going to be rejected anyway.
 
-OPTIONAL
-Set GEMINI_DOC_MODEL in Railway to pin a specific model for document reading.
-Defaults to gemini-2.5-flash, which is the right choice.
+A TIMEOUT NOW SAYS SO
+It no longer blames the report. "That report took too long to read. A single
+page, or a photo of just the results table, is much quicker." — which is
+actionable, unlike "please try again".
 
-TESTS
-7/7 extraction failure modes handled. Regression: 150 assertions across the
-four affected suites, all passing.
+IF IT STILL FAILS AFTER THIS
+The Railway logs will now name the model and the failure kind. Send me that
+line and I can tell you exactly which layer is refusing.

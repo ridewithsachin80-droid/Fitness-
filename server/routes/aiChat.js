@@ -694,7 +694,11 @@ Return ONLY raw JSON, no markdown fences:
               responseMimeType: 'application/json',
             },
           },
-          { headers: { 'content-type': 'application/json' }, timeout: 90000 }
+          // 50s per attempt, not 90. The route may try two models in sequence,
+          // and the browser gives up at 120s — two 90s attempts would blow past
+          // that and the member would see a timeout even though the second
+          // model was about to succeed.
+          { headers: { 'content-type': 'application/json' }, timeout: 50000 }
         );
 
         const cand = response.data.candidates?.[0];

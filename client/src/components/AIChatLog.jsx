@@ -181,7 +181,7 @@ export default function AIChatLog() {
         image: base64,
         mimeType: 'image/jpeg',
         mealSlots,
-      });
+      }, { timeout: 60000 });   // vision is slower than chat; 35s was too tight
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
@@ -221,13 +221,30 @@ export default function AIChatLog() {
     haptic(10);
     const isPdf = file.type === 'application/pdf';
     setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 Lab report (PDF)' : '📄 Photo of my lab report' }]);
+    // A full panel can take 30–60 seconds. Without this the screen sits blank
+    // and members upload the same file again, doubling the load.
+    setMessages(m => [...m, { role: 'ai', text: 'Reading your report… a full panel can take up to a minute.', pending: true }]);
     try {
+      // Reject oversized files here rather than after a long upload. Express
+      // caps the body at 12MB and base64 inflates by ~33%, so anything over
+      // ~8MB of source will be refused server-side anyway.
+      if (file.size > 8 * 1024 * 1024) {
+        throw Object.assign(new Error('too large'), {
+          response: { data: { error: 'That file is over 8MB. Export a smaller PDF, or photograph just the results page.' } },
+        });
+      }
+
       const base64 = isPdf ? await readFileAsBase64(file) : await downscale(file);
+
+      // Reading a multi-page pathology report takes far longer than a chat
+      // reply. The shared client aborts at 35s, which was cutting the request
+      // off before the server had even answered — the failure looked like a
+      // read error when it was really a client-side timeout.
       const { data } = await api.post('/ai-chat/lab-report', {
         file: base64,
         mimeType: isPdf ? 'application/pdf' : 'image/jpeg',
-      });
-      setMessages(m => [...m, {
+      }, { timeout: 120000 });
+      setMessages(m => [...m.filter(x => !x.pending), {
         role: 'ai',
         text: data.reply,
         lab: {
@@ -239,8 +256,12 @@ export default function AIChatLog() {
         applied: false,
       }]);
     } catch (err) {
-      const msg = err.response?.data?.error || 'Could not read that report — please try again.';
-      setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
+      const timedOut = err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '');
+      const msg = err.response?.data?.error
+        || (timedOut
+            ? 'That report took too long to read. A single page, or a photo of just the results table, is much quicker.'
+            : 'Could not reach the reader — check your connection and try again.');
+      setMessages(m => [...m.filter(x => !x.pending), { role: 'ai', text: msg, error: true }]);
     } finally { setLabBusy(false); }
   }, [labBusy]);
 
