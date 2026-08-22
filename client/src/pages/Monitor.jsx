@@ -382,6 +382,10 @@ export default function Monitor() {
   const [data,          setData]      = useState(null);
   const [loading,       setLoading]   = useState(true);
   const [showLabForm,   setShowLab]   = useState(false);
+  // Which lab report dates are expanded. null means "not touched yet", which
+  // the renderer reads as "open the newest only" — so a member with a year of
+  // panels sees a short list of dates rather than two hundred rows.
+  const [openPanels,    setOpenPanels] = useState(null);
   const [showPinForm,   setShowPin]   = useState(false);
   const [showNoteForm,  setShowNote]  = useState(false);
   const [showWeightForm,setShowWeight]= useState(false);
@@ -789,16 +793,68 @@ export default function Monitor() {
         <Card>
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="🧪">Lab Values</SectionTitle>
-            <button onClick={() => setShowLab(true)}
-              className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition-colors">
-              + Add
-            </button>
+            <div className="flex items-center gap-2">
+              {(() => {
+                const dates = [...new Set(labs.map(l => String(l.test_date).slice(0, 10)))];
+                if (dates.length < 2) return null;
+                const allOpen = openPanels ? openPanels.size === dates.length : false;
+                return (
+                  <button onClick={() => setOpenPanels(allOpen ? new Set() : new Set(dates))}
+                    className="text-[11px] font-semibold text-stone-400 hover:text-stone-600 transition-colors">
+                    {allOpen ? 'Collapse all' : 'Expand all'}
+                  </button>
+                );
+              })()}
+              <button onClick={() => setShowLab(true)}
+                className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition-colors">
+                + Add
+              </button>
+            </div>
           </div>
           {labs.length === 0 ? (
             <p className="text-xs text-stone-300 italic text-center py-4">No lab values recorded yet</p>
-          ) : (
-            <div className="space-y-0 divide-y divide-stone-50">
-              {labs.map(l => (
+          ) : (() => {
+            // One panel per report date, newest first
+            const byDate = new Map();
+            for (const l of labs) {
+              const d = String(l.test_date).slice(0, 10);
+              if (!byDate.has(d)) byDate.set(d, []);
+              byDate.get(d).push(l);
+            }
+            for (const rows of byDate.values()) {
+              rows.sort((a, b) => String(a.test_name).localeCompare(String(b.test_name)));
+            }
+            const dates = [...byDate.keys()].sort().reverse();
+            const open = openPanels ?? new Set(dates.slice(0, 1));
+            const toggle = (d) => {
+              const next = new Set(open);
+              next.has(d) ? next.delete(d) : next.add(d);
+              setOpenPanels(next);
+            };
+
+            return dates.map(d => {
+              const rows = byDate.get(d);
+              const flagged = rows.filter(r => r.status && r.status !== 'normal').length;
+              const isOpen = open.has(d);
+              return (
+                <div key={d} className="border border-stone-100 rounded-xl mb-2 overflow-hidden">
+                  <button onClick={() => toggle(d)}
+                    style={{ minHeight: 48 }}
+                    className="w-full flex items-center justify-between px-3 py-2.5 bg-stone-50/60 hover:bg-stone-50 transition-colors">
+                    <div className="text-left">
+                      <div className="text-sm font-bold text-stone-700">{formatDate(d)}</div>
+                      <div className="text-[11px] text-stone-400">
+                        {rows.length} result{rows.length > 1 ? 's' : ''}
+                        {flagged > 0 && <span className="text-amber-600"> · {flagged} outside range</span>}
+                        {rows[0]?.lab_name && ` · ${rows[0].lab_name}`}
+                      </div>
+                    </div>
+                    <span className={`text-stone-400 text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+                  </button>
+
+                  {isOpen && (
+                    <div className="px-3 divide-y divide-stone-50">
+                      {rows.map(l => (
                 <div key={l.id} className="py-2.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -874,8 +930,12 @@ export default function Monitor() {
                   })()}
                 </div>
               ))}
-            </div>
-          )}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </Card>
 
         {/* Sprint 9: Clinical Notes */}

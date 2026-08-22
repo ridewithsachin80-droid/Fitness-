@@ -1,53 +1,41 @@
-FitLife — macro targets as percentages
-======================================
+FitLife — lab values grouped by report date
+===========================================
 
-Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
-NOTHING TO RENAME. No new packages. No schema change.
+1 FILE. Extract, drag the "client" FOLDER onto GitHub at the repo ROOT.
+NOTHING TO RENAME. No new packages. No schema change. Server untouched.
 
-WHAT'S NEW
-The lab analysis now ends with a macro target: calories, grams, and the split
-as percentages, with a proportional bar so the shape reads at a glance.
+WHAT CHANGED
+Lab values are now one collapsible panel per report date instead of a single
+long list. Each header shows the date, how many results it contains, how many
+sit outside range, and the lab name:
 
-    1,750 kcal      36% P · 22% C · 42% F
-                    158g     98g     81g
-                    2.11 g protein per kg
+    Wed, 12 Aug        24 results · 6 outside range · Metropolis   ▲
+    Mon, 4 May          8 results · 2 outside range                ▼
+    Sat, 20 Dec         6 results · 1 outside range                ▼
 
-Percentages also now appear on the adaptive engine's targets, derived from the
-same grams so the two can never disagree.
+The newest report is expanded by default and older ones stay collapsed, so a
+member with a year of panels sees a short list of dates rather than two
+hundred rows. When they upload another report, a new panel appears
+automatically at the top and becomes the expanded one — no configuration.
 
-Both are shown because they answer different questions. Grams are what a member
-shops and cooks to. Percentages are how a coach reads a plan in one glance.
+Once there are two or more reports, an "Expand all / Collapse all" control
+appears next to + Add.
 
-COMPUTED IN CODE, NOT BY THE MODEL
-Dividing calories into grams is arithmetic. A language model doing arithmetic
-produces plausible-looking errors nobody catches, and the same panel must
-always give the same answer. So the split is deterministic; the model only
-writes the surrounding explanation.
+Results within a panel are now sorted alphabetically rather than appearing in
+whatever order the PDF extractor happened to emit them, so the same test sits
+in the same place across reports and can be compared by eye.
 
-HOW THE PANEL MOVES THE SPLIT
-  raised HbA1c        protein up, carbohydrate share down
-  high triglycerides  carbohydrate down further — they respond to refined
-                      carbohydrate and alcohol more than to dietary fat
-  low HDL             a little more fat, weighted to unsaturated sources
-  high LDL            NOTHING CHANGES, and the card says why: the lever there
-                      is saturated fat and soluble fibre, neither of which
-                      shows up in a macro ratio
-  B12, vitamin D,     nothing changes. These are food-choice problems, not
-  ferritin            macro-ratio problems, and pretending otherwise would be
-                      theatre
+The reference ranges and position bars are unchanged — they now live inside
+the panels.
 
-A BUG CAUGHT WHILE BUILDING IT
-The first version derived carbohydrate as whatever remained after a fixed fat
-figure. A carbohydrate floor then bound in every single scenario, so none of
-the lab adjustments moved the numbers at all — while the explanation still
-claimed they had. Reasoning that describes changes which did not happen is
-worse than no reasoning. Rebuilt to split the non-protein calories by share,
-and there is now a test asserting every stated reason corresponds to a real
-change.
-
-Also fixed: three independent roundings made the percentages sum to 99 or 101.
-The last share is now derived from the other two.
+A BUG CAUGHT BY LINTING, NOT BY THE BUILD
+My first attempt anchored the new state on a variable named showLab. The
+actual variable is showLabForm, so the edit silently did nothing and the
+component referenced openPanels without ever declaring it. The production
+build compiled it happily; it would have crashed the moment a coach opened a
+member. The linter caught it, which is why I now run it on every file I touch
+rather than trusting a green build.
 
 TESTS
-  npm run test:insight   67 assertions, 14 of them on the macro maths alone
-Regression: 226 across five suites, all passing.
+Grouping, sorting and default-open state verified against a three-report
+history. Regression: 107 assertions across the two affected suites, passing.
