@@ -292,4 +292,48 @@ Return ONLY raw JSON:
 }`;
 }
 
-module.exports = { triage, buildPrompt, canonical, state, RED_FLAGS, NUTRITION_LEVERS };
+/**
+ * Screen a generated analysis for clinical overreach.
+ *
+ * The first version of this matched bare words, which fails badly in both
+ * directions: it blocked "this is not a diagnosis" and "the doctor should
+ * decide the dose" — both of which are exactly the careful phrasing we want —
+ * while a fluent claim using none of those words would sail through.
+ *
+ * So this checks CLAIMS, not vocabulary:
+ *   · a disease named as an assertion, but not when it is being denied or
+ *     deferred to a doctor
+ *   · a specific dose, but not a statement that dosing is the doctor's call
+ *   · a direct "you have <condition>" attribution
+ *
+ * @returns { ok:boolean, matches:string[] }
+ */
+function screenClinical(text) {
+  const t = String(text || '');
+  const matches = [];
+
+  const DISEASE = /\b(diabetes|pre-?diabetes|an[a]?emia|fatty liver|hepatitis|cirrhosis|hypothyroidism|hyperthyroidism|thyroid disease|kidney disease|renal (failure|impairment)|cancer|metabolic syndrome)\b/gi;
+
+  // Words that turn a disease mention into a denial or a referral. Checked in
+  // the ~60 characters before the mention, which covers ordinary sentence
+  // structure without swallowing a whole paragraph.
+  const SAFE_CONTEXT = /\b(not|no|isn'?t|aren'?t|does not|do not|doesn'?t|cannot|can'?t|never|rather than|instead of|without|rule out|ruling out|whether|if\b|any|suggest(s|ing)? nothing|only a doctor|the doctor|their doctor|a doctor)\b/i;
+
+  let m;
+  while ((m = DISEASE.exec(t)) !== null) {
+    const before = t.slice(Math.max(0, m.index - 60), m.index);
+    if (!SAFE_CONTEXT.test(before)) matches.push(`asserts "${m[0]}"`);
+  }
+
+  // A specific dose is prescribing. "The doctor should decide the dose" is not.
+  const DOSE = /\b(take|start|begin|increase|reduce|add)\b[^.]{0,40}?\b\d+\s*(mg|mcg|µg|iu|g|ml|tablets?|capsules?)\b/gi;
+  while ((m = DOSE.exec(t)) !== null) matches.push(`prescribes a dose: "${m[0].trim().slice(0, 50)}"`);
+
+  // Direct attribution to the member
+  const ATTRIB = /\byou (have|are suffering from|are) (a |an )?(diabet|an[a]?emi|deficien|thyroid|fatty liver)/gi;
+  while ((m = ATTRIB.exec(t)) !== null) matches.push(`attributes a condition: "${m[0].slice(0, 40)}"`);
+
+  return { ok: matches.length === 0, matches };
+}
+
+module.exports = { triage, buildPrompt, canonical, state, screenClinical, RED_FLAGS, NUTRITION_LEVERS };

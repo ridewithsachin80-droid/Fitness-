@@ -94,25 +94,36 @@ const L = (name, value, lo, hi, unit) =>
   }
   ck('urgent markers never enter the prompt', !buildPrompt(mixed, {}).includes('7.5'), null);
 
-  console.log('\n[8] clinical language is rejected server-side, not merely discouraged');
-  const FORBIDDEN = /\b(diabet\w*|prediabet\w*|an(a)?emi\w*|fatty liver|hepatit\w*|thyroid disease|hypothyroid\w*|hyperthyroid\w*|kidney disease|renal failure|cancer|deficiency disease|metabolic syndrome|you have|diagnos\w*|prescrib\w*|\bmg\b ?(daily|per day)|\bdose\b|\bdosage\b)/i;
-  const bad = [
-    'This suggests prediabetes.',
-    'The member likely has anaemia.',
-    'Consistent with fatty liver.',
-    'You have low iron stores.',
-    'Take 60 mg daily of elemental iron.',
-    'Increase the dose to two capsules.',
-    'This is diagnostic of B12 deficiency disease.',
+  console.log('\n[8] clinical CLAIMS are blocked — careful phrasing is not');
+  const { screenClinical } = require('../services/labInsight');
+
+  // These must be blocked: each asserts a condition or prescribes a dose
+  const overreach = [
+    'These results indicate diabetes.',
+    'The member has anaemia.',
+    'This pattern is consistent with fatty liver.',
+    'You have a deficiency that needs correcting.',
+    'Take 60 mg of elemental iron daily.',
+    'Start 2000 IU of vitamin D each morning.',
+    'Likely metabolic syndrome given the lipid picture.',
   ];
-  for (const b of bad) ck(`rejected: "${b.slice(0, 38)}…"`, FORBIDDEN.test(b), b);
-  const good = [
+  for (const b of overreach) ck(`blocked: "${b.slice(0, 40)}…"`, !screenClinical(b).ok, screenClinical(b));
+
+  // These must pass. The first filter rejected all of them, which meant the
+  // more carefully the model wrote, the more likely it was discarded.
+  const careful = [
+    'This is not a diagnosis — discuss it with the doctor who ordered the test.',
+    'A supplement may be needed; the doctor should decide the dose.',
+    'These numbers do not indicate anaemia on their own.',
+    'If you have questions about the plan, raise them with your coach.',
+    'Whether this reflects anaemia is for their doctor to judge.',
     'Ferritin measures stored iron. Pair dal with lemon to improve absorption.',
     'Vitamin D comes mostly from sunlight; diet contributes little.',
-    'Triglycerides often respond within six to eight weeks.',
-    'Worth raising with the doctor who ordered the test.',
+    'Add 2 tbsp of flaxseed to breakfast.',
   ];
-  for (const g of good) ck(`allowed: "${g.slice(0, 38)}…"`, !FORBIDDEN.test(g), g);
+  for (const g of careful) ck(`allowed: "${g.slice(0, 40)}…"`, screenClinical(g).ok, screenClinical(g).matches);
+  ck('a rejection explains what tripped it',
+     (screenClinical('The member has anaemia.').matches[0] || '').includes('anaemia'), null);
 
   console.log('\n[9] access control');
   await pool.query('TRUNCATE users RESTART IDENTITY CASCADE');

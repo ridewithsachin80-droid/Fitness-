@@ -151,7 +151,22 @@ export default function LabResults({ patientId = null }) {
             </button>
           )}
 
-          {insight?.error && <p className="text-xs text-red-400">{insight.error}</p>}
+          {insight?.error && (
+            <div>
+              <p className="text-xs text-red-400 leading-relaxed">{insight.error}</p>
+              {/* Showing what tripped the filter turns an opaque failure into
+                  something a coach can judge for themselves. */}
+              {insight.rejected_for?.length > 0 && (
+                <p className="text-[10px] text-[#7E8596] mt-1">
+                  Flagged: {insight.rejected_for.join(' · ')}
+                </p>
+              )}
+              <button onClick={generateInsight} disabled={thinking}
+                className="text-[11px] font-bold text-[#D4AF37] mt-1.5">
+                {thinking ? 'Analysing…' : 'Try again'}
+              </button>
+            </div>
+          )}
 
           {/* Urgent findings replace the analysis entirely rather than sitting
               alongside it — diet tips beside "see a doctor" dilutes the only

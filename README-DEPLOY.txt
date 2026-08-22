@@ -1,40 +1,49 @@
-FitLife — lab analysis, fixed
-=============================
+FitLife — the safety filter was blocking its own good output
+============================================================
 
 Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
-ONE RENAME: server/server-package.json -> package.json (in server/)
-No new packages. schema.sql adds a data-cleanup migration and re-runs safely.
+NOTHING TO RENAME. No new packages. No schema change.
 
-SUPERSEDES the previous lab-insight zip. Deploy this one.
+DEPLOY THE PREVIOUS ZIP FIRST if you have not — that one carries the NaN
+migration in schema.sql, which this does not repeat.
 
-TWO BUGS, BOTH VISIBLE IN YOUR SCREENSHOT
+WHAT HAPPENED
+The token fix worked: the analysis generated. Then my own safety filter
+discarded it — "The analysis strayed into clinical territory".
 
-1. THE 502 — same fault as the PDF reader, and I should have caught it
-   maxOutputTokens was 4000. Harsha's panel has six actionable markers, each
-   getting three paragraphs plus meal ideas. The response was cut off mid
-   object, and half a JSON object is unparseable. Raised to 12000, timeout to
-   60s, with the same tolerant extraction the PDF reader now uses.
+The filter matched WORDS, not claims. That fails in both directions, and the
+false-positive direction is the embarrassing one. All of these were blocked:
 
-   The error also now tells you which failure it was: a truncated response
-   says "too many markers to analyse in one pass", an empty one says so, and
-   a safety refusal says that instead of a generic retry message. Failures log
-   the finish reason and brace counts, so Railway logs will name the cause.
+  "This is not a diagnosis — discuss it with the doctor who ordered the test."
+  "A supplement may be needed; the doctor should decide the dose."
+  "These numbers do not indicate anaemia on their own."
+  "If you have questions about the plan, raise them with your coach."
 
-2. "ref NaN-100.00" ON LDL CHOLESTEROL
-   Postgres NUMERIC accepts NaN as a legitimate value. A report printing a
-   bound as "< 100" or "-" went through parseFloat, produced NaN, and was
-   stored without complaint - then rendered as "ref NaN-100.00".
+Every one of those is exactly the careful phrasing the prompt asks for. The
+filter could not tell an assertion from a denial, so the more carefully the
+model wrote, the more likely its answer was thrown away. Meanwhile a fluent
+claim avoiding those particular words would have passed untouched.
 
-   Fixed in three places, because one was not enough:
-     · on write - only finite numbers reach the column now
-     · in the database - a migration clears bounds already stored as NaN and
-       recomputes the affected status values
-     · on display - a non-finite bound is treated as absent, so LDL now reads
-       "ref < 100.00" rather than showing a broken lower bound
+WHAT IT DOES NOW
+It checks claims:
 
-   Verified end to end: a row stored with a NaN bound is cleaned by the
-   migration, keeps its real upper bound, and keeps its "high" status.
+  · A DISEASE NAMED AS AN ASSERTION is blocked — but not when it is being
+    denied or handed to a doctor. The preceding 60 characters are scanned for
+    negation and referral ("not", "whether", "the doctor", "rule out").
+  · A SPECIFIC DOSE is blocked — "take 60 mg", "start 2000 IU", "increase to
+    2 tablets". Saying dosing is the doctor's call is fine, as is "add 2 tbsp
+    of flaxseed", which is food.
+  · A DIRECT ATTRIBUTION — "you have a deficiency" — is blocked.
+
+Verified 17/17 in both directions: seven real overreaches blocked, nine
+pieces of careful phrasing allowed, including all four the old filter ate.
+
+REJECTIONS NOW EXPLAIN THEMSELVES
+When something is genuinely blocked, the coach sees what tripped it —
+'asserts "anaemia"' or 'prescribes a dose: "Take 60 mg"' — plus a Try Again
+button. An opaque refusal gives a coach nothing to judge; a specific one lets
+them decide whether to regenerate or handle it themselves.
 
 TESTS
-  npm run test:insight    48 assertions, now including the NaN storage path
-Regression: 259 across seven suites, all passing.
+  npm run test:insight    53 assertions
+Regression: 186 across the four affected suites, all passing.

@@ -625,13 +625,8 @@ router.get('/:id/lab-analysis', authMW, roleCheck('monitor', 'admin'), requirePa
 // Nutritional guidance from a lab panel. A deterministic rule layer runs first
 // and can suppress the AI entirely; see services/labInsight.js for where the
 // line between nutrition and diagnosis is drawn and why.
-const { triage: triageLabs, buildPrompt: buildLabPrompt } = require('../services/labInsight');
+const { triage: triageLabs, buildPrompt: buildLabPrompt, screenClinical } = require('../services/labInsight');
 const axios = require('axios');
-
-// Phrases that must never reach a coach or member from this endpoint. The
-// prompt forbids them, but a prompt is a request, not a guarantee — this is
-// the enforcement.
-const FORBIDDEN = /\b(diabet\w*|prediabet\w*|an(a)?emi\w*|fatty liver|hepatit\w*|thyroid disease|hypothyroid\w*|hyperthyroid\w*|kidney disease|renal failure|cancer|deficiency disease|metabolic syndrome|you have|diagnos\w*|prescrib\w*|\bmg\b ?(daily|per day)|\bdose\b|\bdosage\b)/i;
 
 router.post('/:id/lab-insight', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
@@ -723,13 +718,16 @@ router.post('/:id/lab-insight', authMW, roleCheck('monitor', 'admin'), requirePa
           : 'Could not generate the analysis — please try again.' });
     }
 
-    // Enforcement, not trust. If the model named a condition anywhere, the
-    // whole response is rejected rather than partially shown.
-    const flat = JSON.stringify(parsed);
-    if (FORBIDDEN.test(flat)) {
-      console.warn('lab-insight: response rejected, contained clinical language');
+    // Enforcement, not trust — but checking CLAIMS rather than vocabulary.
+    // The first version matched bare words and rejected its own careful
+    // phrasing: "this is not a diagnosis" and "the doctor should decide the
+    // dose" were both blocked, which is precisely backwards.
+    const screen = screenClinical(JSON.stringify(parsed));
+    if (!screen.ok) {
+      console.warn('lab-insight: rejected —', screen.matches.slice(0, 3).join('; '));
       return res.status(502).json({
-        error: 'The analysis strayed into clinical territory and was discarded. Try generating again.',
+        error: 'The analysis made a clinical claim it should not have, so it was discarded. Generating again usually produces a clean result.',
+        rejected_for: screen.matches.slice(0, 3),
       });
     }
 
