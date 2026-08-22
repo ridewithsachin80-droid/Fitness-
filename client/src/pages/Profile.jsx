@@ -428,7 +428,7 @@ export default function Profile() {
         <Card>
           <SectionTitle icon="🩸">Lab Results</SectionTitle>
           <div className="mt-2">
-            <LabResults />
+            <LabResults memberName={profile?.name || ''} />
           </div>
         </Card>
 

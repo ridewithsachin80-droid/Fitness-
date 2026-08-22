@@ -1,49 +1,47 @@
-FitLife — the safety filter was blocking its own good output
-============================================================
+FitLife — download lab results as PDF and CSV
+=============================================
 
-Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
-NOTHING TO RENAME. No new packages. No schema change.
+Extract, drag the "client" FOLDER onto GitHub at the repo ROOT.
+NOTHING TO RENAME. No new packages. No schema change. Server untouched.
 
-DEPLOY THE PREVIOUS ZIP FIRST if you have not — that one carries the NaN
-migration in schema.sql, which this does not repeat.
+THREE BUTTONS ON THE LAB RESULTS CARD
 
-WHAT HAPPENED
-The token fix worked: the analysis generated. Then my own safety filter
-discarded it — "The analysis strayed into clinical territory".
+  PDF       a formatted report: every panel by test date, the interval
+            comparisons, and — for coaches — the nutritional guidance
+  CSV       one row per lab value: test, result, unit, reference range,
+            status, date, lab, who entered it
+  Changes   one row per interval comparison, including the average intake,
+            protein, weight change, training and cardio in that window,
+            and what percentage of the window was actually logged
 
-The filter matched WORDS, not claims. That fails in both directions, and the
-false-positive direction is the embarrassing one. All of these were blocked:
+MEMBERS GET THESE TOO
+A PDF of their own results is exactly what someone needs to hand a doctor at
+their next appointment. Members see values and comparisons; the nutritional
+guidance stays coach-only, as it was.
 
-  "This is not a diagnosis — discuss it with the doctor who ordered the test."
-  "A supplement may be needed; the doctor should decide the dose."
-  "These numbers do not indicate anaemia on their own."
-  "If you have questions about the plan, raise them with your coach."
+WHY PRINT-TO-PDF RATHER THAN A PDF LIBRARY
+jsPDF and its peers add roughly a quarter of a megabyte to a bundle whose
+members are often on patchy mobile data, and the browser already has a
+competent PDF writer. The app already uses this pattern for the coach's Print
+Report, so behaviour stays consistent.
 
-Every one of those is exactly the careful phrasing the prompt asks for. The
-filter could not tell an assertion from a denial, so the more carefully the
-model wrote, the more likely its answer was thrown away. Meanwhile a fluent
-claim avoiding those particular words would have passed untouched.
+The cost is one extra tap: the print dialog opens and you choose "Save as
+PDF". Chrome on Android and Safari on iOS both offer it. If that tap matters
+more than the payload, say so and I will swap in a real library.
 
-WHAT IT DOES NOW
-It checks claims:
+The CSV is a genuine one-click download with no dialog.
 
-  · A DISEASE NAMED AS AN ASSERTION is blocked — but not when it is being
-    denied or handed to a doctor. The preceding 60 characters are scanned for
-    negation and referral ("not", "whether", "the doctor", "rule out").
-  · A SPECIFIC DOSE is blocked — "take 60 mg", "start 2000 IU", "increase to
-    2 tablets". Saying dosing is the doctor's call is fine, as is "add 2 tbsp
-    of flaxseed", which is food.
-  · A DIRECT ATTRIBUTION — "you have a deficiency" — is blocked.
-
-Verified 17/17 in both directions: seven real overreaches blocked, nine
-pieces of careful phrasing allowed, including all four the old filter ate.
-
-REJECTIONS NOW EXPLAIN THEMSELVES
-When something is genuinely blocked, the coach sees what tripped it —
-'asserts "anaemia"' or 'prescribes a dose: "Take 60 mg"' — plus a Try Again
-button. An opaque refusal gives a coach nothing to judge; a specific one lets
-them decide whether to regenerate or handle it themselves.
+DETAILS THAT MATTER IN PRACTICE
+· The CSV carries a UTF-8 byte-order mark, without which Excel renders Indian
+  test names and the µ in µg as mojibake — which reads as corrupted data.
+· Fields containing commas, quotes or newlines are quoted and escaped
+  properly. Verified against a test name containing both a comma and quotes.
+· NaN reference bounds render as "< 100" rather than "NaN - 100", matching
+  the on-screen fix.
+· Out-of-range rows are shaded in the PDF so they are findable at a glance.
+· If pop-ups are blocked the button says so instead of failing silently.
+· Filenames include the member name and date: harsha-lab-results-2026-08-22.csv
 
 TESTS
-  npm run test:insight    53 assertions
-Regression: 186 across the four affected suites, all passing.
+CSV escaping verified against awkward real values. Regression: 160 assertions
+across the three affected suites, all passing.

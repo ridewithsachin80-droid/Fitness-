@@ -930,7 +930,7 @@ export default function Monitor() {
         <Card>
           <SectionTitle icon="🩸">Lab Results</SectionTitle>
           <div className="mt-2">
-            <LabResults patientId={parseInt(patientId)} />
+            <LabResults patientId={parseInt(patientId)} memberName={data?.profile?.name || ''} />
           </div>
         </Card>
 

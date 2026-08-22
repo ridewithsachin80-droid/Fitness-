@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
+import { exportLabsCSV, exportComparisonsCSV, printLabReport } from '../utils/labExport';
 
 const COMMON = [
   { name: 'HbA1c',        unit: '%',      min: 4,   max: 5.6 },
@@ -36,7 +37,7 @@ const STATE_STYLE = {
   normal: 'text-emerald-300 bg-emerald-400/10 border-emerald-400/30',
 };
 
-export default function LabResults({ patientId = null }) {
+export default function LabResults({ patientId = null, memberName = '' }) {
   const isCoach = !!patientId;
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -45,6 +46,8 @@ export default function LabResults({ patientId = null }) {
   const [notice, setNotice]   = useState(null);
   const [insight, setInsight] = useState(null);
   const [thinking, setThinking] = useState(false);
+  const [rawLabs, setRawLabs]   = useState([]);
+  const [exportMsg, setExportMsg] = useState(null);
   const [error, setError]     = useState(null);
 
   const [testDate, setTestDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -54,9 +57,14 @@ export default function LabResults({ patientId = null }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(
-        isCoach ? `/patients/${patientId}/lab-analysis` : '/patients/me/lab-analysis');
-      setData(data);
+      const [analysis, raw] = await Promise.all([
+        api.get(isCoach ? `/patients/${patientId}/lab-analysis` : '/patients/me/lab-analysis'),
+        api.get(isCoach ? `/patients/${patientId}` : '/patients/me/labs'),
+      ]);
+      setData(analysis.data);
+      // Both endpoints return the rows under `labs` — the coach one nested in
+      // the member payload, the member one on its own.
+      setRawLabs(raw.data.labs || []);
     } catch {
       setError('Could not load results');
     } finally { setLoading(false); }
@@ -137,6 +145,51 @@ export default function LabResults({ patientId = null }) {
           </p>
         </div>
       )}
+
+      {/* Exports. Available to members too — a PDF of their own results is
+          exactly what they need to hand a doctor at the next appointment. */}
+      {rawLabs.length > 0 && (
+        <div className="flex gap-2 mb-3">
+          <button
+            onClick={() => {
+              const ok = printLabReport({
+                labs: rawLabs,
+                comparisons: data?.comparisons || [],
+                insight: isCoach ? insight : null,
+                memberName: memberName || 'Member',
+              });
+              setExportMsg(ok ? null : 'Allow pop-ups for this site to save the PDF.');
+            }}
+            style={{ minHeight: 38 }}
+            className="flex-1 rounded-xl text-[11px] font-bold text-[#D4AF37]
+              bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.28)] active:scale-[0.98]">
+            ⬇ PDF
+          </button>
+          <button
+            onClick={() => {
+              const n = exportLabsCSV(rawLabs, memberName || 'member');
+              setExportMsg(`${n} results exported`);
+            }}
+            style={{ minHeight: 38 }}
+            className="flex-1 rounded-xl text-[11px] font-bold text-[#9EA3B0]
+              border border-white/[0.12] active:scale-[0.98]">
+            ⬇ CSV
+          </button>
+          {(data?.comparisons || []).length > 0 && (
+            <button
+              onClick={() => {
+                const n = exportComparisonsCSV(data.comparisons, memberName || 'member');
+                setExportMsg(`${n} comparisons exported`);
+              }}
+              style={{ minHeight: 38 }}
+              className="flex-1 rounded-xl text-[11px] font-bold text-[#9EA3B0]
+                border border-white/[0.12] active:scale-[0.98]">
+              ⬇ Changes
+            </button>
+          )}
+        </div>
+      )}
+      {exportMsg && <p className="text-[10px] text-[#7E8596] mb-3">{exportMsg}</p>}
 
       {/* Nutritional analysis — coach only. The engine drafts, the coach decides
           what reaches the member. */}
