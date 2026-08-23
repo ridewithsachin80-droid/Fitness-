@@ -1,62 +1,44 @@
-FitLife — Today's gaps, with a message ready for each
-=====================================================
+FitLife — one message listing everything a member is missing
+============================================================
 
 Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
-ONE RENAME: server/server-package.json -> package.json (in server/)
-No new packages. schema.sql re-runs safely.
+NOTHING TO RENAME. No new packages. No schema change.
 
-SUPERSEDES all earlier WhatsApp zips. Deploy this one only.
+DEPLOY THE PREVIOUS ZIP FIRST if you have not — it carries the endpoint,
+the routes and the card itself. This changes how the message is built.
 
-WHAT IT DOES
-A new "📋 Today's gaps" card sits at the top of the Admin overview. It lists
-who hasn't logged what, and each gap is a button that opens WhatsApp already
-talking about that specific thing:
+WHAT CHANGED
+One 💬 Message button per member instead of one per gap. The gaps are now
+chips showing what is missing, and the single message names all of them:
 
-    Harsha          💬 No food    💬 No weight
-    Asha            💬 Nothing logged
-    Daya            💬 Low water  💬 No activity
+    Harsha    [No weight] [No food]              💬 Message
 
-Nine gap types: nothing logged, food, weight, dinner, water, activity, ACV,
-supplements, sleep. Each has its own message.
+    "Hi Harsha, a couple of things are still open today — your morning weight
+     and your meals. Pop them in when you get a moment, or just tell the AI
+     and it'll sort the rest.
 
-TIMING IS THE WHOLE POINT
-"No water logged" at 9am is not a gap, it is a morning. Flagging it teaches a
-coach the list is noise and they stop reading it, which is worse than no list.
-So every check has an hour before which it does not apply:
+     https://fitness.upscale-app.com"
 
-    11:00  morning weight
-    14:00  nothing logged at all
-    15:00  no food
-    18:00  water under half target
-    19:00  no activity ticked
-    20:00  ACV, supplements
-    21:00  dinner, sleep times
+GRAMMAR AGREES WITH THE COUNT
+    1 gap    "your morning weight isn't logged yet today. Pop it in..."
+    2 gaps   "a couple of things are still open — X and Y. Pop them in..."
+    3-4      "a few things are still open — X, Y and Z. Pop them in..."
+    5+       falls back to the gentle "haven't seen anything from you today"
 
-All computed in IST regardless of where Railway runs the container.
+"Your weight isn't logged, pop THEM in" is the kind of mismatch that makes a
+message read as generated rather than written, so it is handled explicitly.
 
-ONE MESSAGE, NOT SIX
-A member who has logged nothing has one problem, not six. Sending them
-separate messages about water, ACV, supplements, activity and food would be
-five messages saying the same thing, from a coach's personal number — which is
-how a helpful nudge becomes harassment.
+WHY NOT LIST EVERYTHING WHEN THERE ARE MANY
+Beyond four items the list stops being a nudge and becomes an audit of
+someone's failures. At that point they have not really engaged with the day at
+all, so the message asks how they are instead of itemising what they missed.
 
-So "nothing logged" suppresses every other gap for that member, and anyone
-else shows at most two. The full list is still counted ("+3 more") so nothing
-is hidden from the coach.
-
-NOTHING SENDS AUTOMATICALLY
-The list is a prompt for the coach. They know which member is travelling,
-unwell, or simply doesn't need chasing. Every message opens in their own
-WhatsApp, editable, and is only sent when they tap send there.
-
-TWO BUGS FOUND WHILE TESTING
-· The query selected a column called meal_slots. The actual column is
-  meal_plan, so the endpoint returned 500 for every coach. Caught because the
-  test called the real endpoint rather than only the function behind it.
-· My own test asserted that an empty log at 16:00 shows "no food" and "no
-  weight". It correctly shows "nothing logged" instead — the blocking gap
-  suppressing the others, which is exactly the restraint described above.
+STILL ONE MESSAGE PER MEMBER, NOT PER ITEM
+Two or three separate WhatsApps within a minute, from a coach's personal
+number, reads as pestering. That was the flaw in the previous version and it
+is fixed here.
 
 TESTS
-  npm run test:gaps    30 assertions, most of them about NOT flagging
-Regression: 231 across five suites, all passing.
+  npm run test:gaps    31 assertions
+Message phrasing verified for one, two, three and four gaps.
+Regression: 128 across three suites, all passing.

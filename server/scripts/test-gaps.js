@@ -68,7 +68,8 @@ const fullDay = {
                     water_ml: 400, activities: {}, acv: {}, supplements: {}, sleep: {} };
   const pr = detectGaps(M, partial, P, { now: at(20) });
   ck('not treated as "nothing logged"', !keys(pr).includes('nothing'), keys(pr));
-  ck('at most two surfaced', pr.gaps.length <= 2, keys(pr));
+  ck('every gap returned for the combined message', pr.gaps.length >= 3, keys(pr));
+  ck('display cap reported separately', pr.show <= 2, pr.show);
   ck('most severe first', pr.gaps[0].severity !== 'low', pr.gaps[0]);
 
   console.log('\n[6] a complete day produces no gaps at all');

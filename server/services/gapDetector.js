@@ -147,8 +147,12 @@ function detectGaps(member, log, protocol = {}, opts = {}) {
     .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
 
   // A blocking gap means nothing else is worth saying — they have not opened
-  // the app. Asking about ACV on top would be noise.
-  const gaps = found[0]?.severity === 'blocking' ? [found[0]] : found.slice(0, max);
+  // the app. Listing ACV on top would be noise.
+  //
+  // Otherwise ALL gaps are returned, because they now go into one message
+  // rather than one message each. The cap only applies to how many are shown
+  // as chips in the coach's list, not to what the message covers.
+  const gaps = found[0]?.severity === 'blocking' ? [found[0]] : found;
 
   return {
     member_id: member.id,
@@ -156,7 +160,8 @@ function detectGaps(member, log, protocol = {}, opts = {}) {
     phone: member.phone,
     hour,
     gaps: gaps.map(g => ({ key: g.key, label: g.label, severity: g.severity })),
-    // Everything that matched, so a coach can see the full picture on demand
+    // How many to show as chips before collapsing to "+n more"
+    show: Math.min(gaps.length, max),
     all_gaps: found.map(g => g.key),
   };
 }

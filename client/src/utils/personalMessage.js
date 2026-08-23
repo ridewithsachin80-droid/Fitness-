@@ -161,6 +161,68 @@ export const GAP_TEMPLATES = {
     `the app can't work out on its own.`),
 };
 
+/**
+ * One message covering everything a member hasn't logged.
+ *
+ * Sending a separate message per gap would mean two or three notifications
+ * from a coach's personal number within a minute, which reads as pestering.
+ * One message naming both things is a single, easy ask.
+ *
+ * The phrasing is deliberately light. A member who is already behind does not
+ * need a bulleted audit of their failures — the list is short, the tone is
+ * "when you get a moment", and it never says why it matters. They know why.
+ */
+
+/** How each gap is named inside a sentence, as a natural noun phrase. */
+const GAP_PHRASE = {
+  weight:      'your morning weight',
+  food:        'your meals',
+  dinner:      'dinner',
+  water:       'your water',
+  activity:    "today's activity",
+  acv:         'your ACV doses',
+  supplements: 'your supplements',
+  sleep:       'your sleep times',
+};
+
+/** "a, b and c" — the Oxford-less list a person would actually speak. */
+function joinPhrases(items) {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/**
+ * @param member  { name }
+ * @param gapKeys ordered gap keys, most important first
+ */
+export function combinedGapMessage(member, gapKeys = []) {
+  const keys = gapKeys.filter(k => k !== 'nothing');
+
+  // Nothing at all, or so much missing that listing it becomes a telling-off
+  if (gapKeys.includes('nothing') || keys.length === 0 || keys.length >= 5) {
+    return GAP_TEMPLATES.nothing(member);
+  }
+
+  const phrases = keys.map(k => GAP_PHRASE[k]).filter(Boolean);
+  const list = joinPhrases(phrases);
+
+  // Grammar has to agree with the count, or the message reads as generated —
+  // "your weight isn't logged, pop THEM in" is the tell.
+  const opener = keys.length === 1
+    ? `Hi ${first(member.name)}, ${list} isn't logged yet today.`
+    : keys.length === 2
+      ? `Hi ${first(member.name)}, a couple of things are still open today — ${list}.`
+      : `Hi ${first(member.name)}, a few things are still open today — ${list}.`;
+
+  const closer = keys.length === 1
+    ? "Pop it in when you get a moment, or just tell the AI and it'll sort the rest."
+    : "Pop them in when you get a moment, or just tell the AI and it'll sort the rest.";
+
+  return withLink(`${opener} ${closer}`);
+}
+
 /** Human label for a gap key, for buttons and lists. */
 export const GAP_LABEL = {
   nothing: 'Nothing logged', food: 'No food', weight: 'No weight',

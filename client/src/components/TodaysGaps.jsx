@@ -19,7 +19,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
 import MessageMember from './MessageMember';
-import { GAP_TEMPLATES, GAP_LABEL } from '../utils/personalMessage';
+import { combinedGapMessage, GAP_LABEL } from '../utils/personalMessage';
 
 const SEVERITY = {
   blocking: 'text-red-300 border-red-400/35 bg-red-400/[0.08]',
@@ -59,52 +59,53 @@ export default function TodaysGaps() {
     );
   }
 
-  const open = (member, gapKey) => {
-    const build = GAP_TEMPLATES[gapKey] || GAP_TEMPLATES.nothing;
+  // One message per member covering everything they're missing. Two or three
+  // separate WhatsApps within a minute, from a personal number, reads as
+  // pestering — one message naming both things is a single, easy ask.
+  const open = (member) => {
     setTarget({
       member: { id: member.member_id, name: member.name, phone: member.phone },
-      text: build({ name: member.name }),
-      key: `${member.member_id}:${gapKey}`,
+      text: combinedGapMessage({ name: member.name }, member.gaps.map(g => g.key)),
+      key: String(member.member_id),
     });
   };
 
   return (
     <div>
       <p className="text-[11px] text-[#7E8596] mb-2.5 leading-relaxed">
-        Checked against the time of day — water isn't flagged in the morning, and
-        supplements aren't flagged before evening.
+        One message per member covering everything they're missing. Checked against
+        the time of day, so water isn't flagged in the morning and supplements
+        aren't flagged before evening.
       </p>
 
       <div className="space-y-2">
         {members.map(m => (
           <div key={m.member_id} className="bg-[#121316] border border-white/[0.07] rounded-xl px-3 py-2.5">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-[13px] font-bold text-white truncate">{m.name}</span>
-              {m.all_gaps.length > m.gaps.length && (
-                <span className="text-[9px] text-[#7E8596] flex-shrink-0">
-                  +{m.all_gaps.length - m.gaps.length} more
-                </span>
-              )}
-            </div>
+            <p className="text-[13px] font-bold text-white truncate mb-1.5">{m.name}</p>
 
-            <div className="flex flex-wrap gap-1.5">
-              {m.gaps.map(g => {
-                const key = `${m.member_id}:${g.key}`;
-                return done[key] ? (
+            <div className="flex items-center justify-between gap-2">
+              {/* Chips are labels, not buttons — everything listed goes into
+                  the one message the button opens. */}
+              <div className="flex flex-wrap gap-1 min-w-0">
+                {m.gaps.map(g => (
                   <span key={g.key}
-                    className="text-[10px] font-bold text-emerald-300 border border-emerald-400/30
-                      bg-emerald-400/[0.08] rounded-full px-2.5 py-1">
-                    ✓ {GAP_LABEL[g.key] || g.label}
+                    className={`text-[10px] font-bold rounded-full px-2 py-0.5 border ${SEVERITY[g.severity]}`}>
+                    {GAP_LABEL[g.key] || g.label}
                   </span>
-                ) : (
-                  <button key={g.key} onClick={() => open(m, g.key)}
-                    style={{ minHeight: 30 }}
-                    className={`text-[10px] font-bold rounded-full px-2.5 border
-                      active:scale-95 transition-transform ${SEVERITY[g.severity]}`}>
-                    💬 {GAP_LABEL[g.key] || g.label}
-                  </button>
-                );
-              })}
+                ))}
+              </div>
+
+              {done[String(m.member_id)] ? (
+                <span className="text-[10px] font-bold text-emerald-300 flex-shrink-0">✓ Sent</span>
+              ) : (
+                <button onClick={() => open(m)}
+                  style={{ minHeight: 32 }}
+                  className="text-[11px] font-extrabold text-[#121316] flex-shrink-0
+                    bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                    rounded-full px-3 active:scale-95 transition-transform">
+                  💬 Message
+                </button>
+              )}
             </div>
           </div>
         ))}
