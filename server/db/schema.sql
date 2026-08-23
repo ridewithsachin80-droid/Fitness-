@@ -296,6 +296,12 @@ CREATE TABLE IF NOT EXISTS message_log (
 );
 CREATE INDEX IF NOT EXISTS idx_message_log_user ON message_log(user_id, sent_at DESC);
 
+-- How a coach note actually reached the member. NULL means in-app only.
+-- A note sent over WhatsApp is marked read on creation, so the member does not
+-- receive the message twice: once on WhatsApp and again as an unread "action
+-- needed" card in the app.
+ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS delivered_via VARCHAR(12);
+
 -- Clean reference bounds that were stored as NaN. Postgres NUMERIC accepts
 -- NaN as a legitimate value, so a non-numeric bound on a report ("< 100", "-")
 -- became parseFloat(...) = NaN and was stored happily, then rendered as

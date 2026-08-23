@@ -13,6 +13,7 @@ import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
 import TrainingSummary from '../components/TrainingSummary';
 import MetabolicInsight from '../components/MetabolicInsight';
 import MacroLab from '../components/MacroLab';
+import MessageMember from '../components/MessageMember';
 import LabResults from '../components/LabResults';
 import MuscleCoverage from '../components/MuscleCoverage';
 import { getActiveProgram } from '../api/programs';
@@ -386,6 +387,7 @@ export default function Monitor() {
   // the renderer reads as "open the newest only" — so a member with a year of
   // panels sees a short list of dates rather than two hundred rows.
   const [openPanels,    setOpenPanels] = useState(null);
+  const [msgOpen,       setMsgOpen]    = useState(false);
   const [showPinForm,   setShowPin]   = useState(false);
   const [showNoteForm,  setShowNote]  = useState(false);
   const [showWeightForm,setShowWeight]= useState(false);
@@ -621,7 +623,11 @@ export default function Monitor() {
                   : 'text-amber-900 bg-amber-400 hover:bg-amber-300 border-amber-300'}`}>
               🔑 {profile.has_pin ? 'Reset PIN' : '⚠ Set PIN (required to login)'}
             </button>
-            <button onClick={() => setShowNote(true)}
+                        <button onClick={() => setMsgOpen(true)}
+              className="text-xs font-semibold text-[#121316] bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37] px-3 py-1.5 rounded-xl active:scale-95 transition-transform">
+              💬 Message
+            </button>
+<button onClick={() => setShowNote(true)}
               className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
                 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
               📝 Add Note
@@ -1402,6 +1408,13 @@ export default function Monitor() {
           }}
         />
       )}
+
+      {/* Compose sheet — reloads on close so a saved copy appears in notes */}
+      <MessageMember
+        member={{ id: parseInt(patientId), name: data?.profile?.name, phone: data?.profile?.phone }}
+        open={msgOpen}
+        onClose={() => { setMsgOpen(false); load(); }}
+      />
 
       <BottomNav role={user?.role} />
     </div>

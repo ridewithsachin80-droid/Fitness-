@@ -607,17 +607,23 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
 // Monitor: add a clinical note for a patient.
 router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
-    const { note_date, note, flagged = false } = req.body;
+    const { note_date, note, flagged = false, delivered_via = null } = req.body;
 
     if (!note_date || !note) {
       return res.status(400).json({ error: 'note_date and note are required' });
     }
 
+    const via = ['whatsapp', 'sms'].includes(delivered_via) ? delivered_via : null;
+
+    // A note the coach already sent over WhatsApp is stored as read. The member
+    // has the message; showing it again as an unread "action needed" card would
+    // deliver it twice and make the coach look like they are nagging.
     const result = await pool.query(
-      `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged,
+                                  delivered_via, read_at)
+       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6 IS NULL THEN NULL ELSE NOW() END)
        RETURNING *`,
-      [req.user.id, req.params.id, note_date, note, flagged]
+      [req.user.id, req.params.id, note_date, note, flagged, via]
     );
 
     res.status(201).json(result.rows[0]);

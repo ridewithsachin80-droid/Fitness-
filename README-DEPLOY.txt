@@ -1,72 +1,54 @@
-FitLife — reach members on WhatsApp and SMS
-===========================================
+FitLife — message members from your own WhatsApp
+================================================
 
 Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
-ONE RENAME: server/server-package.json -> package.json (in server/)
-No new packages. schema.sql adds columns and a table, and re-runs safely.
+NOTHING TO RENAME. No new packages. schema.sql adds one column, re-runs safely.
 
-THE PROBLEM THIS FIXES
-Coach messages live in the app. A member who has stopped logging does not open
-the app — so "we miss your logs" is delivered precisely to the people who do
-not need it, and never reaches the people who do. Push helps a little, but push
-permission tends to be granted by engaged members and ignored by everyone else.
+WORKS TODAY. No Meta verification, no DLT templates, no cost.
 
-WHAT HAPPENS NOW
-The coach's Remind button and the weekly summary go through a channel chain:
+WHAT IT DOES
+A "💬 Message" button now sits beside Add Note on a member's page. It opens a
+sheet with the text ready, you edit it, and it opens YOUR WhatsApp with the
+message pre-filled to that member. You tap send.
 
-    push  ->  WhatsApp  ->  SMS
+Three presets — Not logging, No weight, Check in — plus the weekly summary
+when one is available. All editable, because that is the point.
 
-Cheapest first, stopping at the first success. Sending all three is both
-wasteful and irritating, and paying for a WhatsApp conversation to someone who
-just read the push is money for nothing.
+WHY THIS RATHER THAN THE BUSINESS API
+The Business API sends from a business number using a template Meta approved
+weeks earlier. Right at a few hundred members; wrong at a few dozen. A
+templated nudge to someone who knows Sachin personally reads like a bank
+notification and makes the product feel less personal than it actually is.
 
-CODE IS READY; CREDENTIALS ARE NOT
-Everything works the moment you add credentials, and degrades silently and
-safely without them — no errors, no crashes, each skip recorded with a reason.
+This arrives in the conversation the member already has with their coach,
+which is where they will actually reply. The cost is one tap of coach time per
+member and no delivery receipt. At your size that is the better trade.
 
-  SMS — you already have MSG91 for OTP, so the account and DLT registration
-  exist. You need DLT-approved template IDs for the new message types:
-      MSG91_SENDER_ID     your 6-character DLT header
-      MSG91_TPL_NUDGE     "Hi {#var#}, your coach is waiting on {#var#}..."
-      MSG91_TPL_SUMMARY   weekly summary template
-      MSG91_TPL_COACH     general coach message template
-  DLT template approval usually takes a few working days.
+The Business API plumbing from the previous batch stays in place, inert until
+you add credentials. Use this now, switch that on when the member count makes
+personal messaging impractical.
 
-  WHATSAPP — needs a Meta Business account, a verified business, and either
-  direct Cloud API access or a BSP (Gupshup, AiSensy, Interakt and WATI are
-  the common Indian ones). Then:
-      WHATSAPP_TOKEN      Meta or BSP access token
-      WHATSAPP_PHONE_ID   Meta phone number id
-      WA_TPL_NUDGE        approved template name (default fitlife_log_reminder)
-      WA_TPL_SUMMARY      default fitlife_weekly_summary
-      WA_TPL_COACH        default fitlife_coach_message
-  Business verification takes days to weeks. Business-initiated messages MUST
-  use a pre-approved template — free text gets a number banned, not delivered.
+A DUPLICATE-DELIVERY BUG FIXED ALONG THE WAY
+Saving a copy of the message as a coach note would have delivered it twice:
+once on WhatsApp and again as an unread "action needed" card in the app,
+making the coach look like they were nagging. Notes sent externally now carry
+delivered_via and are stored already-read, so they appear in the member's
+history without a second notification. Verified directly against the database.
 
-  Optional:
-      QUIET_HOURS_FROM    default 21
-      QUIET_HOURS_TO      default 7
-
-WHAT IT REFUSES TO DO
- · Send between 21:00 and 07:00 IST. Computed in IST explicitly, so it holds
-   wherever Railway runs the container.
- · Send to a member who has opted out — checked before anything else, and kept
-   separate from the individual channel toggles so that turning WhatsApp back
-   on cannot quietly undo a withdrawal of consent.
- · Send free text on WhatsApp. Only approved templates with variables.
- · Send to an unusable number. Malformed numbers are rejected locally rather
-   than spending an API call to be told so.
-
-MEMBERS CONTROL IT
-Settings gains "How we reach you" with a switch per channel and a "Stop all
-messages" link. Push and WhatsApp default on; SMS defaults OFF because it costs
-per message and reads as more intrusive.
-
-EVERY ATTEMPT IS LOGGED
-A message_log table records channel, template, success and reason. Needed to
-answer "did she actually get it", to notice a channel failing silently, and to
-show consent was honoured.
+DETAILS
+· Numbers are normalised to the 91XXXXXXXXXX form wa.me needs — 10-digit,
+  +91-prefixed, 0-prefixed and spaced formats all work; malformed ones disable
+  the buttons with a reason rather than opening an empty chat.
+· Ampersands are escaped. A raw & in a wa.me link silently truncates the
+  message at that point, which is the failure nobody notices until a member
+  gets half a sentence.
+· The sms: scheme differs on iOS (&body=) from everywhere else (?body=).
+  Both handled — getting it wrong opens an empty compose window.
+· wa.me opens the app on a phone and WhatsApp Web on a desktop, so it works
+  wherever the coach is.
+· "Keep a copy in their notes" is on by default, so a conversation that
+  happens in WhatsApp is not invisible to whoever picks the member up next.
 
 TESTS
-  npm run test:messaging   27 assertions
-Regression: 161 across the four affected suites, all passing.
+Link generation and encoding verified, including the ampersand case.
+Regression: 201 assertions across four suites, all passing.
