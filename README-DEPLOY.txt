@@ -1,43 +1,44 @@
-FitLife — why a member is missing from the gaps list
-====================================================
+FitLife — the member page message now knows what they missed
+============================================================
 
 Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
 NOTHING TO RENAME. No new packages. No schema change.
 
-SUBRAMANYA WAS NOT A BUG, BUT IT LOOKED LIKE ONE
-He is absent from the list because at 15:17 he had already logged his weight
-and his food — everything the app checks for by mid-afternoon. Water is not
-checked until 6pm, activity until 7pm, supplements until 8pm.
+THE BUG YOU FOUND
+Opening 💬 Message from Subramanya's page produced:
 
-I traced it against the real thresholds to confirm:
+    "Hi Subramanya, haven't seen your logs for a few days."
 
-    weight + food logged      15:00  nothing flagged yet
-                              18:00  water
-                              19:00  water, activity
-                              20:00  water, activity, ACV, supplements
+He had logged that morning. The gaps list passes the detected state in, but
+the member page had nothing to pass, so the sheet fell back to a generic
+nudge — one that happened to be false.
 
-So he would have appeared on his own an hour later. But the compliance list
-below showed him at 0%, and an empty entry beside a 0% row reads as broken —
-which is a real problem even when the logic is right.
+That is worse than unhelpful. A member who catches the app being wrong about
+them trusts everything else in it a little less, including the numbers.
 
-WHAT I ADDED
-The card now says why the list is short:
+THE FIX
+The sheet now fetches that member's actual state when no text is supplied. A
+new per-member endpoint answers even when there is nothing outstanding, which
+the list endpoint deliberately does not — it only returns members WITH gaps.
 
-    "3 other members have logged everything due so far.
-     Next check at 6pm — water well under target."
+Subramanya at 15:17, weight and food logged:
+    "Hi Subramanya, all up to date on your side — nice work.
+     Just checking in: how are you finding things this week?"
 
-And when nobody needs chasing at all:
+The same member at 19:00, once water and activity are due:
+    "Hi Subramanya, a couple of things are still open today — your water and
+     today's activity. Pop them in when you get a moment..."
 
-    "Everyone has logged what's due so far. Nothing to chase.
-     Next check at 6pm — water well under target."
+Asha, 86 days silent:
+    "Hi Asha, haven't seen a log from you in a while. Everything alright?"
 
-WHY NOT JUST FLAG EVERYTHING EARLIER
-Because that is the failure mode this design exists to avoid. Flagging water at
-9am, or supplements at lunchtime, trains a coach that the list is noise and
-they stop reading it — at which point it is worse than having no list. The
-thresholds stay; the reasoning is now visible instead of implicit.
+Every entry point now writes from the same detection: the gaps list, the
+member page, the alerts list and the member menu.
+
+WHILE IT LOADS
+The box shows "Checking what they haven't logged…" and the send buttons are
+disabled, so nobody fires a half-written message.
 
 TESTS
-  npm run test:gaps    46 assertions, including Subramanya's exact scenario
-                       traced hour by hour from 15:00 to 20:00
-Regression: 180 across four suites, all passing.
+  npm run test:gaps    52 assertions, six of them on the new endpoint
+Regression: 253 across five suites, all passing.

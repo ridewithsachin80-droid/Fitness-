@@ -154,6 +154,40 @@ const fullDay = {
   ck('MEMBERS CANNOT SEE THE GAP LIST', x.status === 403, x.status);
   ck('"gaps" is not read as a member id', true);
 
+  console.log('\n[12] the per-member endpoint always answers');
+  // The list endpoint only returns members WITH gaps. Composing a message from
+  // a member's own page needs their state either way, including "nothing
+  // outstanding" — otherwise the sheet falls back to a generic nudge that
+  // tells someone who logged this morning we haven't seen their logs.
+  await pool.query(
+    `INSERT INTO daily_logs (patient_id, log_date, weight_kg, food_items)
+     VALUES ($1, (NOW() AT TIME ZONE 'Asia/Kolkata')::date, 85, $2)`,
+    [mine.id, JSON.stringify([{ name: 'Rice', grams: 150, meal: 'Meal 1' }])]);
+
+  const one = await (async () => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/patients/${mine.id}/gaps`,
+      { headers: { Authorization: 'Bearer ' + tok(coach.id, 'monitor') } });
+    return { status: r.status, data: await r.json().catch(() => ({})) };
+  })();
+  ck('answers for a member with no gaps', one.status === 200, one.status);
+  ck('gaps array present even when empty', Array.isArray(one.data.gaps), one.data);
+  ck('days_since_log reported as 0', one.data.days_since_log === 0, one.data.days_since_log);
+  ck('next_check included', 'next_check' in one.data, Object.keys(one.data));
+
+  const denied = await (async () => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/patients/${other.id}/gaps`,
+      { headers: { Authorization: 'Bearer ' + tok(coach.id, 'monitor') } });
+    return r.status;
+  })();
+  ck('blocked for an unassigned member', denied === 403, denied);
+
+  const asMember = await (async () => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/patients/${mine.id}/gaps`,
+      { headers: { Authorization: 'Bearer ' + tok(mine.id, 'patient') } });
+    return r.status;
+  })();
+  ck('members cannot read it', asMember === 403, asMember);
+
   srv.close();
   console.log(`\n\u2550\u2550\u2550 GAPS: ${pass} passed, ${fail} failed \u2550\u2550\u2550`);
   process.exit(fail ? 1 : 0);

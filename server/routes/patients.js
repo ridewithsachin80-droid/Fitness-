@@ -335,6 +335,49 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   }
 });
 
+// ── GET /api/patients/:id/gaps ───────────────────────────────────────────────
+// One member's state, so a message composed from their page is written from
+// what they actually haven't logged rather than a generic nudge. Unlike the
+// list endpoint this always answers, including "nothing outstanding".
+router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const [userRes, logRes, profRes, lastRes] = await Promise.all([
+      pool.query(`SELECT id, name, phone FROM users WHERE id = $1`, [id]),
+      pool.query(
+        `SELECT * FROM daily_logs
+         WHERE patient_id = $1 AND log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`, [id]),
+      pool.query(
+        `SELECT water_target, protocol_activities, protocol_acv,
+                protocol_supplements, meal_plan
+         FROM patient_profiles WHERE user_id = $1`, [id]),
+      pool.query(
+        `SELECT ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - MAX(log_date)) AS days_since
+         FROM daily_logs WHERE patient_id = $1`, [id]),
+    ]);
+
+    if (!userRes.rows.length) return res.status(404).json({ error: 'Member not found' });
+
+    const p = profRes.rows[0] || {};
+    const raw = lastRes.rows[0]?.days_since;
+    const days = raw == null ? 9999 : parseInt(raw);
+
+    res.json({
+      ...detectGaps(userRes.rows[0], logRes.rows[0] || null, {
+        water_target: p.water_target,
+        activities:   p.protocol_activities,
+        acv:          p.protocol_acv,
+        supplements:  p.protocol_supplements,
+        meal_slots:   p.meal_plan,
+      }, { daysSince: days }),
+      next_check: nextCheck(),
+    });
+  } catch (err) {
+    console.error('GET /patients/:id/gaps error:', err);
+    res.status(500).json({ error: 'Could not work out their gaps' });
+  }
+});
+
 // ── Notification preferences ─────────────────────────────────────────────────
 // Members control which channels reach them. Opting out is kept separate from
 // the individual toggles: switching a channel off is a preference, opting out

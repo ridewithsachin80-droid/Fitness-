@@ -217,7 +217,17 @@ export function combinedGapMessage(member, gapKeys = [], daysSince = null) {
 
   const keys = gapKeys.filter(k => k !== 'nothing');
 
-  // Nothing at all, or so much missing that listing it becomes a telling-off
+  // Nothing outstanding. Telling someone who logged this morning that we
+  // "haven't seen their logs" is simply false, and a member who spots the app
+  // being wrong about them trusts the rest of it less.
+  if (!gapKeys.length) {
+    return withLink(
+      `Hi ${first(member.name)}, all up to date on your side — nice work. ` +
+      `Just checking in: how are you finding things this week?`);
+  }
+
+  // Logged nothing at all, or so much missing that listing it becomes a
+  // telling-off
   if (gapKeys.includes('nothing') || keys.length === 0 || keys.length >= 5) {
     return GAP_TEMPLATES.nothing(member);
   }

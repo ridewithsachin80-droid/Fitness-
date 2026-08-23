@@ -13,16 +13,41 @@
 
 import { useState, useEffect } from 'react';
 import api from '../api/client';
-import { TEMPLATES, openWhatsApp, openSMS, waNumber } from '../utils/personalMessage';
+import { TEMPLATES, combinedGapMessage, openWhatsApp, openSMS, waNumber } from '../utils/personalMessage';
 
 export default function MessageMember({ member, summary = null, initialText = null, open, onClose }) {
   // initialText lets a caller open the sheet already talking about a specific
   // thing — a missing water log, say — rather than the generic nudge.
   const [text, setText]   = useState(() => initialText || TEMPLATES.nudge(member || {}));
+  const [loadingGaps, setLoadingGaps] = useState(false);
+
   // Reopening the sheet for a different member must reset the body; without
   // this the previous member's message persists.
+  //
+  // When the caller has not supplied text — opening from a member's page
+  // rather than the gaps list — fetch what they actually haven't logged and
+  // write from that. The old fallback claimed "haven't seen your logs for a
+  // few days" to members who had logged that morning, which is simply untrue.
   useEffect(() => {
-    if (open) setText(initialText || TEMPLATES.nudge(member || {}));
+    if (!open) return;
+    if (initialText) { setText(initialText); return; }
+    if (!member?.id) { setText(TEMPLATES.nudge(member || {})); return; }
+
+    let cancelled = false;
+    setLoadingGaps(true);
+    setText('');
+    api.get(`/patients/${member.id}/gaps`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setText(combinedGapMessage(
+          { name: member.name },
+          (data.gaps || []).map(g => g.key),
+          data.days_since_log));
+      })
+      .catch(() => { if (!cancelled) setText(TEMPLATES.nudge(member || {})); })
+      .finally(() => { if (!cancelled) setLoadingGaps(false); });
+
+    return () => { cancelled = true; };
   }, [open, initialText, member?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [saveNote, setSaveNote] = useState(true);
   const [busy, setBusy]   = useState(false);
@@ -90,8 +115,9 @@ export default function MessageMember({ member, summary = null, initialText = nu
         {/* Always editable. A coach who cannot add a sentence sends a form
             letter, which defeats the purpose of using their own number. */}
         <textarea
-          value={text}
+          value={loadingGaps ? 'Checking what they haven\'t logged…' : text}
           onChange={e => setText(e.target.value)}
+          disabled={loadingGaps}
           rows={7}
           className="w-full bg-[#121316] border border-white/[0.12] rounded-xl p-3 text-[13px]
             text-white leading-relaxed resize-none focus:outline-none focus:ring-2
@@ -109,14 +135,14 @@ export default function MessageMember({ member, summary = null, initialText = nu
         {error && <p className="text-[11px] text-red-400 mb-2">{error}</p>}
 
         <div className="flex gap-2">
-          <button onClick={() => send('whatsapp')} disabled={busy || !numberOk}
+          <button onClick={() => send('whatsapp')} disabled={busy || !numberOk || loadingGaps}
             style={{ minHeight: 46 }}
             className="flex-1 rounded-xl text-sm font-bold text-[#121316]
               bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
               active:scale-[0.98] disabled:opacity-50">
             WhatsApp
           </button>
-          <button onClick={() => send('sms')} disabled={busy || !numberOk}
+          <button onClick={() => send('sms')} disabled={busy || !numberOk || loadingGaps}
             style={{ minHeight: 46 }}
             className="flex-1 rounded-xl text-sm font-bold text-[#9EA3B0]
               border border-white/[0.14] active:scale-[0.98] disabled:opacity-50">
