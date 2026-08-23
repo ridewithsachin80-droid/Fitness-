@@ -1,54 +1,43 @@
-FitLife — one list, one message, nothing to choose
-==================================================
+FitLife — why a member is missing from the gaps list
+====================================================
 
 Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
 NOTHING TO RENAME. No new packages. No schema change.
 
-DEPLOY THE "todays-gaps" ZIP FIRST if you have not — it carries the endpoint
-and the card. This simplifies both.
+SUBRAMANYA WAS NOT A BUG, BUT IT LOOKED LIKE ONE
+He is absent from the list because at 15:17 he had already logged his weight
+and his food — everything the app checks for by mid-afternoon. Water is not
+checked until 6pm, activity until 7pm, supplements until 8pm.
 
-YOU WERE RIGHT ABOUT THE DUPLICATION
-Today's gaps and Needs Attention were two lists doing overlapping jobs. Asha
-appeared in both, with a 💬 button in each. And the compose sheet then asked
-you to pick "Not logging / No weight / Check in" — a category the app had
-already worked out.
+I traced it against the real thresholds to confirm:
 
-THREE THINGS REMOVED
+    weight + food logged      15:00  nothing flagged yet
+                              18:00  water
+                              19:00  water, activity
+                              20:00  water, activity, ACV, supplements
 
-1. NEEDS ATTENTION'S PER-MEMBER LIST IS GONE
-   Members who have not logged in days now appear in the same gaps list, with
-   the day count as their reason:
+So he would have appeared on his own an hour later. But the compliance list
+below showed him at 0%, and an empty entry beside a 0% row reads as broken —
+which is a real problem even when the logic is right.
 
-       Asha              [86 days no log]        💬 Message
-       Harsha            [Nothing logged]        💬 Message
-       Vishwas           [No food]               💬 Message
-       Daya              [No weight] [No food]   💬 Message
+WHAT I ADDED
+The card now says why the list is short:
 
-   One list, ordered most urgent first.
+    "3 other members have logged everything due so far.
+     Next check at 6pm — water well under target."
 
-2. THE PRESET CHIPS ARE GONE
-   The message text is already written from what the member actually has not
-   logged. Asking a coach to pick a category first was work the app had
-   already done. The text is still fully editable — that has not changed.
+And when nobody needs chasing at all:
 
-3. THE DUPLICATE 💬 BUTTONS ARE GONE
-   One button per member, in one place.
+    "Everyone has logged what's due so far. Nothing to chase.
+     Next check at 6pm — water well under target."
 
-WHAT WAS KEPT
-"Send an in-app reminder to all N" survives as a single button, because bulk
-in-app push is the one action the gaps card deliberately does not automate.
-Its caption now says plainly that for members who have stopped opening the app,
-💬 is the better tool.
-
-THE MESSAGE ADAPTS TO HOW LONG THEY HAVE BEEN GONE
-    4 days      "haven't seen a log from you for 4 days. Everything alright?"
-    86 days     "haven't seen a log from you in a while. Everything alright?"
-    never       "we haven't seen you in FitLife for a long while. No pressure
-                 at all — but if you'd like to pick things back up, I'm here."
-
-An itemised chase after a month of silence reads as an invoice rather than
-concern, so a dormant member never gets a checklist of today's missing items.
+WHY NOT JUST FLAG EVERYTHING EARLIER
+Because that is the failure mode this design exists to avoid. Flagging water at
+9am, or supplements at lunchtime, trains a coach that the list is noise and
+they stop reading it — at which point it is worse than having no list. The
+thresholds stay; the reasoning is now visible instead of implicit.
 
 TESTS
-  npm run test:gaps    37 assertions
-Regression: 264 across six suites, all passing.
+  npm run test:gaps    46 assertions, including Subramanya's exact scenario
+                       traced hour by hour from 15:00 to 20:00
+Regression: 180 across four suites, all passing.

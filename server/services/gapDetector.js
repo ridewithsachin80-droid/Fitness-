@@ -181,4 +181,31 @@ function detectGaps(member, log, protocol = {}, opts = {}) {
   };
 }
 
-module.exports = { detectGaps, istHour, GAPS };
+/**
+ * The next check that will start applying, so a coach can see why a member is
+ * absent from the list rather than assuming it is broken.
+ *
+ * A member who has logged weight and food by 3pm has nothing outstanding —
+ * water is not checked until 6pm and supplements not until 8pm. Without this,
+ * an empty-looking list next to a 0% compliance row reads as a bug.
+ */
+function nextCheck(now = new Date()) {
+  const h = istHour(now);
+  const upcoming = GAPS
+    .filter(g => g.after > h)
+    .sort((a, b) => a.after - b.after);
+  if (!upcoming.length) return null;
+
+  const hour = upcoming[0].after;
+  const names = upcoming
+    .filter(g => g.after === hour)
+    .map(g => g.label.toLowerCase());
+
+  return {
+    hour,
+    label: `${hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'pm' : 'am'}`,
+    covers: names,
+  };
+}
+
+module.exports = { detectGaps, istHour, nextCheck, GAPS };

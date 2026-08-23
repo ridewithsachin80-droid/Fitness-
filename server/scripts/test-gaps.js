@@ -11,7 +11,7 @@ if (!process.env.DATABASE_URL?.includes('localhost') && !process.env.ALLOW_TEST_
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
 const express = require('express'), jwt = require('jsonwebtoken'), cookieParser = require('cookie-parser');
 const pool = require('../db/pool');
-const { detectGaps } = require('../services/gapDetector');
+const { detectGaps, nextCheck } = require('../services/gapDetector');
 
 const app = express(); app.use(express.json()); app.use(cookieParser());
 app.use((q,_r,n) => { q.io = { to: () => ({ emit: () => {} }) }; n(); });
@@ -109,7 +109,26 @@ const fullDay = {
   ck('dormant even when today looks complete',
      keys(partialButDormant).includes('dormant'), keys(partialButDormant));
 
-  console.log('\n[10] endpoint and access control');
+  console.log('\n[10] an absence from the list is explainable');
+  // A member who logged weight and food by 3pm has nothing outstanding yet.
+  // Without this the coach sees 0% compliance elsewhere and no entry here,
+  // and reasonably assumes the list is broken.
+  const doneSoFar = { weight_kg: 85, food_items: [{ name:'x', meal:'Meal 1' }],
+                      water_ml: 0, activities: {}, acv: {}, supplements: {} };
+  const at15 = detectGaps(M, doneSoFar, P, { now: at(15), daysSince: 0 });
+  ck('nothing flagged at 15:00', at15.gaps.length === 0, keys(at15));
+  const at18 = detectGaps(M, doneSoFar, P, { now: at(18), daysSince: 0 });
+  ck('water appears at 18:00', keys(at18).includes('water'), keys(at18));
+  const at19 = detectGaps(M, doneSoFar, P, { now: at(19), daysSince: 0 });
+  ck('activity appears at 19:00', keys(at19).includes('activity'), keys(at19));
+
+  const n15 = nextCheck(at(15));
+  ck('next check reported at 15:00', n15 && n15.hour === 18, n15);
+  ck('and names what it covers', n15.covers.some(c => /water/.test(c)), n15.covers);
+  ck('formats the hour readably', n15.label === '6pm', n15.label);
+  ck('late evening -> no further checks', nextCheck(at(23)) === null, nextCheck(at(23)));
+
+  console.log('\n[11] endpoint and access control');
   await pool.query('TRUNCATE users RESTART IDENTITY CASCADE');
   const mk = async (n,ph,role) => (await pool.query(
     `INSERT INTO users (name,phone,password,role,active) VALUES ($1,$2,'x',$3,true) RETURNING id`,[n,ph,role])).rows[0];
@@ -129,6 +148,8 @@ const fullDay = {
   ck('only their own members appear',
      x.data.members.every(m => m.member_id === mine.id), x.data.members.map(m => m.name));
   ck('phone included for messaging', x.data.members.every(m => 'phone' in m), x.data.members[0]);
+  ck('clear count returned', typeof x.data.clear === 'number', x.data.clear);
+  ck('next check returned or null', 'next_check' in x.data, Object.keys(x.data));
   x = await call(tok(mine.id,'patient'));
   ck('MEMBERS CANNOT SEE THE GAP LIST', x.status === 403, x.status);
   ck('"gaps" is not read as a member id', true);

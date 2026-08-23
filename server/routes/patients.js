@@ -259,7 +259,7 @@ router.get('/population/prior', authMW, roleCheck('monitor', 'admin'), async (re
 // see at a glance who is worth a message and about what.
 //
 // Declared before '/:id' so "gaps" is not read as a member id.
-const { detectGaps } = require('../services/gapDetector');
+const { detectGaps, nextCheck } = require('../services/gapDetector');
 
 router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   try {
@@ -299,6 +299,7 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     const profByMember = new Map(profRes.rows.map(p => [p.user_id, p]));
     const lastByMember = new Map(lastRes.rows.map(r => [r.patient_id, parseInt(r.days_since)]));
 
+    let clear = 0;
     const out = members.map(m => {
       const p = profByMember.get(m.id) || {};
       // A member who has never logged at all reads as maximally dormant
@@ -310,14 +311,24 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
         supplements:  p.protocol_supplements,
         meal_slots:   p.meal_plan,
       }, { daysSince: days });
-    }).filter(r => r.gaps.length);
+    }).filter(r => {
+      if (!r.gaps.length) clear++;
+      return r.gaps.length;
+    });
 
     // Most urgent first, so the coach works down the list
     const rank = { blocking: 0, high: 1, medium: 2, low: 3 };
     out.sort((a, b) => rank[a.gaps[0].severity] - rank[b.gaps[0].severity]
                     || a.name.localeCompare(b.name));
 
-    res.json({ members: out, generated_at: new Date().toISOString() });
+    res.json({
+      members: out,
+      // Members with nothing outstanding YET. Reported so an absence from the
+      // list is explainable rather than looking like a bug.
+      clear,
+      next_check: nextCheck(),
+      generated_at: new Date().toISOString(),
+    });
   } catch (err) {
     console.error('GET /patients/gaps error:', err);
     res.status(500).json({ error: 'Could not work out today\'s gaps' });

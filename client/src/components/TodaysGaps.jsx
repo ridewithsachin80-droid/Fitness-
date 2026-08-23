@@ -51,11 +51,21 @@ export default function TodaysGaps() {
 
   const members = data?.members || [];
 
+  const clear = data?.clear ?? 0;
+  const next = data?.next_check;
+
   if (!members.length) {
     return (
-      <p className="text-xs text-emerald-300 py-3 text-center">
-        Everyone's logged and up to date. Nothing to chase.
-      </p>
+      <div className="py-3 text-center">
+        <p className="text-xs text-emerald-300">
+          Everyone has logged what's due so far. Nothing to chase.
+        </p>
+        {next && (
+          <p className="text-[10px] text-[#7E8596] mt-1">
+            Next check at {next.label} — {next.covers.join(' and ')}.
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -111,8 +121,20 @@ export default function TodaysGaps() {
         ))}
       </div>
 
+      {/* Without this, a member showing 0% compliance elsewhere but missing
+          from this list looks like a bug rather than someone who has simply
+          logged everything due so far. */}
+      {(clear > 0 || next) && (
+        <p className="text-[10px] text-[#7E8596] mt-2.5 leading-relaxed">
+          {clear > 0 && (
+            <>{clear} other member{clear > 1 ? 's have' : ' has'} logged everything due so far. </>
+          )}
+          {next && <>Next check at {next.label} — {next.covers.join(' and ')}.</>}
+        </p>
+      )}
+
       <button onClick={load}
-        className="text-[11px] font-bold text-[#D4AF37] mt-2.5">
+        className="text-[11px] font-bold text-[#D4AF37] mt-1.5">
         Refresh
       </button>
 
