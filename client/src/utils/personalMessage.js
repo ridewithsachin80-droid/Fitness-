@@ -52,18 +52,38 @@ export function smsLink(phone, text) {
 const first = name => String(name || '').trim().split(/\s+/)[0] || 'there';
 
 /**
+ * The app's own address, taken from wherever the coach is currently running it.
+ *
+ * Reading window.location.origin rather than hard-coding the domain means the
+ * link is always right — production, a staging deploy, or a local dev server —
+ * and it can never drift out of date if the domain changes.
+ *
+ * WhatsApp turns a bare URL into a tappable link automatically, so it goes on
+ * its own line at the end where it reads as a call to action rather than
+ * interrupting the sentence.
+ */
+export function appUrl(path = '') {
+  const origin = (typeof window !== 'undefined' && window.location?.origin)
+    || 'https://fitness.upscale-app.com';
+  return path ? `${origin}${path.startsWith('/') ? path : `/${path}`}` : origin;
+}
+
+/** Append the link as its own line — never inline, where it breaks the read. */
+const withLink = (body, path = '') => `${body}\n\n${appUrl(path)}`;
+
+/**
  * Message templates. Written to sound like a person, because they are sent
  * from a person's number — a coach's WhatsApp saying "Dear Member, your
  * compliance is 45%" would be worse than sending nothing.
  */
 export const TEMPLATES = {
-  nudge: (m) =>
+  nudge: (m) => withLink(
     `Hi ${first(m.name)}, haven't seen your logs for a few days. ` +
-    `Everything alright? Just open FitLife and tell the AI what you ate — it fills the rest in.`,
+    `Everything alright? Open FitLife and just tell the AI what you ate — it fills the rest in.`),
 
-  weightless: (m) =>
+  weightless: (m) => withLink(
     `Hi ${first(m.name)}, quick one — could you log your morning weight when you get a moment? ` +
-    `It takes ten seconds and it keeps your targets accurate.`,
+    `It takes ten seconds and keeps your targets accurate.`),
 
   summary: (m, s = {}) => {
     const lines = [`Hi ${first(m.name)}, here's your week:`];
@@ -79,19 +99,20 @@ export const TEMPLATES = {
     lines.push('', (s.avgComp ?? 0) >= 75 || (s.days ?? 0) >= 6
       ? 'Really good consistency — keep it going.'
       : "Let's aim for a bit more logging this week. Small entries add up.");
-    return lines.join('\n');
+    return withLink(lines.join('\n'), '/progress');
   },
 
-  labs: (m, markers = []) =>
+  labs: (m, markers = []) => withLink(
     `Hi ${first(m.name)}, I've been through your lab report. ` +
     (markers.length
       ? `A few things worth adjusting in your diet — mainly ${markers.slice(0, 3).join(', ')}. `
       : '') +
     `I've updated your plan in FitLife. Have a look and tell me if anything doesn't suit you.`,
+    '/profile'),
 
-  checkin: (m) =>
+  checkin: (m) => withLink(
     `Hi ${first(m.name)}, just checking in — how are you finding the plan this week? ` +
-    `Anything you'd like changed?`,
+    `Anything you'd like changed?`),
 };
 
 /**
