@@ -19,7 +19,7 @@ const MACRO_KEYS = [
   { key:'calories',    label:'Calories',  unit:'kcal', color:'#FF6B35' },
   { key:'protein',     label:'Protein',   unit:'g',    color:'#00D49F' },
   { key:'total_carbs', label:'Carbs',     unit:'g',    color:'#F59E0B' },
-  { key:'fat',         label:'Fat',       unit:'g',    color:'#e0c98a' },
+  { key:'fat',         label:'Fat',       unit:'g',    color:'#F0E2B6' },
   { key:'fiber',       label:'Fiber',     unit:'g',    color:'#4ADE80' },
   { key:'sugar',       label:'Sugar',     unit:'g',    color:'#FB923C' },
 ];
@@ -58,10 +58,10 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
 
   // Tokens with fallbacks matching FoodLog's existing dark theme
   const accent = t?.accent  || '#00D49F';
-  const bg     = t?.card    || '#131317';
-  const text   = t?.text    || '#ededf0';
+  const bg     = t?.card    || '#1A1C20';
+  const text   = t?.text    || '#FFFFFF';
   const muted  = t?.muted   || '#6a6a78';
-  const faint  = t?.faint   || '#1a1a20';
+  const faint  = t?.faint   || '#1A1C20';
   const border = t?.cardBorder || 'rgba(255,255,255,0.1)';
   const font   = t?.font    || 'inherit';
   const r      = t?.r       || 14;
@@ -299,8 +299,8 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
         </summary>
         <div style={micro}>
           {VITAMIN_KEYS.map(v => (
-            <div key={v.key} style={mBox('#e0c98a')}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#e0c98a', fontFamily: font }}>{sc(food.per_100g?.[v.key])}</div>
+            <div key={v.key} style={mBox('#F0E2B6')}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#F0E2B6', fontFamily: font }}>{sc(food.per_100g?.[v.key])}</div>
               <div style={{ fontSize: 9, color: muted, marginTop: 1, fontFamily: font }}>{v.label} {v.unit}</div>
             </div>
           ))}
