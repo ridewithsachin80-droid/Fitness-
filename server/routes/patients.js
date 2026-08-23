@@ -252,6 +252,58 @@ router.get('/population/prior', authMW, roleCheck('monitor', 'admin'), async (re
   }
 });
 
+// Declared before '/:id' — Express matches in order and would otherwise
+// read 'me' as a member id and reject the member on role.
+// ── Notification preferences ─────────────────────────────────────────────────
+// Members control which channels reach them. Opting out is kept separate from
+// the individual toggles: switching a channel off is a preference, opting out
+// is a withdrawal of consent and must not be undone by toggling something else.
+router.get('/me/notifications', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT notify_push, notify_whatsapp, notify_sms, notify_opted_out
+       FROM patient_profiles WHERE user_id = $1`, [req.user.id]);
+    const p = rows[0] || {};
+    res.json({
+      push:     p.notify_push     !== false,
+      whatsapp: p.notify_whatsapp !== false,
+      sms:      p.notify_sms      === true,
+      opted_out: p.notify_opted_out === true,
+    });
+  } catch (err) {
+    console.error('GET /patients/me/notifications error:', err);
+    res.status(500).json({ error: 'Could not load your preferences' });
+  }
+});
+
+router.put('/me/notifications', authMW, roleCheck('patient'), async (req, res) => {
+  const { push, whatsapp, sms, opted_out } = req.body || {};
+  const bool = (v, fallback) => (typeof v === 'boolean' ? v : fallback);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE patient_profiles SET
+         notify_push      = COALESCE($2, notify_push),
+         notify_whatsapp  = COALESCE($3, notify_whatsapp),
+         notify_sms       = COALESCE($4, notify_sms),
+         notify_opted_out = COALESCE($5, notify_opted_out)
+       WHERE user_id = $1
+       RETURNING notify_push, notify_whatsapp, notify_sms, notify_opted_out`,
+      [req.user.id,
+       typeof push === 'boolean' ? push : null,
+       typeof whatsapp === 'boolean' ? whatsapp : null,
+       typeof sms === 'boolean' ? sms : null,
+       typeof opted_out === 'boolean' ? opted_out : null]);
+    const p = rows[0] || {};
+    res.json({
+      push: p.notify_push, whatsapp: p.notify_whatsapp,
+      sms: p.notify_sms, opted_out: p.notify_opted_out,
+    });
+  } catch (err) {
+    console.error('PUT /patients/me/notifications error:', err);
+    res.status(500).json({ error: 'Could not save your preferences' });
+  }
+});
+
 router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;

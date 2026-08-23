@@ -1705,8 +1705,14 @@ router.post('/remind', roleCheck('monitor', 'admin'), async (req, res) => {
 
       try {
         const pushService = require('../services/pushService');
-        await pushService.sendToUser(memberId, 'Your coach checked in 👋',
-          `Please log today — it takes under a minute with AI chat.`, 'coach-remind');
+        // Reach them wherever they actually are. A member who has stopped
+        // logging is exactly the member who is not opening the app, so a
+        // push-only nudge is delivered to everyone except its audience.
+        const messaging = require('../services/messaging');
+        await messaging.notify(memberId, 'nudge',
+          [firstName, 'your daily log'],
+          { title: 'Your coach checked in 👋',
+            body: `${req.user.name} sent you a message. Open FitLife to see it.` });
       } catch { /* no push subscription — note still lands */ }
 
       coachAudit(req.user, 'coach_remind', memberId, rows[0].name, 'One-tap reminder (note + push)');
@@ -1793,9 +1799,11 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
 
     try {
       const pushService = require('../services/pushService');
-      await pushService.sendToUser(memberId, 'Your weekly summary 📊',
-        `${logs.length}/7 days logged${change != null && change < 0 ? ` · ${Math.abs(change)} kg down` : ''}`,
-        'weekly-summary');
+      const messaging = require('../services/messaging');
+      await messaging.notify(memberId, 'summary',
+        [firstName, `${logs.length} of 7 days`],
+        { title: 'Your weekly summary 📊',
+          body: `${logs.length}/7 days logged${change != null && change < 0 ? ` · ${Math.abs(change)} kg down` : ''}` });
     } catch { /* no push subscription — the note still lands */ }
 
     coachAudit(req.user, 'coach_weekly_summary', memberId, userRes.rows[0].name,

@@ -271,6 +271,31 @@ ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS entered_role VARCHAR(10);
 ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS lab_name VARCHAR(120);
 ALTER TABLE lab_values ADD COLUMN IF NOT EXISTS notes TEXT;
 
+-- Notification channel preferences. Default ON for push and WhatsApp because
+-- a coaching product that cannot reach its members is not coaching; SMS is
+-- opt-in since it costs per message and reads as more intrusive.
+--
+-- notify_opted_out is separate from the individual flags on purpose: turning
+-- off one channel is a preference, opting out is a withdrawal of consent and
+-- must survive anyone toggling the others back on.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_push      BOOLEAN DEFAULT true;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_whatsapp  BOOLEAN DEFAULT true;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_sms       BOOLEAN DEFAULT false;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_opted_out BOOLEAN DEFAULT false;
+
+-- Delivery log. Needed to answer "did she actually get it?", to stop paying
+-- for a channel that silently fails, and to prove consent was honoured.
+CREATE TABLE IF NOT EXISTS message_log (
+  id           SERIAL PRIMARY KEY,
+  user_id      INT REFERENCES users(id) ON DELETE CASCADE,
+  channel      VARCHAR(12) NOT NULL,
+  template_key VARCHAR(40),
+  ok           BOOLEAN NOT NULL,
+  detail       TEXT,
+  sent_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_message_log_user ON message_log(user_id, sent_at DESC);
+
 -- Clean reference bounds that were stored as NaN. Postgres NUMERIC accepts
 -- NaN as a legitimate value, so a non-numeric bound on a report ("< 100", "-")
 -- became parseFloat(...) = NaN and was stored happily, then rendered as
