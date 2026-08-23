@@ -6,6 +6,7 @@ import { adminResetPin, adminSendPush, getAuditLog } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
 import AdminReminders from '../components/AdminReminders';
+import MessageMember from '../components/MessageMember';
 import CoachAIChat, { CoachAIFab, useCoachAI } from '../components/CoachAIChat';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
@@ -28,10 +29,10 @@ function StatCard({ value, label, icon, color }) {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-sm max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/[0.07]">
-          <h3 className="font-bold text-[#ededf0] text-base">{title}</h3>
-          <button onClick={onClose} className="text-[#9a9aa6] hover:text-[#9a9aa6] text-2xl leading-none">×</button>
+          <h3 className="font-bold text-[#FFFFFF] text-base">{title}</h3>
+          <button onClick={onClose} className="text-[#9EA3B0] hover:text-[#9EA3B0] text-2xl leading-none">×</button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -43,7 +44,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, type = 'text', value, onChange, placeholder, required }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
@@ -52,7 +53,7 @@ function Field({ label, type = 'text', value, onChange, placeholder, required })
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-          focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]"
+          focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]"
       />
     </div>
   );
@@ -99,14 +100,14 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
 
         {/* Assign monitor */}
         <div>
-          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
             Assign to Monitor
           </label>
           <select
             value={form.monitor_id}
             onChange={e => set('monitor_id', e.target.value)}
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0] bg-white"
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF] bg-white"
           >
             <option value="">— Unassigned —</option>
             {monitors.map(m => (
@@ -255,7 +256,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-[#9a9aa6]">
+      <p className="text-xs text-[#9EA3B0]">
         Build the prescribed meal plan. Member sees cards above the food log — tap to pre-fill.
       </p>
 
@@ -270,10 +271,10 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotMap[meal.color] || dotMap.emerald}`} />
               <input value={meal.name} onChange={e => updateMeal(meal.id, 'name', e.target.value)}
-                className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-[#d8d8de]" />
+                className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-[#FFFFFF]" />
               <input type="time" value={meal.time} onChange={e => updateMeal(meal.id, 'time', e.target.value)}
                 className="text-xs border border-white/[0.15] rounded-lg px-2 py-1 w-28" />
-              <button onClick={() => removeMeal(meal.id)} className="text-[#9a9aa6] hover:text-red-400 text-sm ml-1">🗑</button>
+              <button onClick={() => removeMeal(meal.id)} className="text-[#9EA3B0] hover:text-red-400 text-sm ml-1">🗑</button>
             </div>
 
             {(meal.items || []).map((item, iIdx) => (
@@ -304,10 +305,10 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                 <input autoFocus value={foodQuery} onChange={e => handleFoodQuery(e.target.value)}
                   placeholder="Search food…"
                   className="w-full text-xs px-3 py-2 rounded-xl border border-white bg-white
-                    focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#d8d8de]" />
-                {searchingFood && <span className="absolute right-3 top-2 text-xs text-[#9a9aa6]">…</span>}
+                    focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+                {searchingFood && <span className="absolute right-3 top-2 text-xs text-[#9EA3B0]">…</span>}
                 {foodSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] rounded-xl border border-white/[0.07] shadow-lg
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1A1C20] rounded-xl border border-white/[0.07] shadow-lg
                     z-30 border border-white/[0.07] max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
                     {foodSuggestions.map(food => (
                       <button key={food.id}
@@ -315,7 +316,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                         onClick={() => addFoodToMeal(meal.id, food, 100)}
                         className="w-full text-left px-3 py-2 hover:bg-[rgba(52,211,153,0.10)] border-b border-white/[0.06] last:border-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-[#d8d8de] font-medium truncate">{food.name}</span>
+                          <span className="text-xs text-[#FFFFFF] font-medium truncate">{food.name}</span>
                           <span className="text-xs font-bold text-orange-300 flex-shrink-0 ml-2">
                             {food.per_100g?.calories || 0} kcal/100g
                           </span>
@@ -325,11 +326,11 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                   </div>
                 )}
                 <button onClick={() => { setActiveMealId(null); setFoodQuery(''); setFoodSugg([]); }}
-                  className="text-xs text-[#9a9aa6] mt-1 hover:text-[#9a9aa6]">Cancel</button>
+                  className="text-xs text-[#9EA3B0] mt-1 hover:text-[#9EA3B0]">Cancel</button>
               </div>
             ) : (
               <button onClick={() => { setActiveMealId(meal.id); setFoodQuery(''); setFoodSugg([]); }}
-                className="w-full py-1.5 text-xs font-semibold text-[#9a9aa6] hover:text-emerald-300
+                className="w-full py-1.5 text-xs font-semibold text-[#9EA3B0] hover:text-emerald-300
                   bg-white/60 hover:bg-white/90 rounded-xl border border-dashed border-white/[0.1]
                   hover:border-[rgba(52,211,153,0.35)] transition-all">
                 + Add food item
@@ -347,8 +348,8 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
       </button>
 
       {mealPlan.length > 0 && (
-        <div className="bg-white/[0.08] border border-white/[0.1] text-[#ededf0] rounded-2xl px-4 py-3 space-y-2">
-          <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6]">Day Total</p>
+        <div className="bg-white/[0.08] border border-white/[0.1] text-[#FFFFFF] rounded-2xl px-4 py-3 space-y-2">
+          <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0]">Day Total</p>
           <div className="flex gap-4 flex-wrap">
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
             <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
@@ -375,17 +376,17 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
               const cls = pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-300' : 'text-red-400';
               return (
                 <div key={label} className="flex items-center justify-between">
-                  <span className="text-xs text-[#9a9aa6]">{label}</span>
+                  <span className="text-xs text-[#9EA3B0]">{label}</span>
                   <span className={`text-xs font-bold ${cls}`}>
-                    {v} <span className="text-[#9a9aa6] font-normal">{unit}</span>
-                    <span className="text-[#9a9aa6] ml-1">({Math.round(pct)}%)</span>
+                    {v} <span className="text-[#9EA3B0] font-normal">{unit}</span>
+                    <span className="text-[#9EA3B0] ml-1">({Math.round(pct)}%)</span>
                   </span>
                 </div>
               );
             })}
           </div>
           {macrosKcal && (
-            <div className="text-xs text-[#9a9aa6] pt-1 border-t border-white/[0.15]">
+            <div className="text-xs text-[#9EA3B0] pt-1 border-t border-white/[0.15]">
               Target: {macrosKcal} kcal · Difference:{' '}
               <span className={Math.abs(dayTotal.kcal - parseInt(macrosKcal)) <= 100 ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}>
                 {dayTotal.kcal - parseInt(macrosKcal) > 0 ? '+' : ''}{dayTotal.kcal - parseInt(macrosKcal)} kcal
@@ -665,33 +666,33 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="space-y-4">
-        <p className="text-xs text-[#9a9aa6]">
+        <p className="text-xs text-[#9EA3B0]">
           Set the fasting window. Member sees a live bar showing exactly where they are right now.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
               Fast Begins ⏸
             </label>
             <input type="time" value={fasting.start} onChange={e => setF('start', e.target.value)}
               className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
               Eating Window Opens ▶
             </label>
             <input type="time" value={fasting.end} onChange={e => setF('end', e.target.value)}
               className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
           </div>
         </div>
 
         {/* Live preview bar */}
         {hasValues && (
           <div className="bg-white/[0.04] rounded-2xl p-3">
-            <div className="flex justify-between text-xs text-[#9a9aa6] mb-1.5">
+            <div className="flex justify-between text-xs text-[#9EA3B0] mb-1.5">
               <span className="font-semibold text-blue-600">🔵 Fasting {fastHrs.toFixed(1)}h</span>
               <span className="font-semibold text-emerald-300">🟢 Eating {eatHrs.toFixed(1)}h</span>
             </div>
@@ -701,33 +702,33 @@ function EditMemberModal({ member, onClose, onSaved }) {
                   className={s.type === 'eat' ? 'bg-emerald-400' : 'bg-blue-400'} />
               ))}
             </div>
-            <div className="flex justify-between mt-1 text-xs text-[#9a9aa6]">
+            <div className="flex justify-between mt-1 text-xs text-[#9EA3B0]">
               <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span><span>12AM</span>
             </div>
-            <p className="text-xs text-[#9a9aa6] mt-2 text-center font-medium">
+            <p className="text-xs text-[#9EA3B0] mt-2 text-center font-medium">
               Eating: {fasting.end} – {fasting.start} · Fasting: {fasting.start} – {fasting.end}
             </p>
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
             Protocol Label (shown to member)
           </label>
           <input value={fasting.label} onChange={e => setF('label', e.target.value)}
             placeholder="e.g. 16:8 Intermittent Fasting"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
             Member-Facing Note
           </label>
           <textarea value={fasting.note} onChange={e => setF('note', e.target.value)} rows={2}
             placeholder="e.g. Water and black coffee allowed during fasting window"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0] resize-none" />
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF] resize-none" />
         </div>
 
         {(fasting.start || fasting.end) && (
@@ -753,28 +754,28 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="space-y-3">
-        <p className="text-xs text-[#9a9aa6]">
+        <p className="text-xs text-[#9EA3B0]">
           Set daily targets. Member sees live progress bars that fill as food is logged.
         </p>
 
         <div>
-          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
             Daily Calorie Target (kcal)
           </label>
           <input type="number" value={macros.kcal} onChange={e => setM('kcal', e.target.value)}
             placeholder="e.g. 1450"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           {[['pro','Protein (g)','66'],['carb','Net Carbs (g)','144'],['fat','Fat (g)','57']].map(([k,lbl,ph]) => (
             <div key={k}>
-              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">{lbl}</label>
+              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">{lbl}</label>
               <input type="number" value={macros[k]} onChange={e => setM(k, e.target.value)}
                 placeholder={ph}
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
             </div>
           ))}
         </div>
@@ -783,8 +784,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
         {(p > 0 || c > 0 || f > 0) && (
           <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-[rgba(52,211,153,0.10)]' : 'bg-[rgba(251,191,36,0.10)]'}`}>
             <div className="flex justify-between items-center">
-              <span className="text-[#9a9aa6]">
-                {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-[#d8d8de]">{fromMacros} kcal from macros</span>
+              <span className="text-[#9EA3B0]">
+                {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-[#FFFFFF]">{fromMacros} kcal from macros</span>
               </span>
               {target > 0 && (
                 <span className={`font-bold ml-2 ${diffOk ? 'text-emerald-300' : 'text-amber-300'}`}>
@@ -799,13 +800,13 @@ function EditMemberModal({ member, onClose, onSaved }) {
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
             Phase / Label (shown to member)
           </label>
           <input value={macros.phase} onChange={e => setM('phase', e.target.value)}
             placeholder="e.g. Phase 1 — Fat Loss"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
         </div>
 
         {(macros.kcal || macros.pro) && (
@@ -818,10 +819,10 @@ function EditMemberModal({ member, onClose, onSaved }) {
         {/* Sprint 5: Clinical RDA Overrides */}
         <div className="border-t border-white/[0.07] pt-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-[#9a9aa6] uppercase tracking-wider">★ Clinical RDA Overrides</p>
-            <span className="text-xs text-[#9a9aa6]">Leave blank = use defaults</span>
+            <p className="text-xs font-bold text-[#9EA3B0] uppercase tracking-wider">★ Clinical RDA Overrides</p>
+            <span className="text-xs text-[#9EA3B0]">Leave blank = use defaults</span>
           </div>
-          <p className="text-xs text-[#9a9aa6] mb-3">
+          <p className="text-xs text-[#9EA3B0] mb-3">
             Override default nutrient targets for this member's specific needs (e.g. B12 deficiency, osteoporosis).
           </p>
           <div className="space-y-2">
@@ -831,7 +832,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
               const current = rdaOverrides[key] || '';
               return (
                 <div key={key} className="flex items-center gap-2">
-                  <span className="text-xs text-[#9a9aa6] w-28 flex-shrink-0">{meta.icon} {meta.label}</span>
+                  <span className="text-xs text-[#9EA3B0] w-28 flex-shrink-0">{meta.icon} {meta.label}</span>
                   <input
                     type="number"
                     value={current}
@@ -840,9 +841,9 @@ function EditMemberModal({ member, onClose, onSaved }) {
                     className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-300 ${
                       current ? 'border-[rgba(192,132,252,0.40)] bg-[rgba(192,132,252,0.10)] text-amber-300 font-semibold' : 'border-white/[0.08]'}`}
                   />
-                  <span className="text-xs text-[#9a9aa6] w-10">{meta.unit}</span>
+                  <span className="text-xs text-[#9EA3B0] w-10">{meta.unit}</span>
                   {current && (
-                    <button onClick={() => setRda(key, '')} className="text-[#d8d8de] hover:text-red-400 text-sm flex-shrink-0">×</button>
+                    <button onClick={() => setRda(key, '')} className="text-[#FFFFFF] hover:text-red-400 text-sm flex-shrink-0">×</button>
                   )}
                 </div>
               );
@@ -864,31 +865,31 @@ function EditMemberModal({ member, onClose, onSaved }) {
     <div className="mt-2 ml-7 space-y-2 p-2.5 bg-white/[0.04] rounded-xl border border-white/[0.08]">
       <div className="flex gap-2">
         <div className="flex-1">
-          <p className="text-xs text-[#9a9aa6] mb-1">Label</p>
+          <p className="text-xs text-[#9EA3B0] mb-1">Label</p>
           <input value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
             placeholder="Item name"
             className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
         </div>
       </div>
       <div>
-        <p className="text-xs text-[#9a9aa6] mb-1">Description (optional)</p>
+        <p className="text-xs text-[#9EA3B0] mb-1">Description (optional)</p>
         <input value={draft.sub} onChange={e => setDraft(d => ({ ...d, sub: e.target.value }))}
           placeholder="e.g. 30 min · 6:30–7:00 AM"
           className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <p className="text-xs text-[#9a9aa6] mb-1">From</p>
+          <p className="text-xs text-[#9EA3B0] mb-1">From</p>
           <input type="time" value={draft.fromTime} onChange={e => setDraft(d => ({ ...d, fromTime: e.target.value }))}
             className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
         </div>
         <div>
-          <p className="text-xs text-[#9a9aa6] mb-1">To</p>
+          <p className="text-xs text-[#9EA3B0] mb-1">To</p>
           <input type="time" value={draft.toTime} onChange={e => setDraft(d => ({ ...d, toTime: e.target.value }))}
             className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
         </div>
         <div>
-          <p className="text-xs text-[#9a9aa6] mb-1">Duration</p>
+          <p className="text-xs text-[#9EA3B0] mb-1">Duration</p>
           <input value={draft.totalTime} onChange={e => setDraft(d => ({ ...d, totalTime: e.target.value }))}
             placeholder="30 min"
             className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
@@ -900,7 +901,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
           ✓ Save
         </button>
         <button onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-[#9a9aa6] hover:text-[#d8d8de] rounded-lg border border-white/[0.08]">
+          className="px-3 py-1.5 text-xs text-[#9EA3B0] hover:text-[#FFFFFF] rounded-lg border border-white/[0.08]">
           Cancel
         </button>
       </div>
@@ -922,19 +923,19 @@ function EditMemberModal({ member, onClose, onSaved }) {
         className="w-full text-sm border border-white/[0.08] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <p className="text-xs text-[#9a9aa6] mb-1">From</p>
+          <p className="text-xs text-[#9EA3B0] mb-1">From</p>
           <input type="time" value={newItem.fromTime}
             onChange={e => setNewItem(n => ({ ...n, fromTime: e.target.value }))}
             className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
         </div>
         <div>
-          <p className="text-xs text-[#9a9aa6] mb-1">To</p>
+          <p className="text-xs text-[#9EA3B0] mb-1">To</p>
           <input type="time" value={newItem.toTime}
             onChange={e => setNewItem(n => ({ ...n, toTime: e.target.value }))}
             className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
         </div>
         <div>
-          <p className="text-xs text-[#9a9aa6] mb-1">Duration</p>
+          <p className="text-xs text-[#9EA3B0] mb-1">Duration</p>
           <input value={newItem.totalTime}
             onChange={e => setNewItem(n => ({ ...n, totalTime: e.target.value }))}
             placeholder="30 min"
@@ -947,7 +948,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
           + Add
         </button>
         <button onClick={() => { setAddingKey(null); setNewItem({ label:'',sub:'',fromTime:'',toTime:'',totalTime:'' }); }}
-          className="px-3 py-1.5 text-xs text-[#9a9aa6] hover:text-[#d8d8de] rounded-lg border border-white/[0.08]">
+          className="px-3 py-1.5 text-xs text-[#9EA3B0] hover:text-[#FFFFFF] rounded-lg border border-white/[0.08]">
           Cancel
         </button>
       </div>
@@ -961,7 +962,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="border border-white/[0.07] rounded-2xl p-3 space-y-1">
-        <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6] mb-2">{icon} {label}</p>
+        <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0] mb-2">{icon} {label}</p>
 
         {allItems.map(item => {
           const ov       = overrides[item.id] || {};
@@ -983,20 +984,20 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
                 {/* Label + sub */}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[#d8d8de] leading-tight">{dispLabel}</div>
-                  {subLine && <div className="text-xs text-[#9a9aa6] mt-0.5">{subLine}</div>}
+                  <div className="text-sm font-medium text-[#FFFFFF] leading-tight">{dispLabel}</div>
+                  {subLine && <div className="text-xs text-[#9EA3B0] mt-0.5">{subLine}</div>}
                 </div>
 
                 {/* Edit button */}
                 <button onClick={() => isEditing ? setEditingId(null) : startEdit(item)}
                   className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors flex-shrink-0 ${
-                    isEditing ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' : 'text-[#9a9aa6] hover:text-emerald-300 hover:bg-[rgba(52,211,153,0.10)]'}`}>
+                    isEditing ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' : 'text-[#9EA3B0] hover:text-emerald-300 hover:bg-[rgba(52,211,153,0.10)]'}`}>
                   ✏️
                 </button>
 
                 {/* Delete button */}
                 <button onClick={() => deleteItem(protoKey, item.id, !!item.custom)}
-                  className="text-xs px-2 py-1 rounded-lg text-[#d8d8de] hover:text-red-400 hover:bg-[rgba(248,113,113,0.10)] transition-colors flex-shrink-0">
+                  className="text-xs px-2 py-1 rounded-lg text-[#FFFFFF] hover:text-red-400 hover:bg-[rgba(248,113,113,0.10)] transition-colors flex-shrink-0">
                   🗑
                 </button>
               </div>
@@ -1028,7 +1029,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         {[['identity','👤 Identity'],['protocol','📋 Protocol']].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-              tab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9a9aa6]'}`}>
+              tab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9EA3B0]'}`}>
             {label}
           </button>
         ))}
@@ -1036,13 +1037,13 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
       {tab === 'identity' && (
         <div className="space-y-3">
-          <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6]">Identity</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0]">Identity</p>
           <Field label="Full Name"        value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
           <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
 
           <div className="border border-white/[0.07] rounded-2xl p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6]">PIN / Password</p>
+              <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0]">PIN / Password</p>
               <button onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
                 className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
                   showPin ? 'bg-[rgba(248,113,113,0.10)] text-red-400' : 'bg-[rgba(52,211,153,0.10)] text-emerald-300'}`}>
@@ -1055,27 +1056,27 @@ function EditMemberModal({ member, onClose, onSaved }) {
                 <Field label="Confirm PIN" type="password" value={form.confirmPin} onChange={v=>set('confirmPin',v)} placeholder="Repeat PIN" />
               </>
             ) : (
-              <p className="text-xs text-[#9a9aa6]">Leave unchanged — member uses existing PIN.</p>
+              <p className="text-xs text-[#9EA3B0]">Leave unchanged — member uses existing PIN.</p>
             )}
           </div>
 
-          <p className="text-xs font-bold tracking-widest uppercase text-[#9a9aa6] mt-1">Profile</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0] mt-1">Profile</p>
           <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
           <Field label="Date of birth"      type="date"   value={form.dob}           onChange={v=>set('dob',v)} />
           <div>
-            <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Sex</label>
+            <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Sex</label>
             <div className="flex gap-2">
               {[['male','Male'],['female','Female']].map(([val,label]) => (
                 <button key={val} type="button"
                   onClick={() => set('gender', form.gender === val ? '' : val)}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
                     form.gender === val
-                      ? 'bg-[rgba(201,162,39,0.16)] border-[rgba(201,162,39,0.5)] text-white'
-                      : 'border-white/[0.08] text-[#9a9aa6] hover:border-white/[0.15]'
+                      ? 'bg-[rgba(212,175,55,0.16)] border-[rgba(212,175,55,0.5)] text-white'
+                      : 'border-white/[0.08] text-[#9EA3B0] hover:border-white/[0.15]'
                   }`}>{label}</button>
               ))}
             </div>
-            <p className="text-[10px] text-[#5a5a68] mt-1.5">
+            <p className="text-[10px] text-[#7E8596] mt-1.5">
               Date of birth and sex are required for the member's TDEE calculation.
             </p>
           </div>
@@ -1091,7 +1092,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
             {[['items','📋 Items'],['fasting','⏰ Fasting'],['macros','🎯 Macros'],['meals','🍽 Meal Plan']].map(([id, label]) => (
               <button key={id} onClick={() => setProtoTab(id)}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                  protoTab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9a9aa6] hover:text-[#d8d8de]'}`}>
+                  protoTab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9EA3B0] hover:text-[#FFFFFF]'}`}>
                 {label}
               </button>
             ))}
@@ -1099,7 +1100,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
           {protoTab === 'items' && (
             <>
-              <p className="text-xs text-[#9a9aa6] bg-[rgba(251,191,36,0.10)] px-3 py-2 rounded-xl">
+              <p className="text-xs text-[#9EA3B0] bg-[rgba(251,191,36,0.10)] px-3 py-2 rounded-xl">
                 ✅ Check/uncheck to assign. ✏️ Edit label & timing. 🗑 Delete item.
               </p>
               <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />
@@ -1159,20 +1160,20 @@ function PushModal({ members, onClose }) {
         {result ? (
           <div className="text-center py-4 space-y-2">
             <div className="text-4xl">📨</div>
-            <p className="font-bold text-[#ededf0]">Notification sent!</p>
-            <p className="text-sm text-[#9a9aa6]">
+            <p className="font-bold text-[#FFFFFF]">Notification sent!</p>
+            <p className="text-sm text-[#9EA3B0]">
               Delivered to <span className="font-semibold text-emerald-300">{result.sent}</span> device{result.sent !== 1 ? 's' : ''}
               {result.failed > 0 && `, ${result.failed} failed`}
             </p>
-            <button onClick={onClose} className="mt-2 text-sm font-semibold text-[#9a9aa6] hover:text-[#d8d8de]">Close</button>
+            <button onClick={onClose} className="mt-2 text-sm font-semibold text-[#9EA3B0] hover:text-[#FFFFFF]">Close</button>
           </div>
         ) : (
           <>
             <div>
-              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Recipient</label>
+              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Recipient</label>
               <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)}
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-white
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]">
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]">
                 <option value="">📢 All active members ({members.filter(m => m.active).length})</option>
                 {members.filter(m => m.active).map(m => (
                   <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
@@ -1181,20 +1182,20 @@ function PushModal({ members, onClose }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Title</label>
+              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Title</label>
               <input value={form.title} onChange={e => set('title', e.target.value)}
                 placeholder="e.g. Reminder: Log your weight today"
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Message</label>
+              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Message</label>
               <textarea value={form.body} onChange={e => set('body', e.target.value)} rows={3}
                 placeholder="e.g. Great work this week! Don't forget to log your morning weight."
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm resize-none
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#ededf0]" />
-              <p className="text-xs text-[#9a9aa6] mt-1">{form.body.length}/140 characters</p>
+                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+              <p className="text-xs text-[#9EA3B0] mt-1">{form.body.length}/140 characters</p>
             </div>
 
             <div className="bg-[rgba(251,191,36,0.10)] border border-[rgba(251,191,36,0.25)] rounded-xl px-3 py-2">
@@ -1206,7 +1207,7 @@ function PushModal({ members, onClose }) {
             {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
 
             <button onClick={send} disabled={sending || !form.title.trim() || !form.body.trim()}
-              className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
+              className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-bold
                 rounded-xl transition-colors disabled:opacity-40">
               {sending ? 'Sending…' : `Send Notification`}
             </button>
@@ -1247,14 +1248,14 @@ function AddMonitorModal({ onClose, onAdded }) {
         <Field label="Password" type="password" value={form.password} onChange={v=>set('password',v)} placeholder="Min 8 characters" required />
 
         <div>
-          <label className="block text-xs font-semibold text-[#9a9aa6] uppercase tracking-wider mb-1.5">Role</label>
+          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Role</label>
           <div className="flex gap-2">
             {['monitor','admin'].map(r => (
               <button key={r} onClick={() => set('role', r)}
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all capitalize ${
                   form.role === r
-                    ? 'bg-white/[0.08] border border-white/[0.1] text-[#ededf0] border-stone-800'
-                    : 'bg-white text-[#9a9aa6] border-white/[0.08] hover:border-white/[0.1]'
+                    ? 'bg-white/[0.08] border border-white/[0.1] text-[#FFFFFF] border-stone-800'
+                    : 'bg-white text-[#9EA3B0] border-white/[0.08] hover:border-white/[0.1]'
                 }`}>
                 {r === 'admin' ? '👑 Admin' : '🏋️ Monitor'}
               </button>
@@ -1270,7 +1271,7 @@ function AddMonitorModal({ onClose, onAdded }) {
         {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-bold
+          className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-bold
             rounded-xl transition-colors disabled:opacity-50 mt-2">
           {saving ? 'Creating…' : 'Create Account'}
         </button>
@@ -1301,7 +1302,7 @@ function AssignModal({ member, monitors, onClose, onAssigned }) {
       <div className="space-y-4">
         <select value={monitorId} onChange={e => setMonitorId(e.target.value)}
           className="w-full border border-white/[0.08] rounded-xl px-3 py-3 text-sm
-            focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white text-[#ededf0]">
+            focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white text-[#FFFFFF]">
           <option value="">— Unassigned —</option>
           {monitors.map(m => (
             <option key={m.id} value={m.id}>{m.name} · {m.role} · {m.patient_count} members</option>
@@ -1325,6 +1326,10 @@ export default function AdminDashboard() {
   const openCoachAI = useCoachAI(s => s.openChat);
   const [remindBusy, setRemindBusy] = useState({});   // { [memberId|'all']: true }
   const [reminded,   setReminded]   = useState({});   // { [memberId]: true } after sent
+  // Which member the compose sheet is open for. Personal WhatsApp matters most
+  // exactly here: a member who has not logged in 86 days is not opening the app
+  // to read a push, so the in-app reminder reaches nobody.
+  const [msgMember, setMsgMember]   = useState(null);
   const [complianceLens, setComplianceLens] = useState('today'); // 'today' | '7d'
   const [menuFor,    setMenuFor]    = useState(null); // member id with open ⋮ menu
   const [weeklyBusy, setWeeklyBusy] = useState(null); // member id being summarised
@@ -1411,23 +1416,23 @@ export default function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e]">
+    <div className="min-h-screen bg-[#121316]">
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-5">
+      <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-5">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[#e0c98a] mb-1">FitLife Admin</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-[#F0E2B6] mb-1">FitLife Admin</p>
               <h1 className="font-display text-xl font-medium">Welcome, {user?.name} 👑</h1>
               {stats && (
-                <p className="text-[#9a9aa6] text-xs mt-0.5">
+                <p className="text-[#9EA3B0] text-xs mt-0.5">
                   {stats.members} members · {stats.monitors} monitors · {stats.logsToday} logged today
                 </p>
               )}
             </div>
             <button onClick={() => { logout(); }}
-              className="text-xs text-[#9a9aa6] hover:text-white px-3 py-1.5 border border-white/[0.1]
+              className="text-xs text-[#9EA3B0] hover:text-white px-3 py-1.5 border border-white/[0.1]
                 hover:border-white/[0.2] rounded-xl transition-colors">
               Sign out
             </button>
@@ -1436,10 +1441,10 @@ export default function AdminDashboard() {
           {/* AI command bar — the coach's fastest path to any change */}
           <button onClick={() => openCoachAI()}
             style={{ minHeight: 52 }}
-            className="w-full flex items-center gap-3 bg-gradient-to-r from-[#c9a227]/[0.16] to-[#8a6a1e]/[0.08] border border-[#c9a227]/40 hover:border-[#c9a227]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(201,162,39,0.10)]">
-            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(201,162,39,0.5)]">✨</span>
-            <span className="text-sm text-[#8e8e9a] font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
-            <span className="text-[#e0c98a]">🎤</span>
+            className="w-full flex items-center gap-3 bg-gradient-to-r from-[#D4AF37]/[0.16] to-[#8C6D37]/[0.08] border border-[#D4AF37]/40 hover:border-[#D4AF37]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(212,175,55,0.10)]">
+            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8C6D37] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.5)]">✨</span>
+            <span className="text-sm text-[#9EA3B0] font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
+            <span className="text-[#F0E2B6]">🎤</span>
           </button>
         </div>
       </div>
@@ -1457,8 +1462,8 @@ export default function AdminDashboard() {
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 tab === t.id
-                  ? 'bg-[rgba(201,162,39,0.14)] text-[#f0dfae] border border-[rgba(201,162,39,0.25)]'
-                  : 'text-[#5a5a68] hover:text-[#9a9aa6]'
+                  ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6] border border-[rgba(212,175,55,0.25)]'
+                  : 'text-[#7E8596] hover:text-[#9EA3B0]'
               }`}>
               {t.label}
             </button>
@@ -1472,12 +1477,12 @@ export default function AdminDashboard() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${tab}…`}
-            className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm
-              focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)] text-[#ededf0] placeholder-[#5a5a68]"
+            className="flex-1 px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm
+              focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF] placeholder-[#7E8596]"
           />
           <button
             onClick={() => tab === 'members' ? setShowAddMember(true) : setShowAddMonitor(true)}
-            className="px-4 py-2.5 bg-[#c9a227] hover:bg-[#e0c98a] text-[#08052a] text-sm font-bold
+            className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] text-sm font-bold
               rounded-xl transition-colors whitespace-nowrap">
             + Add {tab === 'members' ? 'Member' : 'Monitor'}
           </button>
@@ -1499,25 +1504,36 @@ export default function AdminDashboard() {
                 { label: '7-day avg', value: `${overview.stats.avg_compliance_7d}%`, cls: overview.stats.avg_compliance_7d >= 75 ? 'text-emerald-300' : 'text-amber-300' },
                 { label: 'Lost',      value: `${overview.stats.total_weight_lost_kg}kg`, cls: 'text-amber-300' },
               ].map(s => (
-                <div key={s.label} className="bg-[#131317] border border-white/[0.07] rounded-2xl px-2 py-2.5 text-center">
+                <div key={s.label} className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl px-2 py-2.5 text-center">
                   <div className={`text-[15px] font-extrabold ${s.cls}`}>{s.value}</div>
-                  <div className="text-[8px] font-bold uppercase tracking-wider text-[#4e4e5c] mt-0.5">{s.label}</div>
+                  <div className="text-[8px] font-bold uppercase tracking-wider text-[#7E8596] mt-0.5">{s.label}</div>
                 </div>
               ))}
             </div>
 
             {/* Needs attention — now actionable */}
             {overview.alerts.length > 0 && (
-              <div className="bg-[#131317] border border-[rgba(248,113,113,0.25)] rounded-2xl p-4">
+              <div className="bg-[#1A1C20] border border-[rgba(248,113,113,0.25)] rounded-2xl p-4">
                 <p className="text-sm font-bold text-red-400 mb-1">⚠️ Needs Attention ({overview.alerts.length})</p>
                 <div className="divide-y divide-white/[0.05]">
                   {overview.alerts.map(a => (
                     <div key={a.id} className="flex items-center gap-3 py-2.5">
                       <button onClick={() => navigate(`/monitor/${a.id}`)} className="flex-1 min-w-0 text-left">
-                        <span className="text-sm font-semibold text-[#ededf0] block truncate">{a.name}</span>
+                        <span className="text-sm font-semibold text-[#FFFFFF] block truncate">{a.name}</span>
                         <span className="text-[10px] text-red-400 font-bold">
                           {a.days_since ? `${a.days_since}d no log` : 'Never logged'}
                         </span>
+                      </button>
+                      {/* WhatsApp first: for someone 86 days silent, a push
+                          notification is delivered to an app they are not
+                          opening. This reaches them where they actually are. */}
+                      <button
+                        onClick={() => setMsgMember(a)}
+                        style={{ minHeight: 34, minWidth: 34 }}
+                        title={`Message ${a.name} on WhatsApp`}
+                        className="text-[13px] rounded-full border border-[rgba(212,175,55,0.4)]
+                          bg-[rgba(212,175,55,0.12)] active:scale-95 transition-transform flex-shrink-0">
+                        💬
                       </button>
                       {reminded[a.id] ? (
                         <span className="text-[10px] font-bold text-emerald-300">✓ Reminded</span>
@@ -1526,7 +1542,7 @@ export default function AdminDashboard() {
                           onClick={() => sendRemind([a], a.id)}
                           disabled={remindBusy[a.id]}
                           style={{ minHeight: 34 }}
-                          className="text-[10px] font-extrabold text-[#e0c98a] bg-[rgba(201,162,39,0.12)] border border-[rgba(201,162,39,0.4)] rounded-full px-3 active:scale-95 transition-transform disabled:opacity-50">
+                          className="text-[10px] font-extrabold text-[#F0E2B6] bg-[rgba(212,175,55,0.12)] border border-[rgba(212,175,55,0.4)] rounded-full px-3 active:scale-95 transition-transform disabled:opacity-50">
                           {remindBusy[a.id] ? 'Sending…' : '✨ Remind'}
                         </button>
                       )}
@@ -1538,21 +1554,23 @@ export default function AdminDashboard() {
                     onClick={() => sendRemind(overview.alerts.filter(a => !reminded[a.id]), 'all')}
                     disabled={remindBusy['all']}
                     style={{ minHeight: 38 }}
-                    className="w-full mt-2 text-[11px] font-extrabold text-[#e0c98a] border border-[rgba(201,162,39,0.3)] rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50">
+                    className="w-full mt-2 text-[11px] font-extrabold text-[#F0E2B6] border border-[rgba(212,175,55,0.3)] rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50">
                     {remindBusy['all'] ? 'Sending…' : '✨ Remind everyone'}
                   </button>
                 )}
-                <p className="text-[9px] text-[#4e4e5c] mt-2">Sends a friendly push + flagged coach message · logged in Audit</p>
+                <p className="text-[9px] text-[#7E8596] mt-2">
+                  💬 opens your own WhatsApp · ✨ sends an in-app push and coach message, logged in Audit
+                </p>
               </div>
             )}
 
             {/* Compliance — one list, two lenses */}
-            <div className="bg-[#131317] rounded-2xl border border-white/[0.07] overflow-hidden">
+            <div className="bg-[#1A1C20] rounded-2xl border border-white/[0.07] overflow-hidden">
               <div className="flex bg-white/[0.03] border-b border-white/[0.07] p-1.5 gap-1">
                 {[['today', 'Today'], ['7d', '7-Day Average']].map(([k, l]) => (
                   <button key={k} onClick={() => setComplianceLens(k)}
                     className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                      complianceLens === k ? 'bg-[#c9a227] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
+                      complianceLens === k ? 'bg-[#D4AF37] text-white' : 'text-[#7E8596] hover:text-[#9EA3B0]'
                     }`}>{l}</button>
                 ))}
               </div>
@@ -1560,12 +1578,12 @@ export default function AdminDashboard() {
               {complianceLens === 'today' && overview.today_detail.map(m => {
                 const pct = m.compliance_pct || 0;
                 const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-stone-200';
-                const textColor = pct >= 75 ? 'text-emerald-300' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-[#9a9aa6]';
+                const textColor = pct >= 75 ? 'text-emerald-300' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-[#9EA3B0]';
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] last:border-0">
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-[#d8d8de]">{m.name}</span>
-                      {m.monitor_name && <span className="text-xs text-[#9a9aa6] ml-2">· {m.monitor_name}</span>}
+                      <span className="text-sm font-medium text-[#FFFFFF]">{m.name}</span>
+                      {m.monitor_name && <span className="text-xs text-[#9EA3B0] ml-2">· {m.monitor_name}</span>}
                     </div>
                     {m.weight_kg && <span className="text-xs font-semibold text-emerald-300">{m.weight_kg} kg</span>}
                     <div className="flex items-center gap-2">
@@ -1584,8 +1602,8 @@ export default function AdminDashboard() {
                 const pct = parseFloat(m.avg_7d) || 0;
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.06] last:border-0">
-                    <span className="text-sm text-[#d8d8de] flex-1">{m.name}</span>
-                    <span className="text-xs text-[#9a9aa6]">{m.days_logged} days</span>
+                    <span className="text-sm text-[#FFFFFF] flex-1">{m.name}</span>
+                    <span className="text-xs text-[#9EA3B0]">{m.days_logged} days</span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                       pct >= 75 ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' :
                       pct >= 50 ? 'bg-[rgba(251,191,36,0.14)] text-amber-300' : 'bg-[rgba(248,113,113,0.10)] text-red-400'
@@ -1597,22 +1615,22 @@ export default function AdminDashboard() {
 
             {/* Food manager shortcut */}
             <button onClick={() => navigate('/admin/foods')}
-              className="w-full py-3 bg-[#0e0e12] hover:bg-[#08080b] text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
+              className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
               🥗 Food Database Manager
-              <span className="text-[#9a9aa6] text-xs">→</span>
+              <span className="text-[#9EA3B0] text-xs">→</span>
             </button>
           </div>
         )}
 
         {tab === 'overview' && !overview && !loading && (
-          <p className="text-center text-[#9a9aa6] py-8">Overview data loading…</p>
+          <p className="text-center text-[#9EA3B0] py-8">Overview data loading…</p>
         )}
 
         {/* ── Members tab ── */}
         {tab === 'members' && (
           <>
             {filtered(members, 'name').length === 0 ? (
-              <div className="text-center py-16 text-[#9a9aa6]">
+              <div className="text-center py-16 text-[#9EA3B0]">
                 <div className="text-4xl mb-3">👥</div>
                 <p className="font-medium">No members yet</p>
                 <button onClick={() => setShowAddMember(true)}
@@ -1623,7 +1641,7 @@ export default function AdminDashboard() {
                 const noLog = m.last_logged !== today;
                 const initials = m.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
                 const pct = m.last_compliance;
-                const ringColor = pct == null ? '#3a3a46' : pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171';
+                const ringColor = pct == null ? '#4A4E5A' : pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171';
                 const start  = parseFloat(m.start_weight);
                 const latest = parseFloat(m.latest_weight);
                 const goal   = parseFloat(m.target_weight);
@@ -1633,21 +1651,21 @@ export default function AdminDashboard() {
                 const lost = hasJourney && Number.isFinite(latest) ? +(start - latest).toFixed(1) : null;
                 return (
                   <div key={m.id}
-                    className={`relative bg-[#131317] rounded-2xl border p-4 shadow-card
+                    className={`relative bg-[#1A1C20] rounded-2xl border p-4 shadow-card
                       ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/monitor/${m.id}`)}>
-                      <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#e0c98a]"
+                      <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#F0E2B6]"
                         style={{ background: 'linear-gradient(135deg,#2a2150,#1a1633)' }}>
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-[#ededf0] truncate">{m.name}</h3>
-                          {!m.active && <span className="text-[9px] font-bold bg-white/[0.06] text-[#9a9aa6] px-2 py-0.5 rounded-full">INACTIVE</span>}
+                          <h3 className="font-bold text-[#FFFFFF] truncate">{m.name}</h3>
+                          {!m.active && <span className="text-[9px] font-bold bg-white/[0.06] text-[#9EA3B0] px-2 py-0.5 rounded-full">INACTIVE</span>}
                           {noLog && m.active && <span className="text-[9px] font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">NO LOG</span>}
                           {m.has_pin === false && m.active && <span className="text-[9px] font-bold text-amber-300">🔑 NO PIN</span>}
                         </div>
-                        <p className="text-[10px] text-[#9a9aa6] mt-0.5 truncate">
+                        <p className="text-[10px] text-[#9EA3B0] mt-0.5 truncate">
                           📱 {m.phone}
                           {m.monitor_name
                             ? <span className="text-emerald-300"> · 🏋️ {m.monitor_name}</span>
@@ -1659,7 +1677,7 @@ export default function AdminDashboard() {
                         style={{ background: pct != null
                           ? `conic-gradient(${ringColor} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`
                           : 'rgba(255,255,255,0.06)' }}>
-                        <span className="w-7 h-7 rounded-full bg-[#131317] flex items-center justify-center text-[8px] font-extrabold"
+                        <span className="w-7 h-7 rounded-full bg-[#1A1C20] flex items-center justify-center text-[8px] font-extrabold"
                           style={{ color: ringColor }}>
                           {pct != null ? `${pct}%` : '—'}
                         </span>
@@ -1667,20 +1685,20 @@ export default function AdminDashboard() {
                       {/* ⋮ menu */}
                       <button onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === m.id ? null : m.id); }}
                         style={{ minWidth: 36, minHeight: 36 }}
-                        className="flex-shrink-0 flex items-center justify-center rounded-full text-[#4e4e5c] hover:text-white hover:bg-white/[0.06] text-lg font-bold transition-colors">⋮</button>
+                        className="flex-shrink-0 flex items-center justify-center rounded-full text-[#7E8596] hover:text-white hover:bg-white/[0.06] text-lg font-bold transition-colors">⋮</button>
                     </div>
 
                     {/* Weight journey */}
                     {hasJourney && (
                       <div className="mt-3 pt-3 border-t border-white/[0.06]">
-                        <div className="flex items-center justify-between text-[10px] text-[#9a9aa6] mb-1.5">
-                          <span>{start} → <b className="text-[#ededf0]">{Number.isFinite(latest) ? latest : '—'}</b> → {goal} kg</span>
+                        <div className="flex items-center justify-between text-[10px] text-[#9EA3B0] mb-1.5">
+                          <span>{start} → <b className="text-[#FFFFFF]">{Number.isFinite(latest) ? latest : '—'}</b> → {goal} kg</span>
                           {lost != null && lost > 0 && <span className="font-extrabold text-emerald-300">−{lost} kg</span>}
                           {lost != null && lost < 0 && <span className="font-extrabold text-amber-300">+{Math.abs(lost)} kg</span>}
                         </div>
                         <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
                           <div className="h-full rounded-full transition-all"
-                            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#c9a227,#e0c98a)' }} />
+                            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#D4AF37,#F0E2B6)' }} />
                         </div>
                       </div>
                     )}
@@ -1689,14 +1707,18 @@ export default function AdminDashboard() {
                     {menuFor === m.id && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setMenuFor(null)} />
-                        <div className="absolute right-3 top-14 z-50 bg-[#1a1a20] border border-white/[0.12] rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.7)] min-w-[150px]">
+                        <div className="absolute right-3 top-14 z-50 bg-[#1A1C20] border border-white/[0.12] rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.7)] min-w-[150px]">
                           <button onClick={() => { setMenuFor(null); setAssignTarget(m); }}
                             className="w-full text-left px-4 py-3 text-xs font-bold text-emerald-300 hover:bg-white/[0.04]">🔗 Assign monitor</button>
                           <button onClick={() => { setMenuFor(null); setEditTarget(m); }}
                             className="w-full text-left px-4 py-3 text-xs font-bold text-blue-300 hover:bg-white/[0.04] border-t border-white/[0.06]">✏️ Edit & protocol</button>
+                          <button onClick={() => { setMenuFor(null); setMsgMember(m); }}
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#D4AF37] hover:bg-white/[0.04] border-t border-white/[0.06]">
+                            💬 Message on WhatsApp
+                          </button>
                           <button onClick={() => { setMenuFor(null); sendWeekly(m); }}
                             disabled={weeklyBusy === m.id}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#e0c98a] hover:bg-white/[0.04] border-t border-white/[0.06] disabled:opacity-50">
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#F0E2B6] hover:bg-white/[0.04] border-t border-white/[0.06] disabled:opacity-50">
                             {weeklyBusy === m.id ? '📊 Sending…' : weeklySent[m.id] ? '✓ Summary sent' : '📊 Send weekly summary'}
                           </button>
                           <button onClick={() => { setMenuFor(null); toggleUser(m.id, 'member'); }}
@@ -1718,22 +1740,22 @@ export default function AdminDashboard() {
         {tab === 'monitors' && (
           <>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-[#9a9aa6]">{monitors.length} monitor{monitors.length !== 1 ? 's' : ''} registered</p>
+              <p className="text-xs text-[#9EA3B0]">{monitors.length} monitor{monitors.length !== 1 ? 's' : ''} registered</p>
               <div className="flex gap-2">
                 <button onClick={() => setShowPush(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-[#9a9aa6] bg-white/[0.06]
+                  className="flex items-center gap-1.5 text-xs font-bold text-[#9EA3B0] bg-white/[0.06]
                     hover:bg-white/[0.08] px-3 py-2 rounded-xl transition-colors">
                   📨 Send Push
                 </button>
                 <button onClick={() => setShowAddMonitor(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#0e0e12]
-                    hover:bg-[#08080b] px-3 py-2 rounded-xl transition-colors">
+                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#121316]
+                    hover:bg-[#121316] px-3 py-2 rounded-xl transition-colors">
                   + Add Monitor
                 </button>
               </div>
             </div>
             {filtered(monitors, 'name').length === 0 ? (
-              <div className="text-center py-16 text-[#9a9aa6]">
+              <div className="text-center py-16 text-[#9EA3B0]">
                 <div className="text-4xl mb-3">🏋️</div>
                 <p className="font-medium">No monitors yet</p>
                 <button onClick={() => setShowAddMonitor(true)}
@@ -1741,12 +1763,12 @@ export default function AdminDashboard() {
               </div>
             ) : (
               filtered(monitors, 'name').map(m => (
-                <div key={m.id} className={`bg-[#131317] rounded-2xl border border-white/[0.08] p-4 shadow-card border
+                <div key={m.id} className={`bg-[#1A1C20] rounded-2xl border border-white/[0.08] p-4 shadow-card border
                   ${!m.active ? 'opacity-50 border-white/[0.08]' : 'border-white/[0.07]'}`}>
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-[#ededf0]">{m.name}</h3>
+                        <h3 className="font-bold text-[#FFFFFF]">{m.name}</h3>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${
                           m.role === 'admin'
                             ? 'bg-[rgba(251,191,36,0.14)] text-amber-300'
@@ -1754,16 +1776,16 @@ export default function AdminDashboard() {
                         }`}>
                           {m.role === 'admin' ? '👑 admin' : '🏋️ monitor'}
                         </span>
-                        {!m.active && <span className="text-xs bg-white/[0.06] text-[#9a9aa6] px-2 py-0.5 rounded-full">Inactive</span>}
+                        {!m.active && <span className="text-xs bg-white/[0.06] text-[#9EA3B0] px-2 py-0.5 rounded-full">Inactive</span>}
                       </div>
-                      <p className="text-xs text-[#9a9aa6] mt-0.5">✉ {m.email}</p>
+                      <p className="text-xs text-[#9EA3B0] mt-0.5">✉ {m.email}</p>
                       <p className="text-xs text-emerald-300 mt-0.5 font-medium">
                         {m.patient_count} member{m.patient_count !== 1 ? 's' : ''} assigned
                       </p>
                     </div>
                     <div className="flex gap-1.5">
                       <button onClick={() => navigate('/monitor')}
-                        className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-[#9a9aa6] font-semibold
+                        className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-[#9EA3B0] font-semibold
                           rounded-lg hover:bg-white/[0.05] transition-colors">
                         View
                       </button>
@@ -1792,16 +1814,16 @@ export default function AdminDashboard() {
         {tab === 'audit' && (
           <>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-[#9a9aa6]">{auditLog.length} recent actions</p>
+              <p className="text-xs text-[#9EA3B0]">{auditLog.length} recent actions</p>
               <button onClick={() => getAuditLog(100).then(r => setAuditLog(r.data || []))}
-                className="text-xs font-semibold text-[#9a9aa6] hover:text-[#d8d8de] px-3 py-1.5
-                  bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-white/[0.08] transition-colors">
+                className="text-xs font-semibold text-[#9EA3B0] hover:text-[#FFFFFF] px-3 py-1.5
+                  bg-[#1A1C20] rounded-xl border border-white/[0.07] border border-white/[0.08] transition-colors">
                 ↻ Refresh
               </button>
             </div>
 
             {auditLog.length === 0 ? (
-              <div className="text-center py-16 text-[#9a9aa6]">
+              <div className="text-center py-16 text-[#9EA3B0]">
                 <div className="text-4xl mb-3">🔍</div>
                 <p className="font-medium">No audit events yet</p>
                 <p className="text-sm mt-1">Actions like creating members, resetting PINs, and toggling accounts will appear here.</p>
@@ -1817,8 +1839,8 @@ export default function AdminDashboard() {
                     monitor_toggled:  { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     pin_reset:        { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
                     pin_set:          { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
-                    weight_logged:    { icon: '⚖️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9a9aa6]' },
-                  }[entry.action] || { icon: '📝', color: 'bg-white/[0.04] border-white/[0.07] text-[#9a9aa6]' };
+                    weight_logged:    { icon: '⚖️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' },
+                  }[entry.action] || { icon: '📝', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' };
 
                   const timeAgo = (() => {
                     const diff = Date.now() - new Date(entry.created_at).getTime();
@@ -1875,6 +1897,13 @@ export default function AdminDashboard() {
 
       {/* Coach AI — manage protocols & messages by chat */}
       <CoachAIChat onApplied={load} />
+      {/* Compose sheet, shared by the alerts list and the member menu */}
+      <MessageMember
+        member={msgMember || {}}
+        open={!!msgMember}
+        onClose={() => setMsgMember(null)}
+      />
+
       <CoachAIFab />
     </div>
   );
