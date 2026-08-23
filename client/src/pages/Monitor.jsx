@@ -21,6 +21,11 @@ import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGE
 import { useSync } from '../hooks/useSync';
 import { useAuthStore } from '../store/authStore';
 
+// Bucket for food rows whose meal slot is null, blank, or no longer part of the
+// member's protocol. Never rendered as a real slot — it exists so an item can
+// never be filtered out of the coach's view.
+const UNSORTED_MEAL = 'Unsorted';
+
 // ── Nutrition helper — Sprint 1 foods have per_100g, legacy fall back to NUTRITION_DB
 function calcN(item) {
   if (!item) return null;
@@ -570,13 +575,61 @@ export default function Monitor() {
     ? Math.round(complianceData.reduce((s, d) => s + d.score, 0) / complianceData.length)
     : 0;
 
-  // Lab value charts — group by test name, show latest 8 per test
-  const labByTest = {};
-  labs.forEach(l => {
-    if (!labByTest[l.test_name]) labByTest[l.test_name] = [];
-    labByTest[l.test_name].push({ date: l.test_date.slice(0, 10), value: parseFloat(l.value) || 0 });
-  });
-  Object.values(labByTest).forEach(arr => arr.sort((a, b) => a.date.localeCompare(b.date)));
+  // Body composition — group lab rows by marker. Two rows from the SAME panel on
+  // the SAME date are one reading, so the series is deduped per date (last write
+  // wins) and a marker only becomes trendable once it has 2+ distinct dates.
+  const bodyComp = (() => {
+    const byTest = new Map();
+    labs.forEach(l => {
+      const date = String(l.test_date || '').slice(0, 10);
+      if (!date) return;
+      const value = parseFloat(l.value);
+      if (!Number.isFinite(value)) return;
+      if (!byTest.has(l.test_name)) byTest.set(l.test_name, new Map());
+      byTest.get(l.test_name).set(date, value);
+    });
+
+    const scanDates = [...new Set(labs.map(l => String(l.test_date || '').slice(0, 10)).filter(Boolean))].sort();
+    const markers = [...byTest.entries()].map(([name, dateMap]) => {
+      const series = [...dateMap.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, value]) => ({ date, value }));
+      const latest = series[series.length - 1];
+      const prev   = series.length > 1 ? series[series.length - 2] : null;
+      return {
+        name,
+        series,
+        latest: latest ? latest.value : null,
+        change: prev ? +(latest.value - prev.value).toFixed(2) : null,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      markers,
+      scanDates,
+      latestDate: scanDates[scanDates.length - 1] || null,
+      trendable: markers.filter(m => m.series.length >= 2),
+    };
+  })();
+
+  // Logging streak — last 14 days, so the coach sees engagement before anything else
+  const streak14 = (() => {
+    const byDate = new Map(logs.map(l => [String(l.log_date).slice(0, 10), l]));
+    const out = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const log = byDate.get(key);
+      const hasFood = !!(log?.food_items?.length);
+      out.push({
+        date: key,
+        pct: log?.compliance_pct || 0,
+        logged: !!log && (hasFood || !!log.weight_kg),
+      });
+    }
+    return out;
+  })();
 
   const delta = profile.latest_weight && profile.start_weight
     ? (parseFloat(profile.start_weight) - parseFloat(profile.latest_weight || profile.start_weight)).toFixed(1)
@@ -648,6 +701,353 @@ export default function Monitor() {
 
       {/* Content */}
       <div className="max-w-md mx-auto px-4 pt-4 pb-8 space-y-3">
+
+        {/* Daily Log Viewer — date chip navigator + single-date detail */}
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle icon="📋">Daily Log</SectionTitle>
+            {activeLog && (
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
+                (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
+                                                      'bg-red-400/10 text-red-400'
+              }`}>{activeLog.compliance_pct||0}%</span>
+            )}
+          </div>
+
+          {logs.length === 0 ? (
+            <p className="text-xs text-[#7E8596] italic text-center py-4">No logs yet</p>
+          ) : (
+            <>
+              {/* Date chip navigator — horizontal scroll, newest first */}
+              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: 'none' }}>
+                {sortedLogs.map(log => {
+                  const d = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00');
+                  const isToday = log.log_date === todayIST;
+                  const isActive = log.log_date === activeDate;
+                  const pct = log.compliance_pct || 0;
+                  const dotColor = pct >= 75 ? '#D4AF37' : pct >= 50 ? '#fbbf24' : '#f87171';
+                  const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                  return (
+                    <button key={log.log_date}
+                      onClick={() => setViewDate(log.log_date)}
+                      className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl
+                        border transition-all text-xs font-semibold ${
+                        isActive
+                          ? 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.30)] text-[#D4AF37]'
+                          : 'bg-[#1A1C20] border-white/[0.07] text-[#6a6a78] hover:border-white/[0.18] hover:text-[#FFFFFF]'
+                      }`}>
+                      <span>{dayLabel}</span>
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selected day full detail */}
+              {activeLog ? (() => {
+                const log = activeLog;
+                const score = log.compliance_pct || rowCompliance(log);
+                const weightKg = parseFloat(log.weight_kg) || 0;
+                const burnedKcal = weightKg > 0
+                  ? ACTIVITIES.reduce((sum, a) => {
+                      if (!log.activities?.[a.id] || !a.met) return sum;
+                      return sum + Math.round(a.met * weightKg * ((a.durationMin || 30) / 60));
+                    }, 0)
+                  : 0;
+                const eatenKcal = (log.food_items || []).reduce((sum, f) => {
+                  const n = calcN(f); return sum + (n?.cal || 0);
+                }, 0);
+                const netKcal = eatenKcal - burnedKcal;
+
+                return (
+                  <div className="space-y-3">
+
+                    {/* Weight + stats row */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <StatPill value={log.weight_kg ? `${log.weight_kg} kg` : '—'} label="Weight" color="emerald" />
+                      <StatPill value={`${((log.water_ml || 0) / 1000).toFixed(1)}L`} label="Water" color="blue" />
+                      <StatPill value={log.sleep?.quality > 0 ? '⭐'.repeat(log.sleep.quality) : '—'} label="Sleep" color="purple" />
+                    </div>
+
+                    {/* Net calorie row */}
+                    {burnedKcal > 0 && (
+                      <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
+                        netKcal <= 0 ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.20)] text-[#D4AF37]'
+                        : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
+                        : 'bg-red-400/10 border-red-400/20 text-red-400'
+                      }`}>
+                        <div className="flex gap-3">
+                          <span>🍽 <strong>{eatenKcal}</strong> eaten</span>
+                          <span>🔥 <strong>{burnedKcal}</strong> burned</span>
+                        </div>
+                        <span className="font-bold">Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal{netKcal <= 0 && ' 🎯'}</span>
+                      </div>
+                    )}
+
+                    {/* Meal plan adherence */}
+                    {data?.profile?.meal_plan?.length > 0 && (
+                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06]">
+                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🍽 Meal Plan Adherence</span>
+                        </div>
+                        <div className="px-3 py-2.5 flex flex-wrap gap-2">
+                          {data.profile.meal_plan.map(meal => {
+                            const logged  = (log.food_items || []).map(f => f.name?.toLowerCase());
+                            const total   = (meal.items || []).length;
+                            const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
+                            const pct     = total > 0 ? matched / total : 0;
+                            const color   = pct >= 0.8 ? 'bg-[rgba(212,175,55,0.10)] text-[#D4AF37] border-[rgba(212,175,55,0.22)]'
+                                          : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
+                                          :              'bg-red-400/10 text-red-400 border-red-400/25';
+                            const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
+                            return (
+                              <div key={meal.id} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
+                                {icon} {meal.name} {total > 0 ? `${matched}/${total}` : ''}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Food log */}
+                    {log.food_items?.length > 0 && (
+                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06] flex justify-between">
+                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🥗 Food Log</span>
+                          <span className="text-xs font-bold text-[#D4AF37]">{eatenKcal} kcal total</span>
+                        </div>
+                        {(() => {
+                          // Meal slot names are member-configurable and the AI logger can
+                          // persist meal = null. Hardcoding 'Meal 1/2/3' silently dropped
+                          // every item that did not match, leaving the coach with a day
+                          // total and no rows. Group by whatever slot each item carries and
+                          // sweep the rest into 'Unsorted' so nothing can ever disappear.
+                          const slotOf = (f) => {
+                            const s = f.meal == null ? '' : String(f.meal).trim();
+                            return s || UNSORTED_MEAL;
+                          };
+                          const protocolSlots = (data?.profile?.meal_slots || [])
+                            .map(s => (typeof s === 'string' ? s : s?.name))
+                            .filter(Boolean);
+                          const present = [];
+                          (log.food_items || []).forEach(f => {
+                            const s = slotOf(f);
+                            if (!present.includes(s)) present.push(s);
+                          });
+                          const ordered = [
+                            ...protocolSlots.filter(s => present.includes(s)),
+                            ...present.filter(s => !protocolSlots.includes(s) && s !== UNSORTED_MEAL),
+                            ...(present.includes(UNSORTED_MEAL) ? [UNSORTED_MEAL] : []),
+                          ];
+                          return ordered.map(meal => {
+                          const mealItems = log.food_items.filter(f => slotOf(f) === meal);
+                          if (!mealItems.length) return null;
+                          const mealCal = mealItems.reduce((s, f) => s + (calcN(f)?.cal || 0), 0);
+                          return (
+                            <div key={meal} className="border-b border-white/[0.05] last:border-0">
+                              <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
+                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${
+                                  meal === UNSORTED_MEAL ? 'text-amber-400' : 'text-[#6a6a78]'
+                                }`}>
+                                  {meal}{meal === UNSORTED_MEAL && ' · no meal slot'}
+                                </span>
+                                <span className="text-xs text-[#7E8596]">{mealCal} kcal</span>
+                              </div>
+                              {mealItems.map((f, i) => {
+                                const n = calcN(f);
+                                return (
+                                  <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-white/[0.04]">
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-[#FFFFFF] truncate">{f.name}</div>
+                                      <div className="text-xs text-[#7E8596]">{f.grams}g</div>
+                                    </div>
+                                    {n && (
+                                      <div className="flex gap-2.5 text-right flex-shrink-0">
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-orange-400">{n.cal}</div>
+                                          <div className="text-[10px] text-[#7E8596]">kcal</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-blue-400">{n.pro}g</div>
+                                          <div className="text-[10px] text-[#7E8596]">pro</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-amber-400">{n.carb}g</div>
+                                          <div className="text-[10px] text-[#7E8596]">carb</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-xs font-bold text-amber-400">{n.fat}g</div>
+                                          <div className="text-[10px] text-[#7E8596]">fat</div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                          });
+                        })()}
+                        {/* Day total row */}
+                        {(() => {
+                          const t = log.food_items.reduce((acc, f) => {
+                            const n = calcN(f);
+                            if (!n) return acc;
+                            return { cal: acc.cal+n.cal, pro: acc.pro+n.pro, carb: acc.carb+n.carb, fat: acc.fat+n.fat };
+                          }, { cal:0, pro:0, carb:0, fat:0 });
+                          return (
+                            <div className="px-3 py-2.5 bg-[rgba(212,175,55,0.05)] flex items-center justify-between border-t border-[rgba(212,175,55,0.12)]">
+                              <span className="text-xs font-bold text-[#D4AF37]">Day Total</span>
+                              <div className="flex gap-3 text-xs">
+                                <span className="font-bold text-orange-400">{t.cal} kcal</span>
+                                <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
+                                <span className="text-amber-400">{t.carb.toFixed(1)}g C</span>
+                                <span className="text-amber-400">{t.fat.toFixed(1)}g F</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Activities / ACV / Supplements — labeled checklist, not just icons.
+                        Each group shows its own X/Y so the coach can scan exactly what's
+                        missing without having to decode emoji or count cryptic pills. */}
+                    <div className="space-y-3">
+                      {[
+                        { title: '🏃 Activities', items: ACTIVITIES,  done: log.activities },
+                        { title: '🍎 ACV',         items: ACV_ITEMS,  done: log.acv },
+                        { title: '💊 Supplements', items: SUPPLEMENTS, done: log.supplements },
+                      ].map(group => {
+                        const doneCount = group.items.filter(it => group.done?.[it.id]).length;
+                        return (
+                          <div key={group.title}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-bold text-[#6a6a78] uppercase tracking-wide">{group.title}</span>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                doneCount === group.items.length
+                                  ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6]'
+                                  : doneCount === 0
+                                  ? 'bg-white/[0.05] text-[#7E8596]'
+                                  : 'bg-amber-400/10 text-amber-300'
+                              }`}>{doneCount}/{group.items.length}</span>
+                            </div>
+                            <div className="space-y-1">
+                              {group.items.map(it => {
+                                const isDone = !!group.done?.[it.id];
+                                return (
+                                  <div key={it.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${
+                                    isDone ? 'bg-[rgba(212,175,55,0.06)]' : 'bg-white/[0.02]'
+                                  }`}>
+                                    <span className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${
+                                      isDone ? 'bg-[#D4AF37]' : 'bg-white/[0.08]'
+                                    }`}>
+                                      {isDone && (
+                                        <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <span className={`text-xs font-medium leading-tight ${isDone ? 'text-[#FFFFFF]' : 'text-[#7E8596]'}`}>
+                                      {it.icon && <span className="mr-1">{it.icon}</span>}{it.label}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <WorkoutSessionViewer patientId={parseInt(patientId)} date={activeDate} refreshTick={workoutTick} />
+
+                    {/* Key nutrients collapsible */}
+                    {(log.food_items || []).some(f => f.per_100g) && (() => {
+                      const rdaOv = data?.profile?.rda_overrides || {};
+                      const micros = calcMicrosFromItems(log.food_items, log.supplements);
+                      const KEYS = ['vit_b12','vit_d','vit_c','calcium','iron','magnesium','zinc','folate','omega3_epa','omega3_dha','fiber'];
+                      const met  = KEYS.filter(k => {
+                        const meta = RDA_TARGETS[k];
+                        if (!meta) return false;
+                        const rda = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
+                        return (micros[k]||0) / rda >= 0.8;
+                      }).length;
+                      return (
+                        <details className="border border-white/[0.07] rounded-xl overflow-hidden">
+                          <summary className="px-3 py-2.5 text-xs font-semibold text-[#6a6a78] cursor-pointer
+                            hover:text-[#D4AF37] list-none flex justify-between items-center bg-[#1A1C20]">
+                            <span>🔬 Key Nutrients</span>
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
+                              met >= KEYS.length*0.8 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
+                              met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
+                            }`}>{met}/{KEYS.length} ▼</span>
+                          </summary>
+                          <div className="px-3 py-3 space-y-2 bg-[#1A1C20]">
+                            {KEYS.map(k => {
+                              const meta = RDA_TARGETS[k];
+                              if (!meta) return null;
+                              const rda  = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
+                              const raw  = micros[k] || 0;
+                              const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
+                              const val  = +raw.toFixed(dec);
+                              const pct  = Math.min(100, (raw / rda) * 100);
+                              const cls  = pct>=80 ? 'bg-[#D4AF37]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
+                              const tcls = pct>=80 ? 'text-[#D4AF37]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
+                              return (
+                                <div key={k}>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-[#6a6a78]">{meta.icon} {meta.label}</span>
+                                    <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit}</span>
+                                  </div>
+                                  <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all ${cls}`} style={{width:`${pct}%`}} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      );
+                    })()}
+
+                    {/* Notes */}
+                    {log.notes && (
+                      <p className="text-xs text-[#6a6a78] italic border-t border-white/[0.06] pt-2.5 leading-relaxed">
+                        📝 {log.notes}
+                      </p>
+                    )}
+                  </div>
+                );
+              })() : (
+                <p className="text-xs text-[#7E8596] italic text-center py-4">No log for this date</p>
+              )}
+            </>
+          )}
+        </Card>
+        {/* Logging streak — engagement at a glance, above every chart */}
+        <Card>
+          <div className="flex items-center justify-between mb-2">
+            <SectionTitle icon="🔥">Logging Streak</SectionTitle>
+            <span className="text-xs font-bold text-[#7E8596]">
+              {streak14.filter(d => d.logged).length}/14 days
+            </span>
+          </div>
+          <div className="flex gap-[3px]">
+            {streak14.map(d => (
+              <div key={d.date} title={`${d.date} · ${d.logged ? `${d.pct}%` : 'no log'}`}
+                className="flex-1 h-5 rounded-[3px]"
+                style={{ background: !d.logged ? 'rgba(255,255,255,0.05)'
+                  : d.pct >= 75 ? 'rgba(212,175,55,0.55)'
+                  : d.pct >= 50 ? 'rgba(251,191,36,0.40)'
+                  :               'rgba(248,113,113,0.35)' }} />
+            ))}
+          </div>
+          <p className="text-[10px] text-[#7E8596] mt-1.5 text-center">Oldest left · today right</p>
+        </Card>
 
         {/* Weight chart */}
         {weightData.length > 1 && (
@@ -771,29 +1171,76 @@ export default function Monitor() {
           );
         })()}
 
-        {/* Sprint 6: Lab value trend charts per test */}
-        {Object.entries(labByTest).map(([testName, values]) => values.length < 2 ? null : (
-          <Card key={testName}>
-            <SectionTitle icon="📈">{testName} Trend</SectionTitle>
-            <ResponsiveContainer width="100%" height={100}>
-              <LineChart data={values} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <Tooltip
-                  content={({ active, payload }) => active && payload?.length
-                    ? <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
-                        <span className="font-bold text-blue-600">{payload[0].value}</span>
-                        <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
-                      </div>
-                    : null}
-                />
-                <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2}
-                  dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-        ))}
+        {/* What their own data says about their metabolism — the engine
+            proposes targets, the coach decides whether to apply them. */}
+        <Card>
+          <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
+          <div className="mt-2">
+            <MetabolicInsight patientId={parseInt(patientId)} canApply onApplied={load} />
+          </div>
+        </Card>
+
+        {/* Their blood work, and what they were doing between tests */}
+        <Card>
+          <SectionTitle icon="🩸">Lab Results</SectionTitle>
+          <div className="mt-2">
+            <LabResults patientId={parseInt(patientId)} memberName={data?.profile?.name || ''} />
+          </div>
+        </Card>
+
+        {/* Macro Lab — adherence patterns and controlled trials. Coach-only:
+            there is no member-facing route for any of this. */}
+        <Card>
+          <SectionTitle icon="🔬">Macro Lab</SectionTitle>
+          <div className="mt-2">
+            <MacroLab patientId={parseInt(patientId)} onChanged={load} />
+          </div>
+        </Card>
+
+        {/* Training summary — volume, cardio and calories the member logged.
+            Previously invisible to the coach despite being captured daily. */}
+        <Card>
+          <SectionTitle icon="🔥">Training Summary</SectionTitle>
+          <div className="mt-2">
+            <TrainingSummary
+              patientId={parseInt(patientId)}
+              bodyWeightKg={weightData.length ? weightData[weightData.length - 1].weight : (parseFloat(data?.profile?.start_weight) || 0)}
+              refreshTick={workoutTick}
+            />
+          </div>
+        </Card>
+
+        {/* Phase 2: Workout Program */}
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle icon="🏋️">Workout Program</SectionTitle>
+            <button onClick={() => setShowProgramBuilder(true)}
+              className="text-xs font-semibold text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] px-3 py-1.5 rounded-xl
+                hover:bg-[rgba(212,175,55,0.18)] transition-colors">
+              {activeProgram?.program ? 'Edit' : '+ Create'}
+            </button>
+          </div>
+          {activeProgram === undefined ? (
+            <p className="text-xs text-[#7E8596] text-center py-3">Loading…</p>
+          ) : !activeProgram?.program ? (
+            <p className="text-xs text-[#7E8596] italic text-center py-3">
+              No program assigned — {profile.name} is logging freeform only.
+            </p>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold text-[#FFFFFF] mb-2">{activeProgram.program.name}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {activeProgram.days.map(d => (
+                  <span key={d.day_number} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.05] text-[#9EA3B0]">
+                    {d.day_label} <span className="text-[#7E8596]">· {d.exercises.length} exercises</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <MuscleCoverage patientId={parseInt(patientId)} refreshTick={workoutTick} />
 
         {/* Lab values */}
         <Card>
@@ -983,375 +1430,73 @@ export default function Monitor() {
           )}
         </Card>
 
-        {/* What their own data says about their metabolism — the engine
-            proposes targets, the coach decides whether to apply them. */}
-        <Card>
-          <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
-          <div className="mt-2">
-            <MetabolicInsight patientId={parseInt(patientId)} canApply onApplied={load} />
-          </div>
-        </Card>
-
-        {/* Their blood work, and what they were doing between tests */}
-        <Card>
-          <SectionTitle icon="🩸">Lab Results</SectionTitle>
-          <div className="mt-2">
-            <LabResults patientId={parseInt(patientId)} memberName={data?.profile?.name || ''} />
-          </div>
-        </Card>
-
-        {/* Macro Lab — adherence patterns and controlled trials. Coach-only:
-            there is no member-facing route for any of this. */}
-        <Card>
-          <SectionTitle icon="🔬">Macro Lab</SectionTitle>
-          <div className="mt-2">
-            <MacroLab patientId={parseInt(patientId)} onChanged={load} />
-          </div>
-        </Card>
-
-        {/* Training summary — volume, cardio and calories the member logged.
-            Previously invisible to the coach despite being captured daily. */}
-        <Card>
-          <SectionTitle icon="🔥">Training Summary</SectionTitle>
-          <div className="mt-2">
-            <TrainingSummary
-              patientId={parseInt(patientId)}
-              bodyWeightKg={weightData.length ? weightData[weightData.length - 1].weight : (parseFloat(data?.profile?.start_weight) || 0)}
-              refreshTick={workoutTick}
-            />
-          </div>
-        </Card>
-
-        {/* Phase 2: Workout Program */}
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <SectionTitle icon="🏋️">Workout Program</SectionTitle>
-            <button onClick={() => setShowProgramBuilder(true)}
-              className="text-xs font-semibold text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] px-3 py-1.5 rounded-xl
-                hover:bg-[rgba(212,175,55,0.18)] transition-colors">
-              {activeProgram?.program ? 'Edit' : '+ Create'}
-            </button>
-          </div>
-          {activeProgram === undefined ? (
-            <p className="text-xs text-[#7E8596] text-center py-3">Loading…</p>
-          ) : !activeProgram?.program ? (
-            <p className="text-xs text-[#7E8596] italic text-center py-3">
-              No program assigned — {profile.name} is logging freeform only.
-            </p>
-          ) : (
-            <div>
-              <p className="text-sm font-semibold text-[#FFFFFF] mb-2">{activeProgram.program.name}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {activeProgram.days.map(d => (
-                  <span key={d.day_number} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.05] text-[#9EA3B0]">
-                    {d.day_label} <span className="text-[#7E8596]">· {d.exercises.length} exercises</span>
-                  </span>
-                ))}
+        {/* Body composition — one collapsed card instead of a chart per marker.
+            A single DEXA panel entered as 60 rows on one date used to render ~13
+            sibling Cards, each a flat line between two identical dates. Trend
+            lines now require two DISTINCT test dates; otherwise it is one
+            reading and we show it as a reading. */}
+        {bodyComp.markers.length > 0 && (
+          <details className="rounded-2xl border border-white/[0.07] bg-[#1A1C20] overflow-hidden">
+            <summary className="px-4 py-3.5 cursor-pointer list-none flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-[#9EA3B0] uppercase tracking-[0.10em]">📉 Body Composition</span>
+                <p className="text-[11px] text-[#7E8596] mt-0.5">
+                  {bodyComp.scanDates.length} scan{bodyComp.scanDates.length === 1 ? '' : 's'}
+                  {bodyComp.latestDate ? ` · latest ${formatDate(bodyComp.latestDate)}` : ''}
+                  {' · '}{bodyComp.markers.length} markers
+                </p>
               </div>
-            </div>
-          )}
-        </Card>
+              <span className="text-xs text-[#7E8596]">▾</span>
+            </summary>
 
-        <MuscleCoverage patientId={parseInt(patientId)} refreshTick={workoutTick} />
-
-        {/* Daily Log Viewer — date chip navigator + single-date detail */}
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <SectionTitle icon="📋">Daily Log</SectionTitle>
-            {activeLog && (
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
-                (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
-                                                      'bg-red-400/10 text-red-400'
-              }`}>{activeLog.compliance_pct||0}%</span>
-            )}
-          </div>
-
-          {logs.length === 0 ? (
-            <p className="text-xs text-[#7E8596] italic text-center py-4">No logs yet</p>
-          ) : (
-            <>
-              {/* Date chip navigator — horizontal scroll, newest first */}
-              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 [&::-webkit-scrollbar]:hidden"
-                style={{ scrollbarWidth: 'none' }}>
-                {sortedLogs.map(log => {
-                  const d = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00');
-                  const isToday = log.log_date === todayIST;
-                  const isActive = log.log_date === activeDate;
-                  const pct = log.compliance_pct || 0;
-                  const dotColor = pct >= 75 ? '#D4AF37' : pct >= 50 ? '#fbbf24' : '#f87171';
-                  const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-                  return (
-                    <button key={log.log_date}
-                      onClick={() => setViewDate(log.log_date)}
-                      className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl
-                        border transition-all text-xs font-semibold ${
-                        isActive
-                          ? 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.30)] text-[#D4AF37]'
-                          : 'bg-[#1A1C20] border-white/[0.07] text-[#6a6a78] hover:border-white/[0.18] hover:text-[#FFFFFF]'
-                      }`}>
-                      <span>{dayLabel}</span>
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Selected day full detail */}
-              {activeLog ? (() => {
-                const log = activeLog;
-                const score = log.compliance_pct || rowCompliance(log);
-                const weightKg = parseFloat(log.weight_kg) || 0;
-                const burnedKcal = weightKg > 0
-                  ? ACTIVITIES.reduce((sum, a) => {
-                      if (!log.activities?.[a.id] || !a.met) return sum;
-                      return sum + Math.round(a.met * weightKg * ((a.durationMin || 30) / 60));
-                    }, 0)
-                  : 0;
-                const eatenKcal = (log.food_items || []).reduce((sum, f) => {
-                  const n = calcN(f); return sum + (n?.cal || 0);
-                }, 0);
-                const netKcal = eatenKcal - burnedKcal;
-
-                return (
-                  <div className="space-y-3">
-
-                    {/* Weight + stats row */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <StatPill value={log.weight_kg ? `${log.weight_kg} kg` : '—'} label="Weight" color="emerald" />
-                      <StatPill value={`${((log.water_ml || 0) / 1000).toFixed(1)}L`} label="Water" color="blue" />
-                      <StatPill value={log.sleep?.quality > 0 ? '⭐'.repeat(log.sleep.quality) : '—'} label="Sleep" color="purple" />
-                    </div>
-
-                    {/* Net calorie row */}
-                    {burnedKcal > 0 && (
-                      <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
-                        netKcal <= 0 ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.20)] text-[#D4AF37]'
-                        : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
-                        : 'bg-red-400/10 border-red-400/20 text-red-400'
-                      }`}>
-                        <div className="flex gap-3">
-                          <span>🍽 <strong>{eatenKcal}</strong> eaten</span>
-                          <span>🔥 <strong>{burnedKcal}</strong> burned</span>
-                        </div>
-                        <span className="font-bold">Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal{netKcal <= 0 && ' 🎯'}</span>
-                      </div>
-                    )}
-
-                    {/* Meal plan adherence */}
-                    {data?.profile?.meal_plan?.length > 0 && (
-                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06]">
-                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🍽 Meal Plan Adherence</span>
-                        </div>
-                        <div className="px-3 py-2.5 flex flex-wrap gap-2">
-                          {data.profile.meal_plan.map(meal => {
-                            const logged  = (log.food_items || []).map(f => f.name?.toLowerCase());
-                            const total   = (meal.items || []).length;
-                            const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
-                            const pct     = total > 0 ? matched / total : 0;
-                            const color   = pct >= 0.8 ? 'bg-[rgba(212,175,55,0.10)] text-[#D4AF37] border-[rgba(212,175,55,0.22)]'
-                                          : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
-                                          :              'bg-red-400/10 text-red-400 border-red-400/25';
-                            const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
-                            return (
-                              <div key={meal.id} className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
-                                {icon} {meal.name} {total > 0 ? `${matched}/${total}` : ''}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Food log */}
-                    {log.food_items?.length > 0 && (
-                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06] flex justify-between">
-                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🥗 Food Log</span>
-                          <span className="text-xs font-bold text-[#D4AF37]">{eatenKcal} kcal total</span>
-                        </div>
-                        {['Meal 1', 'Meal 2', 'Meal 3'].map(meal => {
-                          const mealItems = log.food_items.filter(f => f.meal === meal);
-                          if (!mealItems.length) return null;
-                          const mealCal = mealItems.reduce((s, f) => s + (calcN(f)?.cal || 0), 0);
-                          return (
-                            <div key={meal} className="border-b border-white/[0.05] last:border-0">
-                              <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
-                                <span className="text-[10px] font-semibold text-[#6a6a78] uppercase tracking-wide">{meal}</span>
-                                <span className="text-xs text-[#7E8596]">{mealCal} kcal</span>
-                              </div>
-                              {mealItems.map((f, i) => {
-                                const n = calcN(f);
-                                return (
-                                  <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-white/[0.04]">
-                                    <div className="min-w-0">
-                                      <div className="text-sm font-medium text-[#FFFFFF] truncate">{f.name}</div>
-                                      <div className="text-xs text-[#7E8596]">{f.grams}g</div>
-                                    </div>
-                                    {n && (
-                                      <div className="flex gap-2.5 text-right flex-shrink-0">
-                                        <div className="text-center">
-                                          <div className="text-xs font-bold text-orange-400">{n.cal}</div>
-                                          <div className="text-[10px] text-[#7E8596]">kcal</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="text-xs font-bold text-blue-400">{n.pro}g</div>
-                                          <div className="text-[10px] text-[#7E8596]">pro</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="text-xs font-bold text-amber-400">{n.carb}g</div>
-                                          <div className="text-[10px] text-[#7E8596]">carb</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="text-xs font-bold text-amber-400">{n.fat}g</div>
-                                          <div className="text-[10px] text-[#7E8596]">fat</div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })}
-                        {/* Day total row */}
-                        {(() => {
-                          const t = log.food_items.reduce((acc, f) => {
-                            const n = calcN(f);
-                            if (!n) return acc;
-                            return { cal: acc.cal+n.cal, pro: acc.pro+n.pro, carb: acc.carb+n.carb, fat: acc.fat+n.fat };
-                          }, { cal:0, pro:0, carb:0, fat:0 });
-                          return (
-                            <div className="px-3 py-2.5 bg-[rgba(212,175,55,0.05)] flex items-center justify-between border-t border-[rgba(212,175,55,0.12)]">
-                              <span className="text-xs font-bold text-[#D4AF37]">Day Total</span>
-                              <div className="flex gap-3 text-xs">
-                                <span className="font-bold text-orange-400">{t.cal} kcal</span>
-                                <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
-                                <span className="text-amber-400">{t.carb.toFixed(1)}g C</span>
-                                <span className="text-amber-400">{t.fat.toFixed(1)}g F</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-
-                    {/* Activities / ACV / Supplements — labeled checklist, not just icons.
-                        Each group shows its own X/Y so the coach can scan exactly what's
-                        missing without having to decode emoji or count cryptic pills. */}
-                    <div className="space-y-3">
-                      {[
-                        { title: '🏃 Activities', items: ACTIVITIES,  done: log.activities },
-                        { title: '🍎 ACV',         items: ACV_ITEMS,  done: log.acv },
-                        { title: '💊 Supplements', items: SUPPLEMENTS, done: log.supplements },
-                      ].map(group => {
-                        const doneCount = group.items.filter(it => group.done?.[it.id]).length;
-                        return (
-                          <div key={group.title}>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-xs font-bold text-[#6a6a78] uppercase tracking-wide">{group.title}</span>
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                doneCount === group.items.length
-                                  ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6]'
-                                  : doneCount === 0
-                                  ? 'bg-white/[0.05] text-[#7E8596]'
-                                  : 'bg-amber-400/10 text-amber-300'
-                              }`}>{doneCount}/{group.items.length}</span>
-                            </div>
-                            <div className="space-y-1">
-                              {group.items.map(it => {
-                                const isDone = !!group.done?.[it.id];
-                                return (
-                                  <div key={it.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${
-                                    isDone ? 'bg-[rgba(212,175,55,0.06)]' : 'bg-white/[0.02]'
-                                  }`}>
-                                    <span className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${
-                                      isDone ? 'bg-[#D4AF37]' : 'bg-white/[0.08]'
-                                    }`}>
-                                      {isDone && (
-                                        <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
-                                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                      )}
-                                    </span>
-                                    <span className={`text-xs font-medium leading-tight ${isDone ? 'text-[#FFFFFF]' : 'text-[#7E8596]'}`}>
-                                      {it.icon && <span className="mr-1">{it.icon}</span>}{it.label}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <WorkoutSessionViewer patientId={parseInt(patientId)} date={activeDate} refreshTick={workoutTick} />
-
-                    {/* Key nutrients collapsible */}
-                    {(log.food_items || []).some(f => f.per_100g) && (() => {
-                      const rdaOv = data?.profile?.rda_overrides || {};
-                      const micros = calcMicrosFromItems(log.food_items, log.supplements);
-                      const KEYS = ['vit_b12','vit_d','vit_c','calcium','iron','magnesium','zinc','folate','omega3_epa','omega3_dha','fiber'];
-                      const met  = KEYS.filter(k => {
-                        const meta = RDA_TARGETS[k];
-                        if (!meta) return false;
-                        const rda = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
-                        return (micros[k]||0) / rda >= 0.8;
-                      }).length;
-                      return (
-                        <details className="border border-white/[0.07] rounded-xl overflow-hidden">
-                          <summary className="px-3 py-2.5 text-xs font-semibold text-[#6a6a78] cursor-pointer
-                            hover:text-[#D4AF37] list-none flex justify-between items-center bg-[#1A1C20]">
-                            <span>🔬 Key Nutrients</span>
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
-                              met >= KEYS.length*0.8 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
-                              met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
-                            }`}>{met}/{KEYS.length} ▼</span>
-                          </summary>
-                          <div className="px-3 py-3 space-y-2 bg-[#1A1C20]">
-                            {KEYS.map(k => {
-                              const meta = RDA_TARGETS[k];
-                              if (!meta) return null;
-                              const rda  = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
-                              const raw  = micros[k] || 0;
-                              const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
-                              const val  = +raw.toFixed(dec);
-                              const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-[#D4AF37]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-[#D4AF37]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
-                              return (
-                                <div key={k}>
-                                  <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-[#6a6a78]">{meta.icon} {meta.label}</span>
-                                    <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit}</span>
-                                  </div>
-                                  <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full transition-all ${cls}`} style={{width:`${pct}%`}} />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </details>
-                      );
-                    })()}
-
-                    {/* Notes */}
-                    {log.notes && (
-                      <p className="text-xs text-[#6a6a78] italic border-t border-white/[0.06] pt-2.5 leading-relaxed">
-                        📝 {log.notes}
+            <div className="px-4 pb-4 space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                {bodyComp.markers.map(m => (
+                  <div key={m.name} className="rounded-xl bg-white/[0.03] px-2.5 py-2">
+                    <p className="text-[10px] text-[#7E8596] leading-tight truncate" title={m.name}>{m.name}</p>
+                    <p className="text-sm font-bold text-[#FFFFFF] leading-tight mt-0.5">{m.latest}</p>
+                    {m.change != null && (
+                      <p className={`text-[10px] leading-tight ${m.change > 0 ? 'text-amber-400' : 'text-[#D4AF37]'}`}>
+                        {m.change > 0 ? '↑' : '↓'} {Math.abs(m.change)}
                       </p>
                     )}
                   </div>
-                );
-              })() : (
-                <p className="text-xs text-[#7E8596] italic text-center py-4">No log for this date</p>
+                ))}
+              </div>
+
+              {bodyComp.trendable.length === 0 ? (
+                <p className="text-[11px] text-[#7E8596] italic leading-relaxed">
+                  Trend lines need two scans on different dates. Repeated rows from the same
+                  panel are one reading, not a trend.
+                </p>
+              ) : (
+                bodyComp.trendable.map(m => (
+                  <div key={m.name}>
+                    <p className="text-[11px] font-semibold text-[#9EA3B0] mb-1">{m.name}</p>
+                    <ResponsiveContainer width="100%" height={80}>
+                      <LineChart data={m.series} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                        <Tooltip
+                          content={({ active, payload }) => active && payload?.length
+                            ? <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
+                                <span className="font-bold text-[#D4AF37]">{payload[0].value}</span>
+                                <span className="text-[#7E8596] ml-1">{payload[0].payload.date}</span>
+                              </div>
+                            : null}
+                        />
+                        <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2}
+                          dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ))
               )}
-            </>
-          )}
-        </Card>
+            </div>
+          </details>
+        )}
+
       </div>
 
       {/* Add lab modal */}

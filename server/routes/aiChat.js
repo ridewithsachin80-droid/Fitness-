@@ -1698,10 +1698,25 @@ router.post('/remind', roleCheck('monitor', 'admin'), async (req, res) => {
       const firstName = rows[0].name.split(' ')[0];
       const noteText  = REMIND_TEMPLATES[memberId % REMIND_TEMPLATES.length](firstName);
 
-      await pool.query(
+      // Dedupe: the dashboard's Needs Attention list can be tapped repeatedly and
+      // each tap used to append an identical flagged note, burying real clinical
+      // notes under stacks of the same nudge. One reminder per member per day —
+      // and if it was already sent, skip the push too rather than spamming them.
+      const ins = await pool.query(
         `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged)
-         VALUES ($1,$2,$3,$4,true)`,
+         SELECT $1,$2,$3,$4,true
+         WHERE NOT EXISTS (
+           SELECT 1 FROM monitor_notes
+           WHERE patient_id=$2 AND note_date=$3 AND note=$4
+         )
+         RETURNING id`,
         [req.user.id, memberId, getISTDate(), noteText]);
+
+      if (!ins.rowCount) {
+        results.push({ id: memberId, name: rows[0].name, ok: true, skipped: true,
+                       detail: 'Already reminded today' });
+        continue;
+      }
 
       try {
         const pushService = require('../services/pushService');
@@ -1723,7 +1738,11 @@ router.post('/remind', roleCheck('monitor', 'admin'), async (req, res) => {
     }
   }
 
-  res.json({ results, sent: results.filter(r => r.ok).length });
+  res.json({
+    results,
+    sent:    results.filter(r => r.ok && !r.skipped).length,
+    skipped: results.filter(r => r.skipped).length,
+  });
 });
 
 // ── POST /api/ai-chat/weekly-summary ─────────────────────────────────────────
