@@ -17,7 +17,8 @@
     "test:labs": "node scripts/test-labs.js",
     "test:insight": "node scripts/test-lab-insight.js",
     "test:messaging": "node scripts/test-messaging.js",
-    "test:gaps": "node scripts/test-gaps.js"
+    "test:gaps": "node scripts/test-gaps.js",
+    "test:sprint1": "node scripts/test-sprint1.js"
   },
   "keywords": [],
   "author": "",

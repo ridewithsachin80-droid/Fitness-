@@ -86,35 +86,35 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
         <div className="col-span-2">
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Name *</label>
           <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Brown Rice (Cooked)"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)]" />
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Hindi Name</label>
           <input value={form.name_hindi} onChange={e => set('name_hindi', e.target.value)} placeholder="ब्राउन राइस"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)]" />
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Local / Brand Name</label>
           <input value={form.name_local} onChange={e => set('name_local', e.target.value)} placeholder="Aashirvaad Brown Rice"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)]" />
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Category</label>
           <select value={form.category} onChange={e => set('category', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)] bg-white">
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] bg-white">
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Source</label>
           <select value={form.source} onChange={e => set('source', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)] bg-white">
+            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] bg-white">
             {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="col-span-2 flex items-center gap-2">
           <input type="checkbox" id="verified" checked={form.verified} onChange={e => set('verified', e.target.checked)}
-            className="w-4 h-4 accent-[#c9a227]" />
+            className="w-4 h-4 accent-[#D4AF37]" />
           <label htmlFor="verified" className="text-sm font-medium text-stone-700">Verified (trusted data source)</label>
         </div>
       </div>
@@ -125,7 +125,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
           {NUTRIENT_GROUPS.map(g => (
             <button key={g.label} onClick={() => setNutrientTab(g.label)}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                nutrientTab === g.label ? 'bg-white text-[#c9a227] shadow-sm' : 'text-stone-500'}`}>
+                nutrientTab === g.label ? 'bg-white text-[#D4AF37] shadow-sm' : 'text-stone-500'}`}>
               {g.label}
             </button>
           ))}
@@ -138,7 +138,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
               </label>
               <input type="number" step="0.001" value={form.per_100g[k] || ''}
                 onChange={e => setN(k, e.target.value)}
-                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)]" />
+                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
             </div>
           ))}
         </div>
@@ -146,7 +146,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
 
       <div className="flex gap-2 pt-2">
         <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()}
-          className="flex-1 py-3 bg-[#c9a227] hover:bg-[#e0c98a] disabled:opacity-50 text-white font-bold rounded-xl transition-colors">
+          className="flex-1 py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 text-white font-bold rounded-xl transition-colors">
           {saving ? 'Saving…' : 'Save Food'}
         </button>
         <button onClick={onCancel}
@@ -159,7 +159,39 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
 }
 
 export default function AdminFoods() {
+  // The review queue: AI-estimated foods nobody has checked yet, ordered by
+  // how many members actually eat them. Without this the database quietly
+  // fills with guesses and a coach has no way to find them.
+  const [reviewMode, setReviewMode] = useState(false);
+  const [review, setReview]         = useState(null);
+  const [verifying, setVerifying]   = useState({});
   const navigate    = useNavigate();
+
+  const loadReview = async () => {
+    try {
+      const { data } = await api.get('/foods/review');
+      setReview(data);
+    } catch {
+      setReview({ foods: [], unverified_total: 0 });
+    }
+  };
+
+  const verify = async (food) => {
+    setVerifying(v => ({ ...v, [food.id]: true }));
+    try {
+      await api.patch(`/foods/${food.id}/verify`, { verified: true });
+      // Drop it from the list rather than reloading — the coach is working
+      // down a queue and a full refresh loses their place.
+      setReview(r => ({
+        ...r,
+        foods: r.foods.filter(f => f.id !== food.id),
+        unverified_total: Math.max(0, r.unverified_total - 1),
+      }));
+    } catch {
+      setVerifying(v => ({ ...v, [food.id]: false }));
+    }
+  };
+
   const [foods,     setFoods]     = useState([]);
   const [total,     setTotal]     = useState(0);
   const [page,      setPage]      = useState(1);
@@ -258,18 +290,18 @@ export default function AdminFoods() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e]">
+    <div className="min-h-screen bg-[#121316]">
       {/* Header */}
-      <div className="bg-[#08080b] text-white px-4 pt-10 pb-5">
+      <div className="bg-[#121316] text-white px-4 pt-10 pb-5">
         <div className="max-w-2xl mx-auto">
           <BackButton onClick={() => navigate('/admin')} light />
           <div className="flex items-center justify-between mt-3">
             <div>
               <h1 className="font-display text-xl font-medium">Food Database</h1>
-              <p className="text-[#9a9aa6] text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
+              <p className="text-[#9EA3B0] text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
             </div>
             <button onClick={() => { setEditing(null); setAiPrefill(null); setMode('add'); }}
-              className="px-4 py-2 bg-[#c9a227] hover:bg-[#e0c98a] text-[#08052a] font-bold rounded-xl text-sm transition-colors">
+              className="px-4 py-2 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] font-bold rounded-xl text-sm transition-colors">
               + Add Food
             </button>
           </div>
@@ -280,10 +312,76 @@ export default function AdminFoods() {
 
         {error && <p className="text-red-600 text-xs bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
 
+        {/* Review queue — the AI's own guesses, ordered by real usage. Verifying
+            the food forty members eat is worth far more than the one logged once. */}
+        {mode === 'list' && (
+          <Card>
+            <div className="flex items-center justify-between">
+              <SectionTitle icon="🔍">Needs review</SectionTitle>
+              <button
+                onClick={() => { const next = !reviewMode; setReviewMode(next); if (next && !review) loadReview(); }}
+                className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition-colors">
+                {reviewMode ? 'Hide' : 'Show queue'}
+              </button>
+            </div>
+
+            {reviewMode && (
+              review === null ? (
+                <p className="text-xs text-stone-400 py-3 text-center">Loading…</p>
+              ) : review.foods.length === 0 ? (
+                <p className="text-xs text-emerald-600 py-3 text-center">
+                  Nothing waiting. Every food in the database has been checked.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-stone-500 mt-1 mb-3">
+                    {review.unverified_total} unverified {review.unverified_total === 1 ? 'food' : 'foods'},
+                    most-eaten first. Confirming one fixes it for every member.
+                  </p>
+                  <div className="space-y-1.5">
+                    {review.foods.map(f => (
+                      <div key={f.id} className="flex items-center gap-3 py-2 border-b border-stone-50 last:border-0">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-stone-700 truncate">{f.name}</p>
+                          <p className="text-[11px] text-stone-400">
+                            {Math.round(f.per_100g?.calories ?? 0)} kcal · P{f.per_100g?.protein ?? 0}
+                            {' · '}C{f.per_100g?.total_carbs ?? 0} · F{f.per_100g?.fat ?? 0}
+                            {f.members > 0 && (
+                              <span className="text-amber-600 font-semibold">
+                                {' · '}{f.members} member{f.members > 1 ? 's' : ''}, {f.times_logged}×
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => { setEditing(f); setMode('edit'); }}
+                          className="text-[11px] font-semibold text-stone-500 px-2 py-1">
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => verify(f)}
+                          disabled={verifying[f.id]}
+                          style={{ minHeight: 32 }}
+                          className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200
+                            rounded-lg px-3 disabled:opacity-50">
+                          {verifying[f.id] ? '…' : '✓ Verify'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={loadReview} className="text-[11px] font-bold text-emerald-600 mt-3">
+                    Refresh
+                  </button>
+                </>
+              )
+            )}
+          </Card>
+        )}
+
         {/* AI search — only shown in list mode, lets admin identify a food via AI
             before reviewing/editing it in the same form used for manual adds. */}
         {mode === 'list' && (
-          <div className="bg-[#131317] rounded-2xl border border-white/[0.08] px-4 py-3">
+          <div className="bg-[#1A1C20] rounded-2xl border border-white/[0.08] px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-sm font-bold text-stone-200">✨ Search with AI</span>
               <span className="text-xs text-stone-500">Identify a food not yet in the database</span>
@@ -295,10 +393,10 @@ export default function AdminFoods() {
                 onKeyDown={e => { if (e.key === 'Enter') runAiSearch(); }}
                 placeholder="e.g. Ragi mudde, Brazil nut, Paneer tikka…"
                 disabled={aiLoading}
-                className="flex-1 px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm text-stone-100
-                  focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)] disabled:opacity-50" />
+                className="flex-1 px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm text-stone-100
+                  focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] disabled:opacity-50" />
               <button onClick={runAiSearch} disabled={aiLoading || aiQuery.trim().length < 2}
-                className="px-4 py-2.5 bg-[#c9a227] hover:bg-[#e0c98a] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
+                className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
                 {aiLoading ? 'Identifying…' : 'Identify'}
               </button>
             </div>
@@ -336,8 +434,8 @@ export default function AdminFoods() {
           <>
             <input value={query} onChange={e => handleSearch(e.target.value)}
               placeholder="Search foods by name…"
-              className="w-full px-4 py-3 bg-[#1a1a20] border border-white/[0.1] rounded-2xl text-sm
-                focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.35)] text-stone-800" />
+              className="w-full px-4 py-3 bg-[#1A1C20] border border-white/[0.1] rounded-2xl text-sm
+                focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] text-stone-800" />
 
             {loading ? (
               <div className="flex justify-center py-12">
@@ -349,11 +447,11 @@ export default function AdminFoods() {
                   {foods.length === 0 ? (
                     <p className="text-center text-stone-400 py-12">No foods found. Try a different search or add one.</p>
                   ) : foods.map(food => (
-                    <div key={food.id} className="bg-[#131317] rounded-2xl border border-white/[0.08] px-4 py-3 flex items-center gap-3 group shadow-sm">
+                    <div key={food.id} className="bg-[#1A1C20] rounded-2xl border border-white/[0.08] px-4 py-3 flex items-center gap-3 group shadow-sm">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-stone-800 text-sm truncate">{food.name}</span>
-                          {food.verified && <span className="text-xs bg-[rgba(201,162,39,0.15)] text-[#c9a227] px-1.5 py-0.5 rounded font-semibold">✓</span>}
+                          {food.verified && <span className="text-xs bg-[rgba(212,175,55,0.15)] text-[#D4AF37] px-1.5 py-0.5 rounded font-semibold">✓</span>}
                           <span className="text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">{food.category}</span>
                           <span className="text-xs text-stone-400">{food.source}</span>
                         </div>
@@ -364,7 +462,7 @@ export default function AdminFoods() {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => { setEditing(food); setMode('edit'); }}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-[#c9a227] hover:bg-[rgba(201,162,39,0.08)] transition-colors text-sm">
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-[#D4AF37] hover:bg-[rgba(212,175,55,0.08)] transition-colors text-sm">
                           ✏️
                         </button>
                         <button onClick={() => handleDelete(food)}
@@ -380,12 +478,12 @@ export default function AdminFoods() {
                 {pages > 1 && (
                   <div className="flex items-center justify-between pt-2">
                     <button onClick={() => load(query, page - 1)} disabled={page <= 1}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
                       ← Prev
                     </button>
                     <span className="text-xs text-stone-500 font-medium">Page {page} of {pages}</span>
                     <button onClick={() => load(query, page + 1)} disabled={page >= pages}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1a1a20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
                       Next →
                     </button>
                   </div>

@@ -126,6 +126,67 @@ function mapOffNutrients(nutriments = {}) {
 // Full-text search on name + name_local. Returns up to 10 results with all
 // nutrient fields. Used by FoodLog autocomplete and meal plan builder.
 // ─────────────────────────────────────────────────────────────────────────────
+// ── GET /api/foods/review ────────────────────────────────────────────────────
+// Unverified foods, ordered by how many members actually log them.
+//
+// The AI chat saves what it estimates as source='ai', verified=false. Without
+// a way to find those rows the database quietly fills with guesses nobody
+// reviews. Ordering by real usage means ten minutes of a coach's time is spent
+// on the food forty members eat rather than the one logged once.
+//
+// Declared before '/:id' so "review" is not read as a food id.
+router.get('/review', authMW, role('monitor', 'admin'), async (req, res) => {
+  try {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+    const { rows } = await pool.query(
+      `WITH logged AS (
+         SELECT LOWER(TRIM(item->>'name')) AS name,
+                COUNT(*)                        AS times_logged,
+                COUNT(DISTINCT patient_id)      AS members,
+                MAX(log_date)                   AS last_logged
+         FROM daily_logs, jsonb_array_elements(food_items) AS item
+         WHERE food_items IS NOT NULL
+           AND jsonb_typeof(food_items) = 'array'
+           AND item->>'name' IS NOT NULL
+         GROUP BY 1
+       )
+       SELECT f.id, f.name, f.category, f.source, f.verified, f.per_100g, f.created_at,
+              COALESCE(l.times_logged, 0) AS times_logged,
+              COALESCE(l.members, 0)      AS members,
+              l.last_logged
+       FROM foods f
+       LEFT JOIN logged l ON l.name = LOWER(TRIM(f.name))
+       WHERE f.verified = false
+       ORDER BY COALESCE(l.members, 0) DESC,
+                COALESCE(l.times_logged, 0) DESC,
+                f.created_at DESC
+       LIMIT $1`, [limit]);
+
+    const { rows: [tot] } = await pool.query(
+      `SELECT COUNT(*)::int AS unverified FROM foods WHERE verified = false`);
+
+    res.json({ foods: rows, unverified_total: tot.unverified });
+  } catch (err) {
+    console.error('GET /foods/review error:', err);
+    res.status(500).json({ error: 'Could not load the review queue' });
+  }
+});
+
+// ── PATCH /api/foods/:id/verify ──────────────────────────────────────────────
+// One tap to mark a food trusted, which is the whole point of the queue.
+router.patch('/:id/verify', authMW, role('monitor', 'admin'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE foods SET verified = $2 WHERE id = $1 RETURNING id, name, verified`,
+      [req.params.id, req.body?.verified !== false]);
+    if (!rows.length) return res.status(404).json({ error: 'Food not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('PATCH /foods/:id/verify error:', err);
+    res.status(500).json({ error: 'Could not update the food' });
+  }
+});
+
 router.get('/search', async (req, res) => {
   try {
     const q        = (req.query.q        || '').trim();

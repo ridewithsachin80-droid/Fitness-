@@ -1,44 +1,84 @@
-FitLife — audit fixes
-=====================
+FitLife — Sprint 1 complete
+===========================
 
-2 FILES. Extract, drag the "client" FOLDER onto GitHub at the repo ROOT.
-NOTHING TO RENAME. No new packages. No schema change. Server untouched.
+Extract, drag "client" and "server" FOLDERS onto GitHub at the repo ROOT.
+ONE RENAME: server/server-package.json -> package.json (in server/)
+No new packages. schema.sql re-runs safely.
 
-client/src/api/logs.js                 <- THIS ONE MATTERS
-client/src/components/AIFoodSearch.jsx <- unchanged in effect, included for safety
+═══ THE BIG ONE: schema.sql was building databases with missing columns ═══
 
-THE ONE REAL FINDING, AND IT WAS MINE
-In an earlier audit I "fixed" two API paths that were not broken.
+Found while running the full suite against a database created from empty.
 
-routes/aiFoods.js is mounted at /api/foods, not /api/ai-foods:
+ALTER TABLE workout_sessions ADD COLUMN cardio sat at line 217. CREATE TABLE
+workout_sessions sat at line 473. On a fresh database the ALTER ran 256 lines
+before the table existed — and Postgres reported NOTHING, because "ADD COLUMN
+IF NOT EXISTS" against a missing table quietly does nothing.
 
-    app.use('/api/foods', aiFoodsRoutes);   // index.js line 60
+So schema.sql claimed success while the cardio column was simply absent, and
+every workout save failed at runtime with "column cardio does not exist".
 
-I inferred the mount path from the filename instead of reading index.js, decided
-/foods/ai-identify looked wrong, and changed it to /ai-foods/ai-identify — which
-pointed at a route that does not exist. Both helpers in api/logs.js have been
-broken since. They are currently unused exports, so nothing failed in production,
-but anyone wiring up AI food search would have hit a 404 with no obvious cause.
+Six columns were affected: workout cardio, monitor_notes from_member /
+reply_to / delivered_via, lab_values entered_role, and the notification
+preference flags.
 
-Reverted to the correct /foods/ path.
+Your production database is fine — those columns were added by earlier runs
+when the tables already existed. This only bit a from-scratch build. But it
+would have bitten hard on any new environment: a staging deploy, a restored
+backup, or a second Railway instance.
 
-I also rewrote the audit script itself. It now parses the real app.use() mounts
-from index.js rather than guessing from filenames — the assumption that created
-this bug in the first place. Under the corrected script, all 94 client API calls
-resolve against all 108 server routes with zero mismatches.
+All migrations now sit in one block at the end of the file, after every
+CREATE TABLE, with a note explaining why. There is a check verifying no ALTER
+precedes its own table.
 
-EVERYTHING ELSE CLEAN
-  · 24 server modules load without error
-  · no shadowed routes — every literal path is declared before its /:id sibling
-    (this trap has bitten four times, so it is now checked explicitly)
-  · all 6 new components mounted; all 7 new services imported by a route
-  · schema drops and rebuilds from empty with zero errors, twice — genuinely
-    idempotent
-  · 463 assertions across 16 suites, all passing on the rebuilt database
-  · nutrition validator: 0 errors across 579 foods
-  · production build clean, no warnings
+═══ SPRINT 1 ITEMS ═══
 
-NINE PRE-EXISTING LINT WARNINGS REMAIN, DELIBERATELY UNTOUCHED
-AIFoodSearch, FoodLog and AdminDashboard each reference a setter before its
-declaration. I checked each one: all are inside useEffect or event handlers,
-which run after mount, so the constant exists by the time it is read. Left alone.
+1 · OFFLINE LOGGING — the queue existed but had a hole
+   My roadmap audit said there was no offline queue. That was wrong; it lives
+   in hooks/useOfflineQueue.js, not the service worker, and it is wired up.
+
+   The real flaw was its guard: if (navigator.onLine) post; else queue.
+   navigator.onLine only reports whether an interface is up. It says true on
+   hotel WiFi before the captive portal, on one bar with nothing getting
+   through, and while the server is down — and in each case the POST threw and
+   the log was LOST, because the queue was in the branch that never ran.
+
+   A gym basement with one bar is exactly that case.
+
+   Now: the request is attempted first, and a network error, timeout or 5xx
+   queues it. A 4xx does not — a rejected payload stays rejected however often
+   it is resent, and queueing it would retry forever while hiding a real bug.
+   401 and 403 also pass through, because the member needs to log in again,
+   not have their entry silently parked.
+
+   Sync now also polls every 60 seconds. The 'online' event only fires when
+   the interface changes state, so a flaky connection that starts working
+   again never triggers it.
+
+2 · FOOD REVIEW QUEUE
+   Admin -> Foods -> "Needs review". Unverified AI foods ordered by how many
+   members actually eat them, with the member and log counts shown, and a
+   one-tap Verify. Verifying the food forty members eat is worth far more than
+   the one logged once.
+
+3 · MEMBER REPLIES
+   A Reply button on every coach message. Replies thread to the note they
+   answer, route to the coach who wrote it, mark the original read, and push a
+   notification to the coach.
+
+   A security bug was caught in testing: a member could set reply_to to a note
+   belonging to a DIFFERENT member, threading their reply into a stranger's
+   conversation. reply_to is now validated against that member's own notes and
+   discarded otherwise. The same fix removes a 500 when replying to a note id
+   that does not exist.
+
+4 · CONFIGURATION HEALTH
+   GET /api/admin/health reports which integrations are configured — push,
+   AI text, AI vision, SMS, WhatsApp — and names the missing variables. This
+   is how you confirm VAPID is set. Booleans and variable NAMES only, never a
+   key or any fragment of one; there is a test asserting no long token-like
+   string appears in the response.
+
+═══ TESTS ═══
+  npm run test:sprint1    36 assertions
+FULL SUITE: 499 assertions across 17 suites, all passing on a database built
+from empty. Nutrition validator 0 errors. Lint clean. Build clean.

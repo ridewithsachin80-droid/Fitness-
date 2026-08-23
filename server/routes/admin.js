@@ -23,6 +23,64 @@ async function audit(actor, action, targetId, targetName, detail) {
 }
 
 // ── GET /api/admin/stats ───────────────────────────────────────────────────────
+// ── GET /api/admin/health ────────────────────────────────────────────────────
+// Which integrations are actually configured. Reports booleans only — never a
+// key, never a fragment of one — so it is safe to read over a shared screen.
+//
+// Exists because several features fail SILENTLY without their keys: push just
+// logs a warning and carries on, so a coach sees members ignoring reminders
+// that were never sent.
+router.get('/health', authMW, role('admin'), async (req, res) => {
+  const set = v => !!(v && String(v).trim() && !/^your-/i.test(String(v)));
+
+  const checks = {
+    database: { ok: false, detail: 'not reachable' },
+    push: {
+      ok: set(process.env.VAPID_EMAIL) && set(process.env.VAPID_PUBLIC_KEY) && set(process.env.VAPID_PRIVATE_KEY),
+      detail: 'Coach reminders, weekly summaries and all in-app notifications',
+      missing: ['VAPID_EMAIL', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter(k => !set(process.env[k])),
+    },
+    ai_text: {
+      ok: set(process.env.GROQ_API_KEY) || set(process.env.GEMINI_API_KEY),
+      detail: 'AI chat logging',
+      missing: (set(process.env.GROQ_API_KEY) || set(process.env.GEMINI_API_KEY)) ? [] : ['GROQ_API_KEY or GEMINI_API_KEY'],
+    },
+    ai_vision: {
+      ok: set(process.env.GEMINI_API_KEY),
+      detail: 'Photo food logging and lab report reading',
+      missing: set(process.env.GEMINI_API_KEY) ? [] : ['GEMINI_API_KEY'],
+    },
+    sms: {
+      ok: set(process.env.MSG91_API_KEY) && set(process.env.MSG91_SENDER_ID),
+      detail: 'Automated SMS to members (optional — personal WhatsApp needs nothing)',
+      missing: ['MSG91_API_KEY', 'MSG91_SENDER_ID'].filter(k => !set(process.env[k])),
+    },
+    whatsapp_business: {
+      ok: set(process.env.WHATSAPP_TOKEN) && set(process.env.WHATSAPP_PHONE_ID),
+      detail: 'Automated WhatsApp (optional — personal WhatsApp needs nothing)',
+      missing: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID'].filter(k => !set(process.env[k])),
+    },
+  };
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT (SELECT COUNT(*) FROM users WHERE role='patient' AND active=true)::int AS members,
+              (SELECT COUNT(*) FROM foods)::int                                     AS foods,
+              (SELECT COUNT(*) FROM foods WHERE verified = false)::int              AS unverified_foods,
+              (SELECT COUNT(*) FROM daily_logs)::int                                AS logs`);
+    checks.database = { ok: true, detail: 'connected', ...rows[0] };
+  } catch (err) {
+    checks.database.detail = err.message.slice(0, 120);
+  }
+
+  const critical = ['database', 'push', 'ai_text'];
+  res.json({
+    ok: critical.every(k => checks[k].ok),
+    checks,
+    checked_at: new Date().toISOString(),
+  });
+});
+
 router.get('/stats', async (req, res) => {
   try {
     const [members, monitors, logs] = await Promise.all([

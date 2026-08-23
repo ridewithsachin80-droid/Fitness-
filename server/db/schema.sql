@@ -214,14 +214,6 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
 -- [{ "type":"running", "duration_min":30, "speed_kmh":9, "distance_km":4.5 }]
 -- Stored as JSONB rather than its own table: entries are always read and
 -- written with their session, and never queried independently.
-ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
-
--- Per-member portion memory. "1 katori" is not a fixed weight — it depends on
--- whose kitchen the katori came from. When a member corrects the grams the AI
--- suggested, we remember it and use their figure next time.
---
--- Keyed on a normalised phrase ("katori dal", "glass milk") rather than the
--- food id, because the unit is the thing being learned, not the food.
 CREATE TABLE IF NOT EXISTS member_portions (
   id          SERIAL PRIMARY KEY,
   patient_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -301,6 +293,17 @@ CREATE INDEX IF NOT EXISTS idx_message_log_user ON message_log(user_id, sent_at 
 -- receive the message twice: once on WhatsApp and again as an unread "action
 -- needed" card in the app.
 ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS delivered_via VARCHAR(12);
+
+-- Members can now reply. Coach notes were one-way, so members answered on
+-- WhatsApp and the exchange left the app entirely — along with any record of
+-- what was actually agreed.
+--
+-- from_member distinguishes a reply from a coach note in the same thread.
+-- reply_to threads a reply to the note it answers, so a coach reading three
+-- messages knows which is which.
+ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS from_member BOOLEAN DEFAULT false;
+ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS reply_to INT REFERENCES monitor_notes(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_monitor_notes_thread ON monitor_notes(patient_id, note_date DESC, id);
 
 -- Clean reference bounds that were stored as NaN. Postgres NUMERIC accepts
 -- NaN as a legitimate value, so a non-numeric bound on a report ("< 100", "-")
@@ -565,3 +568,25 @@ WHEN OTHERS THEN
   RAISE NOTICE 'workout_sessions program FK migration skipped: %', SQLERRM;
 END $$;
 
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- MIGRATIONS
+--
+-- These run LAST, deliberately. They were previously interleaved with the
+-- table definitions, which meant that on a fresh database an ALTER could run
+-- before its own CREATE TABLE. Postgres reported nothing — "ADD COLUMN IF NOT
+-- EXISTS" against a missing table simply did nothing — so schema.sql appeared
+-- to succeed while the workout cardio column was absent and every workout save
+-- failed at runtime.
+--
+-- Anything altering an existing table belongs below this line.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
+
+-- Per-member portion memory. "1 katori" is not a fixed weight — it depends on
+-- whose kitchen the katori came from. When a member corrects the grams the AI
+-- suggested, we remember it and use their figure next time.
+--
+-- Keyed on a normalised phrase ("katori dal", "glass milk") rather than the
+-- food id, because the unit is the thing being learned, not the food.

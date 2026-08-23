@@ -716,10 +716,32 @@ export default function DailyLog() {
 
   // Fetch coach notes + profile age once on mount
   const [coachNotes, setCoachNotes] = useState([]);
+  // Replies were impossible, so members answered on WhatsApp and the exchange
+  // left the app entirely — along with any record of what was agreed.
+  const [replyTo, setReplyTo]     = useState(null);   // note id being answered
+  const [replyText, setReplyText] = useState('');
+  const [replyBusy, setReplyBusy] = useState(false);
+  const [replied, setReplied]     = useState({});
   const [profileAge, setProfileAge] = useState(null);
 
   // Only unread messages appear on Today; read ones live in the bell.
   const unreadNotes = coachNotes.filter(n => !n.read_at);
+
+  const sendReply = async (noteId) => {
+    const text = replyText.trim();
+    if (!text) return;
+    setReplyBusy(true);
+    try {
+      await api.post('/patients/me/notes/reply', { note: text, reply_to: noteId });
+      setReplied(r => ({ ...r, [noteId]: true }));
+      setReplyTo(null);
+      setReplyText('');
+      // Replying is reading, so the note clears from the unread list too
+      markNotesRead([noteId]);
+    } catch (err) {
+      console.error('reply failed:', err);
+    } finally { setReplyBusy(false); }
+  };
 
   const markNotesRead = useCallback(async (ids) => {
     if (!ids?.length) return;
@@ -1677,11 +1699,50 @@ export default function DailyLog() {
                         </span>
                       </div>
                       <p className="text-sm text-[#FFFFFF] leading-relaxed whitespace-pre-wrap">{n.note}</p>
-                      <button onClick={() => markNotesRead([n.id])}
-                        style={{ minHeight: 36 }}
-                        className="mt-2 w-full text-[11px] font-bold text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.25)] rounded-xl active:scale-[0.98] transition-transform">
-                        Got it ✓
-                      </button>
+                      {replied[n.id] ? (
+                        <p className="mt-2 text-[11px] font-bold text-emerald-300 text-center">✓ Reply sent</p>
+                      ) : replyTo === n.id ? (
+                        <div className="mt-2">
+                          <textarea
+                            value={replyText}
+                            onChange={e => setReplyText(e.target.value)}
+                            rows={3}
+                            autoFocus
+                            placeholder="Type your reply…"
+                            className="w-full bg-[#121316] border border-white/[0.12] rounded-xl p-2.5
+                              text-[13px] text-white leading-relaxed resize-none
+                              focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]"
+                          />
+                          <div className="flex gap-2 mt-1.5">
+                            <button onClick={() => sendReply(n.id)} disabled={replyBusy || !replyText.trim()}
+                              style={{ minHeight: 38 }}
+                              className="flex-1 text-[11px] font-bold text-[#121316] rounded-xl
+                                bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                                active:scale-[0.98] disabled:opacity-50">
+                              {replyBusy ? 'Sending…' : 'Send reply'}
+                            </button>
+                            <button onClick={() => { setReplyTo(null); setReplyText(''); }}
+                              style={{ minHeight: 38 }}
+                              className="px-3 text-[11px] font-bold text-[#9EA3B0] border border-white/[0.10] rounded-xl">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => { setReplyTo(n.id); setReplyText(''); }}
+                            style={{ minHeight: 36 }}
+                            className="flex-1 text-[11px] font-bold text-[#D4AF37] bg-[rgba(212,175,55,0.08)]
+                              border border-[rgba(212,175,55,0.28)] rounded-xl active:scale-[0.98]">
+                            Reply
+                          </button>
+                          <button onClick={() => markNotesRead([n.id])}
+                            style={{ minHeight: 36 }}
+                            className="flex-1 text-[11px] font-bold text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.25)] rounded-xl active:scale-[0.98] transition-transform">
+                            Got it ✓
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
