@@ -15,25 +15,14 @@ import { useState, useEffect } from 'react';
 import api from '../api/client';
 import { TEMPLATES, openWhatsApp, openSMS, waNumber } from '../utils/personalMessage';
 
-const PRESETS = [
-  ['nudge',      'Not logging',     m => TEMPLATES.nudge(m)],
-  ['weightless', 'No weight',       m => TEMPLATES.weightless(m)],
-  ['checkin',    'Check in',        m => TEMPLATES.checkin(m)],
-];
-
 export default function MessageMember({ member, summary = null, initialText = null, open, onClose }) {
   // initialText lets a caller open the sheet already talking about a specific
   // thing — a missing water log, say — rather than the generic nudge.
   const [text, setText]   = useState(() => initialText || TEMPLATES.nudge(member || {}));
-  const [preset, setPreset] = useState(initialText ? null : 'nudge');
-
-  // Reopening the sheet for a different member or a different gap must reset
-  // the body; without this the previous member's message persists.
+  // Reopening the sheet for a different member must reset the body; without
+  // this the previous member's message persists.
   useEffect(() => {
-    if (open) {
-      setText(initialText || TEMPLATES.nudge(member || {}));
-      setPreset(initialText ? null : 'nudge');
-    }
+    if (open) setText(initialText || TEMPLATES.nudge(member || {}));
   }, [open, initialText, member?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [saveNote, setSaveNote] = useState(true);
   const [busy, setBusy]   = useState(false);
@@ -42,11 +31,6 @@ export default function MessageMember({ member, summary = null, initialText = nu
   if (!open) return null;
 
   const numberOk = !!waNumber(member?.phone);
-
-  const pick = (key, build) => {
-    setPreset(key);
-    setText(build(member));
-  };
 
   /** Record the message in-app so the exchange is not lost to WhatsApp. */
   const record = async (via) => {
@@ -91,7 +75,7 @@ export default function MessageMember({ member, summary = null, initialText = nu
           <div className="min-w-0">
             <p className="text-sm font-bold text-white truncate">Message {member?.name}</p>
             <p className="text-[11px] text-[#7E8596]">
-              Sends from your own number, not the app
+              Written from what they haven't logged · sends from your own number
             </p>
           </div>
           <button onClick={onClose} className="text-[#7E8596] text-lg leading-none px-2">×</button>
@@ -102,29 +86,6 @@ export default function MessageMember({ member, summary = null, initialText = nu
             This member has no usable mobile number on file, so messaging won't open.
           </p>
         )}
-
-        <div className="flex gap-1.5 mb-2 flex-wrap">
-          {PRESETS.map(([key, label, build]) => (
-            <button key={key} onClick={() => pick(key, build)}
-              style={{ minHeight: 30 }}
-              className={`text-[11px] font-semibold rounded-full px-3 border transition-colors ${
-                preset === key
-                  ? 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.45)] text-[#D4AF37]'
-                  : 'border-white/[0.12] text-[#9EA3B0]'}`}>
-              {label}
-            </button>
-          ))}
-          {summary && (
-            <button onClick={() => pick('summary', m => TEMPLATES.summary(m, summary))}
-              style={{ minHeight: 30 }}
-              className={`text-[11px] font-semibold rounded-full px-3 border transition-colors ${
-                preset === 'summary'
-                  ? 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.45)] text-[#D4AF37]'
-                  : 'border-white/[0.12] text-[#9EA3B0]'}`}>
-              Weekly summary
-            </button>
-          )}
-        </div>
 
         {/* Always editable. A coach who cannot add a sentence sends a form
             letter, which defeats the purpose of using their own number. */}

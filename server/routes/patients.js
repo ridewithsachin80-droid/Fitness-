@@ -277,7 +277,7 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     if (!members.length) return res.json({ members: [], generated_at: new Date().toISOString() });
 
     const ids = members.map(m => m.id);
-    const [logsRes, profRes] = await Promise.all([
+    const [logsRes, profRes, lastRes] = await Promise.all([
       pool.query(
         `SELECT * FROM daily_logs
          WHERE patient_id = ANY($1) AND log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
@@ -286,20 +286,30 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
         `SELECT user_id, water_target, protocol_activities, protocol_acv,
                 protocol_supplements, meal_plan
          FROM patient_profiles WHERE user_id = ANY($1)`, [ids]),
+      // How long since each member logged anything at all — a member silent
+      // for weeks needs a different message from one who missed water today.
+      pool.query(
+        `SELECT patient_id,
+                ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - MAX(log_date)) AS days_since
+         FROM daily_logs WHERE patient_id = ANY($1)
+         GROUP BY patient_id`, [ids]),
     ]);
 
     const logByMember  = new Map(logsRes.rows.map(l => [l.patient_id, l]));
     const profByMember = new Map(profRes.rows.map(p => [p.user_id, p]));
+    const lastByMember = new Map(lastRes.rows.map(r => [r.patient_id, parseInt(r.days_since)]));
 
     const out = members.map(m => {
       const p = profByMember.get(m.id) || {};
+      // A member who has never logged at all reads as maximally dormant
+      const days = lastByMember.has(m.id) ? lastByMember.get(m.id) : 9999;
       return detectGaps(m, logByMember.get(m.id) || null, {
         water_target: p.water_target,
         activities:   p.protocol_activities,
         acv:          p.protocol_acv,
         supplements:  p.protocol_supplements,
         meal_slots:   p.meal_plan,
-      });
+      }, { daysSince: days });
     }).filter(r => r.gaps.length);
 
     // Most urgent first, so the coach works down the list

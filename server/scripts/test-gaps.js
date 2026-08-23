@@ -94,7 +94,22 @@ const fullDay = {
   ck('garbage fields survive',   detectGaps(M, { activities: 'nonsense', food_items: null }, P, { now: at(22) }).gaps.length >= 0);
   ck('missing protocol survives', detectGaps(M, fullDay, {}, { now: at(22) }).gaps.length >= 0);
 
-  console.log('\n[9] endpoint and access control');
+  console.log('\n[9] dormant members outrank today\'s misses');
+  const dorm = detectGaps(M, null, P, { now: at(22), daysSince: 86 });
+  ck('86 days silent -> dormant', keys(dorm).includes('dormant'), keys(dorm));
+  ck('and nothing else is listed', dorm.gaps.length === 1, keys(dorm));
+  ck('the day count is carried', dorm.days_since_log === 86, dorm.days_since_log);
+  ck('the label names the number', /86 days/.test(dorm.gaps[0].label), dorm.gaps[0].label);
+
+  const yesterday = detectGaps(M, null, P, { now: at(22), daysSince: 1 });
+  ck('missed one day -> not dormant, just today\'s gaps',
+     !keys(yesterday).includes('dormant'), keys(yesterday));
+
+  const partialButDormant = detectGaps(M, fullDay, P, { now: at(22), daysSince: 40 });
+  ck('dormant even when today looks complete',
+     keys(partialButDormant).includes('dormant'), keys(partialButDormant));
+
+  console.log('\n[10] endpoint and access control');
   await pool.query('TRUNCATE users RESTART IDENTITY CASCADE');
   const mk = async (n,ph,role) => (await pool.query(
     `INSERT INTO users (name,phone,password,role,active) VALUES ($1,$2,'x',$3,true) RETURNING id`,[n,ph,role])).rows[0];

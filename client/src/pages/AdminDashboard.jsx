@@ -1519,55 +1519,24 @@ export default function AdminDashboard() {
               <TodaysGaps />
             </div>
 
-            {/* Needs attention — now actionable */}
-            {overview.alerts.length > 0 && (
-              <div className="bg-[#1A1C20] border border-[rgba(248,113,113,0.25)] rounded-2xl p-4">
-                <p className="text-sm font-bold text-red-400 mb-1">⚠️ Needs Attention ({overview.alerts.length})</p>
-                <div className="divide-y divide-white/[0.05]">
-                  {overview.alerts.map(a => (
-                    <div key={a.id} className="flex items-center gap-3 py-2.5">
-                      <button onClick={() => navigate(`/monitor/${a.id}`)} className="flex-1 min-w-0 text-left">
-                        <span className="text-sm font-semibold text-[#FFFFFF] block truncate">{a.name}</span>
-                        <span className="text-[10px] text-red-400 font-bold">
-                          {a.days_since ? `${a.days_since}d no log` : 'Never logged'}
-                        </span>
-                      </button>
-                      {/* WhatsApp first: for someone 86 days silent, a push
-                          notification is delivered to an app they are not
-                          opening. This reaches them where they actually are. */}
-                      <button
-                        onClick={() => setMsgMember(a)}
-                        style={{ minHeight: 34, minWidth: 34 }}
-                        title={`Message ${a.name} on WhatsApp`}
-                        className="text-[13px] rounded-full border border-[rgba(212,175,55,0.4)]
-                          bg-[rgba(212,175,55,0.12)] active:scale-95 transition-transform flex-shrink-0">
-                        💬
-                      </button>
-                      {reminded[a.id] ? (
-                        <span className="text-[10px] font-bold text-emerald-300">✓ Reminded</span>
-                      ) : (
-                        <button
-                          onClick={() => sendRemind([a], a.id)}
-                          disabled={remindBusy[a.id]}
-                          style={{ minHeight: 34 }}
-                          className="text-[10px] font-extrabold text-[#F0E2B6] bg-[rgba(212,175,55,0.12)] border border-[rgba(212,175,55,0.4)] rounded-full px-3 active:scale-95 transition-transform disabled:opacity-50">
-                          {remindBusy[a.id] ? 'Sending…' : '✨ Remind'}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {overview.alerts.some(a => !reminded[a.id]) && (
-                  <button
-                    onClick={() => sendRemind(overview.alerts.filter(a => !reminded[a.id]), 'all')}
-                    disabled={remindBusy['all']}
-                    style={{ minHeight: 38 }}
-                    className="w-full mt-2 text-[11px] font-extrabold text-[#F0E2B6] border border-[rgba(212,175,55,0.3)] rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50">
-                    {remindBusy['all'] ? 'Sending…' : '✨ Remind everyone'}
-                  </button>
-                )}
-                <p className="text-[9px] text-[#7E8596] mt-2">
-                  💬 opens your own WhatsApp · ✨ sends an in-app push and coach message, logged in Audit
+            {/* The per-member list that lived here is now the single gaps card
+                above, which covers both dormant members and today's misses.
+                Only the bulk in-app reminder remains, since that is the one
+                action the gaps card deliberately does not automate. */}
+            {overview.alerts?.length > 0 && (
+              <div className="bg-[#1A1C20] rounded-2xl p-3.5 border border-white/[0.07] mb-3">
+                <button
+                  onClick={() => sendRemind(overview.alerts, 'all')}
+                  disabled={remindBusy['all']}
+                  style={{ minHeight: 42 }}
+                  className="w-full rounded-xl text-xs font-extrabold text-[#F0E2B6]
+                    bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.35)]
+                    active:scale-[0.99] transition-transform disabled:opacity-50">
+                  {remindBusy['all'] ? 'Sending…' : `✨ Send an in-app reminder to all ${overview.alerts.length}`}
+                </button>
+                <p className="text-[9px] text-[#7E8596] mt-2 text-center">
+                  Push notification and a coach message inside the app, logged in Audit.
+                  For members who have stopped opening the app, use 💬 above instead.
                 </p>
               </div>
             )}

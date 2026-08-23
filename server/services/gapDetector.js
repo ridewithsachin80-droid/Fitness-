@@ -38,6 +38,13 @@ const ticked = obj => Object.values(obj || {}).filter(Boolean).length;
  */
 const GAPS = [
   {
+    key: 'dormant',
+    label: 'Not logged in days',
+    after: 0,                        // applies at any hour — this is not about today
+    severity: 'blocking',
+    test: ({ daysSince }) => daysSince != null && daysSince >= 3,
+  },
+  {
     key: 'nothing',
     label: 'Nothing logged today',
     after: 14,                       // give them most of the day first
@@ -135,13 +142,14 @@ const SEVERITY_RANK = { blocking: 0, high: 1, medium: 2, low: 3 };
  * @param opts.max how many gaps to surface (default 2)
  */
 function detectGaps(member, log, protocol = {}, opts = {}) {
+  const daysSince = opts.daysSince ?? null;
   const hour = istHour(opts.now || new Date());
   const max = opts.max ?? 2;
 
   const found = GAPS
     .filter(g => hour >= g.after)
     .filter(g => {
-      try { return g.test({ log, protocol }); }
+      try { return g.test({ log, protocol, daysSince }); }
       catch { return false; }          // a malformed log must not break the list
     })
     .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
@@ -159,7 +167,14 @@ function detectGaps(member, log, protocol = {}, opts = {}) {
     name: member.name,
     phone: member.phone,
     hour,
-    gaps: gaps.map(g => ({ key: g.key, label: g.label, severity: g.severity })),
+    days_since_log: daysSince,
+    gaps: gaps.map(g => ({
+      key: g.key,
+      // A dormant member's label carries the actual number, which is the
+      // thing a coach reacts to — "86 days" lands differently from "dormant".
+      label: g.key === 'dormant' ? `${daysSince} days no log` : g.label,
+      severity: g.severity,
+    })),
     // How many to show as chips before collapsing to "+n more"
     show: Math.min(gaps.length, max),
     all_gaps: found.map(g => g.key),

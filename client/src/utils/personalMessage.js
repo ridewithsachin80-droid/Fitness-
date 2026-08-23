@@ -197,7 +197,24 @@ function joinPhrases(items) {
  * @param member  { name }
  * @param gapKeys ordered gap keys, most important first
  */
-export function combinedGapMessage(member, gapKeys = []) {
+export function combinedGapMessage(member, gapKeys = [], daysSince = null) {
+  // Someone silent for weeks does not need a list of today's missing items.
+  // The right message asks how they are — an itemised chase after a month of
+  // silence reads as an invoice, not concern.
+  if (gapKeys.includes('dormant')) {
+    if (daysSince != null && daysSince > 300) {
+      return withLink(
+        `Hi ${first(member.name)}, we haven't seen you in FitLife for a long while. ` +
+        `No pressure at all — but if you'd like to pick things back up, I'm here. ` +
+        `Just open the app and tell the AI what you ate today.`);
+    }
+    const howLong = daysSince != null && daysSince < 60
+      ? `for ${daysSince} days` : 'in a while';
+    return withLink(
+      `Hi ${first(member.name)}, haven't seen a log from you ${howLong}. ` +
+      `Everything alright? If you're short on time, one line to the AI covers the whole day.`);
+  }
+
   const keys = gapKeys.filter(k => k !== 'nothing');
 
   // Nothing at all, or so much missing that listing it becomes a telling-off
@@ -225,6 +242,7 @@ export function combinedGapMessage(member, gapKeys = []) {
 
 /** Human label for a gap key, for buttons and lists. */
 export const GAP_LABEL = {
+  dormant: 'Not logged in days',
   nothing: 'Nothing logged', food: 'No food', weight: 'No weight',
   dinner: 'No dinner', water: 'Low water', activity: 'No activity',
   acv: 'ACV missed', supplements: 'No supplements', sleep: 'No sleep times',

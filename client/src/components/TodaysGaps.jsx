@@ -54,7 +54,7 @@ export default function TodaysGaps() {
   if (!members.length) {
     return (
       <p className="text-xs text-emerald-300 py-3 text-center">
-        Everyone's up to date for the time of day. Nothing to chase.
+        Everyone's logged and up to date. Nothing to chase.
       </p>
     );
   }
@@ -65,7 +65,7 @@ export default function TodaysGaps() {
   const open = (member) => {
     setTarget({
       member: { id: member.member_id, name: member.name, phone: member.phone },
-      text: combinedGapMessage({ name: member.name }, member.gaps.map(g => g.key)),
+      text: combinedGapMessage({ name: member.name }, member.gaps.map(g => g.key), member.days_since_log),
       key: String(member.member_id),
     });
   };
@@ -73,9 +73,9 @@ export default function TodaysGaps() {
   return (
     <div>
       <p className="text-[11px] text-[#7E8596] mb-2.5 leading-relaxed">
-        One message per member covering everything they're missing. Checked against
-        the time of day, so water isn't flagged in the morning and supplements
-        aren't flagged before evening.
+        One message per member, written from what they actually haven't logged.
+        Time-aware, so water isn't flagged in the morning and supplements aren't
+        flagged before evening.
       </p>
 
       <div className="space-y-2">
