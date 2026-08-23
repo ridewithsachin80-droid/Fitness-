@@ -16,7 +16,8 @@
     "test:model": "node scripts/test-learning-model.js",
     "test:labs": "node scripts/test-labs.js",
     "test:insight": "node scripts/test-lab-insight.js",
-    "test:messaging": "node scripts/test-messaging.js"
+    "test:messaging": "node scripts/test-messaging.js",
+    "test:gaps": "node scripts/test-gaps.js"
   },
   "keywords": [],
   "author": "",

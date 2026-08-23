@@ -116,6 +116,59 @@ export const TEMPLATES = {
 };
 
 /**
+ * Messages for a specific missing item.
+ *
+ * Each names the one thing and nothing else. A message listing five gaps reads
+ * as a scolding, and a member who is already behind does not need a checklist
+ * of their failures — they need one small thing they can do in ten seconds.
+ */
+export const GAP_TEMPLATES = {
+  nothing: (m) => withLink(
+    `Hi ${first(m.name)}, haven't seen anything from you today. ` +
+    `Everything alright? If you're short on time, just send the AI one line — ` +
+    `"2 chapati and dal for lunch, walked in the morning" — and it fills the rest in.`),
+
+  food: (m) => withLink(
+    `Hi ${first(m.name)}, your meals aren't logged yet today. ` +
+    `Tell the AI what you've eaten so far and it'll sort out the rest.`),
+
+  weight: (m) => withLink(
+    `Morning ${first(m.name)} — could you pop your weight in when you get a chance? ` +
+    `Takes ten seconds and it keeps your calorie target accurate.`),
+
+  dinner: (m) => withLink(
+    `Hi ${first(m.name)}, dinner isn't logged yet. Add it before bed so tomorrow's ` +
+    `numbers start clean.`),
+
+  water: (m) => withLink(
+    `Hi ${first(m.name)}, you're well behind on water today. ` +
+    `A couple of glasses this evening will get you close — just stop an hour before bed.`),
+
+  activity: (m) => withLink(
+    `Hi ${first(m.name)}, nothing ticked on your activity today. ` +
+    `Even a 15-minute walk after dinner counts — log it and it's done.`),
+
+  acv: (m) => withLink(
+    `Hi ${first(m.name)}, a couple of ACV doses are still open today. ` +
+    `Tick them off if you've had them — easy to forget the logging rather than the drink.`),
+
+  supplements: (m) => withLink(
+    `Hi ${first(m.name)}, your supplements aren't ticked today. ` +
+    `Quick one to mark off if you've taken them.`),
+
+  sleep: (m) => withLink(
+    `Hi ${first(m.name)}, add your sleep times before bed — it's the one thing ` +
+    `the app can't work out on its own.`),
+};
+
+/** Human label for a gap key, for buttons and lists. */
+export const GAP_LABEL = {
+  nothing: 'Nothing logged', food: 'No food', weight: 'No weight',
+  dinner: 'No dinner', water: 'Low water', activity: 'No activity',
+  acv: 'ACV missed', supplements: 'No supplements', sleep: 'No sleep times',
+};
+
+/**
  * Open the conversation. Returns false when the number is unusable so the
  * caller can say so rather than appearing to do nothing.
  */

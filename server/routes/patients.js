@@ -254,6 +254,66 @@ router.get('/population/prior', authMW, roleCheck('monitor', 'admin'), async (re
 
 // Declared before '/:id' — Express matches in order and would otherwise
 // read 'me' as a member id and reject the member on role.
+// ── GET /api/patients/gaps ───────────────────────────────────────────────────
+// What each assigned member has not logged yet today, ranked, so a coach can
+// see at a glance who is worth a message and about what.
+//
+// Declared before '/:id' so "gaps" is not read as a member id.
+const { detectGaps } = require('../services/gapDetector');
+
+router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const { rows: members } = await pool.query(
+      isAdmin
+        ? `SELECT u.id, u.name, u.phone FROM users u
+           WHERE u.role = 'patient' AND u.active = true ORDER BY u.name`
+        : `SELECT u.id, u.name, u.phone FROM users u
+           JOIN monitor_patients mp ON mp.patient_id = u.id
+           WHERE mp.monitor_id = $1 AND mp.active = true AND u.active = true
+           ORDER BY u.name`,
+      isAdmin ? [] : [req.user.id]
+    );
+    if (!members.length) return res.json({ members: [], generated_at: new Date().toISOString() });
+
+    const ids = members.map(m => m.id);
+    const [logsRes, profRes] = await Promise.all([
+      pool.query(
+        `SELECT * FROM daily_logs
+         WHERE patient_id = ANY($1) AND log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
+        [ids]),
+      pool.query(
+        `SELECT user_id, water_target, protocol_activities, protocol_acv,
+                protocol_supplements, meal_plan
+         FROM patient_profiles WHERE user_id = ANY($1)`, [ids]),
+    ]);
+
+    const logByMember  = new Map(logsRes.rows.map(l => [l.patient_id, l]));
+    const profByMember = new Map(profRes.rows.map(p => [p.user_id, p]));
+
+    const out = members.map(m => {
+      const p = profByMember.get(m.id) || {};
+      return detectGaps(m, logByMember.get(m.id) || null, {
+        water_target: p.water_target,
+        activities:   p.protocol_activities,
+        acv:          p.protocol_acv,
+        supplements:  p.protocol_supplements,
+        meal_slots:   p.meal_plan,
+      });
+    }).filter(r => r.gaps.length);
+
+    // Most urgent first, so the coach works down the list
+    const rank = { blocking: 0, high: 1, medium: 2, low: 3 };
+    out.sort((a, b) => rank[a.gaps[0].severity] - rank[b.gaps[0].severity]
+                    || a.name.localeCompare(b.name));
+
+    res.json({ members: out, generated_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('GET /patients/gaps error:', err);
+    res.status(500).json({ error: 'Could not work out today\'s gaps' });
+  }
+});
+
 // ── Notification preferences ─────────────────────────────────────────────────
 // Members control which channels reach them. Opting out is kept separate from
 // the individual toggles: switching a channel off is a preference, opting out

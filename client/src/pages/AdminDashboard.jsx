@@ -7,6 +7,7 @@ import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
 import AdminReminders from '../components/AdminReminders';
 import MessageMember from '../components/MessageMember';
+import TodaysGaps from '../components/TodaysGaps';
 import CoachAIChat, { CoachAIFab, useCoachAI } from '../components/CoachAIChat';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
@@ -1509,6 +1510,13 @@ export default function AdminDashboard() {
                   <div className="text-[8px] font-bold uppercase tracking-wider text-[#7E8596] mt-0.5">{s.label}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Today's gaps — what to chase right now. Needs Attention below is
+                the longer-term list of members drifting away. */}
+            <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl p-3.5 mb-3">
+              <p className="text-sm font-bold text-[#D4AF37] mb-1">📋 Today's gaps</p>
+              <TodaysGaps />
             </div>
 
             {/* Needs attention — now actionable */}

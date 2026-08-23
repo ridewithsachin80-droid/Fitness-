@@ -11,7 +11,7 @@
  * next — and to the member's own message history in the app.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../api/client';
 import { TEMPLATES, openWhatsApp, openSMS, waNumber } from '../utils/personalMessage';
 
@@ -21,9 +21,20 @@ const PRESETS = [
   ['checkin',    'Check in',        m => TEMPLATES.checkin(m)],
 ];
 
-export default function MessageMember({ member, summary = null, open, onClose }) {
-  const [text, setText]   = useState(() => TEMPLATES.nudge(member || {}));
-  const [preset, setPreset] = useState('nudge');
+export default function MessageMember({ member, summary = null, initialText = null, open, onClose }) {
+  // initialText lets a caller open the sheet already talking about a specific
+  // thing — a missing water log, say — rather than the generic nudge.
+  const [text, setText]   = useState(() => initialText || TEMPLATES.nudge(member || {}));
+  const [preset, setPreset] = useState(initialText ? null : 'nudge');
+
+  // Reopening the sheet for a different member or a different gap must reset
+  // the body; without this the previous member's message persists.
+  useEffect(() => {
+    if (open) {
+      setText(initialText || TEMPLATES.nudge(member || {}));
+      setPreset(initialText ? null : 'nudge');
+    }
+  }, [open, initialText, member?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [saveNote, setSaveNote] = useState(true);
   const [busy, setBusy]   = useState(false);
   const [error, setError] = useState(null);
