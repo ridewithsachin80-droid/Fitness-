@@ -99,6 +99,8 @@ const CASES = [
   ['GET',  '/api/admin/members',          'admin member list'],
   ['GET',  '/api/admin/stats',            'admin stats'],
   ['POST', '/api/ai-chat/remind',         'reminder endpoint'],
+  ['POST', '/api/ai-chat/voice-transcribe','voice transcription (new)'],
+  ['POST', '/api/ai-chat/photo',          'photo logging'],
   ['GET',  '/health',                     'health check'],
 ];
 

@@ -20,18 +20,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { create } from 'zustand';
 import api from '../api/client';
-import { haptic } from '../store/settingsStore';
+import { haptic, useSettingsStore } from '../store/settingsStore';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 
 export const useCoachAI = create((set) => ({
   open: false,
   openChat:  () => set({ open: true }),
   closeChat: () => set({ open: false }),
 }));
-
-const SpeechRecognition =
-  typeof window !== 'undefined'
-    ? window.SpeechRecognition || window.webkitSpeechRecognition
-    : null;
 
 const SUGGESTION_CHIPS = [
   'Set water target 4L for ',
@@ -71,7 +67,6 @@ export default function CoachAIChat({ onApplied }) {
   const [input, setInput]         = useState('');
   const [busy, setBusy]           = useState(false);
   const [applying, setApplying]   = useState(false);
-  const [listening, setListening] = useState(false);
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
@@ -85,25 +80,21 @@ export default function CoachAIChat({ onApplied }) {
     if (open) setTimeout(() => inputRef.current?.focus(), 250);
   }, [open]);
 
+  // Voice: shared hook — live preview while speaking, Gemini transcript on stop
+  const voiceLang    = useSettingsStore(st => st.voiceLang || 'en-IN');
+  const voiceBaseRef = useRef('');
+  const joinVoice = (t) => (voiceBaseRef.current ? voiceBaseRef.current + ' ' + t : t);
+  const voice = useVoiceInput({
+    lang: voiceLang,
+    onInterim: (t) => setInput(joinVoice(t)),
+    onFinal:   (t) => { setInput(joinVoice(t)); inputRef.current?.focus(); },
+  });
+  const { listening } = voice;
   const toggleVoice = useCallback(() => {
-    if (!SpeechRecognition) return;
-    if (listening) { recogRef.current?.stop(); setListening(false); return; }
-    const r = new SpeechRecognition();
-    recogRef.current = r;
-    r.lang = 'en-IN';
-    r.interimResults = false;
-    r.maxAlternatives = 1;
-    r.onresult = (e) => {
-      const text = e.results[0][0].transcript;
-      setInput(prev => (prev ? prev + ' ' + text : text));
-      setListening(false);
-    };
-    r.onerror = () => setListening(false);
-    r.onend   = () => setListening(false);
-    setListening(true);
+    if (!voice.listening) voiceBaseRef.current = input.trim();
     haptic(15);
-    r.start();
-  }, [listening]);
+    voice.toggle();
+  }, [voice, input]);
 
   // ── Send → coach-parse ─────────────────────────────────────────────────────
   const send = useCallback(async (textOverride) => {
@@ -351,6 +342,18 @@ export default function CoachAIChat({ onApplied }) {
       {/* ── Input bar ── */}
       <div className="px-4 py-3 border-t border-white/[0.06] bg-[#111116]"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+        {listening && (
+          <p className="text-xs text-red-400 font-medium mb-2 px-1 flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-red-400 animate-ping" />
+            Listening… tap the mic when done
+          </p>
+        )}
+        {voice.transcribing && (
+          <p className="text-xs text-[#e0c98a] font-medium mb-2 px-1">✨ Getting the exact words…</p>
+        )}
+        {voice.error && (
+          <p className="text-xs text-amber-400 font-medium mb-2 px-1">{voice.error}</p>
+        )}
         <div className="flex items-end gap-2">
           <div className="flex-1 flex items-center bg-[#1a1a20] border border-white/[0.10] rounded-2xl px-3">
             <input
@@ -361,11 +364,14 @@ export default function CoachAIChat({ onApplied }) {
               placeholder="Eg: Set Bujju water target 4L, add evening walk"
               className="flex-1 bg-transparent text-sm text-white placeholder-[#4e4e5c] py-3 outline-none min-w-0"
             />
-            {SpeechRecognition && (
-              <button onClick={toggleVoice}
+            {voice.supported && (
+              <button onClick={toggleVoice} disabled={voice.transcribing}
                 style={{ minWidth: 40, minHeight: 40 }}
+                title={listening ? 'Tap to stop' : 'Dictate'}
                 className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                  listening ? 'text-red-400 animate-pulse' : 'text-[#8e8e9a] hover:text-[#e0c98a]'
+                  listening ? 'text-red-400 animate-pulse'
+                  : voice.transcribing ? 'text-[#e0c98a] animate-pulse'
+                  : 'text-[#8e8e9a] hover:text-[#e0c98a]'
                 }`}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />

@@ -800,6 +800,74 @@ Return ONLY raw JSON, no markdown fences:
 // Body: { image: "<base64, no data: prefix>", mimeType: "image/jpeg", mealSlots }
 // Returns the same shape as /parse's food list, so the client reuses one
 // preview component for typed, spoken and photographed logging.
+// ── POST /api/ai-chat/voice-transcribe ───────────────────────────────────────
+// Body: { audio: base64, mimeType, langHint }
+// Returns: { transcript }
+//
+// Why server-side: on-device Web Speech mangles Indian English, Hinglish and
+// food vocabulary (bhindi, katori, rajma), and iOS has no Web Speech at all.
+// Gemini transcribes the recorded audio instead — same inline_data pattern and
+// same models as /photo. The client falls back to its on-device text if this
+// endpoint fails, so errors here degrade, never break.
+router.post('/voice-transcribe', async (req, res) => {
+  const { audio, mimeType, langHint } = req.body;
+
+  if (!audio || typeof audio !== 'string') {
+    return res.status(400).json({ error: 'Audio required' });
+  }
+  // 30s of opus is ~250 KB of base64; even uncompressed formats fit well
+  // under this. Anything bigger is not a voice note.
+  if (audio.length > 6_000_000) {
+    return res.status(413).json({ error: 'Recording too long — keep it under 30 seconds' });
+  }
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'Voice transcription needs GEMINI_API_KEY to be set' });
+  }
+
+  const mt = /^audio\/[a-z0-9.+-]+$/i.test(String(mimeType || '')) ? mimeType : 'audio/webm';
+
+  const prompt = `Transcribe this voice note exactly as spoken.
+Rules:
+- The speaker is logging food, workouts or health data, usually in Indian English or Hinglish (mixed Hindi and English).
+- Keep food and exercise words as spoken: roti, dal, katori, bhindi, paneer, surya namaskar — do not translate them to English equivalents.
+- If the speech is mostly Hindi, transliterate it into Roman script rather than Devanagari.
+- Write numbers as digits (2 roti, 250 ml, 82.5 kg).
+- Return ONLY the transcript text. No quotes, no labels, no commentary.
+- If there is no intelligible speech, return an empty string.${langHint === 'hi-IN' ? '\n- The speaker has set Hindi as their preferred language.' : ''}`;
+
+  try {
+    const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
+    let transcript = null, lastErr;
+
+    for (const model of models) {
+      try {
+        const response = await axios.post(
+          `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
+          {
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: mt, data: audio } },
+              ],
+            }],
+            generationConfig: { temperature: 0, maxOutputTokens: 500 },
+          },
+          { headers: { 'content-type': 'application/json' }, timeout: 25000 }
+        );
+        const cand = response.data.candidates?.[0];
+        transcript = (cand?.content?.parts?.map(p => p.text).join('') || '').trim();
+        break;
+      } catch (e) { lastErr = e; }
+    }
+    if (transcript === null) throw lastErr || new Error('Transcription failed');
+
+    return res.json({ transcript: transcript.slice(0, 1000) });
+  } catch (err) {
+    console.error('voice-transcribe failed:', err.response?.data?.error?.message || err.message);
+    return res.status(502).json({ error: 'Could not transcribe the recording' });
+  }
+});
+
 router.post('/photo', async (req, res) => {
   const { image, mimeType, mealSlots } = req.body;
 

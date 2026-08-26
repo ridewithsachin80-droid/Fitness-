@@ -16,6 +16,7 @@ import { getRecentFoods } from '../api/logs';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import AIFoodSearch from './AIFoodSearch';
 import { useAIChat } from './AIChatLog';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 
 // ── Extended portion map ──────────────────────────────────────────────────────
 const TYPICAL_GRAMS = {
@@ -157,7 +158,6 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const [selected, setSelected]       = useState(null);
   const [lookupStatus, setLookupStatus] = useState('');
   const [recentFoods, setRecentFoods] = useState([]);
-  const [listening, setListening]     = useState(false);
   const [showAI, setShowAI]           = useState(false);
   const [aiQuery, setAiQuery]         = useState('');
   const openAIChat = useAIChat(s => s.openChat);  // shared AI chat (mounted in DailyLog)
@@ -172,31 +172,20 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const gramsRef     = useRef(null);
   const debounceRef  = useRef(null);
   const containerRef = useRef(null);
-  const recognRef    = useRef(null);
 
-  // ── Voice input ─────────────────────────────────────────────────────────────
-  const startVoice = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert('Voice input not supported in this browser'); return; }
-    const r = new SpeechRecognition();
-    r.lang = 'en-IN';
-    r.continuous = false;
-    r.interimResults = false;
-    r.onresult = (e) => {
-      const text = e.results[0][0].transcript;
-      setQuery(text);
-      setSelected(null);
-      setListening(false);
+  // ── Voice input — shared hook; Gemini transcript triggers the food search ──
+  const voiceLang = useSettingsStore(st => st.voiceLang || 'en-IN');
+  const voice = useVoiceInput({
+    lang: voiceLang,
+    onInterim: (t) => { setQuery(t); setSelected(null); },
+    onFinal:   (t) => {
+      setQuery(t); setSelected(null);
       clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => searchFoods(text), 200);
-    };
-    r.onend = () => setListening(false);
-    r.onerror = () => setListening(false);
-    recognRef.current = r;
-    r.start();
-    setListening(true);
-    haptic(30);
-  };
+      debounceRef.current = setTimeout(() => searchFoods(t), 200);
+    },
+  });
+  const { listening } = voice;
+  const startVoice = () => { haptic(30); voice.toggle(); };
 
   // ── Search ──────────────────────────────────────────────────────────────────
   const searchFoods = useCallback(async (q) => {
@@ -531,7 +520,13 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               )}
             </div>
             {listening && (
-              <div className="mt-1 text-xs text-red-400 font-medium px-1">🎤 Listening… speak now</div>
+              <div className="mt-1 text-xs text-red-400 font-medium px-1">🎤 Listening… tap again when done</div>
+            )}
+            {voice.transcribing && (
+              <div className="mt-1 text-xs text-[#c9a227] font-medium px-1">✨ Getting the exact words…</div>
+            )}
+            {voice.error && (
+              <div className="mt-1 text-xs text-amber-400 font-medium px-1">{voice.error}</div>
             )}
 
             {showSuggestions && suggestions.length > 0 && (

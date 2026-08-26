@@ -26,6 +26,7 @@ import { create } from 'zustand';
 import api from '../api/client';
 import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
 
 // ── Shared open/close store — FoodLog banner + DailyLog FAB both use this ────
@@ -106,7 +107,6 @@ export default function AIChatLog() {
   const [messages, setMessages]   = useState([]);
   const [input, setInput]         = useState('');
   const [busy, setBusy]           = useState(false);
-  const [listening, setListening] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef(null);
   const labRef  = useRef(null);
@@ -127,25 +127,29 @@ export default function AIChatLog() {
   }, [open]);
 
   // ── Voice input ────────────────────────────────────────────────────────────
+  // Live on-device preview while speaking; accurate Gemini transcript replaces
+  // it after stop. Text only fills the box — sending stays a manual tap.
+  const voiceLang    = useSettingsStore(st => st.voiceLang || 'en-IN');
+  const setVoiceLang = useSettingsStore(st => st.setVoiceLang);
+  const voiceBaseRef = useRef('');
+  const joinVoice = (t) => (voiceBaseRef.current ? voiceBaseRef.current + ' ' + t : t);
+  const voice = useVoiceInput({
+    lang: voiceLang,
+    onInterim: (t) => setInput(joinVoice(t)),
+    onFinal:   (t) => { setInput(joinVoice(t)); inputRef.current?.focus(); },
+  });
+  const { listening } = voice;
   const toggleVoice = useCallback(() => {
-    if (!SpeechRecognition) return;
-    if (listening) { recogRef.current?.stop(); setListening(false); return; }
-    const r = new SpeechRecognition();
-    recogRef.current = r;
-    r.lang = 'en-IN';
-    r.interimResults = false;
-    r.maxAlternatives = 1;
-    r.onresult = (e) => {
-      const text = e.results[0][0].transcript;
-      setInput(prev => (prev ? prev + ' ' + text : text));
-      setListening(false);
-    };
-    r.onerror = () => setListening(false);
-    r.onend   = () => setListening(false);
-    setListening(true);
+    if (!voice.listening) voiceBaseRef.current = input.trim();
     haptic(15);
-    r.start();
-  }, [listening]);
+    voice.toggle();
+  }, [voice, input]);
+  // Voice errors surface for a few seconds, then clear themselves.
+  useEffect(() => {
+    if (!voice.error) return;
+    const t = setTimeout(() => voice.setError(null), 5000);
+    return () => clearTimeout(t);
+  }, [voice.error]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Photo food logging ─────────────────────────────────────────────────────
   // Phone photos are 3–8 MB; we downscale to 1280px and re-encode at 0.8 JPEG
@@ -1074,6 +1078,28 @@ export default function AIChatLog() {
       {/* ── Input bar ── */}
       <div className="px-4 py-3 border-t border-white/[0.06] bg-[#111116]"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+        {/* Voice status — listening indicator, language toggle, errors */}
+        {listening && (
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-xs text-red-400 font-medium flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-red-400 animate-ping" />
+              Listening… tap the mic when done
+            </span>
+            {setVoiceLang && (
+              <button
+                onClick={() => setVoiceLang(voiceLang === 'hi-IN' ? 'en-IN' : 'hi-IN')}
+                className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-white/[0.15] text-[#9EA3B0]">
+                {voiceLang === 'hi-IN' ? 'हिं' : 'EN'}
+              </button>
+            )}
+          </div>
+        )}
+        {voice.transcribing && (
+          <p className="text-xs text-[#D4AF37] font-medium mb-2 px-1">✨ Getting the exact words…</p>
+        )}
+        {voice.error && (
+          <p className="text-xs text-amber-400 font-medium mb-2 px-1">{voice.error}</p>
+        )}
         <div className="flex items-end gap-2">
           <div className="flex-1 flex items-center bg-[#1A1C20] border border-white/[0.10] rounded-2xl px-3">
             <input
@@ -1115,17 +1141,24 @@ export default function AIChatLog() {
             <input ref={fileRef} type="file" accept="image/*" capture="environment"
               onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
               style={{ display: 'none' }} />
-            {SpeechRecognition && (
-              <button onClick={toggleVoice}
+            {voice.supported && (
+              <button onClick={toggleVoice} disabled={voice.transcribing}
                 style={{ minWidth: 40, minHeight: 40 }}
+                title={listening ? 'Tap to stop' : 'Speak your log'}
                 className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                  listening ? 'text-red-400 animate-pulse' : 'text-[#9EA3B0] hover:text-[#F0E2B6]'
+                  listening ? 'text-red-400 animate-pulse'
+                  : voice.transcribing ? 'text-[#D4AF37] animate-pulse'
+                  : 'text-[#9EA3B0] hover:text-[#F0E2B6]'
                 }`}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
-                </svg>
+                {voice.transcribing ? (
+                  <span className="text-base leading-none">✨</span>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                )}
               </button>
             )}
           </div>

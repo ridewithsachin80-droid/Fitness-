@@ -51,6 +51,10 @@ export const useSettingsStore = create(
       setGuardianEmail: (email) => set({ guardianEmail: email }),
       setEmergencyContact: (contact) => set({ emergencyContact: contact }),
       setMealSlots: (slots) => set({ mealSlots: slots }),
+      // Web Speech live-preview language. The Gemini transcript auto-detects
+      // language regardless; this only tunes the on-screen preview.
+      voiceLang: 'en-IN',
+      setVoiceLang: (lang) => set({ voiceLang: lang === 'hi-IN' ? 'hi-IN' : 'en-IN' }),
       setAvatarIdx: (idx) => set({ avatarIdx: idx }),
       finishOnboarding: (mode) => {
         set({ ageMode: mode, onboardingDone: true,
