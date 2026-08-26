@@ -354,4 +354,51 @@ test('an implausible "Weight" row stays a lab row', () => {
   assert.ok(!weightRow, 'a BMR misread as weight must not reach the daily log');
 });
 
+
+// ── Mirrors computeDayTotals in aiChat.js (member question answering) ─────────
+function computeDayTotals(foodItems) {
+  let cal = 0, pro = 0, carb = 0, fat = 0, unknown = 0;
+  for (const f of (Array.isArray(foodItems) ? foodItems : [])) {
+    const g = parseFloat(f.grams);
+    const n = f.per_100g;
+    if (!Number.isFinite(g) || !n || !(parseFloat(n.calories) > 0)) { unknown++; continue; }
+    const k = g / 100;
+    cal  += (parseFloat(n.calories)    || 0) * k;
+    pro  += (parseFloat(n.protein)     || 0) * k;
+    carb += (parseFloat(n.total_carbs) || 0) * k;
+    fat  += (parseFloat(n.fat)         || 0) * k;
+  }
+  return { cal: Math.round(cal), pro: +pro.toFixed(1), carb: +carb.toFixed(1),
+           fat: +fat.toFixed(1), unknown };
+}
+
+console.log('\nDay totals for member questions');
+
+test("Sachin's breakfast from the coach screenshot sums correctly", () => {
+  const items = [
+    { name: 'Ghee', grams: 12,  per_100g: { calories: 900, protein: 0,  total_carbs: 0,   fat: 99.5 } },
+    { name: 'Coconut chutney', grams: 50, per_100g: { calories: 180, protein: 2,  total_carbs: 4,  fat: 16 } },
+    { name: 'Whey protein powder', grams: 30, per_100g: { calories: 400, protein: 80, total_carbs: 8, fat: 5 } },
+  ];
+  const t = computeDayTotals(items);
+  assert.strictEqual(t.cal, 318, '108 + 90 + 120');
+  assert.strictEqual(t.pro, 25);
+  assert.strictEqual(t.unknown, 0);
+});
+
+test('legacy items without per_100g are counted as unknown, not zero-priced silently', () => {
+  const t = computeDayTotals([
+    { name: 'Old item', grams: 100 },
+    { name: 'Bad grams', grams: 'a lot', per_100g: { calories: 100 } },
+    { name: 'Good', grams: 50, per_100g: { calories: 200, protein: 10, total_carbs: 20, fat: 2 } },
+  ]);
+  assert.strictEqual(t.cal, 100);
+  assert.strictEqual(t.unknown, 2);
+});
+
+test('empty and missing food lists yield zeros', () => {
+  assert.deepStrictEqual(computeDayTotals([]),        { cal: 0, pro: 0, carb: 0, fat: 0, unknown: 0 });
+  assert.deepStrictEqual(computeDayTotals(undefined), { cal: 0, pro: 0, carb: 0, fat: 0, unknown: 0 });
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

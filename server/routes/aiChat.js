@@ -286,12 +286,21 @@ PARSING RULES:
    protocol tick records compliance, the cardio entry records the actual work.
 9. reply — ONE short friendly sentence summarising what was understood. Mention
    food calories if food present. No emojis. No medical advice.
-10. Anything not mentioned → null / empty array. If nothing parseable at all,
-   return empty everything and a reply asking them to describe their day.
+10. Anything not mentioned → null / empty array. If nothing parseable at all
+   AND it is not a question (see rule 11), return empty everything and a reply
+   asking them to describe their day.
+11. QUESTIONS — if the message is a QUESTION about their own data, progress,
+   targets or plan ("how many calories have I eaten today?", "kitna paani
+   baaki hai?", "did I hit my protein target?", "what's my weight trend?")
+   rather than something to log, set "question" to the member's question and
+   leave every other field empty/null. The app will answer it from their real
+   data. If the message BOTH logs something AND asks something, treat it as a
+   log (parse the loggable items, question stays null).
 
 Return ONLY a raw JSON object, no markdown fences, exactly this structure:
 {
   "reply": "Got it — weight 82.5, walk done, lunch logged at 290 kcal, 1L water.",
+  "question": null,
   "weight_kg": 82.5,
   "activity_ids": ["walk"],
   "acv_ids": ["acv2"],
@@ -1107,6 +1116,106 @@ Return ONLY raw JSON, no markdown fences:
   }
 });
 
+// ── Member questions ("how many calories today?") ─────────────────────────────
+// The parse prompt flags questions instead of parsing them; these helpers build
+// a compact snapshot of the member's real data and ask the AI to answer FROM
+// THAT SNAPSHOT ONLY. Deterministic numbers, conversational delivery.
+
+// Sum a day's food_items. Mirrors the client's calcN: per_100g × grams/100.
+// Legacy rows without per_100g can't be priced server-side — counted so the
+// answer can say "2 items missing nutrition data" instead of silently lying.
+function computeDayTotals(foodItems) {
+  let cal = 0, pro = 0, carb = 0, fat = 0, unknown = 0;
+  for (const f of (Array.isArray(foodItems) ? foodItems : [])) {
+    const g = parseFloat(f.grams);
+    const n = f.per_100g;
+    if (!Number.isFinite(g) || !n || !(parseFloat(n.calories) > 0)) { unknown++; continue; }
+    const k = g / 100;
+    cal  += (parseFloat(n.calories)    || 0) * k;
+    pro  += (parseFloat(n.protein)     || 0) * k;
+    carb += (parseFloat(n.total_carbs) || 0) * k;
+    fat  += (parseFloat(n.fat)         || 0) * k;
+  }
+  return { cal: Math.round(cal), pro: +pro.toFixed(1), carb: +carb.toFixed(1),
+           fat: +fat.toFixed(1), unknown };
+}
+
+async function buildDayContext(userId, ctx) {
+  const today = getISTDate();
+  const [{ rows: logs }, { rows: prof }] = await Promise.all([
+    pool.query(
+      `SELECT log_date, weight_kg, water_ml, sleep, activities, acv, supplements, food_items
+       FROM daily_logs WHERE patient_id=$1 AND log_date > (DATE $2 - 7)
+       ORDER BY log_date DESC`, [userId, today]),
+    pool.query(
+      `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target, target_weight, start_weight
+       FROM patient_profiles WHERE patient_id=$1`, [userId]),
+  ]);
+
+  const t = logs.find(l => String(l.log_date).slice(0, 10) === today) || null;
+  const doneCount = (obj) => Object.values(obj || {}).filter(Boolean).length;
+  const totals = computeDayTotals(t?.food_items);
+
+  const lines = [];
+  lines.push(`Date: ${today} (IST)`);
+  if (t) {
+    lines.push(`Today so far:`);
+    lines.push(`  Calories eaten: ${totals.cal} kcal (P ${totals.pro}g · C ${totals.carb}g · F ${totals.fat}g)` +
+      (totals.unknown ? ` — plus ${totals.unknown} logged item(s) with no nutrition data, not counted` : ''));
+    lines.push(`  Food items: ${(t.food_items || []).map(f => `${f.name} ${f.grams}g`).join(', ') || 'none logged'}`);
+    lines.push(`  Weight: ${t.weight_kg ? t.weight_kg + ' kg' : 'not logged today'}`);
+    lines.push(`  Water: ${t.water_ml || 0} ml of ${ctx.waterTargetMl} ml target`);
+    lines.push(`  Protocol done: activities ${doneCount(t.activities)}/${ctx.activities.length}, ` +
+               `ACV ${doneCount(t.acv)}/${ctx.acv.length}, supplements ${doneCount(t.supplements)}/${ctx.supplements.length}`);
+    lines.push(`  Sleep: ${t.sleep?.bedtime && t.sleep?.waketime ? `${t.sleep.bedtime}–${t.sleep.waketime}` : 'not logged'}`);
+  } else {
+    lines.push(`Today: nothing logged yet.`);
+  }
+
+  const p = prof[0];
+  if (p) {
+    const tg = [];
+    if (p.macro_kcal) tg.push(`calorie target ${p.macro_kcal} kcal`);
+    if (p.macro_pro)  tg.push(`protein target ${p.macro_pro} g`);
+    if (p.macro_carb) tg.push(`carb target ${p.macro_carb} g`);
+    if (p.macro_fat)  tg.push(`fat target ${p.macro_fat} g`);
+    if (p.target_weight)    tg.push(`goal weight ${p.target_weight} kg (started ${p.start_weight || '?'} kg)`);
+    if (tg.length) lines.push(`Targets: ${tg.join(', ')}`);
+  }
+
+  const week = logs
+    .filter(l => String(l.log_date).slice(0, 10) !== today)
+    .map(l => {
+      const d = computeDayTotals(l.food_items);
+      return `  ${String(l.log_date).slice(0, 10)}: ${d.cal} kcal${l.weight_kg ? `, weight ${l.weight_kg} kg` : ''}`;
+    });
+  if (week.length) lines.push(`Previous days (last 7):\n${week.join('\n')}`);
+
+  return lines.join('\n');
+}
+
+function buildAnswerPrompt(question, dayContext) {
+  return `You are FitLife AI, the in-app assistant for a fitness coaching member in India.
+The member asked: "${question}"
+
+Answer USING ONLY the data below. Never invent numbers or estimate data that is
+not present. If the data needed is missing, say so plainly and tell them how to
+log it (they can just type or speak it to you).
+
+MEMBER'S DATA:
+${dayContext}
+
+RULES:
+- 1–3 short sentences, warm and direct, lead with the number they asked for.
+- Numbers exactly as given in the data. No emojis. No markdown.
+- If they ask how much is LEFT, subtract from the target when a target exists;
+  if there is no target, give the eaten total and say no target is set.
+- No medical advice, no diagnosis, no supplement or medication suggestions.
+  Progress questions get facts, not clinical interpretation.
+
+Return ONLY the answer text, nothing else.`;
+}
+
 // ── POST /api/ai-chat/parse ──────────────────────────────────────────────────
 // Body: {
 //   message: string,
@@ -1143,6 +1252,27 @@ router.post('/parse', async (req, res) => {
 
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed   = JSON.parse(jsonText);
+
+    // ── Questions get answered, not parsed ────────────────────────────────────
+    // "how many calories have I consumed today?" used to fall through as an
+    // unparseable log and get "I couldn't find any details about your meals."
+    // Now the parser flags it, we snapshot the member's real data, and a second
+    // AI call answers from that snapshot only. Empty item arrays keep the
+    // client's preview card hidden — the member just sees the answer.
+    if (parsed.question && typeof parsed.question === 'string') {
+      const dayContext = await buildDayContext(req.user.id, ctx);
+      const { text: answerText, provider: ap, model: am } =
+        await callAI(buildAnswerPrompt(parsed.question.slice(0, 300), dayContext));
+      return res.json({
+        reply: String(answerText || '').trim().slice(0, 700)
+          || "I couldn't work that out from your data — try asking in a different way.",
+        question: true,
+        weight_kg: null, activities: [], acv: [], supplements: [],
+        water_ml_add: null, sleep: null, foods: [], workouts: [],
+        totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
+        aiProvider: ap, aiModel: am,
+      });
+    }
 
     // ── Weight ──
     let weight_kg = parseFloat(parsed.weight_kg);
