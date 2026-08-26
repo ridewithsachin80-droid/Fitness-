@@ -820,11 +820,35 @@ router.post('/voice-transcribe', async (req, res) => {
   if (audio.length > 6_000_000) {
     return res.status(413).json({ error: 'Recording too long — keep it under 30 seconds' });
   }
-  if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'Voice transcription needs GEMINI_API_KEY to be set' });
+  if (!GEMINI_API_KEY && !GROQ_API_KEY) {
+    return res.status(500).json({ error: 'Voice transcription needs GEMINI_API_KEY or GROQ_API_KEY to be set' });
   }
 
   const mt = /^audio\/[a-z0-9.+-]+$/i.test(String(mimeType || '')) ? mimeType : 'audio/webm';
+
+  // ── Engine 2: Groq-hosted Whisper large-v3 ─────────────────────────────────
+  // A dedicated ASR model, strong on Indian accents, using the GROQ_API_KEY
+  // this file already has for chat fallback — no new vendor, no new billing.
+  // Runs when Gemini fails or is throttled (429/503 bursts on free tier), so a
+  // provider hiccup degrades to a different world-class engine instead of to
+  // the inaccurate on-device text.
+  async function groqWhisper() {
+    if (!GROQ_API_KEY) return null;
+    const ext = mt.includes('mp4') ? 'mp4' : mt.includes('ogg') ? 'ogg' : 'webm';
+    const fd = new FormData();
+    fd.append('file', new Blob([Buffer.from(audio, 'base64')], { type: mt }), `voice.${ext}`);
+    fd.append('model', 'whisper-large-v3');
+    fd.append('temperature', '0');
+    fd.append('response_format', 'json');
+    // Whisper's prompt parameter biases style — nudge it toward Roman-script
+    // Hinglish with food words kept as spoken, matching the Gemini output.
+    fd.append('prompt', 'Hinglish health log in Roman script: 2 roti, 1 katori dal, weight 82.5 kg, surya namaskar done.');
+    const r = await axios.post(
+      'https://api.groq.com/openai/v1/audio/transcriptions', fd,
+      { headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, timeout: 25000 }
+    );
+    return String(r.data?.text || '').trim();
+  }
 
   const prompt = `Transcribe this voice note exactly as spoken.
 Rules:
@@ -837,31 +861,44 @@ Rules:
 
   try {
     const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
-    let transcript = null, lastErr;
+    let transcript = null, engine = null, lastErr;
 
-    for (const model of models) {
+    if (GEMINI_API_KEY) {
+      for (const model of models) {
+        try {
+          const response = await axios.post(
+            `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
+            {
+              contents: [{
+                parts: [
+                  { text: prompt },
+                  { inline_data: { mime_type: mt, data: audio } },
+                ],
+              }],
+              generationConfig: { temperature: 0, maxOutputTokens: 500 },
+            },
+            { headers: { 'content-type': 'application/json' }, timeout: 25000 }
+          );
+          const cand = response.data.candidates?.[0];
+          transcript = (cand?.content?.parts?.map(p => p.text).join('') || '').trim();
+          engine = `gemini/${model}`;
+          break;
+        } catch (e) { lastErr = e; }
+      }
+    }
+
+    if (transcript === null) {
       try {
-        const response = await axios.post(
-          `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
-          {
-            contents: [{
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mt, data: audio } },
-              ],
-            }],
-            generationConfig: { temperature: 0, maxOutputTokens: 500 },
-          },
-          { headers: { 'content-type': 'application/json' }, timeout: 25000 }
-        );
-        const cand = response.data.candidates?.[0];
-        transcript = (cand?.content?.parts?.map(p => p.text).join('') || '').trim();
-        break;
+        transcript = await groqWhisper();
+        if (transcript !== null) engine = 'groq/whisper-large-v3';
       } catch (e) { lastErr = e; }
     }
-    if (transcript === null) throw lastErr || new Error('Transcription failed');
 
-    return res.json({ transcript: transcript.slice(0, 1000) });
+    if (transcript === null) throw lastErr || new Error('No transcription engine available');
+
+    // engine is returned for debugging and for the edit-rate accuracy metric —
+    // the client ignores it today.
+    return res.json({ transcript: transcript.slice(0, 1000), engine });
   } catch (err) {
     console.error('voice-transcribe failed:', err.response?.data?.error?.message || err.message);
     return res.status(502).json({ error: 'Could not transcribe the recording' });

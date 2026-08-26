@@ -191,7 +191,18 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
 
     if (hasRecorder) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Ask the browser for its full cleanup chain — noise suppression, echo
+        // cancellation, auto gain. Members log from gyms, kitchens and streets;
+        // this is the single biggest capture-quality lever and it is free.
+        // Mono halves the payload with zero accuracy cost for speech.
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            noiseSuppression: true,
+            echoCancellation: true,
+            autoGainControl:  true,
+            channelCount:     1,
+          },
+        });
         streamRef.current = stream;
         const mime = pickMime();
         mimeRef.current = mime;
