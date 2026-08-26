@@ -330,10 +330,21 @@ export default function AIChatLog() {
 
     try {
       const proto = deriveProtocolItems(useLogStore.getState().protocol);
+      // Chat memory: the last few visible turns plus today's logged foods, so
+      // follow-ups like "make the dal 250g" or "that was dinner" resolve to
+      // real items instead of "couldn't find anything to log".
+      const recent = messages.slice(-6).map(m => ({
+        role: m.role === 'user' ? 'user' : 'ai',
+        text: String(m.text || '').slice(0, 200),
+      })).filter(r => r.text);
+      const lastFoods = (useLogStore.getState().log?.food || []).slice(-20)
+        .map(f => ({ name: f.name, grams: f.grams, meal: f.meal }));
       const { data } = await api.post('/ai-chat/parse', {
         message: text,
         context: {
           mealSlots,
+          recent,
+          lastFoods,
           activities:    proto.activities.map(({ id, label, sub }) => ({ id, label, sub })),
           acv:           proto.acv.map(({ id, label, sub }) => ({ id, label, sub })),
           supplements:   proto.supplements.map(({ id, label, sub }) => ({ id, label, sub })),
@@ -356,6 +367,7 @@ export default function AIChatLog() {
           sleep:        data.sleep,
           sleepOn:      !!data.sleep,
           foods:        (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
+          corrections:  (data.corrections || []).map(c => ({ ...c, on: true })),
           workouts:     (data.workouts || []).map(w => ({ ...w, on: true })),
           totals:       data.totals,
         },
@@ -367,7 +379,7 @@ export default function AIChatLog() {
     } finally {
       setBusy(false);
     }
-  }, [input, busy, mealSlots]);
+  }, [input, busy, mealSlots, messages]);
 
   // ── Toggle helpers on a message's parsed preview ───────────────────────────
   const patchParsed = useCallback((mi, patchFn) => {
@@ -590,6 +602,26 @@ export default function AIChatLog() {
       };
       updateLog('sleep', newLog.sleep);
     }
+    // Corrections update the LAST matching item by name — the most recently
+    // logged dal is "the dal" the member means. Grams and slot only; the
+    // per_100g stays, so calories recompute automatically from the new grams.
+    const corrOn = (p.corrections || []).filter(c => c.on);
+    if (corrOn.length) {
+      const food = [...(cur.food || [])];
+      for (const c of corrOn) {
+        for (let i = food.length - 1; i >= 0; i--) {
+          if (String(food[i].name).toLowerCase() === c.name.toLowerCase()) {
+            food[i] = { ...food[i],
+              ...(c.grams ? { grams: c.grams } : {}),
+              ...(c.meal  ? { meal: c.meal }   : {}) };
+            break;
+          }
+        }
+      }
+      newLog.food = food;
+      updateLog('food', food);
+    }
+
     const foodsOn = p.foods.filter(f => f.on);
     if (foodsOn.length) {
       const baseId = Date.now();
@@ -601,7 +633,7 @@ export default function AIChatLog() {
         food_id:  f.food_id || null,
         per_100g: f.per_100g && (f.per_100g.calories || 0) > 0 ? f.per_100g : null,
       }));
-      newLog.food = [...(cur.food || []), ...newItems];
+      newLog.food = [...(newLog.food || cur.food || []), ...newItems];
       updateLog('food', newLog.food);
     }
 
@@ -693,6 +725,7 @@ export default function AIChatLog() {
     (p.waterOn && p.water_ml_add ? 1 : 0) +
     (p.sleepOn && p.sleep ? 1 : 0) +
     ((p.bodyMetricsOn && p.bodyMetrics?.length) ? 1 : 0) +
+    (p.corrections || []).filter(c => c.on).length +
     p.foods.filter(f => f.on).length +
     p.workouts.filter(w => w.on).length;
 
@@ -880,6 +913,24 @@ export default function AIChatLog() {
                             {m.parsed.bodyMetrics.slice(0, 4).map(bm => `${bm.name} ${bm.value}${bm.unit || ''}`).join(' · ')}
                             {m.parsed.bodyMetrics.length > 4 && ` · +${m.parsed.bodyMetrics.length - 4} more`}
                           </p>
+                        </div>
+                      )}
+
+                      {/* ✏️ Corrections to items already in today's log */}
+                      {m.parsed.corrections?.length > 0 && (
+                        <div>
+                          <GroupHeader icon="✏️" title="Corrections" count={m.parsed.corrections.filter(c => c.on).length} />
+                          <div className="flex flex-wrap gap-1.5">
+                            {m.parsed.corrections.map((c, i) => (
+                              <ToggleChip key={`corr-${i}`} on={c.on}
+                                onToggle={() => patchParsed(mi, p => ({
+                                  ...p,
+                                  corrections: p.corrections.map((x, xi) => xi === i ? { ...x, on: !x.on } : x),
+                                }))}>
+                                {c.name} → {[c.grams && `${c.grams}g`, c.meal].filter(Boolean).join(' · ')}
+                              </ToggleChip>
+                            ))}
+                          </div>
                         </div>
                       )}
 

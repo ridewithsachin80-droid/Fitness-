@@ -205,6 +205,13 @@ ${portions.length
   ? portions.map(p => `  ${p.phrase} = ${p.grams}g`).join('\n')
   : '  (none recorded yet — use the generic conversions)'}
 
+RECENT CONVERSATION (oldest first — for resolving references like "the dal",
+"that", "same as yesterday"; do not re-log items from these turns):
+${ctx.recent.length ? ctx.recent.map(r => `  ${r.role === 'user' ? 'Member' : 'AI'}: ${r.text}`).join('\n') : '  (none)'}
+
+FOODS ALREADY IN TODAY'S LOG (the only items a correction can target):
+${ctx.lastFoods.length ? ctx.lastFoods.map(f => `  - ${f.name} · ${f.grams}g · ${f.meal || 'no slot'}`).join('\n') : '  (none)'}
+
 MEMBER'S ASSIGNED PROTOCOL (use ONLY these ids — never invent ids):
 Meal slots: ${slots}
 Activities:
@@ -289,6 +296,12 @@ PARSING RULES:
 10. Anything not mentioned → null / empty array. If nothing parseable at all
    AND it is not a question (see rule 11), return empty everything and a reply
    asking them to describe their day.
+11a. CORRECTIONS — if the member is CHANGING something already in today's log
+   ("make the dal 250g", "that was dinner not lunch", "paneer was 150 grams"),
+   return it in "corrections": [{ "name": "<exact name from TODAY'S LOG list>",
+   "grams": <new grams or null>, "meal": "<new slot or null>" }] and do NOT
+   also add it to "foods" — corrections update, foods append. Only names from
+   the TODAY'S LOG list are valid. "the dal" resolves to the dal item there.
 11. QUESTIONS — if the message is a QUESTION about their own data, progress,
    targets or plan ("how many calories have I eaten today?", "kitna paani
    baaki hai?", "did I hit my protein target?", "what's my weight trend?")
@@ -301,6 +314,7 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
 {
   "reply": "Got it — weight 82.5, walk done, lunch logged at 290 kcal, 1L water.",
   "question": null,
+  "corrections": [],
   "weight_kg": 82.5,
   "activity_ids": ["walk"],
   "acv_ids": ["acv2"],
@@ -1121,24 +1135,7 @@ Return ONLY raw JSON, no markdown fences:
 // a compact snapshot of the member's real data and ask the AI to answer FROM
 // THAT SNAPSHOT ONLY. Deterministic numbers, conversational delivery.
 
-// Sum a day's food_items. Mirrors the client's calcN: per_100g × grams/100.
-// Legacy rows without per_100g can't be priced server-side — counted so the
-// answer can say "2 items missing nutrition data" instead of silently lying.
-function computeDayTotals(foodItems) {
-  let cal = 0, pro = 0, carb = 0, fat = 0, unknown = 0;
-  for (const f of (Array.isArray(foodItems) ? foodItems : [])) {
-    const g = parseFloat(f.grams);
-    const n = f.per_100g;
-    if (!Number.isFinite(g) || !n || !(parseFloat(n.calories) > 0)) { unknown++; continue; }
-    const k = g / 100;
-    cal  += (parseFloat(n.calories)    || 0) * k;
-    pro  += (parseFloat(n.protein)     || 0) * k;
-    carb += (parseFloat(n.total_carbs) || 0) * k;
-    fat  += (parseFloat(n.fat)         || 0) * k;
-  }
-  return { cal: Math.round(cal), pro: +pro.toFixed(1), carb: +carb.toFixed(1),
-           fat: +fat.toFixed(1), unknown };
-}
+const { computeDayTotals } = require('../services/digests');
 
 async function buildDayContext(userId, ctx) {
   const today = getISTDate();
@@ -1244,6 +1241,16 @@ router.post('/parse', async (req, res) => {
     acv:           sanitiseItems(context?.acv),
     supplements:   sanitiseItems(context?.supplements),
     waterTargetMl: Math.min(8000, Math.max(500, parseInt(context?.waterTargetMl) || 3000)),
+    // Chat memory: last few turns + today's logged foods, so "make the dal
+    // 250g" and "that was dinner" resolve to real items instead of failing.
+    recent: (Array.isArray(context?.recent) ? context.recent : []).slice(-6)
+      .filter(r => r && (r.role === 'user' || r.role === 'ai') && r.text)
+      .map(r => ({ role: r.role, text: String(r.text).slice(0, 200) })),
+    lastFoods: (Array.isArray(context?.lastFoods) ? context.lastFoods : []).slice(0, 20)
+      .filter(f => f && f.name)
+      .map(f => ({ name: String(f.name).slice(0, 100),
+                   grams: Math.min(3000, Math.max(0, parseInt(f.grams) || 0)),
+                   meal: f.meal ? String(f.meal).slice(0, 40) : null })),
   };
 
   try {
@@ -1314,6 +1321,21 @@ router.post('/parse', async (req, res) => {
       if (bt || wt) sleep = { bedtime: bt, waketime: wt };
     }
 
+    // ── Corrections — whitelist against foods actually in today's log ────────
+    const loggedNames = new Map(ctx.lastFoods.map(f => [f.name.toLowerCase(), f.name]));
+    const corrections = (Array.isArray(parsed.corrections) ? parsed.corrections : [])
+      .filter(c => c && c.name && loggedNames.has(String(c.name).toLowerCase()))
+      .slice(0, 10)
+      .map(c => {
+        const grams = parseInt(c.grams);
+        return {
+          name:  loggedNames.get(String(c.name).toLowerCase()),
+          grams: Number.isFinite(grams) && grams >= 1 && grams <= 3000 ? grams : null,
+          meal:  c.meal ? String(c.meal).slice(0, 40) : null,
+        };
+      })
+      .filter(c => c.grams !== null || c.meal !== null);
+
     // ── Foods ──
     const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
     const validFoods = rawFoods
@@ -1381,7 +1403,7 @@ router.post('/parse', async (req, res) => {
       }));
 
     const nothingParsed = !weight_kg && !activities.length && !acv.length &&
-      !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length;
+      !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length && corrections.length === 0;
 
     return res.json({
       reply: String(parsed.reply || '').slice(0, 400) ||
@@ -1395,6 +1417,7 @@ router.post('/parse', async (req, res) => {
       water_ml_add,
       sleep,
       foods,
+      corrections,
       workouts,
       totals: {
         cal:  Math.round(totCal),

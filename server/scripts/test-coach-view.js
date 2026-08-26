@@ -401,4 +401,83 @@ test('empty and missing food lists yield zeros', () => {
   assert.deepStrictEqual(computeDayTotals(undefined), { cal: 0, pro: 0, carb: 0, fat: 0, unknown: 0 });
 });
 
+
+// ── Digest message builders (real module, pure functions) ─────────────────────
+const digests = require('../services/digests');
+
+console.log('\nDigest messages');
+
+test('recap with target: shows room left', () => {
+  const body = digests.buildRecapBody({
+    totals: { cal: 1450 }, kcalTarget: 1800, waterMl: 2100, waterTarget: 3000, weightLogged: true });
+  assert.strictEqual(body, '1450 of 1800 kcal — room for ~350 more · water 2.1 of 3L');
+});
+
+test('recap over target says over, missing weigh-in is flagged', () => {
+  const body = digests.buildRecapBody({
+    totals: { cal: 2100 }, kcalTarget: 1800, waterMl: 3200, waterTarget: 3000, weightLogged: false });
+  assert.ok(/300 over your 1800 target/.test(body));
+  assert.ok(/water done/.test(body));
+  assert.ok(/weigh-in still open/.test(body));
+});
+
+test('recap without any target still reads sensibly', () => {
+  const body = digests.buildRecapBody({
+    totals: { cal: 620 }, kcalTarget: null, waterMl: 0, waterTarget: null, weightLogged: true });
+  assert.strictEqual(body, '620 kcal so far');
+});
+
+test('coach digest lists quiet members oldest-silence first, capped at 5', () => {
+  const silent = [3,4,5,6,7,8,9].map(d => ({ name: `M${d}`, days: d })).sort((a,b)=>b.days-a.days);
+  const body = digests.buildDigestBody({ total: 12, loggedYesterday: 5, silent });
+  assert.ok(body.startsWith('5 of 12 members logged yesterday.'));
+  assert.ok(/M9 \(9d\)/.test(body) && /\+2 more/.test(body));
+});
+
+test('coach digest with nobody quiet celebrates instead', () => {
+  const body = digests.buildDigestBody({ total: 8, loggedYesterday: 8, silent: [] });
+  assert.ok(/Nobody has gone quiet/.test(body));
+});
+
+// ── Member streak (mirrors StreakCard.computeStreak) ──────────────────────────
+function computeStreak(logs, todayStr) {
+  const logged = new Set((logs || [])
+    .filter(l => (l.food_items?.length || 0) > 0 || l.weight_kg != null)
+    .map(l => String(l.log_date).slice(0, 10)));
+  const day = (offset) => {
+    const d = new Date(todayStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - offset);
+    return d.toISOString().slice(0, 10);
+  };
+  const cells = [];
+  for (let i = 13; i >= 0; i--) cells.push({ date: day(i), logged: logged.has(day(i)) });
+  let streak = 0;
+  let offset = logged.has(day(0)) ? 0 : 1;
+  while (logged.has(day(offset + streak))) streak++;
+  return { cells, streak };
+}
+
+console.log('\nMember streak');
+
+test('unbroken 5-day run counts 5', () => {
+  const logs = [0,1,2,3,4].map(i => ({ log_date: `2026-08-${26-i}`, food_items: [{}] }));
+  assert.strictEqual(computeStreak(logs, '2026-08-26').streak, 5);
+});
+
+test("today not yet logged doesn't break yesterday's streak", () => {
+  const logs = [1,2,3].map(i => ({ log_date: `2026-08-${26-i}`, weight_kg: 84 }));
+  assert.strictEqual(computeStreak(logs, '2026-08-26').streak, 3);
+});
+
+test('a gap two days ago resets the run', () => {
+  const logs = [{ log_date: '2026-08-26', food_items: [{}] },
+                { log_date: '2026-08-23', food_items: [{}] }];
+  assert.strictEqual(computeStreak(logs, '2026-08-26').streak, 1);
+});
+
+test('empty logs and no-content logs count zero', () => {
+  assert.strictEqual(computeStreak([], '2026-08-26').streak, 0);
+  assert.strictEqual(computeStreak([{ log_date: '2026-08-26', food_items: [] }], '2026-08-26').streak, 0);
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

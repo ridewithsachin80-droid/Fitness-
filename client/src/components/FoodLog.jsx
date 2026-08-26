@@ -144,6 +144,74 @@ function calcMacros(item) {
   return getNutrition(item.name, item.grams);
 }
 
+
+// ── Barcode scanner ──────────────────────────────────────────────────────────
+// Native BarcodeDetector (Chrome/Android — the member base). No library, no
+// bundle weight. Browsers without it simply never see the button. A hit goes
+// through the existing /foods/lookup → Open Food Facts pipeline, which also
+// caches the product into the foods table for next time.
+const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
+function BarcodeScanner({ onFound, onClose }) {
+  const videoRef = useRef(null);
+  const [status, setStatus] = useState('Starting camera…');
+
+  useEffect(() => {
+    let stream, raf, stopped = false;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        });
+        if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setStatus('Point at the barcode');
+        const detector = new window.BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
+        });
+        const tick = async () => {
+          if (stopped) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes.length) {
+              stopped = true;
+              stream.getTracks().forEach(t => t.stop());
+              onFound(codes[0].rawValue);
+              return;
+            }
+          } catch { /* frame not ready */ }
+          raf = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch (err) {
+        setStatus(err?.name === 'NotAllowedError'
+          ? 'Camera blocked — allow camera access in browser settings'
+          : 'Could not start the camera');
+      }
+    })();
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
+      stream?.getTracks().forEach(t => t.stop());
+    };
+  }, [onFound]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6"
+      onClick={onClose}>
+      <video ref={videoRef} playsInline muted
+        className="w-full max-w-sm rounded-2xl border border-white/[0.15]"
+        onClick={e => e.stopPropagation()} />
+      <p className="text-sm text-white mt-4">{status}</p>
+      <button onClick={onClose} style={{ minHeight: 44 }}
+        className="mt-3 px-6 rounded-full border border-white/[0.25] text-sm text-white">
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
   const nutritionView = useSettingsStore(s => s.nutritionView);
@@ -186,6 +254,26 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   });
   const { listening } = voice;
   const startVoice = () => { haptic(30); voice.toggle(); };
+
+  // Barcode → /foods/lookup (Open Food Facts) → selected food, ready for grams
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState(null);
+  const onBarcodeFound = useCallback(async (barcode) => {
+    setScanning(false);
+    haptic(20);
+    setScanMsg('Looking up product…');
+    try {
+      const { data } = await api.post('/foods/lookup', { barcode });
+      setSelected({ id: data.id, name: data.name, per_100g: data.per_100g });
+      setQuery(data.name);
+      setScanMsg(null);
+    } catch (err) {
+      setScanMsg(err.response?.status === 404
+        ? "Not in the product database — type the name and AI will estimate it"
+        : 'Lookup failed — type the name instead');
+      setTimeout(() => setScanMsg(null), 5000);
+    }
+  }, []);
 
   // ── Search ──────────────────────────────────────────────────────────────────
   const searchFoods = useCallback(async (q) => {
@@ -499,6 +587,19 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 placeholder="Food name…"
                 className="flex-1 px-3 py-2.5 rounded-xl border border-[rgba(255,255,255,0.12)] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] text-[#ededf0] font-medium"
                 autoFocus />
+              {hasBarcodeDetector && (
+                <button onClick={() => { haptic(15); setScanning(true); }}
+                  style={{ width: 44, height: 44, minWidth: 44 }}
+                  className="rounded-xl flex items-center justify-center border bg-white/[0.06] border-white/[0.1] text-[#6a6a78] hover:text-[#8e8e9a]"
+                  title="Scan a barcode">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                    <path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                    <line x1="8" y1="8" x2="8" y2="16" /><line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="16" y1="8" x2="16" y2="16" />
+                  </svg>
+                </button>
+              )}
               {/* Voice input button */}
               <button onClick={startVoice}
                 style={{ width: 44, height: 44, minWidth: 44 }}
@@ -527,6 +628,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
             )}
             {voice.error && (
               <div className="mt-1 text-xs text-amber-400 font-medium px-1">{voice.error}</div>
+            )}
+            {scanMsg && (
+              <div className="mt-1 text-xs text-[#c9a227] font-medium px-1">{scanMsg}</div>
+            )}
+            {scanning && (
+              <BarcodeScanner onFound={onBarcodeFound} onClose={() => setScanning(false)} />
             )}
 
             {showSuggestions && suggestions.length > 0 && (

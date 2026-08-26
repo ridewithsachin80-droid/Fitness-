@@ -14,6 +14,7 @@ import FoodLog       from '../components/FoodLog';
 import WorkoutLog    from '../components/WorkoutLog';
 import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
+import StreakCard from '../components/StreakCard';
 import AIChatLog, { useAIChat } from '../components/AIChatLog';
 import { sessionEnergy } from '../utils/exerciseCalories';
 import { dailyRead } from '../utils/dailyRead';
@@ -845,6 +846,17 @@ export default function DailyLog() {
 
   // ── Premium hero state ─────────────────────────────────────────────────────
   const [heroPanel, setHeroPanel] = useState(null);   // 'weight'|'food'|'protocol'|'water'|'workout'|'sleep'
+
+  // PWA app shortcuts: long-press icon → /?open=ai or /?open=weight.
+  // Handled once on mount, then the param is stripped so a refresh doesn't
+  // re-trigger it.
+  useEffect(() => {
+    const open = new URLSearchParams(window.location.search).get('open');
+    if (!open) return;
+    if (open === 'ai') useAIChat.getState().openChat();
+    if (open === 'weight') setHeroPanel('weight');
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });
   // Bumped whenever the AI chat closes, so WorkoutLog remounts and picks up
   // anything the AI just wrote (otherwise an open panel shows stale data).
@@ -1667,6 +1679,9 @@ export default function DailyLog() {
                 </div>
               </Card>
             )}
+
+            {/* Logging streak — the member's own version of the coach strip */}
+            <StreakCard />
 
             {/* Coach messages — only UNREAD show here; once read they move to
                 the notification bell's message history so Today stays clean. */}

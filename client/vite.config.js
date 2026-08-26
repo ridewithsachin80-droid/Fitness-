@@ -23,6 +23,24 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: '/',
         scope: '/',
+        // Long-press the app icon → jump straight into the two most common
+        // actions. Query params are handled in DailyLog on mount.
+        shortcuts: [
+          {
+            name: 'Tell the AI',
+            short_name: 'AI Chat',
+            description: 'Log your day in one message',
+            url: '/?open=ai',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
+          },
+          {
+            name: 'Log weight',
+            short_name: 'Weight',
+            description: 'Quick morning weigh-in',
+            url: '/?open=weight',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
+          },
+        ],
         icons: [
           // "any" and "maskable" are split deliberately. A single icon marked
           // 'any maskable' gets its rounded corners cropped by launchers that

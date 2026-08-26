@@ -61,9 +61,21 @@ const fake = async (url, body) => {
   aiCalls++;
   const prompt = body.contents[0].parts.map(p => p.text || '').join('');
   capturedPrompts.push(prompt);
-  const text = aiCalls === 1
-    ? JSON.stringify({ reply: '', question: 'how many calories have i consumed today?', weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [], water_ml_add: null, sleep: null, foods: [], workouts: [] })
-    : "You've eaten 154 kcal so far today, out of your 1800 kcal target — 1646 kcal left.";
+  let text;
+  if (/Member's message: "make the dal 250 grams"/i.test(prompt)) {
+    text = JSON.stringify({ reply: 'Updated the dal to 250g.', question: null,
+      corrections: [
+        { name: 'Dal Tadka', grams: 250, meal: null },
+        { name: 'Hallucinated Biryani', grams: 500, meal: null },
+        { name: 'Ghee', grams: 99999, meal: null },
+      ],
+      weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [],
+      water_ml_add: null, sleep: null, foods: [], workouts: [] });
+  } else if (aiCalls === 1) {
+    text = JSON.stringify({ reply: '', question: 'how many calories have i consumed today?', weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [], water_ml_add: null, sleep: null, foods: [], workouts: [] });
+  } else {
+    text = "You've eaten 154 kcal so far today, out of your 1800 kcal target — 1646 kcal left.";
+  }
   return { data: { candidates: [{ content: { parts: [{ text }] } }] } };
 };
 const real = require.cache[axiosPath].exports;
@@ -100,5 +112,28 @@ const req = (body) => new Promise(r => {
   t('answer prompt contained the calorie target', /calorie target 1800 kcal/.test(capturedPrompts[1] || ''));
   t('answer prompt contained week history (267 kcal chapati day, 84 kg)',
     /267 kcal.*84(\.0)? kg/.test(capturedPrompts[1] || ''));
+
+  // ── Corrections scenario ────────────────────────────────────────────────────
+  const corr = await req({
+    message: 'make the dal 250 grams',
+    context: {
+      waterTargetMl: 3000,
+      lastFoods: [
+        { name: 'Dal Tadka', grams: 150, meal: 'Lunch' },
+        { name: 'Ghee', grams: 12, meal: 'Breakfast' },
+      ],
+      recent: [{ role: 'user', text: '1 katori dal tadka for lunch' },
+               { role: 'ai', text: 'Logged Dal Tadka 150g for Lunch.' }],
+    },
+  });
+  t('corrections: 200 response', corr.code === 200);
+  t('valid correction passes through', corr.body.corrections?.length >= 1
+      && corr.body.corrections[0].name === 'Dal Tadka' && corr.body.corrections[0].grams === 250);
+  t('hallucinated food name is whitelisted out',
+    !(corr.body.corrections || []).some(c => /biryani/i.test(c.name)));
+  t('implausible grams (99999) dropped',
+    !(corr.body.corrections || []).some(c => c.name === 'Ghee'));
+  t('parse prompt carried the logged-foods list',
+    /Dal Tadka · 150g · Lunch/.test(capturedPrompts[2] || ''));
   server.close(); process.exit(ok ? 0 : 1);
 })();

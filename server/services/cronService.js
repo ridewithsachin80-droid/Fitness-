@@ -3,6 +3,10 @@ const pool        = require('../db/pool');
 const pushService = require('./pushService');
 
 // ── IST helpers ──────────────────────────────────────────────────────────────
+function getISTDateStr() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+}
+
 function getISTTime() {
   const now = new Date();
   const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
@@ -139,6 +143,25 @@ function start() {
     } catch (err) {
       console.error('Cron error:', err.message);
     }
+  }, { timezone: 'Asia/Kolkata' });
+
+  // 20:30 IST: evening recap for members who logged today — real numbers,
+  // never a generic nudge. Deduped per member per day in notifications_log.
+  cron.schedule('30 20 * * *', async () => {
+    try {
+      const { sendEveningRecaps } = require('./digests');
+      const n = await sendEveningRecaps(getISTDateStr());
+      if (n) console.log(`🌙 Evening recap sent to ${n} member(s)`);
+    } catch (err) { console.error('Evening recap error:', err.message); }
+  }, { timezone: 'Asia/Kolkata' });
+
+  // 08:00 IST: coach morning digest — who logged yesterday, who has gone quiet.
+  cron.schedule('0 8 * * *', async () => {
+    try {
+      const { sendCoachDigests } = require('./digests');
+      const n = await sendCoachDigests(getISTDateStr());
+      if (n) console.log(`☀️ Morning digest sent to ${n} coach(es)`);
+    } catch (err) { console.error('Coach digest error:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 
   // Daily at midnight IST: clean up old records
