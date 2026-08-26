@@ -178,7 +178,7 @@ export default function AIChatLog() {
     if (!file || photoBusy) return;
     setPhotoBusy(true);
     haptic(10);
-    setMessages(m => [...m, { role: 'user', text: '📷 Photo of my meal' }]);
+    setMessages(m => [...m, { role: 'user', text: '📷 Photo' }]);
     try {
       const base64 = await downscale(file);
       const { data } = await api.post('/ai-chat/photo', {
@@ -190,7 +190,11 @@ export default function AIChatLog() {
         role: 'ai',
         text: data.reply,
         parsed: {
-          weight_kg: null, weightOn: false,
+          // Scale screenshots return a weight and body metrics; meal photos
+          // return foods. Same preview card handles both.
+          weight_kg: data.weight_kg ?? null, weightOn: data.weight_kg != null,
+          bodyMetrics: data.body_metrics || [],
+          bodyMetricsOn: (data.body_metrics || []).length > 0,
           activities: [], acv: [], supplements: [],
           water_ml_add: null, waterOn: false,
           sleep: null, sleepOn: false,
@@ -593,6 +597,23 @@ export default function AIChatLog() {
       updateLog('food', newLog.food);
     }
 
+    if (p.bodyMetricsOn && p.bodyMetrics?.length) {
+      // Body-scan metrics go to lab history (the coach's Body Composition
+      // section reads from there). Fire-and-forget with a visible failure —
+      // the daily log has already applied and must not be blocked by this.
+      api.post('/members/me/labs', {
+        test_date: new Date().toISOString().slice(0, 10),
+        results: p.bodyMetrics.map(bm => ({ test_name: bm.name, value: bm.value, unit: bm.unit })),
+        lab_name: 'Smart Scale',
+        notes: 'Captured from a scale screenshot via AI chat',
+      }).catch(() => {
+        setMessages(msgs => [...msgs, {
+          role: 'ai', error: true,
+          text: "Your weight was logged, but saving the body metrics failed — try the screenshot again later.",
+        }]);
+      });
+    }
+
     haptic(30);
     saveLog().catch(() => {});
 
@@ -663,6 +684,7 @@ export default function AIChatLog() {
     p.supplements.filter(s => s.on).length +
     (p.waterOn && p.water_ml_add ? 1 : 0) +
     (p.sleepOn && p.sleep ? 1 : 0) +
+    ((p.bodyMetricsOn && p.bodyMetrics?.length) ? 1 : 0) +
     p.foods.filter(f => f.on).length +
     p.workouts.filter(w => w.on).length;
 
@@ -825,6 +847,21 @@ export default function AIChatLog() {
                             onToggle={() => patchParsed(mi, p => ({ ...p, weightOn: !p.weightOn }))}>
                             {m.parsed.weight_kg} kg
                           </ToggleChip>
+                        </div>
+                      )}
+
+                      {/* 📊 Body scan metrics from a scale screenshot */}
+                      {m.parsed.bodyMetrics?.length > 0 && (
+                        <div>
+                          <GroupHeader icon="📊" title="Body scan" count={m.parsed.bodyMetrics.length} />
+                          <ToggleChip on={m.parsed.bodyMetricsOn}
+                            onToggle={() => patchParsed(mi, p => ({ ...p, bodyMetricsOn: !p.bodyMetricsOn }))}>
+                            Save {m.parsed.bodyMetrics.length} metrics to body history
+                          </ToggleChip>
+                          <p className="text-[10px] text-[#7E8596] mt-1 px-1">
+                            {m.parsed.bodyMetrics.slice(0, 4).map(bm => `${bm.name} ${bm.value}${bm.unit || ''}`).join(' · ')}
+                            {m.parsed.bodyMetrics.length > 4 && ` · +${m.parsed.bodyMetrics.length - 4} more`}
+                          </p>
                         </div>
                       )}
 

@@ -175,4 +175,70 @@ test('non-numeric and dateless rows are ignored, not crashed on', () => {
   assert.strictEqual(bc.markers[0].name, 'C');
 });
 
+
+// ── Mirrors the scale-screenshot validation in /ai-chat/photo ─────────────────
+function cleanScalePayload(parsed) {
+  let weight_kg = parseFloat(parsed.weight_kg);
+  if (!Number.isFinite(weight_kg) || weight_kg < 20 || weight_kg > 300) weight_kg = null;
+  const body_metrics = (Array.isArray(parsed.body_metrics) ? parsed.body_metrics : [])
+    .filter(m => m && m.name && Number.isFinite(parseFloat(m.value)))
+    .slice(0, 40)
+    .map(m => ({
+      name:  String(m.name).trim().slice(0, 80),
+      value: parseFloat(m.value),
+      unit:  m.unit ? String(m.unit).trim().slice(0, 20) : null,
+    }))
+    .filter(m => !/^(body )?weight$/i.test(m.name));
+  return { weight_kg, body_metrics };
+}
+
+console.log('\nScale screenshot parsing');
+
+test('a smart-scale screen yields weight plus metrics', () => {
+  const r = cleanScalePayload({
+    weight_kg: '84.35',
+    body_metrics: [
+      { name: 'Body Fat', value: 26.1, unit: '%' },
+      { name: 'Muscle Mass', value: 59.2, unit: 'kg' },
+      { name: 'BMR', value: 1716, unit: 'Cal' },
+    ],
+  });
+  assert.strictEqual(r.weight_kg, 84.35);
+  assert.strictEqual(r.body_metrics.length, 3);
+});
+
+test('implausible weights are rejected, metrics survive', () => {
+  assert.strictEqual(cleanScalePayload({ weight_kg: 843.5 }).weight_kg, null);
+  assert.strictEqual(cleanScalePayload({ weight_kg: 5 }).weight_kg, null);
+  assert.strictEqual(cleanScalePayload({ weight_kg: 'NaN' }).weight_kg, null);
+});
+
+test('the main weight is never duplicated into lab history', () => {
+  const r = cleanScalePayload({
+    weight_kg: 84.35,
+    body_metrics: [
+      { name: 'Weight', value: 84.35, unit: 'kg' },
+      { name: 'Body Weight', value: 84.35, unit: 'kg' },
+      { name: 'Best Visual Weight', value: 73.8, unit: 'kg' },
+    ],
+  });
+  assert.deepStrictEqual(r.body_metrics.map(m => m.name), ['Best Visual Weight'],
+    'Weight/Body Weight must be dropped; derived weights like Best Visual Weight stay');
+});
+
+test('junk metric rows are filtered without crashing', () => {
+  const r = cleanScalePayload({ body_metrics: [
+    { name: 'Health Score', value: '79.60' },
+    { name: '', value: 5 }, { name: 'X' }, null, { value: 3 },
+    { name: 'Protein', value: 'high' },
+  ]});
+  assert.deepStrictEqual(r.body_metrics.map(m => m.name), ['Health Score']);
+});
+
+test('a meal photo (no scale fields) parses to nulls harmlessly', () => {
+  const r = cleanScalePayload({ foods: [{ name: 'Chapati' }] });
+  assert.strictEqual(r.weight_kg, null);
+  assert.strictEqual(r.body_metrics.length, 0);
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

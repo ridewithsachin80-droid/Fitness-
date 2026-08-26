@@ -923,7 +923,32 @@ router.post('/photo', async (req, res) => {
   const slots = Array.isArray(mealSlots) && mealSlots.length
     ? mealSlots.join(' | ') : 'Meal 1 | Meal 2 | Meal 3';
 
-  const prompt = `You are a nutritionist looking at a photo of an Indian meal.
+  const prompt = `You are looking at a photo a member sent to their fitness coach.
+First decide what kind of image this is:
+
+A) A MEAL — food on a plate, in bowls, packaged food, a drink.
+B) A WEIGHT OR BODY-COMPOSITION READING — a smart-scale app screenshot
+   (Body Fat %, Muscle Mass, BMR, Visceral Fat tiles...), a body-analysis
+   machine printout (InBody or similar), or a photo of a weighing scale's
+   display showing a number.
+C) Neither.
+
+For type B:
+- "weight_kg": the main body weight in kg. If the screen shows pounds, convert
+  (1 lb = 0.4536 kg). If no overall weight is visible, null.
+- "body_metrics": every OTHER metric tile visible, as
+  { "name": "...", "value": number, "unit": "..." }. Use the on-screen names
+  (Body Fat, Muscle Mass %, BMI, BMR, Bone Mass, Body Hydration, Metabolic Age,
+  Protein, Skeletal Muscle, Subcutaneous Fat, Visceral Fat, Lean Body Mass...).
+  Numbers only — strip the units into "unit" (%, kg, Cal, years, score...).
+  Do NOT repeat the main weight inside body_metrics.
+- "foods": [] for type B. Set "reply" to one short line stating the weight and
+  how many metrics you read, e.g. "Got it — 84.35 kg, plus 18 body metrics
+  from your scale."
+For type C: empty foods, null weight, empty body_metrics, and a reply saying
+what the image seems to be and that you could not find food or readings in it.
+
+For type A (a meal), "weight_kg" is null, "body_metrics" is [], and:
 
 Identify EVERY distinct food item you can see and estimate its portion in grams
 from visual cues (plate size, bowl size, number of pieces).
@@ -957,6 +982,8 @@ empty foods array and say so in reply.
 Return ONLY raw JSON, no markdown fences:
 {
   "reply": "I can see 2 chapatis, dal and a small salad — about 420 kcal.",
+  "weight_kg": null,
+  "body_metrics": [],
   "foods": [
     { "name": "Chapati", "qty_text": "2 pieces", "grams": 60, "meal": null, "category": "grain",
       "confidence": "high",
@@ -995,6 +1022,22 @@ Return ONLY raw JSON, no markdown fences:
     }
     if (!parsed) throw lastErr || new Error('Vision model failed');
 
+    // ── Scale screenshots: weight + body-composition metrics ──────────────────
+    // Same plausibility gate as the text parser: 20–300 kg.
+    let weight_kg = parseFloat(parsed.weight_kg);
+    if (!Number.isFinite(weight_kg) || weight_kg < 20 || weight_kg > 300) weight_kg = null;
+
+    const body_metrics = (Array.isArray(parsed.body_metrics) ? parsed.body_metrics : [])
+      .filter(m => m && m.name && Number.isFinite(parseFloat(m.value)))
+      .slice(0, 40)
+      .map(m => ({
+        name:  String(m.name).trim().slice(0, 80),
+        value: parseFloat(m.value),
+        unit:  m.unit ? String(m.unit).trim().slice(0, 20) : null,
+      }))
+      // The main weight belongs in daily_logs, not duplicated into lab history.
+      .filter(m => !/^(body )?weight$/i.test(m.name));
+
     const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
     const validFoods = rawFoods
       .filter(f => f && f.name && (parseFloat(f.grams) || 0) > 0)
@@ -1031,13 +1074,18 @@ Return ONLY raw JSON, no markdown fences:
       totCarb += f.macros.carb; totFat += f.macros.fat;
     }
 
+    const fallbackReply = foods.length
+      ? `I found ${foods.length} item${foods.length > 1 ? 's' : ''} in that photo.`
+      : weight_kg != null
+        ? `Got it — ${weight_kg} kg from your scale${body_metrics.length ? `, plus ${body_metrics.length} body metrics` : ''}.`
+        : "I couldn't spot any food or readings in that photo — try a clearer shot.";
+
     return res.json({
-      reply: String(parsed.reply || '').slice(0, 400) ||
-        (foods.length ? `I found ${foods.length} item${foods.length > 1 ? 's' : ''} in that photo.`
-                      : "I couldn't spot any food in that photo — try a clearer shot of the plate."),
+      reply: String(parsed.reply || '').slice(0, 400) || fallbackReply,
       foods,
+      body_metrics,
       workouts: [], activities: [], acv: [], supplements: [],
-      weight_kg: null, water_ml_add: null, sleep: null,
+      weight_kg, water_ml_add: null, sleep: null,
       totals: {
         cal: Math.round(totCal), pro: +totPro.toFixed(1),
         carb: +totCarb.toFixed(1), fat: +totFat.toFixed(1),
