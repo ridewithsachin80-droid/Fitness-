@@ -241,4 +241,62 @@ test('a meal photo (no scale fields) parses to nulls harmlessly', () => {
   assert.strictEqual(r.body_metrics.length, 0);
 });
 
+
+// ── Mirrors the voice composer's continue-by-mic state machine ────────────────
+function voiceComposerModel() {
+  let committed = '', draft = null;
+  const join = (a, b) => (a && b ? `${a} ${b}` : a || b || '');
+  return {
+    record()        { committed = (draft || '').trim(); if (draft === null) draft = ''; },
+    interim(t)      { draft = join(committed, t); },
+    final(t)        { committed = join(committed, t); draft = committed; },
+    edit(t)         { draft = t; committed = t; },
+    send()          { const out = (draft || '').trim(); committed = ''; draft = null; return out; },
+    discard()       { committed = ''; draft = null; },
+    get draft()     { return draft; },
+  };
+}
+
+console.log('\nVoice composer continue semantics');
+
+test('a second take appends to the first with a single space', () => {
+  const m = voiceComposerModel();
+  m.record(); m.interim('2 roti'); m.final('2 roti with ghee');
+  m.record(); m.interim('aur'); m.final('aur ek katori dal');
+  assert.strictEqual(m.draft, '2 roti with ghee aur ek katori dal');
+});
+
+test('interim results never overwrite committed takes', () => {
+  const m = voiceComposerModel();
+  m.record(); m.final('weight 82.5');
+  m.record(); m.interim('morning');
+  assert.strictEqual(m.draft, 'weight 82.5 morning');
+  m.interim('morning walk done');
+  assert.strictEqual(m.draft, 'weight 82.5 morning walk done');
+});
+
+test('manual edits become the base for the next take', () => {
+  const m = voiceComposerModel();
+  m.record(); m.final('2 rothi with ghee');
+  m.edit('2 roti with ghee');
+  m.record(); m.final('khaya chutney ke saath');
+  assert.strictEqual(m.draft, '2 roti with ghee khaya chutney ke saath');
+});
+
+test('send drains the card and returns the full text', () => {
+  const m = voiceComposerModel();
+  m.record(); m.final('slept 10:30 to 6:30');
+  assert.strictEqual(m.send(), 'slept 10:30 to 6:30');
+  assert.strictEqual(m.draft, null, 'card must close after send');
+  m.record(); m.final('drank 1 litre water');
+  assert.strictEqual(m.draft, 'drank 1 litre water', 'a fresh session must not inherit sent text');
+});
+
+test('discard clears everything including committed takes', () => {
+  const m = voiceComposerModel();
+  m.record(); m.final('2 chapati'); m.discard();
+  m.record(); m.final('1 bowl dal');
+  assert.strictEqual(m.draft, '1 bowl dal');
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

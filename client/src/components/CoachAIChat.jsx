@@ -20,8 +20,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { create } from 'zustand';
 import api from '../api/client';
-import { haptic, useSettingsStore } from '../store/settingsStore';
-import { useVoiceInput } from '../hooks/useVoiceInput';
+import { haptic } from '../store/settingsStore';
+import { useVoiceComposer } from './VoiceComposer';
 
 export const useCoachAI = create((set) => ({
   open: false,
@@ -80,21 +80,8 @@ export default function CoachAIChat({ onApplied }) {
     if (open) setTimeout(() => inputRef.current?.focus(), 250);
   }, [open]);
 
-  // Voice: shared hook — live preview while speaking, Gemini transcript on stop
-  const voiceLang    = useSettingsStore(st => st.voiceLang || 'en-IN');
-  const voiceBaseRef = useRef('');
-  const joinVoice = (t) => (voiceBaseRef.current ? voiceBaseRef.current + ' ' + t : t);
-  const voice = useVoiceInput({
-    lang: voiceLang,
-    onInterim: (t) => setInput(joinVoice(t)),
-    onFinal:   (t) => { setInput(joinVoice(t)); inputRef.current?.focus(); },
-  });
-  const { listening } = voice;
-  const toggleVoice = useCallback(() => {
-    if (!voice.listening) voiceBaseRef.current = input.trim();
-    haptic(15);
-    voice.toggle();
-  }, [voice, input]);
+  // Voice: review card above the input — see VoiceComposer for the flow
+  const vc = useVoiceComposer({ onSend: (t) => send(t), accent: '#e0c98a' });
 
   // ── Send → coach-parse ─────────────────────────────────────────────────────
   const send = useCallback(async (textOverride) => {
@@ -342,18 +329,7 @@ export default function CoachAIChat({ onApplied }) {
       {/* ── Input bar ── */}
       <div className="px-4 py-3 border-t border-white/[0.06] bg-[#111116]"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-        {listening && (
-          <p className="text-xs text-red-400 font-medium mb-2 px-1 flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-red-400 animate-ping" />
-            Listening… tap the mic when done
-          </p>
-        )}
-        {voice.transcribing && (
-          <p className="text-xs text-[#e0c98a] font-medium mb-2 px-1">✨ Getting the exact words…</p>
-        )}
-        {voice.error && (
-          <p className="text-xs text-amber-400 font-medium mb-2 px-1">{voice.error}</p>
-        )}
+        {vc.card}
         <div className="flex items-end gap-2">
           <div className="flex-1 flex items-center bg-[#1a1a20] border border-white/[0.10] rounded-2xl px-3">
             <input
@@ -364,22 +340,7 @@ export default function CoachAIChat({ onApplied }) {
               placeholder="Eg: Set Bujju water target 4L, add evening walk"
               className="flex-1 bg-transparent text-sm text-white placeholder-[#4e4e5c] py-3 outline-none min-w-0"
             />
-            {voice.supported && (
-              <button onClick={toggleVoice} disabled={voice.transcribing}
-                style={{ minWidth: 40, minHeight: 40 }}
-                title={listening ? 'Tap to stop' : 'Dictate'}
-                className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                  listening ? 'text-red-400 animate-pulse'
-                  : voice.transcribing ? 'text-[#e0c98a] animate-pulse'
-                  : 'text-[#8e8e9a] hover:text-[#e0c98a]'
-                }`}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
-                </svg>
-              </button>
-            )}
+            {vc.micButton}
           </div>
           <button
             onClick={() => send()}

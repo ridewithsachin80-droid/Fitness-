@@ -35,6 +35,10 @@ const hasRecorder = typeof window !== 'undefined'
   && !!(navigator.mediaDevices?.getUserMedia) && !!window.MediaRecorder;
 
 const MAX_SECONDS = 30;   // cost cap; a meal description fits comfortably
+const SILENCE_MS  = 3000; // auto-stop after this much quiet once speech was heard
+// RMS above this counts as voice. Tuned against browser noise suppression:
+// ambient room noise sits well under it, soft speech well over.
+const VOICE_RMS   = 0.035;
 
 // Human messages per Web Speech error code. 'no-speech' is handled at stop()
 // instead — in continuous mode it fires on every pause and must not abort.
@@ -54,7 +58,7 @@ function pickMime() {
   return candidates.find(m => window.MediaRecorder?.isTypeSupported?.(m)) || '';
 }
 
-export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
+export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = SILENCE_MS } = {}) {
   const [listening, setListening]       = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError]               = useState(null);
@@ -62,7 +66,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
   // Callbacks and lang go through a ref so recognition handlers never close
   // over stale props.
   const optsRef = useRef({});
-  optsRef.current = { lang, onInterim, onFinal };
+  optsRef.current = { lang, onInterim, onFinal, silenceMs };
 
   const recogRef     = useRef(null);
   const recorderRef  = useRef(null);
@@ -73,10 +77,58 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
   const listeningRef = useRef(false);
   const stoppingRef  = useRef(false);
   const timerRef     = useRef(null);
+  const audioCtxRef  = useRef(null);
+  const silenceIvRef = useRef(null);
+  const heardRef     = useRef(false);   // arms the silence timer only after real speech
+  const lastVoiceRef = useRef(0);
 
   const releaseStream = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
+  };
+
+  const stopSilenceWatch = () => {
+    clearInterval(silenceIvRef.current);
+    silenceIvRef.current = null;
+    try { audioCtxRef.current?.close(); } catch { /* already closed */ }
+    audioCtxRef.current = null;
+  };
+
+  // Auto-stop after a pause: sample mic energy a few times a second; once the
+  // member has actually spoken, N ms of quiet ends the session so the review
+  // card (with its Send button) appears without them hunting for the mic.
+  // Web Speech results feed lastVoiceRef too, so the timer works either way.
+  const startSilenceWatch = (stream, onSilence) => {
+    heardRef.current = false;
+    lastVoiceRef.current = Date.now();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    let analyser = null, buf = null;
+    if (AC && stream) {
+      try {
+        const ctx = new AC();
+        audioCtxRef.current = ctx;
+        ctx.resume?.().catch(() => {});
+        const src = ctx.createMediaStreamSource(stream);
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        src.connect(analyser);
+        buf = new Uint8Array(analyser.fftSize);
+      } catch { analyser = null; }
+    }
+    silenceIvRef.current = setInterval(() => {
+      if (analyser) {
+        analyser.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+        if (Math.sqrt(sum / buf.length) > VOICE_RMS) {
+          heardRef.current = true;
+          lastVoiceRef.current = Date.now();
+        }
+      }
+      if (heardRef.current && Date.now() - lastVoiceRef.current > optsRef.current.silenceMs) {
+        onSilence();
+      }
+    }, 200);
   };
 
   const startRecognition = useCallback(() => {
@@ -96,6 +148,8 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
         else interim += t;
       }
       finalTextRef.current = finals.trim();
+      heardRef.current = true;
+      lastVoiceRef.current = Date.now();
       optsRef.current.onInterim?.((finals + interim).trim());
     };
     r.onerror = (e) => {
@@ -121,6 +175,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
     listeningRef.current = false;
     setListening(false);
     clearTimeout(timerRef.current);
+    stopSilenceWatch();
 
     try { recogRef.current?.stop(); } catch { /* not started */ }
 
@@ -231,8 +286,25 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
     startRecognition();
     listeningRef.current = true;
     setListening(true);
+    startSilenceWatch(streamRef.current, stop);
     timerRef.current = setTimeout(stop, MAX_SECONDS * 1000);
   }, [startRecognition, stop]);
+
+  // Discard the session: no transcription call, no onFinal. For the ✕ button.
+  const cancel = useCallback(() => {
+    stoppingRef.current = true;
+    listeningRef.current = false;
+    setListening(false);
+    setTranscribing(false);
+    setError(null);
+    clearTimeout(timerRef.current);
+    stopSilenceWatch();
+    try { recogRef.current?.abort(); } catch { /* noop */ }
+    try { if (recorderRef.current?.state !== 'inactive') recorderRef.current.stop(); } catch { /* noop */ }
+    chunksRef.current = [];
+    finalTextRef.current = '';
+    releaseStream();
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = useCallback(() => {
     listeningRef.current ? stop() : start();
@@ -243,6 +315,8 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
     stoppingRef.current = true;
     listeningRef.current = false;
     clearTimeout(timerRef.current);
+    clearInterval(silenceIvRef.current);
+    try { audioCtxRef.current?.close(); } catch { /* noop */ }
     try { recogRef.current?.abort(); } catch { /* noop */ }
     try { recorderRef.current?.state !== 'inactive' && recorderRef.current?.stop(); } catch { /* noop */ }
     streamRef.current?.getTracks().forEach(t => t.stop());
@@ -253,7 +327,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal } = {}) {
     // Consumers can tell members the transcript improves after they stop:
     hasAccurateEngine: hasRecorder,
     listening, transcribing, error, setError,
-    start, stop, toggle,
+    start, stop, toggle, cancel,
   };
 }
 
