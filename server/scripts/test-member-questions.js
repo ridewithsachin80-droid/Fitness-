@@ -25,10 +25,21 @@ const dayRow = {
     { name: 'Soppina Palya', grams: 200, per_100g: { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4 } },
   ],
 };
+// With TEST_DATABASE_URL set, run against a real Postgres (schema.sql loaded,
+// member 214 seeded) — this catches SQL syntax and column-name errors a stub
+// pool waves through, which is exactly how two such bugs shipped on 26 Aug.
+const USE_REAL_DB = !!process.env.TEST_DATABASE_URL;
+if (USE_REAL_DB) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 const poolPath = require.resolve(path.join(SERVER, 'db/pool.js'));
 const stubPool = {
   query: async (sql) => {
-    if (/FROM daily_logs/.test(sql))       return { rows: [dayRow], rowCount: 1 };
+    if (/FROM daily_logs/.test(sql)) {
+      const twoDaysAgo = new Date(Date.now() + 5.5 * 3600e3 - 2 * 86400e3).toISOString().slice(0, 10);
+      const weekRow = { log_date: twoDaysAgo, weight_kg: '84.0', water_ml: 2500, sleep: null,
+        activities: {}, acv: {}, supplements: {},
+        food_items: [{ name: 'Chapati', grams: 90, per_100g: { calories: 297, protein: 8, total_carbs: 61, fat: 3.7 } }] };
+      return { rows: [dayRow, weekRow], rowCount: 2 };
+    }
     if (/FROM patient_profiles/.test(sql)) return { rows: [{ macro_kcal: 1800, macro_pro: 120, macro_carb: null, macro_fat: null, water_target: 3000, target_weight: 70, start_weight: 78.5 }], rowCount: 1 };
     if (/member_portions/.test(sql))       return { rows: [], rowCount: 0 };
     return { rows: [], rowCount: 0 };
@@ -36,7 +47,9 @@ const stubPool = {
   connect: async () => ({ query: async () => ({ rows: [] }), release() {} }),
   on() {}, end: async () => {},
 };
-require.cache[poolPath] = { id: poolPath, filename: poolPath, loaded: true, exports: stubPool, children: [], paths: [] };
+if (!USE_REAL_DB) {
+  require.cache[poolPath] = { id: poolPath, filename: poolPath, loaded: true, exports: stubPool, children: [], paths: [] };
+}
 
 // Stub axios: first generateContent call = parser (returns question flag),
 // second = answerer (echoes context numbers so we can assert data flowed).
@@ -85,5 +98,7 @@ const req = (body) => new Promise(r => {
   t('two AI calls made (parse + answer)', aiCalls === 2);
   t('answer prompt contained real computed calories (154 kcal = 108 ghee + 46 palya)', /Calories eaten: 154 kcal/.test(capturedPrompts[1] || ''));
   t('answer prompt contained the calorie target', /calorie target 1800 kcal/.test(capturedPrompts[1] || ''));
+  t('answer prompt contained week history (267 kcal chapati day, 84 kg)',
+    /267 kcal.*84(\.0)? kg/.test(capturedPrompts[1] || ''));
   server.close(); process.exit(ok ? 0 : 1);
 })();

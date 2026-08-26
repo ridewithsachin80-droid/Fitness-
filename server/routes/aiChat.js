@@ -1145,11 +1145,11 @@ async function buildDayContext(userId, ctx) {
   const [{ rows: logs }, { rows: prof }] = await Promise.all([
     pool.query(
       `SELECT log_date, weight_kg, water_ml, sleep, activities, acv, supplements, food_items
-       FROM daily_logs WHERE patient_id=$1 AND log_date > (DATE $2 - 7)
+       FROM daily_logs WHERE patient_id=$1 AND log_date > ($2::date - 7)
        ORDER BY log_date DESC`, [userId, today]),
     pool.query(
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target, target_weight, start_weight
-       FROM patient_profiles WHERE patient_id=$1`, [userId]),
+       FROM patient_profiles WHERE user_id=$1`, [userId]),
   ]);
 
   const t = logs.find(l => String(l.log_date).slice(0, 10) === today) || null;
@@ -1260,18 +1260,31 @@ router.post('/parse', async (req, res) => {
     // AI call answers from that snapshot only. Empty item arrays keep the
     // client's preview card hidden — the member just sees the answer.
     if (parsed.question && typeof parsed.question === 'string') {
-      const dayContext = await buildDayContext(req.user.id, ctx);
-      const { text: answerText, provider: ap, model: am } =
-        await callAI(buildAnswerPrompt(parsed.question.slice(0, 300), dayContext));
-      return res.json({
-        reply: String(answerText || '').trim().slice(0, 700)
-          || "I couldn't work that out from your data — try asking in a different way.",
-        question: true,
-        weight_kg: null, activities: [], acv: [], supplements: [],
-        water_ml_add: null, sleep: null, foods: [], workouts: [],
-        totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
-        aiProvider: ap, aiModel: am,
-      });
+      try {
+        const dayContext = await buildDayContext(req.user.id, ctx);
+        const { text: answerText, provider: ap, model: am } =
+          await callAI(buildAnswerPrompt(parsed.question.slice(0, 300), dayContext));
+        return res.json({
+          reply: String(answerText || '').trim().slice(0, 700)
+            || "I couldn't work that out from your data — try asking in a different way.",
+          question: true,
+          weight_kg: null, activities: [], acv: [], supplements: [],
+          water_ml_add: null, sleep: null, foods: [], workouts: [],
+          totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
+          aiProvider: ap, aiModel: am,
+        });
+      } catch (qErr) {
+        // A failure ANSWERING must not read like a failure LOGGING — return a
+        // normal reply, not a 500, so the member knows the app itself is fine.
+        console.error('question answering failed:', qErr.message);
+        return res.json({
+          reply: "I couldn't pull up your numbers just now — give it another try in a moment.",
+          question: true,
+          weight_kg: null, activities: [], acv: [], supplements: [],
+          water_ml_add: null, sleep: null, foods: [], workouts: [],
+          totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
+        });
+      }
     }
 
     // ── Weight ──
