@@ -100,7 +100,7 @@ test('old /monitor/:id links still redirect', () => {
 console.log('\nUI must not show clinical terminology');
 
 test('no user-visible "Patient" or "Monitor" copy remains in the client', () => {
-  const ALLOW = /patient_id|patient_count|monitor_id|monitor_name|monitor_notes|join_monitor_room|monitor_room|monitor_\$\{|'patient'|"patient"|'monitor'|"monitor"|pages\/Monitor|pages\/PatientList|\/monitor|LegacyMonitorRedirect|ROLE_MEMBER|ROLE_COACH/;
+  const ALLOW = /patient_id|patient_count|patient_profiles|monitor_id|monitor_name|monitor_notes|monitor_created|monitor_assigned|monitor_toggled|join_monitor_room|monitor_room|monitor_\$\{|'patient'|"patient"|'monitor'|"monitor"|pages\/Monitor|pages\/PatientList|\/monitor|LegacyMonitorRedirect|ROLE_MEMBER|ROLE_COACH/;
   const bad = [];
   for (const f of walk(path.join(ROOT, 'client/src'))) {
     fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
@@ -110,6 +110,32 @@ test('no user-visible "Patient" or "Monitor" copy remains in the client', () => 
     });
   }
   assert.deepStrictEqual(bad, [], `clinical wording left in UI code:\n    ${bad.join('\n    ')}`);
+});
+
+test('audit log UI maps every action name the server actually emits', () => {
+  const admin  = read('client/src/pages/AdminDashboard.jsx');
+  const mapped = new Set((admin.match(/^\s{2,}([a-z_]+):\s*\{ icon:/gm) || [])
+    .map(l => l.trim().split(':')[0]));
+
+  const emitted = new Set();
+  for (const f of walk(path.join(ROOT, 'server/routes'))) {
+    const s = fs.readFileSync(f, 'utf8');
+    for (const m of s.matchAll(/(?:Audit|audit)\w*\([^)]*?'((?:member|monitor|coach|pin|weight)_[a-z_]+)'/g)) {
+      emitted.add(m[1]);
+    }
+  }
+  const unmapped = [...emitted].filter(a => !mapped.has(a));
+  assert.deepStrictEqual(unmapped, [],
+    `server emits these audit actions but the UI has no icon for them, so they ` +
+    `render with the generic fallback: ${unmapped.join(', ')}`);
+});
+
+test('audit map still handles pre-rename monitor_* history rows', () => {
+  const admin = read('client/src/pages/AdminDashboard.jsx');
+  for (const k of ['monitor_created', 'monitor_assigned', 'monitor_toggled']) {
+    assert.ok(admin.includes(`${k}:`),
+      `${k} missing — rows written before the rename would lose their icon`);
+  }
 });
 
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

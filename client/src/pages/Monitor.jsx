@@ -260,7 +260,7 @@ function AddNoteModal({ memberId, onClose, onAdded }) {
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
       <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-stone-800">Add Clinical Note</h3>
+          <h3 className="font-bold text-stone-800">Add Coach Note</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
         </div>
 
@@ -275,7 +275,7 @@ function AddNoteModal({ memberId, onClose, onAdded }) {
         <div>
           <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Note</label>
           <textarea value={form.note} onChange={e => set('note', e.target.value)}
-            rows={4} placeholder="Clinical observations, progress notes, instructions…"
+            rows={4} placeholder="Observations, progress notes, instructions…"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
               focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none" />
         </div>
@@ -487,12 +487,12 @@ export default function Coach() {
       <td>${new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</td></tr>`).join('')}
     </tbody></table>` : ''}
 
-    ${notes.length ? `<h2>📝 Clinical Notes</h2>
+    ${notes.length ? `<h2>📝 Coach Notes</h2>
     ${notes.map(n => `<div class="note-item${n.flagged?' flag':''}">
       <strong>${new Date(n.note_date+'T00:00:00').toLocaleDateString('en-IN')}</strong>
       ${n.flagged ? ' 🚩' : ''} — ${n.note}</div>`).join('')}` : ''}
 
-    <div class="footer"><span>FitLife Health Coach</span><span>Confidential — for clinical use only</span></div>
+    <div class="footer"><span>FitLife Health Coach</span><span>Confidential</span></div>
     <script>window.onload=()=>window.print()</script></body></html>`;
 
     const win = window.open('', '_blank');
@@ -1391,10 +1391,10 @@ export default function Coach() {
           })()}
         </Card>
 
-        {/* Sprint 9: Clinical Notes */}
+        {/* Sprint 9: Coach Notes — table is still monitor_notes, see RENAME.md */}
         <Card>
           <div className="flex items-center justify-between mb-3">
-            <SectionTitle icon="📝">Clinical Notes</SectionTitle>
+            <SectionTitle icon="📝">Coach Notes</SectionTitle>
             <button onClick={() => setShowNote(true)}
               className="text-xs font-semibold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-xl
                 hover:bg-white/[0.08] transition-colors">
@@ -1402,7 +1402,7 @@ export default function Coach() {
             </button>
           </div>
           {notes.length === 0 ? (
-            <p className="text-xs text-stone-300 italic text-center py-4">No clinical notes yet</p>
+            <p className="text-xs text-stone-300 italic text-center py-4">No coach notes yet</p>
           ) : (
             <div className="space-y-2">
               {[...notes].sort((a, b) => (b.flagged ? 1 : 0) - (a.flagged ? 1 : 0)).map(n => (

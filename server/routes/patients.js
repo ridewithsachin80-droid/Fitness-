@@ -30,7 +30,7 @@ async function requirePatientAccess(req, res, next) {
       [req.user.id, req.params.id]
     );
     if (!linkCheck.rows.length) {
-      return res.status(403).json({ error: 'Patient not assigned to you' });
+      return res.status(403).json({ error: 'Member not assigned to you' });
     }
     next();
   } catch (err) {
@@ -530,7 +530,7 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
 
     // Admins can see any patient; monitors only see their assigned patients
     if (!linkCheck.rows.length && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Patient not assigned to you' });
+      return res.status(403).json({ error: 'Member not assigned to you' });
     }
 
     const [profileResult, logsResult, labsResult, notesResult, pinResult] = await Promise.all([

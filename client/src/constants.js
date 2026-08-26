@@ -138,7 +138,7 @@ export const calcCompliance = (log, acts = ACTIVITIES, acvList = ACV_ITEMS, supp
 };
 
 // ── Sprint 5: Full RDA Targets (female, 60yr, Indian baseline) ───────────────
-// Admin can override any value per member via rda_overrides in member_profiles.
+// Admin can override any value per member via rda_overrides in patient_profiles (DB table name).
 export const RDA_TARGETS = {
   // ── Vitamins (14) ──
   vit_a:   { rda:700,   unit:'mcg', label:'Vitamin A',         icon:'🥕', tab:'vitamins' },

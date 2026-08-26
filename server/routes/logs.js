@@ -165,7 +165,7 @@ router.get('/:date', authMW, async (req, res) => {
     } else {
       patientId = req.query.patientId;
       if (!patientId) {
-        return res.status(400).json({ error: 'memberId query param required for coaches' });
+        return res.status(400).json({ error: 'patientId query param required (DB param name — see RENAME.md)' });
       }
       // Monitors can only access their assigned patients — admins bypass.
       // (Same check the /range/:from/:to route above already does correctly;

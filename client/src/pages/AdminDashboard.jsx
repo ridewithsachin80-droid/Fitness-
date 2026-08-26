@@ -1808,15 +1808,27 @@ export default function AdminDashboard() {
             ) : (
               <div className="space-y-2">
                 {auditLog.map(entry => {
+                  // Action names are DB values written by the server into audit_log.
+                  // The UI rename did NOT rename them, and history rows written before
+                  // the rename use the older spelling. Both are mapped so nothing
+                  // silently falls back to the generic icon. See RENAME.md.
                   const actionConfig = {
-                    member_created:   { icon: '➕', color: 'bg-[rgba(52,211,153,0.10)] border-[rgba(52,211,153,0.25)] text-emerald-300' },
-                    coach_created:  { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    coach_assigned: { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
-                    member_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
-                    coach_toggled:  { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
-                    pin_reset:        { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
-                    pin_set:          { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
-                    weight_logged:    { icon: '⚖️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' },
+                    member_created:    { icon: '➕', color: 'bg-[rgba(52,211,153,0.10)] border-[rgba(52,211,153,0.25)] text-emerald-300' },
+                    monitor_created:   { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
+                    coach_created:     { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
+                    monitor_assigned:  { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
+                    coach_assigned:    { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
+                    member_toggled:    { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
+                    monitor_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
+                    coach_toggled:     { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
+                    pin_reset:         { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
+                    pin_set:           { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
+                    member_updated:      { icon: '✏️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' },
+                    coach_remind:        { icon: '🔔', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
+                    coach_weekly_summary:{ icon: '📊', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
+                    coach_ai_update:     { icon: '🤖', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
+                    coach_ai_broadcast:  { icon: '📢', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
+                    weight_logged:     { icon: '⚖️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' },
                   }[entry.action] || { icon: '📝', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' };
 
                   const timeAgo = (() => {
