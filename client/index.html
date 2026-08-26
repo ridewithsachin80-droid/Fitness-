@@ -22,9 +22,51 @@
       rel="stylesheet"
     />
     <title>FitLife</title>
+    <!-- Inline so a failed CSS load can never flash white — the app is dark. -->
+    <style>
+      html, body { background: #121316; margin: 0; }
+      #boot-fallback { display: none; position: fixed; inset: 0; background: #121316;
+        color: #EDEDF0; font-family: system-ui, sans-serif; text-align: center;
+        padding: 40vh 24px 0; z-index: 9999; }
+      #boot-fallback p { color: #9EA3B0; font-size: 14px; margin: 0 0 20px; }
+      #boot-fallback button { background: #D4AF37; color: #121316; border: 0;
+        border-radius: 999px; padding: 12px 28px; font-size: 15px; font-weight: 600; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot-fallback">
+      <p>FitLife couldn't load. This usually clears with a fresh start.</p>
+      <button onclick="window.__fitlifeRecover()">Reload app</button>
+    </div>
+    <script>
+      // ── Boot watchdog ──────────────────────────────────────────────────────
+      // A PWA can white-screen for reasons the app code never gets to handle:
+      // a stale service worker serving an index.html whose hashed chunks were
+      // purged by a new deploy, a refresh landing mid-rollout, or a script
+      // crash before React mounts. This inline script runs no matter what else
+      // fails: if React hasn't painted into #root within 10s, it shows a
+      // recovery screen whose button wipes service workers + caches and
+      // reloads clean. window.__fitlifeBooted is set by main.jsx after mount.
+      window.__fitlifeRecover = async function () {
+        try {
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }
+          if (window.caches && caches.keys) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }
+        } catch (e) { /* best effort — reload regardless */ }
+        location.reload();
+      };
+      setTimeout(function () {
+        if (!window.__fitlifeBooted) {
+          document.getElementById('boot-fallback').style.display = 'block';
+        }
+      }, 10000);
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
