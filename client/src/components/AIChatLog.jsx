@@ -264,25 +264,52 @@ export default function AIChatLog() {
     });
   }, []);
 
+  // A body-scale weight hiding among lab rows. Members upload scale screenshots
+  // through the lab button too — that weight belongs in today's daily log, not
+  // in lab history (where it duplicates the weight series and never reaches the
+  // coach's daily view). 20–300 kg plausibility gate matches the parsers.
+  const isScaleWeightRow = (r) => {
+    const v = parseFloat(r.value);
+    return /^(body )?weight( ?\(?kgs?\)?)?$/i.test(String(r.test_name || '').trim())
+      && Number.isFinite(v) && v >= 20 && v <= 300;
+  };
+
   const saveLabs = useCallback(async (mi) => {
     const m = messages[mi];
     if (!m?.lab || m.applied) return;
     const rows = m.lab.results.filter(r => r.on && r.value !== null && r.value !== '');
     if (!rows.length) return;
+
+    // Only when the reading is from today — retro-writing today's log from an
+    // old report would be wrong. Past-dated weight rows stay in lab history.
+    const today = new Date().toISOString().slice(0, 10);
+    const weightRow = m.lab.test_date === today ? rows.find(isScaleWeightRow) : null;
+    const labRows = weightRow ? rows.filter(r => r !== weightRow) : rows;
+
     setLabBusy(true);
     try {
-      const { data } = await api.post('/members/me/labs', {
-        test_date: m.lab.test_date,
-        lab_name: m.lab.lab_name || null,
-        results: rows.map(r => ({
-          test_name: r.test_name, value: r.value, unit: r.unit,
-          ref_min: r.ref_min, ref_max: r.ref_max,
-        })),
-      });
+      let saved = 0, notice = null;
+      if (labRows.length) {
+        const { data } = await api.post('/members/me/labs', {
+          test_date: m.lab.test_date,
+          lab_name: m.lab.lab_name || null,
+          results: labRows.map(r => ({
+            test_name: r.test_name, value: r.value, unit: r.unit,
+            ref_min: r.ref_min, ref_max: r.ref_max,
+          })),
+        });
+        saved = data.saved; notice = data.notice;
+      }
+      if (weightRow) {
+        const { updateLog, saveLog } = useLogStore.getState();
+        updateLog('weight', String(parseFloat(weightRow.value)));
+        saveLog().catch(() => {});
+      }
       haptic(30);
       setMessages(prev => {
         const next = [...prev];
-        next[mi] = { ...next[mi], applied: true, labSaved: data.saved, labNotice: data.notice };
+        next[mi] = { ...next[mi], applied: true, labSaved: saved, labNotice: notice,
+                     weightLogged: weightRow ? parseFloat(weightRow.value) : null };
         return next;
       });
     } catch (err) {
@@ -746,6 +773,13 @@ export default function AIChatLog() {
                           style={{ minHeight: 32 }}
                           className="flex-1 min-w-0 bg-[#121316] border border-white/[0.12] rounded-lg px-2 text-[11px] text-white placeholder-[#7E8596]" />
                       </div>
+                      {!m.applied
+                        && m.lab.test_date === new Date().toISOString().slice(0, 10)
+                        && m.lab.results.some(r => r.on && isScaleWeightRow(r)) && (
+                        <p className="text-[11px] text-[#D4AF37] mb-2 px-1">
+                          ⚖ Weight found — it will go into today's daily log, the rest into body history.
+                        </p>
+                      )}
 
                       {m.lab.needs_review > 0 && !m.applied && (
                         <p className="text-[10px] text-amber-300 mb-2 leading-relaxed">
@@ -794,7 +828,10 @@ export default function AIChatLog() {
 
                       {m.applied ? (
                         <div className="mt-2 bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl px-3.5 py-3">
-                          <p className="text-[13px] font-bold text-emerald-400">✓ {m.labSaved} results saved</p>
+                          <p className="text-[13px] font-bold text-emerald-400">
+                            ✓ {m.labSaved > 0 ? `${m.labSaved} results saved` : 'Saved'}
+                            {m.weightLogged != null && ` · ⚖ ${m.weightLogged} kg logged for today`}
+                          </p>
                           {m.labNotice && (
                             <p className="text-[11px] text-amber-200 mt-1 leading-relaxed">{m.labNotice}</p>
                           )}

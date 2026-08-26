@@ -299,4 +299,59 @@ test('discard clears everything including committed takes', () => {
   assert.strictEqual(m.draft, '1 bowl dal');
 });
 
+
+// ── Mirrors the lab-save weight routing in AIChatLog.saveLabs ─────────────────
+function routeLabRows(rows, testDate, today) {
+  const isScaleWeightRow = (r) => {
+    const v = parseFloat(r.value);
+    return /^(body )?weight( ?\(?kgs?\)?)?$/i.test(String(r.test_name || '').trim())
+      && Number.isFinite(v) && v >= 20 && v <= 300;
+  };
+  const weightRow = testDate === today ? rows.find(isScaleWeightRow) : null;
+  return { weightRow, labRows: weightRow ? rows.filter(r => r !== weightRow) : rows };
+}
+
+console.log('\nLab upload weight routing (the scale-screenshot-via-lab-button bug)');
+
+test("today's scale screenshot: weight to daily log, metrics to labs", () => {
+  const rows = [
+    { test_name: 'Weight', value: '84.35', unit: 'kg' },
+    { test_name: 'Body Fat', value: '26.10', unit: '%' },
+    { test_name: 'BMI', value: '25.50' },
+  ];
+  const { weightRow, labRows } = routeLabRows(rows, '2026-08-26', '2026-08-26');
+  assert.strictEqual(parseFloat(weightRow.value), 84.35);
+  assert.deepStrictEqual(labRows.map(r => r.test_name), ['Body Fat', 'BMI']);
+});
+
+test('name variants still route: "Weight (kg)", "Body Weight"', () => {
+  for (const name of ['Weight (kg)', 'Body Weight', 'weight kg', ' Weight ']) {
+    const { weightRow } = routeLabRows([{ test_name: name, value: 84 }], 'd', 'd');
+    assert.ok(weightRow, `${name} should be recognised as the scale weight`);
+  }
+});
+
+test('a past-dated report keeps its weight in lab history', () => {
+  const rows = [{ test_name: 'Weight', value: '78.5', unit: 'kg' }];
+  const { weightRow, labRows } = routeLabRows(rows, '2026-06-01', '2026-08-26');
+  assert.strictEqual(weightRow, null, 'must not overwrite today\'s log from an old report');
+  assert.strictEqual(labRows.length, 1);
+});
+
+test('markers that merely contain "weight" are NOT hijacked', () => {
+  const rows = [
+    { test_name: 'Best Visual Weight', value: '73.8', unit: 'kg' },
+    { test_name: 'Molecular Weight', value: '180' },
+    { test_name: 'Weight Control (kg)', value: '-11' },
+  ];
+  const { weightRow, labRows } = routeLabRows(rows, 'd', 'd');
+  assert.ok(!weightRow);
+  assert.strictEqual(labRows.length, 3);
+});
+
+test('an implausible "Weight" row stays a lab row', () => {
+  const { weightRow } = routeLabRows([{ test_name: 'Weight', value: '1716' }], 'd', 'd');
+  assert.ok(!weightRow, 'a BMR misread as weight must not reach the daily log');
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

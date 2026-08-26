@@ -1036,7 +1036,7 @@ Return ONLY raw JSON, no markdown fences:
         unit:  m.unit ? String(m.unit).trim().slice(0, 20) : null,
       }))
       // The main weight belongs in daily_logs, not duplicated into lab history.
-      .filter(m => !/^(body )?weight$/i.test(m.name));
+      .filter(m => !/^(body )?weight( ?\(?kgs?\)?)?$/i.test(m.name.trim()));
 
     const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
     const validFoods = rawFoods
