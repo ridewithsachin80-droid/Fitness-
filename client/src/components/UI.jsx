@@ -149,8 +149,8 @@ export function StatPill({ value, label, color = 'stone' }) {
   );
 }
 
-// ── Patient Bottom Nav ────────────────────────────────────────────────────────
-export function PatientBottomNav() {
+// ── Member Bottom Nav ────────────────────────────────────────────────────────
+export function MemberBottomNav() {
   const navigate = useNavigate();
   // Shared AI chat store — the chat itself is mounted once on the Today page,
   // so from anywhere else we navigate there first and it opens on arrival.
@@ -231,7 +231,7 @@ export function BottomNav({ role }) {
   const navigate = useNavigate?.() ?? null;
   const pathname = useLocation?.()?.pathname ?? '';
   const tabs = [
-    { label: 'Patients', path: '/monitor', active: pathname.startsWith('/monitor'), roles: ['monitor', 'admin'], icon: (
+    { label: 'Members', path: '/coach', active: pathname.startsWith('/coach'), roles: ['monitor', 'admin'], icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
     )},
     { label: 'Admin', path: '/admin', active: pathname === '/admin', roles: ['admin'], icon: (

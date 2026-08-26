@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useOfflineSync } from './hooks/useOfflineQueue';
 import { useAuthStore } from './store/authStore';
@@ -9,13 +9,19 @@ import Login          from './pages/Login';
 import DailyLog       from './pages/DailyLog';
 import Progress       from './pages/Progress';
 import Profile        from './pages/Profile';
-import Monitor        from './pages/Monitor';
-import PatientList    from './pages/PatientList';
+import Coach        from './pages/Monitor';
+import MemberList    from './pages/PatientList';
 import Settings       from './pages/Settings';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminFoods     from './pages/AdminFoods';
 import DeviceConnect  from './pages/DeviceConnect';
 import Onboarding     from './components/Onboarding';
+
+// Preserves the member id when redirecting an old /monitor/:id link to /coach/:id.
+function LegacyMonitorRedirect() {
+  const { memberId } = useParams();
+  return <Navigate to={`/coach/${memberId}`} replace />;
+}
 
 function PrivateRoute({ children, roles }) {
   const { user, isRestoring } = useAuthStore();
@@ -28,7 +34,7 @@ function PrivateRoute({ children, roles }) {
   }
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'patient' ? '/' : '/monitor'} replace />;
+    return <Navigate to={user.role === 'patient' ? '/' : '/coach'} replace />;
   }
   return children;
 }
@@ -56,7 +62,7 @@ export default function App() {
   const { user } = useAuthStore();
   useOfflineSync();
 
-  // Show onboarding for logged-in patients who haven't completed it
+  // Show onboarding for logged-in members who haven't completed it
   if (user?.role === 'patient' && !onboardingDone) {
     return <Onboarding />;
   }
@@ -68,14 +74,19 @@ export default function App() {
         <Route path="/" element={<PrivateRoute roles={['patient']}><DailyLog /></PrivateRoute>} />
         <Route path="/progress" element={<PrivateRoute roles={['patient']}><Progress /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute roles={['patient']}><Profile /></PrivateRoute>} />
-        <Route path="/monitor" element={<PrivateRoute roles={['monitor','admin']}><PatientList /></PrivateRoute>} />
-        <Route path="/monitor/:patientId" element={<PrivateRoute roles={['monitor','admin']}><Monitor /></PrivateRoute>} />
+        <Route path="/coach" element={<PrivateRoute roles={['monitor','admin']}><MemberList /></PrivateRoute>} />
+        <Route path="/coach/:memberId" element={<PrivateRoute roles={['monitor','admin']}><Coach /></PrivateRoute>} />
+        {/* Legacy /monitor URLs — bookmarks, PWA shortcuts and links inside old
+            coach notes still point here. Redirect rather than 404. Safe to drop
+            once the coach team confirms no saved links remain. */}
+        <Route path="/monitor" element={<Navigate to="/coach" replace />} />
+        <Route path="/monitor/:memberId" element={<LegacyMonitorRedirect />} />
         <Route path="/admin" element={<PrivateRoute roles={['admin']}><AdminDashboard /></PrivateRoute>} />
         <Route path="/admin/foods" element={<PrivateRoute roles={['admin']}><AdminFoods /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
         <Route path="/devices" element={<PrivateRoute><DeviceConnect /></PrivateRoute>} />
         <Route path="*" element={
-          <Navigate to={!user ? '/login' : user.role === 'patient' ? '/' : user.role === 'admin' ? '/admin' : '/monitor'} replace />
+          <Navigate to={!user ? '/login' : user.role === 'patient' ? '/' : user.role === 'admin' ? '/admin' : '/coach'} replace />
         } />
       </Routes>
     </BrowserRouter>

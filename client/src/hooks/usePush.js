@@ -19,14 +19,14 @@ function urlBase64ToUint8Array(base64String) {
  *  - The user denies notification permission
  *  - A subscription is already registered
  *
- * Call this hook in DailyLog (patient) so it runs when the app first opens.
+ * Call this hook in DailyLog (member) so it runs when the app first opens.
  */
 export function usePush() {
   const { user }     = useAuthStore();
   const attempted    = useRef(false);
 
   useEffect(() => {
-    // Only run once per mount, only for patients, only if SW + Push are supported
+    // Only run once per mount, only for members, only if SW + Push are supported
     if (attempted.current)            return;
     if (!user)                        return;
     if (!('serviceWorker' in navigator)) return;

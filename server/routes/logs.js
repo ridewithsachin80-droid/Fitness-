@@ -124,7 +124,7 @@ router.get('/range/:from/:to', authMW, async (req, res) => {
           [req.user.id, patientId]
         );
         if (!linkCheck.rows.length) {
-          return res.status(403).json({ error: 'Patient not assigned to you' });
+          return res.status(403).json({ error: 'Member not assigned to you' });
         }
       }
     }
@@ -165,7 +165,7 @@ router.get('/:date', authMW, async (req, res) => {
     } else {
       patientId = req.query.patientId;
       if (!patientId) {
-        return res.status(400).json({ error: 'patientId query param required for monitors' });
+        return res.status(400).json({ error: 'memberId query param required for coaches' });
       }
       // Monitors can only access their assigned patients — admins bypass.
       // (Same check the /range/:from/:to route above already does correctly;
@@ -177,7 +177,7 @@ router.get('/:date', authMW, async (req, res) => {
           [req.user.id, patientId]
         );
         if (!linkCheck.rows.length) {
-          return res.status(403).json({ error: 'Patient not assigned to you' });
+          return res.status(403).json({ error: 'Member not assigned to you' });
         }
       }
     }

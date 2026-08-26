@@ -9,9 +9,9 @@
  *   - Recency   — days since each group was last trained at all (catches
  *                 genuinely stale groups, not just "not done today")
  *
- * Used for both the patient's own view (no patientId prop) and the coach's
- * view of any patient (patientId prop) — same component, same data shape,
- * just a different effective patient on the server side.
+ * Used for both the member's own view (no memberId prop) and the coach's
+ * view of any member (memberId prop) — same component, same data shape,
+ * just a different effective member on the server side.
  */
 import { useState, useEffect } from 'react';
 import { Card, SectionTitle, CardSkeleton } from './UI';
@@ -62,7 +62,7 @@ const STATUS_DOT = {
   stale: 'bg-[#3a3a46]',
 };
 
-export default function MuscleCoverage({ patientId, refreshTick = 0 }) {
+export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]       = useState('sessions'); // 'sessions' | 'volume' | 'recency'
@@ -70,12 +70,12 @@ export default function MuscleCoverage({ patientId, refreshTick = 0 }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getMuscleCoverage(getToday(), patientId)
+    getMuscleCoverage(getToday(), memberId)
       .then(({ data }) => !cancelled && setData(data))
       .catch(() => !cancelled && setData(null))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [patientId, refreshTick]);
+  }, [memberId, refreshTick]);
 
   if (loading) return <Card><CardSkeleton lines={2} /></Card>;
   if (!data?.groups) return null;

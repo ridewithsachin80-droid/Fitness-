@@ -1,3 +1,12 @@
+// ── Role values ───────────────────────────────────────────────────────────────
+// These strings are the DB values in users.role and are NOT renamed by the
+// member/coach terminology change. The UI says "member" and "coach"; the
+// database still stores 'patient' and 'monitor'. Changing these requires a
+// migration plus a CHECK-constraint update on users.role — see RENAME.md.
+export const ROLE_MEMBER = 'patient';
+export const ROLE_COACH  = 'monitor';
+export const ROLE_ADMIN  = 'admin';
+
 // ── Activities (6 total) ─────────────────────────────────────────────────────
 export const ACTIVITIES = [
   { id: 'walk',       label: 'Morning Walk',        sub: '30 min · 6:30–7:00 AM',             icon: '🚶', met: 3.5, durationMin: 30 },
@@ -31,7 +40,7 @@ export const SUPPLEMENTS = [
 // table existed. All new food entries from DB search / AI search include per_100g
 // directly on the item object, so getNutrition() is only called as a safety net.
 // TODO: Remove NUTRITION_DB, getNutrition, and their imports from DailyLog.jsx,
-//       Monitor.jsx, and FoodLog.jsx once you confirm no old logs lack per_100g.
+//       Coach.jsx, and FoodLog.jsx once you confirm no old logs lack per_100g.
 // { cal: kcal, pro: protein g, carb: carbs g, fat: fat g }
 export const NUTRITION_DB = {
   'Epigamia Greek Yoghurt':   { cal: 73,  pro: 6.5, carb: 5.0, fat: 2.8 },
@@ -129,7 +138,7 @@ export const calcCompliance = (log, acts = ACTIVITIES, acvList = ACV_ITEMS, supp
 };
 
 // ── Sprint 5: Full RDA Targets (female, 60yr, Indian baseline) ───────────────
-// Admin can override any value per member via rda_overrides in patient_profiles.
+// Admin can override any value per member via rda_overrides in member_profiles.
 export const RDA_TARGETS = {
   // ── Vitamins (14) ──
   vit_a:   { rda:700,   unit:'mcg', label:'Vitamin A',         icon:'🥕', tab:'vitamins' },

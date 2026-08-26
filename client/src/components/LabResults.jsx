@@ -2,8 +2,8 @@
  * LabResults.jsx — member-entered blood work, and what changed alongside it.
  *
  * Two modes:
- *   member (no patientId) — add results, see their own history and trends
- *   coach  (patientId)    — read-only view of the same analysis
+ *   member (no memberId) — add results, see their own history and trends
+ *   coach  (memberId)    — read-only view of the same analysis
  *
  * The framing is the important part. Between two blood tests a member changes
  * diet, supplements, training, weight and sleep at once, and the testing lab
@@ -37,8 +37,8 @@ const STATE_STYLE = {
   normal: 'text-emerald-300 bg-emerald-400/10 border-emerald-400/30',
 };
 
-export default function LabResults({ patientId = null, memberName = '' }) {
-  const isCoach = !!patientId;
+export default function LabResults({ memberId = null, memberName = '' }) {
+  const isCoach = !!memberId;
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding]   = useState(false);
@@ -58,8 +58,8 @@ export default function LabResults({ patientId = null, memberName = '' }) {
     setLoading(true);
     try {
       const [analysis, raw] = await Promise.all([
-        api.get(isCoach ? `/patients/${patientId}/lab-analysis` : '/patients/me/lab-analysis'),
-        api.get(isCoach ? `/patients/${patientId}` : '/patients/me/labs'),
+        api.get(isCoach ? `/members/${memberId}/lab-analysis` : '/members/me/lab-analysis'),
+        api.get(isCoach ? `/members/${memberId}` : '/members/me/labs'),
       ]);
       setData(analysis.data);
       // Both endpoints return the rows under `labs` — the coach one nested in
@@ -68,14 +68,14 @@ export default function LabResults({ patientId = null, memberName = '' }) {
     } catch {
       setError('Could not load results');
     } finally { setLoading(false); }
-  }, [patientId, isCoach]);
+  }, [memberId, isCoach]);
 
   useEffect(() => { load(); }, [load]);
 
   const generateInsight = async () => {
     setThinking(true); setInsight(null);
     try {
-      const { data } = await api.post(`/patients/${patientId}/lab-insight`);
+      const { data } = await api.post(`/members/${memberId}/lab-insight`);
       setInsight(data);
     } catch (err) {
       setInsight({ error: err.response?.data?.error || 'Could not generate the analysis' });
@@ -97,7 +97,7 @@ export default function LabResults({ patientId = null, memberName = '' }) {
     if (!usable.length) { setError('Add at least one result'); return; }
     setSaving(true); setError(null);
     try {
-      const { data } = await api.post('/patients/me/labs', {
+      const { data } = await api.post('/members/me/labs', {
         test_date: testDate, lab_name: labName || null, results: usable,
       });
       setNotice(data.notice);

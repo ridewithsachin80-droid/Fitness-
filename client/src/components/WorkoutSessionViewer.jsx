@@ -1,9 +1,9 @@
 /**
  * WorkoutSessionViewer.jsx
  *
- * Coach-facing, read-only. Shows whatever resistance training a patient
+ * Coach-facing, read-only. Shows whatever resistance training a member
  * actually logged on a given date — this was a real gap: Phases 1-4 built
- * patient logging, patient progress, and coach program *assignment*, but
+ * member logging, member progress, and coach program *assignment*, but
  * never wired "coach sees what was actually logged" into the existing Daily
  * Log detail view. The backend already supported this (GET /api/workouts
  * already accepts ?patient_id= with the proper assignment check) — it just
@@ -12,19 +12,19 @@
 import { useState, useEffect } from 'react';
 import { getWorkout } from '../api/workouts';
 
-export default function WorkoutSessionViewer({ patientId, date, refreshTick = 0 }) {
+export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getWorkout(date, patientId)
+    getWorkout(date, memberId)
       .then(({ data }) => !cancelled && setData(data))
       .catch(() => !cancelled && setData(null))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [date, patientId, refreshTick]);
+  }, [date, memberId, refreshTick]);
 
   if (loading) return null; // avoid a flash of "nothing logged" while this loads
   if (!data?.exercises?.length) return null; // nothing logged that day — say nothing rather than an empty box

@@ -126,7 +126,7 @@ function start() {
         const ackId = await createAckRecord(s.uid, s.type, new Date());
         if (ackId) {
           await sendReminder(s.uid, s.type, 0, ackId);
-          console.log(`📢 Reminder: ${s.type} → patient ${s.uid} at ${timeStr} IST`);
+          console.log(`📢 Reminder: ${s.type} → member ${s.uid} at ${timeStr} IST`);
         }
       }
 

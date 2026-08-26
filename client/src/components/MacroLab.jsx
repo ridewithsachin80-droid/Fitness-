@@ -22,7 +22,7 @@ const STATUS_STYLE = {
   incomplete:    'bg-white/[0.03] border-white/[0.10] text-[#9EA3B0]',
 };
 
-export default function MacroLab({ patientId, onChanged }) {
+export default function MacroLab({ memberId, onChanged }) {
   const [adh, setAdh]         = useState(null);
   const [trial, setTrial]     = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,8 +34,8 @@ export default function MacroLab({ patientId, onChanged }) {
     setLoading(true);
     try {
       const [a, t] = await Promise.all([
-        api.get(`/patients/${patientId}/adherence`),
-        api.get(`/patients/${patientId}/trial`),
+        api.get(`/members/${memberId}/adherence`),
+        api.get(`/members/${memberId}/trial`),
       ]);
       setAdh(a.data);
       setTrial(t.data);
@@ -44,7 +44,7 @@ export default function MacroLab({ patientId, onChanged }) {
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [memberId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -68,7 +68,7 @@ export default function MacroLab({ patientId, onChanged }) {
   const start = async () => {
     setBusy(true);
     try {
-      await api.post(`/patients/${patientId}/trial`, {
+      await api.post(`/members/${memberId}/trial`, {
         arm_a: setup.a, arm_b: setup.b,
         arm_days: setup.arm_days, washout_days: setup.washout_days,
       });
@@ -83,7 +83,7 @@ export default function MacroLab({ patientId, onChanged }) {
   const advance = async () => {
     setBusy(true);
     try {
-      await api.post(`/patients/${patientId}/trial/advance`);
+      await api.post(`/members/${memberId}/trial/advance`);
       await load();
       onChanged?.();
     } catch (err) {

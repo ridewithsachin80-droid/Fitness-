@@ -36,7 +36,7 @@ export default function MessageMember({ member, summary = null, initialText = nu
     let cancelled = false;
     setLoadingGaps(true);
     setText('');
-    api.get(`/patients/${member.id}/gaps`)
+    api.get(`/members/${member.id}/gaps`)
       .then(({ data }) => {
         if (cancelled) return;
         setText(combinedGapMessage(
@@ -61,7 +61,7 @@ export default function MessageMember({ member, summary = null, initialText = nu
   const record = async (via) => {
     if (!saveNote) return;
     try {
-      await api.post(`/patients/${member.id}/notes`, {
+      await api.post(`/members/${member.id}/notes`, {
         note: text,
         note_date: new Date().toISOString().slice(0, 10),
         flagged: false,

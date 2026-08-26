@@ -12,7 +12,7 @@
  * applies everything through the server — protocol updates, coach messages
  * (monitor_notes), and push notifications. Every apply is audit-logged.
  *
- * Mount ONCE per page (AdminDashboard / Monitor do this). Open with:
+ * Mount ONCE per page (AdminDashboard / Coach do this). Open with:
  *   import { useCoachAI } from '../components/CoachAIChat';
  *   const openChat = useCoachAI(s => s.openChat);
  */

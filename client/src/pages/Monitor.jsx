@@ -4,9 +4,9 @@ import {
   LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts';
-import { getPatient } from '../api/logs';
+import { getMember } from '../api/logs';
 import { addLabValue } from '../api/logs';
-import { setMemberPin, addNote, logWeightForPatient } from '../api/logs';
+import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
@@ -99,7 +99,7 @@ function WeightTooltip({ active, payload, label }) {
 }
 
 // ── Add lab value modal ───────────────────────────────────────────────────────
-function AddLabModal({ patientId, onClose, onAdded }) {
+function AddLabModal({ memberId, onClose, onAdded }) {
   const [form, setForm] = useState({
     test_date: (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })(),
     test_name: '', value: '', unit: '', ref_min: '', ref_max: '',
@@ -115,7 +115,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
     }
     setSaving(true);
     try {
-      const { data } = await addLabValue(patientId, form);
+      const { data } = await addLabValue(memberId, form);
       onAdded(data);
       onClose();
     } catch (e) {
@@ -157,7 +157,7 @@ function AddLabModal({ patientId, onClose, onAdded }) {
 }
 
 // ── Set PIN modal (Sprint 8) ──────────────────────────────────────────────────
-function SetPinModal({ patientId, patientName, onClose, onSaved }) {
+function SetPinModal({ memberId, memberName, onClose, onSaved }) {
   const [pin,     setPin]     = useState('');
   const [confirm, setConfirm] = useState('');
   const [show,    setShow]    = useState(false);
@@ -170,7 +170,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
     if (pin !== confirm)    { setError('PINs do not match'); return; }
     setSaving(true); setError('');
     try {
-      await setMemberPin(patientId, pin);
+      await setMemberPin(memberId, pin);
       setSuccess(true);
       setTimeout(() => { onSaved(); onClose(); }, 1200);
     } catch (e) {
@@ -185,7 +185,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
         <div className="flex items-center justify-between mb-1">
           <div>
             <h3 className="font-bold text-stone-800">Set Login PIN</h3>
-            <p className="text-xs text-stone-400 mt-0.5">{patientName}</p>
+            <p className="text-xs text-stone-400 mt-0.5">{memberName}</p>
           </div>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
         </div>
@@ -235,7 +235,7 @@ function SetPinModal({ patientId, patientName, onClose, onSaved }) {
 }
 
 // ── Add Note modal (Sprint 9) ─────────────────────────────────────────────────
-function AddNoteModal({ patientId, onClose, onAdded }) {
+function AddNoteModal({ memberId, onClose, onAdded }) {
   const today = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
   const [form,    setForm]    = useState({ note_date: today, note: '', flagged: false });
   const [saving,  setSaving]  = useState(false);
@@ -247,7 +247,7 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
     if (!form.note.trim()) { setError('Note cannot be empty'); return; }
     setSaving(true); setError('');
     try {
-      const { data } = await addNote(patientId, form);
+      const { data } = await addNote(memberId, form);
       onAdded(data);
       onClose();
     } catch (e) {
@@ -302,7 +302,7 @@ function AddNoteModal({ patientId, onClose, onAdded }) {
 }
 
 // ── Weight Entry modal (Sprint 11) ───────────────────────────────────────────
-function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
+function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
   const todayStr = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
   const [date,    setDate]    = useState(todayStr);
   const [weight,  setWeight]  = useState('');
@@ -318,7 +318,7 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
     }
     setSaving(true); setError('');
     try {
-      const { data } = await logWeightForPatient(patientId, date, w);
+      const { data } = await logWeightForMember(memberId, date, w);
       setSuccess(true);
       setTimeout(() => { onSaved(data.log); onClose(); }, 1000);
     } catch (e) {
@@ -333,7 +333,7 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-bold text-stone-800">Log Weight</h3>
-            <p className="text-xs text-stone-400 mt-0.5">{patientName}</p>
+            <p className="text-xs text-stone-400 mt-0.5">{memberName}</p>
           </div>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
         </div>
@@ -380,9 +380,9 @@ function WeightEntryModal({ patientId, patientName, onClose, onSaved }) {
   );
 }
 
-// ── Monitor page ──────────────────────────────────────────────────────────────
-export default function Monitor() {
-  const { patientId } = useParams();
+// ── Coach page ──────────────────────────────────────────────────────────────
+export default function Coach() {
+  const { memberId } = useParams();
   const navigate      = useNavigate();
   const { user }      = useAuthStore();
   const [data,          setData]      = useState(null);
@@ -401,11 +401,11 @@ export default function Monitor() {
   const [selectedLog,   setSelectedLog] = useState(null); // compliance chart drill-down
   const [viewDate,      setViewDate]    = useState(null); // selected date in log viewer
 
-  // Load the patient's active workout program summary for the new card below
+  // Load the member's active workout program summary for the new card below
   useEffect(() => {
-    if (!patientId) return;
-    getActiveProgram(patientId).then(({ data }) => setActiveProgram(data.program ? data : null)).catch(() => setActiveProgram(null));
-  }, [patientId, showProgramBuilder]); // re-fetch after the builder closes (showProgramBuilder flips false→true→false)
+    if (!memberId) return;
+    getActiveProgram(memberId).then(({ data }) => setActiveProgram(data.program ? data : null)).catch(() => setActiveProgram(null));
+  }, [memberId, showProgramBuilder]); // re-fetch after the builder closes (showProgramBuilder flips false→true→false)
 
   // Sprint 13: open a print-ready report in a new tab
   const printReport = () => {
@@ -492,7 +492,7 @@ export default function Monitor() {
       <strong>${new Date(n.note_date+'T00:00:00').toLocaleDateString('en-IN')}</strong>
       ${n.flagged ? ' 🚩' : ''} — ${n.note}</div>`).join('')}` : ''}
 
-    <div class="footer"><span>FitLife Health Monitor</span><span>Confidential — for clinical use only</span></div>
+    <div class="footer"><span>FitLife Health Coach</span><span>Confidential — for clinical use only</span></div>
     <script>window.onload=()=>window.print()</script></body></html>`;
 
     const win = window.open('', '_blank');
@@ -501,30 +501,30 @@ export default function Monitor() {
 
   const load = useCallback(async () => {
     try {
-      const { data: res } = await getPatient(patientId);
+      const { data: res } = await getMember(memberId);
       setData(res);
     } catch (e) {
-      console.error('Failed to load patient', e);
+      console.error('Failed to load member', e);
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [memberId]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Real-time: reload when this patient saves a new log
+  // Real-time: reload when this member saves a new log
   // Guard: don't fire concurrent re-fetches on rapid socket events
   const reloadTimer = useRef(null);
   const [workoutTick, setWorkoutTick] = useState(0); // bumped on workout_updated, passed to workout child components so they refetch
   useSync(
     (update) => {
-      if (String(update.patientId) === String(patientId)) {
+      if (String(update.memberId) === String(memberId)) {
         clearTimeout(reloadTimer.current);
         reloadTimer.current = setTimeout(() => load(), 400); // debounce 400ms
       }
     },
     (update) => {
-      if (String(update.patientId) === String(patientId)) {
+      if (String(update.memberId) === String(memberId)) {
         setWorkoutTick(t => t + 1);
       }
     }
@@ -534,8 +534,8 @@ export default function Monitor() {
   if (!data)   return (
     <div className="min-h-screen bg-[#121316] flex items-center justify-center p-4">
       <div className="text-center">
-        <p className="text-[#9EA3B0] mb-4">Patient not found or not assigned to you.</p>
-        <button onClick={() => navigate('/monitor')} className="text-[#D4AF37] font-semibold">← Back</button>
+        <p className="text-[#9EA3B0] mb-4">Member not found or not assigned to you.</p>
+        <button onClick={() => navigate('/coach')} className="text-[#D4AF37] font-semibold">← Back</button>
       </div>
     </div>
   );
@@ -640,7 +640,7 @@ export default function Monitor() {
       {/* Header */}
       <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
-          <BackButton onClick={() => navigate('/monitor')} label="All patients" />
+          <BackButton onClick={() => navigate('/coach')} label="All members" />
           <div className="mt-3 flex items-start justify-between">
             <div>
               <h1 className="font-display text-xl font-medium">{profile.name}</h1>
@@ -963,7 +963,7 @@ export default function Monitor() {
                       })}
                     </div>
 
-                    <WorkoutSessionViewer patientId={parseInt(patientId)} date={activeDate} refreshTick={workoutTick} />
+                    <WorkoutSessionViewer memberId={parseInt(memberId)} date={activeDate} refreshTick={workoutTick} />
 
                     {/* Key nutrients collapsible */}
                     {(log.food_items || []).some(f => f.per_100g) && (() => {
@@ -1176,7 +1176,7 @@ export default function Monitor() {
         <Card>
           <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
           <div className="mt-2">
-            <MetabolicInsight patientId={parseInt(patientId)} canApply onApplied={load} />
+            <MetabolicInsight memberId={parseInt(memberId)} canApply onApplied={load} />
           </div>
         </Card>
 
@@ -1184,7 +1184,7 @@ export default function Monitor() {
         <Card>
           <SectionTitle icon="🩸">Lab Results</SectionTitle>
           <div className="mt-2">
-            <LabResults patientId={parseInt(patientId)} memberName={data?.profile?.name || ''} />
+            <LabResults memberId={parseInt(memberId)} memberName={data?.profile?.name || ''} />
           </div>
         </Card>
 
@@ -1193,7 +1193,7 @@ export default function Monitor() {
         <Card>
           <SectionTitle icon="🔬">Macro Lab</SectionTitle>
           <div className="mt-2">
-            <MacroLab patientId={parseInt(patientId)} onChanged={load} />
+            <MacroLab memberId={parseInt(memberId)} onChanged={load} />
           </div>
         </Card>
 
@@ -1203,7 +1203,7 @@ export default function Monitor() {
           <SectionTitle icon="🔥">Training Summary</SectionTitle>
           <div className="mt-2">
             <TrainingSummary
-              patientId={parseInt(patientId)}
+              memberId={parseInt(memberId)}
               bodyWeightKg={weightData.length ? weightData[weightData.length - 1].weight : (parseFloat(data?.profile?.start_weight) || 0)}
               refreshTick={workoutTick}
             />
@@ -1240,7 +1240,7 @@ export default function Monitor() {
           )}
         </Card>
 
-        <MuscleCoverage patientId={parseInt(patientId)} refreshTick={workoutTick} />
+        <MuscleCoverage memberId={parseInt(memberId)} refreshTick={workoutTick} />
 
         {/* Lab values */}
         <Card>
@@ -1502,7 +1502,7 @@ export default function Monitor() {
       {/* Add lab modal */}
       {showLabForm && (
         <AddLabModal
-          patientId={patientId}
+          memberId={memberId}
           onClose={() => setShowLab(false)}
           onAdded={(newLab) => setData(d => ({ ...d, labs: [newLab, ...d.labs] }))}
         />
@@ -1511,8 +1511,8 @@ export default function Monitor() {
       {/* Sprint 8: Set PIN modal */}
       {showPinForm && (
         <SetPinModal
-          patientId={patientId}
-          patientName={profile.name}
+          memberId={memberId}
+          memberName={profile.name}
           onClose={() => setShowPin(false)}
           onSaved={() => setData(d => ({ ...d, profile: { ...d.profile, has_pin: true } }))}
         />
@@ -1521,7 +1521,7 @@ export default function Monitor() {
       {/* Sprint 9: Add note modal */}
       {showNoteForm && (
         <AddNoteModal
-          patientId={patientId}
+          memberId={memberId}
           onClose={() => setShowNote(false)}
           onAdded={(newNote) => setData(d => ({ ...d, notes: [newNote, ...(d.notes || [])] }))}
         />
@@ -1530,8 +1530,8 @@ export default function Monitor() {
       {/* Phase 2: Workout program builder */}
       {showProgramBuilder && (
         <ProgramBuilderModal
-          patientId={parseInt(patientId)}
-          patientName={profile.name}
+          memberId={parseInt(memberId)}
+          memberName={profile.name}
           onClose={() => setShowProgramBuilder(false)}
           onSaved={() => {}}
         />
@@ -1540,8 +1540,8 @@ export default function Monitor() {
       {/* Sprint 11: Weight entry modal */}
       {showWeightForm && (
         <WeightEntryModal
-          patientId={patientId}
-          patientName={profile.name}
+          memberId={memberId}
+          memberName={profile.name}
           onClose={() => setShowWeight(false)}
           onSaved={(log) => {
             setData(d => ({
@@ -1556,7 +1556,7 @@ export default function Monitor() {
 
       {/* Compose sheet — reloads on close so a saved copy appears in notes */}
       <MessageMember
-        member={{ id: parseInt(patientId), name: data?.profile?.name, phone: data?.profile?.phone }}
+        member={{ id: parseInt(memberId), name: data?.profile?.name, phone: data?.profile?.phone }}
         open={msgOpen}
         onClose={() => { setMsgOpen(false); load(); }}
       />

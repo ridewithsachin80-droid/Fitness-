@@ -3,23 +3,23 @@ import { io }               from 'socket.io-client';
 import { useAuthStore }     from '../store/authStore';
 
 // Singleton socket — shared across hook instances so we don't open
-// multiple connections if both PatientList and Monitor mount together.
+// multiple connections if both MemberList and Coach mount together.
 let socket = null;
 
 /**
  * Connects to the Socket.io server and listens for log_updated and
  * workout_updated events.
  *
- * Monitor usage:
+ * Coach usage:
  *   useSync((update) => { ... })                       // log_updated only
  *   useSync((update) => { ... }, (update) => { ... })   // + workout_updated
  *
- * Patient usage:
+ * Member usage:
  *   useSync()  // just joins their own room (push ack)
  *
  * Rooms:
- *   monitor_${monitorId}  — monitor sees updates for any of their patients
- *   user_${patientId}     — patient's own room
+ *   monitor_${coachId}  — coach sees updates for any of their members
+ *   user_${memberId}     — member's own room
  */
 export function useSync(onLogUpdated, onWorkoutUpdated) {
   const { user }            = useAuthStore();

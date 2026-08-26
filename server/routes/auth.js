@@ -128,7 +128,7 @@ router.post('/pin-login', async (req, res) => {
 
     const isValid = await bcrypt.compare(pin, user.password);
     if (!isValid) {
-      return res.status(401).json({ error: 'Incorrect PIN. Contact your monitor to reset.' });
+      return res.status(401).json({ error: 'Incorrect PIN. Contact your coach to reset.' });
     }
 
     // Successful login — clear the rate-limit counter for this IP

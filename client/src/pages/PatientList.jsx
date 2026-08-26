@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { getPatients }  from '../api/logs';
+import { getMembers }  from '../api/logs';
 import { today, formatDate } from '../constants';
 import { OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
@@ -20,10 +20,10 @@ function weightDelta(current, start) {
   return delta;
 }
 
-export default function PatientList() {
+export default function MemberList() {
   const navigate       = useNavigate();
   const { user, logout } = useAuthStore();
-  const [patients, setPatients] = useState([]);
+  const [members, setMembers] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error,   setError]     = useState('');
   const [search,  setSearch]    = useState('');
@@ -31,15 +31,15 @@ export default function PatientList() {
 
   const load = async () => {
     try {
-      const { data } = await getPatients();
+      const { data } = await getMembers();
       // Normalise date fields to YYYY-MM-DD regardless of how pg serialises them
-      setPatients((data || []).map(p => ({
+      setMembers((data || []).map(p => ({
         ...p,
         last_logged: p.last_logged ? String(p.last_logged).slice(0, 10) : null,
         last_workout: p.last_workout ? String(p.last_workout).slice(0, 10) : null,
       })));
     } catch (e) {
-      setError('Failed to load patients');
+      setError('Failed to load members');
     } finally {
       setLoading(false);
     }
@@ -47,18 +47,18 @@ export default function PatientList() {
 
   useEffect(() => { load(); }, []);
 
-  // Real-time: when a patient saves a log, update their card live
+  // Real-time: when a member saves a log, update their card live
   useSync(
     (update) => {
-      setPatients(prev => prev.map(p =>
-        p.id === update.patientId
+      setMembers(prev => prev.map(p =>
+        p.id === update.memberId
           ? { ...p, last_compliance: update.compliance, latest_weight: update.weight_kg, last_logged: update.date }
           : p
       ));
     },
     (update) => {
-      setPatients(prev => prev.map(p =>
-        p.id === update.patientId ? { ...p, last_workout: update.date } : p
+      setMembers(prev => prev.map(p =>
+        p.id === update.memberId ? { ...p, last_workout: update.date } : p
       ));
     }
   );
@@ -68,10 +68,10 @@ export default function PatientList() {
   if (loading) return <PageLoader />;
 
   const baseList = search.trim()
-    ? patients.filter(p =>
+    ? members.filter(p =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.phone || '').includes(search))
-    : patients;
+    : members;
 
   const filtered = (() => {
     if (filter === 'needs_attention') return baseList.filter(p => p.last_logged !== todayStr);
@@ -92,9 +92,9 @@ export default function PatientList() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold tracking-widest uppercase text-[#4e4e5c] mb-0.5">Monitor</p>
+              <p className="text-xs font-bold tracking-widest uppercase text-[#4e4e5c] mb-0.5">Coach</p>
               <h1 className="font-display text-xl font-medium">{user?.name}</h1>
-              <p className="text-[#4e4e5c] text-xs mt-0.5">{patients.length} patient{patients.length !== 1 ? 's' : ''} assigned</p>
+              <p className="text-[#4e4e5c] text-xs mt-0.5">{members.length} member{members.length !== 1 ? 's' : ''} assigned</p>
             </div>
             <button onClick={() => navigate('/settings')}
               className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
@@ -110,7 +110,7 @@ export default function PatientList() {
             {[
               { label: 'Logged today', value: loggedToday.length, color: 'text-emerald-400' },
               { label: 'Pending',      value: noLogToday.length,  color: noLogToday.length > 0 ? 'text-red-400' : 'text-[#4e4e5c]' },
-              { label: 'Total',        value: patients.length,    color: 'text-stone-300' },
+              { label: 'Total',        value: members.length,    color: 'text-stone-300' },
             ].map(stat => (
               <div key={stat.label} className="bg-white/[0.05] rounded-xl py-2.5 text-center border border-white/[0.06]">
                 <div className={`font-display text-xl font-semibold ${stat.color}`}>{stat.value}</div>
@@ -121,14 +121,14 @@ export default function PatientList() {
         </div>
       </div>
 
-      {/* Patient cards */}
+      {/* Member cards */}
       <div className="max-w-md mx-auto px-4 pt-4 pb-8 space-y-3">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
         )}
 
         {/* Sprint 9: Search bar */}
-        {patients.length > 0 && (
+        {members.length > 0 && (
           <div className="relative">
             <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4e4e5c]"
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -151,13 +151,13 @@ export default function PatientList() {
         )}
 
         {/* Filter chips */}
-        {patients.length > 0 && (
+        {members.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
             {[
-              { id: 'all',              label: 'All',              count: patients.length },
-              { id: 'needs_attention',  label: '⚠ No log today',   count: patients.filter(p => p.last_logged !== todayStr).length },
-              { id: 'low_compliance',   label: '📉 Low compliance', count: patients.filter(p => p.last_compliance != null && p.last_compliance < 50).length },
-              { id: 'no_pin',           label: '🔑 No PIN',         count: patients.filter(p => p.has_pin === false).length },
+              { id: 'all',              label: 'All',              count: members.length },
+              { id: 'needs_attention',  label: '⚠ No log today',   count: members.filter(p => p.last_logged !== todayStr).length },
+              { id: 'low_compliance',   label: '📉 Low compliance', count: members.filter(p => p.last_compliance != null && p.last_compliance < 50).length },
+              { id: 'no_pin',           label: '🔑 No PIN',         count: members.filter(p => p.has_pin === false).length },
             ].map(chip => (
               <button key={chip.id} onClick={() => setFilter(chip.id)}
                 className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-all whitespace-nowrap ${
@@ -179,7 +179,7 @@ export default function PatientList() {
         {filtered.length === 0 && !error && (
           <div className="text-center py-16 text-[#4e4e5c]">
             <div className="text-4xl mb-3">👥</div>
-            <p className="font-medium">{search ? `No patients matching "${search}"` : 'No patients assigned yet'}</p>
+            <p className="font-medium">{search ? `No members matching "${search}"` : 'No members assigned yet'}</p>
           </div>
         )}
 
@@ -189,7 +189,7 @@ export default function PatientList() {
             <p className="text-[10px] font-semibold text-red-400 uppercase tracking-[0.12em] mb-2 px-1">
               ⚠ No log today ({noLogToday.length})
             </p>
-            {noLogToday.map(p => <PatientCard key={p.id} patient={p} todayStr={todayStr} onClick={() => navigate(`/monitor/${p.id}`)} />)}
+            {noLogToday.map(p => <MemberCard key={p.id} member={p} todayStr={todayStr} onClick={() => navigate(`/coach/${p.id}`)} />)}
           </div>
         )}
 
@@ -200,7 +200,7 @@ export default function PatientList() {
                 ✓ Logged today ({loggedToday.length})
               </p>
             )}
-            {loggedToday.map(p => <PatientCard key={p.id} patient={p} todayStr={todayStr} onClick={() => navigate(`/monitor/${p.id}`)} />)}
+            {loggedToday.map(p => <MemberCard key={p.id} member={p} todayStr={todayStr} onClick={() => navigate(`/coach/${p.id}`)} />)}
           </div>
         )}
       </div>
@@ -213,7 +213,7 @@ export default function PatientList() {
   );
 }
 
-function PatientCard({ patient: p, todayStr, onClick }) {
+function MemberCard({ member: p, todayStr, onClick }) {
   const badge  = complianceBadge(p.last_compliance);
   const delta  = weightDelta(p.latest_weight, p.start_weight);
   const noLog  = p.last_logged !== todayStr;

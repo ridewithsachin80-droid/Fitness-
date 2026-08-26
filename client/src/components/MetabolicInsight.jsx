@@ -29,7 +29,7 @@ const NUTRIENT_LABEL = {
   omega3_ala: 'Omega-3 ALA',
 };
 
-export default function MetabolicInsight({ patientId = null, onApplied = null, canApply = false }) {
+export default function MetabolicInsight({ memberId = null, onApplied = null, canApply = false }) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -41,29 +41,29 @@ export default function MetabolicInsight({ patientId = null, onApplied = null, c
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.get(patientId ? `/patients/${patientId}/adaptive` : '/patients/me/adaptive')
+    api.get(memberId ? `/members/${memberId}/adaptive` : '/members/me/adaptive')
       .then(({ data }) => { if (!cancelled) setData(data); })
       .catch(() => { if (!cancelled) setError('Could not load the analysis'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     // The continuous model is coach-only, so only fetch it on that side
-    if (patientId) {
-      api.get(`/patients/${patientId}/model`)
+    if (memberId) {
+      api.get(`/members/${memberId}/model`)
         .then(({ data }) => { if (!cancelled) setModel(data); })
         .catch(() => {});
       // What the clinic as a whole has learned — a coach should be able to see
       // the correction their own members are building, not just its effect.
-      api.get('/patients/population/prior')
+      api.get('/members/population/prior')
         .then(({ data }) => { if (!cancelled) setPrior(data); })
         .catch(() => {});
     }
     return () => { cancelled = true; };
-  }, [patientId]);
+  }, [memberId]);
 
   const applyTargets = async () => {
-    if (!data?.targets || !patientId) return;
+    if (!data?.targets || !memberId) return;
     setApplying(true);
     try {
-      await api.put(`/admin/members/${patientId}`, {
+      await api.put(`/admin/members/${memberId}`, {
         macro_kcal: data.targets.kcal,
         macro_pro:  data.targets.protein_g,
         macro_carb: data.targets.carbs_g,
@@ -243,7 +243,7 @@ export default function MetabolicInsight({ patientId = null, onApplied = null, c
 
       {/* What all their natural variation implies, holding the other
           variables constant. Coach-only. */}
-      {patientId && model && (
+      {memberId && model && (
         <div className="border-t border-white/[0.06] pt-3 mt-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-2">
             What their history shows
@@ -301,7 +301,7 @@ export default function MetabolicInsight({ patientId = null, onApplied = null, c
       )}
 
       {/* Clinic-wide calibration, visible to the coach */}
-      {patientId && prior && (
+      {memberId && prior && (
         <div className="border-t border-white/[0.06] pt-3 mt-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-1.5">
             Across your members

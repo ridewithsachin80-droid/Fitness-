@@ -1,12 +1,12 @@
 /**
  * ProgramBuilderModal.jsx
  *
- * Coach-facing (monitor/admin) workout program builder. Lets a coach:
- *  - Quick-assign an existing shared template to this patient
+ * Coach-facing (coach/admin) workout program builder. Lets a coach:
+ *  - Quick-assign an existing shared template to this member
  *  - Or build/edit a multi-day program from scratch, picking exercises per
  *    day with target sets/reps
  *
- * Mirrors the modal style already used throughout Monitor.jsx (AddNoteModal,
+ * Mirrors the modal style already used throughout Coach.jsx (AddNoteModal,
  * WeightEntryModal, etc.) for visual consistency.
  */
 import { useState, useEffect } from 'react';
@@ -19,7 +19,7 @@ function emptyDay(n) {
   return { day_number: n, day_label: `Day ${n}`, exercises: [] };
 }
 
-export default function ProgramBuilderModal({ patientId, patientName, onClose, onSaved }) {
+export default function ProgramBuilderModal({ memberId, memberName, onClose, onSaved }) {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState('');
@@ -33,10 +33,10 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
 
-  // ── Load this patient's current program (if any) + the template list ──────
+  // ── Load this member's current program (if any) + the template list ──────
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getActiveProgram(patientId), getTemplates()])
+    Promise.all([getActiveProgram(memberId), getTemplates()])
       .then(([activeRes, templatesRes]) => {
         if (cancelled) return;
         setTemplates(templatesRes.data || []);
@@ -56,7 +56,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
       .catch(() => !cancelled && setError('Failed to load program data'))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [patientId]);
+  }, [memberId]);
 
   // ── Exercise search (for adding to the current day) ────────────────────────
   const runSearch = async (q) => {
@@ -116,7 +116,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
     setSaving(true); setError('');
     const payload = {
       name: programName.trim(),
-      patient_id: patientId,
+      patient_id: memberId,
       days: days.map(d => ({
         day_number: d.day_number, day_label: d.day_label,
         exercises: d.exercises.map(e => ({
@@ -143,7 +143,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
   const handleUseTemplate = async (templateId) => {
     setSaving(true); setError('');
     try {
-      await assignProgram(templateId, patientId);
+      await assignProgram(templateId, memberId);
       onSaved();
       onClose();
     } catch (e) {
@@ -154,7 +154,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
 
   const handleDelete = async () => {
     if (!existingProgramId) return;
-    if (!confirm(`Remove ${patientName}'s current program? They'll go back to freeform logging only.`)) return;
+    if (!confirm(`Remove ${memberName}'s current program? They'll go back to freeform logging only.`)) return;
     setSaving(true);
     try {
       await deleteProgram(existingProgramId);
@@ -178,7 +178,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-2">
       <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/[0.07] flex-shrink-0">
-          <h3 className="font-bold text-[#ededf0]">🏋️ {patientName}'s Program</h3>
+          <h3 className="font-bold text-[#ededf0]">🏋️ {memberName}'s Program</h3>
           <button onClick={onClose} className="text-[#5a5a68] hover:text-[#9a9aa6] text-2xl leading-none">×</button>
         </div>
 
@@ -283,7 +283,7 @@ export default function ProgramBuilderModal({ patientId, patientName, onClose, o
           </button>
           {existingProgramId && (
             <button onClick={handleDelete} disabled={saving} className="w-full py-2 text-xs text-red-400 hover:text-red-300">
-              Remove this patient's program
+              Remove this member's program
             </button>
           )}
         </div>

@@ -41,7 +41,7 @@ async function resolvePatientId(req, res) {
       [req.user.id, patientId]
     );
     if (!linkCheck.rows.length) {
-      res.status(403).json({ error: 'Patient not assigned to you' });
+      res.status(403).json({ error: 'Member not assigned to you' });
       return null;
     }
   }

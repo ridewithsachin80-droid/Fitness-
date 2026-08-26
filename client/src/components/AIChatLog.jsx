@@ -282,7 +282,7 @@ export default function AIChatLog() {
     if (!rows.length) return;
     setLabBusy(true);
     try {
-      const { data } = await api.post('/patients/me/labs', {
+      const { data } = await api.post('/members/me/labs', {
         test_date: m.lab.test_date,
         lab_name: m.lab.lab_name || null,
         results: rows.map(r => ({

@@ -37,7 +37,7 @@ export default function TodaysGaps() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/patients/gaps');
+      const { data } = await api.get('/members/gaps');
       setData(data);
     } catch {
       setData({ members: [], error: true });

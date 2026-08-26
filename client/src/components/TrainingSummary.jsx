@@ -1,12 +1,12 @@
 /**
  * TrainingSummary.jsx — coach-facing view of a member's training.
  *
- * The Monitor page already shows compliance, weight and a per-day session
+ * The Coach page already shows compliance, weight and a per-day session
  * viewer, but none of the data the member now generates: volume lifted, cardio
  * distance/speed, and calories burned. A coach reviewing someone had no way to
  * see "750 kg lifted, 5 km walked" without opening each day one at a time.
  *
- * Also used on the member's own Progress page (same data, no patientId).
+ * Also used on the member's own Progress page (same data, no memberId).
  */
 
 import { useState, useEffect } from 'react';
@@ -24,7 +24,7 @@ function fmtDate(d) {
     .toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-export default function TrainingSummary({ patientId = null, bodyWeightKg = 0, refreshTick = 0 }) {
+export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, refreshTick = 0 }) {
   const [days, setDays]       = useState(30);
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,13 +35,13 @@ export default function TrainingSummary({ patientId = null, bodyWeightKg = 0, re
     setLoading(true);
     setError(null);
     const params = { days };
-    if (patientId) params.patient_id = patientId;
+    if (memberId) params.patient_id = memberId;
     api.get('/workouts/summary', { params })
       .then(({ data }) => { if (!cancelled) setData(data); })
       .catch(() => { if (!cancelled) setError('Could not load training history'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [days, patientId, refreshTick]);
+  }, [days, memberId, refreshTick]);
 
   if (loading && !data) {
     return <p className="text-xs text-[#5a5a68] py-4 text-center">Loading training history…</p>;

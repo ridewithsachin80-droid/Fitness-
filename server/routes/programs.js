@@ -50,7 +50,7 @@ async function resolvePatientId(req, res, { required = true } = {}) {
       [req.user.id, patientId]
     );
     if (!linkCheck.rows.length) {
-      res.status(403).json({ error: 'Patient not assigned to you' });
+      res.status(403).json({ error: 'Member not assigned to you' });
       return undefined;
     }
   }
@@ -277,7 +277,7 @@ router.post('/:id/assign', async (req, res) => {
     const source = sourceRes.rows[0];
     if (!source) return res.status(404).json({ error: 'Program not found' });
     if (source.patient_id !== null) {
-      return res.status(400).json({ error: 'Can only assign templates (not a patient-specific program) — create a new program for one-off cases.' });
+      return res.status(400).json({ error: 'Can only assign templates (not a member-specific program) — create a new program for one-off cases.' });
     }
 
     const days = await loadProgramDays(source.id);

@@ -10,7 +10,7 @@ const path         = require('path');
 // ── Route imports ─────────────────────────────────────────────────────────────
 const authRoutes      = require('./routes/auth');
 const logRoutes       = require('./routes/logs');
-const patientRoutes   = require('./routes/patients');
+const memberRoutes    = require('./routes/patients'); // file keeps its name — see RENAME.md
 const notifRoutes     = require('./routes/notifications');
 const adminRoutes     = require('./routes/admin');
 const foodsRoutes     = require('./routes/foods');
@@ -53,7 +53,17 @@ app.use((req, res, next) => { req.io = io; next(); });
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
 app.use('/api/logs',          logRoutes);
-app.use('/api/patients',      patientRoutes);
+// Terminology: the product says "member" and "coach". The DB still stores
+// role='patient'/'monitor' and patient_id/monitor_id columns — renaming those
+// needs a migration, so this is a UI + API rename only.
+//
+// /api/members is the current path. /api/patients stays mounted because this is
+// a PWA: a member whose service worker has not updated yet is still running the
+// old bundle and will keep calling /api/patients until it refreshes. Removing
+// the alias on deploy day would break every stale client. Drop it once the
+// rollout has settled.
+app.use('/api/members',       memberRoutes);
+app.use('/api/patients',      memberRoutes); // legacy alias — see note above
 app.use('/api/notifications', notifRoutes);
 app.use('/api/reminders',     remindersRoutes);
 app.use('/api/admin',         adminRoutes);

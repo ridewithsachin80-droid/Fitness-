@@ -2,7 +2,7 @@
  * Progress.jsx — Sprint 6
  * Member-facing progress page: weight trend, compliance streak,
  * 30-day compliance chart, lab value highlights.
- * Accessible via /progress (patient route).
+ * Accessible via /progress (member route).
  */
 
 import { useState, useEffect } from 'react';
@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import { useAuthStore }  from '../store/authStore';
 import { getLogRange, getMyProfile }   from '../api/logs';
-import { Card, SectionTitle, PageLoader, PatientBottomNav } from '../components/UI';
+import { Card, SectionTitle, PageLoader, MemberBottomNav } from '../components/UI';
 import StrengthProgress from '../components/StrengthProgress';
 import MuscleCoverage from '../components/MuscleCoverage';
 import TrainingSummary from '../components/TrainingSummary';
@@ -650,7 +650,7 @@ export default function Progress() {
       </div>
 
       {selectedLog && <PastLogModal log={selectedLog} onClose={() => setSelectedLog(null)} />}
-      <PatientBottomNav />
+      <MemberBottomNav />
     </div>
   );
 }

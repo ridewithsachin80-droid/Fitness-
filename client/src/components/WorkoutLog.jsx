@@ -2,7 +2,7 @@
  * WorkoutLog.jsx
  *
  * Resistance Training — Phase 1 (freeform logging) + Phase 2 (coach-assigned
- * programs). If the patient has an active program, day tabs let them pull in
+ * programs). If the member has an active program, day tabs let them pull in
  * that day's prescribed exercises (with target sets/reps shown for context);
  * otherwise — or in addition — they can always search and log freeform.
  * Selecting a program day only ADDS exercises, never replaces what's already
@@ -153,7 +153,7 @@ export default function WorkoutLog({ date }) {
     return () => { cancelled = true; };
   }, [exercisesInSession, date, lastTimeByExerciseId]);
 
-  // ── Load the patient's active program once (not date-scoped — a program
+  // ── Load the member's active program once (not date-scoped — a program
   // stays assigned across days until the coach changes it) ──────────────────
   useEffect(() => {
     getActiveProgram().then(({ data }) => {

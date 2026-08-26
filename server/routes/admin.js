@@ -90,7 +90,8 @@ router.get('/stats', async (req, res) => {
     ]);
     res.json({
       members:      parseInt(members.rows[0].count),
-      monitors:     parseInt(monitors.rows[0].count),
+      coaches:      parseInt(monitors.rows[0].count),
+      monitors:     parseInt(monitors.rows[0].count), // legacy key — stale PWA bundles read this
       logsToday:    parseInt(logs.rows[0].count),
     });
   } catch (err) {
@@ -253,7 +254,7 @@ router.get('/members/:id', async (req, res) => {
 });
 
 // ── GET /api/admin/monitors ────────────────────────────────────────────────────
-router.get('/monitors', async (req, res) => {
+router.get(['/coaches', '/monitors'], async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id, u.name, u.email, u.role, u.active, u.created_at,
@@ -299,7 +300,7 @@ router.post('/members', async (req, res) => {
 
     await client.query('COMMIT');
     audit(req.user, 'member_created', user.id, user.name,
-      `Created member ${user.name} (${phone})${monitor_id ? ' and assigned to monitor' : ''}`);
+      `Created member ${user.name} (${phone})${monitor_id ? ' and assigned to coach' : ''}`);
     res.status(201).json({ id: user.id, name: user.name, phone: user.phone });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -312,10 +313,10 @@ router.post('/members', async (req, res) => {
 
 // ── POST /api/admin/monitors ───────────────────────────────────────────────────
 // Create a new monitor/trainer
-router.post('/monitors', async (req, res) => {
+router.post(['/coaches', '/monitors'], async (req, res) => {
   const { name, email, password, role: userRole = 'monitor' } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'name, email and password required' });
-  if (!['monitor','admin'].includes(userRole)) return res.status(400).json({ error: 'role must be monitor or admin' });
+  if (!['monitor','admin'].includes(userRole)) return res.status(400).json({ error: 'role must be coach or admin' });
 
   try {
     const hash = await bcrypt.hash(password, 12);
@@ -514,7 +515,7 @@ router.patch('/members/:id/toggle', async (req, res) => {
 });
 
 // ── PATCH /api/admin/monitors/:id/toggle ──────────────────────────────────────
-router.patch('/monitors/:id/toggle', async (req, res) => {
+router.patch(['/coaches/:id/toggle', '/monitors/:id/toggle'], async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE users SET active = NOT active WHERE id=$1 RETURNING id, name, active`,

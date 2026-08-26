@@ -9,7 +9,7 @@ import {
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
   calcCompliance, getNutrition, RDA_TARGETS,
 } from '../constants';
-import { Card, SectionTitle, OfflineBanner, PatientBottomNav } from '../components/UI';
+import { Card, SectionTitle, OfflineBanner, MemberBottomNav } from '../components/UI';
 import FoodLog       from '../components/FoodLog';
 import WorkoutLog    from '../components/WorkoutLog';
 import InstallPrompt from '../components/InstallPrompt';
@@ -732,7 +732,7 @@ export default function DailyLog() {
     if (!text) return;
     setReplyBusy(true);
     try {
-      await api.post('/patients/me/notes/reply', { note: text, reply_to: noteId });
+      await api.post('/members/me/notes/reply', { note: text, reply_to: noteId });
       setReplied(r => ({ ...r, [noteId]: true }));
       setReplyTo(null);
       setReplyText('');
@@ -751,7 +751,7 @@ export default function DailyLog() {
       ids.includes(n.id) ? { ...n, read_at: new Date().toISOString() } : n
     ));
     try {
-      await api.post('/patients/me/notes/read', { ids });
+      await api.post('/members/me/notes/read', { ids });
     } catch (err) {
       console.error('Failed to mark messages read:', err);
       // Roll back so the member doesn't silently lose a message
@@ -1812,7 +1812,7 @@ export default function DailyLog() {
         )}
       </div>
 
-      <PatientBottomNav />
+      <MemberBottomNav />
 
       {/* AI Chat — mounted once; opened from the FAB below or FoodLog banner */}
       <AIChatLog />

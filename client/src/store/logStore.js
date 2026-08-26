@@ -81,7 +81,7 @@ function mapServerLog(row) {
   };
 }
 
-/** Compute total assignable checkable items from the patient's protocol */
+/** Compute total assignable checkable items from the member's protocol */
 function computeProtocolTotal(protocol) {
   if (!protocol) return null;
   const acts  = protocol.activities  ? protocol.activities.length
@@ -99,9 +99,9 @@ function mapToServer(log, protocol) {
     weight_kg:      log.weight ? parseFloat(log.weight) : null,
     activities:     log.activities,
     acv:            log.acv,
-    // Explicitly preserve food_id and per_100g so Monitor can display nutrition
+    // Explicitly preserve food_id and per_100g so Coach can display nutrition
     // for foods added via the API search (Sprint 1+). Legacy items without
-    // per_100g fall back to getNutrition() in Monitor.
+    // per_100g fall back to getNutrition() in Coach.
     food_items:     (log.food || []).map(item => ({
       id:       item.id,
       name:     item.name,

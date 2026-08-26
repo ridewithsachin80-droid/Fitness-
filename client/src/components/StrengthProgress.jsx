@@ -93,7 +93,7 @@ export default function StrengthProgress() {
   const [loadingList, setLoadingList]     = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Load the list of exercises this patient has actually logged
+  // Load the list of exercises this member has actually logged
   useEffect(() => {
     let cancelled = false;
     getLoggedExercises()

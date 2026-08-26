@@ -86,8 +86,8 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
   );
 }
 
-// ── Monitor / Admin form ──────────────────────────────────────────────────────
-function MonitorForm({ email, password, loading, error, onEmail, onPassword, onLogin }) {
+// ── Coach / Admin form ──────────────────────────────────────────────────────
+function CoachForm({ email, password, loading, error, onEmail, onPassword, onLogin }) {
   const [showPw, setShowPw] = useState(false);
   return (
     <div className="space-y-4 fade-up">
@@ -154,12 +154,12 @@ export default function Login() {
     } finally { setLoading(false); }
   };
 
-  const monitorLogin = async () => {
+  const coachLogin = async () => {
     setLoading(true); setError('');
     try {
       const { data } = await axios.post('/api/auth/login', { email, password }, { withCredentials: true });
       login(data.accessToken, data.user);
-      navigate(data.user.role === 'admin' ? '/admin' : '/monitor');
+      navigate(data.user.role === 'admin' ? '/admin' : '/coach');
     } catch (e) {
       setError(e.response?.data?.error || 'Invalid email or password.');
     } finally { setLoading(false); }
@@ -231,8 +231,8 @@ export default function Login() {
               <PinForm phone={phone} pin={pin} showPin={showPin} loading={loading} error={error}
                 onPhone={setPhone} onPin={setPin} onTogglePin={() => setShowPin(s => !s)} onLogin={pinLogin} />
             ) : (
-              <MonitorForm email={email} password={password} loading={loading} error={error}
-                onEmail={setEmail} onPassword={setPassword} onLogin={monitorLogin} />
+              <CoachForm email={email} password={password} loading={loading} error={error}
+                onEmail={setEmail} onPassword={setPassword} onLogin={coachLogin} />
             )}
           </div>
         </div>

@@ -15,7 +15,7 @@ const DEFAULT_TIMES = {
   acv:      [],
 };
 
-export default function AdminReminders({ patients = [] }) {
+export default function AdminReminders({ members = [] }) {
   const [schedules, setSchedules]   = useState([]);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
@@ -25,32 +25,32 @@ export default function AdminReminders({ patients = [] }) {
   const [editing, setEditing]       = useState(null); // { patient_id, type, times, max_retries, retry_interval_min }
   const [newTime, setNewTime]       = useState('');
 
-  // Devices panel state — lazy-loaded per patient when expanded
+  // Devices panel state — lazy-loaded per member when expanded
   const [openDevicesFor, setOpenDevicesFor] = useState(null);
-  const [devices, setDevices]               = useState({}); // { [patientId]: [...subs] }
+  const [devices, setDevices]               = useState({}); // { [memberId]: [...subs] }
   const [devicesLoading, setDevicesLoading] = useState(false);
 
-  async function toggleDevices(patientId) {
-    if (openDevicesFor === patientId) { setOpenDevicesFor(null); return; }
-    setOpenDevicesFor(patientId);
-    if (!devices[patientId]) {
+  async function toggleDevices(memberId) {
+    if (openDevicesFor === memberId) { setOpenDevicesFor(null); return; }
+    setOpenDevicesFor(memberId);
+    if (!devices[memberId]) {
       setDevicesLoading(true);
       try {
-        const { data } = await api.get(`/reminders/subscriptions/${patientId}`);
-        setDevices(d => ({ ...d, [patientId]: data }));
+        const { data } = await api.get(`/reminders/subscriptions/${memberId}`);
+        setDevices(d => ({ ...d, [memberId]: data }));
       } catch {
-        setDevices(d => ({ ...d, [patientId]: [] }));
+        setDevices(d => ({ ...d, [memberId]: [] }));
       } finally {
         setDevicesLoading(false);
       }
     }
   }
 
-  async function removeDevice(patientId, subId) {
+  async function removeDevice(memberId, subId) {
     if (!confirm('Remove this device? It will stop receiving reminders.')) return;
     try {
       await api.delete(`/reminders/subscriptions/${subId}`);
-      setDevices(d => ({ ...d, [patientId]: d[patientId].filter(s => s.id !== subId) }));
+      setDevices(d => ({ ...d, [memberId]: d[memberId].filter(s => s.id !== subId) }));
     } catch {
       setMsg('Failed to remove device');
     }
@@ -69,13 +69,13 @@ export default function AdminReminders({ patients = [] }) {
 
   useEffect(() => { load(); }, [load]);
 
-  function startEdit(patientId, type) {
+  function startEdit(memberId, type) {
     const existing = schedules.find(
-      s => s.patient_id == patientId && s.type === type
+      s => s.patient_id == memberId && s.type === type
     );
     setEditing({
       id:                existing?.id,
-      patient_id:        patientId,
+      patient_id:        memberId,
       type,
       times:             existing?.times || DEFAULT_TIMES[type],
       max_retries:       existing?.max_retries ?? 3,
@@ -116,11 +116,11 @@ export default function AdminReminders({ patients = [] }) {
     load();
   }
 
-  async function sendTest(patientId, type) {
+  async function sendTest(memberId, type) {
     try {
-      const { data } = await api.post('/reminders/test', { patient_id: patientId, type });
+      const { data } = await api.post('/reminders/test', { patient_id: memberId, type });
       if (!data.deviceCount) {
-        setMsg(`⚠️ No active devices found for this patient — they won't receive anything until they open the app and allow notifications.`);
+        setMsg(`⚠️ No active devices found for this member — they won't receive anything until they open the app and allow notifications.`);
       } else {
         setMsg(`✅ Sent to ${data.deviceCount} device${data.deviceCount > 1 ? 's' : ''}: ${data.devices.filter(Boolean).join(', ') || 'unnamed device'}`);
       }
@@ -130,9 +130,9 @@ export default function AdminReminders({ patients = [] }) {
     }
   }
 
-  // Group existing schedules by patient
+  // Group existing schedules by member
   const globalSchedules  = schedules.filter(s => !s.patient_id);
-  const patientSchedules = schedules.filter(s =>  s.patient_id);
+  const memberSchedules = schedules.filter(s =>  s.patient_id);
 
   const cardStyle = {
     background: '#1a1a2e', border: '1px solid #2a2a3e',
@@ -172,8 +172,8 @@ export default function AdminReminders({ patients = [] }) {
             </h3>
             <p style={{ color: '#888', fontSize: 12, margin: '0 0 16px' }}>
               {editing.patient_id
-                ? `For: ${patients.find(p => p.id == editing.patient_id)?.name || 'Patient'}`
-                : 'Global — applies to all patients'}
+                ? `For: ${members.find(p => p.id == editing.patient_id)?.name || 'Member'}`
+                : 'Global — applies to all members'}
             </p>
 
             {/* Times list */}
@@ -230,7 +230,7 @@ export default function AdminReminders({ patients = [] }) {
       {/* ── Global Schedules ── */}
       <div style={cardStyle}>
         <div style={{ fontWeight: 700, marginBottom: 12, color: '#fff' }}>
-          🌐 Global Reminders <span style={{ fontSize: 12, color: '#888' }}>(all patients)</span>
+          🌐 Global Reminders <span style={{ fontSize: 12, color: '#888' }}>(all members)</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {TYPES.map(t => {
@@ -263,46 +263,46 @@ export default function AdminReminders({ patients = [] }) {
         </div>
       </div>
 
-      {/* ── Per-Patient Schedules ── */}
+      {/* ── Per-Member Schedules ── */}
       <div style={{ fontWeight: 700, marginBottom: 10, color: '#fff' }}>
-        👤 Per-Patient Overrides
+        👤 Per-Member Overrides
       </div>
-      {patients.map(patient => {
-        const pSchedules = patientSchedules.filter(s => s.patient_id == patient.id);
+      {members.map(member => {
+        const pSchedules = memberSchedules.filter(s => s.patient_id == member.id);
         return (
-          <div key={patient.id} style={cardStyle}>
+          <div key={member.id} style={cardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ fontWeight: 600 }}>{patient.name}</span>
+              <span style={{ fontWeight: 600 }}>{member.name}</span>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => toggleDevices(patient.id)}
-                  style={{ ...btnStyle(openDevicesFor === patient.id ? '#c9a227' : '#374151'), fontSize: 11 }}>
-                  📱 Devices{devices[patient.id] ? ` (${devices[patient.id].length})` : ''}
+                <button onClick={() => toggleDevices(member.id)}
+                  style={{ ...btnStyle(openDevicesFor === member.id ? '#c9a227' : '#374151'), fontSize: 11 }}>
+                  📱 Devices{devices[member.id] ? ` (${devices[member.id].length})` : ''}
                 </button>
-                <button onClick={() => sendTest(patient.id, 'water')}
+                <button onClick={() => sendTest(member.id, 'water')}
                   style={{ ...btnStyle('#0369a1'), fontSize: 11 }}>
                   💧 Test
                 </button>
-                <button onClick={() => sendTest(patient.id, 'activity')}
+                <button onClick={() => sendTest(member.id, 'activity')}
                   style={{ ...btnStyle('#065f46'), fontSize: 11 }}>
                   🏃 Test
                 </button>
               </div>
             </div>
 
-            {/* Devices panel — diagnoses "patient didn't get the reminder" by
+            {/* Devices panel — diagnoses "member didn't get the reminder" by
                 showing exactly which device(s) are registered for this account. */}
-            {openDevicesFor === patient.id && (
+            {openDevicesFor === member.id && (
               <div style={{ background: '#0d0d1a', border: '1px solid #2a2a3e', borderRadius: 10, padding: 10, marginBottom: 10 }}>
                 {devicesLoading ? (
                   <div style={{ fontSize: 12, color: '#888' }}>Loading…</div>
-                ) : !devices[patient.id]?.length ? (
+                ) : !devices[member.id]?.length ? (
                   <div style={{ fontSize: 12, color: '#f59e0b' }}>
-                    ⚠️ No devices registered. This patient won't receive any reminders until they
+                    ⚠️ No devices registered. This member won't receive any reminders until they
                     open the app on their own phone and allow notifications when prompted.
                   </div>
                 ) : (
-                  devices[patient.id].map(sub => (
+                  devices[member.id].map(sub => (
                     <div key={sub.id} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '6px 0', borderBottom: '1px solid #1f1f2e', fontSize: 12,
@@ -315,7 +315,7 @@ export default function AdminReminders({ patients = [] }) {
                           Registered {new Date(sub.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </div>
                       </div>
-                      <button onClick={() => removeDevice(patient.id, sub.id)}
+                      <button onClick={() => removeDevice(member.id, sub.id)}
                         style={{ ...btnStyle('#dc2626'), fontSize: 10, padding: '4px 10px' }}>
                         Remove
                       </button>
@@ -340,12 +340,12 @@ export default function AdminReminders({ patients = [] }) {
                           Retry {s.retry_interval_min}min × {s.max_retries}
                         </div>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => startEdit(patient.id, t.key)} style={{ ...btnStyle(), fontSize: 11 }}>Edit</button>
+                          <button onClick={() => startEdit(member.id, t.key)} style={{ ...btnStyle(), fontSize: 11 }}>Edit</button>
                           <button onClick={() => deleteSchedule(s.id)} style={{ ...btnStyle('#dc2626'), fontSize: 11 }}>Del</button>
                         </div>
                       </>
                     ) : (
-                      <button onClick={() => startEdit(patient.id, t.key)}
+                      <button onClick={() => startEdit(member.id, t.key)}
                         style={{ ...btnStyle('#374151'), fontSize: 11 }}>
                         + Override
                       </button>

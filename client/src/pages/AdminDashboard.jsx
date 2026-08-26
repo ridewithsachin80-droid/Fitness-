@@ -61,7 +61,7 @@ function Field({ label, type = 'text', value, onChange, placeholder, required })
 }
 
 // ── Add Member modal ──────────────────────────────────────────────────────────
-function AddMemberModal({ monitors, onClose, onAdded }) {
+function AddMemberModal({ coaches, onClose, onAdded }) {
   const [form, setForm] = useState({
     name: '', phone: '', height_cm: '', start_weight: '',
     target_weight: '', monitor_id: '',
@@ -99,10 +99,10 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
         <Field label="Start Weight (kg)" value={form.start_weight} onChange={v=>set('start_weight',v)} placeholder="85"   type="number" />
         <Field label="Target Weight (kg)" value={form.target_weight} onChange={v=>set('target_weight',v)} placeholder="70" type="number" />
 
-        {/* Assign monitor */}
+        {/* Assign coach */}
         <div>
           <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
-            Assign to Monitor
+            Assign to Coach
           </label>
           <select
             value={form.monitor_id}
@@ -111,7 +111,7 @@ function AddMemberModal({ monitors, onClose, onAdded }) {
               focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF] bg-white"
           >
             <option value="">— Unassigned —</option>
-            {monitors.map(m => (
+            {coaches.map(m => (
               <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
             ))}
           </select>
@@ -1219,8 +1219,8 @@ function PushModal({ members, onClose }) {
   );
 }
 
-// ── Add Monitor modal ─────────────────────────────────────────────────────────
-function AddMonitorModal({ onClose, onAdded }) {
+// ── Add Coach modal ─────────────────────────────────────────────────────────
+function AddCoachModal({ onClose, onAdded }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'monitor' });
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
@@ -1232,17 +1232,17 @@ function AddMonitorModal({ onClose, onAdded }) {
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
     setSaving(true); setError('');
     try {
-      const { data } = await api.post('/admin/monitors', form);
+      const { data } = await api.post('/admin/coaches', form);
       onAdded(data);
       onClose();
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to create monitor');
+      setError(e.response?.data?.error || 'Failed to create coach');
       setSaving(false);
     }
   };
 
   return (
-    <Modal title="Add Monitor / Trainer" onClose={onClose}>
+    <Modal title="Add Coach / Trainer" onClose={onClose}>
       <div className="space-y-3">
         <Field label="Full Name" value={form.name} onChange={v=>set('name',v)} placeholder="Dr. Sachin" required />
         <Field label="Email" type="email" value={form.email} onChange={v=>set('email',v)} placeholder="trainer@fitlife.app" required />
@@ -1258,7 +1258,7 @@ function AddMonitorModal({ onClose, onAdded }) {
                     ? 'bg-white/[0.08] border border-white/[0.1] text-[#FFFFFF] border-stone-800'
                     : 'bg-white text-[#9EA3B0] border-white/[0.08] hover:border-white/[0.1]'
                 }`}>
-                {r === 'admin' ? '👑 Admin' : '🏋️ Monitor'}
+                {r === 'admin' ? '👑 Admin' : '🏋️ Coach'}
               </button>
             ))}
           </div>
@@ -1281,17 +1281,17 @@ function AddMonitorModal({ onClose, onAdded }) {
   );
 }
 
-// ── Assign Monitor modal ──────────────────────────────────────────────────────
-function AssignModal({ member, monitors, onClose, onAssigned }) {
-  const [monitorId, setMonitorId] = useState(member.monitor_id || '');
+// ── Assign Coach modal ──────────────────────────────────────────────────────
+function AssignModal({ member, coaches, onClose, onAssigned }) {
+  const [coachId, setCoachId] = useState(member.monitor_id || '');
   const [saving,    setSaving]    = useState(false);
 
   const submit = async () => {
-    if (!monitorId) return;
+    if (!coachId) return;
     setSaving(true);
     try {
-      await api.post('/admin/assign', { monitor_id: monitorId, patient_id: member.id });
-      onAssigned(member.id, monitorId, monitors.find(m => m.id == monitorId)?.name);
+      await api.post('/admin/assign', { monitor_id: coachId, patient_id: member.id });
+      onAssigned(member.id, coachId, coaches.find(m => m.id == coachId)?.name);
       onClose();
     } catch (e) {
       setSaving(false);
@@ -1299,17 +1299,17 @@ function AssignModal({ member, monitors, onClose, onAssigned }) {
   };
 
   return (
-    <Modal title={`Assign Monitor — ${member.name}`} onClose={onClose}>
+    <Modal title={`Assign Coach — ${member.name}`} onClose={onClose}>
       <div className="space-y-4">
-        <select value={monitorId} onChange={e => setMonitorId(e.target.value)}
+        <select value={coachId} onChange={e => setCoachId(e.target.value)}
           className="w-full border border-white/[0.08] rounded-xl px-3 py-3 text-sm
             focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white text-[#FFFFFF]">
           <option value="">— Unassigned —</option>
-          {monitors.map(m => (
+          {coaches.map(m => (
             <option key={m.id} value={m.id}>{m.name} · {m.role} · {m.patient_count} members</option>
           ))}
         </select>
-        <button onClick={submit} disabled={saving || !monitorId}
+        <button onClick={submit} disabled={saving || !coachId}
           className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
             rounded-xl disabled:opacity-50 transition-colors">
           {saving ? 'Saving…' : 'Confirm Assignment'}
@@ -1366,10 +1366,10 @@ export default function AdminDashboard() {
   const [stats,     setStats]     = useState(null);
   const [overview,  setOverview]  = useState(null);
   const [members,   setMembers]   = useState([]);
-  const [monitors,  setMonitors]  = useState([]);
+  const [coaches,  setCoaches]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [showAddMember,  setShowAddMember]  = useState(false);
-  const [showAddMonitor, setShowAddMonitor] = useState(false);
+  const [showAddCoach, setShowAddCoach] = useState(false);
   const [showPush,       setShowPush]       = useState(false);
   const [auditLog,       setAuditLog]       = useState([]);
   const [assignTarget,   setAssignTarget]   = useState(null);
@@ -1381,13 +1381,13 @@ export default function AdminDashboard() {
       const [s, m, mo, ov, al] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/members'),
-        api.get('/admin/monitors'),
+        api.get('/admin/coaches'),
         api.get('/admin/overview').catch(() => ({ data: null })),
         getAuditLog(100).catch(() => ({ data: [] })),
       ]);
       setStats(s.data);
       setMembers(m.data);
-      setMonitors(mo.data);
+      setCoaches(mo.data);
       setOverview(ov.data);
       setAuditLog(al.data || []);
     } catch (e) {
@@ -1405,7 +1405,7 @@ export default function AdminDashboard() {
     if (type === 'member') {
       setMembers(prev => prev.map(m => m.id === id ? { ...m, active: data.active } : m));
     } else {
-      setMonitors(prev => prev.map(m => m.id === id ? { ...m, active: data.active } : m));
+      setCoaches(prev => prev.map(m => m.id === id ? { ...m, active: data.active } : m));
     }
   };
 
@@ -1428,7 +1428,7 @@ export default function AdminDashboard() {
               <h1 className="font-display text-xl font-medium">Welcome, {user?.name} 👑</h1>
               {stats && (
                 <p className="text-[#9EA3B0] text-xs mt-0.5">
-                  {stats.members} members · {stats.monitors} monitors · {stats.logsToday} logged today
+                  {stats.members} members · {stats.coaches} coaches · {stats.logsToday} logged today
                 </p>
               )}
             </div>
@@ -1456,7 +1456,7 @@ export default function AdminDashboard() {
           {[
             { id: 'overview',   label: '📊 Overview'  },
             { id: 'members',    label: '👥 Members'   },
-            { id: 'monitors',   label: '🏋️ Monitors'  },
+            { id: 'coaches',   label: '🏋️ Coaches'  },
             { id: 'reminders',  label: '🔔 Reminders' },
             { id: 'audit',      label: '🔍 Audit'     },
           ].map(t => (
@@ -1471,8 +1471,8 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Search + add button — only for members/monitors tabs */}
-        {(tab === 'members' || tab === 'monitors') && (
+        {/* Search + add button — only for members/coaches tabs */}
+        {(tab === 'members' || tab === 'coaches') && (
         <div className="flex gap-2 mb-4">
           <input
             value={search}
@@ -1482,10 +1482,10 @@ export default function AdminDashboard() {
               focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF] placeholder-[#7E8596]"
           />
           <button
-            onClick={() => tab === 'members' ? setShowAddMember(true) : setShowAddMonitor(true)}
+            onClick={() => tab === 'members' ? setShowAddMember(true) : setShowAddCoach(true)}
             className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] text-sm font-bold
               rounded-xl transition-colors whitespace-nowrap">
-            + Add {tab === 'members' ? 'Member' : 'Monitor'}
+            + Add {tab === 'members' ? 'Member' : 'Coach'}
           </button>
         </div>
         )}
@@ -1630,7 +1630,7 @@ export default function AdminDashboard() {
                   <div key={m.id}
                     className={`relative bg-[#1A1C20] rounded-2xl border p-4 shadow-card
                       ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
-                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/monitor/${m.id}`)}>
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/coach/${m.id}`)}>
                       <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#F0E2B6]"
                         style={{ background: 'linear-gradient(135deg,#2a2150,#1a1633)' }}>
                         {initials}
@@ -1686,7 +1686,7 @@ export default function AdminDashboard() {
                         <div className="fixed inset-0 z-40" onClick={() => setMenuFor(null)} />
                         <div className="absolute right-3 top-14 z-50 bg-[#1A1C20] border border-white/[0.12] rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.7)] min-w-[150px]">
                           <button onClick={() => { setMenuFor(null); setAssignTarget(m); }}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-emerald-300 hover:bg-white/[0.04]">🔗 Assign monitor</button>
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-emerald-300 hover:bg-white/[0.04]">🔗 Assign coach</button>
                           <button onClick={() => { setMenuFor(null); setEditTarget(m); }}
                             className="w-full text-left px-4 py-3 text-xs font-bold text-blue-300 hover:bg-white/[0.04] border-t border-white/[0.06]">✏️ Edit & protocol</button>
                           <button onClick={() => { setMenuFor(null); setMsgMember(m); }}
@@ -1713,33 +1713,33 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* ── Monitors tab ── */}
-        {tab === 'monitors' && (
+        {/* ── Coaches tab ── */}
+        {tab === 'coaches' && (
           <>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-[#9EA3B0]">{monitors.length} monitor{monitors.length !== 1 ? 's' : ''} registered</p>
+              <p className="text-xs text-[#9EA3B0]">{coaches.length} coach{coaches.length !== 1 ? 's' : ''} registered</p>
               <div className="flex gap-2">
                 <button onClick={() => setShowPush(true)}
                   className="flex items-center gap-1.5 text-xs font-bold text-[#9EA3B0] bg-white/[0.06]
                     hover:bg-white/[0.08] px-3 py-2 rounded-xl transition-colors">
                   📨 Send Push
                 </button>
-                <button onClick={() => setShowAddMonitor(true)}
+                <button onClick={() => setShowAddCoach(true)}
                   className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#121316]
                     hover:bg-[#121316] px-3 py-2 rounded-xl transition-colors">
-                  + Add Monitor
+                  + Add Coach
                 </button>
               </div>
             </div>
-            {filtered(monitors, 'name').length === 0 ? (
+            {filtered(coaches, 'name').length === 0 ? (
               <div className="text-center py-16 text-[#9EA3B0]">
                 <div className="text-4xl mb-3">🏋️</div>
-                <p className="font-medium">No monitors yet</p>
-                <button onClick={() => setShowAddMonitor(true)}
-                  className="mt-3 text-emerald-300 font-semibold text-sm">+ Add first monitor</button>
+                <p className="font-medium">No coaches yet</p>
+                <button onClick={() => setShowAddCoach(true)}
+                  className="mt-3 text-emerald-300 font-semibold text-sm">+ Add first coach</button>
               </div>
             ) : (
-              filtered(monitors, 'name').map(m => (
+              filtered(coaches, 'name').map(m => (
                 <div key={m.id} className={`bg-[#1A1C20] rounded-2xl border border-white/[0.08] p-4 shadow-card border
                   ${!m.active ? 'opacity-50 border-white/[0.08]' : 'border-white/[0.07]'}`}>
                   <div className="flex items-start justify-between">
@@ -1751,7 +1751,7 @@ export default function AdminDashboard() {
                             ? 'bg-[rgba(251,191,36,0.14)] text-amber-300'
                             : 'bg-[rgba(96,165,250,0.14)] text-blue-300'
                         }`}>
-                          {m.role === 'admin' ? '👑 admin' : '🏋️ monitor'}
+                          {m.role === 'admin' ? '👑 admin' : '🏋️ coach'}
                         </span>
                         {!m.active && <span className="text-xs bg-white/[0.06] text-[#9EA3B0] px-2 py-0.5 rounded-full">Inactive</span>}
                       </div>
@@ -1761,7 +1761,7 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                     <div className="flex gap-1.5">
-                      <button onClick={() => navigate('/monitor')}
+                      <button onClick={() => navigate('/coach')}
                         className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-[#9EA3B0] font-semibold
                           rounded-lg hover:bg-white/[0.05] transition-colors">
                         View
@@ -1785,7 +1785,7 @@ export default function AdminDashboard() {
         )}
         {/* ── Audit tab ── */}
         {tab === 'reminders' && (
-          <AdminReminders patients={members} />
+          <AdminReminders members={members} />
         )}
 
         {tab === 'audit' && (
@@ -1810,10 +1810,10 @@ export default function AdminDashboard() {
                 {auditLog.map(entry => {
                   const actionConfig = {
                     member_created:   { icon: '➕', color: 'bg-[rgba(52,211,153,0.10)] border-[rgba(52,211,153,0.25)] text-emerald-300' },
-                    monitor_created:  { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    monitor_assigned: { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
+                    coach_created:  { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
+                    coach_assigned: { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
                     member_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
-                    monitor_toggled:  { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
+                    coach_toggled:  { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     pin_reset:        { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
                     pin_set:          { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
                     weight_logged:    { icon: '⚖️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' },
@@ -1856,10 +1856,10 @@ export default function AdminDashboard() {
       </div>
 
       {/* Modals */}
-      {showAddMember  && <AddMemberModal  monitors={monitors} onClose={() => setShowAddMember(false)}  onAdded={u => { setMembers(prev => [u, ...prev]); load(); }} />}
-      {showAddMonitor && <AddMonitorModal onClose={() => setShowAddMonitor(false)} onAdded={u => { setMonitors(prev => [u, ...prev]); load(); }} />}
+      {showAddMember  && <AddMemberModal  coaches={coaches} onClose={() => setShowAddMember(false)}  onAdded={u => { setMembers(prev => [u, ...prev]); load(); }} />}
+      {showAddCoach && <AddCoachModal onClose={() => setShowAddCoach(false)} onAdded={u => { setCoaches(prev => [u, ...prev]); load(); }} />}
       {showPush       && <PushModal members={members} onClose={() => setShowPush(false)} />}
-      {assignTarget   && <AssignModal member={assignTarget} monitors={monitors}
+      {assignTarget   && <AssignModal member={assignTarget} coaches={coaches}
         onClose={() => setAssignTarget(null)}
         onAssigned={(pid, mid, mname) => {
           setMembers(prev => prev.map(m => m.id === pid ? { ...m, monitor_id: mid, monitor_name: mname } : m));

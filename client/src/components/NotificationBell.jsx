@@ -1,13 +1,13 @@
 /**
  * NotificationBell.jsx
  *
- * Patient-facing notification history. Reads from notifications_log via
+ * Member-facing notification history. Reads from notifications_log via
  * /api/reminders/my-notifications — this is the in-app record of every
  * reminder the server attempted to send, independent of whether the device
  * actually displayed it. That distinction matters: push notifications can be
  * silently swallowed by the OS (Android's per-app notification toggle,
  * revoked browser permission, a stale service worker, etc.) with zero error
- * surfacing anywhere — this gives the patient a way to see "yes, your coach
+ * surfacing anywhere — this gives the member a way to see "yes, your coach
  * did send a reminder" even when the push itself never showed up.
  */
 import { useState, useEffect, useRef } from 'react';

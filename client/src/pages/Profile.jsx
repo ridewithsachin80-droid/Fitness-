@@ -2,14 +2,14 @@
  * Profile.jsx — Sprint 10
  * Member-facing profile page: personal details, conditions, targets,
  * fasting protocol, macro plan, stats, and diet notes.
- * Accessible via /profile (patient route).
+ * Accessible via /profile (member route).
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getMyProfile }  from '../api/logs';
-import { Card, SectionTitle, PageLoader, BackButton, PatientBottomNav } from '../components/UI';
+import { Card, SectionTitle, PageLoader, BackButton, MemberBottomNav } from '../components/UI';
 import { sessionEnergy } from '../utils/exerciseCalories';
 import MetabolicInsight from '../components/MetabolicInsight';
 import LabResults from '../components/LabResults';
@@ -533,7 +533,7 @@ export default function Profile() {
           Member since {new Date(p.member_since).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
         </p>
       </div>
-      <PatientBottomNav />
+      <MemberBottomNav />
     </div>
   );
 }

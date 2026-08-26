@@ -2,7 +2,7 @@ import { openDB }  from 'idb';
 import { useEffect } from 'react';
 import api           from '../api/client';
 
-const DB_NAME    = 'health-monitor-offline';
+const DB_NAME    = 'health-coach-offline';
 const DB_VERSION = 1;
 const STORE      = 'log-queue';
 

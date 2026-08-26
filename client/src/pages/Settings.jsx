@@ -5,7 +5,7 @@ import { useSettingsStore, haptic } from '../store/settingsStore';
 import api from '../api/client';
 import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword, getNotifLog } from '../api/logs';
 import { disconnectSocket } from '../hooks/useSync';
-import { Card, SectionTitle, BackButton, PatientBottomNav, BottomNav } from '../components/UI';
+import { Card, SectionTitle, BackButton, MemberBottomNav, BottomNav } from '../components/UI';
 
 const AVATARS = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
 const AGE_MODES = [
@@ -25,7 +25,7 @@ export default function Settings() {
 
   useEffect(() => {
     let cancelled = false;
-    api.get('/patients/me/notifications')
+    api.get('/members/me/notifications')
       .then(({ data }) => { if (!cancelled) setNotif(data); })
       .catch(() => {});   // coaches have no such preferences; card stays hidden
     return () => { cancelled = true; };
@@ -36,7 +36,7 @@ export default function Settings() {
     const optimistic = { ...notif, ...patch };
     setNotif(optimistic);
     try {
-      const { data } = await api.put('/patients/me/notifications', patch);
+      const { data } = await api.put('/members/me/notifications', patch);
       setNotif(data);
     } catch {
       setNotif(notif);            // roll back rather than show a lie
@@ -442,7 +442,7 @@ export default function Settings() {
         <p className="text-center text-xs text-[#4A4E5A] pt-2">FitLife · Enhanced UX</p>
       </div>
 
-      {user?.role === 'patient' ? <PatientBottomNav /> : <BottomNav role={user?.role} />}
+      {user?.role === 'patient' ? <MemberBottomNav /> : <BottomNav role={user?.role} />}
     </div>
   );
 }
