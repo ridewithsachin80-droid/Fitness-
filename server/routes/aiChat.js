@@ -1562,6 +1562,22 @@ SUPPORTED OPERATIONS per command:
   keeping the coach's intent. If coach gives exact words, use them.
 - push: { "title": "...", "body": "..." } — instant phone notification.
   Only when the coach says notify/push/alert immediately.
+- meal_plan: prescribes SPECIFIC FOODS for a member's meal(s) TODAY. Shape:
+  { "meals": [
+      { "meal": "Dinner",
+        "items": [
+          { "name": "Avocado", "qty_text": "100 g", "grams": 100,
+            "per_100g": { "calories": 160, "protein": 2, "total_carbs": 9, "fat": 15 } }
+        ] }
+  ] }
+  · Use it when the coach dictates what to EAT: "Sachin dinner: avocado 100g,
+    1 spoon ghee, 150g paneer, 4 eggs, 100g chicken".
+  · Convert household measures to grams (1 spoon ghee/oil ≈ 13 g, 1 katori
+    ≈ 150 g, 1 medium egg ≈ 50 g → "4 medium egg" = grams 200).
+  · per_100g: your best nutrition estimate for EVERY item — calories, protein,
+    total_carbs, fat (numbers, per 100 g). The member logs against these.
+  · meal: use the coach's word (Breakfast/Lunch/Dinner/Snack …), capitalised.
+  · Re-prescribing the same meal today REPLACES it — say so in reply.
 - program: assigns a WORKOUT PROGRAM / training split. Shape:
   { "name": "Push Pull Legs",
     "days": [
@@ -1607,7 +1623,8 @@ Return ONLY a raw JSON object, no markdown fences:
       "supplements": null,
       "note": { "text": "Please log your meals daily — I review them every morning.", "flagged": false },
       "push": null,
-      "program": null
+      "program": null,
+      "meal_plan": null
     }
   ]
 }`;
@@ -1654,6 +1671,36 @@ function normaliseProgram(raw) {
   return { name: raw.name ? String(raw.name).trim().slice(0, 100) : 'Training Program', days };
 }
 
+// ── Meal plan normaliser ──────────────────────────────────────────────────────
+function normaliseMealPlan(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.meals) || !raw.meals.length) return null;
+  const num = (v, lo, hi) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : null;
+  };
+  const meals = raw.meals.slice(0, 6).map(m => {
+    if (!m || typeof m !== 'object') return null;
+    const meal = m.meal ? String(m.meal).trim().slice(0, 40) : '';
+    const items = (Array.isArray(m.items) ? m.items : []).slice(0, 15).map(it => {
+      const name = it && it.name ? String(it.name).trim().slice(0, 100) : '';
+      const grams = num(it?.grams, 1, 2000);
+      if (!name || grams === null) return null;
+      const n = it.per_100g || {};
+      const per_100g = {
+        calories:    num(n.calories, 0, 900)  ?? 0,
+        protein:     num(n.protein, 0, 100)   ?? 0,
+        total_carbs: num(n.total_carbs, 0, 100) ?? 0,
+        fat:         num(n.fat, 0, 100)       ?? 0,
+      };
+      return { name, grams,
+               qty_text: it.qty_text ? String(it.qty_text).slice(0, 40) : `${grams} g`,
+               per_100g };
+    }).filter(Boolean);
+    return meal && items.length ? { meal, items } : null;
+  }).filter(Boolean);
+  return meals.length ? { meals } : null;
+}
+
 // ── Command validator/normaliser ─────────────────────────────────────────────
 function normaliseGroupOp(raw, catalogList) {
   if (!raw || typeof raw !== 'object') return null;
@@ -1698,6 +1745,13 @@ function describeOps(cmd) {
     op.remove.forEach(id => out.push({ icon, text: `Remove ${word}: ${labelFor(group, id)}` }));
     op.add_custom.forEach(c => out.push({ icon, text: `New custom ${word}: ${c.label}${c.sub ? ` (${c.sub})` : ''}` }));
     op.remove_custom.forEach(l => out.push({ icon, text: `Remove custom ${word}: ${l}` }));
+  }
+  if (cmd.meal_plan) {
+    for (const m of cmd.meal_plan.meals) {
+      const kcal = Math.round(m.items.reduce((a, it) => a + (it.per_100g.calories * it.grams / 100), 0));
+      const names = m.items.slice(0, 4).map(it => `${it.name} ${it.grams}g`).join(', ');
+      out.push({ icon: '🍽️', text: `${m.meal} plan (~${kcal} kcal): ${names}${m.items.length > 4 ? ` +${m.items.length - 4} more` : ''}` });
+    }
   }
   if (cmd.program) {
     const daysTxt = cmd.program.days.map(d => `${d.label} (${d.exercises.length})`).join(', ');
@@ -1802,6 +1856,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
         macros,
         target_weight,
         program: normaliseProgram(raw.program),
+        meal_plan: normaliseMealPlan(raw.meal_plan),
         activities:  normaliseGroupOp(raw.activities,  CATALOG.activities),
         acv:         normaliseGroupOp(raw.acv,         CATALOG.acv),
         supplements: normaliseGroupOp(raw.supplements, CATALOG.supplements),
@@ -1814,6 +1869,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
         ops.water_target = null; ops.macros = null; ops.target_weight = null;
         ops.activities = null; ops.acv = null; ops.supplements = null;
         ops.program = null;   // a split for "everyone" is almost always a mistake
+        ops.meal_plan = null; // and so is one dinner for every member
       }
 
       const changes = describeOps(ops);
@@ -2050,6 +2106,23 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
         // Tell the member — best effort, never blocks the transaction result.
         require('../services/pushService').sendToUser(memberId, 'New workout program',
           `${ops.program.name} — ${ops.program.days.length} day${ops.program.days.length > 1 ? 's' : ''}. Open Workout to see today's session.`,
+          'coach-ai').catch(() => {});
+      }
+      if (ops.meal_plan) {
+        for (const m of ops.meal_plan.meals) {
+          // Same-day re-prescription replaces — the UNIQUE constraint makes the
+          // upsert atomic, and the member always sees exactly one plan per meal.
+          await client.query(
+            `INSERT INTO meal_plans (patient_id, monitor_id, plan_date, meal, items)
+             VALUES ($1,$2,$3,$4,$5)
+             ON CONFLICT (patient_id, plan_date, meal)
+             DO UPDATE SET items = EXCLUDED.items, monitor_id = EXCLUDED.monitor_id,
+                           created_at = NOW()`,
+            [memberId, req.user.id, getISTDate(), m.meal, JSON.stringify(m.items)]);
+        }
+        appliedBits.push(`meal plan (${ops.meal_plan.meals.map(m => m.meal).join(', ')})`);
+        require('../services/pushService').sendToUser(memberId, 'Meal plan from your coach',
+          ops.meal_plan.meals.map(m => `${m.meal}: ${m.items.length} items`).join(' · ') + ' — open FitLife to log against it.',
           'coach-ai').catch(() => {});
       }
       if (ops.note?.text) {

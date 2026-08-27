@@ -769,6 +769,10 @@ export default function DailyLog() {
   // today's weekday ("Leg · Thu"). Lets the dashboard announce the session
   // instead of showing "— none" until the member digs into the panel.
   const [coachPlan, setCoachPlan] = useState(null); // { programName, todayDay|null, dayCount }
+  const [mealPlans, setMealPlans] = useState([]);   // [{ meal, items:[{name,grams,qty_text,per_100g}] }]
+  useEffect(() => {
+    api.get('/members/me/meal-plan').then(({ data }) => setMealPlans(data.meals || [])).catch(() => {});
+  }, []);
   useEffect(() => {
     api.get('/programs/active').then(({ data }) => {
       if (!data?.program) return;
@@ -1710,7 +1714,13 @@ export default function DailyLog() {
               const showWorkout = !!coachPlan?.todayDay && !workoutDone;
               const showRest    = !!coachPlan && !coachPlan.todayDay;
               const showTargets = !!protocol?.macros?.kcal && !foodLogged;
-              if (!showWorkout && !showRest && !showTargets) return null;
+              // A prescribed meal is pending until at least one of its items is
+              // logged under that meal slot — then the food panel's plan card
+              // takes over tracking the rest.
+              const loggedByMeal = new Set((log.food || []).map(f => `${f.meal}|${String(f.name).toLowerCase()}`));
+              const pendingMeals = mealPlans.filter(mp =>
+                !(mp.items || []).some(it => loggedByMeal.has(`${mp.meal}|${String(it.name).toLowerCase()}`)));
+              if (!showWorkout && !showRest && !showTargets && !pendingMeals.length) return null;
               return (
               <div className="rounded-2xl border border-[rgba(212,175,55,0.25)] bg-[#1A1C20] px-4 py-3 mb-3">
                 <p className="text-[10px] font-bold tracking-[0.12em] text-[#D4AF37] uppercase mb-2">
@@ -1740,6 +1750,27 @@ export default function DailyLog() {
                     </span>
                   </div>
                 ) : null}
+
+                {pendingMeals.map(mp => {
+                  const kcal = Math.round((mp.items || []).reduce((a, it) =>
+                    a + ((it.per_100g?.calories || 0) * (it.grams || 0) / 100), 0));
+                  return (
+                    <button key={mp.meal} onClick={() => { setHeroPanel('food'); haptic(10); }}
+                      className="w-full text-left flex items-start gap-2.5 py-1.5 border-t border-white/[0.06] mt-1 pt-2.5 first:border-t-0 first:mt-0 first:pt-1.5">
+                      <span className="text-base leading-none mt-0.5">🍽️</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-white">
+                          {mp.meal} plan — {(mp.items || []).length} items · ~{kcal} kcal
+                        </span>
+                        <span className="block text-[11px] text-[#9EA3B0] truncate">
+                          {(mp.items || []).slice(0, 3).map(it => it.name).join(' · ')}
+                          {(mp.items || []).length > 3 && ` +${(mp.items || []).length - 3} more`}
+                        </span>
+                      </span>
+                      <span className="text-[11px] font-bold text-[#D4AF37] flex-shrink-0 mt-1">Log ›</span>
+                    </button>
+                  );
+                })}
 
                 {showTargets && (
                   <button onClick={() => { setHeroPanel('food'); haptic(10); }}

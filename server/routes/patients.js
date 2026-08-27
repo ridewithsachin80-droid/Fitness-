@@ -471,6 +471,25 @@ router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAcc
 // Members control which channels reach them. Opting out is kept separate from
 // the individual toggles: switching a channel off is a preference, opting out
 // is a withdrawal of consent and must not be undone by toggling something else.
+// ── GET /api/members/me/meal-plan?date=YYYY-MM-DD ────────────────────────────
+// The coach's prescribed meals for a date (default today IST). The member UI
+// renders these workout-log style: prescribed amount vs consumed input.
+router.get('/me/meal-plan', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
+      ? req.query.date
+      : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const { rows } = await pool.query(
+      `SELECT meal, items, created_at FROM meal_plans
+       WHERE patient_id = $1 AND plan_date = $2::date
+       ORDER BY created_at`,
+      [req.user.id, date]);
+    res.json({ date, meals: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/me/notifications', authMW, roleCheck('patient'), async (req, res) => {
   try {
     const { rows } = await pool.query(

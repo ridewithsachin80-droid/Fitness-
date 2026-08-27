@@ -590,3 +590,18 @@ ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
 --
 -- Keyed on a normalised phrase ("katori dal", "glass milk") rather than the
 -- food id, because the unit is the thing being learned, not the food.
+
+-- ── Meal plans — coach prescribes a day's meals; member logs consumed against
+-- prescribed, workout-log style. items JSONB carries per-item nutrition
+-- (per_100g) estimated at prescription time so logging needs no AI round-trip.
+CREATE TABLE IF NOT EXISTS meal_plans (
+  id          SERIAL PRIMARY KEY,
+  patient_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  monitor_id  INT REFERENCES users(id) ON DELETE SET NULL,
+  plan_date   DATE NOT NULL,
+  meal        VARCHAR(40) NOT NULL,
+  items       JSONB NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(patient_id, plan_date, meal)
+);
+CREATE INDEX IF NOT EXISTS idx_meal_plans_member_date ON meal_plans(patient_id, plan_date);

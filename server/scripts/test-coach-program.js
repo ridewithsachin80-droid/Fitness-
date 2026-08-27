@@ -84,9 +84,31 @@ const PROGRAM_CMD = {
     activities: null, acv: null, supplements: null, note: null, push: null,
   }],
 };
+const MEAL_CMD = {
+  reply: "Setting Sachin's dinner plan — this replaces any dinner plan already set today.",
+  commands: [{
+    member_name: 'Sachin',
+    meal_plan: { meals: [{ meal: 'Dinner', items: [
+      { name: 'Avocado', qty_text: '100 g', grams: 100, per_100g: { calories: 160, protein: 2, total_carbs: 9, fat: 15 } },
+      { name: 'Ghee', qty_text: '1 spoon', grams: 13, per_100g: { calories: 900, protein: 0, total_carbs: 0, fat: 99.5 } },
+      { name: 'Olive Oil', qty_text: '1 spoon', grams: 13, per_100g: { calories: 884, protein: 0, total_carbs: 0, fat: 100 } },
+      { name: 'Paneer', qty_text: '150 g', grams: 150, per_100g: { calories: 265, protein: 18, total_carbs: 3.5, fat: 20 } },
+      { name: 'Eggs', qty_text: '4 medium', grams: 200, per_100g: { calories: 143, protein: 13, total_carbs: 0.7, fat: 9.5 } },
+      { name: 'Chicken', qty_text: '100 g', grams: 100, per_100g: { calories: 165, protein: 31, total_carbs: 0, fat: 3.6 } },
+      { name: 'Junk item', grams: 0 },
+    ]}]},
+    program: null, water_target: null, macros: null, target_weight: null,
+    activities: null, acv: null, supplements: null, note: null, push: null,
+  }],
+};
 const fake = async (url, body) => {
   if (!/generativelanguage/.test(String(url))) throw new Error('unexpected ' + url);
-  return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(PROGRAM_CMD) }] } }] } };
+  const prompt = body.contents[0].parts.map(x => x.text || '').join('');
+  // Route on the coach's actual message line — the prompt's own documentation
+  // contains example food text, which burned us once already in the voice tests.
+  const msgLine = (prompt.match(/Coach's message: "([^"]*)"/) || [])[1] || '';
+  const cmd = /avocado/i.test(msgLine) ? MEAL_CMD : PROGRAM_CMD;
+  return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(cmd) }] } }] } };
 };
 const stubAx = (...a) => fake(...a);
 stubAx.post = fake; stubAx.get = realAxios.get; stubAx.create = realAxios.create;
@@ -158,6 +180,43 @@ const req = (p, body) => new Promise(r => {
     const { rows: exCount } = await pool.query(
       `SELECT COUNT(*)::int AS n FROM exercises WHERE name='Barbell Squat'`);
     t('exercises reused by name, not duplicated', exCount[0].n === 1);
+  }
+
+  // ── Meal plan: dictate dinner, verify preview + storage + member fetch ─────
+  const mp = await req('/api/ai-chat/coach-parse',
+    { message: 'Sachin dinner: avocado 100 grams, 1 spoon ghee, 1 spoon olive oil, 150g paneer, 4 medium egg, 100g chicken' });
+  const mpAction = mp.body.actions?.[0];
+  const mpChange = (mpAction?.changes || []).find(c => /Dinner plan/.test(c.text));
+  t('meal plan previewed with kcal + items',
+    !!mpChange && /~\d{3,4} kcal/.test(mpChange.text) && /Avocado 100g/.test(mpChange.text));
+  t('zero-gram junk item dropped by normaliser', !/Junk/.test(JSON.stringify(mpAction || {})));
+
+  const mpApply = await req('/api/ai-chat/coach-apply', { actions: [mpAction] });
+  t('meal plan applied', mpApply.code === 200 && /meal plan \(Dinner\)/.test(String(mpApply.body.results?.[0]?.detail)));
+
+  if (USE_REAL_DB) {
+    const pool = require(poolPath);
+    const { rows } = await pool.query(
+      `SELECT meal, items FROM meal_plans WHERE patient_id=214 ORDER BY id DESC LIMIT 1`);
+    t('dinner stored with 6 valid items', rows[0]?.meal === 'Dinner' && rows[0].items.length === 6);
+    t('nutrition attached to each item', rows[0].items.every(it => it.per_100g?.calories >= 0));
+
+    await req('/api/ai-chat/coach-apply', { actions: [mpAction] });
+    const { rows: after } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM meal_plans WHERE patient_id=214 AND meal='Dinner'`);
+    t('re-prescribing replaces, not duplicates', after[0].n === 1);
+
+    // Member fetches it
+    const memberToken = jwt.sign({ id: 214, role: 'patient', name: 'Sachin' }, 'smoke-test-secret');
+    const got = await new Promise(r => {
+      const q = http.request({ host: '127.0.0.1', port, path: '/api/members/me/meal-plan', method: 'GET',
+        headers: { authorization: 'Bearer ' + memberToken } },
+        res => { let d = ''; res.on('data', c => d += c); res.on('end', () => r({ code: res.statusCode, body: JSON.parse(d || '{}') })); });
+      q.end();
+    });
+    t('member endpoint returns the plan', got.code === 200
+      && got.body.meals?.[0]?.meal === 'Dinner'
+      && got.body.meals[0].items.some(it => it.name === 'Paneer' && it.grams === 150));
   }
 
   server.close();
