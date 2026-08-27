@@ -1562,6 +1562,23 @@ SUPPORTED OPERATIONS per command:
   keeping the coach's intent. If coach gives exact words, use them.
 - push: { "title": "...", "body": "..." } — instant phone notification.
   Only when the coach says notify/push/alert immediately.
+- program: assigns a WORKOUT PROGRAM / training split. Shape:
+  { "name": "Push Pull Legs",
+    "days": [
+      { "label": "Push", "weekday": "monday",
+        "exercises": [
+          { "name": "Barbell Bench Press", "sets": 4, "reps_min": 8, "reps_max": 12, "muscle_group": "chest" }
+        ] }
+    ] }
+  · Use it when the coach assigns circuits/splits: "push circuit Monday, pull
+    Wednesday, legs Friday", "upper/lower 4 days", "chest+tri and back+bi days".
+  · If the coach lists exercises with sets×reps ("bench 4x8-12"), use exactly
+    those. If they only name the split, BUILD each day with 5–6 standard,
+    widely-known gym exercises appropriate to that day (compound first),
+    sets 3–4, reps 8–12 (legs/compounds may be 6–10).
+  · weekday: lowercase english day if the coach gave one, else null.
+  · muscle_group: one of chest, back, legs, shoulders, arms, core, full_body.
+  · Assigning a program REPLACES the member's current one — mention that in reply.
 
 RULES:
 1. member_name must be copied EXACTLY from the members list. If the coach says
@@ -1589,10 +1606,52 @@ Return ONLY a raw JSON object, no markdown fences:
       "acv": null,
       "supplements": null,
       "note": { "text": "Please log your meals daily — I review them every morning.", "flagged": false },
-      "push": null
+      "push": null,
+      "program": null
     }
   ]
 }`;
+}
+
+// ── Program normaliser — clamps everything the model can get wrong ───────────
+const WEEKDAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+const MUSCLE_GROUPS = ['chest','back','legs','shoulders','arms','core','full_body'];
+
+function normaliseProgram(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.days) || !raw.days.length) return null;
+  const clampInt = (v, lo, hi, dflt) => {
+    const n = parseInt(v);
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : dflt;
+  };
+  const days = raw.days.slice(0, 7).map(d => {
+    if (!d || typeof d !== 'object') return null;
+    const exercises = (Array.isArray(d.exercises) ? d.exercises : []).slice(0, 10).map(e => {
+      const name = e && e.name ? String(e.name).trim().slice(0, 100) : '';
+      if (!name) return null;
+      const reps_min = clampInt(e.reps_min, 1, 50, 8);
+      let reps_max = clampInt(e.reps_max, 1, 50, null);
+      if (reps_max != null && reps_max < reps_min) reps_max = null;
+      const mgRaw = String(e.muscle_group || '').toLowerCase();
+      return {
+        name,
+        sets: clampInt(e.sets, 1, 10, 3),
+        reps_min, reps_max,
+        muscle_group: MUSCLE_GROUPS.includes(mgRaw) ? mgRaw : null,
+      };
+    }).filter(Boolean);
+    if (!exercises.length) return null;
+    let label = d.label ? String(d.label).trim().slice(0, 30) : 'Day';
+    const wdRaw = String(d.weekday || '').toLowerCase();
+    if (WEEKDAYS.includes(wdRaw)) {
+      // Weekday lives in the label ("Push · Mon") — the schema has no schedule
+      // column and the schema is the stability boundary. The member's workout
+      // screen highlights the day whose label carries today's weekday.
+      label = `${label} · ${wdRaw[0].toUpperCase()}${wdRaw.slice(1, 3)}`;
+    }
+    return { label: label.slice(0, 50), exercises };
+  }).filter(Boolean);
+  if (!days.length) return null;
+  return { name: raw.name ? String(raw.name).trim().slice(0, 100) : 'Training Program', days };
 }
 
 // ── Command validator/normaliser ─────────────────────────────────────────────
@@ -1639,6 +1698,10 @@ function describeOps(cmd) {
     op.remove.forEach(id => out.push({ icon, text: `Remove ${word}: ${labelFor(group, id)}` }));
     op.add_custom.forEach(c => out.push({ icon, text: `New custom ${word}: ${c.label}${c.sub ? ` (${c.sub})` : ''}` }));
     op.remove_custom.forEach(l => out.push({ icon, text: `Remove custom ${word}: ${l}` }));
+  }
+  if (cmd.program) {
+    const daysTxt = cmd.program.days.map(d => `${d.label} (${d.exercises.length})`).join(', ');
+    out.push({ icon: '🏋️', text: `Assign program "${cmd.program.name}" — replaces current: ${daysTxt}` });
   }
   if (cmd.note) out.push({ icon: '💬', text: `${cmd.note.flagged ? 'Flagged message' : 'Message'}: "${cmd.note.text}"` });
   if (cmd.push) out.push({ icon: '🔔', text: `Push notification: ${cmd.push.title} — ${cmd.push.body}` });
@@ -1738,6 +1801,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
         water_target,
         macros,
         target_weight,
+        program: normaliseProgram(raw.program),
         activities:  normaliseGroupOp(raw.activities,  CATALOG.activities),
         acv:         normaliseGroupOp(raw.acv,         CATALOG.acv),
         supplements: normaliseGroupOp(raw.supplements, CATALOG.supplements),
@@ -1749,6 +1813,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
       if (isAll) {
         ops.water_target = null; ops.macros = null; ops.target_weight = null;
         ops.activities = null; ops.acv = null; ops.supplements = null;
+        ops.program = null;   // a split for "everyone" is almost always a mistake
       }
 
       const changes = describeOps(ops);
@@ -1948,6 +2013,44 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
             vals);
           appliedBits.push('macros');
         }
+      }
+      if (ops.program) {
+        // Replace-not-stack: the partial unique index allows one active program
+        // per member, so the current one is retired first. History (and every
+        // session logged against it) is preserved — only `active` flips.
+        await client.query(
+          `UPDATE workout_programs SET active=false WHERE patient_id=$1 AND active=true`,
+          [memberId]);
+        const { rows: [prog] } = await client.query(
+          `INSERT INTO workout_programs (name, patient_id, created_by, active)
+           VALUES ($1,$2,$3,true) RETURNING id`,
+          [ops.program.name, memberId, req.user.id]);
+
+        for (const [di, day] of ops.program.days.entries()) {
+          for (const [ei, ex] of day.exercises.entries()) {
+            // Find-or-create by name. The upsert's no-op UPDATE guarantees
+            // RETURNING id on both paths, and UNIQUE(name) makes it race-safe.
+            const { rows: [exRow] } = await client.query(
+              `INSERT INTO exercises (name, muscle_group, created_by)
+               VALUES ($1,$2,$3)
+               ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+               RETURNING id`,
+              [ex.name, ex.muscle_group, req.user.id]);
+            await client.query(
+              `INSERT INTO program_exercises
+                 (program_id, exercise_id, day_number, day_label, order_index,
+                  target_sets, target_reps_min, target_reps_max)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+              [prog.id, exRow.id, di + 1, day.label, ei,
+               ex.sets, ex.reps_min, ex.reps_max]);
+          }
+        }
+        appliedBits.push(`program "${ops.program.name}" (${ops.program.days.length} days)`);
+
+        // Tell the member — best effort, never blocks the transaction result.
+        require('../services/pushService').sendToUser(memberId, 'New workout program',
+          `${ops.program.name} — ${ops.program.days.length} day${ops.program.days.length > 1 ? 's' : ''}. Open Workout to see today's session.`,
+          'coach-ai').catch(() => {});
       }
       if (ops.note?.text) {
         await client.query(

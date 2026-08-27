@@ -379,12 +379,25 @@ export default function WorkoutLog({ date }) {
             <span className="font-semibold text-[#e0c98a]">{program.name}</span> — tap a day to pull in today's exercises:
           </p>
           <div className="flex gap-1.5 flex-wrap">
-            {programDays.map(day => (
-              <button key={day.day_number} onClick={() => addProgramDay(day)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-full bg-[rgba(201,162,39,0.10)] border border-[rgba(201,162,39,0.20)] text-[#e0c98a] hover:bg-[rgba(201,162,39,0.18)] transition-colors">
-                {day.day_label}
-              </button>
-            ))}
+            {(() => {
+              // Programs assigned by the coach carry the weekday in the label
+              // ("Push · Mon"). Highlight today's day so the member doesn't
+              // have to think about which circuit is due.
+              const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
+              return programDays.map(day => {
+                const isToday = String(day.day_label || '').includes(todayWd);
+                return (
+                  <button key={day.day_number} onClick={() => addProgramDay(day)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
+                      isToday
+                        ? 'bg-[#c9a227] border-[#c9a227] text-[#121316]'
+                        : 'bg-[rgba(201,162,39,0.10)] border-[rgba(201,162,39,0.20)] text-[#e0c98a] hover:bg-[rgba(201,162,39,0.18)]'
+                    }`}>
+                    {isToday && '▸ '}{day.day_label}
+                  </button>
+                );
+              });
+            })()}
           </div>
         </div>
       )}
