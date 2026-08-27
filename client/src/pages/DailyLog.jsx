@@ -765,6 +765,20 @@ export default function DailyLog() {
   // Height + sex power the hero's energy-balance chip (see calcBMR below)
   const [bodyStats, setBodyStats] = useState({ height_cm: null, gender: null });
 
+  // Coach's plan for today — the active program's day whose label carries
+  // today's weekday ("Leg · Thu"). Lets the dashboard announce the session
+  // instead of showing "— none" until the member digs into the panel.
+  const [coachPlan, setCoachPlan] = useState(null); // { programName, todayDay|null, dayCount }
+  useEffect(() => {
+    api.get('/programs/active').then(({ data }) => {
+      if (!data?.program) return;
+      const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
+      const days = data.days || [];
+      const todayDay = days.find(d => String(d.day_label || '').includes(todayWd)) || null;
+      setCoachPlan({ programName: data.program.name, todayDay, dayCount: days.length });
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     getMyProfile().then(({ data }) => {
       if (data?.coach_notes?.length) setCoachNotes(data.coach_notes);
@@ -1328,10 +1342,14 @@ export default function DailyLog() {
                           <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">
                           {workoutKcal > 0
                             ? <>{workoutKcal}<span className="text-[11px] text-[#7E8596]"> kcal</span></>
-                            : <span className="text-[#7E8596]">— none</span>}
+                            : coachPlan?.todayDay
+                              ? <span className="text-[#D4AF37]">{coachPlan.todayDay.day_label}</span>
+                              : <span className="text-[#7E8596]">— none</span>}
                         </span>
                         <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">
-                          🏋️ {workoutKcal > 0 ? 'burned' : 'workout'}
+                          🏋️ {workoutKcal > 0 ? 'burned'
+                            : coachPlan?.todayDay ? `workout · ${coachPlan.todayDay.exercises.length} exercises`
+                            : 'workout'}
                         </span>
                         </div>
                         <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
@@ -1678,6 +1696,59 @@ export default function DailyLog() {
                   </p>
                 </div>
               </Card>
+            )}
+
+            {/* From your coach today — the assigned plan, visible without digging.
+                Workout row opens the panel to start logging; targets row opens food. */}
+            {(coachPlan || protocol?.macros?.kcal) && (
+              <div className="rounded-2xl border border-[rgba(212,175,55,0.25)] bg-[#1A1C20] px-4 py-3 mb-3">
+                <p className="text-[10px] font-bold tracking-[0.12em] text-[#D4AF37] uppercase mb-2">
+                  📋 From your coach today
+                </p>
+
+                {coachPlan?.todayDay ? (
+                  <button onClick={() => { setHeroPanel('workout'); haptic(10); }}
+                    className="w-full text-left flex items-start gap-2.5 py-1.5">
+                    <span className="text-base leading-none mt-0.5">🏋️</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-white">
+                        {coachPlan.todayDay.day_label} — {coachPlan.todayDay.exercises.length} exercises
+                      </span>
+                      <span className="block text-[11px] text-[#9EA3B0] truncate">
+                        {coachPlan.todayDay.exercises.slice(0, 3).map(e => e.exercise_name).join(' · ')}
+                        {coachPlan.todayDay.exercises.length > 3 && ` +${coachPlan.todayDay.exercises.length - 3} more`}
+                      </span>
+                    </span>
+                    <span className="text-[11px] font-bold text-[#D4AF37] flex-shrink-0 mt-1">Start ›</span>
+                  </button>
+                ) : coachPlan ? (
+                  <div className="flex items-start gap-2.5 py-1.5">
+                    <span className="text-base leading-none mt-0.5">🛌</span>
+                    <span className="text-sm text-[#9EA3B0]">
+                      Rest day on <span className="text-white font-semibold">{coachPlan.programName}</span> — recovery counts. Walk, water, sleep.
+                    </span>
+                  </div>
+                ) : null}
+
+                {protocol?.macros?.kcal && (
+                  <button onClick={() => { setHeroPanel('food'); haptic(10); }}
+                    className="w-full text-left flex items-start gap-2.5 py-1.5 border-t border-white/[0.06] mt-1 pt-2.5">
+                    <span className="text-base leading-none mt-0.5">🎯</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-white">
+                        Eat to today's targets
+                      </span>
+                      <span className="block text-[11px] text-[#9EA3B0]">
+                        {protocol.macros.kcal} kcal
+                        {protocol.macros.pro ? ` · ${protocol.macros.pro}g protein` : ''}
+                        {protocol.macros.carb ? ` · ${protocol.macros.carb}g carbs` : ''}
+                        {protocol.macros.fat ? ` · ${protocol.macros.fat}g fat` : ''}
+                      </span>
+                    </span>
+                    <span className="text-[11px] font-bold text-[#D4AF37] flex-shrink-0 mt-1">Log ›</span>
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Logging streak — the member's own version of the coach strip */}
