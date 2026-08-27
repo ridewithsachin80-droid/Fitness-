@@ -1700,13 +1700,24 @@ export default function DailyLog() {
 
             {/* From your coach today — the assigned plan, visible without digging.
                 Workout row opens the panel to start logging; targets row opens food. */}
-            {(coachPlan || protocol?.macros?.kcal) && (
+            {(() => {
+              // The card shows only what is still PENDING from the coach.
+              // Once the member acts on a row, it leaves; when nothing is
+              // pending the whole card leaves — the tiles carry the progress.
+              const workoutDone = (workoutSummary.sets || []).length > 0
+                || (workoutSummary.cardio || []).length > 0;
+              const foodLogged  = (log.food || []).length > 0;
+              const showWorkout = !!coachPlan?.todayDay && !workoutDone;
+              const showRest    = !!coachPlan && !coachPlan.todayDay;
+              const showTargets = !!protocol?.macros?.kcal && !foodLogged;
+              if (!showWorkout && !showRest && !showTargets) return null;
+              return (
               <div className="rounded-2xl border border-[rgba(212,175,55,0.25)] bg-[#1A1C20] px-4 py-3 mb-3">
                 <p className="text-[10px] font-bold tracking-[0.12em] text-[#D4AF37] uppercase mb-2">
                   📋 From your coach today
                 </p>
 
-                {coachPlan?.todayDay ? (
+                {showWorkout ? (
                   <button onClick={() => { setHeroPanel('workout'); haptic(10); }}
                     className="w-full text-left flex items-start gap-2.5 py-1.5">
                     <span className="text-base leading-none mt-0.5">🏋️</span>
@@ -1721,7 +1732,7 @@ export default function DailyLog() {
                     </span>
                     <span className="text-[11px] font-bold text-[#D4AF37] flex-shrink-0 mt-1">Start ›</span>
                   </button>
-                ) : coachPlan ? (
+                ) : showRest ? (
                   <div className="flex items-start gap-2.5 py-1.5">
                     <span className="text-base leading-none mt-0.5">🛌</span>
                     <span className="text-sm text-[#9EA3B0]">
@@ -1730,9 +1741,11 @@ export default function DailyLog() {
                   </div>
                 ) : null}
 
-                {protocol?.macros?.kcal && (
+                {showTargets && (
                   <button onClick={() => { setHeroPanel('food'); haptic(10); }}
-                    className="w-full text-left flex items-start gap-2.5 py-1.5 border-t border-white/[0.06] mt-1 pt-2.5">
+                    className={`w-full text-left flex items-start gap-2.5 py-1.5 ${
+                      (showWorkout || showRest) ? 'border-t border-white/[0.06] mt-1 pt-2.5' : ''
+                    }`}>
                     <span className="text-base leading-none mt-0.5">🎯</span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-white">
@@ -1749,7 +1762,8 @@ export default function DailyLog() {
                   </button>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* Logging streak — the member's own version of the coach strip */}
             <StreakCard />

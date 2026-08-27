@@ -541,4 +541,48 @@ test('overlapping exercise between days keeps its sets across the switch', () =>
   assert.strictEqual(lp.sets.length, 1, 'shared exercise must carry its logged set over');
 });
 
+
+// ── Mirrors the "From your coach today" pending logic ─────────────────────────
+function coachCardRows({ coachPlan, macrosKcal, sets, cardio, food }) {
+  const workoutDone = (sets || []).length > 0 || (cardio || []).length > 0;
+  const foodLogged  = (food || []).length > 0;
+  return {
+    workout: !!coachPlan?.todayDay && !workoutDone,
+    rest:    !!coachPlan && !coachPlan.todayDay,
+    targets: !!macrosKcal && !foodLogged,
+  };
+}
+const anyRow = (r) => r.workout || r.rest || r.targets;
+
+console.log('\nCoach card pending logic');
+
+test('morning: workout + targets both pending', () => {
+  const r = coachCardRows({ coachPlan: { todayDay: {} }, macrosKcal: 1800, sets: [], cardio: [], food: [] });
+  assert.deepStrictEqual(r, { workout: true, rest: false, targets: true });
+});
+
+test('after first meal the targets row leaves, workout stays', () => {
+  const r = coachCardRows({ coachPlan: { todayDay: {} }, macrosKcal: 1800, sets: [], cardio: [], food: [{ name: 'Poha' }] });
+  assert.deepStrictEqual(r, { workout: true, rest: false, targets: false });
+});
+
+test('after logging a set the workout row leaves', () => {
+  const r = coachCardRows({ coachPlan: { todayDay: {} }, macrosKcal: 1800, sets: [{ reps: 10 }], cardio: [], food: [{}] });
+  assert.ok(!r.workout && !r.targets && !anyRow(r), 'everything done → card gone');
+});
+
+test('cardio alone also completes the workout row', () => {
+  const r = coachCardRows({ coachPlan: { todayDay: {} }, macrosKcal: null, sets: [], cardio: [{ type: 'walk' }], food: [] });
+  assert.ok(!r.workout);
+});
+
+test('rest day row stays all day (informational, no action)', () => {
+  const r = coachCardRows({ coachPlan: { todayDay: null }, macrosKcal: 1800, sets: [{}], cardio: [], food: [{}] });
+  assert.deepStrictEqual(r, { workout: false, rest: true, targets: false });
+});
+
+test('no program and no targets → no card at all', () => {
+  assert.ok(!anyRow(coachCardRows({ coachPlan: null, macrosKcal: null, sets: [], cardio: [], food: [] })));
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);
