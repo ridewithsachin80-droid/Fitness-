@@ -480,4 +480,65 @@ test('empty logs and no-content logs count zero', () => {
   assert.strictEqual(computeStreak([{ log_date: '2026-08-26', food_items: [] }], '2026-08-26').streak, 0);
 });
 
+
+// ── Mirrors WorkoutLog day-chip switch semantics ──────────────────────────────
+function switchProgramDay(prev, day) {
+  const hasLoggedData = (ex) =>
+    (ex.sets || []).some(st => String(st.reps).trim() !== '' || String(st.weight_kg).trim() !== '');
+  const dayIds = new Set(day.exercises.map(ex => ex.exercise_id));
+  const kept = prev.filter(ex => !ex.fromProgram || dayIds.has(ex.exercise_id) || hasLoggedData(ex));
+  const have = new Set(kept.map(ex => ex.exercise_id));
+  const added = day.exercises.filter(ex => !have.has(ex.exercise_id))
+    .map(ex => ({ exercise_id: ex.exercise_id, exercise_name: ex.exercise_name, sets: [], fromProgram: true }));
+  return [...kept.map(ex => dayIds.has(ex.exercise_id) ? { ...ex, fromProgram: true } : ex), ...added];
+}
+
+console.log('\nProgram day switching (the stacked-circuits bug)');
+
+const LEG  = { day_number: 3, exercises: [{ exercise_id: 1, exercise_name: 'Squat' }, { exercise_id: 2, exercise_name: 'Leg Press' }] };
+const PULL = { day_number: 2, exercises: [{ exercise_id: 3, exercise_name: 'Pull-Ups' }, { exercise_id: 4, exercise_name: 'Row' }] };
+
+test('tapping Pull after Leg replaces, not stacks', () => {
+  let sess = switchProgramDay([], LEG);
+  sess = switchProgramDay(sess, PULL);
+  assert.deepStrictEqual(sess.map(e => e.exercise_name).sort(), ['Pull-Ups', 'Row'],
+    'leg exercises with no data must leave when switching to pull');
+});
+
+test('an exercise with a logged set survives the switch', () => {
+  let sess = switchProgramDay([], LEG);
+  sess = sess.map(e => e.exercise_id === 1 ? { ...e, sets: [{ reps: '10', weight_kg: '80' }] } : e);
+  sess = switchProgramDay(sess, PULL);
+  assert.deepStrictEqual(sess.map(e => e.exercise_name).sort(), ['Pull-Ups', 'Row', 'Squat'],
+    'the squat with 10×80 logged is real data and must stay');
+});
+
+test('an empty set row does not count as logged data', () => {
+  let sess = switchProgramDay([], LEG);
+  sess = sess.map(e => e.exercise_id === 1 ? { ...e, sets: [{ reps: '', weight_kg: '' }] } : e);
+  sess = switchProgramDay(sess, PULL);
+  assert.ok(!sess.some(e => e.exercise_name === 'Squat'), 'a blank row from +Add Set is not data');
+});
+
+test('manually searched-in exercises are never swept by a chip tap', () => {
+  let sess = switchProgramDay([{ exercise_id: 99, exercise_name: 'Farmer Walk', sets: [] }], LEG);
+  sess = switchProgramDay(sess, PULL);
+  assert.ok(sess.some(e => e.exercise_name === 'Farmer Walk'));
+});
+
+test('re-tapping the same day is a no-op', () => {
+  let sess = switchProgramDay([], LEG);
+  const again = switchProgramDay(sess, LEG);
+  assert.deepStrictEqual(again.map(e => e.exercise_id).sort(), sess.map(e => e.exercise_id).sort());
+});
+
+test('overlapping exercise between days keeps its sets across the switch', () => {
+  const PUSH = { day_number: 1, exercises: [{ exercise_id: 2, exercise_name: 'Leg Press' }] };
+  let sess = switchProgramDay([], LEG);
+  sess = sess.map(e => e.exercise_id === 2 ? { ...e, sets: [{ reps: '12', weight_kg: '150' }] } : e);
+  sess = switchProgramDay(sess, PUSH);
+  const lp = sess.find(e => e.exercise_id === 2);
+  assert.strictEqual(lp.sets.length, 1, 'shared exercise must carry its logged set over');
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

@@ -269,10 +269,33 @@ export default function WorkoutLog({ date }) {
   // exercise already in today's session (logged freeform, or from a
   // different day picked earlier) is left untouched, so this can never
   // clobber real data, no matter what order things happen in.
+  // Which program day the member is currently viewing. Tapping a chip SWITCHES
+  // to that day: the previous day's untouched exercises leave, the new day's
+  // arrive. Anything with a set already entered is real training data and is
+  // never removed by a chip tap — Remove on the exercise is the only way out.
+  // Manually searched-in exercises (no fromProgram flag) are also left alone.
+  const [activeProgramDay, setActiveProgramDay] = useState(null);
+
+  const hasLoggedData = (ex) =>
+    (ex.sets || []).some(st => String(st.reps).trim() !== '' || String(st.weight_kg).trim() !== '');
+
   const addProgramDay = (day) => {
-    for (const ex of day.exercises) {
-      addExercise({ id: ex.exercise_id, name: ex.exercise_name });
-    }
+    haptic(15);
+    setActiveProgramDay(day.day_number);
+    setExercisesInSession(prev => {
+      const dayIds = new Set(day.exercises.map(ex => ex.exercise_id));
+      // Drop program-pulled exercises from other days that carry no data yet
+      const kept = prev.filter(ex =>
+        !ex.fromProgram || dayIds.has(ex.exercise_id) || hasLoggedData(ex));
+      const have = new Set(kept.map(ex => ex.exercise_id));
+      const added = day.exercises
+        .filter(ex => !have.has(ex.exercise_id))
+        .map(ex => ({ exercise_id: ex.exercise_id, exercise_name: ex.exercise_name,
+                      sets: [], fromProgram: true }));
+      // Existing entries that belong to this day get (re)marked as program ones
+      return [...kept.map(ex => dayIds.has(ex.exercise_id) ? { ...ex, fromProgram: true } : ex),
+              ...added];
+    });
   };
 
   const removeExercise = (exerciseId) => {
@@ -385,15 +408,18 @@ export default function WorkoutLog({ date }) {
               // have to think about which circuit is due.
               const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
               return programDays.map(day => {
-                const isToday = String(day.day_label || '').includes(todayWd);
+                const isToday  = String(day.day_label || '').includes(todayWd);
+                const isActive = activeProgramDay != null
+                  ? activeProgramDay === day.day_number   // member picked one → that wins
+                  : isToday;                              // nothing picked yet → highlight today
                 return (
                   <button key={day.day_number} onClick={() => addProgramDay(day)}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
-                      isToday
+                      isActive
                         ? 'bg-[#c9a227] border-[#c9a227] text-[#121316]'
                         : 'bg-[rgba(201,162,39,0.10)] border-[rgba(201,162,39,0.20)] text-[#e0c98a] hover:bg-[rgba(201,162,39,0.18)]'
                     }`}>
-                    {isToday && '▸ '}{day.day_label}
+                    {(isActive || (activeProgramDay == null && isToday)) && '▸ '}{day.day_label}
                   </button>
                 );
               });
