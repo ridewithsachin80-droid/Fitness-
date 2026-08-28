@@ -55,10 +55,17 @@ const fake = async (url, body) => {
     }
   } else {
     // /photo reader
-    out = scenario === 'labviacamera'
-      ? { kind: 'lab_report', reply: 'looks like a report', foods: [], body_metrics: [], weight_kg: null }
-      : { kind: 'body_scan', reply: 'Got it — 76.8 kg from your scale.',
-          foods: [], body_metrics: [{ name: 'Body Fat', value: 26.1, unit: '%' }], weight_kg: 76.8 };
+    if (scenario === 'labviacamera') {
+      out = { kind: 'lab_report', reply: 'looks like a report', foods: [], body_metrics: [], weight_kg: null };
+    } else if (scenario === 'scaleonly') {
+      // The real Dr Trust photo: one number, no metric tiles. The model used to
+      // answer "plus 0 body metrics from your scale".
+      out = { kind: 'body_scan', reply: 'Got it — 76.80 kg, plus 0 body metrics from your scale.',
+              foods: [], body_metrics: [], weight_kg: 76.8 };
+    } else {
+      out = { kind: 'body_scan', reply: 'Got it — 76.8 kg from your scale.',
+              foods: [], body_metrics: [{ name: 'Body Fat', value: 26.1, unit: '%' }], weight_kg: 76.8 };
+    }
   }
   return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] }, finishReason: 'STOP' }] } };
 };
@@ -97,6 +104,8 @@ const toPhoto = () => post('/api/ai-chat/photo', { image: FAKE_IMG, mimeType: 'i
     r.code === 200 && r.body.doc_type === 'scale' && r.body.route_to === 'photo');
   t('reply explains the re-route in member language',
     /scale reading/i.test(r.body.reply) && !/couldn't find any numeric/i.test(r.body.reply));
+  t("reply doesn't contradict a claim the member never made",
+    !/not a lab report/i.test(r.body.reply));
   t('no empty lab rows are returned to render a "Save 0 results" card',
     Array.isArray(r.body.results) && r.body.results.length === 0);
 
@@ -133,6 +142,13 @@ const toPhoto = () => post('/api/ai-chat/photo', { image: FAKE_IMG, mimeType: 'i
   r = await toPhoto();
   t('scale photo via 📷 still reads weight + metrics as before',
     r.body.weight_kg === 76.8 && r.body.body_metrics.length === 1 && r.body.kind === 'body_scan');
+  t('scale reply is built server-side, never "plus 0 body metrics"',
+    /Got it — 76.8 kg, plus 1 body metric from your scale\./.test(r.body.reply));
+
+  scenario = 'scaleonly';
+  r = await toPhoto();
+  t('a weight with no metrics reads as a clean sentence',
+    r.body.reply === 'Got it — 76.8 kg from your scale.' && !/0 body metric/.test(r.body.reply));
 
   server.close();
   console.log(ok ? '\nAll checks passed\n' : '\nFAILURES\n');

@@ -808,9 +808,9 @@ Return ONLY raw JSON, no markdown fences:
         // on a genuine report would silently lose their blood work.
         route_to: docType === 'unclear' ? 'ask' : 'photo',
         reply: docType === 'scale'
-          ? "That's a scale reading, not a lab report — reading it as your weigh-in instead."
+          ? "That's a scale reading — logging it as your weigh-in."
           : docType === 'meal'
-            ? "That looks like food rather than a lab report — reading it as a meal instead."
+            ? "That's food — reading it as a meal."
             : (question || "I can't tell what this is. Is it a lab report, or a photo of a meal or your scale?"),
         aiModel: usedModel,
       });
@@ -1163,7 +1163,7 @@ Return ONLY raw JSON, no markdown fences:
       return res.json({
         kind: 'lab_report',
         route_to: 'lab',
-        reply: "That looks like a lab report — reading it properly instead.",
+        reply: "That's a lab report — reading the results instead.",
         foods: [], body_metrics: [], workouts: [], activities: [], acv: [], supplements: [],
         weight_kg: null, water_ml_add: null, sleep: null,
         totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
@@ -1173,7 +1173,14 @@ Return ONLY raw JSON, no markdown fences:
 
     return res.json({
       kind: ['meal', 'body_scan', 'lab_report', 'other'].includes(parsed.kind) ? parsed.kind : null,
-      reply: String(parsed.reply || '').slice(0, 400) || fallbackReply,
+      // For a scale read the reply is built here rather than taken from the
+      // model — it produced lines like "plus 0 body metrics from your scale",
+      // which reads like a failure when a plain weigh-in is a perfectly good
+      // result. Deterministic copy also keeps the number consistent with the
+      // value actually being applied.
+      reply: weight_kg != null
+        ? `Got it — ${weight_kg} kg${body_metrics.length ? `, plus ${body_metrics.length} body metric${body_metrics.length > 1 ? 's' : ''}` : ''} from your scale.`
+        : (String(parsed.reply || '').slice(0, 400) || fallbackReply),
       foods,
       body_metrics,
       workouts: [], activities: [], acv: [], supplements: [],

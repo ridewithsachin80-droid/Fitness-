@@ -165,7 +165,7 @@ export default function AIChatLog() {
     if (!file || photoBusy) return;
     setPhotoBusy(true);
     haptic(10);
-    if (!silent) setMessages(m => [...m, { role: 'user', text: '📷 Photo' }]);
+    if (!silent) setMessages(m => [...m, { role: 'user', text: '📷 Photo attached' }]);
     try {
       const base64 = await downscale(file);
       const { data } = await api.post('/ai-chat/photo', {
@@ -223,10 +223,13 @@ export default function AIChatLog() {
     setLabBusy(true);
     haptic(10);
     const isPdf = file.type === 'application/pdf';
-    if (!silent) setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 Lab report (PDF)' : '📄 Photo of my lab report' }]);
+    // Neutral label: the member attaches a file, the app works out what it is.
+    // Claiming "my lab report" up front reads wrong when it turns out to be a
+    // scale photo, and pre-labels a decision the classifier hasn't made yet.
+    if (!silent) setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 PDF attached' : '📷 Photo attached' }]);
     // A full panel can take 30–60 seconds. Without this the screen sits blank
     // and members upload the same file again, doubling the load.
-    setMessages(m => [...m, { role: 'ai', text: 'Reading your report… a full panel can take up to a minute.', pending: true }]);
+    setMessages(m => [...m, { role: 'ai', text: 'Reading it… a full lab panel can take up to a minute.', pending: true }]);
     try {
       // Reject oversized files here rather than after a long upload. Express
       // caps the body at 12MB and base64 inflates by ~33%, so anything over
