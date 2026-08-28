@@ -23,7 +23,7 @@ import { useVoiceInput } from '../hooks/useVoiceInput';
 
 const join = (a, b) => (a && b ? `${a} ${b}` : a || b || '');
 
-export function useVoiceComposer({ onSend, accent = '#D4AF37' }) {
+export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }) {
   // null → card hidden. '' → card open, nothing captured yet.
   const [draft, setDraft] = useState(null);
   // Transcript accepted from finished takes; interim results render after it.
@@ -37,8 +37,20 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37' }) {
     lang: voiceLang,
     onInterim: (t) => setDraft(join(committedRef.current, t)),
     onFinal:   (t) => {
-      committedRef.current = join(committedRef.current, t);
-      setDraft(committedRef.current);
+      const full = join(committedRef.current, t).trim();
+      committedRef.current = full;
+      setDraft(full);
+      // The pause IS the send. Waiting for a button tap after already waiting
+      // for the transcript made a two-second sentence take fifteen. This is
+      // safe because the parse result is a PREVIEW — nothing reaches the log
+      // until the member taps Apply, so that card is the real review step.
+      // Guard against a stray cough producing a one-character AI call.
+      if (autoSend && full.length >= 2) {
+        committedRef.current = '';
+        setDraft(null);
+        haptic(20);
+        onSend(full);
+      }
     },
   });
 
@@ -86,7 +98,7 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37' }) {
         {voice.listening ? (
           <span className="text-[11px] text-red-400 font-medium flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
-            Listening… pause to finish, or tap the mic
+            {autoSend ? 'Listening… pause when done, I\'ll send it' : 'Listening… pause to finish, or tap the mic'}
           </span>
         ) : voice.transcribing ? (
           <span className="text-[11px] font-medium animate-pulse" style={{ color: accent }}>

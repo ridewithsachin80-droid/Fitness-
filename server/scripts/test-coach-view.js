@@ -625,4 +625,62 @@ test('a day label merely containing weekday-ish letters does not trip scheduling
   assert.strictEqual(r.todayDay.day_label, 'Strength');
 });
 
+
+// ── Mirrors the voice fast-path + auto-send decisions ────────────────────────
+// Real report (28 Aug 2026): "76.7kg 500ml water" took 10–15s to reach the AI.
+// Cause: the hook uploaded the audio to Gemini even when on-device recognition
+// had already produced the words the member watched appear on screen.
+function transcriptionRoute({ webSpeechText, blobBytes }) {
+  if (webSpeechText) return { source: 'on-device', uploads: false };
+  if (blobBytes < 1000) return { source: 'none', uploads: false };
+  return { source: 'gemini', uploads: true };
+}
+
+function autoSendDecision({ text, autoSend }) {
+  const full = String(text || '').trim();
+  return !!(autoSend && full.length >= 2) ? { sent: full, cardOpen: false }
+                                          : { sent: null, cardOpen: full.length > 0 };
+}
+
+console.log('\nVoice latency: transcription routing');
+
+test('on-device transcript is used immediately, no upload', () => {
+  const r = transcriptionRoute({ webSpeechText: 'weight 76.7 kg 500 ml water', blobBytes: 48000 });
+  assert.strictEqual(r.source, 'on-device');
+  assert.strictEqual(r.uploads, false, 'the Gemini round-trip was the 10-15s delay');
+});
+
+test('no on-device transcript falls back to Gemini', () => {
+  const r = transcriptionRoute({ webSpeechText: '', blobBytes: 48000 });
+  assert.strictEqual(r.source, 'gemini');
+  assert.strictEqual(r.uploads, true, 'iOS Safari has no recognition — upload is the only path');
+});
+
+test('a silent tap uploads nothing at all', () => {
+  assert.deepStrictEqual(transcriptionRoute({ webSpeechText: '', blobBytes: 300 }),
+    { source: 'none', uploads: false });
+});
+
+console.log('\nVoice auto-send after the pause');
+
+test('a real utterance is sent automatically and the card closes', () => {
+  const r = autoSendDecision({ text: 'weight 76.7, 500ml water', autoSend: true });
+  assert.strictEqual(r.sent, 'weight 76.7, 500ml water');
+  assert.strictEqual(r.cardOpen, false);
+});
+
+test('a stray one-character noise does not fire an AI call', () => {
+  assert.strictEqual(autoSendDecision({ text: 'a', autoSend: true }).sent, null);
+});
+
+test('whitespace-only transcript never sends', () => {
+  assert.strictEqual(autoSendDecision({ text: '   ', autoSend: true }).sent, null);
+});
+
+test('with autoSend off the text waits in the card for the Send button', () => {
+  const r = autoSendDecision({ text: '2 roti with ghee', autoSend: false });
+  assert.strictEqual(r.sent, null);
+  assert.strictEqual(r.cardOpen, true);
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

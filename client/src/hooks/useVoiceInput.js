@@ -177,10 +177,38 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
     clearTimeout(timerRef.current);
     stopSilenceWatch();
 
+    // Recognition delivers its last result asynchronously, so give it a brief
+    // moment to flush trailing words before we read the transcript. 400ms is
+    // imperceptible; without it the final word can be dropped.
+    const recogFlushed = new Promise(resolve => {
+      const r = recogRef.current;
+      if (!r) return resolve();
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      try { r.addEventListener('end', finish, { once: true }); } catch { /* older impl */ }
+      setTimeout(finish, 400);
+    });
     try { recogRef.current?.stop(); } catch { /* not started */ }
+    await recogFlushed;
 
     const recorder = recorderRef.current;
     const webSpeechText = finalTextRef.current;
+
+    // ── Fast path ────────────────────────────────────────────────────────────
+    // On-device recognition already produced the words the member watched
+    // appear on screen. Uploading the audio to Gemini for a SECOND opinion
+    // added 10–15s of dead time before anything could happen — and risked
+    // sending text different from what they just read. So when we have an
+    // on-device transcript, use it immediately and skip the network entirely.
+    // Gemini remains the fallback for browsers without recognition (iOS
+    // Safari), where it is the only way to get a transcript at all.
+    if (webSpeechText) {
+      try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch { /* noop */ }
+      chunksRef.current = [];
+      releaseStream();
+      optsRef.current.onFinal?.(webSpeechText);
+      return;
+    }
 
     if (recorder && recorder.state !== 'inactive') {
       const stopped = new Promise(resolve => { recorder.onstop = resolve; });
