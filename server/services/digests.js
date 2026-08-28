@@ -54,8 +54,14 @@ function buildRecapBody({ totals, kcalTarget, waterMl, waterTarget, weightLogged
   return parts.join(' · ');
 }
 
-function buildDigestBody({ total, loggedYesterday, silent }) {
+function buildDigestBody({ total, loggedYesterday, silent, milestones = [] }) {
   const lines = [`${loggedYesterday} of ${total} members logged yesterday.`];
+  // Milestones lead: a congratulations is time-sensitive in a way that a
+  // compliance count never is. Named so the coach can act in one message.
+  if (milestones.length) {
+    const m = milestones.slice(0, 3).map(x => `${x.name} — ${x.text}`).join('; ');
+    lines.push(`🎉 ${m}${milestones.length > 3 ? ` +${milestones.length - 3} more` : ''}. Say "celebrate <name>" to send a note.`);
+  }
   if (silent.length) {
     const names = silent.slice(0, 5).map(s => `${s.name} (${s.days}d)`).join(', ');
     lines.push(`Quiet 3+ days: ${names}${silent.length > 5 ? ` +${silent.length - 5} more` : ''}.`);
@@ -156,10 +162,19 @@ async function sendCoachDigests(istDate) {
       .sort((a, b) => b.days - a.days)
       .map(m => ({ ...m, days: m.days > 60 ? '60+' : m.days }));
 
+    let milestones = [];
+    try {
+      const { loadCoachMemberStats } = require('./milestones');
+      milestones = (await loadCoachMemberStats({ id: c.id, role: 'monitor' }))
+        .filter(s => s.milestones.length)
+        .map(s => ({ name: s.name, text: s.milestones[0] }));
+    } catch (e) { console.error('digest milestones unavailable:', e.message); }
+
     const body = buildDigestBody({
       total: members.length,
       loggedYesterday: members.filter(m => m.logged_yesterday).length,
       silent,
+      milestones,
     });
     const title = 'Morning digest';
     let ok = true;

@@ -1608,7 +1608,9 @@ function coachAudit(actor, action, targetId, targetName, detail) {
 }
 
 // ── Coach prompt ─────────────────────────────────────────────────────────────
-function buildCoachPrompt(message, members) {
+function buildCoachPrompt(message, members, memberStats = []) {
+  const { statsLine } = require('../services/milestones');
+  const statsById = new Map(memberStats.map(s => [s.id, statsLine(s)]));
   const cat = (list) => list.map(i => `"${i.id}" (${i.label})`).join(', ');
   return `You are the AI assistant for a fitness COACH managing members in an Indian
 fitness coaching app. The coach typed an instruction in casual language (English,
@@ -1619,8 +1621,9 @@ If the coach schedules a workout day for "today"/"aaj", use today's weekday.
 
 Coach's message: "${message}"
 
-MEMBERS (match names loosely — partial/first names are fine):
-${members.map(m => `  - "${m.name}"`).join('\n')}
+MEMBERS (match names loosely — partial/first names are fine).
+Progress facts are REAL, computed from their logs — quote them, never invent:
+${members.map(m => `  - "${m.name}"${statsById.has(m.id) ? ` — ${statsById.get(m.id)}` : ''}`).join('\n')}
 
 PROTOCOL ITEM CATALOG (the ONLY valid ids):
 Activities: ${cat(CATALOG.activities)}
@@ -1644,6 +1647,16 @@ SUPPORTED OPERATIONS per command:
   keeping the coach's intent. If coach gives exact words, use them.
 - push: { "title": "...", "body": "..." } — instant phone notification.
   Only when the coach says notify/push/alert immediately.
+- CELEBRATION / ENCOURAGEMENT: when the coach asks to congratulate, celebrate,
+  encourage, motivate or "write a message" to a member, put the message in
+  note.text (and set push so it reaches their phone). Write it yourself:
+  · Use ONLY numbers from that member's line above. If a number is not there,
+    do not state it — no invented starting weights, durations or percentages.
+  · 2–4 short sentences. Warm, specific, in the coach's voice. Name the real
+    figures and the habits behind them (consistent logging, walks, fasting).
+  · If a MILESTONE is listed for them, lead with it.
+  · No medical claims, no diagnosis, at most one or two emojis.
+  · Address them by first name.
 - meal_plan: prescribes SPECIFIC FOODS for a member's meal(s) TODAY. Shape:
   { "meals": [
       { "meal": "Dinner",
@@ -1888,8 +1901,15 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
     if (!members.length) {
       return res.json({ reply: 'You have no active members assigned yet.', actions: [] });
     }
+    // Progress facts so a congratulations message can quote real numbers
+    // instead of inventing them. Never fatal — the coach's other commands must
+    // keep working if this query has a bad day.
+    let memberStats = [];
+    try {
+      memberStats = await require('../services/milestones').loadCoachMemberStats(req.user);
+    } catch (e) { console.error('member stats unavailable:', e.message); }
 
-    const { text: rawText, provider } = await callAI(buildCoachPrompt(cleanMsg, members));
+    const { text: rawText, provider } = await callAI(buildCoachPrompt(cleanMsg, members, memberStats));
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(jsonText);
 

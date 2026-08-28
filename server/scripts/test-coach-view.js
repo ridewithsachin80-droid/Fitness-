@@ -743,4 +743,71 @@ test("a genuine parse keeps the model's summary", () => {
   assert.strictEqual(r, 'Got it — 40 minute walk and 1L water.');
 });
 
+
+// ── Milestone detection (real module) ────────────────────────────────────────
+const { detectMilestones, statsLine } = require('../services/milestones');
+
+console.log('\nMilestone detection');
+
+test("Padmini's real case: 85.2 → 84.9 crosses below 85", () => {
+  const ms = detectMilestones({ start_weight: 94, latest_weight: 84.9, prev_weight: 85.2,
+                                lowest_before: 85.2, target_weight: 80 });
+  assert.ok(ms.some(m => /below 85 kg/.test(m)));
+  assert.ok(ms.some(m => /new lowest weight/.test(m)));
+});
+
+test('the same weight next morning does NOT re-fire the milestone', () => {
+  const ms = detectMilestones({ start_weight: 94, latest_weight: 84.8, prev_weight: 84.9,
+                                lowest_before: 84.9, target_weight: 80 });
+  assert.ok(!ms.some(m => /below 85 kg/.test(m)), 'congratulating daily would cheapen it');
+  assert.ok(ms.some(m => /new lowest/.test(m)), 'but it is still a new best');
+});
+
+test('a 5 kg-lost threshold fires only on the crossing weigh-in', () => {
+  const crossing = detectMilestones({ start_weight: 94, latest_weight: 88.9, prev_weight: 89.2, lowest_before: 89.2 });
+  assert.ok(crossing.some(m => /5 kg down from the starting 94/.test(m)));
+  const after = detectMilestones({ start_weight: 94, latest_weight: 88.5, prev_weight: 88.9, lowest_before: 88.9 });
+  assert.ok(!after.some(m => /kg down from the starting/.test(m)));
+});
+
+test('reaching goal weight leads the list', () => {
+  const ms = detectMilestones({ start_weight: 94, latest_weight: 79.8, prev_weight: 80.4,
+                                lowest_before: 80.4, target_weight: 80 });
+  assert.ok(/reached the goal weight of 80 kg/.test(ms[0]));
+});
+
+test('a weight gain produces no milestones', () => {
+  assert.deepStrictEqual(
+    detectMilestones({ start_weight: 94, latest_weight: 86.0, prev_weight: 85.2, lowest_before: 85.2 }), []);
+});
+
+test('streak milestones fire only on exact days', () => {
+  assert.ok(detectMilestones({ latest_weight: 80, streak: 7 }).some(m => /7 days logged in a row/.test(m)));
+  assert.strictEqual(detectMilestones({ latest_weight: 80, streak: 8 }).length, 0);
+});
+
+test('a member with no weigh-in yields nothing to celebrate', () => {
+  assert.deepStrictEqual(detectMilestones({ start_weight: 94, latest_weight: null }), []);
+});
+
+test('the prompt line quotes only real figures', () => {
+  const line = statsLine({ start_weight: 94, latest_weight: 84.9, prev_weight: 85.2,
+                           lowest_before: 85.2, target_weight: 80, days_logged_14: 12, streak: 6 });
+  assert.ok(/now 84.9 kg/.test(line) && /down 9.1 from 94/.test(line) && /goal 80/.test(line));
+  assert.ok(/logged 12\/14 days/.test(line));
+  assert.ok(/MILESTONE: dropped below 85 kg/.test(line));
+});
+
+test('a member without a start weight still gets a usable line', () => {
+  const line = statsLine({ latest_weight: 72.4, days_logged_14: 3 });
+  assert.ok(/now 72.4 kg/.test(line) && !/down/.test(line) && !/NaN/.test(line));
+});
+
+test('digest leads with milestones and tells the coach how to act', () => {
+  const body = digests.buildDigestBody({ total: 12, loggedYesterday: 9, silent: [],
+    milestones: [{ name: 'Padmini', text: 'dropped below 85 kg for the first time' }] });
+  assert.ok(/🎉 Padmini — dropped below 85 kg/.test(body));
+  assert.ok(/celebrate <name>/.test(body));
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);
