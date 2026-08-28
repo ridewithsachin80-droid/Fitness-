@@ -30,6 +30,26 @@ const dayRow = {
 // pool waves through, which is exactly how two such bugs shipped on 26 Aug.
 const USE_REAL_DB = !!process.env.TEST_DATABASE_URL;
 if (USE_REAL_DB) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+
+// Seed today's data at run time rather than relying on rows seeded by hand on
+// some earlier day — "today" moves, and a fixture pinned to 27 Aug silently
+// stops exercising the code the morning after.
+async function seedToday(pool) {
+  const IST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  await pool.query(`INSERT INTO users (id,name,phone,role,password,active)
+    VALUES (214,'Sachin','9999999999','patient','x',true) ON CONFLICT (id) DO NOTHING`);
+  await pool.query(`INSERT INTO patient_profiles (user_id, macro_kcal, macro_pro, water_target, target_weight, start_weight)
+    VALUES (214,1800,120,3000,70,78.5)
+    ON CONFLICT (user_id) DO UPDATE SET macro_kcal=1800, macro_pro=120, water_target=3000`);
+  await pool.query(`DELETE FROM daily_logs WHERE patient_id=214 AND log_date >= $1::date - 7`, [IST]);
+  await pool.query(`INSERT INTO daily_logs (patient_id, log_date, water_ml, food_items) VALUES
+    (214, $1::date, 800,
+     '[{"name":"Ghee","grams":12,"per_100g":{"calories":900,"protein":0,"total_carbs":0,"fat":99.5}},
+       {"name":"Soppina Palya","grams":200,"per_100g":{"calories":23,"protein":2.9,"total_carbs":3.6,"fat":0.4}}]'),
+    (214, $1::date - 2, 2500,
+     '[{"name":"Chapati","grams":90,"per_100g":{"calories":297,"protein":8,"total_carbs":61,"fat":3.7}}]')`, [IST]);
+  await pool.query(`UPDATE daily_logs SET weight_kg=84.0 WHERE patient_id=214 AND log_date = $1::date - 2`, [IST]);
+}
 const poolPath = require.resolve(path.join(SERVER, 'db/pool.js'));
 const stubPool = {
   query: async (sql) => {
@@ -100,6 +120,7 @@ const req = (body) => new Promise(r => {
 });
 
 (async () => {
+  if (USE_REAL_DB) await seedToday(require(poolPath));
   const { code, body } = await req({ message: 'how many calories have i consumed today?', context: { waterTargetMl: 3000 } });
   let ok = true;
   const t = (n, c) => { console.log((c ? '  ✓ ' : '  ✗ ') + n); if (!c) ok = false; };
