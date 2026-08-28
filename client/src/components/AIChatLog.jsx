@@ -715,8 +715,11 @@ export default function AIChatLog() {
     });
   }, [messages, mealSlots, computePending, applyWorkouts]);
 
-  // ── Undo last apply ────────────────────────────────────────────────────────
-  const undo = useCallback((mi) => {
+  // ── Undo / Edit last apply ─────────────────────────────────────────────────
+  // Both roll the log back to its pre-apply snapshot; they differ only in what
+  // the card becomes afterwards. Undo → "Changes reverted." Edit → the preview
+  // card again, editable, so the member can fix a value and re-apply.
+  const rollback = useCallback((mi, { reopen }) => {
     const snap = undoRef.current;
     if (!snap) return;
     const { updateLog, saveLog } = useLogStore.getState();
@@ -747,10 +750,18 @@ export default function AIChatLog() {
 
     setMessages(prev => {
       const next = [...prev];
-      next[mi] = { ...next[mi], applied: false, undone: true, pending: null };
+      next[mi] = { ...next[mi],
+        applied: false,
+        undone: !reopen,          // reopening isn't a revert — the card comes back
+        pending: null,
+        editing: !!reopen,
+      };
       return next;
     });
   }, []);
+
+  const undo = useCallback((mi) => rollback(mi, { reopen: false }), [rollback]);
+  const editApplied = useCallback((mi) => rollback(mi, { reopen: true }), [rollback]);
 
   if (!open) return null;
 
@@ -1166,6 +1177,12 @@ export default function AIChatLog() {
                       )}
 
                       {/* ── Apply / Applied / Undo ── */}
+                      {m.editing && !m.applied && (
+                        <p className="text-[11px] text-[#D4AF37] font-medium">
+                          ✏️ Editing — that entry has been rolled back. Adjust below and apply again.
+                        </p>
+                      )}
+
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
                         <button onClick={() => applyAll(mi)}
                           style={{ minHeight: 48 }}
@@ -1182,10 +1199,18 @@ export default function AIChatLog() {
                             <p className={`text-[13px] font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-emerald-400'}`}>
                               {m.workoutSaveFailed ? '⚠ Applied — workout not saved' : '✓ Applied & saved'}
                             </p>
-                            <button onClick={() => undo(mi)}
-                              className="text-[11px] font-semibold text-[#9EA3B0] hover:text-white underline underline-offset-2 transition-colors">
-                              Undo
-                            </button>
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => editApplied(mi)}
+                                style={{ minHeight: 32 }}
+                                className="text-[11px] font-semibold text-[#D4AF37] hover:text-[#F0E2B6] transition-colors">
+                                ✏️ Edit
+                              </button>
+                              <button onClick={() => undo(mi)}
+                                style={{ minHeight: 32 }}
+                                className="text-[11px] font-semibold text-[#9EA3B0] hover:text-white underline underline-offset-2 transition-colors">
+                                Undo
+                              </button>
+                            </div>
                           </div>
                           {m.workoutSaveFailed && (
                             <p className="text-[11px] text-amber-300 leading-relaxed">
@@ -1199,6 +1224,9 @@ export default function AIChatLog() {
                           ) : (
                             <p className="text-[11px] text-[#9EA3B0]">Everything's logged for today — great job! 🎉</p>
                           )}
+                          <p className="text-[10px] text-[#7E8596] leading-relaxed">
+                            Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.
+                          </p>
                         </div>
                       )}
 

@@ -683,4 +683,64 @@ test('with autoSend off the text waits in the card for the Send button', () => {
   assert.strictEqual(r.cardOpen, true);
 });
 
+
+// ── Mirrors Undo / Edit card-state transitions ───────────────────────────────
+function rollbackCard(msg, { reopen }) {
+  return { ...msg, applied: false, undone: !reopen, pending: null, editing: !!reopen };
+}
+// The preview (with Apply) renders when there are items and the card is
+// neither applied nor undone — see countIncluded(...) && !applied && !undone.
+const previewVisible = (m) => !m.applied && !m.undone;
+
+console.log('\nApplied card: Undo vs Edit');
+
+test('Edit reopens the preview so values can be changed and re-applied', () => {
+  const card = rollbackCard({ applied: true, pending: ['3 activities'] }, { reopen: true });
+  assert.strictEqual(card.applied, false);
+  assert.strictEqual(card.undone, false, 'editing is not a revert — the card must come back');
+  assert.ok(previewVisible(card));
+  assert.strictEqual(card.editing, true);
+});
+
+test('Undo closes the card as reverted, no preview', () => {
+  const card = rollbackCard({ applied: true, pending: ['3 activities'] }, { reopen: false });
+  assert.strictEqual(card.undone, true);
+  assert.ok(!previewVisible(card), 'a reverted entry should not offer Apply again');
+  assert.strictEqual(card.editing, false);
+});
+
+test('both paths clear the stale pending summary', () => {
+  for (const reopen of [true, false]) {
+    assert.strictEqual(rollbackCard({ applied: true, pending: ['x'] }, { reopen }).pending, null);
+  }
+});
+
+// ── Never claim a save that did not happen ───────────────────────────────────
+// Real report: sending "walking 40 minutes" twice replied "Got it — logged a
+// 40-minute walk" while logging nothing, because the model's sentence was used
+// even when every array came back empty.
+function parseReply({ modelReply, nothingParsed }) {
+  return nothingParsed
+    ? "Nothing new to log there — it may already be in today's log. Tell me what to change (\"make the walk 30 minutes\"), or add something new."
+    : (modelReply || "Here's what I understood — review and apply.");
+}
+
+console.log('\nReply honesty');
+
+test('a false "logged it" claim is overridden when nothing parsed', () => {
+  const r = parseReply({ modelReply: 'Got it — logged a 40-minute walk.', nothingParsed: true });
+  assert.ok(!/Got it/.test(r), 'the model must not be allowed to claim a save');
+  assert.ok(/Nothing new to log/.test(r));
+});
+
+test('the reply points at the fix rather than dead-ending', () => {
+  const r = parseReply({ modelReply: '', nothingParsed: true });
+  assert.ok(/make the walk 30 minutes/.test(r), 'show the member how to correct it');
+});
+
+test("a genuine parse keeps the model's summary", () => {
+  const r = parseReply({ modelReply: 'Got it — 40 minute walk and 1L water.', nothingParsed: false });
+  assert.strictEqual(r, 'Got it — 40 minute walk and 1L water.');
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

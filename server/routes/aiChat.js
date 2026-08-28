@@ -1482,10 +1482,13 @@ router.post('/parse', async (req, res) => {
       !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length && corrections.length === 0;
 
     return res.json({
-      reply: String(parsed.reply || '').slice(0, 400) ||
-        (nothingParsed
-          ? 'I couldn\'t find anything to log in that — try e.g. "weight 82.5, walk done, 2 chapati for lunch, 1L water".'
-          : 'Here\'s what I understood — review and apply.'),
+      // When nothing was parsed the model's own sentence is NOT trustworthy: a
+      // repeated "walking 40 minutes" produced "Got it — logged a 40-minute
+      // walk" with empty arrays, so the app claimed a save that never
+      // happened. If there is nothing to apply, say so in our own words.
+      reply: nothingParsed
+        ? "Nothing new to log there — it may already be in today's log. Tell me what to change (\"make the walk 30 minutes\"), or add something new."
+        : (String(parsed.reply || '').slice(0, 400) || 'Here\'s what I understood — review and apply.'),
       weight_kg,
       activities,
       acv,
