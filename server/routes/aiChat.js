@@ -633,6 +633,9 @@ function extractJSON(text) {
 // /patients/me/labs as if they had been typed.
 router.post('/lab-report', async (req, res) => {
   const { file, mimeType } = req.body || {};
+  // The member overrode our classification ("It's a lab report"). Their word
+  // beats the model's guess — read it as a report and skip the handoff.
+  const force = !!(req.body || {}).force;
 
   if (!file || typeof file !== 'string') {
     return res.status(400).json({ error: 'A report file is required' });
@@ -646,9 +649,26 @@ router.post('/lab-report', async (req, res) => {
     return res.status(500).json({ error: 'Reading reports needs GEMINI_API_KEY to be set' });
   }
 
-  const prompt = `You are reading a pathology lab report from an Indian laboratory.
+  const prompt = `${force ? `The member has CONFIRMED this is a lab report. Set doc_type to
+"lab_report" and extract the test rows even if the layout is unusual.
 
-Extract EVERY numeric test result. For each one give:
+` : ''}You are looking at a file a fitness-app member uploaded using
+the "lab report" button. They may well have used the wrong button, so FIRST
+decide what the image actually is, then act accordingly.
+
+Set "doc_type" to exactly one of:
+  "lab_report"  a pathology/laboratory report with printed test rows
+  "scale"       a weighing-scale reading — a photo of a scale's LED/LCD screen
+                showing a weight, a smart-scale phone-app screenshot, or a body
+                composition machine printout (InBody etc.)
+  "meal"        a photo of food, a plate, a packet or a restaurant dish
+  "unclear"     you genuinely cannot tell, or it is none of the above
+If the image is a scale or a meal, set "results" to [] and do NOT invent lab
+rows from it — the app will handle it on the correct path. When doc_type is
+"unclear", put a SHORT plain-English question to the member in "question"
+(e.g. "Is this your lab report, or a photo of your meal?").
+
+Only when doc_type is "lab_report", extract EVERY numeric test result. For each one give:
   test_name  the marker as printed, cleaned up (e.g. "HbA1c", "Vitamin D",
              "Total Cholesterol"). Expand obvious abbreviations. Do not invent
              markers that are not on the page.
@@ -679,6 +699,8 @@ RULES
 
 Return ONLY raw JSON, no markdown fences:
 {
+  "doc_type": "lab_report",
+  "question": null,
   "test_date": "2026-08-14",
   "lab_name": "Metropolis",
   "results": [
@@ -771,7 +793,31 @@ Return ONLY raw JSON, no markdown fences:
     const unreadable = results.filter(r => r.value === null).length;
     const lowConf = results.filter(r => r.confidence === 'low').length;
 
+    // The member pressed the report button but sent something else. Rather
+    // than the dead-end "I couldn't find any numeric results", tell the client
+    // which pipeline this belongs on — /photo already reads scale displays,
+    // scale-app screenshots and meals. The client re-sends the same file there.
+    const docType = ['lab_report', 'scale', 'meal', 'unclear'].includes(parsed.doc_type)
+      ? parsed.doc_type : 'lab_report';
+    if (docType !== 'lab_report' && !results.length && !force) {
+      const question = parsed.question ? String(parsed.question).slice(0, 200) : null;
+      return res.json({
+        doc_type: docType,
+        results: [],
+        // 'photo' → auto-route. 'ask' → let the member decide; guessing wrong
+        // on a genuine report would silently lose their blood work.
+        route_to: docType === 'unclear' ? 'ask' : 'photo',
+        reply: docType === 'scale'
+          ? "That's a scale reading, not a lab report — reading it as your weigh-in instead."
+          : docType === 'meal'
+            ? "That looks like food rather than a lab report — reading it as a meal instead."
+            : (question || "I can't tell what this is. Is it a lab report, or a photo of a meal or your scale?"),
+        aiModel: usedModel,
+      });
+    }
+
     res.json({
+      doc_type: docType,
       test_date: testDate,
       lab_name: parsed.lab_name ? String(parsed.lab_name).slice(0, 120) : null,
       results,
@@ -954,7 +1000,13 @@ B) A WEIGHT OR BODY-COMPOSITION READING — a smart-scale app screenshot
    (Body Fat %, Muscle Mass, BMR, Visceral Fat tiles...), a body-analysis
    machine printout (InBody or similar), or a photo of a weighing scale's
    display showing a number.
-C) Neither.
+C) A LAB / PATHOLOGY REPORT — a printed or scanned page of test rows with
+   values and reference ranges (Haemoglobin, HbA1c, Vitamin D, Lipid Profile...).
+   Members sometimes send these to the camera button by mistake.
+D) Neither.
+
+For type C: set "kind" to "lab_report", empty foods, null weight, empty
+body_metrics. Do not try to read the individual test rows here.
 
 For type B:
 - "weight_kg": the main body weight in kg. If the screen shows pounds, convert
@@ -968,8 +1020,10 @@ For type B:
 - "foods": [] for type B. Set "reply" to one short line stating the weight and
   how many metrics you read, e.g. "Got it — 84.35 kg, plus 18 body metrics
   from your scale."
-For type C: empty foods, null weight, empty body_metrics, and a reply saying
+For type D: empty foods, null weight, empty body_metrics, and a reply saying
 what the image seems to be and that you could not find food or readings in it.
+
+ALWAYS include "kind": one of "meal", "body_scan", "lab_report", "other".
 
 For type A (a meal), "weight_kg" is null, "body_metrics" is [], and:
 
@@ -1103,7 +1157,22 @@ Return ONLY raw JSON, no markdown fences:
         ? `Got it — ${weight_kg} kg from your scale${body_metrics.length ? `, plus ${body_metrics.length} body metrics` : ''}.`
         : "I couldn't spot any food or readings in that photo — try a clearer shot.";
 
+    // Mirror of the lab-report handoff: a report sent to the camera button gets
+    // routed to the reader rather than coming back as "no food found".
+    if (parsed.kind === 'lab_report' && !foods.length && weight_kg == null && !body_metrics.length) {
+      return res.json({
+        kind: 'lab_report',
+        route_to: 'lab',
+        reply: "That looks like a lab report — reading it properly instead.",
+        foods: [], body_metrics: [], workouts: [], activities: [], acv: [], supplements: [],
+        weight_kg: null, water_ml_add: null, sleep: null,
+        totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
+        aiProvider: 'gemini-vision', aiModel: usedModel,
+      });
+    }
+
     return res.json({
+      kind: ['meal', 'body_scan', 'lab_report', 'other'].includes(parsed.kind) ? parsed.kind : null,
       reply: String(parsed.reply || '').slice(0, 400) || fallbackReply,
       foods,
       body_metrics,
@@ -1535,6 +1604,9 @@ function buildCoachPrompt(message, members) {
 fitness coaching app. The coach typed an instruction in casual language (English,
 Hinglish, or Kannada-English mix). Parse it into structured commands.
 
+Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'Asia/Kolkata' })} (IST).
+If the coach schedules a workout day for "today"/"aaj", use today's weekday.
+
 Coach's message: "${message}"
 
 MEMBERS (match names loosely — partial/first names are fine):
@@ -1577,7 +1649,13 @@ SUPPORTED OPERATIONS per command:
   · per_100g: your best nutrition estimate for EVERY item — calories, protein,
     total_carbs, fat (numbers, per 100 g). The member logs against these.
   · meal: use the coach's word (Breakfast/Lunch/Dinner/Snack …), capitalised.
-  · Re-prescribing the same meal today REPLACES it — say so in reply.
+  · "mode": "replace" (default — a full meal prescription) or "append" — use
+    append when the coach is ADDING to an existing plan: "add whey protein to
+    the lunch", "lunch mein X bhi daal do", "also give him a banana at dinner".
+    Whey protein, peanut butter etc. named as part of a MEAL are meal_plan
+    items (with grams: 1 scoop whey ≈ 30 g), NOT protocol supplements —
+    supplements are standing daily pills/powders, not food for a specific meal.
+  · Replace mode overwrites that meal's plan — say so in reply.
 - program: assigns a WORKOUT PROGRAM / training split. Shape:
   { "name": "Push Pull Legs",
     "days": [
@@ -1696,7 +1774,8 @@ function normaliseMealPlan(raw) {
                qty_text: it.qty_text ? String(it.qty_text).slice(0, 40) : `${grams} g`,
                per_100g };
     }).filter(Boolean);
-    return meal && items.length ? { meal, items } : null;
+    const mode = String(m.mode || '').toLowerCase() === 'append' ? 'append' : 'replace';
+    return meal && items.length ? { meal, items, mode } : null;
   }).filter(Boolean);
   return meals.length ? { meals } : null;
 }
@@ -1750,7 +1829,7 @@ function describeOps(cmd) {
     for (const m of cmd.meal_plan.meals) {
       const kcal = Math.round(m.items.reduce((a, it) => a + (it.per_100g.calories * it.grams / 100), 0));
       const names = m.items.slice(0, 4).map(it => `${it.name} ${it.grams}g`).join(', ');
-      out.push({ icon: '🍽️', text: `${m.meal} plan (~${kcal} kcal): ${names}${m.items.length > 4 ? ` +${m.items.length - 4} more` : ''}` });
+      out.push({ icon: '🍽️', text: `${m.mode === 'append' ? `Add to ${m.meal} plan` : `${m.meal} plan`} (~${kcal} kcal): ${names}${m.items.length > 4 ? ` +${m.items.length - 4} more` : ''}` });
     }
   }
   if (cmd.program) {
@@ -2112,13 +2191,30 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
         for (const m of ops.meal_plan.meals) {
           // Same-day re-prescription replaces — the UNIQUE constraint makes the
           // upsert atomic, and the member always sees exactly one plan per meal.
+          let itemsToStore = m.items;
+          if (m.mode === 'append') {
+            // "Add whey to the lunch" must not wipe the six items already
+            // prescribed. Merge with the stored plan; a re-mention of the same
+            // food updates it (new grams win) rather than duplicating.
+            const { rows: [existing] } = await client.query(
+              `SELECT items FROM meal_plans
+               WHERE patient_id=$1 AND plan_date=$2 AND meal=$3`,
+              [memberId, getISTDate(), m.meal]);
+            if (existing?.items?.length) {
+              const newNames = new Set(m.items.map(it => it.name.toLowerCase()));
+              itemsToStore = [
+                ...existing.items.filter(it => !newNames.has(String(it.name).toLowerCase())),
+                ...m.items,
+              ].slice(0, 20);
+            }
+          }
           await client.query(
             `INSERT INTO meal_plans (patient_id, monitor_id, plan_date, meal, items)
              VALUES ($1,$2,$3,$4,$5)
              ON CONFLICT (patient_id, plan_date, meal)
              DO UPDATE SET items = EXCLUDED.items, monitor_id = EXCLUDED.monitor_id,
                            created_at = NOW()`,
-            [memberId, req.user.id, getISTDate(), m.meal, JSON.stringify(m.items)]);
+            [memberId, req.user.id, getISTDate(), m.meal, JSON.stringify(itemsToStore)]);
         }
         appliedBits.push(`meal plan (${ops.meal_plan.meals.map(m => m.meal).join(', ')})`);
         require('../services/pushService').sendToUser(memberId, 'Meal plan from your coach',

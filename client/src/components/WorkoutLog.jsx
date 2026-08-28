@@ -407,8 +407,14 @@ export default function WorkoutLog({ date }) {
               // ("Push · Mon"). Highlight today's day so the member doesn't
               // have to think about which circuit is due.
               const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
-              return programDays.map(day => {
-                const isToday  = String(day.day_label || '').includes(todayWd);
+              const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+              const scheduled = programDays.some(d => WD.some(w => String(d.day_label || '').includes(w)));
+              return programDays.map((day, di) => {
+                // Unscheduled program (no weekdays in labels): the first day is
+                // today's default rather than nothing being highlighted.
+                const isToday = scheduled
+                  ? String(day.day_label || '').includes(todayWd)
+                  : di === 0;
                 const isActive = activeProgramDay != null
                   ? activeProgramDay === day.day_number   // member picked one → that wins
                   : isToday;                              // nothing picked yet → highlight today

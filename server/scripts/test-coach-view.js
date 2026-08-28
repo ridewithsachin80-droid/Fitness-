@@ -585,4 +585,44 @@ test('no program and no targets → no card at all', () => {
   assert.ok(!anyRow(coachCardRows({ coachPlan: null, macrosKcal: null, sets: [], cardio: [], food: [] })));
 });
 
+
+// ── Mirrors the scheduled/unscheduled today-day derivation ────────────────────
+function deriveTodayDay(days, todayWd) {
+  const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const scheduled = days.some(d => WD.some(w => String(d.day_label || '').includes(w)));
+  const todayDay = scheduled
+    ? days.find(d => String(d.day_label || '').includes(todayWd)) || null
+    : days[0] || null;
+  return { scheduled, todayDay };
+}
+
+console.log('\nToday-day derivation (the "Rest day on Core Workout" bug)');
+
+test('unscheduled single-day program is TODAY, never a rest day', () => {
+  const r = deriveTodayDay([{ day_label: 'Core Workout', day_number: 1 }], 'Thu');
+  assert.ok(r.todayDay, 'the program the coach just assigned must show as today');
+  assert.strictEqual(r.scheduled, false);
+});
+
+test('scheduled program off-day is a genuine rest day', () => {
+  const days = [{ day_label: 'Push · Mon' }, { day_label: 'Pull · Wed' }];
+  const r = deriveTodayDay(days, 'Thu');
+  assert.strictEqual(r.todayDay, null);
+  assert.strictEqual(r.scheduled, true);
+});
+
+test('scheduled program on-day picks the matching day', () => {
+  const days = [{ day_label: 'Push · Mon' }, { day_label: 'Leg · Thu' }];
+  const r = deriveTodayDay(days, 'Thu');
+  assert.strictEqual(r.todayDay.day_label, 'Leg · Thu');
+});
+
+test('a day label merely containing weekday-ish letters does not trip scheduling', () => {
+  // "Monster Monday Madness" contains Mon — genuinely scheduled; but plain
+  // "Strength" or "Hypertrophy" must not.
+  const r = deriveTodayDay([{ day_label: 'Strength' }, { day_label: 'Hypertrophy' }], 'Fri');
+  assert.strictEqual(r.scheduled, false);
+  assert.strictEqual(r.todayDay.day_label, 'Strength');
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

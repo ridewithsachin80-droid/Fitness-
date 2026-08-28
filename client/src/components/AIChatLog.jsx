@@ -155,11 +155,17 @@ export default function AIChatLog() {
     reader.readAsDataURL(file);
   });
 
-  const sendPhoto = useCallback(async (file) => {
+  // `silent` is set when we are re-routing a file the member already sent via
+  // the report button — a second "📷 Photo" bubble would be confusing.
+  // sendPhoto and sendLabReport can each hand a file to the other, so one side
+  // goes through a ref to avoid a circular useCallback dependency.
+  const sendLabReportRef = useRef(null);
+
+  const sendPhoto = useCallback(async (file, { silent = false } = {}) => {
     if (!file || photoBusy) return;
     setPhotoBusy(true);
     haptic(10);
-    setMessages(m => [...m, { role: 'user', text: '📷 Photo' }]);
+    if (!silent) setMessages(m => [...m, { role: 'user', text: '📷 Photo' }]);
     try {
       const base64 = await downscale(file);
       const { data } = await api.post('/ai-chat/photo', {
@@ -167,6 +173,14 @@ export default function AIChatLog() {
         mimeType: 'image/jpeg',
         mealSlots,
       }, { timeout: 60000 });   // vision is slower than chat; 35s was too tight
+
+      // A lab report reached the camera button — send it to the reader instead.
+      if (data.route_to === 'lab') {
+        setMessages(m => [...m, { role: 'ai', text: data.reply }]);
+        setPhotoBusy(false);
+        return sendLabReportRef.current?.(file, { silent: true });
+      }
+
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
@@ -204,12 +218,12 @@ export default function AIChatLog() {
     r.readAsDataURL(file);
   });
 
-  const sendLabReport = useCallback(async (file) => {
+  const sendLabReport = useCallback(async (file, { silent = false, force = false } = {}) => {
     if (!file || labBusy) return;
     setLabBusy(true);
     haptic(10);
     const isPdf = file.type === 'application/pdf';
-    setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 Lab report (PDF)' : '📄 Photo of my lab report' }]);
+    if (!silent) setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 Lab report (PDF)' : '📄 Photo of my lab report' }]);
     // A full panel can take 30–60 seconds. Without this the screen sits blank
     // and members upload the same file again, doubling the load.
     setMessages(m => [...m, { role: 'ai', text: 'Reading your report… a full panel can take up to a minute.', pending: true }]);
@@ -232,7 +246,27 @@ export default function AIChatLog() {
       const { data } = await api.post('/ai-chat/lab-report', {
         file: base64,
         mimeType: isPdf ? 'application/pdf' : 'image/jpeg',
+        force,
       }, { timeout: 120000 });
+
+      // Wrong button: the image is a scale reading or a meal. Route it to the
+      // photo pipeline, which already reads both — the member never has to
+      // learn which button does what.
+      if (data.route_to === 'photo' && !force) {
+        setMessages(m => [...m.filter(x => !x.pending), { role: 'ai', text: data.reply }]);
+        setLabBusy(false);
+        return sendPhoto(file, { silent: true });
+      }
+      // Genuinely ambiguous — ask rather than guess. Losing a real lab report
+      // to a wrong guess is far worse than one extra tap.
+      if (data.route_to === 'ask' && !force) {
+        setMessages(m => [...m.filter(x => !x.pending), {
+          role: 'ai', text: data.reply, imageChoice: { file },
+        }]);
+        setLabBusy(false);
+        return;
+      }
+
       setMessages(m => [...m.filter(x => !x.pending), {
         role: 'ai',
         text: data.reply,
@@ -253,6 +287,7 @@ export default function AIChatLog() {
       setMessages(m => [...m.filter(x => !x.pending), { role: 'ai', text: msg, error: true }]);
     } finally { setLabBusy(false); }
   }, [labBusy]);
+  sendLabReportRef.current = sendLabReport;
 
   const patchLab = useCallback((mi, fn) => {
     setMessages(prev => {
@@ -791,6 +826,28 @@ export default function AIChatLog() {
                   {/* Lab report draft — nothing is saved until confirmed. A
                       misread decimal on a blood test is a different order of
                       mistake from a misread portion size. */}
+                  {/* Ambiguous image — the member decides which reader to use */}
+                  {m.imageChoice && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        onClick={() => { const f = m.imageChoice.file;
+                          setMessages(prev => prev.map(x => x === m ? { ...x, imageChoice: null } : x));
+                          sendPhoto(f, { silent: true }); }}
+                        style={{ minHeight: 40 }}
+                        className="px-3 rounded-full text-xs font-semibold bg-[#D4AF37] text-[#121316]">
+                        It's a meal or my scale
+                      </button>
+                      <button
+                        onClick={() => { const f = m.imageChoice.file;
+                          setMessages(prev => prev.map(x => x === m ? { ...x, imageChoice: null } : x));
+                          sendLabReportRef.current?.(f, { silent: true, force: true }); }}
+                        style={{ minHeight: 40 }}
+                        className="px-3 rounded-full text-xs font-semibold border border-white/[0.18] text-[#9EA3B0]">
+                        It's a lab report
+                      </button>
+                    </div>
+                  )}
+
                   {m.lab && (
                     <div className="mt-3">
                       <div className="flex items-center gap-2 mb-2">

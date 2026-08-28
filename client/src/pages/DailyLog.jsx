@@ -776,10 +776,18 @@ export default function DailyLog() {
   useEffect(() => {
     api.get('/programs/active').then(({ data }) => {
       if (!data?.program) return;
-      const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
       const days = data.days || [];
-      const todayDay = days.find(d => String(d.day_label || '').includes(todayWd)) || null;
-      setCoachPlan({ programName: data.program.name, todayDay, dayCount: days.length });
+      const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
+      // A program is "scheduled" only if its labels actually carry weekdays.
+      // "Core Workout" assigned for today has none — showing "Rest day" on the
+      // program the coach just assigned would be exactly wrong. Unscheduled →
+      // today's session is simply the first (usually only) day.
+      const scheduled = days.some(d => WD.some(w => String(d.day_label || '').includes(w)));
+      const todayDay = scheduled
+        ? days.find(d => String(d.day_label || '').includes(todayWd)) || null
+        : days[0] || null;
+      setCoachPlan({ programName: data.program.name, todayDay, dayCount: days.length, scheduled });
     }).catch(() => {});
   }, []);
 

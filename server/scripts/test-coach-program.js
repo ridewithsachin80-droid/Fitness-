@@ -107,7 +107,20 @@ const fake = async (url, body) => {
   // Route on the coach's actual message line — the prompt's own documentation
   // contains example food text, which burned us once already in the voice tests.
   const msgLine = (prompt.match(/Coach's message: "([^"]*)"/) || [])[1] || '';
-  const cmd = /avocado/i.test(msgLine) ? MEAL_CMD : PROGRAM_CMD;
+  const APPEND_CMD = {
+    reply: "Adding whey protein to Sachin's dinner plan.",
+    commands: [{
+      member_name: 'Sachin',
+      meal_plan: { meals: [{ meal: 'Dinner', mode: 'append', items: [
+        { name: 'Whey Protein', qty_text: '1 scoop', grams: 30,
+          per_100g: { calories: 400, protein: 80, total_carbs: 8, fat: 5 } },
+      ]}]},
+      program: null, water_target: null, macros: null, target_weight: null,
+      activities: null, acv: null, supplements: null, note: null, push: null,
+    }],
+  };
+  const cmd = /whey/i.test(msgLine) ? APPEND_CMD
+            : /avocado/i.test(msgLine) ? MEAL_CMD : PROGRAM_CMD;
   return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(cmd) }] } }] } };
 };
 const stubAx = (...a) => fake(...a);
@@ -197,13 +210,16 @@ const req = (p, body) => new Promise(r => {
   if (USE_REAL_DB) {
     const pool = require(poolPath);
     const { rows } = await pool.query(
-      `SELECT meal, items FROM meal_plans WHERE patient_id=214 ORDER BY id DESC LIMIT 1`);
+      `SELECT meal, items FROM meal_plans WHERE patient_id=214
+       AND plan_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date ORDER BY id DESC LIMIT 1`);
     t('dinner stored with 6 valid items', rows[0]?.meal === 'Dinner' && rows[0].items.length === 6);
     t('nutrition attached to each item', rows[0].items.every(it => it.per_100g?.calories >= 0));
 
     await req('/api/ai-chat/coach-apply', { actions: [mpAction] });
+    const IST_TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
     const { rows: after } = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM meal_plans WHERE patient_id=214 AND meal='Dinner'`);
+      `SELECT COUNT(*)::int AS n FROM meal_plans
+       WHERE patient_id=214 AND meal='Dinner' AND plan_date=$1::date`, [IST_TODAY]);
     t('re-prescribing replaces, not duplicates', after[0].n === 1);
 
     // Member fetches it
@@ -217,6 +233,31 @@ const req = (p, body) => new Promise(r => {
     t('member endpoint returns the plan', got.code === 200
       && got.body.meals?.[0]?.meal === 'Dinner'
       && got.body.meals[0].items.some(it => it.name === 'Paneer' && it.grams === 150));
+
+    // ── Append: "add whey protein to the dinner" must merge, never wipe ──────
+    const ap = await req('/api/ai-chat/coach-parse', { message: 'add whey protein to the dinner of Sachin' });
+    const apAction = ap.body.actions?.[0];
+    t('append previewed as "Add to Dinner plan"',
+      (apAction?.changes || []).some(c => /Add to Dinner plan/.test(c.text)));
+    const apApply = await req('/api/ai-chat/coach-apply', { actions: [apAction] });
+    t('append applied', apApply.code === 200 && apApply.body.results?.[0]?.ok);
+    const TODAY_IST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const { rows: merged } = await pool.query(
+      `SELECT items FROM meal_plans
+       WHERE patient_id=214 AND meal='Dinner' AND plan_date=$1::date`, [TODAY_IST]);
+    t('whey joined the existing 6 items (7 total, originals intact)',
+      merged[0].items.length === 7
+      && merged[0].items.some(it => it.name === 'Whey Protein' && it.grams === 30)
+      && merged[0].items.some(it => it.name === 'Paneer' && it.grams === 150));
+
+    // Re-appending the same food updates grams instead of duplicating
+    await req('/api/ai-chat/coach-apply', { actions: [apAction] });
+    const { rows: again } = await pool.query(
+      `SELECT items FROM meal_plans
+       WHERE patient_id=214 AND meal='Dinner' AND plan_date=$1::date`, [TODAY_IST]);
+    t('re-appending the same food does not duplicate it',
+      again[0].items.filter(it => it.name === 'Whey Protein').length === 1
+      && again[0].items.length === 7);
   }
 
   server.close();
