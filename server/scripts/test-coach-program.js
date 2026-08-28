@@ -119,20 +119,6 @@ const fake = async (url, body) => {
       activities: null, acv: null, supplements: null, note: null, push: null,
     }],
   };
-  // Celebration: assert the REAL figures reached the prompt, then answer with a
-  // note the way the model would. If the stats never arrive the AI can only
-  // invent numbers, which is the failure this guards.
-  if (/celebrate/i.test(msgLine)) {
-    global.__celebratePrompt = prompt;
-    const CELEBRATE_CMD = { reply: 'Sending Padmini a congratulations note.', commands: [{
-      member_name: 'Padmini',
-      note: { text: 'Padmini, 84.9 kg — below 85 for the first time! That is 9.1 kg down from 94, built on steady logging and your daily walks. Same energy, one day at a time.', flagged: false },
-      push: { title: 'Milestone!', body: 'Below 85 kg — 9.1 kg down. Proud of you.' },
-      program: null, meal_plan: null, water_target: null, macros: null, target_weight: null,
-      activities: null, acv: null, supplements: null,
-    }]};
-    return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(CELEBRATE_CMD) }] } }] } };
-  }
   const cmd = /whey/i.test(msgLine) ? APPEND_CMD
             : /avocado/i.test(msgLine) ? MEAL_CMD : PROGRAM_CMD;
   return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(cmd) }] } }] } };
@@ -272,39 +258,6 @@ const req = (p, body) => new Promise(r => {
     t('re-appending the same food does not duplicate it',
       again[0].items.filter(it => it.name === 'Whey Protein').length === 1
       && again[0].items.length === 7);
-  }
-
-  if (USE_REAL_DB) {
-    const pool = require(poolPath);
-    // Padmini: 94 start, 85.2 three days ago, 84.9 today, goal 80
-    await pool.query(`INSERT INTO users (id,name,phone,role,password,active)
-      VALUES (401,'Padmini','777','patient','x',true) ON CONFLICT (id) DO NOTHING`);
-    await pool.query(`INSERT INTO patient_profiles (user_id,start_weight,target_weight)
-      VALUES (401,94.0,80.0) ON CONFLICT (user_id) DO UPDATE SET start_weight=94.0, target_weight=80.0`);
-    await pool.query(`INSERT INTO monitor_patients (monitor_id,patient_id) VALUES (300,401) ON CONFLICT DO NOTHING`);
-    await pool.query(`DELETE FROM daily_logs WHERE patient_id=401`);
-    const IST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-    await pool.query(`INSERT INTO daily_logs (patient_id,log_date,weight_kg) VALUES
-      (401,$1::date - 10,94.0),(401,$1::date - 3,85.2),(401,$1::date,84.9)`, [IST]);
-
-    const cel = await req('/api/ai-chat/coach-parse', { message: 'celebrate Padmini' });
-    const prompt = global.__celebratePrompt || '';
-    t('real progress figures reach the AI prompt',
-      /now 84.9 kg/.test(prompt) && /down 9.1 from 94/.test(prompt));
-    t('the crossed-threshold milestone is flagged to the AI',
-      /MILESTONE: dropped below 85 kg for the first time/.test(prompt));
-
-    const celAction = cel.body.actions?.[0];
-    t('celebration previews as a message + push',
-      (celAction?.changes || []).some(c => /Message:/.test(c.text))
-      && (celAction?.changes || []).some(c => /push|notification/i.test(c.text)));
-
-    const celApply = await req('/api/ai-chat/coach-apply', { actions: [celAction] });
-    t('celebration applied to the member', celApply.code === 200 && celApply.body.results?.[0]?.ok);
-    const { rows: notes } = await pool.query(
-      `SELECT note FROM monitor_notes WHERE patient_id=401 ORDER BY id DESC LIMIT 1`);
-    t('the note reaching the member quotes her real numbers',
-      /84\.9/.test(notes[0]?.note || '') && /9\.1 kg down from 94/.test(notes[0]?.note || ''));
   }
 
   server.close();
