@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test:aichat": "node scripts/test-aichat.js"
+    "test:aichat": "node scripts/test-aichat.js",
+    "test": "bash scripts/test-local.sh",
+    "test:db": "bash scripts/test-local.sh --db-only"
   },
   "keywords": [],
   "author": "",
