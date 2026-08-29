@@ -123,6 +123,16 @@ CREATE TABLE IF NOT EXISTS monitor_notes (
 -- above failed mid-run due to the duplicate protocol_supplements column that
 -- existed in early versions of this file).
 --
+-- Sprint 2 (onboarding) — onboarding state moves off the device.
+-- It used to live only in localStorage under 'fitlife-settings-v2', so a
+-- member on a second phone, or one who cleared their cache, was made to
+-- onboard again — and the coach could not see the mode they had chosen.
+-- Keyed on user_id like every other column here (NOT patient_id — see RENAME.md).
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS onboarding_done  BOOLEAN     DEFAULT FALSE;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS age_mode         VARCHAR(10);
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS avatar_idx       INT         DEFAULT 0;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS goal             VARCHAR(20);
+
 -- Sprint 0 columns (may be missing on older deployments)
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS dob                 DATE;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS diet_notes          TEXT;
@@ -321,34 +331,6 @@ UPDATE lab_values SET status = CASE
   WHERE status IS NULL OR status NOT IN ('low','normal','high')
      OR (ref_min IS NULL AND ref_max IS NULL AND status <> 'normal');
 
--- Backfill muscle_group for exercises created without one (AI chat used to
--- create name-only rows, which /muscle-coverage silently skipped). Idempotent:
--- only touches rows still NULL, and never overwrites a coach's own value.
-UPDATE exercises SET muscle_group = 'chest'
-  WHERE muscle_group IS NULL AND (name ILIKE '%bench%' OR name ILIKE '%chest%'
-    OR name ILIKE '%pec%' OR name ILIKE '%fly%' OR name ILIKE '%push up%'
-    OR name ILIKE '%pushup%' OR name ILIKE '%push-up%' OR name ILIKE '%dip%');
-UPDATE exercises SET muscle_group = 'back'
-  WHERE muscle_group IS NULL AND (name ILIKE '%row%' OR name ILIKE '%pull up%'
-    OR name ILIKE '%pullup%' OR name ILIKE '%pull-up%' OR name ILIKE '%lat %'
-    OR name ILIKE '%deadlift%' OR name ILIKE '%back%' OR name ILIKE '%pulldown%'
-    OR name ILIKE '%shrug%');
-UPDATE exercises SET muscle_group = 'legs'
-  WHERE muscle_group IS NULL AND (name ILIKE '%squat%' OR name ILIKE '%leg%'
-    OR name ILIKE '%lunge%' OR name ILIKE '%calf%' OR name ILIKE '%quad%'
-    OR name ILIKE '%hamstring%' OR name ILIKE '%glute%' OR name ILIKE '%hip thrust%');
-UPDATE exercises SET muscle_group = 'shoulders'
-  WHERE muscle_group IS NULL AND (name ILIKE '%shoulder%' OR name ILIKE '%overhead%'
-    OR name ILIKE '%military%' OR name ILIKE '%lateral raise%' OR name ILIKE '%delt%'
-    OR name ILIKE '%arnold%' OR name ILIKE '%upright%');
-UPDATE exercises SET muscle_group = 'arms'
-  WHERE muscle_group IS NULL AND (name ILIKE '%curl%' OR name ILIKE '%bicep%'
-    OR name ILIKE '%tricep%' OR name ILIKE '%pushdown%' OR name ILIKE '%hammer%'
-    OR name ILIKE '%forearm%' OR name ILIKE '%preacher%');
-UPDATE exercises SET muscle_group = 'core'
-  WHERE muscle_group IS NULL AND (name ILIKE '%abs%' OR name ILIKE '%core%'
-    OR name ILIKE '%plank%' OR name ILIKE '%crunch%' OR name ILIKE '%sit up%'
-    OR name ILIKE '%situp%' OR name ILIKE '%oblique%' OR name ILIKE '%leg raise%');
 CREATE INDEX IF NOT EXISTS idx_monitor_notes_patient_unread
   ON monitor_notes(patient_id, read_at);
 
@@ -621,3 +603,41 @@ CREATE TABLE IF NOT EXISTS weekly_reports (
   UNIQUE(patient_id, week_start)
 );
 CREATE INDEX IF NOT EXISTS idx_weekly_reports_member ON weekly_reports(patient_id, week_start DESC);
+
+
+-- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
+-- These are UPDATEs, not CREATEs, so they MUST come after the tables they
+-- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was
+-- invisible on an existing database and fatal on an empty one: startup.js runs
+-- this whole file as a single pool.query(), Postgres wraps a multi-statement
+-- simple query in an implicit transaction, and one error rolls the entire
+-- batch back — so a fresh deploy created ZERO tables and the server never
+-- booted. Keep every backfill below this line.
+-- Backfill muscle_group for exercises created without one (AI chat used to
+-- create name-only rows, which /muscle-coverage silently skipped). Idempotent:
+-- only touches rows still NULL, and never overwrites a coach's own value.
+UPDATE exercises SET muscle_group = 'chest'
+  WHERE muscle_group IS NULL AND (name ILIKE '%bench%' OR name ILIKE '%chest%'
+    OR name ILIKE '%pec%' OR name ILIKE '%fly%' OR name ILIKE '%push up%'
+    OR name ILIKE '%pushup%' OR name ILIKE '%push-up%' OR name ILIKE '%dip%');
+UPDATE exercises SET muscle_group = 'back'
+  WHERE muscle_group IS NULL AND (name ILIKE '%row%' OR name ILIKE '%pull up%'
+    OR name ILIKE '%pullup%' OR name ILIKE '%pull-up%' OR name ILIKE '%lat %'
+    OR name ILIKE '%deadlift%' OR name ILIKE '%back%' OR name ILIKE '%pulldown%'
+    OR name ILIKE '%shrug%');
+UPDATE exercises SET muscle_group = 'legs'
+  WHERE muscle_group IS NULL AND (name ILIKE '%squat%' OR name ILIKE '%leg%'
+    OR name ILIKE '%lunge%' OR name ILIKE '%calf%' OR name ILIKE '%quad%'
+    OR name ILIKE '%hamstring%' OR name ILIKE '%glute%' OR name ILIKE '%hip thrust%');
+UPDATE exercises SET muscle_group = 'shoulders'
+  WHERE muscle_group IS NULL AND (name ILIKE '%shoulder%' OR name ILIKE '%overhead%'
+    OR name ILIKE '%military%' OR name ILIKE '%lateral raise%' OR name ILIKE '%delt%'
+    OR name ILIKE '%arnold%' OR name ILIKE '%upright%');
+UPDATE exercises SET muscle_group = 'arms'
+  WHERE muscle_group IS NULL AND (name ILIKE '%curl%' OR name ILIKE '%bicep%'
+    OR name ILIKE '%tricep%' OR name ILIKE '%pushdown%' OR name ILIKE '%hammer%'
+    OR name ILIKE '%forearm%' OR name ILIKE '%preacher%');
+UPDATE exercises SET muscle_group = 'core'
+  WHERE muscle_group IS NULL AND (name ILIKE '%abs%' OR name ILIKE '%core%'
+    OR name ILIKE '%plank%' OR name ILIKE '%crunch%' OR name ILIKE '%sit up%'
+    OR name ILIKE '%situp%' OR name ILIKE '%oblique%' OR name ILIKE '%leg raise%');

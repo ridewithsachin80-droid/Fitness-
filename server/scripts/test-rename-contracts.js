@@ -101,9 +101,14 @@ console.log('\nUI must not show clinical terminology');
 
 test('no user-visible "Patient" or "Monitor" copy remains in the client', () => {
   const ALLOW = /patient_id|patient_count|patient_profiles|monitor_id|monitor_name|monitor_notes|monitor_created|monitor_assigned|monitor_toggled|join_monitor_room|monitor_room|monitor_\$\{|'patient'|"patient"|'monitor'|"monitor"|pages\/Monitor|pages\/PatientList|\/monitor|LegacyMonitorRedirect|ROLE_MEMBER|ROLE_COACH/;
+  // Comments are not user-visible, and this assertion is about COPY. Flagging
+  // them forced developers to reword explanations of the very rename this file
+  // exists to protect — which is how you end up with no explanation at all.
+  const isComment = (l) => /^\s*(\/\/|\*|\/\*)/.test(l);
   const bad = [];
   for (const f of walk(path.join(ROOT, 'client/src'))) {
     fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (isComment(line)) return;
       if (/[Pp]atient|[Mm]onitor/.test(line) && !ALLOW.test(line)) {
         bad.push(`${path.relative(ROOT, f)}:${i + 1}`);
       }
@@ -111,6 +116,36 @@ test('no user-visible "Patient" or "Monitor" copy remains in the client', () => 
   }
   assert.deepStrictEqual(bad, [], `clinical wording left in UI code:\n    ${bad.join('\n    ')}`);
 });
+
+test('raw users.role is never rendered to the user', () => {
+  // The grep above searches for the WORDS. It passed for months while
+  // Settings.jsx rendered `{ label: 'Role', value: user?.role }` — which puts
+  // the literal string "patient" on a member's own Account card at runtime.
+  // A value-based leak has no matching word in the source, so it needs its
+  // own check: role must go through a display map before it reaches JSX.
+  const bad = [];
+  for (const f of walk(path.join(ROOT, 'client/src'))) {
+    // client/src/app.js is 2,000 lines of an unrelated hostel-management app
+    // left in the tree. Nothing imports it and Vite never bundles it, so its
+    // markup cannot reach a user. Scheduled to be stubbed out; until then it
+    // would be the only entry in this list forever.
+    if (path.basename(f) === 'app.js') continue;
+    const src = fs.readFileSync(f, 'utf8');
+    src.split('\n').forEach((line, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+      // Passing the role to a component that filters on it is fine
+      // (`<BottomNav role={user?.role} />`) — only RENDERING it is the bug.
+      if (/\brole=\{/.test(line)) return;
+      // `value: user?.role` / `{user.role}` / `>{u.role}<` — rendered as-is.
+      if (/(value:\s*\w+\??\.role\b)|(\{\s*\w+\??\.role\s*\})/.test(line)) {
+        bad.push(`${path.relative(ROOT, f)}:${i + 1}`);
+      }
+    });
+  }
+  assert.deepStrictEqual(bad, [],
+    `raw role value rendered to the user:\n    ${bad.join('\n    ')}`);
+});
+
 
 test('audit log UI maps every action name the server actually emits', () => {
   const admin  = read('client/src/pages/AdminDashboard.jsx');

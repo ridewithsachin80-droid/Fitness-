@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useOfflineSync } from './hooks/useOfflineQueue';
 import { useAuthStore } from './store/authStore';
 import { useSettingsStore, applyTheme, applyFontSize } from './store/settingsStore';
+import { getMyOnboarding } from './api/logs';
 
 import Login          from './pages/Login';
 import DailyLog       from './pages/DailyLog';
@@ -62,9 +63,36 @@ export default function App() {
   const { user } = useAuthStore();
   useOfflineSync();
 
-  // Show onboarding for logged-in members who haven't completed it
-  if (user?.role === 'patient' && !onboardingDone) {
-    return <Onboarding />;
+  // ── Onboarding gate ─────────────────────────────────────────────────────────
+  // The flag used to come from localStorage alone, so a member on a second
+  // phone — or one who had cleared their cache — was made to onboard again,
+  // and the coach could not see the mode they had chosen. The server is now
+  // the source of truth; the local flag is a cache that avoids a flash of the
+  // onboarding screen on every cold start.
+  const [serverOnboarded, setServerOnboarded] = useState(null); // null = unknown
+  useEffect(() => {
+    if (user?.role !== 'patient') return;
+    getMyOnboarding()
+      .then(({ data }) => {
+        setServerOnboarded(data.onboarding_done === true);
+        // Mirror the member's saved mode so font size and terminology follow
+        // them onto this device.
+        if (data.onboarding_done && data.age_mode) {
+          useSettingsStore.getState().finishOnboarding(data.age_mode);
+          if (Number.isInteger(data.avatar_idx)) {
+            useSettingsStore.getState().setAvatarIdx(data.avatar_idx);
+          }
+        }
+      })
+      // Offline or the endpoint is unreachable: fall back to the local flag
+      // rather than trapping a returning member in onboarding they already did.
+      .catch(() => setServerOnboarded(null));
+  }, [user?.id]);
+
+  if (user?.role === 'patient') {
+    const settled = serverOnboarded !== null;
+    const needsOnboarding = settled ? !serverOnboarded : !onboardingDone;
+    if (needsOnboarding) return <Onboarding />;
   }
 
   return (

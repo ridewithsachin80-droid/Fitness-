@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { adminResetPin, adminSendPush, getAuditLog } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS } from '../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel } from '../constants';
 import AdminReminders from '../components/AdminReminders';
 import MessageMember from '../components/MessageMember';
 import TodaysGaps from '../components/TodaysGaps';
@@ -112,7 +112,7 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
           >
             <option value="">— Unassigned —</option>
             {coaches.map(m => (
-              <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+              <option key={m.id} value={m.id}>{m.name} ({roleLabel(m.role)})</option>
             ))}
           </select>
         </div>
@@ -1306,7 +1306,7 @@ function AssignModal({ member, coaches, onClose, onAssigned }) {
             focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white text-[#FFFFFF]">
           <option value="">— Unassigned —</option>
           {coaches.map(m => (
-            <option key={m.id} value={m.id}>{m.name} · {m.role} · {m.patient_count} members</option>
+            <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role)} · {m.patient_count} members</option>
           ))}
         </select>
         <button onClick={submit} disabled={saving || !coachId}

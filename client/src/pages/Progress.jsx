@@ -228,6 +228,24 @@ function StatBox({ value, label, sub, color = 'emerald' }) {
   );
 }
 
+
+// ── Chart placeholders ────────────────────────────────────────────────────────
+// Every chart on this page was gated on `length > 1`, so a member in their
+// first week saw section headings with nothing under them and no explanation.
+// The second-most-important tab in the app looked broken exactly when a new
+// member was deciding whether to trust it. Say what's coming instead.
+function ChartEmpty({ icon, title, need }) {
+  return (
+    <Card>
+      <SectionTitle icon={icon}>{title}</SectionTitle>
+      <div className="text-center py-6">
+        <p className="text-sm text-[#7E8596]">{need}</p>
+        <p className="text-xs text-[#4A4E5A] mt-1">Your chart appears here automatically.</p>
+      </div>
+    </Card>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Progress() {
@@ -368,7 +386,19 @@ export default function Progress() {
             <WeeklyReportCard />
           </div>
 
-          {/* Journey progress bar */}
+          {/* Journey progress bar. When start/target aren't set this used to
+              render nothing at all, so a new member had no idea a goal even
+              existed — let alone that their coach sets it. */}
+          {journeyPct === null && (
+            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07]">
+              <p className="text-sm text-white font-medium">No goal set yet</p>
+              <p className="text-xs text-[#9EA3B0] mt-1 leading-relaxed">
+                {!latestW
+                  ? 'Log your weight and ask your coach to set your target — your progress bar appears here.'
+                  : 'Ask your coach to set your target weight and you\'ll see how far along you are.'}
+              </p>
+            </div>
+          )}
           {journeyPct !== null && (
             <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07]">
               <div className="flex justify-between text-xs text-blue-200 mb-2">
@@ -423,6 +453,12 @@ export default function Progress() {
         </div>
 
         {/* Weight trend */}
+        {weightData.length <= 1 && (
+          <ChartEmpty icon="⚖️" title="Weight Trend"
+            need={weightData.length === 1
+              ? 'One more weigh-in and your trend line starts here.'
+              : 'Log your weight for two days to see your trend.'} />
+        )}
         {weightData.length > 1 && (
           <Card>
             <SectionTitle icon="⚖️">Weight Trend</SectionTitle>
@@ -453,6 +489,10 @@ export default function Progress() {
         )}
 
         {/* 30-day compliance chart */}
+        {complianceData.length <= 1 && (
+          <ChartEmpty icon="📊" title="30-Day Compliance"
+            need="Log two days and your compliance chart builds itself." />
+        )}
         {complianceData.length > 1 && (
           <Card>
             <SectionTitle icon="📊">30-Day Compliance</SectionTitle>
@@ -478,6 +518,10 @@ export default function Progress() {
         )}
 
         {/* Sprint 12: 7-day nutrition trend */}
+        {nutritionTrend.length <= 1 && (
+          <ChartEmpty icon="🥗" title="7-Day Nutrition Trend"
+            need="Log food on two days to see how your macros move." />
+        )}
         {nutritionTrend.length > 1 && (
           <Card>
             <SectionTitle icon="🥗">7-Day Nutrition Trend</SectionTitle>

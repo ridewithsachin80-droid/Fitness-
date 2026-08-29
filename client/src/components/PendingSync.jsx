@@ -17,12 +17,12 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { getQueueStatus, onQueueChange, syncOfflineQueue } from '../hooks/useOfflineQueue';
+import { getQueueStatus, onQueueChange, retryQueueNow } from '../hooks/useOfflineQueue';
 import { formatDate } from '../constants';
 import { haptic } from '../store/settingsStore';
 
 export default function PendingSync() {
-  const [status, setStatus]   = useState({ count: 0, stuck: false, oldestDate: null });
+  const [status, setStatus]   = useState({ count: 0, stuck: false, exhausted: false, oldestDate: null });
   const [retrying, setRetry]  = useState(false);
 
   const refresh = useCallback(() => {
@@ -40,7 +40,9 @@ export default function PendingSync() {
   const retry = async () => {
     haptic(15);
     setRetry(true);
-    try { await syncOfflineQueue(); } catch (_) {}
+    // retryQueueNow resets the attempt counters first — a queue that has hit
+    // the retry cap would otherwise be skipped by the sync pass entirely.
+    try { await retryQueueNow(); } catch (_) {}
     finally { setRetry(false); refresh(); }
   };
 
@@ -54,7 +56,7 @@ export default function PendingSync() {
     return (
       <div className="rounded-xl px-3.5 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]">
         <p className="text-xs font-semibold text-amber-300">
-          {label} — stuck since {formatDate(status.oldestDate)}
+          {label} — {status.exhausted ? "couldn't send" : `stuck since ${formatDate(status.oldestDate)}`}
         </p>
         <p className="text-[11px] text-[#9EA3B0] mt-0.5 leading-relaxed">
           Your entries are safe on this phone, but your coach can't see them yet.

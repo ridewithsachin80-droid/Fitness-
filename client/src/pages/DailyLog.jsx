@@ -16,6 +16,7 @@ import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
 import StreakCard from '../components/StreakCard';
 import PendingSync from '../components/PendingSync';
+import PushPrimer  from '../components/PushPrimer';
 import AIChatLog, { useAIChat } from '../components/AIChatLog';
 import { sessionEnergy } from '../utils/exerciseCalories';
 import { dailyRead } from '../utils/dailyRead';
@@ -1123,6 +1124,14 @@ export default function DailyLog() {
           {/* Anything held on this device only. Renders nothing when the
               queue is empty, which is the normal case. */}
           <PendingSync />
+
+          {/* Asked only once the member has actually logged something, so the
+              request is about a recap of THEIR day rather than a system dialog
+              from a stranger. Renders nothing once answered. */}
+          <PushPrimer hasLogged={
+            !!log.weight || (log.food?.length > 0) || (log.water || 0) > 0 ||
+            Object.values(log.activities || {}).some(Boolean)
+          } />
 
           {/* Compact date nav */}
           <div className="flex items-center justify-between mb-3">

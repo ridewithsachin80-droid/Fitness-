@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, takeLogoutReason } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 
 // ── Animated pulse ring decoration ───────────────────────────────────────────
@@ -142,6 +142,16 @@ export default function Login() {
   const { login } = useAuthStore();
   const navigate  = useNavigate();
 
+  // Why we're back here. An expired refresh token drops the member on this
+  // screen mid-task; without a word it reads as the app having crashed.
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    const reason = takeLogoutReason();
+    if (reason === 'expired') {
+      setNotice('Your session timed out. Please log in again — nothing you logged has been lost.');
+    }
+  }, []);
+
   const pinLogin = async () => {
     setLoading(true); setError('');
     try {
@@ -203,6 +213,13 @@ export default function Login() {
         <div className="rounded-2xl border border-white/[0.08] bg-[#1A1C20]
           shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.7)]
           overflow-hidden scale-up">
+
+          {notice && (
+            <div className="bg-[rgba(212,175,55,0.08)] border-b border-[rgba(212,175,55,0.20)]
+              text-[#F0E2B6] text-xs leading-relaxed px-5 py-3">
+              {notice}
+            </div>
+          )}
 
           {/* Mode tabs */}
           <div className="flex border-b border-white/[0.07]">

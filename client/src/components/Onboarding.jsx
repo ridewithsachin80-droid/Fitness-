@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSettingsStore } from '../store/settingsStore';
+import { saveMyOnboarding } from '../api/logs';
 
 const AVATARS = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
 
@@ -36,15 +37,56 @@ const AGE_MODES = [
   },
 ];
 
+const GOALS = [
+  { id: 'lose',     label: 'Lose weight',   emoji: '\u2696\ufe0f' },
+  { id: 'maintain', label: 'Stay healthy',  emoji: '\ud83c\udf3f' },
+  { id: 'gain',     label: 'Build muscle',  emoji: '\ud83d\udcaa' },
+  { id: 'strength', label: 'Get stronger',  emoji: '\ud83c\udfcb\ufe0f' },
+];
+
 export default function Onboarding() {
-  const [step, setStep]         = useState(0); // 0=who, 1=avatar, 2=finish
+  const [step, setStep]         = useState(0); // 0=who, 1=goal+weights, 2=avatar, 3=finish
   const [ageMode, setAgeMode]   = useState(null);
   const [avatarIdx, setAvatarI] = useState(0);
+  const [goal, setGoal]         = useState(null);
+  const [startW, setStartW]     = useState('');
+  const [targetW, setTargetW]   = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [saveError, setSaveErr] = useState('');
   const { finishOnboarding, setAvatarIdx } = useSettingsStore();
 
-  const done = () => {
-    setAvatarIdx(avatarIdx);
-    finishOnboarding(ageMode);
+  // Same plausibility gate the server applies, so the member is told here
+  // rather than bounced by a 400 after tapping through to the end.
+  const wOk = (v) => {
+    if (!v) return true;                       // optional
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n >= 20 && n <= 300;
+  };
+  const weightsValid = wOk(startW) && wOk(targetW);
+
+  const done = async () => {
+    setSaving(true);
+    setSaveErr('');
+    try {
+      await saveMyOnboarding({
+        age_mode:      ageMode,
+        avatar_idx:    avatarIdx,
+        goal,
+        start_weight:  startW  ? parseFloat(startW)  : null,
+        target_weight: targetW ? parseFloat(targetW) : null,
+      });
+      // Only mirror locally once the server has it. Flipping the local flag
+      // first would strand a member whose save failed: the gate in App.jsx
+      // would let them through with nothing actually recorded.
+      setAvatarIdx(avatarIdx);
+      finishOnboarding(ageMode);
+    } catch (err) {
+      setSaveErr(
+        err.response?.data?.error ||
+        "Couldn't save your setup \u2014 check your connection and tap again."
+      );
+      setSaving(false);
+    }
   };
 
   // ── Step 0: Who is using the app ───────────────────────────────────────────
@@ -57,7 +99,7 @@ export default function Onboarding() {
         {AGE_MODES.map(m => (
           <button key={m.id} style={{
             ...s.modeCard,
-            border: ageMode === m.id ? '2px solid #c9a227' : '2px solid transparent',
+            border: ageMode === m.id ? '2px solid #D4AF37' : '2px solid transparent',
             background: ageMode === m.id ? 'rgba(201,162,39,0.08)' : 'rgba(255,255,255,0.04)',
           }} onClick={() => setAgeMode(m.id)}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>{m.emoji}</div>
@@ -71,8 +113,54 @@ export default function Onboarding() {
     </Screen>
   );
 
-  // ── Step 1: Pick avatar ────────────────────────────────────────────────────
+  // ── Step 1: Goal + starting numbers ────────────────────────────
+  // Onboarding used to ask only for an emoji and an age band, so a new member
+  // landed on a dashboard with no target at all — and the journey bar on
+  // Progress silently refused to render, making the page look broken.
   if (step === 1) return (
+    <Screen>
+      <Logo />
+      <h1 style={s.h1}>What are you here for?</h1>
+      <p style={s.sub}>Your coach can fine-tune this later</p>
+      <div style={s.goalGrid}>
+        {GOALS.map(g => (
+          <button key={g.id} style={{
+            ...s.goalCard,
+            border: goal === g.id ? '2px solid #D4AF37' : '2px solid transparent',
+            background: goal === g.id ? 'rgba(212,175,55,0.08)' : 'rgba(255,255,255,0.04)',
+          }} onClick={() => setGoal(g.id)}>
+            <div style={{ fontSize: 26, marginBottom: 6 }}>{g.emoji}</div>
+            <div style={s.goalLabel}>{g.label}</div>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <div style={{ flex: 1 }}>
+          <label style={s.fieldLabel}>Weight today (kg)</label>
+          <input value={startW} onChange={e => setStartW(e.target.value.replace(/[^0-9.]/g, ''))}
+            inputMode="decimal" placeholder="e.g. 82.5" style={s.input} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={s.fieldLabel}>Goal weight (kg)</label>
+          <input value={targetW} onChange={e => setTargetW(e.target.value.replace(/[^0-9.]/g, ''))}
+            inputMode="decimal" placeholder="optional" style={s.input} />
+        </div>
+      </div>
+      {!weightsValid && (
+        <p style={s.warn}>That doesn't look right — please enter a weight between 20 and 300 kg.</p>
+      )}
+      <p style={s.hint}>You can skip the numbers and add them later from your daily log.</p>
+
+      <div style={s.btnRow}>
+        <BackBtn onClick={() => setStep(0)} />
+        <Btn disabled={!goal || !weightsValid} onClick={() => setStep(2)}>Next →</Btn>
+      </div>
+    </Screen>
+  );
+
+  // ── Step 2: Pick avatar ────────────────────────────────────────────────────
+  if (step === 2) return (
     <Screen>
       <Logo />
       <h1 style={s.h1}>Pick your avatar</h1>
@@ -81,7 +169,7 @@ export default function Onboarding() {
         {AVATARS.map((a, i) => (
           <button key={i} style={{
             ...s.avatarBtn,
-            border: avatarIdx === i ? '2px solid #c9a227' : '2px solid transparent',
+            border: avatarIdx === i ? '2px solid #D4AF37' : '2px solid transparent',
             background: avatarIdx === i ? 'rgba(201,162,39,0.15)' : 'rgba(255,255,255,0.04)',
             transform: avatarIdx === i ? 'scale(1.1)' : 'scale(1)',
           }} onClick={() => setAvatarI(i)}>
@@ -90,14 +178,14 @@ export default function Onboarding() {
         ))}
       </div>
       <div style={s.btnRow}>
-        <BackBtn onClick={() => setStep(0)} />
-        <Btn onClick={() => setStep(2)}>Next →</Btn>
+        <BackBtn onClick={() => setStep(1)} />
+        <Btn onClick={() => setStep(3)}>Next →</Btn>
       </div>
     </Screen>
   );
 
-  // ── Step 2: Finish ────────────────────────────────────────────────────────
-  if (step === 2) return (
+  // ── Step 3: Finish ────────────────────────────────────────────────────────
+  if (step === 3) return (
     <Screen>
       <Logo />
       <h1 style={s.h1}>You're all set!</h1>
@@ -113,9 +201,12 @@ export default function Onboarding() {
       </div>
 
       <div style={s.btnRow}>
-        <BackBtn onClick={() => setStep(1)} />
-        <Btn onClick={done}>Start tracking 🎉</Btn>
+        <BackBtn onClick={() => setStep(2)} />
+        <Btn disabled={saving} onClick={done}>
+          {saving ? 'Saving…' : 'Start tracking 🎉'}
+        </Btn>
       </div>
+      {saveError && <p style={s.saveErr}>{saveError}</p>}
     </Screen>
   );
 }
@@ -145,7 +236,7 @@ function Logo() {
   return (
     <div style={{ textAlign: 'center', marginBottom: 32 }}>
       <div style={{ fontSize: 48, marginBottom: 8 }}>🏃</div>
-      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: '#c9a227', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: '#D4AF37', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
         FitLife
       </div>
     </div>
@@ -156,7 +247,7 @@ function Btn({ children, onClick, disabled }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       width: '100%', padding: '16px', borderRadius: 16,
-      background: disabled ? 'rgba(201,162,39,0.3)' : '#c9a227',
+      background: disabled ? 'rgba(201,162,39,0.3)' : '#D4AF37',
       color: '#fff', fontWeight: 700, fontSize: 16,
       border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
       marginTop: 24, transition: 'all .15s',
@@ -189,6 +280,14 @@ const s = {
   modeLabel: { fontSize: 15, fontWeight: 700, color: '#ededf0', marginBottom: 2 },
   modeSub:   { fontSize: 11, color: '#8e8e9a', marginBottom: 6 },
   modeDesc:  { fontSize: 10, color: '#6a6a78', lineHeight: 1.4 },
+  goalGrid:  { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 },
+  goalCard:  { borderRadius: 16, padding: '16px 10px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
+  goalLabel: { fontSize: 14, fontWeight: 600, color: '#ededf0' },
+  fieldLabel:{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: '#7E8596', marginBottom: 6 },
+  input:     { width: '100%', boxSizing: 'border-box', background: '#1A1C20', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: '12px 14px', color: '#FFFFFF', fontSize: 15, fontWeight: 600, outline: 'none' },
+  warn:      { fontSize: 12, color: '#f87171', marginTop: 10, textAlign: 'center' },
+  hint:      { fontSize: 11, color: '#6a6a78', marginTop: 10, textAlign: 'center', lineHeight: 1.5 },
+  saveErr:   { fontSize: 12, color: '#f87171', marginTop: 12, textAlign: 'center', lineHeight: 1.5 },
   avatarGrid:{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 8 },
   avatarBtn: { borderRadius: 14, padding: '12px 8px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
   btnRow:    { display: 'flex', gap: 8 },

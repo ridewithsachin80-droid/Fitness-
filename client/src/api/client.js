@@ -68,7 +68,9 @@ api.interceptors.response.use(
         return api(original);
       } catch (refreshError) {
         processPending(refreshError, null);
-        useAuthStore.getState().logout();
+        // Not a deliberate sign-out — the session ran out underneath them.
+        // Say so on the login screen instead of appearing to have crashed.
+        useAuthStore.getState().logout('expired');
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

@@ -31,6 +31,10 @@ export const addLabValue     = (id, data)       => api.post(`/members/${id}/labs
 export const addNote         = (id, data)       => api.post(`/members/${id}/notes`, data);
 export const setMemberPin    = (id, pin)        => api.patch(`/members/${id}/pin`, { pin });
 export const getMyProfile    = ()               => api.get('/members/me');
+// Sprint 2: first-run setup now lives on the account, not in localStorage, so
+// a second device (or a cleared cache) doesn't make the member start over.
+export const getMyOnboarding = ()               => api.get('/members/me/onboarding');
+export const saveMyOnboarding = (data)          => api.put('/members/me/onboarding', data);
 // Sprint 11: coach logs/corrects a member's weight for a specific date
 export const logWeightForMember = (id, date, weight_kg) =>
   api.patch(`/members/${id}/weight`, { date, weight_kg });

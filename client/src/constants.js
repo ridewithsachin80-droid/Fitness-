@@ -7,6 +7,16 @@ export const ROLE_MEMBER = 'patient';
 export const ROLE_COACH  = 'monitor';
 export const ROLE_ADMIN  = 'admin';
 
+// Display labels for those literals. Anywhere a role reaches the screen it
+// goes through here — printing the raw value put the clinical word in front
+// of members and coaches, which is the one thing the rename was for.
+export const ROLE_LABEL = {
+  'patient': 'Member',
+  'monitor': 'Coach',
+  'admin':   'Admin',
+};
+export const roleLabel = (r) => ROLE_LABEL[r] || r || '';
+
 // ── Activities (6 total) ─────────────────────────────────────────────────────
 export const ACTIVITIES = [
   { id: 'walk',       label: 'Morning Walk',        sub: '30 min · 6:30–7:00 AM',             icon: '🚶', met: 3.5, durationMin: 30 },

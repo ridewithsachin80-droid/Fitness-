@@ -6,6 +6,9 @@ import api from '../api/client';
 import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword, getNotifLog } from '../api/logs';
 import { disconnectSocket } from '../hooks/useSync';
 import { Card, SectionTitle, BackButton, MemberBottomNav, BottomNav } from '../components/UI';
+import { roleLabel } from '../constants';
+import { pushPermission, registerPushSubscription } from '../hooks/usePush';
+
 
 const AVATARS = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
 const AGE_MODES = [
@@ -352,7 +355,7 @@ export default function Settings() {
         <Card>
           <SectionTitle icon="👤">Account</SectionTitle>
           <div className="space-y-2">
-            {[{ label: 'Name', value: user?.name }, { label: 'Role', value: user?.role }, { label: 'ID', value: `#${user?.id}` }].map(({ label, value }) => (
+            {[{ label: 'Name', value: user?.name }, { label: 'Role', value: roleLabel(user?.role) }, { label: 'ID', value: `#${user?.id}` }].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between py-1.5">
                 <span className="text-sm text-[#7E8596]">{label}</span>
                 <span className="text-sm font-semibold text-[#FFFFFF] capitalize">{value}</span>
@@ -364,10 +367,14 @@ export default function Settings() {
         {/* Push notifications */}
         <Card>
           <SectionTitle icon="🔔">Push Notifications</SectionTitle>
+          {/* Permission state first. "No active subscriptions" told a blocked
+              member nothing about WHY nothing ever arrives, and gave them no
+              way back — so the evening recap just silently never came. */}
+          <PushStatus />
+
           {loading ? <p className="text-xs text-[#7E8596] py-2">Loading…</p> : subs.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-[#7E8596]">No active subscriptions</p>
-              <p className="text-xs text-[#4A4E5A] mt-1">Notifications register automatically when you open the app</p>
+              <p className="text-sm text-[#7E8596]">No devices registered yet</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -443,6 +450,76 @@ export default function Settings() {
       </div>
 
       {user?.role === 'patient' ? <MemberBottomNav /> : <BottomNav role={user?.role} />}
+    </div>
+  );
+}
+
+
+// ── Push permission status ────────────────────────────────────────────────────
+// Three states worth distinguishing, because the fix differs for each:
+//   granted     — working; nothing to do
+//   default     — never asked; one tap fixes it
+//   denied      — the browser is blocking us; only site settings can undo it,
+//                 so say so plainly instead of leaving them guessing
+//   unsupported — iOS Safari outside an installed PWA, mostly
+function PushStatus() {
+  const [perm, setPerm] = useState(() => pushPermission());
+  const [busy, setBusy] = useState(false);
+
+  const enable = async () => {
+    setBusy(true);
+    try {
+      const p = await Notification.requestPermission();
+      setPerm(p);
+      if (p === 'granted') await registerPushSubscription();
+    } catch (_) { /* leave state as-is */ }
+    finally { setBusy(false); }
+  };
+
+  if (perm === 'granted') {
+    return (
+      <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2
+        border border-[rgba(212,175,55,0.20)] bg-[rgba(212,175,55,0.06)]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] flex-shrink-0" />
+        <p className="text-[11px] text-[#F0E2B6]">Notifications are on for this device.</p>
+      </div>
+    );
+  }
+
+  if (perm === 'denied') {
+    return (
+      <div className="mb-3 rounded-xl px-3 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]">
+        <p className="text-xs font-semibold text-amber-300">Notifications are blocked</p>
+        <p className="text-[11px] text-[#9EA3B0] mt-1 leading-relaxed">
+          Your browser is blocking them, so your evening recap and coach messages
+          won't arrive. To turn them back on: tap the lock icon in the address
+          bar (or Site settings), find Notifications, and switch it to Allow.
+        </p>
+      </div>
+    );
+  }
+
+  if (perm === 'unsupported') {
+    return (
+      <p className="text-[11px] text-[#7E8596] mb-3 leading-relaxed">
+        This browser doesn't support notifications. Add FitLife to your home
+        screen and open it from there to enable them.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mb-3 rounded-xl px-3 py-2.5 border border-white/[0.08] bg-white/[0.03]">
+      <p className="text-xs text-[#FFFFFF]">Notifications are off</p>
+      <p className="text-[11px] text-[#9EA3B0] mt-0.5 leading-relaxed">
+        Turn them on for your 8:30pm recap and messages from your coach.
+      </p>
+      <button onClick={enable} disabled={busy} style={{ minHeight: 36 }}
+        className="mt-2 text-[11px] font-bold text-[#121316] rounded-lg px-3
+          bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+          active:scale-[0.98] disabled:opacity-50">
+        {busy ? 'Just a moment…' : 'Turn on notifications'}
+      </button>
     </div>
   );
 }

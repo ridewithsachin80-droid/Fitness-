@@ -557,6 +557,96 @@ router.put('/me/notifications', authMW, roleCheck('patient'), async (req, res) =
   }
 });
 
+// ── GET /api/patients/me/onboarding ──────────────────────────────────────────
+// Onboarding state used to live only in localStorage, so a member on a new
+// phone was made to do it again and the coach could not see the mode they had
+// picked. Now it follows the account.
+//
+// Declared before '/:id' so "me" is never read as a member id.
+router.get('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT onboarding_done, age_mode, avatar_idx, goal,
+              start_weight, target_weight
+         FROM patient_profiles WHERE user_id = $1`,
+      [req.user.id]);
+    const r = rows[0] || {};
+    res.json({
+      onboarding_done: r.onboarding_done === true,
+      age_mode:        r.age_mode || null,
+      avatar_idx:      r.avatar_idx ?? 0,
+      goal:            r.goal || null,
+      start_weight:    r.start_weight != null ? parseFloat(r.start_weight) : null,
+      target_weight:   r.target_weight != null ? parseFloat(r.target_weight) : null,
+    });
+  } catch (err) {
+    console.error('GET /patients/me/onboarding error:', err);
+    res.status(500).json({ error: 'Could not load your setup' });
+  }
+});
+
+// ── PUT /api/patients/me/onboarding ──────────────────────────────────────────
+// Saves what the member chose during first-run setup.
+//
+// start_weight is written ONLY if it is not already set. It is the anchor for
+// every "kg lost" figure in the app, so letting a re-run overwrite it would
+// silently reset a member's whole journey. target_weight is a coaching
+// decision, so it is accepted here as a starting intention only — the coach
+// can change it afterwards and this endpoint will not clobber that either.
+router.put('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
+  const { age_mode, avatar_idx, goal, start_weight, target_weight } = req.body || {};
+
+  const MODES = ['child', 'adult', 'senior'];
+  const GOALS = ['lose', 'maintain', 'gain', 'strength'];
+  if (age_mode && !MODES.includes(age_mode)) {
+    return res.status(400).json({ error: 'Unknown age mode' });
+  }
+  if (goal && !GOALS.includes(goal)) {
+    return res.status(400).json({ error: 'Unknown goal' });
+  }
+
+  // Same plausibility gate the scale-import path uses, so a typo cannot
+  // poison the start weight that every later figure is measured against.
+  const weight = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n >= 20 && n <= 300 ? n : null;
+  };
+  const sw = weight(start_weight);
+  const tw = weight(target_weight);
+  const idx = Number.isInteger(avatar_idx) && avatar_idx >= 0 && avatar_idx <= 11
+    ? avatar_idx : null;
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE patient_profiles SET
+         onboarding_done = TRUE,
+         age_mode        = COALESCE($2, age_mode),
+         avatar_idx      = COALESCE($3, avatar_idx),
+         goal            = COALESCE($4, goal),
+         start_weight    = COALESCE(start_weight, $5),
+         target_weight   = COALESCE(target_weight, $6),
+         updated_at      = NOW()
+       WHERE user_id = $1
+       RETURNING onboarding_done, age_mode, avatar_idx, goal,
+                 start_weight, target_weight`,
+      [req.user.id, age_mode || null, idx, goal || null, sw, tw]);
+
+    if (!rows.length) return res.status(404).json({ error: 'Profile not found' });
+    const r = rows[0];
+    res.json({
+      onboarding_done: r.onboarding_done === true,
+      age_mode:        r.age_mode || null,
+      avatar_idx:      r.avatar_idx ?? 0,
+      goal:            r.goal || null,
+      start_weight:    r.start_weight  != null ? parseFloat(r.start_weight)  : null,
+      target_weight:   r.target_weight != null ? parseFloat(r.target_weight) : null,
+    });
+  } catch (err) {
+    console.error('PUT /patients/me/onboarding error:', err);
+    res.status(500).json({ error: 'Could not save your setup' });
+  }
+});
+
 router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;

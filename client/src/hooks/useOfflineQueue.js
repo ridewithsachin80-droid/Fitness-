@@ -82,7 +82,17 @@ export async function saveLogWithFallback(date, log) {
  * Sync all queued offline logs to the server.
  * Call this when the browser comes back online.
  * Removes successfully synced items from the queue.
+ *
+ * Retries are capped. An entry the server keeps rejecting used to be resent
+ * every 60 seconds forever — burning battery and data on a request that was
+ * never going to succeed, while the member believed the day was logged. After
+ * MAX_ATTEMPTS we stop trying and let the UI say so instead. The entry is
+ * never discarded: the member's data stays on the device, and the "Try again
+ * now" button in PendingSync resets the counter so a real fix (server back up,
+ * app updated) can still drain it.
  */
+const MAX_ATTEMPTS = 12;
+
 export async function syncOfflineQueue() {
   let db;
   try {
@@ -95,22 +105,52 @@ export async function syncOfflineQueue() {
   const items = await db.getAll(STORE);
   if (!items.length) return;
 
-  console.log(`🔄 Syncing ${items.length} queued log(s)…`);
+  const live = items.filter(i => (i.attempts || 0) < MAX_ATTEMPTS);
+  if (!live.length) {
+    // Everything left has exhausted its retries. Don't hammer the network.
+    notifyQueueChanged();
+    return;
+  }
 
-  for (const item of items) {
+  console.log(`🔄 Syncing ${live.length} queued log(s)…`);
+
+  for (const item of live) {
     try {
       await api.post(`/logs/${item.date}`, item.log);
       await db.delete(STORE, item.key);
       console.log(`✅ Synced queued log for ${item.date}`);
     } catch (err) {
-      console.error(`❌ Failed to sync log for ${item.date}:`, err.message);
-      // Leave in queue — will retry next time
+      const attempts = (item.attempts || 0) + 1;
+      await db.put(STORE, { ...item, attempts, lastError: err.message });
+      console.error(
+        `❌ Failed to sync log for ${item.date} (attempt ${attempts}/${MAX_ATTEMPTS}):`,
+        err.message
+      );
+      // Stays in the queue either way — the member's entry is never thrown
+      // away just because the server is unhappy.
     }
   }
 
   // Whether anything drained or not, the badge needs to re-read: a successful
   // pass should clear it, and a failed one may have crossed the stuck threshold.
   notifyQueueChanged();
+}
+
+/**
+ * Reset the attempt counters and try again immediately.
+ * Backs the "Try again now" button on a stuck queue.
+ */
+export async function retryQueueNow() {
+  try {
+    const db    = await getDB();
+    const items = await db.getAll(STORE);
+    for (const item of items) {
+      if (item.attempts) await db.put(STORE, { ...item, attempts: 0 });
+    }
+  } catch (err) {
+    console.error('retryQueueNow: could not reset attempts:', err);
+  }
+  await syncOfflineQueue();
 }
 
 /**
@@ -142,13 +182,19 @@ export async function getQueueStatus() {
     const items = await db.getAll(STORE);
     if (!items.length) return { count: 0, stuck: false, oldestDate: null };
     const oldest = items.reduce((a, b) => (a.queuedAt <= b.queuedAt ? a : b));
+    // Stuck on either signal: waiting too long, or out of retries. The second
+    // catches a poison entry fast — a server rejecting it every minute hits
+    // the cap in about twelve minutes rather than taking a day to admit it.
+    const tooOld    = Date.now() - oldest.queuedAt > STUCK_AFTER_MS;
+    const exhausted = items.some(i => (i.attempts || 0) >= MAX_ATTEMPTS);
     return {
       count:      items.length,
-      stuck:      Date.now() - oldest.queuedAt > STUCK_AFTER_MS,
+      stuck:      tooOld || exhausted,
+      exhausted,
       oldestDate: oldest.date,
     };
   } catch {
-    return { count: 0, stuck: false, oldestDate: null };
+    return { count: 0, stuck: false, exhausted: false, oldestDate: null };
   }
 }
 
