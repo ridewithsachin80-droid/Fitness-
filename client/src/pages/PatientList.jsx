@@ -84,7 +84,7 @@ export default function MemberList() {
   const loggedToday = filtered.filter(p => p.last_logged === todayStr);
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e]">
+    <div className="min-h-screen bg-[#121316]">
       <OfflineBanner />
 
       {/* Header */}
@@ -138,7 +138,7 @@ export default function MemberList() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search by name or phone…"
-              className="w-full pl-10 pr-4 py-3 bg-[#1a1a20] border border-white/[0.1] rounded-2xl text-sm
+              className="w-full pl-10 pr-4 py-3 bg-[#1A1C20] border border-white/[0.1] rounded-2xl text-sm
                 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800"
             />
             {search && (
@@ -163,7 +163,7 @@ export default function MemberList() {
                 className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-all whitespace-nowrap ${
                   filter === chip.id
                     ? 'bg-white/[0.08] border border-white/[0.1] text-[#ededf0] shadow-sm'
-                    : 'bg-[#1a1a20] border border-white/[0.1] text-stone-600 hover:border-stone-400'
+                    : 'bg-[#1A1C20] border border-white/[0.1] text-stone-600 hover:border-stone-400'
                 }`}>
                 {chip.label}
                 {chip.count > 0 && (
@@ -196,7 +196,7 @@ export default function MemberList() {
         {loggedToday.length > 0 && (
           <div>
             {noLogToday.length > 0 && (
-              <p className="text-[10px] font-semibold text-[#c9a227] uppercase tracking-[0.12em] mb-2 mt-4 px-1">
+              <p className="text-[10px] font-semibold text-[#D4AF37] uppercase tracking-[0.12em] mb-2 mt-4 px-1">
                 ✓ Logged today ({loggedToday.length})
               </p>
             )}
@@ -279,7 +279,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
               Muscle Coverage's recency lens for consistency. */}
           {workoutDaysAgo !== null && (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-              workoutDaysAgo === 0 ? 'text-[#e0c98a] bg-[rgba(201,162,39,0.10)]'
+              workoutDaysAgo === 0 ? 'text-[#e0c98a] bg-[rgba(212,175,55,0.10)]'
               : workoutDaysAgo > 10 ? 'text-amber-400 bg-amber-400/10'
               : 'text-[#9a9aa6] bg-white/[0.05]'}`}>
               🏋️ {workoutDaysAgo === 0 ? 'Today' : `${workoutDaysAgo}d ago`}

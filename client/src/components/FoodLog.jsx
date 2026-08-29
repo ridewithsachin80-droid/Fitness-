@@ -101,8 +101,8 @@ function PortionPicker({ baseGrams, onSelect }) {
             style={{ minHeight: 60 }}
             className={`rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
               selected === p.label
-                ? 'border-[rgba(201,162,39,0.5)] bg-[rgba(201,162,39,0.1)]'
-                : 'border-white/[0.1] bg-[#1a1a20] hover:border-white/[0.2]'}`}>
+                ? 'border-[rgba(212,175,55,0.5)] bg-[rgba(212,175,55,0.1)]'
+                : 'border-white/[0.1] bg-[#1A1C20] hover:border-white/[0.2]'}`}>
             <span style={{ fontSize: 20 }}>{p.emoji}</span>
             <span className="text-[10px] text-[#8e8e9a] font-medium">{p.label}</span>
             {p.multiplier !== null && (
@@ -312,7 +312,7 @@ function PrescribedMeals({ items, onChange }) {
                 {!allDone && (
                   <button onClick={() => logMeal(plan)}
                     style={{ minHeight: 40 }}
-                    className="mt-2.5 w-full rounded-full bg-[#c9a227] text-[#121316] text-xs font-bold active:scale-[0.98] transition-transform">
+                    className="mt-2.5 w-full rounded-full bg-[#D4AF37] text-[#121316] text-xs font-bold active:scale-[0.98] transition-transform">
                     Log {pending.length === plan.items.length ? 'this meal' : `${pending.length} remaining item${pending.length > 1 ? 's' : ''}`} as entered
                   </button>
                 )}
@@ -541,8 +541,8 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       <button
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
-        className="w-full flex items-center gap-3 bg-gradient-to-r from-[#c9a227]/[0.14] to-[#8a6a1e]/[0.10] border border-[#c9a227]/30 hover:border-[#c9a227]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(201,162,39,0.4)]">✨</span>
+        className="w-full flex items-center gap-3 bg-gradient-to-r from-[#D4AF37]/[0.14] to-[#8a6a1e]/[0.10] border border-[#D4AF37]/30 hover:border-[#D4AF37]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
           <span className="block text-[11px] text-[#8e8e9a] leading-tight truncate">Say your whole day — I'll fill the entire log</span>
@@ -559,7 +559,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               return (
                 <button key={i} onClick={() => { setShowForm(true); setTimeout(() => pickRecent(food), 100); }}
                   style={{ minHeight: 44, whiteSpace: 'nowrap', flexShrink: 0 }}
-                  className="flex items-center gap-2 text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(201,162,39,0.4)] rounded-xl px-3 py-2 transition-colors text-[#d8d8de] font-medium">
+                  className="flex items-center gap-2 text-xs bg-[#1A1C20] border border-white/[0.10] hover:border-[rgba(212,175,55,0.4)] rounded-xl px-3 py-2 transition-colors text-[#d8d8de] font-medium">
                   <span className="truncate max-w-[100px]">{food.name}</span>
                   {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
                 </button>
@@ -598,7 +598,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 {mealItems.map((item) => {
                   const n = calcMacros(item);
                   return (
-                    <div key={item.id} className="py-2 px-3 rounded-xl bg-[#1a1a20] border border-white/[0.05]">
+                    <div key={item.id} className="py-2 px-3 rounded-xl bg-[#1A1C20] border border-white/[0.05]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-sm font-medium text-[#d8d8de] truncate">{item.name}</span>
@@ -659,11 +659,11 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       {!showForm ? (
         <button onClick={() => setShowForm(true)}
           style={{ minHeight: 52 }}
-          className="w-full py-3 rounded-2xl border-2 border-dashed border-[rgba(201,162,39,0.3)] text-[#bf9a2e] text-sm font-semibold hover:bg-[rgba(201,162,39,0.05)] hover:border-[rgba(201,162,39,0.5)] active:scale-98 transition-all">
+          className="w-full py-3 rounded-2xl border-2 border-dashed border-[rgba(212,175,55,0.3)] text-[#bf9a2e] text-sm font-semibold hover:bg-[rgba(212,175,55,0.05)] hover:border-[rgba(212,175,55,0.5)] active:scale-98 transition-all">
           + Add food item
         </button>
       ) : (
-        <div className="bg-[#1a1a20] rounded-2xl p-3 space-y-3 border border-white/[0.07]">
+        <div className="bg-[#1A1C20] rounded-2xl p-3 space-y-3 border border-white/[0.07]">
 
           {/* Meal selector */}
           <div className="flex gap-1.5 flex-wrap">
@@ -671,7 +671,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               <button key={m} onClick={() => setMeal(m)}
                 style={{ minHeight: 36 }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  meal === m ? 'bg-[#c9a227] text-white shadow-sm' : 'bg-white/[0.05] text-[#8e8e9a] hover:bg-white/[0.10]'
+                  meal === m ? 'bg-[#D4AF37] text-white shadow-sm' : 'bg-white/[0.05] text-[#8e8e9a] hover:bg-white/[0.10]'
                 }`}>{m}</button>
             ))}
           </div>
@@ -686,7 +686,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                   return (
                     <button key={i} onClick={() => pickRecent(food)}
                       style={{ minHeight: 36 }}
-                      className="flex items-center gap-1.5 text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(201,162,39,0.4)] rounded-xl px-2.5 py-1.5 transition-colors text-[#d8d8de] font-medium">
+                      className="flex items-center gap-1.5 text-xs bg-[#1A1C20] border border-white/[0.10] hover:border-[rgba(212,175,55,0.4)] rounded-xl px-2.5 py-1.5 transition-colors text-[#d8d8de] font-medium">
                       <span className="truncate max-w-[100px]">{food.name}</span>
                       <span className="text-[#6a6a78]">{food.last_g}g</span>
                       {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
@@ -704,7 +704,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onFocus={() => { if (suggestions.length > 0 && !selected) setShowSuggestions(true); }}
                 placeholder="Food name…"
-                className="flex-1 px-3 py-2.5 rounded-xl border border-[rgba(255,255,255,0.12)] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] text-[#ededf0] font-medium"
+                className="flex-1 px-3 py-2.5 rounded-xl border border-[rgba(255,255,255,0.12)] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)] text-[#ededf0] font-medium"
                 autoFocus />
               {hasBarcodeDetector && (
                 <button onClick={() => { haptic(15); setScanning(true); }}
@@ -732,7 +732,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               </button>
               {searching && (
                 <div className="absolute right-14 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-[rgba(201,162,39,0.3)] border-t-[#c9a227] rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-[rgba(212,175,55,0.3)] border-t-[#D4AF37] rounded-full animate-spin" />
                 </div>
               )}
               {selected && !searching && (
@@ -743,20 +743,20 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               <div className="mt-1 text-xs text-red-400 font-medium px-1">🎤 Listening… tap again when done</div>
             )}
             {voice.transcribing && (
-              <div className="mt-1 text-xs text-[#c9a227] font-medium px-1">✨ Getting the exact words…</div>
+              <div className="mt-1 text-xs text-[#D4AF37] font-medium px-1">✨ Getting the exact words…</div>
             )}
             {voice.error && (
               <div className="mt-1 text-xs text-amber-400 font-medium px-1">{voice.error}</div>
             )}
             {scanMsg && (
-              <div className="mt-1 text-xs text-[#c9a227] font-medium px-1">{scanMsg}</div>
+              <div className="mt-1 text-xs text-[#D4AF37] font-medium px-1">{scanMsg}</div>
             )}
             {scanning && (
               <BarcodeScanner onFound={onBarcodeFound} onClose={() => setScanning(false)} />
             )}
 
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] rounded-xl border border-white/[0.1] shadow-lg z-30 overflow-hidden"
+              <div className="absolute left-0 right-0 top-full mt-1 bg-[#1A1C20] rounded-xl border border-white/[0.1] shadow-lg z-30 overflow-hidden"
                 style={{ maxHeight: 240, overflowY: 'auto', overscrollBehavior: 'contain' }}>
                 {suggestions.map((food) => (
                   <button key={food.id}
@@ -764,12 +764,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                     onTouchStart={(e) => e.preventDefault()}
                     onClick={() => pickSuggestion(food)}
                     style={{ minHeight: 44 }}
-                    className="w-full text-left px-3 py-2.5 hover:bg-[rgba(201,162,39,0.08)] active:bg-[rgba(201,162,39,0.15)] transition-colors border-b border-white/[0.05] last:border-0">
+                    className="w-full text-left px-3 py-2.5 hover:bg-[rgba(212,175,55,0.08)] active:bg-[rgba(212,175,55,0.15)] transition-colors border-b border-white/[0.05] last:border-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-[#d8d8de] font-medium truncate">{food.name}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {food.verified && (
-                          <span className="text-xs bg-[rgba(201,162,39,0.12)] text-[#c9a227] px-1.5 py-0.5 rounded font-semibold">✓</span>
+                          <span className="text-xs bg-[rgba(212,175,55,0.12)] text-[#D4AF37] px-1.5 py-0.5 rounded font-semibold">✓</span>
                         )}
                         <span className="text-xs font-bold text-orange-400">{food.per_100g?.calories || 0} kcal</span>
                       </div>
@@ -825,7 +825,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
 
           {/* Per-100g preview */}
           {selected?.per_100g && (
-            <div className="bg-[#131317] rounded-xl border border-[rgba(201,162,39,0.2)] px-3 py-2">
+            <div className="bg-[#131317] rounded-xl border border-[rgba(212,175,55,0.2)] px-3 py-2">
               <p className="text-xs text-[#6a6a78] mb-1">Per 100g — {selected.name}</p>
               <div className="flex gap-3 flex-wrap">
                 <span className="text-xs font-bold text-orange-400">{selected.per_100g.calories || 0} kcal</span>
@@ -844,12 +844,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 onChange={(e) => setGrams(e.target.value)}
                 placeholder="Weight in grams"
                 onKeyDown={(e) => e.key === 'Enter' && add()}
-                className="w-full px-3 py-2.5 pr-8 rounded-xl border border-white/[0.12] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.3)] text-[#ededf0]" />
+                className="w-full px-3 py-2.5 pr-8 rounded-xl border border-white/[0.12] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)] text-[#ededf0]" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#4e4e5c]">g</span>
             </div>
             <button onClick={add} disabled={!query.trim() || !grams}
               style={{ minHeight: 44 }}
-              className="px-4 py-2.5 bg-[#c9a227] hover:bg-[#9775fa] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-all active:scale-95">
+              className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#9775fa] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-all active:scale-95">
               Add
             </button>
             <button onClick={closeForm}

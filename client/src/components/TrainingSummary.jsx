@@ -75,7 +75,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
             style={{ minHeight: 32 }}
             className={`flex-1 rounded-lg text-[11px] font-bold transition-colors ${
               days === r.days
-                ? 'bg-[#c9a227] text-white'
+                ? 'bg-[#D4AF37] text-white'
                 : 'bg-white/[0.04] text-[#8e8e9a] hover:text-[#d8d8de]'
             }`}>
             {r.label}
@@ -113,7 +113,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
               const pb = s.volume_kg > 0 && s.volume_kg === best.volume_kg;
               return (
                 <div key={i} className="flex-1 flex flex-col justify-end items-center gap-1" title={`${fmtDate(s.date)} · ${s.volume_kg} kg`}>
-                  <div className={`w-full rounded-t transition-all ${pb ? 'bg-amber-400' : 'bg-[#c9a227]'}`}
+                  <div className={`w-full rounded-t transition-all ${pb ? 'bg-amber-400' : 'bg-[#D4AF37]'}`}
                     style={{ height: `${Math.max(4, (s.volume_kg / maxVolume) * 100)}%` }} />
                 </div>
               );

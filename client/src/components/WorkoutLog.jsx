@@ -363,8 +363,8 @@ export default function WorkoutLog({ date }) {
       <button
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
-        className="w-full flex items-center gap-3 mb-3 bg-gradient-to-r from-[#c9a227]/[0.14] to-[#8a6a1e]/[0.10] border border-[#c9a227]/30 hover:border-[#c9a227]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(201,162,39,0.4)]">✨</span>
+        className="w-full flex items-center gap-3 mb-3 bg-gradient-to-r from-[#D4AF37]/[0.14] to-[#8a6a1e]/[0.10] border border-[#D4AF37]/30 hover:border-[#D4AF37]/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
           <span className="block text-[11px] text-[#8e8e9a] leading-tight truncate">"Bench press 3 sets of 20kg" or "5 km walk in 1 hour"</span>
@@ -374,7 +374,7 @@ export default function WorkoutLog({ date }) {
       {/* Rest timer banner — manually started via the ⏱ button on any exercise */}
       {restSeconds !== null && (
         <div className={`flex items-center justify-between mb-3 px-3 py-2.5 rounded-xl border transition-colors ${
-          restSeconds <= 0 ? 'bg-[rgba(212,175,106,0.12)] border-[rgba(212,175,106,0.30)]' : 'bg-[rgba(201,162,39,0.10)] border-[rgba(201,162,39,0.20)]'}`}>
+          restSeconds <= 0 ? 'bg-[rgba(212,175,106,0.12)] border-[rgba(212,175,106,0.30)]' : 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.20)]'}`}>
           <div className="flex items-center gap-2">
             <span className="text-lg">⏱</span>
             <span className={`font-display text-lg font-semibold ${restSeconds <= 0 ? 'text-[#d4af6a]' : 'text-[#ededf0]'}`}>
@@ -422,8 +422,8 @@ export default function WorkoutLog({ date }) {
                   <button key={day.day_number} onClick={() => addProgramDay(day)}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
                       isActive
-                        ? 'bg-[#c9a227] border-[#c9a227] text-[#121316]'
-                        : 'bg-[rgba(201,162,39,0.10)] border-[rgba(201,162,39,0.20)] text-[#e0c98a] hover:bg-[rgba(201,162,39,0.18)]'
+                        ? 'bg-[#D4AF37] border-[#D4AF37] text-[#121316]'
+                        : 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.20)] text-[#e0c98a] hover:bg-[rgba(212,175,55,0.18)]'
                     }`}>
                     {(isActive || (activeProgramDay == null && isToday)) && '▸ '}{day.day_label}
                   </button>
@@ -441,11 +441,11 @@ export default function WorkoutLog({ date }) {
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
             placeholder="Search exercises… e.g. Bench Press"
-            className="w-full px-3 py-2.5 bg-[#1a1a20] border border-white/[0.1] rounded-xl text-sm
-              text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]"
+            className="w-full px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm
+              text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]"
           />
           {(results.length > 0 || (search.length >= 2 && !searching)) && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a20] border border-white/[0.1]
+            <div className="absolute left-0 right-0 top-full mt-1 bg-[#1A1C20] border border-white/[0.1]
               rounded-xl shadow-card-raised z-20 max-h-56 overflow-y-auto">
               {results.map(r => (
                 <button key={r.id} onClick={() => addExercise(r)}
@@ -465,7 +465,7 @@ export default function WorkoutLog({ date }) {
         </div>
         <button onClick={startSearchVoice} disabled={listeningSearch}
           className={`px-3.5 rounded-xl border flex items-center justify-center transition-colors ${
-            listeningSearch ? 'bg-[#c9a227] border-[#c9a227] text-white animate-pulse' : 'bg-white/[0.06] border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1]'}`}>
+            listeningSearch ? 'bg-[#D4AF37] border-[#D4AF37] text-white animate-pulse' : 'bg-white/[0.06] border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1]'}`}>
           🎤
         </button>
       </div>
@@ -486,7 +486,7 @@ export default function WorkoutLog({ date }) {
                 <div>
                   <span className="text-sm font-semibold text-[#ededf0]">{ex.exercise_name}</span>
                   {target && (
-                    <span className="ml-2 text-[10px] font-semibold text-[#e0c98a] bg-[rgba(201,162,39,0.10)] px-1.5 py-0.5 rounded-full">
+                    <span className="ml-2 text-[10px] font-semibold text-[#e0c98a] bg-[rgba(212,175,55,0.10)] px-1.5 py-0.5 rounded-full">
                       Target: {formatTarget(target)}
                     </span>
                   )}
@@ -514,11 +514,11 @@ export default function WorkoutLog({ date }) {
                       <input type="number" inputMode="decimal" value={set.weight_kg}
                         onChange={e => updateSet(ex.exercise_id, i, 'weight_kg', e.target.value)}
                         placeholder="0"
-                        className="flex-1 min-w-0 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
+                        className="flex-1 min-w-0 px-2 py-1.5 bg-[#1A1C20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />
                       <input type="number" inputMode="numeric" value={set.reps}
                         onChange={e => updateSet(ex.exercise_id, i, 'reps', e.target.value)}
                         placeholder="0"
-                        className="flex-1 min-w-0 px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
+                        className="flex-1 min-w-0 px-2 py-1.5 bg-[#1A1C20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />
                       <button onClick={() => removeSet(ex.exercise_id, i)} className="w-6 flex-shrink-0 text-[#5a5a68] hover:text-red-400 text-sm">×</button>
                     </div>
                   ))}
@@ -527,13 +527,13 @@ export default function WorkoutLog({ date }) {
 
               <div className="flex gap-2 mt-2">
                 <button onClick={() => addSetRow(ex.exercise_id)}
-                  className="flex-1 py-2 text-xs font-semibold text-[#e0c98a] bg-[rgba(201,162,39,0.08)] border border-[rgba(201,162,39,0.18)] rounded-lg hover:bg-[rgba(201,162,39,0.14)] transition-colors">
+                  className="flex-1 py-2 text-xs font-semibold text-[#e0c98a] bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.18)] rounded-lg hover:bg-[rgba(212,175,55,0.14)] transition-colors">
                   + Add Set
                 </button>
                 <button onClick={() => voiceLogSet(ex.exercise_id)} disabled={listeningSetKey === ex.exercise_id}
                   className={`px-3.5 py-2 rounded-lg border text-xs font-semibold transition-colors ${
                     listeningSetKey === ex.exercise_id
-                      ? 'bg-[#c9a227] border-[#c9a227] text-white animate-pulse'
+                      ? 'bg-[#D4AF37] border-[#D4AF37] text-white animate-pulse'
                       : 'bg-white/[0.06] border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1]'}`}>
                   🎤 {listeningSetKey === ex.exercise_id ? 'Listening…' : 'Say a set'}
                 </button>
@@ -558,7 +558,7 @@ export default function WorkoutLog({ date }) {
           <span className="text-xs text-[#9a9aa6]">Time in gym:</span>
           <input type="number" inputMode="numeric" value={durationMin}
             onChange={e => handleDurationChange(e.target.value)}
-            placeholder="30" className="w-16 px-2 py-1 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
+            placeholder="30" className="w-16 px-2 py-1 bg-[#1A1C20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />
           <span className="text-xs text-[#5a5a68]">min</span>
           <span className="text-[10px] text-[#5a5a68] ml-auto">optional</span>
         </div>
@@ -570,7 +570,7 @@ export default function WorkoutLog({ date }) {
           <span className="text-[10px] font-bold text-[#5a5a68] uppercase tracking-wider">Cardio</span>
           <button onClick={() => setCardio(c => [...c, { type: 'walking', duration_min: 30, speed_kmh: 5 }])}
             style={{ minHeight: 32 }}
-            className="text-[11px] font-bold text-[#e0c98a] bg-[rgba(201,162,39,0.10)] border border-[rgba(201,162,39,0.25)] rounded-lg px-3 active:scale-95 transition-transform">
+            className="text-[11px] font-bold text-[#e0c98a] bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.25)] rounded-lg px-3 active:scale-95 transition-transform">
             + Add cardio
           </button>
         </div>
@@ -591,7 +591,7 @@ export default function WorkoutLog({ date }) {
                     <select value={c.type}
                       onChange={e => patch('type', e.target.value)}
                       style={{ minHeight: 36 }}
-                      className="flex-1 min-w-0 text-xs font-semibold bg-[#1a1a20] border border-white/[0.1] rounded-lg px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]">
+                      className="flex-1 min-w-0 text-xs font-semibold bg-[#1A1C20] border border-white/[0.1] rounded-lg px-2 text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]">
                       {CARDIO_TYPES.map(o => (
                         <option key={o.id} value={o.id}>{o.icon} {o.label}</option>
                       ))}
@@ -605,7 +605,7 @@ export default function WorkoutLog({ date }) {
                       <input type="number" inputMode="numeric" value={c.duration_min ?? ''}
                         onChange={e => patch('duration_min', e.target.value)}
                         placeholder="30"
-                        className="w-full px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
+                        className="w-full px-2 py-1.5 bg-[#1A1C20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />
                     </label>
                     {t.speed && (
                       <label className="flex-1 min-w-0">
@@ -613,7 +613,7 @@ export default function WorkoutLog({ date }) {
                         <input type="number" inputMode="decimal" step="0.5" value={c.speed_kmh ?? ''}
                           onChange={e => patch('speed_kmh', e.target.value)}
                           placeholder="5"
-                          className="w-full px-2 py-1.5 bg-[#1a1a20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(201,162,39,0.30)]" />
+                          className="w-full px-2 py-1.5 bg-[#1A1C20] border border-white/[0.1] rounded-lg text-sm text-center text-[#ededf0] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />
                       </label>
                     )}
                   </div>
@@ -636,7 +636,7 @@ export default function WorkoutLog({ date }) {
         if (e.totalKcal === 0 && e.sets === 0 && e.cardioMin === 0) return null;
         return (
           <div className="mt-3 pt-3 border-t border-white/[0.06]">
-            <div className="bg-[rgba(201,162,39,0.08)] border border-[rgba(201,162,39,0.22)] rounded-xl px-3.5 py-3">
+            <div className="bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.22)] rounded-xl px-3.5 py-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[11px] font-bold text-[#e0c98a] uppercase tracking-wider">Calories burned</span>
                 <span className="font-display text-xl font-bold text-orange-400">{e.totalKcal} kcal</span>

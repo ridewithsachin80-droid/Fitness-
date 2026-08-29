@@ -52,12 +52,12 @@ function statusColor(group, tab) {
 }
 
 const STATUS_STYLES = {
-  good:  'border-[rgba(201,162,39,0.30)] bg-[rgba(201,162,39,0.08)]',
+  good:  'border-[rgba(212,175,55,0.30)] bg-[rgba(212,175,55,0.08)]',
   ok:    'border-amber-400/25 bg-amber-400/[0.06]',
   stale: 'border-white/[0.07] bg-white/[0.02]',
 };
 const STATUS_DOT = {
-  good:  'bg-[#c9a227]',
+  good:  'bg-[#D4AF37]',
   ok:    'bg-amber-400',
   stale: 'bg-[#3a3a46]',
 };
@@ -103,7 +103,7 @@ export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              tab === t.id ? 'bg-[#c9a227] text-white' : 'text-[#9a9aa6] hover:text-[#d8d8de]'}`}>
+              tab === t.id ? 'bg-[#D4AF37] text-white' : 'text-[#9a9aa6] hover:text-[#d8d8de]'}`}>
             {t.label}
           </button>
         ))}

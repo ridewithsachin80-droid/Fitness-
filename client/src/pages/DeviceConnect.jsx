@@ -481,7 +481,7 @@ export default function DeviceConnect() {
   const anyLoading = bleActive || hcActive;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0b0b0e' }}>
+    <div style={{ minHeight: '100vh', background: '#121316' }}>
 
       {/* ── Toast ── */}
       {toast && (
@@ -540,8 +540,8 @@ export default function DeviceConnect() {
             </div>
             {anyLoading && (
               <div style={{
-                width: 32, height: 32, border: '3px solid rgba(201,162,39,0.2)',
-                borderTopColor: '#c9a227', borderRadius: '50%',
+                width: 32, height: 32, border: '3px solid rgba(212,175,55,0.2)',
+                borderTopColor: '#D4AF37', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite', flexShrink: 0, marginTop: 4,
               }} />
             )}
@@ -881,7 +881,7 @@ function SyncToggleRow({ label, sub, defaultOn }) {
       </div>
       <button onClick={() => { setOn(v => !v); haptic(15); }} style={{
         width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
-        background: on ? '#c9a227' : 'rgba(255,255,255,0.1)',
+        background: on ? '#D4AF37' : 'rgba(255,255,255,0.1)',
         position: 'relative', flexShrink: 0, transition: 'background 0.2s',
       }}>
         <div style={{

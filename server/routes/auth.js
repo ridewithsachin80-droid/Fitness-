@@ -108,11 +108,24 @@ router.post('/pin-login', async (req, res) => {
     return res.status(400).json({ error: 'Phone and PIN are required' });
   }
 
-  // Rate-limit by IP before touching the DB
+  // Rate-limit on TWO keys before touching the DB.
+  //
+  // IP alone was the whole bucket, and under Indian carrier-grade NAT a large
+  // number of mobile users share one public address — so several members on
+  // the same network, or one member on a busy cell, could exhaust the ten
+  // attempts without any of them having typed a wrong PIN. The per-phone key
+  // is the tighter, fairer limit against actual guessing; the per-IP key is
+  // deliberately looser now, and exists to blunt a broad scripted sweep across
+  // many numbers rather than to police one household.
   const ip = getIp(req);
-  if (!checkRateLimit(`pin-login:${ip}`, 10, 15 * 60 * 1000)) {
+  if (!checkRateLimit(`pin-login-phone:${phone}`, 8, 15 * 60 * 1000)) {
     return res.status(429).json({
-      error: 'Too many login attempts. Please wait 15 minutes and try again.',
+      error: 'Too many attempts for this number. Please wait 15 minutes and try again.',
+    });
+  }
+  if (!checkRateLimit(`pin-login:${ip}`, 50, 15 * 60 * 1000)) {
+    return res.status(429).json({
+      error: 'Too many login attempts from this network. Please wait 15 minutes and try again.',
     });
   }
 
@@ -145,8 +158,10 @@ router.post('/pin-login', async (req, res) => {
       return res.status(401).json({ error: 'Incorrect PIN. Contact your coach to reset.' });
     }
 
-    // Successful login — clear the rate-limit counter for this IP
+    // Successful login — clear both counters. Leaving the phone counter set
+    // would carry failed attempts forward into the next session.
     clearRateLimit(`pin-login:${ip}`);
+    clearRateLimit(`pin-login-phone:${phone}`);
 
     const { accessToken, refreshToken } = signTokens(user);
     setRefreshCookie(res, refreshToken);

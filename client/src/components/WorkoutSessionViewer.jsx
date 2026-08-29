@@ -31,7 +31,7 @@ export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }
 
   return (
     <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-      <div className="px-3 py-2 bg-[#1a1a20] border-b border-white/[0.06] flex justify-between items-center">
+      <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06] flex justify-between items-center">
         <span className="text-[10px] font-bold text-[#4e4e5c] uppercase tracking-[0.10em]">🏋️ Workout Log</span>
         {data.session?.duration_min && (
           <span className="text-xs text-[#6a6a78]">{data.session.duration_min} min</span>

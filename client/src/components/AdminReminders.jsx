@@ -139,7 +139,7 @@ export default function AdminReminders({ members = [] }) {
     borderRadius: 12, padding: 16, marginBottom: 12,
   };
 
-  const btnStyle = (color = '#c9a227') => ({
+  const btnStyle = (color = '#D4AF37') => ({
     background: color, color: '#08052a', border: 'none',
     borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
     fontSize: 13, fontWeight: 700,
@@ -155,7 +155,7 @@ export default function AdminReminders({ members = [] }) {
       </p>
 
       {msg && (
-        <div style={{ background: '#1e3a2e', border: '1px solid rgba(201,162,39,0.35)', borderRadius: 8,
+        <div style={{ background: '#1e3a2e', border: '1px solid rgba(212,175,55,0.35)', borderRadius: 8,
           padding: '10px 16px', marginBottom: 16, color: '#f0dfae', fontSize: 14 }}>
           {msg}
         </div>
@@ -166,7 +166,7 @@ export default function AdminReminders({ members = [] }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#12122a', borderRadius: 16, padding: 24,
-            width: 360, border: '1px solid rgba(201,162,39,0.35)' }}>
+            width: 360, border: '1px solid rgba(212,175,55,0.35)' }}>
             <h3 style={{ color: '#f0dfae', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
               {editing.type === 'water' ? '💧 Water' : '🏃 Activity'} Reminders
             </h3>
@@ -181,7 +181,7 @@ export default function AdminReminders({ members = [] }) {
               <div style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>Reminder Times (IST)</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                 {editing.times.map(t => (
-                  <div key={t} style={{ background: 'rgba(201,162,39,0.13)', border: '1px solid #c9a227',
+                  <div key={t} style={{ background: 'rgba(212,175,55,0.13)', border: '1px solid #D4AF37',
                     borderRadius: 20, padding: '4px 12px', fontSize: 13,
                     display: 'flex', alignItems: 'center', gap: 6 }}>
                     {t}
@@ -218,7 +218,7 @@ export default function AdminReminders({ members = [] }) {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={save} disabled={saving} style={btnStyle('#c9a227')}>
+              <button onClick={save} disabled={saving} style={btnStyle('#D4AF37')}>
                 {saving ? 'Saving...' : '✅ Save Schedule'}
               </button>
               <button onClick={() => setEditing(null)} style={btnStyle('#444')}>Cancel</button>
@@ -276,7 +276,7 @@ export default function AdminReminders({ members = [] }) {
               <span style={{ fontWeight: 600 }}>{member.name}</span>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => toggleDevices(member.id)}
-                  style={{ ...btnStyle(openDevicesFor === member.id ? '#c9a227' : '#374151'), fontSize: 11 }}>
+                  style={{ ...btnStyle(openDevicesFor === member.id ? '#D4AF37' : '#374151'), fontSize: 11 }}>
                   📱 Devices{devices[member.id] ? ` (${devices[member.id].length})` : ''}
                 </button>
                 <button onClick={() => sendTest(member.id, 'water')}

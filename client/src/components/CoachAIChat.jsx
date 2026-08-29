@@ -46,7 +46,7 @@ export function CoachAIFab({ bottomOffset = 40 }) {
     <button
       onClick={openChat}
       aria-label="Coach AI"
-      className="fixed z-40 flex items-center justify-center bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] shadow-[0_4px_20px_rgba(201,162,39,0.45)] border border-r-0 border-white/[0.15] active:scale-95 transition-transform"
+      className="fixed z-40 flex items-center justify-center bg-gradient-to-br from-[#D4AF37] to-[#8a6a1e] shadow-[0_4px_20px_rgba(212,175,55,0.45)] border border-r-0 border-white/[0.15] active:scale-95 transition-transform"
       style={{
         right: 0,
         bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))`,
@@ -165,7 +165,7 @@ export default function CoachAIChat({ onApplied }) {
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a227] to-[#8a6a1e] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(201,162,39,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8a6a1e] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">Coach AI</p>
             <p className="text-[10px] text-[#4e4e5c] leading-tight">Manage protocols & messages by chat</p>
@@ -196,7 +196,7 @@ export default function CoachAIChat({ onApplied }) {
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-[#c9a227] text-white text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="max-w-[85%] bg-[#D4AF37] text-white text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
                 {m.text}
               </div>
             </div>
@@ -221,21 +221,21 @@ export default function CoachAIChat({ onApplied }) {
                             !a.resolved
                               ? 'border-amber-500/30 opacity-80'
                               : a.on
-                              ? 'border-[#c9a227]/40 active:scale-[0.99]'
+                              ? 'border-[#D4AF37]/40 active:scale-[0.99]'
                               : 'border-white/[0.05] opacity-40'
                           }`}>
                           <div className="flex items-center justify-between gap-2 mb-1.5">
                             <div className="flex items-center gap-2 min-w-0">
                               {a.resolved && (
                                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                  a.on ? 'bg-[#c9a227] text-white' : 'bg-white/[0.08] text-transparent'
+                                  a.on ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.08] text-transparent'
                                 }`}>✓</span>
                               )}
                               <p className={`text-[13px] font-bold truncate ${a.on || !a.resolved ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
                                 {a.member_name}
                               </p>
                               {a.is_all && (
-                                <span className="text-[9px] font-bold text-[#e0c98a] bg-[#c9a227]/[0.14] border border-[#c9a227]/30 rounded-full px-2 py-0.5 flex-shrink-0">BROADCAST</span>
+                                <span className="text-[9px] font-bold text-[#e0c98a] bg-[#D4AF37]/[0.14] border border-[#D4AF37]/30 rounded-full px-2 py-0.5 flex-shrink-0">BROADCAST</span>
                               )}
                             </div>
                             {!a.resolved && (
@@ -264,7 +264,7 @@ export default function CoachAIChat({ onApplied }) {
                         <button onClick={() => applyAll(mi)}
                           disabled={applying}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#c9a227] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#c9a227] active:scale-[0.98] shadow-[0_2px_16px_rgba(201,162,39,0.4)] transition-all disabled:opacity-60">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#D4AF37] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#D4AF37] active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
                           {applying
                             ? 'Applying…'
                             : `Apply changes for ${m.actions.filter(a => a.on && a.resolved).length} member${m.actions.filter(a => a.on && a.resolved).length > 1 ? 's' : ''}`}
@@ -298,9 +298,9 @@ export default function CoachAIChat({ onApplied }) {
           <div className="flex justify-start">
             <div className="bg-[#16161c] border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#c9a227] animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -319,7 +319,7 @@ export default function CoachAIChat({ onApplied }) {
                 else send(chip);
               }}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
-              className="text-xs bg-[#1a1a20] border border-white/[0.10] hover:border-[rgba(201,162,39,0.4)] rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
+              className="text-xs bg-[#1A1C20] border border-white/[0.10] hover:border-[rgba(212,175,55,0.4)] rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
               {chip.trim()}{chip.endsWith(' ') ? '…' : ''}
             </button>
           ))}
@@ -331,7 +331,7 @@ export default function CoachAIChat({ onApplied }) {
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {vc.card}
         <div className="flex items-end gap-2">
-          <div className="flex-1 flex items-center bg-[#1a1a20] border border-white/[0.10] rounded-2xl px-3">
+          <div className="flex-1 flex items-center bg-[#1A1C20] border border-white/[0.10] rounded-2xl px-3">
             <input
               ref={inputRef}
               value={input}
@@ -348,7 +348,7 @@ export default function CoachAIChat({ onApplied }) {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
-                ? 'bg-[#c9a227] text-white shadow-[0_2px_12px_rgba(201,162,39,0.4)] active:scale-95'
+                ? 'bg-[#D4AF37] text-white shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-[#4e4e5c]'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

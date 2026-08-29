@@ -445,6 +445,25 @@ export default function Profile() {
           );
         })()}
 
+        {/* Connected devices. DeviceConnect is ~900 lines of scale and tracker
+            integration reachable from exactly one row buried in Settings, so
+            most members never discovered it existed. Profile is where someone
+            already thinking about their body data is looking. */}
+        <button
+          onClick={() => navigate('/devices')}
+          style={{ minHeight: 56 }}
+          className="w-full rounded-2xl p-4 border border-white/[0.07] bg-[#1A1C20]
+            flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
+          <span className="text-xl">⌚</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white">Connected devices</p>
+            <p className="text-xs text-[#7E8596] mt-0.5">
+              Smart scale, fitness tracker and health apps
+            </p>
+          </div>
+          <span className="text-[#7E8596]">›</span>
+        </button>
+
         {/* Blood work — members enter their own and see what changed alongside */}
         <Card>
           <SectionTitle icon="🩸">Lab Results</SectionTitle>

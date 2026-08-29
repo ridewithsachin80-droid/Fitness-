@@ -39,7 +39,7 @@ function shortDate(str) {
 function WeightTip({ active, payload }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
+    <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
       <p className="font-bold text-emerald-600">{payload[0].value} kg</p>
       <p className="text-stone-400">{payload[0].payload.date}</p>
     </div>
@@ -50,7 +50,7 @@ function ComplianceTip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const v = payload[0].value;
   return (
-    <div className="bg-[#1a1a20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
+    <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
       <p className={`font-bold ${v >= 75 ? 'text-emerald-600' : v >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{v}%</p>
       <p className="text-stone-400">{payload[0].payload.date}</p>
     </div>
@@ -211,7 +211,7 @@ function PastLogModal({ log, onClose }) {
 
 function StatBox({ value, label, sub, color = 'emerald' }) {
   const colors = {
-    emerald: 'bg-[rgba(201,162,39,0.08)] text-[#c9a227] border border-[rgba(201,162,39,0.14)]',
+    emerald: 'bg-[rgba(212,175,55,0.08)] text-[#D4AF37] border border-[rgba(212,175,55,0.14)]',
     blue:    'bg-[rgba(96,165,250,0.08)] text-blue-400 border border-[rgba(96,165,250,0.14)]',
     orange:  'bg-[rgba(251,146,60,0.08)] text-orange-400 border border-[rgba(251,146,60,0.14)]',
     purple:  'bg-[rgba(192,132,252,0.08)] text-amber-400 border border-[rgba(192,132,252,0.14)]',
@@ -369,7 +369,7 @@ export default function Progress() {
   const complianceColor = avg30 >= 75 ? 'emerald' : avg30 >= 50 ? 'amber' : 'orange';
 
   return (
-    <div className="min-h-screen bg-[#0b0b0e] font-sans">
+    <div className="min-h-screen bg-[#121316] font-sans">
 
       {/* Header */}
       <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
@@ -413,7 +413,7 @@ export default function Progress() {
                 />
               </div>
               {lostKg !== null && lostKg > 0 && (
-                <p className="text-center text-xs text-[#c9a227] mt-2 font-semibold">
+                <p className="text-center text-xs text-[#D4AF37] mt-2 font-semibold">
                   🎉 {lostKg} kg lost · {toGoKg} kg to go
                 </p>
               )}

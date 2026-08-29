@@ -172,14 +172,14 @@ export function printLabReport({ labs = [], comparisons = [], insight = null, me
   @page { margin: 16mm; }
   * { box-sizing: border-box; }
   body { font: 11pt/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c1b18; margin: 0; }
-  header { border-bottom: 2px solid #C9A227; padding-bottom: 8px; margin-bottom: 16px; }
+  header { border-bottom: 2px solid #D4AF37; padding-bottom: 8px; margin-bottom: 16px; }
   h1 { font-size: 19pt; margin: 0 0 2px; }
   .sub { color: #6b6a64; font-size: 9.5pt; margin: 0; }
   h2 { font-size: 13pt; margin: 22px 0 8px; color: #8C6D37; border-bottom: 0.5pt solid #ddd; padding-bottom: 3px; }
   h3 { font-size: 11pt; margin: 14px 0 6px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em;
-       color: #6b6a64; border-bottom: 0.5pt solid #C9A227; padding: 4px 6px; }
+       color: #6b6a64; border-bottom: 0.5pt solid #D4AF37; padding: 4px 6px; }
   td { padding: 4px 6px; border-bottom: 0.3pt solid #eee; font-size: 10pt; }
   td.n, th.n { text-align: right; }
   tr.flag td { background: #fdf6e6; }

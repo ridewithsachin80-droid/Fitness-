@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { getMyProfile } from '../api/logs';
 import {
-  today, formatDate,
+  today, formatDate, istDate, istDaysAgo,
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
   calcCompliance, getNutrition, RDA_TARGETS,
 } from '../constants';
@@ -709,9 +709,9 @@ export default function DailyLog() {
   // Fetch yesterday's weight for trend delta shown after weight entry
   const [yesterdayWeight, setYesterdayWeight] = useState(null);
   useEffect(() => {
-    const yDate = new Date();
-    yDate.setDate(yDate.getDate() - 1);
-    const yStr = yDate.toISOString().split('T')[0];
+    // Was toISOString() — UTC — while today() is IST. For 5.5 hours a day
+    // those pointed at different dates and the trend delta silently vanished.
+    const yStr = istDaysAgo(1);
     api.get(`/logs/${yStr}`).then(({ data }) => {
       if (data?.weight_kg) setYesterdayWeight(parseFloat(data.weight_kg));
     }).catch(() => {});
@@ -823,41 +823,6 @@ export default function DailyLog() {
   // Today's volume, but only when it beats every previous session on record
   const [volumePB, setVolumePB] = useState(null);
   const prevSaved = useRef(false);
-  useEffect(() => {
-    if (!prevSaved.current && saved && date === today()) {
-      // ── Streak milestone ──────────────────────────────────────────────────
-      const STREAK_KEY = 'fitlife_streak';
-      const stored = (() => { try { return JSON.parse(localStorage.getItem(STREAK_KEY) || '{}'); } catch { return {}; } })();
-      const yStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; })();
-      const streak = stored.lastDate === yStr ? (stored.count || 0) + 1 : 1;
-      localStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: today(), count: streak }));
-
-      // ── Weight milestone ──────────────────────────────────────────────────
-      const startW   = parseFloat(protocol?.start_weight);
-      const currentW = parseFloat(log.weight);
-      const lostKg   = startW && currentW ? +(startW - currentW).toFixed(1) : null;
-      // Find the nearest completed whole-kg milestone (1, 2, 3…)
-      const kgMilestone = lostKg != null && lostKg > 0 ? Math.floor(lostKg) : 0;
-      const prevStored  = stored.lastKgMilestone || 0;
-
-      if (kgMilestone > prevStored && kgMilestone >= 1) {
-        localStorage.setItem(STREAK_KEY, JSON.stringify({ lastDate: today(), count: streak, lastKgMilestone: kgMilestone }));
-        setMilestone({ icon: '🏆', title: `${kgMilestone} kg lost!`, body: `You've shed ${kgMilestone} kg since you started. That's real progress — keep going!` });
-      } else if ([7, 14, 21, 30, 50, 100].includes(streak)) {
-        setMilestone({ icon: '🔥', title: `${streak}-day streak!`, body: `${streak} days logged in a row. You're building an unstoppable habit!` });
-      } else if (volumePB) {
-        // Training personal best — checked server-side against the member's
-        // own history, so it survives a device change (unlike the localStorage
-        // streak above).
-        setMilestone({
-          icon: '💪',
-          title: 'New personal best!',
-          body: `${volumePB.toLocaleString()} kg lifted today — the most you've ever done in one session. Strong work!`,
-        });
-      }
-    }
-    prevSaved.current = saved;
-  }, [saved]);
 
   const terms = useTerms();
   const { nutritionView, ageMode, avatarIdx } = useSettingsStore();
@@ -955,8 +920,7 @@ export default function DailyLog() {
   // — "6-day streak" means little on its own; "best this month" is the reward.
   const [streakIsBest, setStreakIsBest] = useState(false);
   useEffect(() => {
-    const from = new Date(); from.setDate(from.getDate() - 30);
-    const fStr = `${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,'0')}-${String(from.getDate()).padStart(2,'0')}`;
+    const fStr = istDaysAgo(30);
     api.get(`/logs/range/${fStr}/${today()}`).then(({ data }) => {
       const logged = new Set((data || []).map(l => (l.log_date || '').slice(0, 10)));
       let s = 0;
@@ -964,7 +928,7 @@ export default function DailyLog() {
       // A streak may end yesterday if today isn't logged yet
       if (!logged.has(today())) d.setDate(d.getDate() - 1);
       for (let i = 0; i < 30; i++) {
-        const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const ds = istDate(d);
         if (!logged.has(ds)) break;
         s++; d.setDate(d.getDate() - 1);
       }
@@ -974,7 +938,7 @@ export default function DailyLog() {
       let best = 0, run = 0;
       const walk = new Date(); walk.setDate(walk.getDate() - 29);
       for (let i = 0; i < 30; i++) {
-        const ds = `${walk.getFullYear()}-${String(walk.getMonth()+1).padStart(2,'0')}-${String(walk.getDate()).padStart(2,'0')}`;
+        const ds = istDate(walk);
         run = logged.has(ds) ? run + 1 : 0;
         best = Math.max(best, run);
         walk.setDate(walk.getDate() + 1);
@@ -982,6 +946,62 @@ export default function DailyLog() {
       setStreakIsBest(s > 0 && s >= best);
     }).catch(() => {});
   }, []);
+
+  // ── Milestone celebration ───────────────────────────────────────────────────
+  // Declared HERE, below the streak effect, and not up beside the other save
+  // handlers: its dependency array reads `streak`, and a dependency array is
+  // evaluated during render. Placing this above `const [streak] = useState()`
+  // would throw a temporal dead-zone ReferenceError and blank the whole page —
+  // the same trap the volumePB effect above records hitting.
+  //
+  // The streak number now comes from the server-derived value (computed from
+  // /logs/range) instead of a second count kept in localStorage. Those two
+  // disagreed: the local one reset on a new device, so a member could be
+  // congratulated on a 7-day streak on one phone while Progress showed
+  // something else on another. localStorage is still used, but ONLY to
+  // remember which celebration has already been shown on this device — that
+  // is a display concern, not a source of truth.
+  useEffect(() => {
+    if (prevSaved.current || !saved || date !== today()) { prevSaved.current = saved; return; }
+
+    const SEEN_KEY = 'fitlife_milestones_seen';
+    const seen = (() => {
+      try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch { return {}; }
+    })();
+    const remember = (patch) => {
+      try { localStorage.setItem(SEEN_KEY, JSON.stringify({ ...seen, ...patch })); } catch (_) {}
+    };
+
+    // ── Weight milestone ────────────────────────────────────────────────────
+    const startW   = parseFloat(protocol?.start_weight);
+    const currentW = parseFloat(log.weight);
+    const lostKg   = startW && currentW ? +(startW - currentW).toFixed(1) : null;
+    const kgMilestone = lostKg != null && lostKg > 0 ? Math.floor(lostKg) : 0;
+
+    if (kgMilestone >= 1 && kgMilestone > (seen.lastKgMilestone || 0)) {
+      remember({ lastKgMilestone: kgMilestone });
+      setMilestone({
+        icon: '🏆',
+        title: `${kgMilestone} kg lost!`,
+        body: `You've shed ${kgMilestone} kg since you started. That's real progress — keep going!`,
+      });
+    } else if ([7, 14, 21, 30, 50, 100].includes(streak) && seen.lastStreak !== streak) {
+      remember({ lastStreak: streak });
+      setMilestone({
+        icon: '🔥',
+        title: `${streak}-day streak!`,
+        body: `${streak} days logged in a row. You're building an unstoppable habit!`,
+      });
+    } else if (volumePB) {
+      setMilestone({
+        icon: '💪',
+        title: 'New personal best!',
+        body: `${volumePB.toLocaleString()} kg lifted today — the most you've ever done in one session. Strong work!`,
+      });
+    }
+
+    prevSaved.current = saved;
+  }, [saved, streak, volumePB]);
 
   // Long-press on a protocol chip shows its timing/instructions
   const chipPressStart = useCallback((item) => {
@@ -1139,7 +1159,7 @@ export default function DailyLog() {
               onClick={() => {
                 const d = new Date(date + 'T12:00:00');
                 d.setDate(d.getDate() - 1);
-                setDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+                setDate(istDate(d));
               }}
               style={{ minWidth: 44, minHeight: 36 }}
               className="text-sm font-bold text-[#7E8596] rounded-xl hover:bg-white/[0.05] active:scale-95 transition-all">‹</button>

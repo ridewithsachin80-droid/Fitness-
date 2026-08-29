@@ -74,7 +74,7 @@ export default function InstallPrompt() {
       rounded-2xl p-4 shadow-card-raised z-50 flex items-center gap-3 fade-up">
 
       {/* Icon */}
-      <div className="w-10 h-10 bg-[#c9a227] rounded-xl flex-shrink-0 flex items-center justify-center">
+      <div className="w-10 h-10 bg-[#D4AF37] rounded-xl flex-shrink-0 flex items-center justify-center">
         <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round"
             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -100,7 +100,7 @@ export default function InstallPrompt() {
       {!isIOS && (
         <button
           onClick={install}
-          className="px-3 py-2 bg-[#c9a227] hover:bg-[#e0c98a] text-[#08052a] text-xs
+          className="px-3 py-2 bg-[#D4AF37] hover:bg-[#e0c98a] text-[#08052a] text-xs
             font-bold rounded-xl flex-shrink-0 transition-colors"
         >
           Install

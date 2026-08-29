@@ -108,10 +108,37 @@ export const TOTAL_SUPPLEMENTS  = SUPPLEMENTS.length;  // 7
 export const TOTAL_CHECKABLE    = TOTAL_ACTIVITIES + TOTAL_ACV + TOTAL_SUPPLEMENTS; // 16
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-/** Returns today as YYYY-MM-DD in local time */
-export const today = () => {
+/**
+ * Returns today as YYYY-MM-DD in IST.
+ *
+ * This used to read the DEVICE's local date. Everything on the server side is
+ * explicitly IST-anchored — the crons, gap detection, the evening recap — so a
+ * member whose phone was on another timezone (travelling, or simply set wrong)
+ * would write to a date the coach's dashboard was not looking at, and their
+ * log would appear missing.
+ *
+ * en-CA gives ISO-shaped YYYY-MM-DD directly, so there is no manual padding to
+ * get wrong, and the timeZone option does the offset properly including any
+ * future change to it.
+ */
+export const today = () =>
+  new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+/**
+ * YYYY-MM-DD in IST for any Date, and for a day offset from today.
+ *
+ * Every place that used to hand-roll a date string did it differently — some
+ * with toISOString() (UTC), some with getFullYear()/getMonth() (device local).
+ * Mixed with an IST today() those disagree by a day at the edges, which is how
+ * a streak silently breaks or yesterday's weight fails to load. One helper.
+ */
+export const istDate = (d = new Date()) =>
+  d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+export const istDaysAgo = (n) => {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  d.setDate(d.getDate() - n);
+  return istDate(d);
 };
 
 /** Formats YYYY-MM-DD (or full ISO timestamp) as "Mon, 3 Jan" in Indian locale */
