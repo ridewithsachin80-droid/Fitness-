@@ -810,4 +810,160 @@ test('digest leads with milestones and tells the coach how to act', () => {
   assert.ok(/celebrate <name>/.test(body));
 });
 
+
+// ── Weekly progress report (real module) ─────────────────────────────────────
+const wr = require('../services/weeklyReport');
+
+console.log('\nWeekly report — week window');
+
+test('the window is the 7 days ending on the run date', () => {
+  const w = wr.weekWindow('2026-08-30');           // a Sunday
+  assert.strictEqual(w.start, '2026-08-24');       // Monday
+  assert.strictEqual(w.end, '2026-08-30');
+  assert.strictEqual(w.prevEnd, '2026-08-23');
+  assert.strictEqual(w.prevStart, '2026-08-17');
+});
+
+console.log('\nWeekly report — aggregation');
+
+const food = (cal, pro) => [{ grams: 100, per_100g: { calories: cal, protein: pro, total_carbs: 0, fat: 0 } }];
+const WIN = wr.weekWindow('2026-08-30');
+
+test('averages count only days with food, not blank days', () => {
+  const a = wr.aggregateWeek({ win: WIN, logs: [
+    { log_date: '2026-08-24', food_items: food(1600, 100) },
+    { log_date: '2026-08-25', food_items: food(1800, 120) },
+    { log_date: '2026-08-26', food_items: [] },
+  ]});
+  assert.strictEqual(a.avgKcal, 1700, 'a blank day must not drag the average to zero');
+  assert.strictEqual(a.avgPro, 110);
+  assert.strictEqual(a.daysLogged, 2);
+});
+
+test('week delta measures against last week\'s final weigh-in', () => {
+  const a = wr.aggregateWeek({ win: WIN, logs: [
+    { log_date: '2026-08-22', weight_kg: 85.6, food_items: [] },   // previous week
+    { log_date: '2026-08-25', weight_kg: 85.2, food_items: [] },
+    { log_date: '2026-08-30', weight_kg: 84.9, food_items: [] },
+  ]});
+  assert.strictEqual(a.latestWeight, 84.9);
+  assert.strictEqual(a.weekDelta, -0.7);
+});
+
+test('a first-ever week falls back to its own first weigh-in', () => {
+  const a = wr.aggregateWeek({ win: WIN, logs: [
+    { log_date: '2026-08-24', weight_kg: 86.0, food_items: [] },
+    { log_date: '2026-08-30', weight_kg: 85.4, food_items: [] },
+  ]});
+  assert.strictEqual(a.weekDelta, -0.6);
+});
+
+test('a single weigh-in and no history yields no delta rather than a fake zero', () => {
+  const a = wr.aggregateWeek({ win: WIN, logs: [{ log_date: '2026-08-30', weight_kg: 85.4, food_items: [] }] });
+  assert.strictEqual(a.weekDelta, null);
+});
+
+test('workout days need a logged set; cardio counts separately', () => {
+  const a = wr.aggregateWeek({ win: WIN, logs: [], sessions: [
+    { session_date: '2026-08-25', set_count: 12, cardio: [] },
+    { session_date: '2026-08-26', set_count: 0,  cardio: [{ type: 'walk' }, { type: 'cycle' }] },
+  ]});
+  assert.strictEqual(a.workoutDays, 1, 'an opened-but-empty session is not a workout');
+  assert.strictEqual(a.cardioCount, 2);
+});
+
+test('rows outside the window are ignored entirely', () => {
+  const a = wr.aggregateWeek({ win: WIN, logs: [
+    { log_date: '2026-08-18', food_items: food(3000, 200) },   // previous week
+    { log_date: '2026-08-25', food_items: food(1600, 100) },
+  ]});
+  assert.strictEqual(a.avgKcal, 1600);
+  assert.strictEqual(a.daysLogged, 1);
+});
+
+console.log('\nWeekly report — goal projection');
+
+const series = (from, perDay, n, startDate = '2026-08-03') => {
+  const out = []; const d = new Date(startDate + 'T00:00:00Z');
+  for (let i = 0; i < n; i++) {
+    out.push({ date: new Date(d.getTime() + i * 86400e3).toISOString().slice(0, 10),
+               kg: +(from + perDay * i).toFixed(2) });
+  }
+  return out;
+};
+
+test('a steady loss projects a plausible date', () => {
+  const p = wr.projectGoalDate({ weights: series(86, -0.1, 21), target: 80, asOf: '2026-08-23' });
+  assert.ok(p, 'should project');
+  assert.ok(p > '2026-08-30' && p < '2027-08-23');
+});
+
+test('too few weigh-ins projects nothing', () => {
+  assert.strictEqual(wr.projectGoalDate({ weights: series(86, -0.1, 3), target: 80, asOf: '2026-08-05' }), null);
+});
+
+test('a flat trend projects nothing rather than a date in 2049', () => {
+  assert.strictEqual(wr.projectGoalDate({ weights: series(86, 0, 21), target: 80, asOf: '2026-08-23' }), null);
+});
+
+test('gaining while the goal is below projects nothing', () => {
+  assert.strictEqual(wr.projectGoalDate({ weights: series(84, 0.05, 21), target: 80, asOf: '2026-08-23' }), null);
+});
+
+test('an implausibly fast trend is suppressed (>1 year out is the only allowance)', () => {
+  // 2 kg to lose at 0.5 kg/day = 4 days — under the 7-day floor, so hidden.
+  assert.strictEqual(wr.projectGoalDate({ weights: series(82, -0.5, 8), target: 80, asOf: '2026-08-10' }), null);
+});
+
+test('no target weight means no projection', () => {
+  assert.strictEqual(wr.projectGoalDate({ weights: series(86, -0.1, 21), target: null, asOf: '2026-08-23' }), null);
+});
+
+console.log('\nWeekly report — win of the week & note');
+
+test('crossing below 85 inside the week is the win', () => {
+  const w = wr.winOfWeek({ latest: 84.9, beforeWindow: 85.2, lowestBefore: 85.2, start: 94, target: 80 });
+  assert.ok(/below 85 kg/.test(w));
+});
+
+test('a week entirely under 85 has no crossing win', () => {
+  const w = wr.winOfWeek({ latest: 84.6, beforeWindow: 84.8, lowestBefore: 84.2, start: 94, target: 80 });
+  assert.strictEqual(w, null, 'already below and not a new low — nothing crossed');
+});
+
+test('the note prompt carries only real figures and forbids invention', () => {
+  const p = wr.buildNotePrompt({
+    name: 'Padmini',
+    week: { latestWeight: 84.9, weekDelta: -0.7, daysLogged: 7, avgKcal: 1690, avgPro: 104,
+            workoutDays: 3, cardioCount: 4 },
+    targets: { kcal: 1800, pro: 110 },
+    win: 'dropped below 85 kg for the first time',
+  });
+  assert.ok(/never invent a number/.test(p));
+  assert.ok(/avg 1690 kcal vs target 1800/.test(p) && /avg protein 104 g vs target 110/.test(p));
+  assert.ok(/logged 7\/7 days/.test(p));
+  assert.ok(/max 220\s+characters/.test(p), 'must stay short enough to read on a card');
+});
+
+test('a flat week prompt demands honesty instead of cheering', () => {
+  const p = wr.buildNotePrompt({
+    name: 'Asha',
+    week: { latestWeight: 86.2, weekDelta: 0.2, daysLogged: 6, avgKcal: 2100, avgPro: 70,
+            workoutDays: 0, cardioCount: 1 },
+    targets: { kcal: 1800, pro: 110 }, win: null,
+  });
+  assert.ok(/up 0.2 kg this week/.test(p), 'the gain is stated plainly');
+  assert.ok(/no fake\s+cheering, no shame/.test(p));
+});
+
+test('the push line leads with the week movement', () => {
+  const line = wr.buildPushLine({ weekDelta: -0.7, daysLogged: 7, win: 'dropped below 85 kg' });
+  assert.ok(/▼ 0.7 kg this week/.test(line) && /7\/7 days logged/.test(line) && /milestone/.test(line));
+});
+
+test('a week with no weigh-in still produces a usable push line', () => {
+  const line = wr.buildPushLine({ weekDelta: null, daysLogged: 4, win: null });
+  assert.ok(/4\/7 days logged/.test(line) && !/NaN|undefined|null/.test(line));
+});
+
 console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);

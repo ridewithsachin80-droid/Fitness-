@@ -605,3 +605,19 @@ CREATE TABLE IF NOT EXISTS meal_plans (
   UNIQUE(patient_id, plan_date, meal)
 );
 CREATE INDEX IF NOT EXISTS idx_meal_plans_member_date ON meal_plans(patient_id, plan_date);
+
+-- ── Weekly progress reports — the Sunday-evening review every member gets.
+-- data JSONB carries the computed week facts; coach_note is the AI-drafted
+-- (guardrailed) line in the coach's voice. One report per member per week.
+CREATE TABLE IF NOT EXISTS weekly_reports (
+  id          SERIAL PRIMARY KEY,
+  patient_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  monitor_id  INT REFERENCES users(id) ON DELETE SET NULL,
+  week_start  DATE NOT NULL,
+  week_end    DATE NOT NULL,
+  data        JSONB NOT NULL DEFAULT '{}',
+  coach_note  TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(patient_id, week_start)
+);
+CREATE INDEX IF NOT EXISTS idx_weekly_reports_member ON weekly_reports(patient_id, week_start DESC);

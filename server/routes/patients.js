@@ -471,6 +471,27 @@ router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAcc
 // Members control which channels reach them. Opting out is kept separate from
 // the individual toggles: switching a channel off is a preference, opting out
 // is a withdrawal of consent and must not be undone by toggling something else.
+// ── GET /api/members/me/weekly-report ────────────────────────────────────────
+// Latest weekly report + a small history strip (week + delta) for context.
+router.get('/me/weekly-report', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT week_start, week_end, data, coach_note, created_at
+       FROM weekly_reports WHERE patient_id = $1
+       ORDER BY week_start DESC LIMIT 8`, [req.user.id]);
+    res.json({
+      latest: rows[0] || null,
+      history: rows.slice(1).map(r => ({
+        week_start: r.week_start, week_end: r.week_end,
+        weekDelta: r.data?.weekDelta ?? null,
+        daysLogged: r.data?.daysLogged ?? null,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/members/me/meal-plan?date=YYYY-MM-DD ────────────────────────────
 // The coach's prescribed meals for a date (default today IST). The member UI
 // renders these workout-log style: prescribed amount vs consumed input.

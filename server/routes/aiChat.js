@@ -2457,3 +2457,4 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
 });
 
 module.exports = router;
+module.exports.callAI = callAI;   // reused by weeklyReport.js — same providers, same fallback

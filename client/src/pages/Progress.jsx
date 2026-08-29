@@ -16,6 +16,7 @@ import { useAuthStore }  from '../store/authStore';
 import { getLogRange, getMyProfile }   from '../api/logs';
 import { Card, SectionTitle, PageLoader, MemberBottomNav } from '../components/UI';
 import StrengthProgress from '../components/StrengthProgress';
+import WeeklyReportCard from '../components/WeeklyReportCard';
 import MuscleCoverage from '../components/MuscleCoverage';
 import TrainingSummary from '../components/TrainingSummary';
 import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
@@ -361,6 +362,11 @@ export default function Progress() {
           </button>
           <h1 className="font-display text-2xl font-medium">My Progress</h1>
           <p className="text-blue-200 text-sm mt-1">Last 90 days · {user?.name}</p>
+
+          {/* Sunday weekly report — renders nothing until the first one exists */}
+          <div className="mt-4">
+            <WeeklyReportCard />
+          </div>
 
           {/* Journey progress bar */}
           {journeyPct !== null && (

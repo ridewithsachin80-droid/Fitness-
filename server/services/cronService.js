@@ -164,6 +164,16 @@ function start() {
     } catch (err) { console.error('Coach digest error:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 
+  // Sunday 18:00 IST: weekly progress reports — the premium ritual. Deduped
+  // per member per week inside the service; empty weeks produce nothing.
+  cron.schedule('0 18 * * 0', async () => {
+    try {
+      const { sendWeeklyReports } = require('./weeklyReport');
+      const n = await sendWeeklyReports(getISTDateStr());
+      if (n) console.log(`📊 Weekly reports sent to ${n} member(s)`);
+    } catch (err) { console.error('Weekly report error:', err.message); }
+  }, { timezone: 'Asia/Kolkata' });
+
   // Daily at midnight IST: clean up old records
   cron.schedule('0 0 * * *', async () => {
     try {
