@@ -15,6 +15,7 @@ import WorkoutLog    from '../components/WorkoutLog';
 import InstallPrompt from '../components/InstallPrompt';
 import NotificationBell from '../components/NotificationBell';
 import StreakCard from '../components/StreakCard';
+import PendingSync from '../components/PendingSync';
 import AIChatLog, { useAIChat } from '../components/AIChatLog';
 import { sessionEnergy } from '../utils/exerciseCalories';
 import { dailyRead } from '../utils/dailyRead';
@@ -680,7 +681,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
 export default function DailyLog() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { date, log, protocol, loading, saving, saved, error, setDate, updateLog, saveLog } = useLogStore();
+  const { date, log, protocol, loading, saving, saved, queued, error, setDate, updateLog, saveLog } = useLogStore();
 
   const overrides    = protocol?.item_overrides || {};
   const applyOverride = (item) => {
@@ -728,10 +729,17 @@ export default function DailyLog() {
   // Only unread messages appear on Today; read ones live in the bell.
   const unreadNotes = coachNotes.filter(n => !n.read_at);
 
+  // A reply that fails silently is worse than no reply feature at all: the
+  // member believes the coach has been answered, the coach never hears, and
+  // the conversation moves to WhatsApp anyway — which is the exact thing this
+  // was built to stop. So the draft is kept and the failure is stated.
+  const [replyError, setReplyError] = useState('');
+
   const sendReply = async (noteId) => {
     const text = replyText.trim();
     if (!text) return;
     setReplyBusy(true);
+    setReplyError('');
     try {
       await api.post('/members/me/notes/reply', { note: text, reply_to: noteId });
       setReplied(r => ({ ...r, [noteId]: true }));
@@ -741,6 +749,10 @@ export default function DailyLog() {
       markNotesRead([noteId]);
     } catch (err) {
       console.error('reply failed:', err);
+      setReplyError(
+        err.response?.data?.error ||
+        "Couldn't send — check your connection and tap Send again. Your message is still here."
+      );
     } finally { setReplyBusy(false); }
   };
 
@@ -1084,8 +1096,18 @@ export default function DailyLog() {
                   return `${greet}, ${user?.name?.split(' ')[0] || ''}`;
                 })()}
               </h1>
-              {autoSaved && (
+              {/* Save feedback sits HERE, next to where the member is editing.
+                  The error banner used to render ~1,900 lines further down the
+                  page, below every panel — a failed save looked to the member
+                  like nothing had happened at all. */}
+              {autoSaved && !queued && (
                 <p className="text-xs text-[#F0E2B6] mt-1 font-medium"><span className="autosave-dot" />auto-saved ✓</p>
+              )}
+              {autoSaved && queued && (
+                <p className="text-xs text-[#9EA3B0] mt-1 font-medium">saved on this phone · will sync</p>
+              )}
+              {error && (
+                <p className="text-xs text-red-400 mt-1 font-medium">{error}</p>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -1097,6 +1119,10 @@ export default function DailyLog() {
               <NotificationBell />
             </div>
           </div>
+
+          {/* Anything held on this device only. Renders nothing when the
+              queue is empty, which is the normal case. */}
+          <PendingSync />
 
           {/* Compact date nav */}
           <div className="flex items-center justify-between mb-3">
@@ -1860,12 +1886,15 @@ export default function DailyLog() {
                                 active:scale-[0.98] disabled:opacity-50">
                               {replyBusy ? 'Sending…' : 'Send reply'}
                             </button>
-                            <button onClick={() => { setReplyTo(null); setReplyText(''); }}
+                            <button onClick={() => { setReplyTo(null); setReplyText(''); setReplyError(''); }}
                               style={{ minHeight: 38 }}
                               className="px-3 text-[11px] font-bold text-[#9EA3B0] border border-white/[0.10] rounded-xl">
                               Cancel
                             </button>
                           </div>
+                          {replyError && (
+                            <p className="text-[11px] text-red-400 mt-1.5 leading-relaxed">{replyError}</p>
+                          )}
                         </div>
                       ) : (
                         <div className="flex gap-2 mt-2">
@@ -1945,8 +1974,6 @@ export default function DailyLog() {
                 placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} rows={3}
                 className="w-full text-sm border border-white/[0.12] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)] resize-none" />
             </Card>
-
-            {error && <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
           </>
         )}
       </div>

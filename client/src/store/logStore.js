@@ -10,11 +10,13 @@ export const useLogStore = create((set, get) => ({
   loading:  false,
   saving:   false,
   saved:    false,
+  // true when the last save went to the offline queue rather than the server
+  queued:   false,
   error:    null,
 
   /** Switch to a different date and load its log from the API */
   setDate: async (date) => {
-    set({ date, loading: true, saved: false, error: null });
+    set({ date, loading: true, saved: false, queued: false, error: null });
     try {
       const { data } = await api.get(`/logs/${date}`);
       set({
@@ -33,6 +35,7 @@ export const useLogStore = create((set, get) => ({
     set((s) => ({
       log: { ...s.log, [field]: value },
       saved: false,
+      queued: false,
     })),
 
   /** Save the current log — uses offline queue when no connection */
@@ -43,10 +46,14 @@ export const useLogStore = create((set, get) => ({
       const payload = mapToServer(log, protocol);
       const result  = await saveLogWithFallback(date, payload);
       if (result.queued) {
-        // Saved offline — optimistically mark as saved, show queued indicator
-        set({ saving: false, saved: true });
+        // Held on this device only. `saved` still goes true — the member's
+        // edit IS safe and the milestone/streak logic keys off it — but
+        // `queued` tells the UI to say "saved on this phone, will sync"
+        // rather than the flat "auto-saved ✓" it used to show for a write
+        // that had never reached the server.
+        set({ saving: false, saved: true, queued: true });
       } else {
-        set({ saving: false, saved: true, log: mapServerLog(result.data) });
+        set({ saving: false, saved: true, queued: false, log: mapServerLog(result.data) });
       }
     } catch (err) {
       console.error('Failed to save log:', err);

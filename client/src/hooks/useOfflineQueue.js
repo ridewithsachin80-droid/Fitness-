@@ -68,6 +68,7 @@ export async function saveLogWithFallback(date, log) {
     const db = await getDB();
     await db.put(STORE, { key: `log:${date}`, date, log, queuedAt: Date.now() });
     console.log(`📦 Queued log for ${date}`);
+    notifyQueueChanged();
     return { queued: true };
   } catch (dbErr) {
     // IndexedDB unavailable — private browsing, storage full. Failing loudly
@@ -106,11 +107,14 @@ export async function syncOfflineQueue() {
       // Leave in queue — will retry next time
     }
   }
+
+  // Whether anything drained or not, the badge needs to re-read: a successful
+  // pass should clear it, and a failed one may have crossed the stuck threshold.
+  notifyQueueChanged();
 }
 
 /**
  * Returns the count of logs currently in the offline queue.
- * Useful for showing a "X logs pending sync" badge.
  */
 export async function getQueueCount() {
   try {
@@ -119,6 +123,49 @@ export async function getQueueCount() {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Queue status for the UI: how many entries are waiting, and whether any has
+ * been waiting long enough to be considered stuck.
+ *
+ * "Stuck" matters because syncOfflineQueue() retries forever. An entry the
+ * server keeps rejecting with a 5xx would sit in IndexedDB indefinitely with
+ * nobody told — the member believes the day is logged, the coach sees nothing.
+ * After STUCK_AFTER_MS we say so plainly instead.
+ */
+const STUCK_AFTER_MS = 24 * 60 * 60 * 1000;
+
+export async function getQueueStatus() {
+  try {
+    const db    = await getDB();
+    const items = await db.getAll(STORE);
+    if (!items.length) return { count: 0, stuck: false, oldestDate: null };
+    const oldest = items.reduce((a, b) => (a.queuedAt <= b.queuedAt ? a : b));
+    return {
+      count:      items.length,
+      stuck:      Date.now() - oldest.queuedAt > STUCK_AFTER_MS,
+      oldestDate: oldest.date,
+    };
+  } catch {
+    return { count: 0, stuck: false, oldestDate: null };
+  }
+}
+
+// ── Change notification ──────────────────────────────────────────────────────
+// The queue is written from saveLogWithFallback and drained from
+// syncOfflineQueue, neither of which is a React component. Rather than have
+// the badge poll IndexedDB on a timer, both call notifyQueueChanged() and the
+// badge re-reads once, when something actually happened.
+const queueListeners = new Set();
+
+export function onQueueChange(fn) {
+  queueListeners.add(fn);
+  return () => queueListeners.delete(fn);
+}
+
+function notifyQueueChanged() {
+  queueListeners.forEach((fn) => { try { fn(); } catch (_) {} });
 }
 
 // ── React hook ───────────────────────────────────────────────────────────────

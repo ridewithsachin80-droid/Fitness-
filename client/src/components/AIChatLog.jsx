@@ -27,14 +27,57 @@ import api from '../api/client';
 import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, today } from '../constants';
 
-// ── Shared open/close store — FoodLog banner + DailyLog FAB both use this ────
-export const useAIChat = create((set) => ({
+// ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
+//
+// The conversation lives HERE, not in component state. AIChatLog is mounted
+// inside DailyLog, so tapping Progress unmounts it — and with `messages` in
+// useState that destroyed the whole exchange, including any preview card the
+// member had not applied yet. They then had to re-dictate the entire day.
+//
+// setMessages/setInput accept either a value or an updater function so every
+// existing call site (`setMessages(m => [...m, x])`) works unchanged.
+export const useAIChat = create((set, get) => ({
   open: false,
   openChat:  () => set({ open: true }),
   closeChat: () => set({ open: false }),
+
+  messages: [],
+  input: '',
+  // The day the conversation belongs to. A preview parsed last night must not
+  // be applicable to today's log after the date rolls over.
+  dayKey: null,
+
+  setMessages: (next) =>
+    set((s) => ({ messages: typeof next === 'function' ? next(s.messages) : next })),
+  setInput: (next) =>
+    set((s) => ({ input: typeof next === 'function' ? next(s.input) : next })),
+
+  /** Wipe the transcript — on logout, or when the day has rolled over. */
+  resetChat: () => {
+    undoSnap.current = null;
+    workoutUndoSnap.current = null;
+    set({ messages: [], input: '', dayKey: null });
+  },
+
+  /** Called when the panel opens; clears a conversation left over from a previous day. */
+  ensureFreshDay: (todayKey) => {
+    if (get().dayKey && get().dayKey !== todayKey) get().resetChat();
+    set({ dayKey: todayKey });
+  },
 }));
+
+// ── Pre-apply snapshots for Undo ─────────────────────────────────────────────
+// Module-level rather than useRef for the same reason as the messages above:
+// the component unmounts on navigation but the "Applied ✓ · Undo" card now
+// survives, so the snapshot behind that Undo button has to survive with it.
+// Without this, Undo would render as an active button and silently do nothing.
+//
+// Safe across accounts: authStore.logout() sets window.location.href, which is
+// a full document load — this module is re-evaluated and both snapshots reset.
+const undoSnap        = { current: null };
+const workoutUndoSnap = { current: null };
 
 // ── Speech recognition ───────────────────────────────────────────────────────
 const SpeechRecognition =
@@ -104,8 +147,16 @@ export default function AIChatLog() {
 
   const mealSlots = useSettingsStore(s => s.mealSlots);
 
-  const [messages, setMessages]   = useState([]);
-  const [input, setInput]         = useState('');
+  // Conversation state comes from the store (see useAIChat above) so it
+  // survives the member navigating away from Today and back.
+  const messages    = useAIChat(s => s.messages);
+  const setMessages = useAIChat(s => s.setMessages);
+  const input       = useAIChat(s => s.input);
+  const setInput    = useAIChat(s => s.setInput);
+
+  // Transient UI state stays local — a half-finished upload is not worth
+  // resuming across a navigation, and leaving `busy` true in the store would
+  // strand the composer permanently if the member navigated mid-request.
   const [busy, setBusy]           = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef(null);
@@ -115,8 +166,8 @@ export default function AIChatLog() {
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const recogRef  = useRef(null);
-  const undoRef   = useRef(null);   // snapshot of log fields before last apply
-  const workoutUndoRef = useRef(null);  // snapshot of workout_sessions before last apply
+  const undoRef        = undoSnap;         // module-level, see above
+  const workoutUndoRef = workoutUndoSnap;  // module-level, see above
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -124,6 +175,20 @@ export default function AIChatLog() {
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 250);
+  }, [open]);
+
+  // Drop a conversation carried over from a previous day before it can be
+  // applied to today's log.
+  useEffect(() => {
+    if (open) useAIChat.getState().ensureFreshDay(today());
+  }, [open]);
+
+  // Returning to Today with an existing conversation should land at the
+  // bottom, not at the top of a long scrollback.
+  useEffect(() => {
+    if (open && messages.length) {
+      setTimeout(() => bottomRef.current?.scrollIntoView({ block: 'end' }), 0);
+    }
   }, [open]);
 
   // ── Voice input ────────────────────────────────────────────────────────────

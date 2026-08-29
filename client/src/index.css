@@ -58,13 +58,22 @@ body {
 .text-emerald-600 { color: #C5A059; }
 .text-emerald-800 { color: #F0E2B6; }
 .text-red-700, .text-red-600, .text-red-500 { color: #f87171; }
+/* Amber is the WARNING colour and must stay amber. It carries the middle band
+   of the compliance traffic-light (green / amber / red) on Progress and on the
+   coach's member cards.
+
+   There used to be a second .text-amber-700/600 rule below this one setting it
+   to #C5A059, and a .text-amber-500 setting it to #d8b4fe — both leftovers from
+   the purple → gold rebrand, where the old purple utility classes were
+   find-replaced to `amber` and landed on top of the genuine amber usages.
+   Same specificity, later position, so they won: mid compliance rendered gold
+   on purple and the sleep stars came out lavender. Removed. */
 .text-amber-700, .text-amber-600            { color: #fbbf24; }
+.text-amber-500                             { color: #fbbf24; }
 .text-orange-700, .text-orange-600          { color: #fb923c; }
 .text-orange-500                            { color: #fdba74; }
 .text-blue-700, .text-blue-600             { color: #60a5fa; }
 .text-blue-500                             { color: #93c5fd; }
-.text-amber-700, .text-amber-600        { color: #C5A059; }
-.text-amber-500                          { color: #d8b4fe; }
 
 
 /* Remaining emerald shades → purple-tinted so all brand elements unify */
@@ -86,13 +95,13 @@ body {
 .bg-emerald-100 { background-color: rgba(212,175,55,0.13); }
 .bg-red-50      { background-color: rgba(248,113,113,0.08); }
 .bg-red-100     { background-color: rgba(248,113,113,0.14); }
+/* Same story as the text rules above — the purple duplicates are gone so an
+   amber background is amber. */
 .bg-amber-50    { background-color: rgba(251,191,36,0.08); }
 .bg-amber-100   { background-color: rgba(251,191,36,0.14); }
 .bg-orange-50   { background-color: rgba(251,146,60,0.08); }
 .bg-blue-50     { background-color: rgba(96,165,250,0.08); }
 .bg-blue-100    { background-color: rgba(96,165,250,0.14); }
-.bg-amber-50   { background-color: rgba(192,132,252,0.08); }
-.bg-amber-100  { background-color: rgba(192,132,252,0.14); }
 
 /* Accent borders */
 .border-emerald-200 { border-color: rgba(212,175,55,0.22); }
@@ -102,7 +111,6 @@ body {
 .border-amber-100   { border-color: rgba(251,191,36,0.15); }
 .border-orange-200  { border-color: rgba(251,146,60,0.25); }
 .border-blue-200    { border-color: rgba(96,165,250,0.25); }
-.border-amber-100  { border-color: rgba(192,132,252,0.18); }
 
 /* Header gradients */
 .from-emerald-700 { --tw-gradient-from: #1A1C20 var(--tw-gradient-from-position); }
