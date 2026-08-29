@@ -35,6 +35,14 @@ export const getMyProfile    = ()               => api.get('/members/me');
 // a second device (or a cleared cache) doesn't make the member start over.
 export const getMyOnboarding = ()               => api.get('/members/me/onboarding');
 export const saveMyOnboarding = (data)          => api.put('/members/me/onboarding', data);
+
+// Sprint 3: member self-service. Until now a member could not change their own
+// PIN or correct their own height — every one of those was a WhatsApp round
+// trip to the coach.
+export const updateMyProfile = (data)           => api.patch('/members/me/profile', data);
+export const changeMyPin     = (currentPin, newPin) =>
+  api.patch('/auth/change-pin', { currentPin, newPin });
+export const getMyReminderSchedule = ()         => api.get('/reminders/my-schedule');
 // Sprint 11: coach logs/corrects a member's weight for a specific date
 export const logWeightForMember = (id, date, weight_kg) =>
   api.patch(`/members/${id}/weight`, { date, weight_kg });

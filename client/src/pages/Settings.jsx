@@ -7,6 +7,7 @@ import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword,
 import { disconnectSocket } from '../hooks/useSync';
 import { Card, SectionTitle, BackButton, MemberBottomNav, BottomNav } from '../components/UI';
 import { roleLabel } from '../constants';
+import { changeMyPin, getMyReminderSchedule } from '../api/logs';
 import { pushPermission, registerPushSubscription } from '../hooks/usePush';
 
 
@@ -394,24 +395,19 @@ export default function Settings() {
           )}
         </Card>
 
-        {/* Reminder schedule */}
+        {/* Reminder schedule — read from the server, not hardcoded */}
         {user?.role === 'patient' && (
           <Card>
             <SectionTitle icon="⏰">Reminder Schedule (IST)</SectionTitle>
-            <div className="space-y-2">
-              {[
-                { time: '6:25 AM',  label: 'Morning weight reminder' },
-                { time: '9:40 AM',  label: 'ACV before Meal 1' },
-                { time: '1:15 PM',  label: 'ACV before Meal 2' },
-                { time: '5:15 PM',  label: 'ACV before Meal 3' },
-                { time: '2:00 PM',  label: 'Water check (if below 1.5L)' },
-              ].map(({ time, label }) => (
-                <div key={time} className="flex items-center gap-3 py-1">
-                  <span className="text-xs font-bold text-[#7E8596] w-16 flex-shrink-0">{time}</span>
-                  <span className="text-xs text-[#9EA3B0]">{label}</span>
-                </div>
-              ))}
-            </div>
+            <ReminderSchedule />
+          </Card>
+        )}
+
+        {/* Member: change your own PIN */}
+        {user?.role === 'patient' && (
+          <Card>
+            <SectionTitle icon="🔑">Change PIN</SectionTitle>
+            <ChangePin />
           </Card>
         )}
 
@@ -520,6 +516,135 @@ function PushStatus() {
           active:scale-[0.98] disabled:opacity-50">
         {busy ? 'Just a moment…' : 'Turn on notifications'}
       </button>
+    </div>
+  );
+}
+
+
+// ── Reminder schedule ─────────────────────────────────────────────────────────
+// This list used to be five times hardcoded into the JSX. If a coach changed a
+// reminder in the admin panel, the member's Settings kept showing the old one,
+// and the 8:30pm evening recap was never listed at all — so members were being
+// shown a schedule that did not match what actually arrived on their phone.
+function ReminderSchedule() {
+  const [items, setItems]     = useState(null);   // null = loading
+  const [failed, setFailed]   = useState(false);
+
+  useEffect(() => {
+    getMyReminderSchedule()
+      .then(({ data }) => setItems(data.items || []))
+      .catch(() => setFailed(true));
+  }, []);
+
+  const pretty = (hhmm) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    const ampm = h < 12 ? 'AM' : 'PM';
+    const h12  = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+  };
+
+  if (failed) return <p className="text-xs text-[#7E8596] py-2">Couldn't load your reminder times.</p>;
+  if (items === null) return <p className="text-xs text-[#7E8596] py-2">Loading…</p>;
+  if (!items.length) {
+    return (
+      <p className="text-xs text-[#7E8596] py-2 leading-relaxed">
+        No reminders set up yet. Your coach can add them for you.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {items.map((it, i) => (
+        <div key={`${it.time}-${i}`} className="flex items-center gap-3 py-1">
+          <span className="text-xs font-bold text-[#7E8596] w-16 flex-shrink-0">{pretty(it.time)}</span>
+          <span className="text-xs text-[#9EA3B0] flex-1">{it.label}</span>
+          {it.personal && (
+            <span className="text-[9px] font-bold text-[#D4AF37] bg-[rgba(212,175,55,0.10)]
+              border border-[rgba(212,175,55,0.25)] rounded-full px-2 py-0.5">
+              just for you
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Change PIN ────────────────────────────────────────────────────────────────
+// A member had no way to change their own PIN — Change Password was gated to
+// coach and admin — so every rotation went through the coach on WhatsApp.
+function ChangePin() {
+  const [current, setCurrent] = useState('');
+  const [next, setNext]       = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy]       = useState(false);
+  const [error, setError]     = useState('');
+  const [done, setDone]       = useState(false);
+
+  const digits = (v) => v.replace(/\D/g, '');
+  const ready  = current.length >= 4 && next.length >= 4 && confirm.length >= 4;
+
+  const submit = async () => {
+    setError('');
+    if (next !== confirm) { setError("The two new PINs don't match"); return; }
+    if (next === current) { setError('That is already your PIN'); return; }
+    setBusy(true);
+    try {
+      await changeMyPin(current, next);
+      setDone(true);
+      setCurrent(''); setNext(''); setConfirm('');
+    } catch (err) {
+      setError(err.response?.data?.error || "Couldn't change your PIN — try again.");
+    } finally { setBusy(false); }
+  };
+
+  if (done) {
+    return (
+      <div className="py-2">
+        <p className="text-sm text-[#F0E2B6] font-medium">PIN changed ✓</p>
+        <p className="text-xs text-[#9EA3B0] mt-1 leading-relaxed">
+          Use your new PIN next time you log in. You're still signed in here.
+        </p>
+        <button onClick={() => setDone(false)} style={{ minHeight: 36 }}
+          className="mt-2 text-[11px] font-bold text-[#D4AF37] px-1">
+          Change it again
+        </button>
+      </div>
+    );
+  }
+
+  const field = (label, value, setter, placeholder) => (
+    <div>
+      <label className="block text-[10px] font-semibold text-[#7E8596] uppercase tracking-[0.10em] mb-1.5">
+        {label}
+      </label>
+      <input
+        type="password" inputMode="numeric" value={value}
+        onChange={(e) => setter(digits(e.target.value))}
+        placeholder={placeholder} maxLength={12}
+        className="w-full bg-[#121316] border border-white/[0.10] rounded-xl px-3 py-2.5
+          text-sm text-white tracking-widest outline-none
+          focus:border-[rgba(212,175,55,0.40)] focus:ring-2 focus:ring-[rgba(212,175,55,0.12)]"
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {field('Current PIN', current, setCurrent, 'Your PIN now')}
+      {field('New PIN', next, setNext, 'At least 4 digits')}
+      {field('Confirm new PIN', confirm, setConfirm, 'Type it again')}
+      {error && <p className="text-xs text-red-400 leading-relaxed">{error}</p>}
+      <button onClick={submit} disabled={!ready || busy} style={{ minHeight: 40 }}
+        className="w-full text-xs font-bold text-[#121316] rounded-xl
+          bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+          active:scale-[0.98] disabled:opacity-40">
+        {busy ? 'Saving…' : 'Change PIN'}
+      </button>
+      <p className="text-[11px] text-[#4A4E5A] leading-relaxed">
+        Forgotten your current PIN? Your coach can reset it for you.
+      </p>
     </div>
   );
 }

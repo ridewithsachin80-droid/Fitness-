@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { getMyProfile }  from '../api/logs';
+import { getMyProfile, updateMyProfile }  from '../api/logs';
 import { Card, SectionTitle, PageLoader, BackButton, MemberBottomNav } from '../components/UI';
 import { sessionEnergy } from '../utils/exerciseCalories';
 import MetabolicInsight from '../components/MetabolicInsight';
@@ -167,6 +167,7 @@ export default function Profile() {
   const { user }       = useAuthStore();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
   const [error,   setError]   = useState('');
 
   useEffect(() => {
@@ -211,10 +212,19 @@ export default function Profile() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <BackButton onClick={() => navigate('/')} label="Back to log" />
-            <button onClick={() => navigate('/settings')}
-              className="text-xs font-semibold text-[#F0E2B6] hover:text-white transition-colors">
-              Settings
-            </button>
+            <div className="flex items-center gap-3">
+              {/* This page had no inputs and no write calls at all, so a member
+                  whose height was typed wrong at signup had to message the
+                  coach to get a number changed they could see on their screen. */}
+              <button onClick={() => setEditing(v => !v)}
+                className="text-xs font-semibold text-[#D4AF37] hover:text-[#F0E2B6] transition-colors">
+                {editing ? 'Cancel' : 'Edit details'}
+              </button>
+              <button onClick={() => navigate('/settings')}
+                className="text-xs font-semibold text-[#F0E2B6] hover:text-white transition-colors">
+                Settings
+              </button>
+            </div>
           </div>
 
           {/* Avatar + name */}
@@ -234,6 +244,17 @@ export default function Profile() {
               )}
             </div>
           </div>
+
+          {editing && (
+            <EditDetails
+              profile={p}
+              onCancel={() => setEditing(false)}
+              onSaved={(patch) => {
+                setProfile(prev => ({ ...prev, ...patch }));
+                setEditing(false);
+              }}
+            />
+          )}
 
           {/* Journey progress bar */}
           {journeyPct !== null && journeyPct >= 0 && (
@@ -351,7 +372,7 @@ export default function Profile() {
               <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
               <p className="text-xs text-[#7E8596] mb-3">
                 Mifflin-St Jeor BMR × 1.2, plus today's logged activity
-                {!p.gender && ' · sex not set — ask your coach to add it for an exact figure'}
+                {!p.gender && ' · sex not set — add it under Edit details for an exact figure'}
               </p>
 
               <div className="grid grid-cols-2 gap-2 mb-3">
@@ -534,6 +555,108 @@ export default function Profile() {
         </p>
       </div>
       <MemberBottomNav />
+    </div>
+  );
+}
+
+
+// ── Edit details ──────────────────────────────────────────────────────────────
+// Height, date of birth and sex only.
+//
+// Target and start weight are deliberately absent: start weight is the anchor
+// every "kg lost" figure is measured against, and the target is a coaching
+// decision. Both stay with the coach. These three are facts about the member
+// that only they can be sure of, and all three feed the BMR/TDEE maths — a
+// wrong height quietly skews every energy figure on the page.
+function EditDetails({ profile, onCancel, onSaved }) {
+  const [height, setHeight] = useState(profile.height_cm ? String(profile.height_cm) : '');
+  const [dob, setDob]       = useState(profile.dob ? String(profile.dob).slice(0, 10) : '');
+  const [gender, setGender] = useState(profile.gender || '');
+  const [busy, setBusy]     = useState(false);
+  const [error, setError]   = useState('');
+
+  const save = async () => {
+    setError('');
+    // Mirror the server's gate so the member is corrected here rather than
+    // bounced by a 400 after tapping Save.
+    if (height) {
+      const h = parseFloat(height);
+      if (!Number.isFinite(h) || h < 80 || h > 250) {
+        setError('Height should be between 80 and 250 cm'); return;
+      }
+    }
+    setBusy(true);
+    try {
+      const { data } = await updateMyProfile({
+        height_cm: height || null,
+        dob:       dob    || null,
+        gender:    gender || null,
+      });
+      onSaved(data);
+    } catch (err) {
+      setError(err.response?.data?.error || "Couldn't save — check your connection and try again.");
+      setBusy(false);
+    }
+  };
+
+  const label = "block text-[10px] font-semibold text-[#7E8596] uppercase tracking-[0.10em] mb-1.5";
+  const input = `w-full bg-[#121316] border border-white/[0.10] rounded-xl px-3 py-2.5
+    text-sm text-white outline-none focus:border-[rgba(212,175,55,0.40)]
+    focus:ring-2 focus:ring-[rgba(212,175,55,0.12)]`;
+
+  return (
+    <div className="bg-white/[0.05] rounded-2xl p-4 border border-white/[0.07] mb-4 space-y-3">
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <label className={label}>Height (cm)</label>
+          <input value={height} inputMode="decimal"
+            onChange={(e) => setHeight(e.target.value.replace(/[^0-9.]/g, ''))}
+            placeholder="e.g. 172" className={input} />
+        </div>
+        <div className="flex-1">
+          <label className={label}>Date of birth</label>
+          <input type="date" value={dob} onChange={(e) => setDob(e.target.value)}
+            className={input} />
+        </div>
+      </div>
+
+      <div>
+        <label className={label}>Sex</label>
+        <div className="flex gap-2">
+          {[['male', 'Male'], ['female', 'Female'], ['other', 'Prefer not to say']].map(([v, l]) => (
+            <button key={v} onClick={() => setGender(v)} style={{ minHeight: 38 }}
+              className={`flex-1 text-[11px] font-semibold rounded-xl border transition-colors ${
+                gender === v
+                  ? 'bg-[rgba(212,175,55,0.12)] border-[rgba(212,175,55,0.35)] text-[#F0E2B6]'
+                  : 'bg-[#121316] border-white/[0.10] text-[#9EA3B0]'
+              }`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-[#4A4E5A] mt-1.5 leading-relaxed">
+          Used only for the calorie-burn calculation — the equation needs it.
+        </p>
+      </div>
+
+      {error && <p className="text-xs text-red-400 leading-relaxed">{error}</p>}
+
+      <div className="flex gap-2">
+        <button onClick={save} disabled={busy} style={{ minHeight: 40 }}
+          className="flex-1 text-xs font-bold text-[#121316] rounded-xl
+            bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+            active:scale-[0.98] disabled:opacity-40">
+          {busy ? 'Saving…' : 'Save details'}
+        </button>
+        <button onClick={onCancel} style={{ minHeight: 40 }}
+          className="px-4 text-xs font-bold text-[#9EA3B0] border border-white/[0.10] rounded-xl">
+          Cancel
+        </button>
+      </div>
+
+      <p className="text-[11px] text-[#4A4E5A] leading-relaxed">
+        Your goal and starting weight are set by your coach — message them to change those.
+      </p>
     </div>
   );
 }

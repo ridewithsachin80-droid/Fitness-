@@ -557,6 +557,77 @@ router.put('/me/notifications', authMW, roleCheck('patient'), async (req, res) =
   }
 });
 
+// ── PATCH /api/patients/me/profile ───────────────────────────────────────────
+// Member edits their own body stats.
+//
+// The profile page was entirely read-only — no inputs, no write calls — so a
+// member who had moved house, or whose height was simply typed wrong at signup,
+// had to message the coach to get a number changed. Every one of those is a
+// WhatsApp round-trip for something they can see is wrong on their own screen.
+//
+// What is NOT editable here, on purpose:
+//   target_weight — a coaching decision, not a self-serve field
+//   start_weight  — the anchor every "kg lost" figure is measured against
+// Both stay with the coach. Sex is included because the BMR equation needs it
+// and the profile page currently just tells the member to go and ask.
+//
+// Declared before '/:id' so "me" is never read as a member id.
+router.patch('/me/profile', authMW, roleCheck('patient'), async (req, res) => {
+  const { height_cm, dob, gender } = req.body || {};
+
+  const height = (() => {
+    if (height_cm === undefined || height_cm === null || height_cm === '') return null;
+    const n = parseFloat(height_cm);
+    // Shortest and tallest recorded adults sit inside this range with room to
+    // spare; anything outside is a typo, and a wrong height silently skews
+    // BMI and every TDEE figure downstream.
+    return Number.isFinite(n) && n >= 80 && n <= 250 ? n : undefined;
+  })();
+  if (height === undefined) {
+    return res.status(400).json({ error: 'Height should be between 80 and 250 cm' });
+  }
+
+  const birth = (() => {
+    if (!dob) return null;
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return undefined;
+    const age = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    return age >= 5 && age <= 120 ? dob : undefined;
+  })();
+  if (birth === undefined) {
+    return res.status(400).json({ error: "That date of birth doesn't look right" });
+  }
+
+  const GENDERS = ['male', 'female', 'other'];
+  const sex = gender ? String(gender).toLowerCase() : null;
+  if (sex && !GENDERS.includes(sex)) {
+    return res.status(400).json({ error: 'Unknown value for sex' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE patient_profiles SET
+         height_cm  = COALESCE($2, height_cm),
+         dob        = COALESCE($3::date, dob),
+         gender     = COALESCE($4, gender),
+         updated_at = NOW()
+       WHERE user_id = $1
+       RETURNING height_cm, dob, gender`,
+      [req.user.id, height, birth, sex]);
+
+    if (!rows.length) return res.status(404).json({ error: 'Profile not found' });
+    const r = rows[0];
+    res.json({
+      height_cm: r.height_cm != null ? parseFloat(r.height_cm) : null,
+      dob:       r.dob || null,
+      gender:    r.gender || null,
+    });
+  } catch (err) {
+    console.error('PATCH /patients/me/profile error:', err);
+    res.status(500).json({ error: 'Could not save your details' });
+  }
+});
+
 // ── GET /api/patients/me/onboarding ──────────────────────────────────────────
 // Onboarding state used to live only in localStorage, so a member on a new
 // phone was made to do it again and the coach could not see the mode they had

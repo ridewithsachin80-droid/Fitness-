@@ -89,6 +89,14 @@ const CASES = [
   ['GET',  '/api/patients/me',            'LEGACY self profile'],
   ['GET',  '/api/members/1',              'member detail'],
   ['GET',  '/api/members/gaps',           'gaps must not be shadowed by /:id'],
+  // Sprint 2/3 member self-service. All of these live under /me, so the point
+  // of smoking them is that "me" is not swallowed by the /:id handler — the
+  // same shadowing trap /gaps and /population already guard against.
+  ['GET',   '/api/members/me/onboarding',  'onboarding read not shadowed by /:id'],
+  ['PUT',   '/api/members/me/onboarding',  'onboarding save not shadowed by /:id'],
+  ['PATCH', '/api/members/me/profile',     'member profile edit not shadowed by /:id'],
+  ['PATCH', '/api/auth/change-pin',        'member changes own PIN'],
+  ['GET',   '/api/reminders/my-schedule',  'member reminder times not shadowed by /schedules'],
   ['GET',  '/api/members/population/prior','population prior not shadowed'],
   ['GET',  '/api/admin/coaches',          'current coach list path'],
   ['GET',  '/api/admin/monitors',         'LEGACY coach list'],

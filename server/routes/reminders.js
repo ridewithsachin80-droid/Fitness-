@@ -45,6 +45,59 @@ router.post('/my-notifications/mark-read', async (req, res) => {
 
 // ── GET /api/reminders/schedules ─────────────────────────────────────────────
 // Admin: get all reminder schedules (global + per-patient)
+// ── GET /api/reminders/my-schedule ───────────────────────────────────────────
+// The member's own reminder times, in IST.
+//
+// Settings used to render a hardcoded array of five times. If a coach changed
+// a reminder in the admin panel, the member's Settings kept showing the old
+// one — and the 8:30pm evening recap and coach digest were never listed at
+// all. Members were being shown a schedule that did not match what they got.
+//
+// Resolution mirrors the cron: a per-member row wins over the global row of
+// the same type, and inactive rows are ignored.
+//
+// Declared before '/schedules' so it is not caught by the coach-only handler.
+router.get('/my-schedule', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (type) type, times, patient_id
+         FROM reminder_schedules
+        WHERE active = true
+          AND (patient_id = $1 OR patient_id IS NULL)
+        ORDER BY type, patient_id NULLS LAST`,
+      [req.user.id]);
+
+    const LABEL = {
+      water:    'Water check',
+      activity: 'Movement reminder',
+      weight:   'Morning weight',
+      acv:      'ACV before meals',
+    };
+
+    const items = [];
+    for (const r of rows) {
+      for (const t of (r.times || [])) {
+        items.push({
+          time:  String(t).slice(0, 5),
+          label: LABEL[r.type] || r.type,
+          personal: r.patient_id != null,   // set just for this member
+        });
+      }
+    }
+
+    // The two fixed crons live in cronService, not in this table, so they were
+    // invisible to the member. List them explicitly rather than leaving the
+    // member wondering why a recap arrives at a time nothing mentions.
+    items.push({ time: '20:30', label: 'Evening recap', personal: false, fixed: true });
+
+    items.sort((a, b) => a.time.localeCompare(b.time));
+    res.json({ timezone: 'Asia/Kolkata', items });
+  } catch (err) {
+    console.error('GET /reminders/my-schedule error:', err.message);
+    res.status(500).json({ error: 'Could not load your reminder times' });
+  }
+});
+
 router.get('/schedules', async (req, res) => {
   if (!['admin', 'monitor'].includes(req.user.role))
     return res.status(403).json({ error: 'Forbidden' });

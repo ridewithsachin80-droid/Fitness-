@@ -31,7 +31,7 @@ const inputCls = `w-full bg-[#1A1C20] border border-white/[0.1] rounded-xl px-4 
   transition-all duration-200`;
 
 // ── Member PIN form ───────────────────────────────────────────────────────────
-function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onTogglePin, onLogin }) {
+function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onTogglePin, onLogin, onForgot }) {
   return (
     <div className="space-y-4 fade-up">
       <Field label="Mobile Number">
@@ -63,7 +63,15 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
             {showPin ? 'Hide' : 'Show'}
           </button>
         </div>
-        <p className="text-[11px] text-[#4A4E5A] mt-1">Set by your health coach</p>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-[11px] text-[#4A4E5A]">Set by your health coach</p>
+          {/* There was no recovery path at all: the PIN is set by the coach and
+              a member who forgot it had nothing to tap. */}
+          <button type="button" onClick={onForgot}
+            className="text-[11px] font-semibold text-[#D4AF37] hover:text-[#F0E2B6] transition-colors">
+            Forgot PIN?
+          </button>
+        </div>
       </Field>
 
       {error && (
@@ -145,6 +153,7 @@ export default function Login() {
   // Why we're back here. An expired refresh token drops the member on this
   // screen mid-task; without a word it reads as the app having crashed.
   const [notice, setNotice] = useState('');
+  const [showForgot, setShowForgot] = useState(false);
   useEffect(() => {
     const reason = takeLogoutReason();
     if (reason === 'expired') {
@@ -159,8 +168,11 @@ export default function Login() {
       login(data.accessToken, data.user);
       navigate('/');
     } catch (e) {
-      setError(e.response?.data?.error || 'Invalid phone or PIN.');
-      setPin('');
+      const data = e.response?.data;
+      setError(data?.error || 'Invalid phone or PIN.');
+      // A paused account is not a typo — clearing the PIN box invites a retry
+      // that cannot succeed, and drives them into the rate limit.
+      if (data?.code !== 'account_inactive') setPin('');
     } finally { setLoading(false); }
   };
 
@@ -214,6 +226,22 @@ export default function Login() {
           shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.7)]
           overflow-hidden scale-up">
 
+          {showForgot && (
+            <div className="bg-[#121316] border-b border-white/[0.07] px-5 py-4">
+              <p className="text-sm font-semibold text-white">Forgotten your PIN?</p>
+              <p className="text-xs text-[#9EA3B0] mt-1.5 leading-relaxed">
+                Your PIN is set by your coach, so they're the one who can reset
+                it. Message them and they'll send you a new one — it takes a
+                minute. Nothing you've logged is affected.
+              </p>
+              <button type="button" onClick={() => setShowForgot(false)}
+                style={{ minHeight: 36 }}
+                className="mt-2 text-[11px] font-bold text-[#D4AF37] px-1">
+                Back to login
+              </button>
+            </div>
+          )}
+
           {notice && (
             <div className="bg-[rgba(212,175,55,0.08)] border-b border-[rgba(212,175,55,0.20)]
               text-[#F0E2B6] text-xs leading-relaxed px-5 py-3">
@@ -246,7 +274,8 @@ export default function Login() {
           <div className="p-6">
             {mode === 'patient' ? (
               <PinForm phone={phone} pin={pin} showPin={showPin} loading={loading} error={error}
-                onPhone={setPhone} onPin={setPin} onTogglePin={() => setShowPin(s => !s)} onLogin={pinLogin} />
+                onPhone={setPhone} onPin={setPin} onTogglePin={() => setShowPin(s => !s)} onLogin={pinLogin}
+                onForgot={() => setShowForgot(true)} />
             ) : (
               <CoachForm email={email} password={password} loading={loading} error={error}
                 onEmail={setEmail} onPassword={setPassword} onLogin={coachLogin} />

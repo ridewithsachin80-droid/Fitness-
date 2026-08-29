@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../db/pool');
 const smsService = require('../services/smsService');
 const authMW = require('../middleware/auth');
+const roleCheck = require('../middleware/roleCheck');
 
 // ── Token helpers ───────────────────────────────────────────────────────────
 
@@ -116,14 +117,27 @@ router.post('/pin-login', async (req, res) => {
   }
 
   try {
+    // Deliberately NOT filtering on active here. A deactivated member used to
+    // get "Invalid phone number or PIN", identical to a typo — so they retyped
+    // it, ran into the rate limit, and messaged the coach convinced the app was
+    // broken. Fetch first, then say which it actually is.
     const result = await pool.query(
-      "SELECT * FROM users WHERE phone = $1 AND role = 'patient' AND active = true",
+      "SELECT * FROM users WHERE phone = $1 AND role = 'patient'",
       [phone]
     );
     const user = result.rows[0];
 
     if (!user || !user.password) {
       return res.status(401).json({ error: 'Invalid phone number or PIN' });
+    }
+
+    if (user.active === false) {
+      // Not a credential failure, so it doesn't count against the rate limit
+      // and the member is told to talk to their coach rather than retry.
+      return res.status(403).json({
+        error: 'This account is paused. Please contact your coach to reactivate it.',
+        code:  'account_inactive',
+      });
     }
 
     const isValid = await bcrypt.compare(pin, user.password);
@@ -372,6 +386,62 @@ router.patch('/change-password', authMW, async (req, res) => {
   } catch (err) {
     console.error('change-password error:', err.message);
     res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// ── PATCH /api/auth/change-pin ──────────────────────────────────────────────
+// Member: change their own PIN. Requires the current one.
+//
+// Until now a member had no way to change their PIN and no way to recover it —
+// every credential change went through the coach on WhatsApp. The coach reset
+// path (PATCH /patients/:id/pin) stays, for the genuine forgot-it case.
+router.patch('/change-pin', authMW, roleCheck('patient'), async (req, res) => {
+  const { currentPin, newPin } = req.body || {};
+
+  if (!currentPin || !newPin) {
+    return res.status(400).json({ error: 'Enter your current PIN and a new one' });
+  }
+  const next = String(newPin).trim();
+  // Matches the 4-digit minimum the coach and admin reset paths already
+  // enforce, so a member can't set a PIN weaker than one set for them.
+  if (next.length < 4) {
+    return res.status(400).json({ error: 'Your new PIN must be at least 4 digits' });
+  }
+  if (!/^\d+$/.test(next)) {
+    return res.status(400).json({ error: 'Your PIN can only contain numbers' });
+  }
+  if (String(currentPin).trim() === next) {
+    return res.status(400).json({ error: 'That is already your PIN' });
+  }
+
+  // Rate-limited like pin-login: this endpoint verifies a credential, so
+  // without a limit it is an oracle for guessing the current PIN.
+  const ip = getIp(req);
+  if (!checkRateLimit(`change-pin:${ip}`, 10, 15 * 60 * 1000)) {
+    return res.status(429).json({
+      error: 'Too many attempts. Please wait 15 minutes and try again.',
+    });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, password FROM users WHERE id = $1 AND role = 'patient' AND active = true",
+      [req.user.id]
+    );
+    const user = rows[0];
+    if (!user || !user.password) return res.status(404).json({ error: 'Account not found' });
+
+    const isValid = await bcrypt.compare(String(currentPin).trim(), user.password);
+    if (!isValid) return res.status(401).json({ error: 'That current PIN is not right' });
+
+    const hash = await bcrypt.hash(next, 10);   // same cost factor as the reset paths
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hash, req.user.id]);
+    clearRateLimit(`change-pin:${ip}`);
+
+    res.json({ message: 'PIN changed' });
+  } catch (err) {
+    console.error('change-pin error:', err.message);
+    res.status(500).json({ error: 'Could not change your PIN' });
   }
 });
 
