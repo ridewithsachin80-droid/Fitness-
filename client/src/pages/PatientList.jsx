@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getMembers }  from '../api/logs';
 import { today, formatDate } from '../constants';
-import { OfflineBanner, PageLoader, BottomNav } from '../components/UI';
+import { Card, SectionTitle, OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
+import TodaysGaps from '../components/TodaysGaps';
 import { useSync } from '../hooks/useSync';
 
 function complianceBadge(pct) {
@@ -119,6 +120,21 @@ export default function MemberList() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Today's gaps — who is missing what, ranked, with a message ready.
+          This was mounted only on the admin dashboard, so a coach landing here
+          saw "5 Pending" in the header and then had to open five member pages
+          one at a time to act on it. The API behind it
+          (GET /members/gaps) has always allowed roleCheck('monitor','admin') —
+          only the UI was admin-only. */}
+      <div className="max-w-md mx-auto px-4 pt-4">
+        <Card>
+          <SectionTitle icon="🎯" tooltip="Members with something missing today, most urgent first. Nothing sends automatically — each message is yours to review.">
+            Needs a nudge
+          </SectionTitle>
+          <TodaysGaps />
+        </Card>
       </div>
 
       {/* Member cards */}

@@ -4,7 +4,7 @@ import {
   LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts';
-import { getMember } from '../api/logs';
+import { getMember, getMembers } from '../api/logs';
 import { addLabValue } from '../api/logs';
 import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
@@ -16,6 +16,7 @@ import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
 import LabResults from '../components/LabResults';
 import MuscleCoverage from '../components/MuscleCoverage';
+import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
 import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
 import { useSync } from '../hooks/useSync';
@@ -397,6 +398,36 @@ export default function Coach() {
   const [showNoteForm,  setShowNote]  = useState(false);
   const [showWeightForm,setShowWeight]= useState(false);
   const [showProgramBuilder, setShowProgramBuilder] = useState(false);
+
+  // ── Roster, for prev/next ───────────────────────────────────────────────────
+  // Reviewing seven members meant: open one, scroll a very long page, go back,
+  // find the next name, open it. Twenty-plus navigations before saying anything
+  // to anyone. Holding the roster here turns it into one pass.
+  //
+  // Ordered the same way the member list orders it — members with nothing
+  // logged today first — so "next" follows the order the coach was already
+  // working down rather than a different one.
+  const [roster, setRoster] = useState([]);
+  useEffect(() => {
+    getMembers()
+      .then(({ data }) => {
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        const list = (data || []).map(m => ({
+          ...m,
+          last_logged: m.last_logged ? String(m.last_logged).slice(0, 10) : null,
+        }));
+        const pending = list.filter(m => m.last_logged !== todayStr);
+        const done    = list.filter(m => m.last_logged === todayStr);
+        setRoster([...pending, ...done]);
+      })
+      // Prev/next is a convenience. If the roster can't load, the page still
+      // works — the arrows just don't render.
+      .catch(() => setRoster([]));
+  }, []);
+
+  const rosterIdx = roster.findIndex(m => String(m.id) === String(memberId));
+  const prevMember = rosterIdx > 0 ? roster[rosterIdx - 1] : null;
+  const nextMember = rosterIdx > -1 && rosterIdx < roster.length - 1 ? roster[rosterIdx + 1] : null;
   const [activeProgram, setActiveProgram] = useState(undefined); // undefined = not loaded yet, null = none assigned
   const [selectedLog,   setSelectedLog] = useState(null); // compliance chart drill-down
   const [viewDate,      setViewDate]    = useState(null); // selected date in log viewer
@@ -499,7 +530,19 @@ export default function Coach() {
     if (win) { win.document.write(html); win.document.close(); }
   };
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts = {}) => {
+    // Blank the screen while switching members.
+    //
+    // `loading` was only ever true on first mount, which was fine when the
+    // only way here was from the member list. With prev/next the coach moves
+    // member -> member on the same route, the component does NOT remount, and
+    // without this the previous member's weight, compliance and labs stay on
+    // screen under the new member's name until the fetch returns. Showing one
+    // member's numbers attributed to another is not a cosmetic problem.
+    //
+    // Silent refreshes (socket updates, after an apply) pass { quiet: true } so
+    // they don't flash the whole page.
+    if (!opts.quiet) { setLoading(true); setData(null); }
     try {
       const { data: res } = await getMember(memberId);
       setData(res);
@@ -520,7 +563,7 @@ export default function Coach() {
     (update) => {
       if (String(update.memberId) === String(memberId)) {
         clearTimeout(reloadTimer.current);
-        reloadTimer.current = setTimeout(() => load(), 400); // debounce 400ms
+        reloadTimer.current = setTimeout(() => load({ quiet: true }), 400); // debounce 400ms
       }
     },
     (update) => {
@@ -640,7 +683,39 @@ export default function Coach() {
       {/* Header */}
       <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
-          <BackButton onClick={() => navigate('/coach')} label="All members" />
+          <div className="flex items-center justify-between gap-2">
+            <BackButton onClick={() => navigate('/coach')} label="All members" />
+            {rosterIdx > -1 && roster.length > 1 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-[#7E8596] font-medium tabular-nums">
+                  {rosterIdx + 1} of {roster.length}
+                </span>
+                <button
+                  onClick={() => prevMember && navigate(`/coach/${prevMember.id}`)}
+                  disabled={!prevMember}
+                  title={prevMember ? prevMember.name : 'First member'}
+                  style={{ minWidth: 40, minHeight: 36 }}
+                  className="rounded-xl text-sm font-bold text-[#D4AF37] bg-white/[0.05]
+                    border border-white/[0.08] disabled:opacity-25 active:scale-95 transition-all">
+                  ‹
+                </button>
+                <button
+                  onClick={() => nextMember && navigate(`/coach/${nextMember.id}`)}
+                  disabled={!nextMember}
+                  title={nextMember ? nextMember.name : 'Last member'}
+                  style={{ minWidth: 40, minHeight: 36 }}
+                  className="rounded-xl text-sm font-bold text-[#D4AF37] bg-white/[0.05]
+                    border border-white/[0.08] disabled:opacity-25 active:scale-95 transition-all">
+                  ›
+                </button>
+              </div>
+            )}
+          </div>
+          {nextMember && (
+            <p className="text-[10px] text-[#7E8596] mt-1.5 text-right">
+              Next: {nextMember.name}
+            </p>
+          )}
           <div className="mt-3 flex items-start justify-between">
             <div>
               <h1 className="font-display text-xl font-medium">{profile.name}</h1>
@@ -1176,7 +1251,7 @@ export default function Coach() {
         <Card>
           <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
           <div className="mt-2">
-            <MetabolicInsight memberId={parseInt(memberId)} canApply onApplied={load} />
+            <MetabolicInsight memberId={parseInt(memberId)} canApply onApplied={() => load({ quiet: true })} />
           </div>
         </Card>
 
@@ -1193,7 +1268,7 @@ export default function Coach() {
         <Card>
           <SectionTitle icon="🔬">Macro Lab</SectionTitle>
           <div className="mt-2">
-            <MacroLab memberId={parseInt(memberId)} onChanged={load} />
+            <MacroLab memberId={parseInt(memberId)} onChanged={() => load({ quiet: true })} />
           </div>
         </Card>
 
@@ -1558,10 +1633,20 @@ export default function Coach() {
       <MessageMember
         member={{ id: parseInt(memberId), name: data?.profile?.name, phone: data?.profile?.phone }}
         open={msgOpen}
-        onClose={() => { setMsgOpen(false); load(); }}
+        onClose={() => { setMsgOpen(false); load({ quiet: true }); }}
       />
 
       <BottomNav role={user?.role} />
+
+      {/* Coach AI, scoped to this member. It was only on the member LIST and
+          the admin dashboard, so changing Vishwas's macros while looking at
+          Vishwas's data meant navigating away from it first. The detail page
+          is where the intent forms. */}
+      <CoachAIChat
+        contextMember={{ id: parseInt(memberId), name: profile?.name }}
+        onApplied={() => load({ quiet: true })}
+      />
+      <CoachAIFab bottomOffset={88} />
     </div>
   );
 }

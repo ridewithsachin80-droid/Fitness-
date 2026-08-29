@@ -1608,7 +1608,7 @@ function coachAudit(actor, action, targetId, targetName, detail) {
 }
 
 // ── Coach prompt ─────────────────────────────────────────────────────────────
-function buildCoachPrompt(message, members, memberStats = []) {
+function buildCoachPrompt(message, members, memberStats = [], contextMember = null) {
   const { statsLine } = require('../services/milestones');
   const statsById = new Map(memberStats.map(s => [s.id, statsLine(s)]));
   const cat = (list) => list.map(i => `"${i.id}" (${i.label})`).join(', ');
@@ -1620,7 +1620,12 @@ Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: '
 If the coach schedules a workout day for "today"/"aaj", use today's weekday.
 
 Coach's message: "${message}"
-
+${contextMember ? `
+THE COACH IS CURRENTLY LOOKING AT "${contextMember.name}"'s page.
+If the message names no member at all ("raise water to 4 litres", "add whey to
+lunch"), it is about ${contextMember.name}. If it DOES name someone — including
+"everyone"/"all" — honour that name and ignore this context line.
+` : ''}
 MEMBERS (match names loosely — partial/first names are fine).
 Progress facts are REAL, computed from their logs — quote them, never invent:
 ${members.map(m => `  - "${m.name}"${statsById.has(m.id) ? ` — ${statsById.get(m.id)}` : ''}`).join('\n')}
@@ -1890,7 +1895,7 @@ router.get('/portions', async (req, res) => {
 // Returns: { reply, actions: [{ member_id|null, member_name, resolved, is_all,
 //            ops (validated command), changes: [{icon,text}] }] }
 router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
-  const { message } = req.body;
+  const { message, context_member_id } = req.body;
   if (!message || String(message).trim().length < 2) {
     return res.status(400).json({ error: 'Message required' });
   }
@@ -1909,7 +1914,16 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
       memberStats = await require('../services/milestones').loadCoachMemberStats(req.user);
     } catch (e) { console.error('member stats unavailable:', e.message); }
 
-    const { text: rawText, provider } = await callAI(buildCoachPrompt(cleanMsg, members, memberStats));
+    // Optional: the coach is on a member's detail page. Only ever used to
+    // resolve a message that names nobody — and only if that member is
+    // genuinely assigned to this coach, so the hint can't be used to reach
+    // someone else's member.
+    const contextMember = context_member_id
+      ? members.find(m => String(m.id) === String(context_member_id)) || null
+      : null;
+
+    const { text: rawText, provider } =
+      await callAI(buildCoachPrompt(cleanMsg, members, memberStats, contextMember));
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(jsonText);
 

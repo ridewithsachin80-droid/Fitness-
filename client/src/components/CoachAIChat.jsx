@@ -59,7 +59,14 @@ export function CoachAIFab({ bottomOffset = 40 }) {
   );
 }
 
-export default function CoachAIChat({ onApplied }) {
+/**
+ * @param {object}  [contextMember]  { id, name } when mounted on a member's
+ *   detail page. Lets the coach type "raise water to 4 litres" without naming
+ *   the member they are already looking at. The server only applies the hint
+ *   when the message names nobody, and only if that member is assigned to
+ *   this coach.
+ */
+export default function CoachAIChat({ onApplied, contextMember = null }) {
   const open      = useCoachAI(s => s.open);
   const closeChat = useCoachAI(s => s.closeChat);
 
@@ -94,7 +101,10 @@ export default function CoachAIChat({ onApplied }) {
     haptic(10);
 
     try {
-      const { data } = await api.post('/ai-chat/coach-parse', { message: text });
+      const { data } = await api.post('/ai-chat/coach-parse', {
+        message: text,
+        context_member_id: contextMember?.id ?? null,
+      });
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
@@ -107,7 +117,7 @@ export default function CoachAIChat({ onApplied }) {
     } finally {
       setBusy(false);
     }
-  }, [input, busy]);
+  }, [input, busy, contextMember?.id]);
 
   const toggleAction = useCallback((mi, ai) => {
     setMessages(prev => {
