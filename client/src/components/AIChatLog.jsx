@@ -27,7 +27,7 @@ import api from '../api/client';
 import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, today } from '../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, today, plural } from '../constants';
 
 // ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
 //
@@ -533,9 +533,9 @@ export default function AIChatLog() {
     const actLeft = proto.activities.filter(a => !newLog.activities?.[a.id]).length;
     if (actLeft > 0) pending.push(`${actLeft} activit${actLeft > 1 ? 'ies' : 'y'}`);
     const acvLeft = proto.acv.filter(a => !newLog.acv?.[a.id]).length;
-    if (acvLeft > 0) pending.push(`${acvLeft} ACV dose${acvLeft > 1 ? 's' : ''}`);
+    if (acvLeft > 0) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
     const suppLeft = proto.supplements.filter(s => !newLog.supplements?.[s.id]).length;
-    if (suppLeft > 0) pending.push(`${suppLeft} supplement${suppLeft > 1 ? 's' : ''}`);
+    if (suppLeft > 0) pending.push(`${suppLeft} ${plural(suppLeft, 'supplement')}`);
     if ((newLog.water || 0) < target) pending.push(`water (${((target - (newLog.water || 0)) / 1000).toFixed(1)}L to go)`);
     if (!newLog.food?.length) pending.push('food log');
     if (!newLog.sleep?.bedtime || !newLog.sleep?.waketime) pending.push('sleep times');
@@ -952,7 +952,7 @@ export default function AIChatLog() {
 
                       {m.lab.needs_review > 0 && !m.applied && (
                         <p className="text-[10px] text-amber-300 mb-2 leading-relaxed">
-                          ⚠ {m.lab.needs_review} row{m.lab.needs_review > 1 ? 's' : ''} came out unclear —
+                          ⚠ {m.lab.needs_review} {plural(m.lab.needs_review, 'row')} came out unclear —
                           check the highlighted ones against your report before saving.
                         </p>
                       )}
@@ -1252,7 +1252,7 @@ export default function AIChatLog() {
                         <button onClick={() => applyAll(mi)}
                           style={{ minHeight: 48 }}
                           className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#D4AF37] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#D4AF37] active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
-                          Apply {countIncluded(m.parsed)} item{countIncluded(m.parsed) > 1 ? 's' : ''} to today's log
+                          Apply {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
                         </button>
                       )}
 

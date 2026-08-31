@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
+import { plural } from '../constants';
 
 const TYPES = [
   { key: 'water',    label: '💧 Water',    desc: 'Hydration reminders' },
@@ -122,7 +123,7 @@ export default function AdminReminders({ members = [] }) {
       if (!data.deviceCount) {
         setMsg(`⚠️ No active devices found for this member — they won't receive anything until they open the app and allow notifications.`);
       } else {
-        setMsg(`✅ Sent to ${data.deviceCount} device${data.deviceCount > 1 ? 's' : ''}: ${data.devices.filter(Boolean).join(', ') || 'unnamed device'}`);
+        setMsg(`✅ Sent to ${data.deviceCount} ${plural(data.deviceCount, 'device')}: ${data.devices.filter(Boolean).join(', ') || 'unnamed device'}`);
       }
       setTimeout(() => setMsg(''), 6000);
     } catch {
@@ -135,12 +136,12 @@ export default function AdminReminders({ members = [] }) {
   const memberSchedules = schedules.filter(s =>  s.patient_id);
 
   const cardStyle = {
-    background: '#1a1a2e', border: '1px solid #2a2a3e',
+    background: '#1A1C20', border: '1px solid rgba(255,255,255,0.07)',
     borderRadius: 12, padding: 16, marginBottom: 12,
   };
 
   const btnStyle = (color = '#D4AF37') => ({
-    background: color, color: '#08052a', border: 'none',
+    background: color, color: '#121316', border: 'none',
     borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
     fontSize: 13, fontWeight: 700,
   });
@@ -148,15 +149,15 @@ export default function AdminReminders({ members = [] }) {
   if (loading) return <div style={{ color: '#5a5a68', padding: 24, fontSize: 14 }}>Loading…</div>;
 
   return (
-    <div style={{ color: '#e0e0e0', maxWidth: 700 }}>
-      <h2 style={{ color: '#f0dfae', fontFamily: 'Fraunces, serif', fontWeight: 600, fontSize: 20, marginBottom: 4 }}>🔔 Reminder Schedules</h2>
+    <div style={{ color: '#FFFFFF', maxWidth: 700 }}>
+      <h2 style={{ color: '#F0E2B6', fontFamily: 'Fraunces, serif', fontWeight: 600, fontSize: 20, marginBottom: 4 }}>🔔 Reminder Schedules</h2>
       <p style={{ color: '#888', fontSize: 13, marginBottom: 20 }}>
-        Set custom times for water and activity reminders. Repeats every {editing?.retry_interval_min ?? 5} min until client taps OK.
+        Set custom times for water and activity reminders. Repeats every {editing?.retry_interval_min ?? 5} min until the member taps OK.
       </p>
 
       {msg && (
         <div style={{ background: '#1e3a2e', border: '1px solid rgba(212,175,55,0.35)', borderRadius: 8,
-          padding: '10px 16px', marginBottom: 16, color: '#f0dfae', fontSize: 14 }}>
+          padding: '10px 16px', marginBottom: 16, color: '#F0E2B6', fontSize: 14 }}>
           {msg}
         </div>
       )}
@@ -164,10 +165,18 @@ export default function AdminReminders({ members = [] }) {
       {/* ── Editor Modal ── */}
       {editing && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#12122a', borderRadius: 16, padding: 24,
-            width: 360, border: '1px solid rgba(212,175,55,0.35)' }}>
-            <h3 style={{ color: '#f0dfae', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 16, zIndex: 1000 }}>
+          {/* width:360 on a 360px phone overflowed by its own padding and
+              border — box-sizing is content-box for these inline styles, so the
+              box measured 360 + 48 + 2 = 410px. maxWidth + width:100% fits any
+              screen, and maxHeight keeps a long time-list scrollable instead of
+              running off the bottom. */}
+          <div style={{ background: '#121316', borderRadius: 16, padding: 24,
+            width: '100%', maxWidth: 360, boxSizing: 'border-box',
+            maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
+            border: '1px solid rgba(212,175,55,0.35)' }}>
+            <h3 style={{ color: '#F0E2B6', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
               {editing.type === 'water' ? '💧 Water' : '🏃 Activity'} Reminders
             </h3>
             <p style={{ color: '#888', fontSize: 12, margin: '0 0 16px' }}>
@@ -193,8 +202,8 @@ export default function AdminReminders({ members = [] }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <input type="time" value={newTime}
                   onChange={e => setNewTime(e.target.value)}
-                  style={{ background: '#1a1a2e', border: '1px solid #3a3a5e',
-                    borderRadius: 8, padding: '6px 10px', color: '#e0e0e0', flex: 1 }} />
+                  style={{ background: '#1A1C20', border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 8, padding: '6px 10px', color: '#FFFFFF', flex: 1 }} />
                 <button onClick={addTime} style={btnStyle()}>+ Add</button>
               </div>
             </div>
@@ -205,15 +214,15 @@ export default function AdminReminders({ members = [] }) {
                 <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>Max Retries</div>
                 <input type="number" min={1} max={10} value={editing.max_retries}
                   onChange={e => setEditing(ed => ({ ...ed, max_retries: +e.target.value }))}
-                  style={{ background: '#1a1a2e', border: '1px solid #3a3a5e',
-                    borderRadius: 8, padding: '6px 10px', color: '#e0e0e0', width: '100%' }} />
+                  style={{ background: '#1A1C20', border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 8, padding: '6px 10px', color: '#FFFFFF', width: '100%' }} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>Retry Every (min)</div>
                 <input type="number" min={1} max={60} value={editing.retry_interval_min}
                   onChange={e => setEditing(ed => ({ ...ed, retry_interval_min: +e.target.value }))}
-                  style={{ background: '#1a1a2e', border: '1px solid #3a3a5e',
-                    borderRadius: 8, padding: '6px 10px', color: '#e0e0e0', width: '100%' }} />
+                  style={{ background: '#1A1C20', border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 8, padding: '6px 10px', color: '#FFFFFF', width: '100%' }} />
               </div>
             </div>
 
@@ -232,12 +241,13 @@ export default function AdminReminders({ members = [] }) {
         <div style={{ fontWeight: 700, marginBottom: 12, color: '#fff' }}>
           🌐 Global Reminders <span style={{ fontSize: 12, color: '#888' }}>(all members)</span>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           {TYPES.map(t => {
             const s = globalSchedules.find(x => x.type === t.key);
             return (
-              <div key={t.key} style={{ flex: 1, background: '#0d0d1a',
-                borderRadius: 10, padding: 12, border: '1px solid #2a2a3e' }}>
+              <div key={t.key} style={{ minWidth: 0, background: '#121316',
+                borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.label}</div>
                 {s ? (
                   <>
@@ -249,7 +259,7 @@ export default function AdminReminders({ members = [] }) {
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={() => startEdit(null, t.key)} style={btnStyle()}>Edit</button>
-                      <button onClick={() => deleteSchedule(s.id)} style={btnStyle('#dc2626')}>Del</button>
+                      <button onClick={() => deleteSchedule(s.id)} style={btnStyle('#b91c1c')}>Del</button>
                     </div>
                   </>
                 ) : (
@@ -293,7 +303,7 @@ export default function AdminReminders({ members = [] }) {
             {/* Devices panel — diagnoses "member didn't get the reminder" by
                 showing exactly which device(s) are registered for this account. */}
             {openDevicesFor === member.id && (
-              <div style={{ background: '#0d0d1a', border: '1px solid #2a2a3e', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+              <div style={{ background: '#121316', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 10, marginBottom: 10 }}>
                 {devicesLoading ? (
                   <div style={{ fontSize: 12, color: '#888' }}>Loading…</div>
                 ) : !devices[member.id]?.length ? (
@@ -305,10 +315,10 @@ export default function AdminReminders({ members = [] }) {
                   devices[member.id].map(sub => (
                     <div key={sub.id} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '6px 0', borderBottom: '1px solid #1f1f2e', fontSize: 12,
+                      padding: '6px 0', borderBottom: '1px solid #1A1C20', fontSize: 12,
                     }}>
                       <div>
-                        <div style={{ color: sub.active ? '#d8d8de' : '#666' }}>
+                        <div style={{ color: sub.active ? '#9EA3B0' : '#666' }}>
                           {sub.device_name || 'Unknown device'} {!sub.active && '(inactive)'}
                         </div>
                         <div style={{ color: '#666', fontSize: 10 }}>
@@ -316,7 +326,7 @@ export default function AdminReminders({ members = [] }) {
                         </div>
                       </div>
                       <button onClick={() => removeDevice(member.id, sub.id)}
-                        style={{ ...btnStyle('#dc2626'), fontSize: 10, padding: '4px 10px' }}>
+                        style={{ ...btnStyle('#b91c1c'), fontSize: 10, padding: '4px 10px' }}>
                         Remove
                       </button>
                     </div>
@@ -324,12 +334,13 @@ export default function AdminReminders({ members = [] }) {
                 )}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
               {TYPES.map(t => {
                 const s = pSchedules.find(x => x.type === t.key);
                 return (
-                  <div key={t.key} style={{ flex: 1, background: '#0d0d1a',
-                    borderRadius: 10, padding: 10, border: '1px solid #2a2a3e' }}>
+                  <div key={t.key} style={{ minWidth: 0, background: '#121316',
+                    borderRadius: 10, padding: 10, border: '1px solid rgba(255,255,255,0.07)' }}>
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t.label}</div>
                     {s ? (
                       <>
@@ -341,7 +352,7 @@ export default function AdminReminders({ members = [] }) {
                         </div>
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button onClick={() => startEdit(member.id, t.key)} style={{ ...btnStyle(), fontSize: 11 }}>Edit</button>
-                          <button onClick={() => deleteSchedule(s.id)} style={{ ...btnStyle('#dc2626'), fontSize: 11 }}>Del</button>
+                          <button onClick={() => deleteSchedule(s.id)} style={{ ...btnStyle('#b91c1c'), fontSize: 11 }}>Del</button>
                         </div>
                       </>
                     ) : (

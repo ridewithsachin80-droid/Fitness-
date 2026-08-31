@@ -11,7 +11,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../api/client';
-import { getNutrition } from '../constants';
+import { getNutrition, plural } from '../constants';
 import { getRecentFoods } from '../api/logs';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import AIFoodSearch from './AIFoodSearch';
@@ -313,7 +313,7 @@ function PrescribedMeals({ items, onChange }) {
                   <button onClick={() => logMeal(plan)}
                     style={{ minHeight: 40 }}
                     className="mt-2.5 w-full rounded-full bg-[#D4AF37] text-[#121316] text-xs font-bold active:scale-[0.98] transition-transform">
-                    Log {pending.length === plan.items.length ? 'this meal' : `${pending.length} remaining item${pending.length > 1 ? 's' : ''}`} as entered
+                    Log {pending.length === plan.items.length ? 'this meal' : `${pending.length} remaining ${plural(pending.length, 'item')}`} as entered
                   </button>
                 )}
                 <p className="mt-1.5 text-[10px] text-[#6a6a78] text-center">

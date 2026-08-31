@@ -17,6 +17,47 @@ export const ROLE_LABEL = {
 };
 export const roleLabel = (r) => ROLE_LABEL[r] || r || '';
 
+/**
+ * Pluralise a noun for a count.
+ *
+ * Replaces 18 hand-written `{n !== 1 ? 's' : ''}` ternaries, which carried two
+ * bugs between them:
+ *
+ *   · `coach` + 's' = "coachs". English needs -es after a sibilant.
+ *   · Half the call sites used `> 1`, which renders ZERO as singular —
+ *     "0 result", "0 device". Zero takes the plural.
+ *
+ * A third bug lived in the same expressions: `!== 1` against a SQL COUNT,
+ * which node-postgres used to hand back as a string, so `"1" !== 1` was always
+ * true and the s was always appended ("1 members assigned"). That is fixed
+ * properly at the driver in db/pool.js, but Number() here means this helper is
+ * correct even if a count arrives as a string from somewhere else.
+ *
+ * @param {number|string} count
+ * @param {string} singular      e.g. 'coach'
+ * @param {string} [pluralForm]  explicit override for irregulars
+ */
+export function plural(count, singular, pluralForm) {
+  const n = Number(count);
+  if (n === 1) return singular;
+  if (pluralForm) return pluralForm;
+  if (IRREGULAR[singular.toLowerCase()]) return IRREGULAR[singular.toLowerCase()];
+  // sibilants: coach→coaches, dish→dishes, glass→glasses, box→boxes
+  if (/(s|x|z|ch|sh)$/i.test(singular)) return `${singular}es`;
+  // consonant + y: entry→entries (but day→days)
+  if (/[^aeiou]y$/i.test(singular)) return `${singular.slice(0, -1)}ies`;
+  return `${singular}s`;
+}
+
+const IRREGULAR = {
+  person: 'people',
+  foot: 'feet',
+};
+
+/** "1 coach" / "3 coaches" / "0 coaches" — count and noun together. */
+export const countOf = (count, singular, pluralForm) =>
+  `${count} ${plural(count, singular, pluralForm)}`;
+
 // ── Activities (6 total) ─────────────────────────────────────────────────────
 export const ACTIVITIES = [
   { id: 'walk',       label: 'Morning Walk',        sub: '30 min · 6:30–7:00 AM',             icon: '🚶', met: 3.5, durationMin: 30 },

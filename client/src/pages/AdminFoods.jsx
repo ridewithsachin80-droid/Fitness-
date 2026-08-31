@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Card, SectionTitle, BackButton } from '../components/UI';
+import { plural } from '../constants';
 
 const CATEGORIES = ['grain','vegetable','fruit','pulse','dairy','meat','nut','oil','spice','beverage','branded','supplement','other'];
 const SOURCES = ['manual','ai','nin','usda','off'];
@@ -301,7 +302,7 @@ export default function AdminFoods() {
               <p className="text-[#9EA3B0] text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
             </div>
             <button onClick={() => { setEditing(null); setAiPrefill(null); setMode('add'); }}
-              className="px-4 py-2 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] font-bold rounded-xl text-sm transition-colors">
+              className="px-4 py-2 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] font-bold rounded-xl text-sm transition-colors">
               + Add Food
             </button>
           </div>
@@ -348,7 +349,7 @@ export default function AdminFoods() {
                             {' · '}C{f.per_100g?.total_carbs ?? 0} · F{f.per_100g?.fat ?? 0}
                             {f.members > 0 && (
                               <span className="text-amber-600 font-semibold">
-                                {' · '}{f.members} member{f.members > 1 ? 's' : ''}, {f.times_logged}×
+                                {' · '}{f.members} {plural(f.members, 'member')}, {f.times_logged}×
                               </span>
                             )}
                           </p>

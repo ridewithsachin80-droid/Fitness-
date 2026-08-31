@@ -98,7 +98,7 @@ export function OfflineBanner() {
     window.addEventListener('offline', goOffline);
     return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
   }, []);
-  if (justOnline) return <div className="bg-[#D4AF37] text-[#08052a] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
+  if (justOnline) return <div className="bg-[#D4AF37] text-[#121316] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
   if (!offline) return null;
   return <div className="bg-amber-500/90 text-white text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
 }

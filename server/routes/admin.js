@@ -1,5 +1,6 @@
 const router  = require('express').Router();
 const pool    = require('../db/pool');
+const { hasContent, IST_TODAY } = require('../db/logPredicates');
 const bcrypt  = require('bcryptjs');
 const authMW  = require('../middleware/auth');
 const role    = require('../middleware/roleCheck');
@@ -86,7 +87,12 @@ router.get('/stats', async (req, res) => {
     const [members, monitors, logs] = await Promise.all([
       pool.query("SELECT COUNT(*) FROM users WHERE role='patient' AND active=true"),
       pool.query("SELECT COUNT(*) FROM users WHERE role IN ('monitor','admin') AND active=true"),
-      pool.query("SELECT COUNT(*) FROM daily_logs WHERE log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date"),
+      // Counts members who logged SOMETHING today, not rows that merely exist.
+      // The first autosave creates an empty row as soon as the app opens, so
+      // counting rows reported "4 logged today" while those same four members
+      // showed "—" in the compliance list below it.
+      pool.query(`SELECT COUNT(*) FROM daily_logs
+                   WHERE log_date = ${IST_TODAY} AND ${hasContent()}`),
     ]);
     res.json({
       members:      parseInt(members.rows[0].count),
@@ -109,9 +115,10 @@ router.get('/overview', async (req, res) => {
       pool.query(`
         SELECT
           (SELECT COUNT(*) FROM users WHERE role='patient' AND active=true)  AS total_members,
-          (SELECT COUNT(*) FROM daily_logs WHERE log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date)    AS logged_today,
-          (SELECT COUNT(*) FROM daily_logs WHERE log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-            AND compliance_pct >= 75)                                        AS good_compliance_today
+          (SELECT COUNT(*) FROM daily_logs
+             WHERE log_date = ${IST_TODAY} AND ${hasContent()})               AS logged_today,
+          (SELECT COUNT(*) FROM daily_logs
+             WHERE log_date = ${IST_TODAY} AND compliance_pct >= 75)          AS good_compliance_today
       `),
       // Today's detail per member
       pool.query(`

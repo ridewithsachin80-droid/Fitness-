@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { adminResetPin, adminSendPush, getAuditLog } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel } from '../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural } from '../constants';
 import AdminReminders from '../components/AdminReminders';
 import MessageMember from '../components/MessageMember';
 import TodaysGaps from '../components/TodaysGaps';
@@ -1163,7 +1163,7 @@ function PushModal({ members, onClose }) {
             <div className="text-4xl">📨</div>
             <p className="font-bold text-[#FFFFFF]">Notification sent!</p>
             <p className="text-sm text-[#9EA3B0]">
-              Delivered to <span className="font-semibold text-emerald-300">{result.sent}</span> device{result.sent !== 1 ? 's' : ''}
+              Delivered to <span className="font-semibold text-emerald-300">{result.sent}</span> {plural(result.sent, 'device')}
               {result.failed > 0 && `, ${result.failed} failed`}
             </p>
             <button onClick={onClose} className="mt-2 text-sm font-semibold text-[#9EA3B0] hover:text-[#FFFFFF]">Close</button>
@@ -1483,7 +1483,7 @@ export default function AdminDashboard() {
           />
           <button
             onClick={() => tab === 'members' ? setShowAddMember(true) : setShowAddCoach(true)}
-            className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] text-sm font-bold
+            className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] text-sm font-bold
               rounded-xl transition-colors whitespace-nowrap">
             + Add {tab === 'members' ? 'Member' : 'Coach'}
           </button>
@@ -1611,7 +1611,7 @@ export default function AdminDashboard() {
                 <div className="text-4xl mb-3">👥</div>
                 <p className="font-medium">No members yet</p>
                 <button onClick={() => setShowAddMember(true)}
-                  className="mt-3 text-emerald-300 font-semibold text-sm">+ Add first member</button>
+                  className="mt-3 text-[#D4AF37] font-semibold text-sm">+ Add first member</button>
               </div>
             ) : (
               filtered(members, 'name').map(m => {
@@ -1632,7 +1632,8 @@ export default function AdminDashboard() {
                       ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/coach/${m.id}`)}>
                       <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#F0E2B6]"
-                        style={{ background: 'linear-gradient(135deg,#2a2150,#1a1633)' }}>
+                        style={{ background: 'linear-gradient(135deg,#2A2620,#1A1C20)',
+                          border: '1px solid rgba(212,175,55,0.18)' }}>
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1717,26 +1718,19 @@ export default function AdminDashboard() {
         {tab === 'coaches' && (
           <>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-[#9EA3B0]">{coaches.length} coach{coaches.length !== 1 ? 's' : ''} registered</p>
-              <div className="flex gap-2">
-                <button onClick={() => setShowPush(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-[#9EA3B0] bg-white/[0.06]
-                    hover:bg-white/[0.08] px-3 py-2 rounded-xl transition-colors">
-                  📨 Send Push
-                </button>
-                <button onClick={() => setShowAddCoach(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#121316]
-                    hover:bg-[#121316] px-3 py-2 rounded-xl transition-colors">
-                  + Add Coach
-                </button>
-              </div>
+              <p className="text-xs text-[#9EA3B0]">{coaches.length} {plural(coaches.length, 'coach')} registered</p>
+              <button onClick={() => setShowPush(true)}
+                className="flex items-center gap-1.5 text-xs font-bold text-[#9EA3B0] bg-white/[0.06]
+                  hover:bg-white/[0.08] px-3 py-2 rounded-xl transition-colors">
+                📨 Send Push
+              </button>
             </div>
             {filtered(coaches, 'name').length === 0 ? (
               <div className="text-center py-16 text-[#9EA3B0]">
                 <div className="text-4xl mb-3">🏋️</div>
                 <p className="font-medium">No coaches yet</p>
                 <button onClick={() => setShowAddCoach(true)}
-                  className="mt-3 text-emerald-300 font-semibold text-sm">+ Add first coach</button>
+                  className="mt-3 text-[#D4AF37] font-semibold text-sm">+ Add first coach</button>
               </div>
             ) : (
               filtered(coaches, 'name').map(m => (
@@ -1757,7 +1751,7 @@ export default function AdminDashboard() {
                       </div>
                       <p className="text-xs text-[#9EA3B0] mt-0.5">✉ {m.email}</p>
                       <p className="text-xs text-emerald-300 mt-0.5 font-medium">
-                        {m.patient_count} member{m.patient_count !== 1 ? 's' : ''} assigned
+                        {m.patient_count} {plural(m.patient_count, 'member')} assigned
                       </p>
                     </div>
                     <div className="flex gap-1.5">

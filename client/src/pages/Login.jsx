@@ -80,12 +80,12 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
 
       <button onClick={onLogin} disabled={phone.length !== 10 || !pin || loading}
         className="w-full py-3.5 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-40
-          disabled:cursor-not-allowed text-[#08052a] font-bold rounded-xl
+          disabled:cursor-not-allowed text-[#121316] font-bold rounded-xl
           transition-all duration-200 text-sm tracking-wide active:scale-[0.98]
           shadow-[0_0_24px_rgba(212,175,55,0.35)]">
         {loading
           ? <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-[#08052a]/30 border-t-[#08052a] rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-[#121316]/30 border-t-[#121316] rounded-full animate-spin" />
               Signing in…
             </span>
           : 'Log In →'}

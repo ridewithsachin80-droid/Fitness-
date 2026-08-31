@@ -97,6 +97,37 @@ test('old /monitor/:id links still redirect', () => {
   assert.ok(app.includes('path="/coach/:memberId"'),   '/coach route missing');
 });
 
+/**
+ * Blank out comments while preserving line numbers, so a copy check reads only
+ * what a user could actually see.
+ *
+ * Needed because JSX comments are `{/* ... *\/}` blocks whose continuation
+ * lines start with ordinary prose — a naive "does this line start with //"
+ * check misses them, and then an explanatory comment about the rename trips
+ * the very test that protects the rename.
+ */
+function stripComments(src) {
+  let out = '';
+  let inBlock = false;
+  for (const line of src.split('\n')) {
+    let l = line;
+    if (inBlock) {
+      const end = l.indexOf('*/');
+      if (end === -1) { out += '\n'; continue; }
+      l = ' '.repeat(end + 2) + l.slice(end + 2);
+      inBlock = false;
+    }
+    // strip single-line /* ... */ and {/* ... */} first
+    l = l.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, ' ');
+    const open = l.indexOf('/*');
+    if (open !== -1) { inBlock = true; l = l.slice(0, open); }
+    const dbl = l.indexOf('//');
+    if (dbl !== -1 && !/https?:$/.test(l.slice(0, dbl))) l = l.slice(0, dbl);
+    out += l + '\n';
+  }
+  return out;
+}
+
 console.log('\nUI must not show clinical terminology');
 
 test('no user-visible "Patient" or "Monitor" copy remains in the client', () => {
@@ -144,6 +175,33 @@ test('raw users.role is never rendered to the user', () => {
   }
   assert.deepStrictEqual(bad, [],
     `raw role value rendered to the user:\n    ${bad.join('\n    ')}`);
+});
+
+test('no other clinical or CRM wording in user-visible copy', () => {
+  // "patient" and "monitor" are covered above. The rename also has to hold for
+  // synonyms that crept in independently — AdminReminders shipped "until client
+  // taps OK", which no grep for "patient" would ever have found.
+  //
+  // Comments and import paths (api/client) are not user-visible, so they are
+  // excluded rather than forcing awkward rewording of internal notes.
+  const WORDS = /\b(client|patient|subject|caseload)\b/i;
+  const bad = [];
+  for (const f of walk(path.join(ROOT, 'client/src'))) {
+    if (path.basename(f) === 'app.js') continue;
+    stripComments(fs.readFileSync(f, 'utf8')).split('\n').forEach((line, i) => {
+      if (/from '[^']*client'|api\/client|apiClient/.test(line)) return;  // import path
+      if (/patient_id|patient_profiles|patient_count|'patient'|"patient"/.test(line)) return; // frozen DB values
+      // No "is it in quotes?" filter: the leak this test exists to catch was
+      // bare JSX text — `min until client taps OK.` — which has no quote and
+      // no angle bracket on its own line. After comment stripping, any of
+      // these words left in client source is worth a look.
+      if (WORDS.test(line)) {
+        bad.push(`${path.relative(ROOT, f)}:${i + 1}`);
+      }
+    });
+  }
+  assert.deepStrictEqual(bad, [],
+    `clinical/CRM wording in user-visible copy:\n    ${bad.join('\n    ')}`);
 });
 
 

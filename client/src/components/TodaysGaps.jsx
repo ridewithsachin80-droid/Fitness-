@@ -100,7 +100,13 @@ export default function TodaysGaps() {
                 {m.gaps.map(g => (
                   <span key={g.key}
                     className={`text-[10px] font-bold rounded-full px-2 py-0.5 border ${SEVERITY[g.severity]}`}>
-                    {GAP_LABEL[g.key] || g.label}
+                    {/* Prefer the SERVER's label. It is computed per member and
+                        carries the real number — "86 days no log" — which is the
+                        thing a coach reacts to. GAP_LABEL is a static fallback
+                        for a key the client doesn't know yet; taking it first
+                        threw away the number and rendered the dormant case as
+                        "Not logged in days", which reads like a broken template. */}
+                    {g.label || GAP_LABEL[g.key] || g.key}
                   </span>
                 ))}
               </div>

@@ -20,6 +20,7 @@ import { parseVoiceSet } from '../utils/voiceSetParser';
 import { CARDIO_TYPES, cardioTypeById, sessionEnergy, distanceFrom } from '../utils/exerciseCalories';
 import { useLogStore } from '../store/logStore';
 import { useAIChat } from './AIChatLog';
+import { plural } from '../constants';
 
 function getSpeechRecognition() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -645,7 +646,7 @@ export default function WorkoutLog({ date }) {
                 {e.sets > 0 && (
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-[#8e8e9a]">
-                      Strength · {e.sets} set{e.sets > 1 ? 's' : ''} · {e.volumeKg.toLocaleString()} kg lifted
+                      Strength · {e.sets} {plural(e.sets, 'set')} · {e.volumeKg.toLocaleString()} kg lifted
                     </span>
                     <span className="font-bold text-[#d8d8de]">{e.strengthKcal} kcal</span>
                   </div>

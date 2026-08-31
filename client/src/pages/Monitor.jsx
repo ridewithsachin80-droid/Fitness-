@@ -18,7 +18,7 @@ import LabResults from '../components/LabResults';
 import MuscleCoverage from '../components/MuscleCoverage';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
 import { getActiveProgram } from '../api/programs';
-import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS } from '../constants';
+import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS, plural } from '../constants';
 import { useSync } from '../hooks/useSync';
 import { useAuthStore } from '../store/authStore';
 
@@ -149,7 +149,7 @@ function AddLabModal({ memberId, onClose, onAdded }) {
         ))}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] font-bold rounded-xl transition-colors disabled:opacity-50">
+          className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] font-bold rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Add Lab Value'}
         </button>
       </div>
@@ -1372,7 +1372,7 @@ export default function Coach() {
                     <div className="text-left">
                       <div className="text-sm font-bold text-stone-700">{formatDate(d)}</div>
                       <div className="text-[11px] text-stone-400">
-                        {rows.length} result{rows.length > 1 ? 's' : ''}
+                        {rows.length} {plural(rows.length, 'result')}
                         {flagged > 0 && <span className="text-amber-600"> · {flagged} outside range</span>}
                         {rows[0]?.lab_name && ` · ${rows[0].lab_name}`}
                       </div>

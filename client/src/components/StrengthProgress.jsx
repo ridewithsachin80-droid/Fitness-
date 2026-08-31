@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { Card, SectionTitle } from './UI';
 import { getLoggedExercises, getExerciseHistory } from '../api/workouts';
+import { plural } from '../constants';
 
 // Epley formula: estimated 1-rep-max from any weight × reps combination.
 // Deliberately not exact for any one rep range — its value is comparability
@@ -141,7 +142,7 @@ export default function StrengthProgress() {
         <SectionTitle icon="💪">Strength Progress</SectionTitle>
         {prCount > 0 && (
           <span className="text-xs font-bold text-[#d4af6a] bg-[rgba(212,175,106,0.10)] px-2 py-0.5 rounded-full">
-            🏆 {prCount} PR{prCount > 1 ? 's' : ''}
+            🏆 {prCount} {plural(prCount, 'PR')}
           </span>
         )}
       </div>

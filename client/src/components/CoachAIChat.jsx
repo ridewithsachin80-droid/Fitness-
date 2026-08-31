@@ -22,6 +22,7 @@ import { create } from 'zustand';
 import api from '../api/client';
 import { haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
+import { plural } from '../constants';
 
 export const useCoachAI = create((set) => ({
   open: false,
@@ -277,7 +278,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                           className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#D4AF37] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#D4AF37] active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
                           {applying
                             ? 'Applying…'
-                            : `Apply changes for ${m.actions.filter(a => a.on && a.resolved).length} member${m.actions.filter(a => a.on && a.resolved).length > 1 ? 's' : ''}`}
+                            : `Apply changes for ${m.actions.filter(a => a.on && a.resolved).length} ${plural(m.actions.filter(a => a.on && a.resolved).length, 'member')}`}
                         </button>
                       )}
 

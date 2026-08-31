@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getMembers }  from '../api/logs';
-import { today, formatDate } from '../constants';
+import { today, formatDate, plural } from '../constants';
 import { Card, SectionTitle, OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
 import TodaysGaps from '../components/TodaysGaps';
@@ -95,7 +95,7 @@ export default function MemberList() {
             <div>
               <p className="text-xs font-bold tracking-widest uppercase text-[#4e4e5c] mb-0.5">Coach</p>
               <h1 className="font-display text-xl font-medium">{user?.name}</h1>
-              <p className="text-[#4e4e5c] text-xs mt-0.5">{members.length} member{members.length !== 1 ? 's' : ''} assigned</p>
+              <p className="text-[#4e4e5c] text-xs mt-0.5">{members.length} {plural(members.length, 'member')} assigned</p>
             </div>
             <button onClick={() => navigate('/settings')}
               className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">

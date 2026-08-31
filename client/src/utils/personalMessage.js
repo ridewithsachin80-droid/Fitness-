@@ -252,7 +252,10 @@ export function combinedGapMessage(member, gapKeys = [], daysSince = null) {
 
 /** Human label for a gap key, for buttons and lists. */
 export const GAP_LABEL = {
-  dormant: 'Not logged in days',
+  // Fallback only — the server sends a per-member label carrying the real
+  // number ("86 days no log"). This is what renders if that is ever missing,
+  // so it must still read as a complete sentence on its own.
+  dormant: 'No log for days',
   nothing: 'Nothing logged', food: 'No food', weight: 'No weight',
   dinner: 'No dinner', water: 'Low water', activity: 'No activity',
   acv: 'ACV missed', supplements: 'No supplements', sleep: 'No sleep times',

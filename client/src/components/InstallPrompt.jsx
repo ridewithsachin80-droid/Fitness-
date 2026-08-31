@@ -100,7 +100,7 @@ export default function InstallPrompt() {
       {!isIOS && (
         <button
           onClick={install}
-          className="px-3 py-2 bg-[#D4AF37] hover:bg-[#e0c98a] text-[#08052a] text-xs
+          className="px-3 py-2 bg-[#D4AF37] hover:bg-[#e0c98a] text-[#121316] text-xs
             font-bold rounded-xl flex-shrink-0 transition-colors"
         >
           Install

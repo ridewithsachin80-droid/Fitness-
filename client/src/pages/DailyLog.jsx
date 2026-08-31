@@ -7,7 +7,7 @@ import { getMyProfile } from '../api/logs';
 import {
   today, formatDate, istDate, istDaysAgo,
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
-  calcCompliance, getNutrition, RDA_TARGETS,
+  calcCompliance, getNutrition, RDA_TARGETS, plural,
 } from '../constants';
 import { Card, SectionTitle, OfflineBanner, MemberBottomNav } from '../components/UI';
 import FoodLog       from '../components/FoodLog';
@@ -1204,8 +1204,8 @@ export default function DailyLog() {
               const acvLeft = activeACV.filter(a => !log.acv?.[a.id]).length;
               const supLeft = activeSupplements.filter(x => !log.supplements?.[x.id]).length;
               if (actLeft) pending.push(`${actLeft} ${terms.activities.toLowerCase()}`);
-              if (acvLeft) pending.push(`${acvLeft} ACV dose${acvLeft > 1 ? 's' : ''}`);
-              if (supLeft) pending.push(`${supLeft} supplement${supLeft > 1 ? 's' : ''}`);
+              if (acvLeft) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
+              if (supLeft) pending.push(`${supLeft} ${plural(supLeft, 'supplement')}`);
               if (!log.sleep?.bedtime || !log.sleep?.waketime) pending.push('sleep times');
 
               const read = dailyRead({
@@ -2024,7 +2024,7 @@ export default function DailyLog() {
             <h2 className="text-xl font-bold text-[#FFFFFF] mb-2">{milestone.title}</h2>
             <p className="text-sm text-[#6a6a78] leading-relaxed mb-6">{milestone.body}</p>
             <button onClick={() => setMilestone(null)}
-              className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#08052a] font-bold rounded-2xl transition-colors active:scale-95">
+              className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] font-bold rounded-2xl transition-colors active:scale-95">
               Let's keep going! 💪
             </button>
           </div>

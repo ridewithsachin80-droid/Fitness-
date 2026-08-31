@@ -14,6 +14,7 @@ import { sessionEnergy } from '../utils/exerciseCalories';
 import MetabolicInsight from '../components/MetabolicInsight';
 import LabResults from '../components/LabResults';
 import api from '../api/client';
+import { plural } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -88,7 +89,7 @@ function PortionMemory() {
                 <span className="text-[12px] font-bold text-[#D4AF37]">
                   {p.grams}g
                   <span className="text-[10px] font-medium text-[#7E8596] ml-1.5">
-                    {p.samples} correction{p.samples > 1 ? 's' : ''}
+                    {p.samples} {plural(p.samples, 'correction')}
                   </span>
                 </span>
               </div>
