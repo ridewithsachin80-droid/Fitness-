@@ -162,7 +162,7 @@ export default function Login() {
   }, []);
 
   const pinLogin = async () => {
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setNotice('');
     try {
       const { data } = await axios.post('/api/auth/pin-login', { phone, pin }, { withCredentials: true });
       login(data.accessToken, data.user);
@@ -177,7 +177,7 @@ export default function Login() {
   };
 
   const coachLogin = async () => {
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setNotice('');
     try {
       const { data } = await axios.post('/api/auth/login', { email, password }, { withCredentials: true });
       login(data.accessToken, data.user);

@@ -361,7 +361,15 @@ export default function WorkoutLog({ date }) {
   const setVoice = useVoiceComposer({
     onSend: (text) => {
       const exerciseId = voiceTargetRef.current;
+      // Whatever happens next, this capture is finished — clear the highlight
+      // and the target. Under the old Web Speech flow this was reset when
+      // listenOnce() resolved; when that went away the reset went with it, and
+      // the highlighted "Say a set" row would have stayed lit forever after
+      // the first use.
+      setListeningSetKey(null);
+      voiceTargetRef.current = null;
       if (!exerciseId) return;
+
       const { sets, reps, weight_kg } = parseVoiceSet(text || '');
       if (reps === null) {
         // Inline, not alert(). An alert is modal, loses the transcript, and on
@@ -381,6 +389,13 @@ export default function WorkoutLog({ date }) {
   });
 
   const voiceLogSet = (exerciseId) => {
+    // Tapping the row that is already capturing cancels it, rather than
+    // silently re-arming the same target.
+    if (voiceTargetRef.current === exerciseId && listeningSetKey === exerciseId) {
+      voiceTargetRef.current = null;
+      setListeningSetKey(null);
+      return;
+    }
     voiceTargetRef.current = exerciseId;
     setSetVoiceError('');
     setListeningSetKey(exerciseId);

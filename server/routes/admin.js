@@ -331,7 +331,7 @@ router.post(['/coaches', '/monitors'], async (req, res) => {
       `INSERT INTO users (name, email, role, password) VALUES ($1,$2,$3,$4) RETURNING id, name, email, role`,
       [name, email, userRole, hash]
     );
-    audit(req.user, 'monitor_created', result.rows[0].id, name,
+    audit(req.user, 'coach_created', result.rows[0].id, name,
       `Created ${userRole} account for ${name} (${email})`);
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -364,7 +364,7 @@ router.post('/assign', async (req, res) => {
       [[monitor_id, patient_id]]
     );
     const nameMap = Object.fromEntries(names.rows.map(r => [r.id, r.name]));
-    audit(req.user, 'monitor_assigned', patient_id, nameMap[patient_id],
+    audit(req.user, 'coach_assigned', patient_id, nameMap[patient_id],
       `Assigned ${nameMap[patient_id] || patient_id} to monitor ${nameMap[monitor_id] || monitor_id}`);
     res.json({ assigned: true });
   } catch (err) {
@@ -529,7 +529,7 @@ router.patch(['/coaches/:id/toggle', '/monitors/:id/toggle'], async (req, res) =
       [req.params.id]
     );
     const u = result.rows[0];
-    audit(req.user, 'monitor_toggled', u.id, u.name,
+    audit(req.user, 'coach_toggled', u.id, u.name,
       `${u.active ? 'Activated' : 'Deactivated'} monitor ${u.name}`);
     res.json(u);
   } catch (err) {
