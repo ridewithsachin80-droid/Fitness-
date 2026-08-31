@@ -183,7 +183,7 @@ if [ "$DB_ONLY" = "1" ]; then
 fi
 
 # ── Run every suite ──────────────────────────────────────────────────────────
-LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions test-coach-program"
+LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions test-coach-program test-coach-questions"
 DB_SUITES="test-journey test-gaps test-labs test-macrolab test-lab-insight"
 
 failed=0

@@ -1572,6 +1572,189 @@ function getISTDate() {
 }
 
 // Members visible to this coach: admin → all active patients, monitor → assigned
+// ── Coach questions ──────────────────────────────────────────────────────────
+// The coach AI could only ever CHANGE things. Asked "how many calories has
+// Padmini eaten today", it had no matching operation, so it fell back to "what
+// would you like to update?" — and kept doing that however the coach rephrased
+// it. Every read had to be done by leaving the chat and opening the member.
+//
+// These build the same kind of real-data snapshot the member chat already uses
+// for its own questions, and hand it to the model to phrase. Numbers are
+// computed here; the model only writes the sentence.
+
+/** One member's day + week, for questions naming a specific member. */
+async function buildCoachMemberContext(member) {
+  const today = getISTDate();
+  const [{ rows: logs }, { rows: prof }] = await Promise.all([
+    pool.query(
+      `SELECT log_date, weight_kg, water_ml, sleep, activities, acv, supplements, food_items
+         FROM daily_logs WHERE patient_id = $1 AND log_date > ($2::date - 7)
+        ORDER BY log_date DESC`, [member.id, today]),
+    pool.query(
+      `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
+              target_weight, start_weight,
+              protocol_activities, protocol_acv, protocol_supplements
+         FROM patient_profiles WHERE user_id = $1`, [member.id]),
+  ]);
+
+  const t = logs.find(l => String(l.log_date).slice(0, 10) === today) || null;
+  const p = prof[0] || {};
+  const totals = computeDayTotals(t?.food_items);
+  const doneKeys = (obj) => Object.entries(obj || {}).filter(([, v]) => v).map(([k]) => k);
+
+  const assigned = (v) => (Array.isArray(v) ? v : []);
+  const idOf     = (i) => (typeof i === 'string' ? i : i.id);
+  const labelOf  = (i) => (typeof i === 'string' ? i : (i.label || i.id));
+
+  /**
+   * Split an assigned protocol list into done / pending, both as LABELS.
+   *
+   * The done side previously printed raw ids straight off the log ("walk")
+   * while the pending side printed labels ("Morning Walk"), so a summary read
+   * as "done: walk, still to do: Yoga, Gym" — the same protocol described two
+   * different ways in one sentence. Both sides now resolve through the
+   * assigned list, with the raw id as a fallback for anything ticked that is
+   * no longer assigned.
+   */
+  const split = (list, ticked) => {
+    const items = assigned(list);
+    const byId  = new Map(items.map(i => [idOf(i), labelOf(i)]));
+    const done    = ticked.map(k => byId.get(k) || k);
+    const pending = items.filter(i => !ticked.includes(idOf(i))).map(labelOf);
+    return { done, pending, total: items.length };
+  };
+
+  const lines = [`Member: ${member.name}`, `Date: ${today} (IST)`];
+
+  if (t) {
+    const act = split(p.protocol_activities,  doneKeys(t.activities));
+    const acv = split(p.protocol_acv,         doneKeys(t.acv));
+    const sup = split(p.protocol_supplements, doneKeys(t.supplements));
+
+    const waterLeft = p.water_target
+      ? Math.max(0, p.water_target - (t.water_ml || 0)) : null;
+    const kcalLeft = p.macro_kcal ? p.macro_kcal - totals.cal : null;
+
+    lines.push(`Today so far:`);
+    lines.push(`  Calories eaten: ${totals.cal} kcal (P ${totals.pro}g · C ${totals.carb}g · F ${totals.fat}g)` +
+      (totals.unknown ? ` — plus ${totals.unknown} item(s) with no nutrition data, not counted` : ''));
+    if (kcalLeft !== null) {
+      lines.push(`  Calories remaining: ${kcalLeft >= 0 ? `${kcalLeft} kcal left of ${p.macro_kcal}` : `${Math.abs(kcalLeft)} kcal OVER the ${p.macro_kcal} target`}`);
+    }
+    lines.push(`  Food logged: ${(t.food_items || []).map(f => `${f.name} ${f.grams}g`).join(', ') || 'nothing'}`);
+    lines.push(`  Weight: ${t.weight_kg ? t.weight_kg + ' kg' : 'not logged today'}`);
+    lines.push(`  Water drunk: ${t.water_ml || 0} ml${p.water_target ? ` of ${p.water_target} ml target` : ' (no target set)'}`);
+    if (waterLeft !== null) lines.push(`  Water remaining: ${waterLeft} ml`);
+    lines.push(`  Activities done (${act.done.length}/${act.total}): ${act.done.join(', ') || 'none'}`);
+    lines.push(`  Activities still to do: ${act.pending.join(', ') || 'none'}`);
+    lines.push(`  ACV done (${acv.done.length}/${acv.total}): ${acv.done.join(', ') || 'none'}`);
+    lines.push(`  ACV still to do: ${acv.pending.join(', ') || 'none'}`);
+    lines.push(`  Supplements taken (${sup.done.length}/${sup.total}): ${sup.done.join(', ') || 'none'}`);
+    lines.push(`  Supplements still to take: ${sup.pending.join(', ') || 'none'}`);
+    lines.push(`  Sleep: ${t.sleep?.bedtime && t.sleep?.waketime ? `${t.sleep.bedtime}-${t.sleep.waketime}` : 'not logged'}`);
+
+    // Every subtraction the coach might ask for is done HERE. Asking a model to
+    // work out what is left from two lists, or to subtract a total from a
+    // target, is exactly where wrong numbers come from.
+    lines.push(`  STILL PENDING today: activities ${act.pending.join(', ') || 'none'}; ` +
+               `ACV ${acv.pending.join(', ') || 'none'}; ` +
+               `supplements ${sup.pending.join(', ') || 'none'}` +
+               (waterLeft !== null ? `; water ${waterLeft} ml` : ''));
+  } else {
+    lines.push(`Today: nothing logged yet.`);
+    // Even with nothing logged, "what's left" is the whole assigned protocol —
+    // otherwise the answer would be "nothing pending", which is the opposite
+    // of the truth.
+    const all = (list) => assigned(list).map(labelOf).join(', ') || 'none assigned';
+    lines.push(`  Everything is still outstanding: activities ${all(p.protocol_activities)}; ` +
+               `ACV ${all(p.protocol_acv)}; supplements ${all(p.protocol_supplements)}` +
+               (p.water_target ? `; water ${p.water_target} ml` : ''));
+  }
+
+  const tg = [];
+  if (p.macro_kcal)    tg.push(`calorie target ${p.macro_kcal} kcal`);
+  if (p.macro_pro)     tg.push(`protein target ${p.macro_pro} g`);
+  if (p.macro_carb)    tg.push(`carb target ${p.macro_carb} g`);
+  if (p.macro_fat)     tg.push(`fat target ${p.macro_fat} g`);
+  if (p.target_weight) tg.push(`goal weight ${p.target_weight} kg (started ${p.start_weight || '?'} kg)`);
+  if (tg.length) lines.push(`Targets: ${tg.join(', ')}`);
+
+  const week = logs
+    .filter(l => String(l.log_date).slice(0, 10) !== today)
+    .map(l => {
+      const d = computeDayTotals(l.food_items);
+      return `  ${String(l.log_date).slice(0, 10)}: ${d.cal} kcal${l.weight_kg ? `, weight ${l.weight_kg} kg` : ''}`;
+    });
+  lines.push(week.length ? `Previous days (last 7):\n${week.join('\n')}` : `No logs in the previous 7 days.`);
+
+  return lines.join('\n');
+}
+
+/** Roster-wide snapshot, for "who hasn't logged today" style questions. */
+async function buildCoachRosterContext(members) {
+  const today = getISTDate();
+  const ids = members.map(m => m.id);
+  const { rows } = await pool.query(
+    `SELECT patient_id, weight_kg, water_ml, food_items, compliance_pct
+       FROM daily_logs WHERE patient_id = ANY($1::int[]) AND log_date = $2::date`,
+    [ids, today]);
+  const byId = new Map(rows.map(r => [r.patient_id, r]));
+
+  const lines = [`Date: ${today} (IST)`, `Coach's members (${members.length}):`];
+  for (const m of members) {
+    const r = byId.get(m.id);
+    if (!r) { lines.push(`  ${m.name}: nothing logged today`); continue; }
+    const d = computeDayTotals(r.food_items);
+    const bits = [];
+    bits.push(`${d.cal} kcal`);
+    if (r.weight_kg) bits.push(`weight ${r.weight_kg} kg`);
+    if (r.water_ml)  bits.push(`${r.water_ml} ml water`);
+    if (r.compliance_pct != null) bits.push(`${r.compliance_pct}% compliance`);
+    lines.push(`  ${m.name}: ${bits.join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
+function buildCoachAnswerPrompt(question, context, memberName) {
+  return `You are the assistant for a fitness COACH in India. The coach asked:
+"${question}"
+
+Answer USING ONLY the data below. It is real, computed from logs. Never invent
+or estimate a number that is not there. If the data needed is missing, say so
+plainly and say what the member would need to log.
+
+DATA${memberName ? ` (${memberName})` : ''}:
+${context}
+
+RULES:
+- Numbers exactly as given above. Never calculate anything yourself — every
+  remaining/pending figure the coach could want is already computed for you.
+- No markdown, no emojis, no ** bold **.
+- You are talking to the coach about their member, so be direct and clinical
+  about the numbers. No medical diagnosis.
+
+LENGTH — match the question:
+- A SPECIFIC question ("how many calories", "how much water left", "what
+  activities are pending") gets 1-3 short sentences leading with that figure.
+- A SUMMARY / RUNDOWN / "everything" / "how is she doing today" / "full update"
+  question gets the whole day, as short labelled lines in this order, skipping
+  any line with no data:
+
+    Food — <kcal> kcal eaten (P/C/F), <X> left of <target>
+    Ate — <items>
+    Water — <drunk> of <target>, <remaining> to go
+    Activities — done: <list> · left: <list>
+    ACV — done: <list> · left: <list>
+    Supplements — taken: <list> · left: <list>
+    Weight — <kg>
+    Sleep — <times>
+
+  One line each, no preamble, no closing summary sentence. If something is
+  fully done say "all done"; if nothing is logged for it say "nothing logged".
+
+Return ONLY the answer text, nothing else.`;
+}
+
 async function coachMembers(user) {
   if (user.role === 'admin') {
     const { rows } = await pool.query(
@@ -1712,12 +1895,31 @@ RULES:
    member_name exactly as the coach wrote it — the server will flag it.
 4. Only include operations the coach actually asked for. Never invent.
 5. reply: ONE short sentence summarising the commands. No emojis.
-6. If nothing actionable, return empty commands and a reply asking what they'd
-   like to change.
+
+6. QUESTIONS. If the coach is ASKING about a member rather than instructing a
+   change — "how many calories has Padmini eaten today", "what has she logged",
+   "who hasn't logged today", "is Bujju hitting his protein", "how much weight
+   has Asha lost" — do NOT try to turn it into a command and do NOT ask what
+   they want to update. Set "question" and return EMPTY commands:
+
+     "question": { "member_name": "Padmini", "text": "how many calories today" }
+
+   · member_name: the member being asked about, or null for a roster-wide
+     question ("who hasn't logged today", "who is behind this week").
+   · text: the coach's question, lightly cleaned up. Keep their intent.
+   · The server answers it from that member's REAL logged data. You are not
+     answering it here, so never guess a number in "reply".
+   · A message can be a question OR commands, not both. If it clearly does both
+     ("how much has she lost, and set her water to 4L"), take the COMMANDS and
+     mention the question in reply — the coach can ask it again.
+
+7. If nothing actionable and it is not a question, return empty commands and a
+   reply asking what they'd like to change.
 
 Return ONLY a raw JSON object, no markdown fences:
 {
   "reply": "Setting Bujju's water target to 4L and adding an evening walk.",
+  "question": null,
   "commands": [
     {
       "member_name": "Bujju",
@@ -1926,6 +2128,52 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
       await callAI(buildCoachPrompt(cleanMsg, members, memberStats, contextMember));
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(jsonText);
+
+    // ── Questions are answered, not parsed ───────────────────────────────────
+    // Returned as { answer } with no actions, so the client renders a plain
+    // reply instead of a preview card with an Apply button — there is nothing
+    // to apply.
+    if (parsed.question && String(parsed.question.text || '').trim()) {
+      const qText = String(parsed.question.text).trim().slice(0, 300);
+      const qName = parsed.question.member_name
+        ? String(parsed.question.member_name).trim()
+        : null;
+
+      // Same loose resolution the commands use, so "padmini" finds
+      // "Mrs. Padmini". Scoped to this coach's own members throughout, so a
+      // question can never reach someone else's member.
+      let qMember = null;
+      if (qName && qName.toUpperCase() !== 'ALL') {
+        const lc = qName.toLowerCase();
+        qMember =
+          members.find(m => m.name.toLowerCase() === lc) ||
+          members.find(m => m.name.toLowerCase().includes(lc) || lc.includes(m.name.toLowerCase())) ||
+          null;
+      }
+      // A question with no name, asked from a member's page, is about them.
+      if (!qMember && !qName && contextMember) qMember = contextMember;
+
+      if (qName && qName.toUpperCase() !== 'ALL' && !qMember) {
+        return res.json({
+          reply: `I couldn't find a member called "${qName}" in your list.`,
+          actions: [], answer: null,
+        });
+      }
+
+      const context = qMember
+        ? await buildCoachMemberContext(qMember)
+        : await buildCoachRosterContext(members);
+
+      const { text: answerText } = await callAI(
+        buildCoachAnswerPrompt(qText, context, qMember?.name || null));
+
+      return res.json({
+        reply: null,
+        actions: [],
+        answer: String(answerText || '').trim().slice(0, 1200),
+        answered_for: qMember?.name || null,
+      });
+    }
 
     const commands = (Array.isArray(parsed.commands) ? parsed.commands : []).slice(0, 15);
     const actions = [];
@@ -2472,3 +2720,7 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
 
 module.exports = router;
 module.exports.callAI = callAI;   // reused by weeklyReport.js — same providers, same fallback
+// Exported for tests: the coach-question snapshot is the thing that decides
+// whether an answer can be complete, so it needs to be inspectable directly.
+module.exports.buildCoachMemberContext = buildCoachMemberContext;
+module.exports.buildCoachAnswerPrompt  = buildCoachAnswerPrompt;

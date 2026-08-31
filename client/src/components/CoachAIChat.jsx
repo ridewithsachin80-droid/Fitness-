@@ -106,6 +106,18 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         message: text,
         context_member_id: contextMember?.id ?? null,
       });
+      // A question comes back as { answer } with no actions. Rendered as a
+      // plain reply — there is nothing to apply, so showing a preview card
+      // with an Apply button would be meaningless.
+      if (data.answer) {
+        setMessages(m => [...m, {
+          role: 'ai',
+          text: data.answer,
+          isAnswer: true,
+          answeredFor: data.answered_for || null,
+        }]);
+        return;
+      }
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
@@ -217,8 +229,17 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                 <div className={`text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
                   m.error
                     ? 'bg-red-500/[0.08] border-red-500/25 text-red-300'
-                    : 'bg-[#16161c] border-white/[0.07] text-[#d8d8de]'
+                    : m.isAnswer
+                      // Answers are gold-tinted so a READ is visually distinct
+                      // from a pending CHANGE. Nothing here needs applying.
+                      ? 'bg-[rgba(212,175,55,0.06)] border-[rgba(212,175,55,0.20)] text-[#F0E2B6]'
+                      : 'bg-[#16161c] border-white/[0.07] text-[#d8d8de]'
                 }`}>
+                  {m.isAnswer && m.answeredFor && (
+                    <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-[#D4AF37] mb-1.5">
+                      {m.answeredFor}
+                    </p>
+                  )}
                   <p className="leading-relaxed">{m.text}</p>
 
                   {/* Per-member action cards */}
@@ -348,7 +369,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-              placeholder="Eg: Set Bujju water target 4L, add evening walk"
+              placeholder="Ask or instruct — &quot;how many calories has Padmini eaten?&quot;"
               className="flex-1 bg-transparent text-sm text-white placeholder-[#4e4e5c] py-3 outline-none min-w-0"
             />
             {vc.micButton}
