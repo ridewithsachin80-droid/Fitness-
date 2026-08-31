@@ -1344,6 +1344,26 @@ router.post('/parse', async (req, res) => {
     // client's preview card hidden — the member just sees the answer.
     if (parsed.question && typeof parsed.question === 'string') {
       try {
+        // A whole-day summary gets the SAME structured card the coach sees.
+        // It is the same data either way, and the member was getting it as a
+        // paragraph purely because this path predates the card. Detected here
+        // rather than in the prompt so the member parse contract is untouched.
+        if (/\b(summar(y|ise|ize)|rundown|full update|overview|how('s| is| am) (my|i) doing|whole day|entire day|my day (today|so far))\b/i
+              .test(parsed.question)) {
+          const { rows: me } = await pool.query(
+            'SELECT id, name FROM users WHERE id = $1', [req.user.id]);
+          if (me[0]) {
+            return res.json({
+              reply: null,
+              summary: await buildCoachSummary(me[0]),
+              question: true,
+              weight_kg: null, activities: [], acv: [], supplements: [],
+              water_ml_add: null, sleep: null, foods: [], workouts: [],
+              totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
+            });
+          }
+        }
+
         const dayContext = await buildDayContext(req.user.id, ctx);
         const { text: answerText, provider: ap, model: am } =
           await callAI(buildAnswerPrompt(parsed.question.slice(0, 300), dayContext));
@@ -1593,43 +1613,22 @@ async function buildCoachMemberContext(member) {
     pool.query(
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
               target_weight, start_weight,
-              protocol_activities, protocol_acv, protocol_supplements
+              protocol_activities, protocol_acv, protocol_supplements,
+              custom_activities, custom_acv, custom_supplements, item_overrides
          FROM patient_profiles WHERE user_id = $1`, [member.id]),
   ]);
 
   const t = logs.find(l => String(l.log_date).slice(0, 10) === today) || null;
   const p = prof[0] || {};
   const totals = computeDayTotals(t?.food_items);
-  const doneKeys = (obj) => Object.entries(obj || {}).filter(([, v]) => v).map(([k]) => k);
-
-  const assigned = (v) => (Array.isArray(v) ? v : []);
-  const idOf     = (i) => (typeof i === 'string' ? i : i.id);
-  const labelOf  = (i) => (typeof i === 'string' ? i : (i.label || i.id));
-
-  /**
-   * Split an assigned protocol list into done / pending, both as LABELS.
-   *
-   * The done side previously printed raw ids straight off the log ("walk")
-   * while the pending side printed labels ("Morning Walk"), so a summary read
-   * as "done: walk, still to do: Yoga, Gym" — the same protocol described two
-   * different ways in one sentence. Both sides now resolve through the
-   * assigned list, with the raw id as a fallback for anything ticked that is
-   * no longer assigned.
-   */
-  const split = (list, ticked) => {
-    const items = assigned(list);
-    const byId  = new Map(items.map(i => [idOf(i), labelOf(i)]));
-    const done    = ticked.map(k => byId.get(k) || k);
-    const pending = items.filter(i => !ticked.includes(idOf(i))).map(labelOf);
-    return { done, pending, total: items.length };
-  };
-
   const lines = [`Member: ${member.name}`, `Date: ${today} (IST)`];
 
   if (t) {
-    const act = split(p.protocol_activities,  doneKeys(t.activities));
-    const acv = split(p.protocol_acv,         doneKeys(t.acv));
-    const sup = split(p.protocol_supplements, doneKeys(t.supplements));
+    // Same resolver the summary card uses, so a prose answer and the card can
+    // never name the same item differently.
+    const act = resolveProtocolGroup('activities',  p, t.activities);
+    const acv = resolveProtocolGroup('acv',         p, t.acv);
+    const sup = resolveProtocolGroup('supplements', p, t.supplements);
 
     const waterLeft = p.water_target
       ? Math.max(0, p.water_target - (t.water_ml || 0)) : null;
@@ -1646,28 +1645,28 @@ async function buildCoachMemberContext(member) {
     lines.push(`  Water drunk: ${t.water_ml || 0} ml${p.water_target ? ` of ${p.water_target} ml target` : ' (no target set)'}`);
     if (waterLeft !== null) lines.push(`  Water remaining: ${waterLeft} ml`);
     lines.push(`  Activities done (${act.done.length}/${act.total}): ${act.done.join(', ') || 'none'}`);
-    lines.push(`  Activities still to do: ${act.pending.join(', ') || 'none'}`);
+    lines.push(`  Activities still to do: ${act.left.join(', ') || 'none'}`);
     lines.push(`  ACV done (${acv.done.length}/${acv.total}): ${acv.done.join(', ') || 'none'}`);
-    lines.push(`  ACV still to do: ${acv.pending.join(', ') || 'none'}`);
+    lines.push(`  ACV still to do: ${acv.left.join(', ') || 'none'}`);
     lines.push(`  Supplements taken (${sup.done.length}/${sup.total}): ${sup.done.join(', ') || 'none'}`);
-    lines.push(`  Supplements still to take: ${sup.pending.join(', ') || 'none'}`);
+    lines.push(`  Supplements still to take: ${sup.left.join(', ') || 'none'}`);
     lines.push(`  Sleep: ${t.sleep?.bedtime && t.sleep?.waketime ? `${t.sleep.bedtime}-${t.sleep.waketime}` : 'not logged'}`);
 
     // Every subtraction the coach might ask for is done HERE. Asking a model to
     // work out what is left from two lists, or to subtract a total from a
     // target, is exactly where wrong numbers come from.
-    lines.push(`  STILL PENDING today: activities ${act.pending.join(', ') || 'none'}; ` +
-               `ACV ${acv.pending.join(', ') || 'none'}; ` +
-               `supplements ${sup.pending.join(', ') || 'none'}` +
+    lines.push(`  STILL PENDING today: activities ${act.left.join(', ') || 'none'}; ` +
+               `ACV ${acv.left.join(', ') || 'none'}; ` +
+               `supplements ${sup.left.join(', ') || 'none'}` +
                (waterLeft !== null ? `; water ${waterLeft} ml` : ''));
   } else {
     lines.push(`Today: nothing logged yet.`);
     // Even with nothing logged, "what's left" is the whole assigned protocol —
     // otherwise the answer would be "nothing pending", which is the opposite
     // of the truth.
-    const all = (list) => assigned(list).map(labelOf).join(', ') || 'none assigned';
-    lines.push(`  Everything is still outstanding: activities ${all(p.protocol_activities)}; ` +
-               `ACV ${all(p.protocol_acv)}; supplements ${all(p.protocol_supplements)}` +
+    const all = (g) => resolveProtocolGroup(g, p, null).left.join(', ') || 'none assigned';
+    lines.push(`  Everything is still outstanding: activities ${all('activities')}; ` +
+               `ACV ${all('acv')}; supplements ${all('supplements')}` +
                (p.water_target ? `; water ${p.water_target} ml` : ''));
   }
 
@@ -1729,6 +1728,56 @@ async function buildCoachRosterContext(members) {
  * model entirely and the client renders real fields. Specific questions still
  * go through the model, because phrasing genuinely helps there.
  */
+/**
+ * Resolve one protocol group into human labels: what is done, what is left.
+ *
+ * Shared by the summary card and the prose-question snapshot. It lived inside
+ * the summary first, and the snapshot kept its own copy that read `.label` off
+ * a string — so the card was fixed while "what's left for Padmini" still
+ * answered "steps1, steps3". One implementation, both callers.
+ *
+ * Two things it has to get right:
+ *
+ * 1. LABELS. protocol_* stores bare catalog IDS ('walk', 'acv1', 'b12').
+ *    Labels live in CATALOG for standard items and in custom_* for coach-added
+ *    ones ({ id: 'cx_1787…', label: 'Creatine' }), with item_overrides able to
+ *    rename either. Without this the screen showed "cx_17878202035850".
+ *
+ * 2. NULL MEANS ALL. protocol_* = null is "everything assigned", not "nothing"
+ *    — see mergeGroup, which materialises the full list before removing.
+ *    Treating null as empty made a member on the default protocol look like
+ *    they had nothing to do.
+ *
+ * Mirrors the client's own resolution in DailyLog, so the coach's view and the
+ * member's screen name the same item the same way.
+ */
+function resolveProtocolGroup(group, profile, ticksObj) {
+  const overrides  = profile.item_overrides || {};
+  const customList = Array.isArray(profile[`custom_${group}`]) ? profile[`custom_${group}`] : [];
+  const protoList  = profile[`protocol_${group}`];
+
+  const all = [...CATALOG[group], ...customList].map((item) => {
+    const ov = overrides[item.id];
+    return { id: item.id, label: (ov && ov.label) || item.label || item.id };
+  });
+
+  const active = Array.isArray(protoList)
+    ? all.filter(i => protoList.includes(i.id))
+    : all;                       // null / undefined => all assigned
+
+  const on = Object.entries(ticksObj || {}).filter(([, v]) => v).map(([k]) => k);
+  const byId = new Map(all.map(i => [i.id, i.label]));
+
+  return {
+    // Ticks only count for items still assigned — one the coach removed after
+    // the member ticked it should not inflate "3/2 done".
+    done:  on.filter(k => active.some(i => i.id === k)).map(k => byId.get(k) || k),
+    left:  active.filter(i => !on.includes(i.id)).map(i => i.label),
+    total: active.length,
+    assigned: active.length > 0,
+  };
+}
+
 async function buildCoachSummary(member) {
   const today = getISTDate();
   const [{ rows: logs }, { rows: prof }] = await Promise.all([
@@ -1737,32 +1786,14 @@ async function buildCoachSummary(member) {
          FROM daily_logs WHERE patient_id = $1 AND log_date = $2::date`, [member.id, today]),
     pool.query(
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
-              protocol_activities, protocol_acv, protocol_supplements
+              protocol_activities, protocol_acv, protocol_supplements,
+              custom_activities, custom_acv, custom_supplements, item_overrides
          FROM patient_profiles WHERE user_id = $1`, [member.id]),
   ]);
 
   const t = logs[0] || null;
   const p = prof[0] || {};
   const totals = computeDayTotals(t?.food_items);
-
-  const assigned = (v) => (Array.isArray(v) ? v : []);
-  const idOf     = (i) => (typeof i === 'string' ? i : i.id);
-  const labelOf  = (i) => (typeof i === 'string' ? i : (i.label || i.id));
-  const ticked   = (obj) => Object.entries(obj || {}).filter(([, v]) => v).map(([k]) => k);
-
-  const split = (list, obj) => {
-    const items = assigned(list);
-    const on    = ticked(obj);
-    const byId  = new Map(items.map(i => [idOf(i), labelOf(i)]));
-    return {
-      done:    on.map(k => byId.get(k) || k),
-      left:    items.filter(i => !on.includes(idOf(i))).map(labelOf),
-      total:   items.length,
-      // Distinguishes "nothing assigned" from "assigned but none done" — they
-      // look identical as "none" and mean opposite things to a coach.
-      assigned: items.length > 0,
-    };
-  };
 
   const kcalLeft  = p.macro_kcal ? p.macro_kcal - totals.cal : null;
   const waterLeft = p.water_target ? Math.max(0, p.water_target - (t?.water_ml || 0)) : null;
@@ -1779,9 +1810,9 @@ async function buildCoachSummary(member) {
       items: (t?.food_items || []).map(f => ({ name: f.name, grams: f.grams })),
     },
     water: { drunk: t?.water_ml || 0, target: p.water_target || null, remaining: waterLeft },
-    activities:  split(p.protocol_activities,  t?.activities),
-    acv:         split(p.protocol_acv,         t?.acv),
-    supplements: split(p.protocol_supplements, t?.supplements),
+    activities:  resolveProtocolGroup('activities',  p, t?.activities),
+    acv:         resolveProtocolGroup('acv',         p, t?.acv),
+    supplements: resolveProtocolGroup('supplements', p, t?.supplements),
     weight: t?.weight_kg ? parseFloat(t.weight_kg) : null,
     sleep: (t?.sleep?.bedtime && t?.sleep?.waketime)
       ? `${t.sleep.bedtime}–${t.sleep.waketime}` : null,

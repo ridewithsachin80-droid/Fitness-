@@ -28,6 +28,7 @@ import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, today, plural } from '../constants';
+import DaySummary from './DaySummary';
 
 // ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
 //
@@ -454,6 +455,13 @@ export default function AIChatLog() {
           waterTargetMl: useLogStore.getState().protocol?.water_target || 3000,
         },
       });
+
+      // A whole-day summary comes back as structured fields, and renders as the
+      // same card the coach sees. Nothing to apply, so no preview list.
+      if (data.summary) {
+        setMessages(m => [...m, { role: 'ai', summary: data.summary }]);
+        return;
+      }
 
       // Every parsed thing starts INCLUDED — member unticks anything misheard
       setMessages(m => [...m, {
@@ -898,9 +906,13 @@ export default function AIChatLog() {
                 <div className={`text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
                   m.error
                     ? 'bg-red-500/[0.08] border-red-500/25 text-red-300'
-                    : 'bg-[#1A1C20] border-white/[0.07] text-[#FFFFFF]'
+                    : m.summary
+                      ? 'bg-[rgba(212,175,55,0.06)] border-[rgba(212,175,55,0.20)] text-[#F0E2B6]'
+                      : 'bg-[#1A1C20] border-white/[0.07] text-[#FFFFFF]'
                 }`}>
-                  <p className="leading-relaxed">{m.text}</p>
+                  {m.summary
+                    ? <DaySummary s={m.summary} />
+                    : <p className="leading-relaxed whitespace-pre-line">{m.text}</p>}
 
                   {/* Lab report draft — nothing is saved until confirmed. A
                       misread decimal on a blood test is a different order of

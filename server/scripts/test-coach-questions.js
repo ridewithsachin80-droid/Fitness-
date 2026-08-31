@@ -50,19 +50,25 @@ if (!USE_REAL_DB) {
         const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
         return { rows: [{ log_date: today, weight_kg: '84.9', water_ml: 1500,
                           sleep: { bedtime: '23:00', waketime: '06:30' },
-                          activities: { walk: true }, acv: { acv1: true }, supplements: {},
+                          activities: { walk: true }, acv: { acv1: true }, supplements: { cx_999: true },
                           food_items: [{ name: 'Idli', grams: 120, per_100g: { calories: 120, protein: 4, total_carbs: 20, fat: 1 } }] }],
                  rowCount: 1 };
       }
       if (/FROM patient_profiles/.test(sql)) {
         return { rows: [{ macro_kcal: 1600, macro_pro: 100, water_target: 3000,
                           target_weight: '74.0', start_weight: '90.0',
-                          protocol_activities: [{ id: 'walk', label: 'Morning Walk' },
-                                                { id: 'yoga', label: 'Yoga' }],
-                          protocol_acv: [{ id: 'acv1', label: 'ACV before meal 1' },
-                                         { id: 'acv2', label: 'ACV before meal 2' }],
-                          protocol_supplements: [{ id: 'whey', label: 'Whey' },
-                                                 { id: 'd3', label: 'Vitamin D3' }] }], rowCount: 1 };
+                          // Real storage shape: protocol_* holds BARE CATALOG
+                          // IDS, labels live in CATALOG; coach-added items live
+                          // in custom_* as { id, label }. Reading .label off a
+                          // string is what printed "steps1" and
+                          // "cx_17878202035850" on screen.
+                          protocol_activities: ['walk', 'resistance'],
+                          protocol_acv: ['acv1', 'acv2'],
+                          protocol_supplements: ['b12', 'cx_999'],
+                          custom_activities: [],
+                          custom_acv: [],
+                          custom_supplements: [{ id: 'cx_999', label: 'Creatine' }],
+                          item_overrides: {} }], rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
     },
@@ -159,11 +165,15 @@ const eq  = (n, a, b) => (String(a) === String(b)) ? ok(n) : bad(n, `expected ${
   // what a model gets wrong, so the server does it.
   eq('STILL PENDING is computed server-side', /STILL PENDING today:/.test(lastAnswerPrompt), true);
   eq('a done activity is excluded from pending',
-     /STILL PENDING today: activities Yoga/.test(lastAnswerPrompt), true);
+     /STILL PENDING today: activities Resistance Training/.test(lastAnswerPrompt), true);
+  // The raw id must never reach the prose answer either — this is the same
+  // bug the summary card had, in the other builder.
+  eq('pending list uses labels, not ids',
+     /STILL PENDING today: activities (walk|resistance|steps)/.test(lastAnswerPrompt), false);
   eq('an undone ACV item is listed as pending',
-     /ACV ACV before meal 2/.test(lastAnswerPrompt), true);
+     /ACV ACV before Meal 2/.test(lastAnswerPrompt), true);
   eq('a DONE ACV item is not listed as pending',
-     /STILL PENDING[^\n]*ACV before meal 1/.test(lastAnswerPrompt), false);
+     /STILL PENDING[^\n]*ACV before Meal 1/.test(lastAnswerPrompt), false);
 
   // ── roster-wide question ──────────────────────────────────────────────────
   parseResponse = { reply: null, question: { member_name: null, text: "who hasn't logged today" }, commands: [] };
@@ -216,11 +226,13 @@ const eq  = (n, a, b) => (String(a) === String(b)) ? ok(n) : bad(n, `expected ${
   eq('water REMAINING precomputed', sum.water.remaining, 1500);
 
   eq('activities done as labels', sum.activities.done.join(','), 'Morning Walk');
-  eq('activities left as labels', sum.activities.left.join(','), 'Yoga');
-  eq('acv done',                  sum.acv.done.join(','), 'ACV before meal 1');
-  eq('acv left',                  sum.acv.left.join(','), 'ACV before meal 2');
-  eq('supplements taken (none)',  sum.supplements.done.length, 0);
-  eq('supplements left',          sum.supplements.left.join(','), 'Whey,Vitamin D3');
+  eq('activities left as labels', sum.activities.left.join(','), 'Resistance Training');
+  eq('acv done',                  sum.acv.done.join(','), 'ACV before Meal 1');
+  eq('acv left',                  sum.acv.left.join(','), 'ACV before Meal 2');
+  // A coach-added supplement must resolve through custom_*, not print its
+  // generated id — "cx_17878202035850" was on screen.
+  eq('custom supplement resolves to its label', sum.supplements.done.join(','), 'Creatine');
+  eq('catalog supplement resolves to its label', sum.supplements.left.join(','), 'Vitamin B12');
   // "nothing assigned" and "assigned but none done" both read as "none" but
   // mean opposite things to a coach, so they are distinguishable.
   eq('supplements are marked as assigned', sum.supplements.assigned, true);
