@@ -399,6 +399,28 @@ export default function Coach() {
   const [showWeightForm,setShowWeight]= useState(false);
   const [showProgramBuilder, setShowProgramBuilder] = useState(false);
 
+  // ── Tabs ────────────────────────────────────────────────────────────────────
+  // This page rendered 23 cards in one column — roughly 1,600 lines of scroll
+  // for a coach who usually wants one specific thing. Four groups instead:
+  //
+  //   today      what happened, and the conversation about it
+  //   nutrition  the metabolic engine and macro trials
+  //   training   volume, programme, muscle coverage
+  //   labs       blood work, lab values, body composition
+  //
+  // Deliberately NOT reset when the member changes. Paired with prev/next, a
+  // coach checking everyone's nutrition can stay on that tab and step through
+  // the roster — which is the actual review workflow. Resetting to 'today' on
+  // every navigation would undo the thing prev/next was built for.
+  const [tab, setTab] = useState('today');
+
+  const TABS = [
+    { id: 'today',     label: 'Today',     icon: '📋' },
+    { id: 'nutrition', label: 'Nutrition', icon: '🥗' },
+    { id: 'training',  label: 'Training',  icon: '🏋️' },
+    { id: 'labs',      label: 'Labs',      icon: '🩸' },
+  ];
+
   // ── Roster, for prev/next ───────────────────────────────────────────────────
   // Reviewing seven members meant: open one, scroll a very long page, go back,
   // find the next name, open it. Twenty-plus navigations before saying anything
@@ -430,6 +452,26 @@ export default function Coach() {
   const nextMember = rosterIdx > -1 && rosterIdx < roster.length - 1 ? roster[rosterIdx + 1] : null;
   const [activeProgram, setActiveProgram] = useState(undefined); // undefined = not loaded yet, null = none assigned
   const [selectedLog,   setSelectedLog] = useState(null); // compliance chart drill-down
+
+  /**
+   * Switch group.
+   *
+   * Two things have to happen besides setting the tab:
+   *
+   *   · Scroll back to the tab bar. The Daily Log card alone is ~320 lines
+   *     tall; switching to Nutrition while scrolled to the bottom of it would
+   *     drop the coach below the end of a much shorter tab, showing blank
+   *     space and looking broken.
+   *   · Clear any open drill-down. The compliance modal lives on the Today
+   *     tab, so leaving `selectedLog` set means it silently reappears the next
+   *     time the coach comes back to Today.
+   */
+  const switchTab = (id) => {
+    setTab(id);
+    setSelectedLog(null);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   const [viewDate,      setViewDate]    = useState(null); // selected date in log viewer
 
   // Load the member's active workout program summary for the new card below
@@ -774,10 +816,33 @@ export default function Coach() {
         </div>
       </div>
 
+      {/* Tab bar. Sticky so a coach deep in a long card can switch group
+          without scrolling back up — the whole point of the split. */}
+      <div className="sticky top-0 z-20 bg-[#121316]/95 backdrop-blur border-b border-white/[0.06]">
+        <div className="max-w-md mx-auto px-3 flex">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => switchTab(t.id)}
+              style={{ minHeight: 46 }}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5
+                text-[11px] font-semibold transition-colors border-b-2 ${
+                tab === t.id
+                  ? 'text-[#D4AF37] border-[#D4AF37]'
+                  : 'text-[#7E8596] border-transparent hover:text-[#9EA3B0]'
+              }`}>
+              <span className="text-base leading-none">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Content */}
       <div className="max-w-md mx-auto px-4 pt-4 pb-8 space-y-3">
 
         {/* Daily Log Viewer — date chip navigator + single-date detail */}
+        {tab === 'today' && (<>   {/* Daily Log */}
         <Card>
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="📋">Daily Log</SectionTitle>
@@ -1103,7 +1168,9 @@ export default function Coach() {
             </>
           )}
         </Card>
+        </>)}
         {/* Logging streak — engagement at a glance, above every chart */}
+        {tab === 'today' && (<>   {/* Logging Streak */}
         <Card>
           <div className="flex items-center justify-between mb-2">
             <SectionTitle icon="🔥">Logging Streak</SectionTitle>
@@ -1123,8 +1190,10 @@ export default function Coach() {
           </div>
           <p className="text-[10px] text-[#7E8596] mt-1.5 text-center">Oldest left · today right</p>
         </Card>
+        </>)}
 
         {/* Weight chart */}
+        {tab === 'today' && (<>   {/* Weight Trend */}
         {weightData.length > 1 && (
           <Card>
             <SectionTitle icon="📈">Weight Trend</SectionTitle>
@@ -1149,7 +1218,9 @@ export default function Coach() {
           </Card>
         )}
 
+        </>)}
         {/* Sprint 6: 30-day compliance chart — tap a bar to drill into that day */}
+        {tab === 'today' && (<>   {/* 30-Day Compliance */}
         {complianceData.length > 1 && (
           <Card>
             <div className="flex items-center justify-between mb-2">
@@ -1182,7 +1253,9 @@ export default function Coach() {
           </Card>
         )}
 
+        </>)}
         {/* Drill-down modal — log detail for the tapped bar */}
+        {tab === 'today' && (<>   {/* Compliance drill-down modal */}
         {selectedLog && (() => {
           const fl    = selectedLog;
           const dateLabel = new Date(String(fl.log_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -1245,35 +1318,43 @@ export default function Coach() {
             </div>
           );
         })()}
+        </>)}
 
         {/* What their own data says about their metabolism — the engine
             proposes targets, the coach decides whether to apply them. */}
+        {tab === 'nutrition' && (<>   {/* Metabolic Insight */}
         <Card>
           <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
           <div className="mt-2">
             <MetabolicInsight memberId={parseInt(memberId)} canApply onApplied={() => load({ quiet: true })} />
           </div>
         </Card>
+        </>)}
 
         {/* Their blood work, and what they were doing between tests */}
+        {tab === 'labs' && (<>   {/* Lab Results */}
         <Card>
           <SectionTitle icon="🩸">Lab Results</SectionTitle>
           <div className="mt-2">
             <LabResults memberId={parseInt(memberId)} memberName={data?.profile?.name || ''} />
           </div>
         </Card>
+        </>)}
 
         {/* Macro Lab — adherence patterns and controlled trials. Coach-only:
             there is no member-facing route for any of this. */}
+        {tab === 'nutrition' && (<>   {/* Macro Lab */}
         <Card>
           <SectionTitle icon="🔬">Macro Lab</SectionTitle>
           <div className="mt-2">
             <MacroLab memberId={parseInt(memberId)} onChanged={() => load({ quiet: true })} />
           </div>
         </Card>
+        </>)}
 
         {/* Training summary — volume, cardio and calories the member logged.
             Previously invisible to the coach despite being captured daily. */}
+        {tab === 'training' && (<>   {/* Training Summary */}
         <Card>
           <SectionTitle icon="🔥">Training Summary</SectionTitle>
           <div className="mt-2">
@@ -1284,8 +1365,10 @@ export default function Coach() {
             />
           </div>
         </Card>
+        </>)}
 
         {/* Phase 2: Workout Program */}
+        {tab === 'training' && (<>   {/* Workout Program */}
         <Card>
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="🏋️">Workout Program</SectionTitle>
@@ -1314,10 +1397,14 @@ export default function Coach() {
             </div>
           )}
         </Card>
+        </>)}
 
+        {tab === 'training' && (<>   {/* Muscle Coverage */}
         <MuscleCoverage memberId={parseInt(memberId)} refreshTick={workoutTick} />
+        </>)}
 
         {/* Lab values */}
+        {tab === 'labs' && (<>   {/* Lab Values */}
         <Card>
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="🧪">Lab Values</SectionTitle>
@@ -1465,8 +1552,10 @@ export default function Coach() {
             });
           })()}
         </Card>
+        </>)}
 
         {/* Sprint 9: Coach Notes — table is still monitor_notes, see RENAME.md */}
+        {tab === 'today' && (<>   {/* Coach Notes */}
         <Card>
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="📝">Coach Notes</SectionTitle>
@@ -1504,12 +1593,14 @@ export default function Coach() {
             </div>
           )}
         </Card>
+        </>)}
 
         {/* Body composition — one collapsed card instead of a chart per marker.
             A single DEXA panel entered as 60 rows on one date used to render ~13
             sibling Cards, each a flat line between two identical dates. Trend
             lines now require two DISTINCT test dates; otherwise it is one
             reading and we show it as a reading. */}
+        {tab === 'labs' && (<>   {/* Body composition */}
         {bodyComp.markers.length > 0 && (
           <details className="rounded-2xl border border-white/[0.07] bg-[#1A1C20] overflow-hidden">
             <summary className="px-4 py-3.5 cursor-pointer list-none flex items-center justify-between">
@@ -1572,6 +1663,7 @@ export default function Coach() {
           </details>
         )}
 
+        </>)}
       </div>
 
       {/* Add lab modal */}
