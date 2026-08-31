@@ -37,7 +37,10 @@ if (!USE_REAL_DB) {
   const stub = {
     query: async (sql) => {
       if (/monitor_patients/.test(sql)) return { rows: [MEMBER], rowCount: 1 };
-      if (/FROM daily_logs/.test(sql) && /log_date = \$2::date/.test(sql)) {
+      // Route on ANY($1::int[]), not on log_date: the single-member summary
+      // query also filters by log_date, so matching on that sent it into the
+      // roster branch and it came back with a different day's numbers.
+      if (/FROM daily_logs/.test(sql) && /ANY\(\$1::int\[\]\)/.test(sql)) {
         // roster snapshot
         return { rows: [{ patient_id: 214, weight_kg: '84.9', water_ml: 1500,
                           food_items: [{ name: 'Idli', grams: 120, per_100g: { calories: 120, protein: 4, total_carbs: 20, fat: 1 } }],
@@ -183,38 +186,57 @@ const eq  = (n, a, b) => (String(a) === String(b)) ? ok(n) : bad(n, `expected ${
   eq('a command returns no answer', r.body.answer, 'undefined');
   eq('the command reply survives', r.body.reply, 'Setting water to 4L.');
 
-  // ── A full-day summary must contain everything, precomputed ───────────────
-  // "give today's summary of Padmini" should cover eaten + left, activities
-  // done + left, water drunk + left, supplements taken + left. The model is
-  // only allowed to phrase these, so every one has to be IN the snapshot.
-  console.log('\nSUMMARY COMPLETENESS');
-  parseResponse = { reply: null, question: { member_name: 'Padmini', text: "today's summary" }, commands: [] };
-  await post('/api/ai-chat/coach-parse', { message: "give todays summary of padmini" });
-  const ctx = lastAnswerPrompt;
+  // ── A full-day summary comes back STRUCTURED, not as model prose ──────────
+  // The first version had the model format it and it arrived as one run-on
+  // paragraph. The numbers were already computed in SQL, so handing them to a
+  // model to retype was formatting risk for no gain.
+  console.log('\nDAY SUMMARY');
+  lastAnswerPrompt = null;
+  parseResponse = { reply: null, commands: [],
+    question: { member_name: 'Padmini', text: "today's summary", scope: 'summary' } };
+  let r2 = await post('/api/ai-chat/coach-parse', { message: "give todays summary of padmini" });
 
-  eq('calories eaten present',        /Calories eaten: \d+ kcal/.test(ctx), true);
-  eq('calories REMAINING precomputed', /Calories remaining: \d+ kcal left of 1600/.test(ctx), true);
-  eq('food items listed',             /Food logged: Idli 120g/.test(ctx), true);
-  eq('water drunk present',           /Water drunk: 1500 ml of 3000 ml target/.test(ctx), true);
-  eq('water REMAINING precomputed',   /Water remaining: 1500 ml/.test(ctx), true);
-  eq('activities done listed',        /Activities done \(1\/2\): Morning Walk/.test(ctx), true);
-  eq('activities left listed',        /Activities still to do: Yoga/.test(ctx), true);
-  eq('ACV done listed',               /ACV done \(1\/2\): ACV before meal 1/.test(ctx), true);
-  eq('supplements taken listed',      /Supplements taken \(0\/2\): none/.test(ctx), true);
-  eq('ACV left listed',               /ACV still to do: ACV before meal 2/.test(ctx), true);
-  eq('supplements left listed',       /Supplements still to take: Whey, Vitamin D3/.test(ctx), true);
-  eq('weight present',                /Weight: 84\.9 kg/.test(ctx), true);
-  eq('sleep present',                 /Sleep: 23:00-06:30/.test(ctx), true);
+  eq('summary returns 200', r2.status, 200);
+  const sum = r2.body.summary;
+  eq('a structured summary is returned', !!sum, true);
+  eq('no prose answer for a summary', r2.body.answer, 'null');
+  eq('attributed to the member', r2.body.answered_for, 'Mrs. Padmini');
+  // The whole point: the model is not involved in a summary at all.
+  eq('the model was NOT asked to format it', lastAnswerPrompt, 'null');
 
-  // Labels, not raw ids, on BOTH sides. The done side used to print "walk"
-  // while the pending side printed "Yoga" — one protocol described two ways
-  // in a single sentence.
-  eq('done side uses labels, not raw ids', /Activities done \(1\/2\): walk/.test(ctx), false);
+  eq('calories eaten',      sum.food.kcal, 144);
+  eq('macros present',      `${sum.food.protein}/${sum.food.carbs}/${sum.food.fat}`, '4.8/24/1.2');
+  eq('calorie target',      sum.food.target, 1600);
+  eq('calories REMAINING precomputed', sum.food.remaining, 1456);
+  eq('not flagged as over',  sum.food.over, false);
+  eq('food items listed',    sum.food.items.map(i => i.name).join(','), 'Idli');
 
-  // The prompt must permit a long answer, or a summary gets crushed into
-  // three sentences and loses most of this.
-  eq('the prompt allows a full rundown', /SUMMARY \/ RUNDOWN/.test(ctx), true);
-  eq('the prompt forbids self-calculation', /Never calculate anything yourself/.test(ctx), true);
+  eq('water drunk',          sum.water.drunk, 1500);
+  eq('water target',         sum.water.target, 3000);
+  eq('water REMAINING precomputed', sum.water.remaining, 1500);
+
+  eq('activities done as labels', sum.activities.done.join(','), 'Morning Walk');
+  eq('activities left as labels', sum.activities.left.join(','), 'Yoga');
+  eq('acv done',                  sum.acv.done.join(','), 'ACV before meal 1');
+  eq('acv left',                  sum.acv.left.join(','), 'ACV before meal 2');
+  eq('supplements taken (none)',  sum.supplements.done.length, 0);
+  eq('supplements left',          sum.supplements.left.join(','), 'Whey,Vitamin D3');
+  // "nothing assigned" and "assigned but none done" both read as "none" but
+  // mean opposite things to a coach, so they are distinguishable.
+  eq('supplements are marked as assigned', sum.supplements.assigned, true);
+
+  eq('weight present', sum.weight, 84.9);
+  eq('sleep present',  sum.sleep, '23:00–06:30');
+  eq('logged_anything flag', sum.logged_anything, true);
+
+  // A SPECIFIC question must still go through the model — phrasing helps there.
+  lastAnswerPrompt = null;
+  parseResponse = { reply: null, commands: [],
+    question: { member_name: 'Padmini', text: 'how much water is left', scope: 'specific' } };
+  const r3 = await post('/api/ai-chat/coach-parse', { message: 'how much water is left for padmini' });
+  eq('a specific question still returns prose', !!r3.body.answer, true);
+  eq('a specific question has no summary card', r3.body.summary, 'undefined');
+  eq('the model WAS used for the specific question', !!lastAnswerPrompt, true);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   server.close();

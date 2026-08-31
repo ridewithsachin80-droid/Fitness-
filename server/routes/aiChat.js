@@ -1715,6 +1715,79 @@ async function buildCoachRosterContext(members) {
   return lines.join('\n');
 }
 
+/**
+ * The whole day as STRUCTURED data, not prose.
+ *
+ * The first version asked the model to format a summary from the snapshot. It
+ * came back as one run-on paragraph — "…1350 kcal left of 1350 Ate — nothing
+ * logged Water — 750 ml…" — because a language model's line breaks are a
+ * suggestion, not a contract, and the client rendered them in a <p> where
+ * whitespace collapses anyway.
+ *
+ * Every number here was already computed in SQL. Handing them to a model to
+ * retype was pure formatting risk for no gain, so the summary now skips the
+ * model entirely and the client renders real fields. Specific questions still
+ * go through the model, because phrasing genuinely helps there.
+ */
+async function buildCoachSummary(member) {
+  const today = getISTDate();
+  const [{ rows: logs }, { rows: prof }] = await Promise.all([
+    pool.query(
+      `SELECT weight_kg, water_ml, sleep, activities, acv, supplements, food_items
+         FROM daily_logs WHERE patient_id = $1 AND log_date = $2::date`, [member.id, today]),
+    pool.query(
+      `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
+              protocol_activities, protocol_acv, protocol_supplements
+         FROM patient_profiles WHERE user_id = $1`, [member.id]),
+  ]);
+
+  const t = logs[0] || null;
+  const p = prof[0] || {};
+  const totals = computeDayTotals(t?.food_items);
+
+  const assigned = (v) => (Array.isArray(v) ? v : []);
+  const idOf     = (i) => (typeof i === 'string' ? i : i.id);
+  const labelOf  = (i) => (typeof i === 'string' ? i : (i.label || i.id));
+  const ticked   = (obj) => Object.entries(obj || {}).filter(([, v]) => v).map(([k]) => k);
+
+  const split = (list, obj) => {
+    const items = assigned(list);
+    const on    = ticked(obj);
+    const byId  = new Map(items.map(i => [idOf(i), labelOf(i)]));
+    return {
+      done:    on.map(k => byId.get(k) || k),
+      left:    items.filter(i => !on.includes(idOf(i))).map(labelOf),
+      total:   items.length,
+      // Distinguishes "nothing assigned" from "assigned but none done" — they
+      // look identical as "none" and mean opposite things to a coach.
+      assigned: items.length > 0,
+    };
+  };
+
+  const kcalLeft  = p.macro_kcal ? p.macro_kcal - totals.cal : null;
+  const waterLeft = p.water_target ? Math.max(0, p.water_target - (t?.water_ml || 0)) : null;
+
+  return {
+    member: member.name,
+    date: today,
+    logged_anything: !!t,
+    food: {
+      kcal: totals.cal, protein: totals.pro, carbs: totals.carb, fat: totals.fat,
+      target: p.macro_kcal || null,
+      remaining: kcalLeft,
+      over: kcalLeft !== null && kcalLeft < 0,
+      items: (t?.food_items || []).map(f => ({ name: f.name, grams: f.grams })),
+    },
+    water: { drunk: t?.water_ml || 0, target: p.water_target || null, remaining: waterLeft },
+    activities:  split(p.protocol_activities,  t?.activities),
+    acv:         split(p.protocol_acv,         t?.acv),
+    supplements: split(p.protocol_supplements, t?.supplements),
+    weight: t?.weight_kg ? parseFloat(t.weight_kg) : null,
+    sleep: (t?.sleep?.bedtime && t?.sleep?.waketime)
+      ? `${t.sleep.bedtime}–${t.sleep.waketime}` : null,
+  };
+}
+
 function buildCoachAnswerPrompt(question, context, memberName) {
   return `You are the assistant for a fitness COACH in India. The coach asked:
 "${question}"
@@ -1902,7 +1975,14 @@ RULES:
    has Asha lost" — do NOT try to turn it into a command and do NOT ask what
    they want to update. Set "question" and return EMPTY commands:
 
-     "question": { "member_name": "Padmini", "text": "how many calories today" }
+     "question": { "member_name": "Padmini", "text": "how many calories today",
+                   "scope": "specific" }
+
+   · scope: "summary" when the coach wants the WHOLE day — "today's summary",
+     "full update", "how is she doing today", "everything for Padmini",
+     "rundown". Otherwise "specific".
+     A summary is rendered by the app from the member's real figures; you are
+     not asked to write it, so do not try.
 
    · member_name: the member being asked about, or null for a roster-wide
      question ("who hasn't logged today", "who is behind this week").
@@ -2157,6 +2237,19 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
         return res.json({
           reply: `I couldn't find a member called "${qName}" in your list.`,
           actions: [], answer: null,
+        });
+      }
+
+      // A whole-day summary is rendered by the client from real fields — no
+      // model call, so no formatting to go wrong and no round trip to wait on.
+      // Only for a named member: "summarise everyone" is a different feature.
+      if (qMember && String(parsed.question.scope || '').toLowerCase() === 'summary') {
+        return res.json({
+          reply: null,
+          actions: [],
+          answer: null,
+          summary: await buildCoachSummary(qMember),
+          answered_for: qMember.name,
         });
       }
 
@@ -2724,3 +2817,4 @@ module.exports.callAI = callAI;   // reused by weeklyReport.js — same provider
 // whether an answer can be complete, so it needs to be inspectable directly.
 module.exports.buildCoachMemberContext = buildCoachMemberContext;
 module.exports.buildCoachAnswerPrompt  = buildCoachAnswerPrompt;
+module.exports.buildCoachSummary       = buildCoachSummary;
