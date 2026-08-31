@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLogStore }  from '../store/logStore';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
-import { getMyProfile } from '../api/logs';
+import { getMyProfile, getMyToday } from '../api/logs';
 import {
   today, formatDate, istDate, istDaysAgo,
   ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
@@ -783,11 +783,35 @@ export default function DailyLog() {
   // instead of showing "— none" until the member digs into the panel.
   const [coachPlan, setCoachPlan] = useState(null); // { programName, todayDay|null, dayCount }
   const [mealPlans, setMealPlans] = useState([]);   // [{ meal, items:[{name,grams,qty_text,per_100g}] }]
+
+  // ── Cold open: one request instead of two ───────────────────────────────────
+  // /members/me/today returns the meal plan and the active program in the
+  // SAME shapes as /members/me/meal-plan and /programs/active, so this is a
+  // pure transport change — the handlers below are untouched.
+  //
+  // The aggregate GATES the individual fetches rather than replacing them. If
+  // the aggregate is unavailable (older bundle against a newer server, a
+  // partial deploy, a 500) the page still fills in exactly as before, just
+  // over more requests. A faster path that can leave the dashboard blank is
+  // not a faster path.
+  const [aggregate, setAggregate] = useState(undefined); // undefined = still deciding
   useEffect(() => {
-    api.get('/members/me/meal-plan').then(({ data }) => setMealPlans(data.meals || [])).catch(() => {});
+    let cancelled = false;
+    getMyToday()
+      .then(({ data }) => { if (!cancelled) setAggregate(data); })
+      .catch(() => { if (!cancelled) setAggregate(null); });   // null = fall back
+    return () => { cancelled = true; };
   }, []);
+
   useEffect(() => {
-    api.get('/programs/active').then(({ data }) => {
+    if (aggregate === undefined) return;                 // still waiting
+    if (aggregate) { setMealPlans(aggregate.meal_plan?.meals || []); return; }
+    api.get('/members/me/meal-plan').then(({ data }) => setMealPlans(data.meals || [])).catch(() => {});
+  }, [aggregate]);
+
+  useEffect(() => {
+    if (aggregate === undefined) return;
+    const handle = ({ data }) => {
       if (!data?.program) return;
       const days = data.days || [];
       const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -801,8 +825,13 @@ export default function DailyLog() {
         ? days.find(d => String(d.day_label || '').includes(todayWd)) || null
         : days[0] || null;
       setCoachPlan({ programName: data.program.name, todayDay, dayCount: days.length, scheduled });
-    }).catch(() => {});
-  }, []);
+    };
+
+    // Same handler either way — the aggregate returns the identical
+    // { program, days } shape that /programs/active does.
+    if (aggregate) { handle({ data: aggregate.program || {} }); return; }
+    api.get('/programs/active').then(handle).catch(() => {});
+  }, [aggregate]);
 
   useEffect(() => {
     getMyProfile().then(({ data }) => {
@@ -1167,12 +1196,30 @@ export default function DailyLog() {
               <p className="text-sm font-bold text-[#FFFFFF]">{date === today() ? 'Today' : formatDate(date)}</p>
               {date !== today() && <p className="text-[10px] text-amber-400 font-medium">Editing past entry</p>}
             </div>
+            {/* Steps forward ONE day, mirroring '‹'. It used to jump straight
+                back to today, so a member who went back five days to fix
+                something and then wanted day four was thrown to today and had
+                to press '‹' four more times — while the two arrows looked like
+                a matched pair. */}
             <button
-              onClick={() => setDate(today())}
+              onClick={() => {
+                const d = new Date(`${date}T12:00:00`);   // midday: no DST/offset edge
+                d.setDate(d.getDate() + 1);
+                const next = istDate(d);
+                setDate(next > today() ? today() : next);
+              }}
               disabled={date === today()}
               style={{ minWidth: 44, minHeight: 36 }}
               className="text-sm font-bold text-[#C5A059] rounded-xl hover:bg-[rgba(212,175,55,0.05)] active:scale-95 transition-all disabled:opacity-30">›</button>
           </div>
+          {/* Direct way back, now that '›' no longer does it. */}
+          {date !== today() && (
+            <button onClick={() => setDate(today())}
+              style={{ minHeight: 32 }}
+              className="w-full text-[11px] font-semibold text-[#D4AF37] mb-1">
+              Jump to today
+            </button>
+          )}
 
           <div className="bg-white/[0.05] rounded-2xl p-3.5 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             {/* Today's read — one coaching sentence, generated from the day's

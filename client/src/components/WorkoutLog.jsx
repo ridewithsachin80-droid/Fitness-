@@ -21,31 +21,12 @@ import { CARDIO_TYPES, cardioTypeById, sessionEnergy, distanceFrom } from '../ut
 import { useLogStore } from '../store/logStore';
 import { useAIChat } from './AIChatLog';
 import { plural } from '../constants';
-
-function getSpeechRecognition() {
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
-}
+import { useVoiceComposer } from './VoiceComposer';
 
 function formatTarget(ex) {
   const reps = ex.target_reps_max && ex.target_reps_max !== ex.target_reps_min
     ? `${ex.target_reps_min}-${ex.target_reps_max}` : `${ex.target_reps_min}`;
   return `${ex.target_sets} × ${reps}`;
-}
-
-/** One-shot voice capture. Resolves with the transcript, or null on failure/cancel. */
-function listenOnce() {
-  return new Promise((resolve) => {
-    const SpeechRecognition = getSpeechRecognition();
-    if (!SpeechRecognition) { resolve(null); return; }
-    const r = new SpeechRecognition();
-    r.lang = 'en-IN';
-    r.continuous = false;
-    r.interimResults = false;
-    r.onresult = (e) => resolve(e.results[0][0].transcript);
-    r.onerror = () => resolve(null);
-    r.onend = () => resolve(null); // no-op if onresult already resolved
-    r.start();
-  });
 }
 
 export default function WorkoutLog({ date }) {
@@ -58,7 +39,6 @@ export default function WorkoutLog({ date }) {
   const [search, setSearch]       = useState('');
   const [results, setResults]     = useState([]);
   const [searching, setSearching] = useState(false);
-  const [listeningSearch, setListeningSearch] = useState(false);
   const [listeningSetKey, setListeningSetKey] = useState(null); // exercise_id while mic is capturing a set for it
 
   const [program, setProgram]         = useState(null); // { id, name } or null
@@ -79,7 +59,6 @@ export default function WorkoutLog({ date }) {
   const debounceRef   = useRef(null);
   const saveRef        = useRef(null);
   const justLoadedRef  = useRef(false); // true for one render right after a (re)load, to skip the resulting save-effect run
-  const voiceSupported = !!getSpeechRecognition();
 
   // ── Rest timer countdown — single interval, always cleared before a new
   // one starts and on unmount, so there's no risk of stacking intervals or
@@ -237,17 +216,22 @@ export default function WorkoutLog({ date }) {
     debounceRef.current = setTimeout(() => runSearch(val), 250);
   };
 
-  const startSearchVoice = async () => {
-    if (!voiceSupported) { alert('Voice input not supported in this browser'); return; }
-    setListeningSearch(true);
-    haptic(20);
-    const transcript = await listenOnce();
-    setListeningSearch(false);
-    if (transcript) {
-      setSearch(transcript);
-      runSearch(transcript);
-    }
-  };
+  // Voice now goes through the shared VoiceComposer, the same path the AI chat
+  // uses: record audio -> Gemini/Groq transcript -> editable review card.
+  //
+  // The old path was raw Web Speech, which Safari does not implement. That is
+  // why this screen told iPhone members "try Chrome on Android" while the AI
+  // chat's mic worked fine on the very same phone. Recording and transcribing
+  // server-side works everywhere, handles Hinglish, and gives a review step
+  // instead of an alert() when it mishears.
+  const searchVoice = useVoiceComposer({
+    onSend: (text) => {
+      const t = (text || '').trim();
+      if (!t) return;
+      setSearch(t);
+      runSearch(t);
+    },
+  });
 
   const addExercise = (exercise) => {
     setExercisesInSession(prev => {
@@ -266,35 +250,73 @@ export default function WorkoutLog({ date }) {
     } catch { /* name conflict or network — just no-op */ }
   };
 
-  // Pulls in one program day's prescribed exercises. Only ADDS — any
-  // exercise already in today's session (logged freeform, or from a
-  // different day picked earlier) is left untouched, so this can never
-  // clobber real data, no matter what order things happen in.
   // Which program day the member is currently viewing. Tapping a chip SWITCHES
   // to that day: the previous day's untouched exercises leave, the new day's
   // arrive. Anything with a set already entered is real training data and is
   // never removed by a chip tap — Remove on the exercise is the only way out.
   // Manually searched-in exercises (no fromProgram flag) are also left alone.
   const [activeProgramDay, setActiveProgramDay] = useState(null);
+  // Transient one-line explanation of the last day switch. Auto-clears; a
+  // member mid-set should not have to dismiss anything.
+  const [switchNote, setSwitchNote] = useState('');
+
+  useEffect(() => {
+    if (!switchNote) return;
+    const t = setTimeout(() => setSwitchNote(''), 5000);
+    // Cleared on unmount and whenever a newer note replaces this one, so two
+    // quick switches can't leave a stale timer wiping the second message.
+    return () => clearTimeout(t);
+  }, [switchNote]);
 
   const hasLoggedData = (ex) =>
     (ex.sets || []).some(st => String(st.reps).trim() !== '' || String(st.weight_kg).trim() !== '');
 
-  const addProgramDay = (day) => {
+  // Named switchProgramDay, not addProgramDay: tapping a chip REPLACES the
+  // previous day's untouched exercises. The old name described what it did
+  // before the switch-semantics fix and was the last thing still claiming
+  // otherwise.
+  const switchProgramDay = (day) => {
     haptic(15);
+    const previous = activeProgramDay;
+    const dayIds   = new Set(day.exercises.map(ex => ex.exercise_id));
+
+    // The kept/dropped split is computed HERE, from current state, rather than
+    // inside the setState updater. An updater must be pure — React runs it
+    // twice in StrictMode, so calling setSwitchNote from inside would fire the
+    // toast twice and make the counts unreliable.
+    const current = exercisesInSession;
+    const kept = current.filter(ex =>
+      !ex.fromProgram || dayIds.has(ex.exercise_id) || hasLoggedData(ex));
+
+    // ── 5.4: say what just happened ─────────────────────────────────────────
+    // Switching silently made five exercises vanish. Worse, if some had sets
+    // entered, the member got a MIXED list — part of the old day still there,
+    // part gone — with no explanation for the pattern. Only announce a real
+    // switch, not the first tap of the day.
+    if (previous != null && previous !== day.day_number) {
+      const removed     = current.length - kept.length;
+      const keptWithData = kept.filter(ex => ex.fromProgram && !dayIds.has(ex.exercise_id)).length;
+      const label = day.day_label || `Day ${day.day_number}`;
+      const parts = [];
+      if (removed)      parts.push(`${removed} ${plural(removed, 'exercise')} swapped out`);
+      if (keptWithData) parts.push(`${keptWithData} kept — your sets are safe`);
+      setSwitchNote(parts.length ? `Switched to ${label} · ${parts.join(' · ')}`
+                                 : `Switched to ${label}`);
+    }
+
     setActiveProgramDay(day.day_number);
     setExercisesInSession(prev => {
-      const dayIds = new Set(day.exercises.map(ex => ex.exercise_id));
-      // Drop program-pulled exercises from other days that carry no data yet
-      const kept = prev.filter(ex =>
+      // Recomputed from `prev` so the update stays correct even if state moved
+      // between the read above and this updater running.
+      const keptNow = prev.filter(ex =>
         !ex.fromProgram || dayIds.has(ex.exercise_id) || hasLoggedData(ex));
-      const have = new Set(kept.map(ex => ex.exercise_id));
+      const have = new Set(keptNow.map(ex => ex.exercise_id));
       const added = day.exercises
         .filter(ex => !have.has(ex.exercise_id))
         .map(ex => ({ exercise_id: ex.exercise_id, exercise_name: ex.exercise_name,
                       sets: [], fromProgram: true }));
       // Existing entries that belong to this day get (re)marked as program ones
-      return [...kept.map(ex => dayIds.has(ex.exercise_id) ? { ...ex, fromProgram: true } : ex),
+      return [...keptNow.map(ex => dayIds.has(ex.exercise_id) ? { ...ex, fromProgram: true } : ex),
               ...added];
     });
   };
@@ -326,29 +348,42 @@ export default function WorkoutLog({ date }) {
 
   // Voice-log a set: "60 kg 8 reps" → fills weight+reps, adds `sets` count of
   // identical rows in one go (e.g. "3 sets of 60 kg 8 reps" adds 3 rows).
-  // Uses the functional setState form deliberately — listenOnce() can take
-  // several seconds of real time, during which other edits could happen;
-  // reading prev state at apply-time (not at call-time) is what makes this
-  // safe regardless of what else changed while the mic was listening.
-  const voiceLogSet = async (exerciseId) => {
-    if (!voiceSupported) { alert('Voice input not supported in this browser'); return; }
-    setListeningSetKey(exerciseId);
-    haptic(20);
-    const transcript = await listenOnce();
-    setListeningSetKey(null);
-    if (!transcript) return;
+  // Uses the functional setState form deliberately: transcription takes real
+  // time, during which other edits can happen, so reading prev state at
+  // apply-time rather than call-time is what keeps this safe.
+  //
+  // Which exercise the set-entry mic is capturing for. The composer is a
+  // single shared instance, so the target has to be remembered across the
+  // async transcription rather than passed through it.
+  const voiceTargetRef = useRef(null);
+  const [setVoiceError, setSetVoiceError] = useState('');
 
-    const { sets, reps, weight_kg } = parseVoiceSet(transcript);
-    if (reps === null) {
-      alert(`Couldn't understand "${transcript}" — try saying e.g. "60 kg 8 reps"`);
-      return;
-    }
-    setExercisesInSession(prev => prev.map(ex => {
-      if (ex.exercise_id !== exerciseId) return ex;
-      const newSets = Array.from({ length: Math.max(1, sets) }, () => ({ reps, weight_kg }));
-      return { ...ex, sets: [...ex.sets, ...newSets] };
-    }));
-    haptic(30);
+  const setVoice = useVoiceComposer({
+    onSend: (text) => {
+      const exerciseId = voiceTargetRef.current;
+      if (!exerciseId) return;
+      const { sets, reps, weight_kg } = parseVoiceSet(text || '');
+      if (reps === null) {
+        // Inline, not alert(). An alert is modal, loses the transcript, and on
+        // iOS interrupts the audio session — which mattered more once voice
+        // actually worked there.
+        setSetVoiceError(`Couldn't read "${text}" — try "60 kg 8 reps".`);
+        return;
+      }
+      setSetVoiceError('');
+      setExercisesInSession(prev => prev.map(ex => {
+        if (ex.exercise_id !== exerciseId) return ex;
+        const newSets = Array.from({ length: Math.max(1, sets) }, () => ({ reps, weight_kg }));
+        return { ...ex, sets: [...ex.sets, ...newSets] };
+      }));
+      haptic(30);
+    },
+  });
+
+  const voiceLogSet = (exerciseId) => {
+    voiceTargetRef.current = exerciseId;
+    setSetVoiceError('');
+    setListeningSetKey(exerciseId);
   };
 
   const openAIChat = useAIChat(s => s.openChat);
@@ -420,7 +455,7 @@ export default function WorkoutLog({ date }) {
                   ? activeProgramDay === day.day_number   // member picked one → that wins
                   : isToday;                              // nothing picked yet → highlight today
                 return (
-                  <button key={day.day_number} onClick={() => addProgramDay(day)}
+                  <button key={day.day_number} onClick={() => switchProgramDay(day)}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
                       isActive
                         ? 'bg-[#D4AF37] border-[#D4AF37] text-[#121316]'
@@ -432,6 +467,14 @@ export default function WorkoutLog({ date }) {
               });
             })()}
           </div>
+
+          {/* What the last switch did. Auto-clears — a member mid-set should
+              not have to dismiss anything. */}
+          {switchNote && (
+            <p className="mt-2 text-[11px] text-[#F0E2B6] leading-relaxed">
+              {switchNote}
+            </p>
+          )}
         </div>
       )}
 
@@ -464,12 +507,13 @@ export default function WorkoutLog({ date }) {
             </div>
           )}
         </div>
-        <button onClick={startSearchVoice} disabled={listeningSearch}
-          className={`px-3.5 rounded-xl border flex items-center justify-center transition-colors ${
-            listeningSearch ? 'bg-[#D4AF37] border-[#D4AF37] text-white animate-pulse' : 'bg-white/[0.06] border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1]'}`}>
-          🎤
-        </button>
+        <div className="px-2 flex items-center bg-white/[0.06] border border-white/[0.1] rounded-xl">
+          {searchVoice.micButton}
+        </div>
       </div>
+      {/* Editable transcript before it becomes a search — a mishearing is
+          corrected here instead of silently searching for the wrong thing. */}
+      {searchVoice.card}
 
       {/* Logged exercises */}
       {exercisesInSession.length === 0 ? (
@@ -531,13 +575,15 @@ export default function WorkoutLog({ date }) {
                   className="flex-1 py-2 text-xs font-semibold text-[#e0c98a] bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.18)] rounded-lg hover:bg-[rgba(212,175,55,0.14)] transition-colors">
                   + Add Set
                 </button>
-                <button onClick={() => voiceLogSet(ex.exercise_id)} disabled={listeningSetKey === ex.exercise_id}
-                  className={`px-3.5 py-2 rounded-lg border text-xs font-semibold transition-colors ${
+                <div
+                  onClickCapture={() => voiceLogSet(ex.exercise_id)}
+                  className={`px-3 py-1 rounded-lg border flex items-center gap-1.5 text-xs font-semibold transition-colors ${
                     listeningSetKey === ex.exercise_id
-                      ? 'bg-[#D4AF37] border-[#D4AF37] text-white animate-pulse'
+                      ? 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.35)] text-[#F0E2B6]'
                       : 'bg-white/[0.06] border-white/[0.1] text-[#d8d8de] hover:bg-white/[0.1]'}`}>
-                  🎤 {listeningSetKey === ex.exercise_id ? 'Listening…' : 'Say a set'}
-                </button>
+                  {setVoice.micButton}
+                  <span>Say a set</span>
+                </div>
                 {ex.sets.length > 0 && (
                   <button onClick={() => startRest(90)}
                     className="px-3 py-2 rounded-lg border text-xs font-semibold bg-white/[0.04] border-white/[0.08] text-[#5a5a68] hover:bg-white/[0.08] hover:text-[#9a9aa6] transition-colors">
@@ -682,10 +728,12 @@ export default function WorkoutLog({ date }) {
         </div>
       )}
 
-      {!voiceSupported && (
-        <p className="text-[10px] text-[#5a5a68] mt-3 italic">
-          Voice logging isn't supported in this browser — try Chrome on Android.
-        </p>
+      {/* The set-entry review card and any parse failure. Rendered once at the
+          card level rather than per-exercise: there is a single shared
+          composer, so two cards could never be open at the same time. */}
+      {setVoice.card}
+      {setVoiceError && (
+        <p className="text-[11px] text-red-400 mt-2 leading-relaxed">{setVoiceError}</p>
       )}
     </Card>
   );

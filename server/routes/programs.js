@@ -336,3 +336,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+// Exported so /members/me/today can build the identical shape rather than
+// duplicating the query. Two implementations of one response shape is how the
+// dashboard and the aggregate would quietly diverge.
+module.exports.loadProgramDays = loadProgramDays;

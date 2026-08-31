@@ -70,13 +70,29 @@ http.Server.prototype.listen = realListen;
 const server = app.listen(0);
 const port = server.address().port;
 
+// A fresh connection per request, and a body only where one is meaningful.
+//
+// Both matter. Node 22's global agent has keepAlive ON, so requests reuse a
+// socket. A DELETE that sends a body no handler reads leaves that body
+// unconsumed; Express responds and destroys the socket, and the NEXT request
+// on the reused connection dies with ECONNRESET.
+//
+// That is exactly what happened: /api/foods/yesterday reported status 0 and
+// looked like a missing route, when the real cause was the DELETE case above
+// it in the list. The route was fine. A harness that mis-reports the case
+// following any DELETE is worse than no harness, because it sends you looking
+// for a bug that isn't there.
+const agent = new http.Agent({ keepAlive: false });
+
 function req(method, urlPath) {
   return new Promise((resolve) => {
+    const sendsBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
+    const headers = sendsBody ? { 'content-type': 'application/json' } : {};
     const r = http.request({ host: '127.0.0.1', port, path: urlPath, method,
-                             headers: { 'content-type': 'application/json' } },
+                             headers, agent },
       (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
     r.on('error', () => resolve(0));
-    r.end(method === 'GET' ? undefined : '{}');
+    r.end(sendsBody ? '{}' : undefined);
   });
 }
 
@@ -97,6 +113,14 @@ const CASES = [
   ['PATCH', '/api/members/me/profile',     'member profile edit not shadowed by /:id'],
   ['PATCH', '/api/auth/change-pin',        'member changes own PIN'],
   ['GET',   '/api/reminders/my-schedule',  'member reminder times not shadowed by /schedules'],
+  // Sprint 5. /presets and /yesterday must be declared before /foods/:id or
+  // they get parsed as a food id, and before router.use(role('admin')) or
+  // members are locked out of their own saved meals.
+  ['GET',    '/api/foods/presets',         'meal presets not shadowed by /foods/:id'],
+  ['POST',   '/api/foods/presets',         'save a meal preset'],
+  ['DELETE', '/api/foods/presets/1',       'delete a meal preset'],
+  ['GET',    '/api/foods/yesterday',       'repeat yesterday not shadowed by /foods/:id'],
+  ['GET',    '/api/members/me/today',      'dashboard aggregate not shadowed by /:id'],
   ['GET',  '/api/members/population/prior','population prior not shadowed'],
   ['GET',  '/api/admin/coaches',          'current coach list path'],
   ['GET',  '/api/admin/monitors',         'LEGACY coach list'],
@@ -120,6 +144,53 @@ const CASES = [
     const ok = code !== 404 && code !== 0;
     if (!ok) fails++;
     console.log(`  ${ok ? '\u2713' : '\u2717'} ${String(code).padEnd(4)} ${method.padEnd(5)} ${url.padEnd(34)} ${label}`);
+  }
+
+  // ── Ordering: literal paths must beat their parameterised sibling ──────────
+  //
+  // A 401 does NOT prove a route exists. If /foods/presets were deleted,
+  // /foods/:id would match "presets" as an id and return 401 too — so the
+  // check above passes either way, and the label "not shadowed by /foods/:id"
+  // was claiming something it could not see. Verified by deleting the route
+  // and watching the suite stay green.
+  //
+  // Route ORDER is the thing that actually matters, so assert it directly
+  // against the registered Express stack instead of inferring it from a status
+  // code that is identical in both cases.
+  // Express 5 no longer exposes a mount path on the layer, so each router is
+  // identified by a route only it declares.
+  const ORDER = [
+    ['foods',   '/lookup', '/presets',       '/:id'],
+    ['foods',   '/lookup', '/yesterday',     '/:id'],
+    ['members', '/gaps',   '/me/today',      '/:id'],
+    ['members', '/gaps',   '/me/onboarding', '/:id'],
+    ['members', '/gaps',   '/me/profile',    '/:id'],
+  ];
+
+  function routePathsFor(fingerprint) {
+    const stack = (app._router || app.router)?.stack || [];
+    for (const layer of stack) {
+      if (!layer.handle?.stack) continue;
+      const paths = layer.handle.stack.filter(l => l.route).map(l => l.route.path);
+      if (paths.includes(fingerprint)) return paths;
+    }
+    return null;
+  }
+
+  for (const [name, fingerprint, literal, param] of ORDER) {
+    const paths = routePathsFor(fingerprint);
+    if (!paths) {
+      console.log(`  \u2717 could not find the ${name} router (looked for ${fingerprint})`);
+      fails++; continue;
+    }
+    const iLit = paths.findIndex(p => p === literal || (Array.isArray(p) && p.includes(literal)));
+    const iPar = paths.findIndex(p => p === param);
+    const ok = iLit > -1 && (iPar === -1 || iLit < iPar);
+    if (!ok) fails++;
+    const why = iLit === -1 ? 'route is MISSING'
+              : iPar > -1 && iLit > iPar ? `declared AFTER ${param} — it is shadowed`
+              : `before ${param}`;
+    console.log(`  ${ok ? '\u2713' : '\u2717'} ${(name + literal).padEnd(30)} ${why}`);
   }
 
   // A path that should genuinely not exist — proves the harness can detect a 404.

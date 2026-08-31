@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool = require('../db/pool');
 const authMW = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
+const { loadProgramDays } = require('./programs');
 const bcrypt = require('bcryptjs');
 
 // Lightweight audit helper — logs monitor/admin actions on patient records
@@ -554,6 +555,62 @@ router.put('/me/notifications', authMW, roleCheck('patient'), async (req, res) =
   } catch (err) {
     console.error('PUT /patients/me/notifications error:', err);
     res.status(500).json({ error: 'Could not save your preferences' });
+  }
+});
+
+// ── GET /api/patients/me/today ───────────────────────────────────────────────
+// One request for everything the member dashboard needs on cold open.
+//
+// DailyLog fired six separate requests on mount (plus two more from child
+// components), so on an Indian mobile connection the page assembled itself in
+// visible stages. These run in one Promise.all on the server, over one pooled
+// connection, and come back as a single payload.
+//
+// The client keeps its existing per-section fetches as a fallback: if this
+// route is unavailable — an older bundle, a partial deploy — nothing breaks,
+// it just goes back to being slower.
+//
+// Declared before '/:id' so "me" is never parsed as a member id.
+router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
+  const uid = req.user.id;
+  try {
+    const istToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
+      .format(new Date());
+
+    const [profile, mealPlan, program] = await Promise.all([
+      pool.query(
+        `SELECT pp.*, u.name
+           FROM patient_profiles pp JOIN users u ON u.id = pp.user_id
+          WHERE pp.user_id = $1`, [uid]),
+      // Same query and column list as GET /me/meal-plan. Not .catch()-swallowed:
+      // a query that silently returned [] on error would show a member an empty
+      // meal plan and look like their coach had removed it.
+      pool.query(
+        `SELECT meal, items, created_at FROM meal_plans
+          WHERE patient_id = $1 AND plan_date = $2::date
+          ORDER BY created_at`, [uid, istToday]),
+      pool.query(
+        `SELECT id, name FROM workout_programs
+          WHERE patient_id = $1 AND active = true LIMIT 1`, [uid]),
+    ]);
+
+    // Program days come from the SAME helper /programs/active uses, so the two
+    // responses cannot drift into different shapes.
+    const prog = program.rows[0] || null;
+    const days = prog ? await loadProgramDays(prog.id) : [];
+
+    // Keys and shapes deliberately mirror the individual endpoints, so the
+    // client can consume this or fall back to them with no branching:
+    //   meal_plan  === GET /members/me/meal-plan  -> { date, meals }
+    //   program    === GET /programs/active       -> { program, days }
+    res.json({
+      profile:   profile.rows[0] || null,
+      meal_plan: { date: istToday, meals: mealPlan.rows || [] },
+      program:   { program: prog, days },
+    });
+  } catch (err) {
+    console.error('GET /patients/me/today error:', err);
+    res.status(500).json({ error: 'Could not load your day' });
   }
 });
 

@@ -260,6 +260,106 @@ router.get('/search', async (req, res) => {
 // GET /api/foods/:id
 // Get a single food by ID (used by meal plan builder to refresh a saved item)
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Meal presets & repeat-a-day (Sprint 5) ───────────────────────────────────
+// Declared BEFORE '/:id' — otherwise "presets" is parsed as a food id — and
+// before the router.use(role('admin')) further down, which would otherwise
+// lock members out of their own presets.
+
+/** GET /api/foods/presets — the member's saved meal combinations. */
+router.get('/presets', authMW, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, meal, items, created_at
+         FROM meal_presets WHERE patient_id = $1
+        ORDER BY created_at DESC`, [req.user.id]);
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /foods/presets error:', err.message);
+    res.status(500).json({ error: 'Could not load your saved meals' });
+  }
+});
+
+/** POST /api/foods/presets — save the current meal as a named combination. */
+router.post('/presets', authMW, async (req, res) => {
+  const { name, meal, items } = req.body || {};
+  const label = String(name || '').trim();
+  if (!label)                 return res.status(400).json({ error: 'Give this meal a name' });
+  if (label.length > 80)      return res.status(400).json({ error: 'That name is too long' });
+  if (!Array.isArray(items) || !items.length) {
+    return res.status(400).json({ error: 'Nothing to save — add some food first' });
+  }
+  if (items.length > 40)      return res.status(400).json({ error: 'That is too many items for one preset' });
+
+  // Store only the fields the logger needs. Anything else the client happens
+  // to be holding (ids from a search result, UI flags) is dropped rather than
+  // persisted into a JSONB blob nobody will maintain.
+  const clean = items.map(i => ({
+    food_id:  i.food_id ?? i.id ?? null,
+    name:     String(i.name || '').slice(0, 120),
+    grams:    Number(i.grams) || 0,
+    per_100g: i.per_100g && typeof i.per_100g === 'object' ? i.per_100g : null,
+  })).filter(i => i.name && i.grams > 0);
+
+  if (!clean.length) return res.status(400).json({ error: 'Those items had no quantities' });
+
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO meal_presets (patient_id, name, meal, items)
+       VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (patient_id, name) DO UPDATE
+         SET items = EXCLUDED.items, meal = EXCLUDED.meal, created_at = NOW()
+       RETURNING id, name, meal, items, created_at`,
+      [req.user.id, label, meal || null, JSON.stringify(clean)]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('POST /foods/presets error:', err.message);
+    res.status(500).json({ error: 'Could not save that meal' });
+  }
+});
+
+/** DELETE /api/foods/presets/:id — scoped to the owner. */
+router.delete('/presets/:id', authMW, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM meal_presets WHERE id = $1 AND patient_id = $2',
+      [req.params.id, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Saved meal not found' });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('DELETE /foods/presets error:', err.message);
+    res.status(500).json({ error: 'Could not delete that' });
+  }
+});
+
+/**
+ * GET /api/foods/yesterday?meal=breakfast
+ *
+ * Yesterday's food, ready to re-log. Backs "same as yesterday" — the single
+ * biggest reduction in daily logging effort, because breakfast and one or two
+ * other meals repeat heavily week to week.
+ *
+ * Yesterday is computed in IST to match every other date in the app.
+ */
+router.get('/yesterday', authMW, async (req, res) => {
+  const meal = req.query.meal ? String(req.query.meal).toLowerCase() : null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT food_items FROM daily_logs
+        WHERE patient_id = $1
+          AND log_date = ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - INTERVAL '1 day')::date`,
+      [req.user.id]);
+
+    const all = Array.isArray(rows[0]?.food_items) ? rows[0].food_items : [];
+    const items = meal
+      ? all.filter(i => String(i.meal || '').toLowerCase() === meal)
+      : all;
+    res.json({ items, meal, count: items.length });
+  } catch (err) {
+    console.error('GET /foods/yesterday error:', err.message);
+    res.status(500).json({ error: "Could not load yesterday's food" });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(

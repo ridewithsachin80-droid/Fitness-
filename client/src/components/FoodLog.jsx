@@ -12,6 +12,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../api/client';
 import { getNutrition, plural } from '../constants';
+import { getMealPresets, saveMealPreset, deleteMealPreset, getYesterdayFood } from '../api/logs';
 import { getRecentFoods } from '../api/logs';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import AIFoodSearch from './AIFoodSearch';
@@ -346,11 +347,105 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const [aiQuery, setAiQuery]         = useState('');
   const openAIChat = useAIChat(s => s.openChat);  // shared AI chat (mounted in DailyLog)
 
+  // ── Repeat logging (Sprint 5) ───────────────────────────────────────────────
+  // Recent-foods already helped with single items. What was missing was any
+  // way to repeat a COMBINATION — the same four-item breakfast was four
+  // pick/confirm/add cycles every morning.
+  const [presets, setPresets]         = useState([]);
+  const [yesterdayCount, setYCount]   = useState(0);
+  const [repeatBusy, setRepeatBusy]   = useState(false);
+  const [repeatNote, setRepeatNote]   = useState('');
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetName, setPresetName]   = useState('');
+
   useEffect(() => {
     getRecentFoods()
       .then(({ data }) => setRecentFoods(data || []))
       .catch(() => {});
+    getMealPresets()
+      .then(({ data }) => setPresets(data || []))
+      .catch(() => {});
   }, []);
+
+  // How much of yesterday is available to repeat, for the current meal slot.
+  useEffect(() => {
+    getYesterdayFood(meal)
+      .then(({ data }) => setYCount(data.count || 0))
+      .catch(() => setYCount(0));
+  }, [meal]);
+
+  /**
+   * Add a list of stored items to today's log.
+   *
+   * New ids are minted per item: reusing yesterday's would collide with a row
+   * already in today's list and make edit/remove act on the wrong one. The
+   * meal is set to the slot the member is currently on, not the slot the food
+   * came from — repeating yesterday's breakfast into lunch is a legitimate
+   * thing to want.
+   */
+  const addStoredItems = (stored, label) => {
+    const toAdd = (stored || [])
+      .filter(i => i && i.name && Number(i.grams) > 0)
+      .map((i, n) => ({
+        id:       Date.now() + n,
+        name:     i.name,
+        grams:    Number(i.grams),
+        meal,
+        food_id:  i.food_id ?? null,
+        per_100g: i.per_100g || null,
+      }));
+    if (!toAdd.length) { setRepeatNote('Nothing to copy.'); return; }
+    onChange([...(items || []), ...toAdd]);
+    haptic(25);
+    setRepeatNote(`Added ${toAdd.length} ${plural(toAdd.length, 'item')} from ${label}.`);
+  };
+
+  const repeatYesterday = async () => {
+    setRepeatBusy(true);
+    setRepeatNote('');
+    try {
+      const { data } = await getYesterdayFood(meal);
+      addStoredItems(data.items, 'yesterday');
+    } catch {
+      setRepeatNote("Couldn't load yesterday — check your connection.");
+    } finally { setRepeatBusy(false); }
+  };
+
+  // Only the items in the slot being viewed, so "save this meal" saves the
+  // meal and not the whole day.
+  const currentMealItems = (items || []).filter(i => i.meal === meal);
+
+  const savePreset = async () => {
+    const name = presetName.trim();
+    if (!name) return;
+    setRepeatNote('');
+    try {
+      const { data } = await saveMealPreset({
+        name, meal,
+        items: currentMealItems.map(i => ({
+          food_id: i.food_id ?? null, name: i.name,
+          grams: i.grams, per_100g: i.per_100g || null,
+        })),
+      });
+      // Replace by name — the server upserts, so a re-save must not duplicate
+      // the entry in the list either.
+      setPresets(prev => [data, ...prev.filter(p => p.name !== data.name)]);
+      setSavingPreset(false);
+      setPresetName('');
+      setRepeatNote(`Saved as "${data.name}".`);
+    } catch (err) {
+      setRepeatNote(err.response?.data?.error || "Couldn't save that meal.");
+    }
+  };
+
+  const removePreset = async (id) => {
+    try {
+      await deleteMealPreset(id);
+      setPresets(prev => prev.filter(p => p.id !== id));
+    } catch {
+      setRepeatNote("Couldn't delete that.");
+    }
+  };
 
   const nameRef      = useRef(null);
   const gramsRef     = useRef(null);
@@ -566,6 +661,88 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ── Repeat logging ────────────────────────────────────────────────────
+          Sits above the meal sections and below the recent-food chips, so the
+          progression reads: repeat a whole meal, repeat one item, or add
+          something new. */}
+      {!showForm && (yesterdayCount > 0 || presets.length > 0) && (
+        <div className="mb-3">
+          <p className="text-xs font-bold text-[#4e4e5c] uppercase tracking-wider mb-1.5">
+            Repeat into {meal}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {yesterdayCount > 0 && (
+              <button onClick={repeatYesterday} disabled={repeatBusy}
+                style={{ minHeight: 36 }}
+                className="px-3 rounded-xl text-xs font-semibold text-[#121316]
+                  bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                  active:scale-[0.98] disabled:opacity-50">
+                {repeatBusy ? 'Adding…' : `Same as yesterday (${yesterdayCount})`}
+              </button>
+            )}
+            {presets.map(p => (
+              <span key={p.id}
+                className="inline-flex items-center rounded-xl border border-[rgba(212,175,55,0.20)]
+                  bg-[rgba(212,175,55,0.08)] overflow-hidden">
+                <button onClick={() => addStoredItems(p.items, p.name)}
+                  style={{ minHeight: 36 }}
+                  className="px-3 text-xs font-semibold text-[#F0E2B6]">
+                  {p.name}
+                  <span className="text-[#9EA3B0] ml-1">
+                    ({p.items?.length || 0})
+                  </span>
+                </button>
+                <button onClick={() => removePreset(p.id)}
+                  title={`Delete "${p.name}"`}
+                  style={{ minWidth: 28, minHeight: 36 }}
+                  className="text-[#7E8596] hover:text-red-400 text-sm border-l border-[rgba(212,175,55,0.18)]">
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+
+          {/* Save the current slot as a named combination — only offered when
+              there is actually something in it. */}
+          {currentMealItems.length > 0 && !savingPreset && (
+            <button onClick={() => { setSavingPreset(true); setPresetName(''); }}
+              style={{ minHeight: 32 }}
+              className="mt-2 text-[11px] font-semibold text-[#D4AF37]">
+              + Save this {meal} as a usual
+            </button>
+          )}
+          {savingPreset && (
+            <div className="flex gap-2 mt-2">
+              <input
+                value={presetName}
+                onChange={e => setPresetName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && savePreset()}
+                placeholder="e.g. My usual breakfast"
+                maxLength={80}
+                autoFocus
+                className="flex-1 min-w-0 px-3 py-2 bg-[#121316] border border-white/[0.10]
+                  rounded-xl text-sm text-white outline-none
+                  focus:border-[rgba(212,175,55,0.40)]" />
+              <button onClick={savePreset} disabled={!presetName.trim()}
+                style={{ minHeight: 38 }}
+                className="px-3 text-xs font-bold text-[#121316] rounded-xl
+                  bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                  disabled:opacity-40">
+                Save
+              </button>
+              <button onClick={() => setSavingPreset(false)}
+                style={{ minHeight: 38 }}
+                className="px-3 text-xs font-bold text-[#9EA3B0] border border-white/[0.10] rounded-xl">
+                Cancel
+              </button>
+            </div>
+          )}
+          {repeatNote && (
+            <p className="text-[11px] text-[#9EA3B0] mt-1.5 leading-relaxed">{repeatNote}</p>
+          )}
         </div>
       )}
 

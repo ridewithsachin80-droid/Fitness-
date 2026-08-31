@@ -605,6 +605,26 @@ CREATE TABLE IF NOT EXISTS weekly_reports (
 CREATE INDEX IF NOT EXISTS idx_weekly_reports_member ON weekly_reports(patient_id, week_start DESC);
 
 
+-- ── MEAL PRESETS (Sprint 5) ──────────────────────────────────────────────────
+-- A member eating the same four-item breakfast every morning had to pick each
+-- item, confirm its grams and tap Add, four times, every day. Recent-foods
+-- helped with single items but there was no way to repeat a COMBINATION.
+--
+-- FK column is patient_id, matching every other table (see RENAME.md). Items
+-- are stored as JSONB rather than a join table because a preset is a snapshot
+-- the member named — if they later edit the underlying food, the preset should
+-- keep the grams they chose, not silently change.
+CREATE TABLE IF NOT EXISTS meal_presets (
+  id          SERIAL PRIMARY KEY,
+  patient_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        VARCHAR(80) NOT NULL,
+  meal        VARCHAR(20),                  -- breakfast/lunch/dinner/snack, optional
+  items       JSONB NOT NULL DEFAULT '[]',  -- [{food_id, name, grams, per_100g:{...}}]
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(patient_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_meal_presets_member ON meal_presets(patient_id, created_at DESC);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

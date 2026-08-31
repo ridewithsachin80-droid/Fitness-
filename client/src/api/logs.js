@@ -43,6 +43,17 @@ export const updateMyProfile = (data)           => api.patch('/members/me/profil
 export const changeMyPin     = (currentPin, newPin) =>
   api.patch('/auth/change-pin', { currentPin, newPin });
 export const getMyReminderSchedule = ()         => api.get('/reminders/my-schedule');
+
+// Sprint 5 — repeat logging. A member eating the same breakfast every day was
+// picking each item, confirming grams and tapping Add, every morning.
+export const getMealPresets   = ()      => api.get('/foods/presets');
+export const saveMealPreset   = (data)  => api.post('/foods/presets', data);
+export const deleteMealPreset = (id)    => api.delete(`/foods/presets/${id}`);
+export const getYesterdayFood = (meal)  =>
+  api.get('/foods/yesterday', { params: meal ? { meal } : {} });
+
+// Sprint 5 — one request for the dashboard's cold open instead of six.
+export const getMyToday = ()            => api.get('/members/me/today');
 // Sprint 11: coach logs/corrects a member's weight for a specific date
 export const logWeightForMember = (id, date, weight_kg) =>
   api.patch(`/members/${id}/weight`, { date, weight_kg });
