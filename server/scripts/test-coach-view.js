@@ -144,21 +144,13 @@ test('non-numeric and dateless rows are ignored, not crashed on', () => {
 });
 
 
-// ── Mirrors the scale-screenshot validation in /ai-chat/photo ─────────────────
-function cleanScalePayload(parsed) {
-  let weight_kg = parseFloat(parsed.weight_kg);
-  if (!Number.isFinite(weight_kg) || weight_kg < 20 || weight_kg > 300) weight_kg = null;
-  const body_metrics = (Array.isArray(parsed.body_metrics) ? parsed.body_metrics : [])
-    .filter(m => m && m.name && Number.isFinite(parseFloat(m.value)))
-    .slice(0, 40)
-    .map(m => ({
-      name:  String(m.name).trim().slice(0, 80),
-      value: parseFloat(m.value),
-      unit:  m.unit ? String(m.unit).trim().slice(0, 20) : null,
-    }))
-    .filter(m => !/^(body )?weight$/i.test(m.name));
-  return { weight_kg, body_metrics };
-}
+// ── The REAL scale-screenshot validation, imported ───────────────────────────
+// The copy that sat here excluded a metric named exactly "Weight". The shipped
+// code also excludes "Weight (kg)", "Body Weight kgs" and the other spellings a
+// scale app prints — so this suite was asserting NARROWER behaviour than the
+// code it claimed to cover, and narrowing the real regex back would not have
+// turned anything red.
+const { cleanScalePayload, isWeightName } = require('../services/scaleParse');
 
 console.log('\nScale screenshot parsing');
 
@@ -268,16 +260,10 @@ test('discard clears everything including committed takes', () => {
 });
 
 
-// ── Mirrors the lab-save weight routing in AIChatLog.saveLabs ─────────────────
-function routeLabRows(rows, testDate, today) {
-  const isScaleWeightRow = (r) => {
-    const v = parseFloat(r.value);
-    return /^(body )?weight( ?\(?kgs?\)?)?$/i.test(String(r.test_name || '').trim())
-      && Number.isFinite(v) && v >= 20 && v <= 300;
-  };
-  const weightRow = testDate === today ? rows.find(isScaleWeightRow) : null;
-  return { weightRow, labRows: weightRow ? rows.filter(r => r !== weightRow) : rows };
-}
+// ── The REAL lab-upload routing, imported ────────────────────────────────────
+// client/src/utils/labRouting.js, the same module AIChatLog.saveLabs calls.
+const { routeLabRows, isWeightName: clientIsWeightName } =
+  importClient('utils/labRouting.js');
 
 console.log('\nLab upload weight routing (the scale-screenshot-via-lab-button bug)');
 
@@ -576,6 +562,51 @@ test('a day label merely containing weekday-ish letters does not trip scheduling
   assert.strictEqual(r.todayDay.day_label, 'Strength');
 });
 
+
+console.log('\nClient/server agreement on what counts as "the weight"');
+
+// The server strips the main weight OUT of body_metrics; the client picks it
+// OUT of an uploaded lab result set. Same predicate, opposite use, opposite
+// sides of the wire — they cannot import each other, so the copy is
+// unavoidable. This is what keeps it honest.
+//
+// If they disagree, a scale screenshot writes its weight to the daily log AND
+// keeps a second copy in lab history, and the member's body-composition chart
+// grows a weight series that contradicts their weigh-in.
+const WEIGHT_NAMES = [
+  'Weight', 'weight', ' Weight ', 'Body Weight', 'Weight (kg)', 'Weight kg',
+  'weight kgs', 'BODY WEIGHT (KG)',
+];
+const NOT_WEIGHT_NAMES = [
+  'Body Fat', 'Muscle Mass', 'BMR', 'BMI', 'Weight Trend', 'Target Weight',
+  'Bone Weight Index', 'Visceral Fat',
+];
+
+test('client and server agree on every name that IS the weight', () => {
+  WEIGHT_NAMES.forEach(n => {
+    assert.strictEqual(clientIsWeightName(n), isWeightName(n), `disagreed on "${n}"`);
+    assert.strictEqual(isWeightName(n), true, `"${n}" should be the weight`);
+  });
+});
+
+test('client and server agree on every name that is NOT the weight', () => {
+  NOT_WEIGHT_NAMES.forEach(n => {
+    assert.strictEqual(clientIsWeightName(n), isWeightName(n), `disagreed on "${n}"`);
+    assert.strictEqual(isWeightName(n), false, `"${n}" is a metric, not the weigh-in`);
+  });
+});
+
+test('"Weight (kg)" is stripped from body_metrics, not left to duplicate', () => {
+  const { body_metrics } = cleanScalePayload({
+    weight_kg: 84.3,
+    body_metrics: [
+      { name: 'Weight (kg)', value: 84.3, unit: 'kg' },
+      { name: 'Body Fat', value: 26.1, unit: '%' },
+    ],
+  });
+  assert.deepStrictEqual(body_metrics.map(m => m.name), ['Body Fat'],
+    'the main weight must not also land in lab history');
+});
 
 console.log('\nClient/server agreement on weekday scheduling');
 

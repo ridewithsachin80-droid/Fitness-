@@ -33,6 +33,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const axios  = require('axios');
 const authMW = require('../middleware/auth');
+const { cleanScalePayload } = require('../services/scaleParse');
 
 router.use(authMW);
 
@@ -1271,20 +1272,10 @@ Return ONLY raw JSON, no markdown fences:
     if (!parsed) throw lastErr || new Error('Vision model failed');
 
     // ── Scale screenshots: weight + body-composition metrics ──────────────────
-    // Same plausibility gate as the text parser: 20–300 kg.
-    let weight_kg = parseFloat(parsed.weight_kg);
-    if (!Number.isFinite(weight_kg) || weight_kg < 20 || weight_kg > 300) weight_kg = null;
-
-    const body_metrics = (Array.isArray(parsed.body_metrics) ? parsed.body_metrics : [])
-      .filter(m => m && m.name && Number.isFinite(parseFloat(m.value)))
-      .slice(0, 40)
-      .map(m => ({
-        name:  String(m.name).trim().slice(0, 80),
-        value: parseFloat(m.value),
-        unit:  m.unit ? String(m.unit).trim().slice(0, 20) : null,
-      }))
-      // The main weight belongs in daily_logs, not duplicated into lab history.
-      .filter(m => !/^(body )?weight( ?\(?kgs?\)?)?$/i.test(m.name.trim()));
+    // The 20–300 kg gate and the "main weight does not go into lab history"
+    // rule live in services/scaleParse.js, which test-coach-view imports
+    // directly instead of keeping a copy that drifts.
+    const { weight_kg, body_metrics } = cleanScalePayload(parsed);
 
     const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
     const validFoods = rawFoods

@@ -29,6 +29,7 @@ import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, today, plural } from '../constants';
 import DaySummary from './DaySummary';
+import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
 
 // ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
 //
@@ -377,12 +378,6 @@ export default function AIChatLog() {
   // through the lab button too — that weight belongs in today's daily log, not
   // in lab history (where it duplicates the weight series and never reaches the
   // coach's daily view). 20–300 kg plausibility gate matches the parsers.
-  const isScaleWeightRow = (r) => {
-    const v = parseFloat(r.value);
-    return /^(body )?weight( ?\(?kgs?\)?)?$/i.test(String(r.test_name || '').trim())
-      && Number.isFinite(v) && v >= 20 && v <= 300;
-  };
-
   const saveLabs = useCallback(async (mi) => {
     const m = messages[mi];
     if (!m?.lab || m.applied) return;
@@ -392,8 +387,10 @@ export default function AIChatLog() {
     // Only when the reading is from today — retro-writing today's log from an
     // old report would be wrong. Past-dated weight rows stay in lab history.
     const today = new Date().toISOString().slice(0, 10);
-    const weightRow = m.lab.test_date === today ? rows.find(isScaleWeightRow) : null;
-    const labRows = weightRow ? rows.filter(r => r !== weightRow) : rows;
+    // Routing rules live in utils/labRouting.js — the same functions
+    // test-coach-view runs, and asserted to agree with the server's copy of the
+    // weight-name predicate.
+    const { weightRow, labRows } = routeLabRows(rows, m.lab.test_date, today);
 
     setLabBusy(true);
     try {
