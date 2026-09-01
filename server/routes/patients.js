@@ -69,13 +69,21 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (SELECT COUNT(*)::int FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
                AND mn.coach_read_at IS NULL) AS unread_messages,
-           -- The newest one, so the coach can read the actual question without
-           -- opening the member. A count alone told them something was waiting
-           -- but not whether it needed a reply now.
+           -- The newest one from the last week, READ OR NOT.
+           --
+           -- This used to be unread-only, and that made a message vanish from
+           -- the dashboard the moment the coach opened that member's page for
+           -- any reason at all — to check a weight, to add a note. The message
+           -- was answered by nobody and gone from every list. Read state now
+           -- controls how the row LOOKS, not whether it exists.
            (SELECT mn.note FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
-               AND mn.coach_read_at IS NULL
+               AND mn.created_at > NOW() - INTERVAL '7 days'
              ORDER BY mn.id DESC LIMIT 1) AS latest_message,
+           (SELECT mn.created_at FROM monitor_notes mn
+             WHERE mn.patient_id = u.id AND mn.from_member = true
+               AND mn.created_at > NOW() - INTERVAL '7 days'
+             ORDER BY mn.id DESC LIMIT 1) AS latest_message_at,
            (SELECT u2.name FROM monitor_patients mp2
             JOIN users u2 ON u2.id = mp2.monitor_id
             WHERE mp2.patient_id = u.id AND mp2.active = true LIMIT 1) AS monitor_name
@@ -107,13 +115,21 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (SELECT COUNT(*)::int FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
                AND mn.coach_read_at IS NULL) AS unread_messages,
-           -- The newest one, so the coach can read the actual question without
-           -- opening the member. A count alone told them something was waiting
-           -- but not whether it needed a reply now.
+           -- The newest one from the last week, READ OR NOT.
+           --
+           -- This used to be unread-only, and that made a message vanish from
+           -- the dashboard the moment the coach opened that member's page for
+           -- any reason at all — to check a weight, to add a note. The message
+           -- was answered by nobody and gone from every list. Read state now
+           -- controls how the row LOOKS, not whether it exists.
            (SELECT mn.note FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
-               AND mn.coach_read_at IS NULL
-             ORDER BY mn.id DESC LIMIT 1) AS latest_message
+               AND mn.created_at > NOW() - INTERVAL '7 days'
+             ORDER BY mn.id DESC LIMIT 1) AS latest_message,
+           (SELECT mn.created_at FROM monitor_notes mn
+             WHERE mn.patient_id = u.id AND mn.from_member = true
+               AND mn.created_at > NOW() - INTERVAL '7 days'
+             ORDER BY mn.id DESC LIMIT 1) AS latest_message_at
          FROM users u
          JOIN monitor_patients mp ON mp.patient_id = u.id
          LEFT JOIN patient_profiles pp ON pp.user_id = u.id

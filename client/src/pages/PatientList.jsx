@@ -90,7 +90,11 @@ export default function MemberList() {
   const byUnread = (a, b) => (b.unread_messages || 0) - (a.unread_messages || 0);
   // Built from the FULL roster, not the filtered list: a message must not
   // disappear because the coach happened to type a name into the search box.
-  const withMessages = members.filter(m => (m.unread_messages || 0) > 0).sort(byUnread);
+  // Anyone who wrote in the last week, unread first — not unread-only, because
+  // opening a member marks their messages read and the card would empty itself.
+  const withMessages = members.filter(m => m.latest_message).sort((a, b) =>
+    (b.unread_messages || 0) - (a.unread_messages || 0)
+    || String(b.latest_message_at || '').localeCompare(String(a.latest_message_at || '')));
   const totalUnread  = withMessages.reduce((n, m) => n + (m.unread_messages || 0), 0);
   const noLogToday  = filtered.filter(p => p.last_logged !== todayStr).sort(byUnread);
   const loggedToday = filtered.filter(p => p.last_logged === todayStr).sort(byUnread);
@@ -143,8 +147,7 @@ export default function MemberList() {
         <div className="max-w-md mx-auto px-4 pt-4">
           <div className="bg-[#1A1C20] rounded-2xl border border-[rgba(212,175,55,0.35)] p-4">
             <p className="text-xs font-bold tracking-widest uppercase text-[#D4AF37] mb-2.5">
-              ✉️ {totalUnread} {plural(totalUnread, 'message')} from {withMessages.length}{' '}
-              {plural(withMessages.length, 'member')}
+              ✉️ Messages from members{totalUnread > 0 ? ` · ${totalUnread} new` : ''}
             </p>
             <div className="space-y-2">
               {withMessages.map(m => (
@@ -153,9 +156,10 @@ export default function MemberList() {
                     px-3 py-2.5 hover:border-[rgba(212,175,55,0.30)] transition-colors">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[13px] font-bold text-white truncate">{m.name}</p>
-                    {m.unread_messages > 1 && (
-                      <span className="text-[10px] font-bold text-[#D4AF37] flex-shrink-0">
-                        +{m.unread_messages - 1} more
+                    {m.unread_messages > 0 && (
+                      <span className="text-[10px] font-bold text-[#121316] bg-[#D4AF37]
+                        px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        {m.unread_messages > 1 ? `${m.unread_messages} new` : 'New'}
                       </span>
                     )}
                   </div>

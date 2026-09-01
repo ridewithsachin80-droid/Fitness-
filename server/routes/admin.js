@@ -233,9 +233,16 @@ router.get('/members', async (req, res) => {
         (SELECT COUNT(*)::int FROM monitor_notes mn
           WHERE mn.patient_id=u.id AND mn.from_member=true AND mn.coach_read_at IS NULL)
           AS unread_messages,
+        -- Last 7 days, read or not — see the note on the same pair in
+        -- routes/patients.js. Unread controls styling, not existence.
         (SELECT mn.note FROM monitor_notes mn
-          WHERE mn.patient_id=u.id AND mn.from_member=true AND mn.coach_read_at IS NULL
-          ORDER BY mn.id DESC LIMIT 1) AS latest_message
+          WHERE mn.patient_id=u.id AND mn.from_member=true
+            AND mn.created_at > NOW() - INTERVAL '7 days'
+          ORDER BY mn.id DESC LIMIT 1) AS latest_message,
+        (SELECT mn.created_at FROM monitor_notes mn
+          WHERE mn.patient_id=u.id AND mn.from_member=true
+            AND mn.created_at > NOW() - INTERVAL '7 days'
+          ORDER BY mn.id DESC LIMIT 1) AS latest_message_at
       FROM users u
       LEFT JOIN patient_profiles pp ON pp.user_id=u.id
       WHERE u.role='patient'

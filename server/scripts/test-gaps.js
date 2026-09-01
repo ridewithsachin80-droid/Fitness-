@@ -270,6 +270,18 @@ const fullDay = {
   await new Promise(r => setTimeout(r, 250));
   ck('opening the member clears the badge', (await listUnread()) === 0, await listUnread());
 
+  // ...but the message must NOT disappear with it. The first version of this
+  // card was unread-only, so opening a member's page to check their weight
+  // silently emptied the dashboard of a question nobody had answered. Read
+  // state controls how the row looks; the message stays for a week.
+  ck('the message itself survives being read',
+     (await listRow()).latest_message === 'Please assign my workout for today.',
+     await listRow());
+  ck('and carries a timestamp so the card can order by it',
+     !!(await listRow()).latest_message_at);
+  ck('the admin list keeps it too', (await adminRow()).latest_message ===
+     'Please assign my workout for today.');
+
   await pool.query(`DELETE FROM monitor_notes WHERE patient_id = $1`, [mine.id]);
   ck('cleanup leaves no messages behind', (await listUnread()) === 0);
 

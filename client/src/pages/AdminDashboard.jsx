@@ -1554,27 +1554,34 @@ export default function AdminDashboard() {
                 filtered view, and it disappears once the member is opened,
                 because opening them marks their messages read. */}
             {(() => {
+              // Anyone who has written in the last week, unread first. Not
+              // unread-only: opening a member's page marks their messages read,
+              // so an unread-only card emptied itself the first time the coach
+              // looked at that member for any reason.
               const withMsgs = (members || [])
-                .filter(m => (m.unread_messages || 0) > 0)
-                .sort((a, b) => (b.unread_messages || 0) - (a.unread_messages || 0));
+                .filter(m => m.latest_message)
+                .sort((a, b) => (b.unread_messages || 0) - (a.unread_messages || 0)
+                             || String(b.latest_message_at || '').localeCompare(String(a.latest_message_at || '')));
               if (!withMsgs.length) return null;
-              const totalMsgs = withMsgs.reduce((n, m) => n + (m.unread_messages || 0), 0);
+              const newCount = withMsgs.reduce((n, m) => n + (m.unread_messages || 0), 0);
               return (
                 <div className="bg-[#1A1C20] border border-[rgba(212,175,55,0.35)] rounded-2xl p-3.5 mb-3">
                   <p className="text-sm font-bold text-[#D4AF37] mb-2">
-                    ✉️ {totalMsgs} {plural(totalMsgs, 'message')} from {withMsgs.length}{' '}
-                    {plural(withMsgs.length, 'member')}
+                    ✉️ Messages from members
+                    {newCount > 0 && <span className="ml-2">· {newCount} new</span>}
                   </p>
                   <div className="space-y-2">
                     {withMsgs.map(m => (
                       <button key={m.id} onClick={() => navigate(`/coach/${m.id}`)}
-                        className="w-full text-left bg-[#121316] border border-white/[0.07] rounded-xl
-                          px-3 py-2.5 hover:border-[rgba(212,175,55,0.30)] transition-colors">
+                        className={`w-full text-left bg-[#121316] rounded-xl px-3 py-2.5 border
+                          hover:border-[rgba(212,175,55,0.30)] transition-colors ${
+                          m.unread_messages > 0 ? 'border-[rgba(212,175,55,0.30)]' : 'border-white/[0.07]'}`}>
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[13px] font-bold text-[#FFFFFF] truncate">{m.name}</p>
-                          {m.unread_messages > 1 && (
-                            <span className="text-[10px] font-bold text-[#D4AF37] flex-shrink-0">
-                              +{m.unread_messages - 1} more
+                          {m.unread_messages > 0 && (
+                            <span className="text-[10px] font-bold text-[#121316] bg-[#D4AF37]
+                              px-1.5 py-0.5 rounded-full flex-shrink-0">
+                              {m.unread_messages > 1 ? `${m.unread_messages} new` : 'New'}
                             </span>
                           )}
                         </div>
