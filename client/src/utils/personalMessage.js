@@ -1,3 +1,4 @@
+import { plural } from '../constants';
 /**
  * personalMessage.js — send a member a message from the coach's own number.
  *
@@ -209,7 +210,7 @@ export function combinedGapMessage(member, gapKeys = [], daysSince = null) {
         `Just open the app and tell the AI what you ate today.`);
     }
     const howLong = daysSince != null && daysSince < 60
-      ? `for ${daysSince} days` : 'in a while';
+      ? `for ${daysSince} ${plural(daysSince, 'day')}` : 'in a while';
     return withLink(
       `Hi ${first(member.name)}, haven't seen a log from you ${howLong}. ` +
       `Everything alright? If you're short on time, one line to the AI covers the whole day.`);

@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
+import { plural } from '../constants';
 
 const STATUS_STYLE = {
   difference:    'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.35)] text-[#FFFFFF]',
@@ -210,8 +211,8 @@ export default function MacroLab({ memberId, onChanged }) {
             })}
             <p className="text-[10px] text-[#7E8596] mt-2">
               {readyToSwitch
-                ? `Arm ${t.current_arm} has run its ${t.arm_days} days.`
-                : `${Math.max(0, (t.arm_days || 28) - daysIn)} days left in arm ${t.current_arm}.`}
+                ? `Arm ${t.current_arm} has run its ${t.arm_days} ${plural(t.arm_days, 'day')}.`
+                : `${Math.max(0, (t.arm_days || 28) - daysIn)} ${plural(Math.max(0, (t.arm_days || 28) - daysIn), 'day')} left in arm ${t.current_arm}.`}
             </p>
             <button onClick={advance} disabled={busy} style={{ minHeight: 38 }}
               className={`w-full mt-2 rounded-xl text-xs font-bold active:scale-[0.98] disabled:opacity-60 ${

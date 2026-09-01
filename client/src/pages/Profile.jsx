@@ -391,7 +391,7 @@ export default function Profile() {
                 {[
                   ['Resting (BMR × 1.2)', restingTdee, 'text-[#9EA3B0]'],
                   [work.cardioMin > 0 && work.sets > 0
-                    ? `Workout (${work.sets} sets + ${work.cardioMin} min cardio)`
+                    ? `Workout (${work.sets} ${plural(work.sets, 'set')} + ${work.cardioMin} min cardio)`
                     : work.sets > 0
                     ? `Strength (${work.volumeKg.toLocaleString()} kg lifted)`
                     : work.cardioMin > 0

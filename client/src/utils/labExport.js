@@ -1,3 +1,4 @@
+import { plural } from '../constants';
 /**
  * labExport.js — download lab results as CSV, or as a printable PDF.
  *
@@ -134,7 +135,7 @@ export function printLabReport({ labs = [], comparisons = [], insight = null, me
       <div class="cmp">
         <p class="cmp-h"><b>${h(c.test_name)}</b> &mdash; ${h(c.from)} &rarr; ${h(c.to)}${c.unit ? ' ' + h(c.unit) : ''}
           <span class="dir">${h(c.direction)}</span></p>
-        <p class="cmp-s">${c.interval_days} days${c.from_state && c.to_state && c.from_state !== c.to_state
+        <p class="cmp-s">${c.interval_days} ${plural(c.interval_days, 'day')}${c.from_state && c.to_state && c.from_state !== c.to_state
           ? ` &middot; ${h(c.from_state)} &rarr; ${h(c.to_state)}` : ''}</p>
         <p class="cmp-c">During this interval:
           ${c.context?.mean_kcal ? `${c.context.mean_kcal} kcal/day average` : 'intake not logged'}${

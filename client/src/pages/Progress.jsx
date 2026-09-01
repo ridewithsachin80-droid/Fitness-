@@ -19,7 +19,7 @@ import StrengthProgress from '../components/StrengthProgress';
 import WeeklyReportCard from '../components/WeeklyReportCard';
 import MuscleCoverage from '../components/MuscleCoverage';
 import TrainingSummary from '../components/TrainingSummary';
-import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../constants';
+import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -433,7 +433,7 @@ export default function Progress() {
             color="emerald"
           />
           <StatBox
-            value={`${streak} days`}
+            value={`${streak} ${plural(streak, 'day')}`}
             label="Logging Streak"
             sub={streak >= 7 ? '🔥 On fire!' : streak >= 3 ? '👍 Keep going' : 'Start today'}
             color={streak >= 7 ? 'gold' : 'orange'}

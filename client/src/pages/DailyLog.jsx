@@ -1019,7 +1019,7 @@ export default function DailyLog() {
       setMilestone({
         icon: '🔥',
         title: `${streak}-day streak!`,
-        body: `${streak} days logged in a row. You're building an unstoppable habit!`,
+        body: `${streak} ${plural(streak, 'day')} logged in a row. You're building an unstoppable habit!`,
       });
     } else if (volumePB) {
       setMilestone({
@@ -1250,7 +1250,14 @@ export default function DailyLog() {
               const actLeft = activeActivities.filter(a => !log.activities?.[a.id]).length;
               const acvLeft = activeACV.filter(a => !log.acv?.[a.id]).length;
               const supLeft = activeSupplements.filter(x => !log.supplements?.[x.id]).length;
-              if (actLeft) pending.push(`${actLeft} ${terms.activities.toLowerCase()}`);
+              // "6 physical activity". The other two lines here pluralise; this
+              // one did not, because the word is coach-configurable (terms.activities)
+              // rather than a literal. A label the coach has already written in the
+              // plural — "Activities" — is left alone, since plural() would make it
+              // "activitieses".
+              const actLabel = terms.activities.toLowerCase();
+              if (actLeft) pending.push(
+                `${actLeft} ${/s$/i.test(actLabel) ? actLabel : plural(actLeft, actLabel)}`);
               if (acvLeft) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
               if (supLeft) pending.push(`${supLeft} ${plural(supLeft, 'supplement')}`);
               if (!log.sleep?.bedtime || !log.sleep?.waketime) pending.push('sleep times');
@@ -1462,7 +1469,7 @@ export default function DailyLog() {
                         </span>
                         <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">
                           🏋️ {workoutKcal > 0 ? 'burned'
-                            : coachPlan?.todayDay ? `workout · ${coachPlan.todayDay.exercises.length} exercises`
+                            : coachPlan?.todayDay ? `workout · ${coachPlan.todayDay.exercises.length} ${plural(coachPlan.todayDay.exercises.length, 'exercise')}`
                             : 'workout'}
                         </span>
                         </div>

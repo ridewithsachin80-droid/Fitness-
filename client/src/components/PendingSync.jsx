@@ -18,7 +18,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { getQueueStatus, onQueueChange, retryQueueNow } from '../hooks/useOfflineQueue';
-import { formatDate } from '../constants';
+import { formatDate, plural } from '../constants';
 import { haptic } from '../store/settingsStore';
 
 export default function PendingSync() {
@@ -50,7 +50,7 @@ export default function PendingSync() {
 
   const label = status.count === 1
     ? '1 day waiting to sync'
-    : `${status.count} days waiting to sync`;
+    : `${status.count} ${plural(status.count, 'day')} waiting to sync`;
 
   if (status.stuck) {
     return (

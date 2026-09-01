@@ -1,3 +1,4 @@
+import { plural } from '../constants';
 /**
  * dailyRead.js — the one-sentence coaching read at the top of Today.
  *
@@ -82,7 +83,7 @@ export function dailyRead({
   const protocolComplete = protocolTotal > 0 && protocolDone === protocolTotal;
   if (protocolComplete && foodCount > 0 && sleepSet) {
     if (streakIsBest && streak >= 3) {
-      return { text: `Everything logged, and ${streak} days straight — your best run this month.`, tone: 'win' };
+      return { text: `Everything logged, and ${streak} ${plural(streak, 'day')} straight — your best run this month.`, tone: 'win' };
     }
     return { text: 'Everything logged and every protocol item done. A complete day.', tone: 'win' };
   }
@@ -90,7 +91,7 @@ export function dailyRead({
   // ── Morning: weight first, it anchors the day's numbers ──────────────────
   if (t === 'morning' && !weight) {
     if (streak >= 3) {
-      return { text: `${streak} days running. Log your weight to keep it going.`, tone: 'prompt' };
+      return { text: `${streak} ${plural(streak, 'day')} running. Log your weight to keep it going.`, tone: 'prompt' };
     }
     return { text: 'Log your morning weight to set up the rest of the day.', tone: 'prompt' };
   }

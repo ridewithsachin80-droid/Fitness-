@@ -16,7 +16,7 @@
 import { useState, useEffect } from 'react';
 import { Card, SectionTitle, CardSkeleton } from './UI';
 import { getMuscleCoverage } from '../api/workouts';
-import { today as getToday } from '../constants';
+import { today as getToday, plural } from '../constants';
 
 const GROUP_META = {
   chest:     { icon: '🫁', label: 'Chest' },
@@ -115,10 +115,10 @@ export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
           const status = statusColor(group, tab);
           const meta = GROUP_META[g];
           const primary = tab === 'sessions' ? `${group.sessions7d}×`
-            : tab === 'volume' ? `${group.sets7d} sets`
+            : tab === 'volume' ? `${group.sets7d} ${plural(group.sets7d, 'set')}`
             : recencyText(group.daysSince);
           const secondary = tab === 'recency'
-            ? (group.lastWorked ? `${group.sets7d} sets this week` : 'No sessions in 60 days')
+            ? (group.lastWorked ? `${group.sets7d} ${plural(group.sets7d, 'set')} this week` : 'No sessions in 60 days')
             : `Last: ${recencyText(group.daysSince)}`;
 
           return (

@@ -410,6 +410,34 @@ for (const dir of ['pages', 'components']) {
 }
 ck('plural() is never called with the word first', badPlural.length === 0, [...new Set(badPlural)]);
 
+/**
+ * A count interpolated straight in front of a plural noun.
+ *
+ * Two of these were on a member's own screens: "1 days Logging Streak" on
+ * Progress, and "Still open today: 6 physical activity" on the dashboard —
+ * the second because the word is coach-configurable, so it was a variable
+ * rather than a literal and the eye slid past it. `plural()` has existed since
+ * the int8 fix; twelve places were simply not using it.
+ *
+ * Only counts, not every occurrence of the word: `${x} days` is the bug,
+ * "last 90 days" is fine.
+ */
+const HARD_PLURALS = /\$\{[^}]*\}\s+(days|items|members|coaches|exercises|sets|messages|weeks|meals|entries|notes|foods|logs)\b/g;
+const hardcoded = [];
+for (const dir of ['pages', 'components', 'utils']) {
+  const abs = path.join(CLIENT, dir);
+  if (!fs.existsSync(abs)) continue;
+  for (const g of fs.readdirSync(abs)) {
+    if (!/\.(jsx|js)$/.test(g)) continue;
+    const f = dir + '/' + g;
+    for (const m of read(f).matchAll(HARD_PLURALS)) {
+      hardcoded.push(`${f}: …${m[0].trim().slice(0, 60)}`);
+    }
+  }
+}
+ck('a count is never interpolated straight in front of a plural noun',
+   hardcoded.length === 0, hardcoded.slice(0, 6));
+
 // ── 8. No light-theme class without a dark-theme rule ───────────────────────
 console.log('\n[8] palette coverage');
 
