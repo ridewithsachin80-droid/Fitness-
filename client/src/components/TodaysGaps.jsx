@@ -33,6 +33,7 @@ export default function TodaysGaps() {
   const [loading, setLoading] = useState(true);
   const [target, setTarget]   = useState(null);   // { member, gapKey }
   const [done, setDone]       = useState({});     // { "id:gap": true }
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,16 +81,22 @@ export default function TodaysGaps() {
     });
   };
 
+  /**
+   * Show three, then offer the rest.
+   *
+   * With thirteen members this card filled the entire coach landing screen and
+   * the member list — the thing the page is actually for — started below the
+   * fold. Three is enough to see whether today needs attention; the rest is one
+   * tap away. The explanatory paragraph that used to sit here moved into the
+   * tooltip on the card title, where it is available without costing four lines
+   * of screen every single visit.
+   */
+  const shown = expanded ? members : members.slice(0, 3);
+
   return (
     <div>
-      <p className="text-[11px] text-[#7E8596] mb-2.5 leading-relaxed">
-        One message per member, written from what they actually haven't logged.
-        Time-aware, so water isn't flagged in the morning and supplements aren't
-        flagged before evening.
-      </p>
-
       <div className="space-y-2">
-        {members.map(m => (
+        {shown.map(m => (
           <div key={m.member_id} className="bg-[#121316] border border-white/[0.07] rounded-xl px-3 py-2.5">
             <p className="text-[13px] font-bold text-white truncate mb-1.5">{m.name}</p>
 
@@ -126,6 +133,22 @@ export default function TodaysGaps() {
           </div>
         ))}
       </div>
+
+      {members.length > shown.length && (
+        <button onClick={() => setExpanded(true)}
+          className="w-full mt-2 py-2 text-xs font-semibold text-[#D4AF37]
+            bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.20)]
+            rounded-xl hover:bg-[rgba(212,175,55,0.14)] transition-colors">
+          Show all {members.length}
+        </button>
+      )}
+      {expanded && members.length > 3 && (
+        <button onClick={() => setExpanded(false)}
+          className="w-full mt-2 py-2 text-xs font-semibold text-[#7E8596]
+            hover:text-[#9EA3B0] transition-colors">
+          Show fewer
+        </button>
+      )}
 
       {/* Without this, a member showing 0% compliance elsewhere but missing
           from this list looks like a bug rather than someone who has simply

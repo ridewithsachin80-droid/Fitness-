@@ -88,6 +88,10 @@ export default function MemberList() {
   // the member. Sorted inside the groups rather than across them so the
   // "no log today" split the coach already reads down stays intact.
   const byUnread = (a, b) => (b.unread_messages || 0) - (a.unread_messages || 0);
+  // Built from the FULL roster, not the filtered list: a message must not
+  // disappear because the coach happened to type a name into the search box.
+  const withMessages = members.filter(m => (m.unread_messages || 0) > 0).sort(byUnread);
+  const totalUnread  = withMessages.reduce((n, m) => n + (m.unread_messages || 0), 0);
   const noLogToday  = filtered.filter(p => p.last_logged !== todayStr).sort(byUnread);
   const loggedToday = filtered.filter(p => p.last_logged === todayStr).sort(byUnread);
 
@@ -128,6 +132,40 @@ export default function MemberList() {
           </div>
         </div>
       </div>
+
+      {/* Messages members have sent, at the top of the page.
+          A member wrote "Please assign me a workout" from the AI chat, it was
+          delivered, and there was nowhere on this screen it appeared — the only
+          way to find it was to open that member. A count on their card was not
+          enough either: it says something is waiting without saying whether it
+          needs an answer now. The message itself is the thing worth reading. */}
+      {withMessages.length > 0 && (
+        <div className="max-w-md mx-auto px-4 pt-4">
+          <div className="bg-[#1A1C20] rounded-2xl border border-[rgba(212,175,55,0.35)] p-4">
+            <p className="text-xs font-bold tracking-widest uppercase text-[#D4AF37] mb-2.5">
+              ✉️ {totalUnread} {plural(totalUnread, 'message')} from {withMessages.length}{' '}
+              {plural(withMessages.length, 'member')}
+            </p>
+            <div className="space-y-2">
+              {withMessages.map(m => (
+                <button key={m.id} onClick={() => navigate(`/coach/${m.id}`)}
+                  className="w-full text-left bg-[#121316] border border-white/[0.07] rounded-xl
+                    px-3 py-2.5 hover:border-[rgba(212,175,55,0.30)] transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-bold text-white truncate">{m.name}</p>
+                    {m.unread_messages > 1 && (
+                      <span className="text-[10px] font-bold text-[#D4AF37] flex-shrink-0">
+                        +{m.unread_messages - 1} more
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#9EA3B0] mt-1 line-clamp-2">{m.latest_message}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Today's gaps — who is missing what, ranked, with a message ready.
           This was mounted only on the admin dashboard, so a coach landing here

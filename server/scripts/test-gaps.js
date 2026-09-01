@@ -215,6 +215,18 @@ const fullDay = {
      RETURNING id`, [link.monitor_id, mine.id]);
   ck('a member message shows as unread on the coach list', (await listUnread()) === 1);
 
+  const listRow = async () => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/patients/`,
+      { headers: { Authorization: 'Bearer ' + tok(link.monitor_id, 'monitor') } });
+    return (await r.json()).find(m => m.id === mine.id) || {};
+  };
+  // The coach list carries the message TEXT, not just a count — the landing
+  // page shows what was asked, so the coach can tell an urgent question from a
+  // "thanks" without opening the member.
+  ck('the newest message text comes through with it',
+     (await listRow()).latest_message === 'Please assign my workout for today.',
+     (await listRow()).latest_message);
+
   // A note the COACH wrote is not a message waiting on the coach.
   await pool.query(
     `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged, from_member)
