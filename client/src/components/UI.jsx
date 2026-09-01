@@ -11,12 +11,73 @@ export function Card({ children, className = '' }) {
   );
 }
 
+/**
+ * Section glyphs.
+ *
+ * Every section heading in the app used to open with an emoji. Emoji are drawn
+ * by the operating system, so the same screen renders differently on a Pixel,
+ * an iPhone and a desktop, at a weight and colour we do not control — they read
+ * as a hobby project rather than something a member is paying for. These are
+ * stroked at the same weight as the interface icons and inherit currentColor,
+ * so a section heading finally looks like it was drawn by the same hand as the
+ * rest of the app.
+ *
+ * Keyed by the emoji the call sites already pass, so all 56 of them upgrade
+ * without being touched. An unmapped key falls back to a short rule rather than
+ * to the emoji: one unknown glyph is a missing icon, an emoji among engraved
+ * icons is a broken design.
+ */
+const GLYPH = {
+  '📋': 'M7 3h6v2h3v14H4V5h3V3zm1 1v2h4V4H8z',           // clipboard
+  '📝': 'M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5z',            // note
+  '⚖️': 'M12 3v16M5 20h14M6 8l-3 6h6L6 8zm12 0l-3 6h6l-3-6z', // scales
+  '📊': 'M5 19V11M10 19V5M15 19v-6M20 19v-9',              // bars
+  '📈': 'M4 17l5-6 4 3 6-8M15 6h5v5',                      // trend
+  '🥗': 'M4 12h16a8 8 0 01-16 0zM9 8a3 3 0 016 0',         // bowl
+  '🔥': 'M12 3s5 4 5 9a5 5 0 01-10 0c0-2 1-3 2-4 0 2 1 3 2 3s1-5 1-8z', // flame
+  '💪': 'M4 14a5 5 0 015-5h4l4 4v4H8a4 4 0 01-4-3z',       // arm
+  '🏋️': 'M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12',            // barbell
+  '🩸': 'M12 3s6 7 6 11a6 6 0 01-12 0c0-4 6-11 6-11z',     // drop
+  '🧪': 'M9 3v7L4 19a2 2 0 002 2h12a2 2 0 002-2l-5-9V3M8 3h8', // flask
+  '🔬': 'M9 4h4v7H9zM6 20h14M11 11v5M7 20a6 6 0 0110-4',    // microscope
+  '🧬': 'M7 3c0 6 10 6 10 12M17 3c0 6-10 6-10 12M7 8h10M7 16h10', // helix
+  '🌟': 'M12 3l2.5 5.5L20 9.5l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-1L12 3z', // star
+  '🎯': 'M12 4a8 8 0 100 16 8 8 0 000-16zm0 4a4 4 0 100 8 4 4 0 000-8z', // target
+  '🔍': 'M11 4a7 7 0 100 14 7 7 0 000-14zM20 20l-4-4',      // search
+  '🔔': 'M12 4a5 5 0 00-5 5v4l-2 3h14l-2-3V9a5 5 0 00-5-5zM10 19a2 2 0 004 0', // bell
+  '👥': 'M8 11a3 3 0 100-6 3 3 0 000 6zM3 19c0-3 2-5 5-5s5 2 5 5M16 6a3 3 0 010 6M17 14c2 0 4 2 4 5', // people
+  '✨': 'M12 4l1.5 4.5L18 10l-4.5 1.5L12 16l-1.5-4.5L6 10l4.5-1.5L12 4z', // spark
+  '🍽': 'M7 3v8M5 3v4a2 2 0 004 0V3M16 3c-1.5 2-2 4-2 6h4V3M16 9v11M7 11v9', // cutlery
+  '⏰': 'M12 5a7 7 0 100 14 7 7 0 000-14zm0 3v4l3 2',       // clock
+};
+
+function SectionGlyph({ name }) {
+  const d = GLYPH[name];
+  if (!d) return <span className="w-3.5 h-px bg-current opacity-40 flex-shrink-0" />;
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+      className="flex-shrink-0" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
+/**
+ * A section heading.
+ *
+ * Sentence case, not tracked-out capitals. Capitals were on every heading on
+ * every screen, which is decoration rather than information — it made a coach's
+ * page read like a form and cost legibility at 10px for nothing. The heading is
+ * quiet so the CONTENT is the loud thing; hierarchy comes from the numbers
+ * below it, not from shouting the label above it.
+ */
 export function SectionTitle({ children, icon, tooltip }) {
   const [show, setShow] = useState(false);
   return (
-    <div className="flex items-center gap-2 mb-3">
-      {icon && <span className="text-base leading-none">{icon}</span>}
-      <h3 className="font-semibold text-[#6a6a78] text-[10px] tracking-[0.12em] uppercase flex-1">
+    <div className="flex items-center gap-2 mb-3 text-[#8C93A3]">
+      {icon && <SectionGlyph name={icon} />}
+      <h3 className="font-semibold text-[13px] tracking-[0.005em] text-[#A9B0BF] flex-1">
         {children}
       </h3>
       {tooltip && (

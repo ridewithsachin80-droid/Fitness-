@@ -209,21 +209,43 @@ function PastLogModal({ log, onClose }) {
 
 // ── Stat Card ────────────────────────────────────────────────────────────────
 
-function StatBox({ value, label, sub, color = 'emerald' }) {
-  const colors = {
-    emerald: 'bg-[rgba(212,175,55,0.08)] text-[#D4AF37] border border-[rgba(212,175,55,0.14)]',
-    blue:    'bg-[rgba(96,165,250,0.08)] text-blue-400 border border-[rgba(96,165,250,0.14)]',
-    orange:  'bg-[rgba(251,146,60,0.08)] text-orange-400 border border-[rgba(251,146,60,0.14)]',
-    purple:  'bg-[rgba(212,175,55,0.08)] text-amber-400 border border-[rgba(212,175,55,0.14)]',
-    amber:   'bg-[rgba(251,191,36,0.08)] text-amber-400 border border-[rgba(251,191,36,0.14)]',
-    // Reserved for genuine streak/achievement milestones, not routine stats.
-    gold:    'bg-[rgba(212,175,106,0.10)] text-gold-300 border border-[rgba(212,175,106,0.22)] shadow-glow-gold',
-  };
+/**
+ * A single figure from the member's own data.
+ *
+ * Four tiles used to arrive in four different accent colours — gold, orange,
+ * blue, amber — each with a tinted background and a tinted border. Colour was
+ * carrying no information: nothing about "days logged" is blue, and with every
+ * tile shouting, none of them was the one to look at.
+ *
+ * Now the numbers are set in the display face on the same quiet surface, and
+ * gold is spent on exactly one tile per screen: the one the member is here to
+ * see. `accent` marks it. Everything else is ink, which is what makes the gold
+ * mean something when it appears.
+ *
+ * `tone` still separates good from concerning, but through a small mark beside
+ * the caption rather than by repainting the whole tile.
+ */
+function StatBox({ value, label, sub, accent = false, tone = null }) {
+  const dot = tone === 'good' ? 'bg-[#6E8F6B]'
+            : tone === 'warn' ? 'bg-[#C4924B]'
+            : null;
   return (
-    <div className={`rounded-2xl px-4 py-3 ${colors[color]}`}>
-      <div className="font-display text-2xl font-semibold">{value}</div>
-      <div className="text-xs font-semibold mt-0.5">{label}</div>
-      {sub && <div className="text-xs opacity-70 mt-0.5">{sub}</div>}
+    <div className={`rounded-2xl px-4 py-3 border ${
+      accent
+        ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.22)]'
+        : 'bg-[#16171A] border-white/[0.07]'
+    }`}>
+      <div className={`font-display text-[26px] leading-none font-semibold ${
+        accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>
+        {value}
+      </div>
+      <div className="text-[12px] font-medium mt-1.5 text-[#A9B0BF]">{label}</div>
+      {sub && (
+        <div className="flex items-center gap-1.5 mt-1">
+          {dot && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />}
+          <span className="text-[11.5px] text-[#7E8596]">{sub}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -430,25 +452,24 @@ export default function Progress() {
             value={latestW ? `${latestW} kg` : '—'}
             label="Current Weight"
             sub={bmi ? `BMI ${bmi}` : ''}
-            color="emerald"
+            accent
           />
           <StatBox
             value={`${streak} ${plural(streak, 'day')}`}
             label="Logging Streak"
-            sub={streak >= 7 ? '🔥 On fire!' : streak >= 3 ? '👍 Keep going' : 'Start today'}
-            color={streak >= 7 ? 'gold' : 'orange'}
+            sub={streak >= 7 ? 'Best run this month' : streak >= 3 ? 'Keep going' : 'Start today'}
+            tone={streak >= 3 ? 'good' : null}
           />
           <StatBox
             value={`${avg30}%`}
             label="30-day Compliance"
-            sub={avg30 >= 75 ? 'Excellent!' : avg30 >= 50 ? 'Good' : 'Room to improve'}
-            color={complianceColor}
+            sub={avg30 >= 75 ? 'Strong' : avg30 >= 50 ? 'Steady' : 'Room to improve'}
+            tone={avg30 >= 75 ? 'good' : avg30 >= 50 ? null : 'warn'}
           />
           <StatBox
             value={daysLogged}
             label="Days Logged"
             sub="last 90 days"
-            color="blue"
           />
         </div>
 

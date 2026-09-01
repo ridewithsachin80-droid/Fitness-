@@ -386,8 +386,26 @@ async function overflowTest() {
 
   const chromium = chromiumPkg.default || chromiumPkg;
   const api = stub('api-overflow.js', OVERFLOW_API_STUB);
-  const css = fs.readFileSync(path.join(CLIENT_SRC, 'index.css'), 'utf8')
-    .replace(/@import[^;]+;/g, '');
+  // The COMPILED stylesheet, not src/index.css.
+  //
+  // src/index.css is the Tailwind SOURCE — three @tailwind directives and some
+  // custom rules. Injecting it gives the page the design tokens and none of the
+  // utility classes, so every flex row, width and padding in the app is absent
+  // and nothing can overflow. The check passed on a page with no layout at all:
+  // a vacuous pass of exactly the kind this repo keeps producing.
+  //
+  // Reading from dist/ means the suite tests what a member actually downloads.
+  const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+  const cssFile = fs.existsSync(distDir)
+    ? fs.readdirSync(distDir).find(f => f.endsWith('.css'))
+    : null;
+  if (!cssFile) {
+    throw new Error(
+      'No built stylesheet found at client/dist/assets/*.css.\n' +
+      '  Run the client build first:  cd client && npm run build\n' +
+      '  Without it this check renders an unstyled page and proves nothing.');
+  }
+  const css = fs.readFileSync(path.join(distDir, cssFile), 'utf8');
 
   const browser = await puppeteerCore.launch({
     executablePath: await chromium.executablePath(),
