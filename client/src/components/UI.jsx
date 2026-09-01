@@ -3,9 +3,23 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '../store/settingsStore';
 import { useAIChat } from './AIChatLog';
 
+/**
+ * A section surface.
+ *
+ * Was: a visible border plus a raised shadow on every section, so a screen with
+ * six sections had six outlines and six shadows, all at the same strength. That
+ * is what made every page read as a stack of identical boxes — no section
+ * looked more important than another because nothing distinguished them.
+ *
+ * Now the surface separates itself by being slightly lighter than the page,
+ * with a single hairline at the top edge to catch the light the way a milled
+ * surface does. No border, no drop shadow, more room inside. Hierarchy is left
+ * to the content, which is where it belongs.
+ */
 export function Card({ children, className = '' }) {
   return (
-    <div className={`rounded-2xl p-4 border border-white/[0.07] bg-[#1A1C20] shadow-card-raised ${className}`}>
+    <div className={`rounded-[20px] px-4 py-4 bg-[#17181C] ${className}`}
+      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
       {children}
     </div>
   );
