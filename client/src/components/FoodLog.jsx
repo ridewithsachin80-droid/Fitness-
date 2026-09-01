@@ -848,7 +848,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               <button key={m} onClick={() => setMeal(m)}
                 style={{ minHeight: 36 }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  meal === m ? 'bg-[#D4AF37] text-white shadow-sm' : 'bg-white/[0.05] text-[#8e8e9a] hover:bg-white/[0.10]'
+                  meal === m ? 'bg-[#D4AF37] text-[#121316] shadow-sm' : 'bg-white/[0.05] text-[#8e8e9a] hover:bg-white/[0.10]'
                 }`}>{m}</button>
             ))}
           </div>
@@ -1026,7 +1026,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
             </div>
             <button onClick={add} disabled={!query.trim() || !grams}
               style={{ minHeight: 44 }}
-              className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#9775fa] disabled:opacity-40 text-white text-sm font-bold rounded-xl transition-all active:scale-95">
+              className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#9775fa] disabled:opacity-40 text-[#121316] text-sm font-bold rounded-xl transition-all active:scale-95">
               Add
             </button>
             <button onClick={closeForm}

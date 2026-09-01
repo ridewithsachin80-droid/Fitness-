@@ -103,7 +103,7 @@ export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              tab === t.id ? 'bg-[#D4AF37] text-white' : 'text-[#9a9aa6] hover:text-[#d8d8de]'}`}>
+              tab === t.id ? 'bg-[#D4AF37] text-[#121316]' : 'text-[#9a9aa6] hover:text-[#d8d8de]'}`}>
             {t.label}
           </button>
         ))}

@@ -213,11 +213,11 @@ export default function ProgramBuilderModal({ memberId, memberName, onClose, onS
               {days.map((d, i) => (
                 <button key={i} onClick={() => setActiveDayIdx(i)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
-                    i === activeDayIdx ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.06] text-[#9a9aa6] hover:bg-white/[0.1]'}`}>
+                    i === activeDayIdx ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.06] text-[#9a9aa6] hover:bg-white/[0.1]'}`}>
                   {d.day_label}
                 </button>
               ))}
-              <button onClick={addDay} className="px-3 py-1.5 text-xs font-semibold rounded-full bg-white/[0.04] border border-dashed border-white/[0.15] text-[#5a5a68] hover:text-[#9a9aa6]">
+              <button onClick={addDay} className="px-3 py-1.5 text-xs font-semibold rounded-full bg-white/[0.04] border border-dashed border-white/[0.15] text-[#9EA3B0] hover:text-[#FFFFFF]">
                 + Day
               </button>
             </div>
@@ -278,7 +278,7 @@ export default function ProgramBuilderModal({ memberId, memberName, onClose, onS
 
         <div className="px-5 py-4 border-t border-white/[0.07] flex-shrink-0 space-y-2">
           <button onClick={handleSave} disabled={saving}
-            className="w-full py-3 bg-[#D4AF37] hover:bg-[#e0c98a] text-white font-bold rounded-xl transition-colors disabled:opacity-50">
+            className="w-full py-3 bg-[#D4AF37] hover:bg-[#e0c98a] text-[#121316] font-bold rounded-xl transition-colors disabled:opacity-50">
             {saving ? 'Saving…' : existingProgramId ? 'Save Changes' : 'Create Program'}
           </button>
           {existingProgramId && (

@@ -135,8 +135,22 @@ const segmentsOf = (classList) => {
  */
 const GOLD_BG = new Set(['bg-[#D4AF37]', 'bg-emerald-500', 'bg-emerald-600', 'bg-emerald-700',
                          'hover:bg-emerald-600', 'hover:bg-emerald-700']);
+/**
+ * Scanned across pages AND components. The first version checked PAGES only,
+ * and a contrast audit against the built stylesheet later found four gold
+ * buttons with white text sitting in components/ — the AI chat, the coach
+ * chat, the food log and the programme builder. The check was real; its search
+ * path was half the app.
+ */
+const ALL_JSX = PAGES.slice();
+for (const dir of ['components']) {
+  for (const g of fs.readdirSync(path.join(CLIENT, dir))) {
+    if (g.endsWith('.jsx')) ALL_JSX.push(dir + '/' + g);
+  }
+}
+
 const whiteOnGold = [];
-for (const f of PAGES) {
+for (const f of ALL_JSX) {
   const src = read(f);
   const re = /className=\{?[`"]([\s\S]*?)[`"]/g;
   let m;
@@ -334,6 +348,46 @@ for (const f of PAGES) {
   }
 }
 ck('every dark-backgrounded input states its own text colour', darkNoFg.length === 0, darkNoFg);
+
+// ── 6b. Measured low-contrast pairs ─────────────────────────────────────────
+console.log('\n[6b] contrast');
+
+/**
+ * These pairs were measured against the BUILT stylesheet — every className in
+ * pages/ and components/, background and foreground resolved through the
+ * index.css overrides, composited over the page colour, scored with the WCAG
+ * formula. Seven elements came back under 3:1:
+ *
+ *     2.10:1  four gold buttons carrying white text
+ *     2.51:1  the "+ Day" and rest-timer buttons, #5a5a68 on a 4% white wash
+ *     2.58:1  the offline banner, white on amber
+ *
+ * The measurement needs client/dist, which no CI step builds, so the audit
+ * itself is a tool rather than a gate — and a gate that skips is worse than no
+ * gate. What runs here instead is the specific pairs it found, as source
+ * contracts. Narrower, but it cannot silently pass.
+ */
+const CONTRAST_BANNED = [
+  { bg: 'bg-amber-500/90', fg: 'text-white', ratio: '2.58:1' },
+  { bg: 'bg-white/[0.04]', fg: 'text-[#5a5a68]', ratio: '2.51:1' },
+];
+const lowContrast = [];
+for (const f of ALL_JSX) {
+  const src = read(f);
+  const re = /className=\{?[`"]([\s\S]*?)[`"]/g;
+  let m;
+  while ((m = re.exec(src))) {
+    for (const seg of segmentsOf(m[1])) {
+      const toks = seg.split(/\s+/).filter(Boolean);
+      for (const pair of CONTRAST_BANNED) {
+        if (toks.includes(pair.bg) && toks.includes(pair.fg)) {
+          lowContrast.push(`${f}: ${pair.bg} + ${pair.fg} (${pair.ratio})`);
+        }
+      }
+    }
+  }
+}
+ck('no element repeats a pair measured below 3:1', lowContrast.length === 0, lowContrast);
 
 // ── 7b. plural() argument order ─────────────────────────────────────────────
 console.log('\n[7b] plural() argument order');

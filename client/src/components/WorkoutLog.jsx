@@ -601,7 +601,7 @@ export default function WorkoutLog({ date }) {
                 </div>
                 {ex.sets.length > 0 && (
                   <button onClick={() => startRest(90)}
-                    className="px-3 py-2 rounded-lg border text-xs font-semibold bg-white/[0.04] border-white/[0.08] text-[#5a5a68] hover:bg-white/[0.08] hover:text-[#9a9aa6] transition-colors">
+                    className="px-3 py-2 rounded-lg border text-xs font-semibold bg-white/[0.04] border-white/[0.08] text-[#9EA3B0] hover:bg-white/[0.08] hover:text-[#FFFFFF] transition-colors">
                     ⏱
                   </button>
                 )}

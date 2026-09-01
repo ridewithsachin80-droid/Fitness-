@@ -231,7 +231,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-[#D4AF37] text-white text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="max-w-[85%] bg-[#D4AF37] text-[#121316] text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
                 {m.text}
               </div>
             </div>
@@ -274,7 +274,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                             <div className="flex items-center gap-2 min-w-0">
                               {a.resolved && (
                                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                  a.on ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.08] text-transparent'
+                                  a.on ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'
                                 }`}>✓</span>
                               )}
                               <p className={`text-[13px] font-bold truncate ${a.on || !a.resolved ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
@@ -394,7 +394,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
-                ? 'bg-[#D4AF37] text-white shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
+                ? 'bg-[#D4AF37] text-[#121316] shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-[#4e4e5c]'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

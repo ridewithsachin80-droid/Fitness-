@@ -75,7 +75,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
             style={{ minHeight: 32 }}
             className={`flex-1 rounded-lg text-[11px] font-bold transition-colors ${
               days === r.days
-                ? 'bg-[#D4AF37] text-white'
+                ? 'bg-[#D4AF37] text-[#121316]'
                 : 'bg-white/[0.04] text-[#8e8e9a] hover:text-[#d8d8de]'
             }`}>
             {r.label}

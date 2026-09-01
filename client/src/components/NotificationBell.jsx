@@ -103,7 +103,7 @@ export default function NotificationBell() {
             {[['messages', `Messages${messages.length ? ` (${messages.length})` : ''}`], ['reminders', 'Reminders']].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
-                  tab === k ? 'bg-[#D4AF37] text-white' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
+                  tab === k ? 'bg-[#D4AF37] text-[#121316]' : 'text-[#5a5a68] hover:text-[#9a9aa6]'
                 }`}>{label}</button>
             ))}
           </div>

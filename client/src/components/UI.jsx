@@ -100,7 +100,7 @@ export function OfflineBanner() {
   }, []);
   if (justOnline) return <div className="bg-[#D4AF37] text-[#121316] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
   if (!offline) return null;
-  return <div className="bg-amber-500/90 text-white text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
+  return <div className="bg-amber-500/90 text-[#121316] text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
 }
 
 export function Spinner({ size = 'md', color = 'emerald' }) {
