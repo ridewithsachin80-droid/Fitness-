@@ -355,22 +355,17 @@ test('an implausible "Weight" row stays a lab row', () => {
 });
 
 
-// ── Mirrors computeDayTotals in aiChat.js (member question answering) ─────────
-function computeDayTotals(foodItems) {
-  let cal = 0, pro = 0, carb = 0, fat = 0, unknown = 0;
-  for (const f of (Array.isArray(foodItems) ? foodItems : [])) {
-    const g = parseFloat(f.grams);
-    const n = f.per_100g;
-    if (!Number.isFinite(g) || !n || !(parseFloat(n.calories) > 0)) { unknown++; continue; }
-    const k = g / 100;
-    cal  += (parseFloat(n.calories)    || 0) * k;
-    pro  += (parseFloat(n.protein)     || 0) * k;
-    carb += (parseFloat(n.total_carbs) || 0) * k;
-    fat  += (parseFloat(n.fat)         || 0) * k;
-  }
-  return { cal: Math.round(cal), pro: +pro.toFixed(1), carb: +carb.toFixed(1),
-           fat: +fat.toFixed(1), unknown };
-}
+// ── The REAL computeDayTotals, imported ──────────────────────────────────────
+// This was a copy of the function, pasted into this file under a comment
+// saying "mirrors computeDayTotals in aiChat.js". Three assertions ran against
+// the copy, so changing the shipped function could not turn them red — the
+// suite would have kept reporting the copy as correct forever.
+//
+// It is importable from services/digests, which is where aiChat.js gets it, so
+// there was never a reason for the copy. Most of this file still has that
+// problem: thirteen helpers here reimplement app logic. This is the one that
+// had a real module sitting behind it.
+const { computeDayTotals } = require('../services/digests');
 
 console.log('\nDay totals for member questions');
 
