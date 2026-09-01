@@ -138,6 +138,7 @@ let pass = 0, fail = 0;
 const ok  = (n) => { pass++; console.log(`  ✓ ${n}`); };
 const bad = (n, d) => { fail++; console.log(`  ✗ ${n}\n      ${d}`); };
 const eq  = (n, a, b) => (String(a) === String(b)) ? ok(n) : bad(n, `expected ${b}, got ${a}`);
+const ckq = (n, c, d) => c ? ok(n) : bad(n, JSON.stringify(d || '').slice(0, 200));
 
 (async () => {
   console.log('\nCOACH QUESTIONS');
@@ -249,6 +250,33 @@ const eq  = (n, a, b) => (String(a) === String(b)) ? ok(n) : bad(n, `expected ${
   eq('a specific question still returns prose', !!r3.body.answer, true);
   eq('a specific question has no summary card', r3.body.summary, 'undefined');
   eq('the model WAS used for the specific question', !!lastAnswerPrompt, true);
+
+  // ── The coach chat remembers the turn before ───────────────────────────────
+  // "Set water target 4L for" -> "Please specify which member" -> "sachin"
+  // came back as "let me know what you'd like to update for Sachin". The 4L was
+  // gone: each message was parsed on its own, so a two-part instruction lost
+  // its first half. The member chat has carried its last few turns since
+  // Sprint 1; the coach chat never did.
+  console.log('\n[coach chat memory]');
+  const { buildCoachPrompt } = require('../routes/aiChat');
+  const roster = [{ id: 1, name: 'Sachin' }, { id: 2, name: 'Asha' }];
+
+  const cold = buildCoachPrompt('sachin', roster, [], null, []);
+  ckq('with no history the prompt carries no conversation block',
+     !/THE CONVERSATION SO FAR/.test(cold));
+
+  const warm = buildCoachPrompt('sachin', roster, [], null, [
+    { role: 'coach', text: 'Set water target 4L for' },
+    { role: 'ai',    text: 'Please specify which member(s) you want to set the 4L water target for.' },
+  ]);
+  ckq('with history it carries the earlier turns', /THE CONVERSATION SO FAR/.test(warm));
+  ckq('including the value the coach already gave', /Set water target 4L for/.test(warm));
+  ckq('and its own question, labelled as its own',
+     /You: Please specify which member/.test(warm), warm.slice(0, 0));
+  ckq('the coach\'s turns are labelled as the coach',
+     /Coach: Set water target 4L for/.test(warm));
+  ckq('and the new message is still the one being parsed',
+     /Coach's message: "sachin"/.test(warm));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   server.close();

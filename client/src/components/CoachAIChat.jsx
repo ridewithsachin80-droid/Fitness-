@@ -73,6 +73,16 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
   const closeChat = useCoachAI(s => s.closeChat);
 
   const [messages, setMessages]   = useState([]);
+  /**
+   * `send` is a useCallback with deps [input, busy, contextMember?.id] — it does
+   * NOT depend on `messages`, so reading the state directly inside it would
+   * capture whatever the array was when the callback was last built. From the
+   * second turn on, the history sent to the server would be stale, which is
+   * exactly the bug this history is meant to fix. A ref always holds the
+   * current value.
+   */
+  const messagesRef = useRef([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput]         = useState('');
   const [busy, setBusy]           = useState(false);
   const [applying, setApplying]   = useState(false);
@@ -106,6 +116,14 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       const { data } = await api.post('/ai-chat/coach-parse', {
         message: text,
         context_member_id: contextMember?.id ?? null,
+        // The last few turns. Without them "set water target 4L for" followed by
+        // "sachin" read as two unrelated instructions, and the second one lost
+        // the 4L entirely. `messages` is the state BEFORE this send, which is
+        // what we want — the new line goes in as `message`.
+        recent: messagesRef.current
+          .filter(mm => mm.text)
+          .slice(-6)
+          .map(mm => ({ role: mm.role === 'user' ? 'coach' : 'ai', text: String(mm.text).slice(0, 300) })),
       });
       // A question comes back as { answer } with no actions. Rendered as a
       // plain reply — there is nothing to apply, so showing a preview card

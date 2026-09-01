@@ -2060,7 +2060,7 @@ function coachAudit(actor, action, targetId, targetName, detail) {
 }
 
 // ── Coach prompt ─────────────────────────────────────────────────────────────
-function buildCoachPrompt(message, members, memberStats = [], contextMember = null) {
+function buildCoachPrompt(message, members, memberStats = [], contextMember = null, recent = []) {
   const { statsLine } = require('../services/milestones');
   const statsById = new Map(memberStats.map(s => [s.id, statsLine(s)]));
   const cat = (list) => list.map(i => `"${i.id}" (${i.label})`).join(', ');
@@ -2072,6 +2072,14 @@ Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: '
 If the coach schedules a workout day for "today"/"aaj", use today's weekday.
 
 Coach's message: "${message}"
+${recent.length ? `
+THE CONVERSATION SO FAR (oldest first). The coach is often mid-thought: they say
+"set water target 4L for" and you ask who, and their next message is just a name.
+Read the WHOLE exchange and carry forward anything they already said — the value,
+the field, the member — instead of treating the latest line on its own. If your
+own previous turn asked a question, the coach's next message is the answer to it.
+${recent.map(r => `${r.role === 'coach' ? 'Coach' : 'You'}: ${r.text}`).join('\n')}
+` : ''}
 ${contextMember ? `
 THE COACH IS CURRENTLY LOOKING AT "${contextMember.name}"'s page.
 If the message names no member at all ("raise water to 4 litres", "add whey to
@@ -2374,6 +2382,14 @@ router.get('/portions', async (req, res) => {
 //            ops (validated command), changes: [{icon,text}] }] }
 router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
   const { message, context_member_id } = req.body;
+  // Last few turns, so a two-part instruction survives. Capped and truncated
+  // for the same reason the member chat caps its own history: this is untrusted
+  // text going into a prompt, and an unbounded transcript is both a cost and an
+  // injection surface.
+  const recent = (Array.isArray(req.body?.recent) ? req.body.recent : [])
+    .slice(-6)
+    .filter(r => r && (r.role === 'coach' || r.role === 'ai') && typeof r.text === 'string' && r.text.trim())
+    .map(r => ({ role: r.role, text: r.text.trim().slice(0, 300) }));
   if (!message || String(message).trim().length < 2) {
     return res.status(400).json({ error: 'Message required' });
   }
@@ -2401,7 +2417,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
       : null;
 
     const { text: rawText, provider } =
-      await callAI(buildCoachPrompt(cleanMsg, members, memberStats, contextMember));
+      await callAI(buildCoachPrompt(cleanMsg, members, memberStats, contextMember, recent));
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(jsonText);
 
@@ -3016,3 +3032,4 @@ module.exports.buildCoachAnswerPrompt  = buildCoachAnswerPrompt;
 module.exports.buildCoachSummary       = buildCoachSummary;
 module.exports.programDayForDate = programDayForDate;
 module.exports.buildCoachRosterContext = buildCoachRosterContext;
+module.exports.buildCoachPrompt = buildCoachPrompt;
