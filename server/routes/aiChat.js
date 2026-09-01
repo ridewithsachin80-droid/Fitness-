@@ -434,7 +434,9 @@ async function recordPortions(patientId, corrections) {
 const crypto = require('crypto');
 
 const EVAL_SOURCES = new Set(['member_parse', 'coach_parse', 'photo']);
-const EVAL_FIELDS  = new Set(['grams', 'meal', 'food_name', 'exercise', 'target', 'ops']);
+const EVAL_FIELDS  = new Set(['grams', 'meal', 'food_name', 'exercise', 'target', 'ops',
+                              // A parse the member did NOT correct — see maybeRecordControl.
+                              'control']);
 
 // One member correcting a lot in one evening should not drown out everyone
 // else. 40 is far above normal use and far below "this is now noise".
@@ -487,6 +489,72 @@ async function recordEvalSample({ patientId, source, message, aiOutput, correcte
     console.error('recordEvalSample failed:', err.message);
     return 'error';
   }
+}
+
+/**
+ * Store a parse the member did NOT correct — a positive control.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Everything else in the eval set is a failure, because a correction is what
+ * creates a sample. Replay a set of nothing but failures and you learn whether
+ * the hard cases improved — and nothing at all about whether you broke the easy
+ * ones. That is how a prompt tweak "fixes roti" and quietly starts mis-slotting
+ * breakfast, with the scoreboard going up the whole time.
+ *
+ * So roughly one parse in CONTROL_SAMPLE_RATE is kept with `corrected` equal to
+ * `ai_output`: the model got this right, and it should still get it right after
+ * the next prompt change. That is what makes "newly broken" a real number
+ * instead of an assumption.
+ *
+ * ── WHY CONTROLS HAVE THEIR OWN CAP ─────────────────────────────────────────
+ * They are far more plentiful than corrections — most parses are fine. Sharing
+ * the error budget would let controls crowd out the real mistakes, which are
+ * the rarer and more valuable signal. Separate ceiling, checked separately.
+ */
+const CONTROL_SAMPLE_RATE = 20;    // 1 in 20 uncorrected parses
+const CONTROL_DAILY_CAP   = 5;     // per member, well under EVAL_DAILY_CAP
+
+/** Injectable so the tests can force the decision instead of retrying 100 times. */
+let controlSampler = () => Math.random() * CONTROL_SAMPLE_RATE < 1;
+function setControlSampler(fn) { controlSampler = fn; }
+
+async function maybeRecordControl(patientId, message, foods) {
+  const list = Array.isArray(foods) ? foods : [];
+  if (!list.length) return 'skipped';
+  if (!controlSampler()) return 'not-sampled';
+
+  // One representative item, so a control scores the same way a grams sample
+  // does and the replay tool needs no special case for it.
+  const f = list[0];
+  const shape = {
+    name:  String(f?.name || '').slice(0, 100),
+    grams: Number(f?.grams) || 0,
+    meal:  f?.meal ? String(f.meal).slice(0, 40) : null,
+  };
+  if (!shape.name || !shape.grams) return 'skipped';
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM ai_parse_samples
+        WHERE patient_id = $1 AND field = 'control'
+          AND created_at > NOW() - INTERVAL '24 hours'`,
+      [patientId]
+    );
+    if ((rows[0]?.n || 0) >= CONTROL_DAILY_CAP) return 'capped';
+  } catch (err) {
+    console.error('control cap check failed:', err.message);
+    return 'error';
+  }
+
+  return recordEvalSample({
+    patientId,
+    source:    'member_parse',
+    message,
+    aiOutput:  shape,
+    corrected: shape,          // identical: this one was already right
+    field:     'control',
+  });
 }
 
 /**
@@ -1745,6 +1813,11 @@ router.post('/parse', async (req, res) => {
     // Only here, in /parse — a photo has no replayable text to pair against.
     rememberParseTurn(req.user.id, cleanMsg, foods)
       .catch(err => console.error('rememberParseTurn failed:', err.message));
+
+    // Eval set: occasionally keep a parse nobody corrected, so a prompt change
+    // can be scored on the easy cases too and not just the hard ones.
+    maybeRecordControl(req.user.id, cleanMsg, foods)
+      .catch(err => console.error('maybeRecordControl failed:', err.message));
 
     // Per-item macros + totals computed server-side — never trust AI arithmetic
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
@@ -3224,4 +3297,8 @@ module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;
 module.exports.captureCorrectionSamples = captureCorrectionSamples;
 module.exports.evalDedupKey       = evalDedupKey;
+module.exports.maybeRecordControl = maybeRecordControl;
+module.exports.setControlSampler  = setControlSampler;
+module.exports.CONTROL_DAILY_CAP  = CONTROL_DAILY_CAP;
+module.exports.CONTROL_SAMPLE_RATE = CONTROL_SAMPLE_RATE;
 module.exports.EVAL_DAILY_CAP     = EVAL_DAILY_CAP;

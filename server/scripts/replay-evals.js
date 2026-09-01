@@ -300,7 +300,19 @@ async function main() {
 
   const pct = results.length ? Math.round((pass / (pass + fail || 1)) * 100) : 0;
 
+  // Controls are parses nobody corrected — the model already had them right.
+  // A control that now fails is a REGRESSION on an easy case, which is the
+  // thing a failures-only eval set cannot see. Reported on its own line rather
+  // than averaged into the headline, where a handful of broken easy cases
+  // disappears behind a big improvement on the hard ones.
+  const controls = results.filter(r => r.field === 'control');
+  const controlBroken = controls.filter(r => r.pass === false);
+
   console.log(`  ${pass} correct · ${fail} wrong${errored ? ` · ${errored} could not be replayed` : ''}   (${pct}%)`);
+  if (controls.length) {
+    console.log(`  controls  : ${controls.length - controlBroken.length}/${controls.length} still right` +
+      (controlBroken.length ? `  ⚠ ${controlBroken.length} EASY ${controlBroken.length === 1 ? 'CASE' : 'CASES'} BROKEN` : ''));
+  }
   if (comparable) {
     const prevPass = comparable.results.filter(r => r.pass === true).length;
     const prevTot  = comparable.results.filter(r => r.pass !== null).length;
@@ -323,7 +335,8 @@ async function main() {
     show('FIXED since the last run', fixed);
     show('NEWLY BROKEN since the last run', newlyBroken);
   }
-  show('STILL WRONG', stillWrong);
+  show('BROKEN CONTROLS — the model used to get these right', controlBroken);
+  show('STILL WRONG', stillWrong.filter(r => r.field !== 'control'));
 
   if (newlyBroken.length && comparable) {
     console.log(`  ⚠ ${newlyBroken.length} ${newlyBroken.length === 1 ? 'sample' : 'samples'} the previous prompt got right are now wrong.`);

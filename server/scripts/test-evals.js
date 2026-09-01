@@ -202,6 +202,90 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('and keeps the original grams', mrow[0]?.corrected?.grams === 200, mrow[0]?.corrected);
   }
 
+  // ── 5b. Positive controls ──────────────────────────────────────────────────
+  // Without these the eval set is 100% failures: replaying it says whether the
+  // hard cases improved and nothing about whether the easy ones broke. That is
+  // how a prompt tweak "fixes roti" and quietly starts mis-slotting breakfast
+  // with the score going up the whole time.
+  console.log('\n[5b] positive controls');
+  {
+    await pool.query('DELETE FROM ai_parse_samples');
+    const FOODS = [{ name: 'Roti', grams: 60, meal: 'Dinner' },
+                   { name: 'Dal',  grams: 200, meal: 'Dinner' }];
+
+    ai.setControlSampler(() => false);
+    ck('an unsampled parse stores nothing',
+      await ai.maybeRecordControl(mem.id, '2 roti aur dal', FOODS) === 'not-sampled');
+    ck('and really stores nothing', await countSamples() === 0);
+
+    ai.setControlSampler(() => true);
+    ck('a sampled parse is stored',
+      await ai.maybeRecordControl(mem.id, '2 roti aur dal', FOODS) === 'stored');
+
+    const { rows } = await pool.query('SELECT * FROM ai_parse_samples ORDER BY id DESC LIMIT 1');
+    ck('it is marked as a control', rows[0].field === 'control', rows[0].field);
+    ck('ai_output and corrected are identical — nothing was wrong here',
+      JSON.stringify(rows[0].ai_output) === JSON.stringify(rows[0].corrected), rows[0]);
+    ck('it carries the real message', rows[0].message === '2 roti aur dal');
+    ck('and a representative item with its grams',
+      rows[0].corrected.name === 'Roti' && rows[0].corrected.grams === 60, rows[0].corrected);
+
+    ck('a parse with no foods is never a control',
+      await ai.maybeRecordControl(mem.id, 'weighed 84kg', []) === 'skipped');
+    ck('an item with no grams is not usable as a control',
+      await ai.maybeRecordControl(mem.id, 'had some chai',
+        [{ name: 'Chai', grams: 0 }]) === 'skipped');
+
+    // Controls are plentiful; corrections are not. Sharing one budget would let
+    // the easy cases crowd out the rare, valuable ones.
+    await pool.query('DELETE FROM ai_parse_samples');
+    for (let i = 0; i < ai.CONTROL_DAILY_CAP; i++) {
+      await ai.maybeRecordControl(mem.id, `control msg ${i}`,
+        [{ name: `Food${i}`, grams: 100, meal: 'Lunch' }]);
+    }
+    ck(`${ai.CONTROL_DAILY_CAP} controls stored`, await countSamples() === ai.CONTROL_DAILY_CAP);
+    ck('the next control is capped',
+      await ai.maybeRecordControl(mem.id, 'one too many',
+        [{ name: 'Extra', grams: 100 }]) === 'capped');
+
+    // The important half: the control cap must NOT block a real correction.
+    ck('a real correction still gets through the control cap',
+      await ai.recordEvalSample({ patientId: mem.id, source: 'member_parse',
+        message: '2 roti', aiOutput: { name: 'Roti', grams: 200 },
+        corrected: { name: 'Roti', grams: 60 }, field: 'grams' }) === 'stored');
+
+    // The other direction, and the one that actually needs a separate budget:
+    // a member who made several corrections today must still be able to
+    // contribute a control. Counting both against one ceiling would mean the
+    // most error-prone members stop producing easy-case coverage precisely
+    // when their prompt changes need it most.
+    await pool.query('DELETE FROM ai_parse_samples');
+    for (let i = 0; i < ai.CONTROL_DAILY_CAP + 2; i++) {
+      await ai.recordEvalSample({ patientId: mem.id, source: 'member_parse',
+        message: `correction ${i}`, aiOutput: { name: 'X', grams: 100 + i },
+        corrected: { name: 'X', grams: 50 + i }, field: 'grams' });
+    }
+    ck('corrections do not consume the control budget',
+      await ai.maybeRecordControl(mem.id, 'still fine',
+        [{ name: 'Poha', grams: 120, meal: 'Breakfast' }]) === 'stored');
+
+    ck('the control cap is well below the error cap',
+      ai.CONTROL_DAILY_CAP < ai.EVAL_DAILY_CAP,
+      { control: ai.CONTROL_DAILY_CAP, error: ai.EVAL_DAILY_CAP });
+
+    // A control scores through the ordinary grams path — no special case in
+    // the replay tool, which is why it was shaped this way.
+    const ctl = { field: 'control', ai_output: { name: 'Roti', grams: 60 },
+                  corrected: { name: 'Roti', grams: 60 } };
+    ck('a control passes while the model still gets it right',
+      score.scoreMemberSample(ctl, { foods: [{ name: 'Roti', grams: 61 }] }).pass === true);
+    ck('and fails the moment it regresses — the whole point',
+      score.scoreMemberSample(ctl, { foods: [{ name: 'Roti', grams: 200 }] }).pass === false);
+
+    ai.setControlSampler(() => false);
+    await pool.query('DELETE FROM ai_parse_samples');
+  }
+
   // ── 6. The client capture endpoint ─────────────────────────────────────────
   console.log('\n[6] POST /api/ai-chat/eval-sample');
   {

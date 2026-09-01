@@ -716,11 +716,15 @@ router.get('/eval-samples', async (req, res) => {
          COUNT(*)::int                                          AS total,
          COUNT(*) FILTER (WHERE dismissed = false)::int          AS active,
          COUNT(*) FILTER (WHERE dismissed = false
-                            AND source <> 'photo')::int          AS replayable
+                            AND source <> 'photo')::int          AS replayable,
+         -- Parses nobody corrected, kept on purpose. A failures-only eval set
+         -- cannot tell you whether a prompt change broke the easy cases.
+         COUNT(*) FILTER (WHERE dismissed = false
+                            AND field = 'control')::int          AS controls
        FROM ai_parse_samples`
     );
 
-    res.json({ samples: rows, counts: tot[0] || { total: 0, active: 0, replayable: 0 } });
+    res.json({ samples: rows, counts: tot[0] || { total: 0, active: 0, replayable: 0, controls: 0 } });
   } catch (err) {
     console.error('GET /admin/eval-samples error:', err.message);
     res.status(500).json({ error: 'Failed to fetch eval samples' });

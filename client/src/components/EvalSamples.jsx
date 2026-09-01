@@ -30,6 +30,7 @@ const FIELD_LABEL = {
   exercise:  'Exercise',
   target:    'Target',
   ops:       'Action',
+  control:   'Control',
 };
 
 /** "300g" / "Dal 300g · Lunch" / "3 actions" — whatever the shape happens to be. */
@@ -106,7 +107,7 @@ export default function EvalSamples() {
       <div className="flex items-center justify-between mb-3 gap-2">
         <p className="text-xs text-[#9EA3B0]">
           {counts
-            ? `${counts.active} live · ${counts.replayable} replayable`
+            ? `${counts.active} live · ${counts.replayable} replayable · ${counts.controls ?? 0} ${plural(counts.controls ?? 0, 'control')}`
             : `${samples.length} ${plural(samples.length, 'sample')}`}
         </p>
         <div className="flex gap-2">
@@ -190,15 +191,28 @@ export default function EvalSamples() {
                 "{s.message}"
               </p>
 
-              <div className="flex items-center gap-2 text-[11px] flex-wrap">
-                <span className="px-2 py-1 rounded-lg bg-red-500/[0.10] border border-red-500/20 text-red-300 line-through">
-                  {describe(s.ai_output)}
-                </span>
-                <span className="text-[#7E8596]">→</span>
-                <span className="px-2 py-1 rounded-lg bg-emerald-500/[0.10] border border-emerald-500/20 text-emerald-300">
-                  {describe(s.corrected)}
-                </span>
-              </div>
+              {/* A control is a parse nobody corrected — the model already had it
+                  right. Rendering it as a struck-through red value next to a
+                  green one would read as an error that was fixed, which is the
+                  opposite of what it records. */}
+              {s.field === 'control' ? (
+                <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                  <span className="px-2 py-1 rounded-lg bg-emerald-500/[0.10] border border-emerald-500/20 text-emerald-300">
+                    ✓ {describe(s.corrected)}
+                  </span>
+                  <span className="text-[#7E8596]">already correct — kept so a prompt change can be scored on it</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                  <span className="px-2 py-1 rounded-lg bg-red-500/[0.10] border border-red-500/20 text-red-300 line-through">
+                    {describe(s.ai_output)}
+                  </span>
+                  <span className="text-[#7E8596]">→</span>
+                  <span className="px-2 py-1 rounded-lg bg-emerald-500/[0.10] border border-emerald-500/20 text-emerald-300">
+                    {describe(s.corrected)}
+                  </span>
+                </div>
+              )}
 
               <button
                 onClick={() => setDismissed(s.id, !s.dismissed)}
