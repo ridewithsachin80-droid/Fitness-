@@ -1513,7 +1513,7 @@ export default function DailyLog() {
                   <span className="text-[#7E8596] font-bold">kg</span>
                   <button onClick={() => setHeroPanel(null)}
                     style={{ minHeight: 48 }}
-                    className="px-4 rounded-2xl bg-[#D4AF37] text-white text-sm font-bold active:scale-95 transition-transform">Done</button>
+                    className="px-4 rounded-2xl bg-[#D4AF37] text-[#121316] text-sm font-bold active:scale-95 transition-transform">Done</button>
                 </div>
                 {weightWarning && (
                   <div className="mt-2 flex items-start gap-2 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2">
@@ -1650,7 +1650,7 @@ export default function DailyLog() {
                           : 'bg-white/[0.03] border-white/[0.12] text-[#9EA3B0]'
                       }`}>
                       <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-extrabold flex-shrink-0 ${
-                        checked ? 'bg-[#D4AF37] text-white' : 'bg-white/[0.08] text-transparent'
+                        checked ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'
                       }`}>✓</span>
                       {item.icon ? `${item.icon} ` : ''}{item.label}
                       {auto && <span className="text-[9px] font-bold text-[#F0E2B6] opacity-80">AUTO</span>}

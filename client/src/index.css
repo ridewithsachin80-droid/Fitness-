@@ -148,6 +148,33 @@ input[type='number'] { -moz-appearance: textfield; }
 .focus\:border-emerald-400:focus,
 .focus\:border-emerald-300:focus    { border-color: rgba(212,175,55,0.45) !important; }
 
+/* ── Flex children must be allowed to shrink ───────────────────────────────────
+   A flex item's default `min-width: auto` means it refuses to shrink below its
+   content's intrinsic minimum. For a text node that minimum is the longest
+   word, which is usually harmless. For an <input> it is the browser's default
+   ~20-character size — around 175px — and for a `whitespace-nowrap` button it
+   is the entire label. Put those in one row on a 320px phone and the row cannot
+   fit, so it grows past the viewport and the WHOLE PAGE scrolls sideways.
+
+   That is what clipped "Sign out" on the admin header and let the header's dark
+   gradient stop short of the scrollable width, which read as a shape bleeding
+   past the edge of the screen.
+
+   There are ~50 `flex-1` usages across the client. Adding `min-w-0` to each is
+   50 chances to miss one and 50 chances for the next new row to reintroduce it.
+   One rule at the root closes the class instead — same reasoning as the int8
+   parser in db/pool.js.
+
+   The `:not([class*="min-w-"])` guard matters: an element that explicitly asks
+   for a minimum width (`min-w-max` on the admin tabs, `min-w-[150px]` on the
+   overflow menu) means it, and this rule steps aside rather than fighting it.
+
+   NOT fixed with `overflow-x: hidden` on html/body. That would work, and it
+   would also silently break `position: sticky` everywhere — an ancestor with
+   overflow-x becomes a scroll container and sticky descendants stop sticking.
+   The coach page's tab bar is sticky. The cure would have been worse. */
+.flex-1:not([class*="min-w-"]) { min-width: 0; }
+
 /* ── Utilities ─────────────────────────────────────────────────────────────── */
 .safe-top    { padding-top:    env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

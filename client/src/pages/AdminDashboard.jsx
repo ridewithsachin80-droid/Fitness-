@@ -107,8 +107,13 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
           <select
             value={form.monitor_id}
             onChange={e => set('monitor_id', e.target.value)}
+            /* `text-[#FFFFFF] bg-white` — white on white. The chosen coach's
+               name was invisible; the control looked empty however you set it.
+               Matches the select styling already used in StrengthProgress and
+               WorkoutLog, and the options carry the colours explicitly so the
+               dropdown list is readable on Android too. */
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF] bg-white"
+              focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]"
           >
             <option value="">— Unassigned —</option>
             {coaches.map(m => (
@@ -305,12 +310,16 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
               <div ref={containerRef} className="relative">
                 <input autoFocus value={foodQuery} onChange={e => handleFoodQuery(e.target.value)}
                   placeholder="Search food…"
-                  className="w-full text-xs px-3 py-2 rounded-xl border border-white bg-white
-                    focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+                  /* White text on a white box: the coach typed a food name and
+                     saw an empty field. Third of four controls with this exact
+                     pairing — see test-layout-contracts [7]. */
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-white/[0.1] bg-[#121316]
+                    focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF]
+                    placeholder-[#7E8596]" />
                 {searchingFood && <span className="absolute right-3 top-2 text-xs text-[#9EA3B0]">…</span>}
                 {foodSuggestions.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-[#1A1C20] rounded-xl border border-white/[0.07] shadow-lg
-                    z-30 border border-white/[0.07] max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
+                    z-30 max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
                     {foodSuggestions.map(food => (
                       <button key={food.id}
                         onMouseDown={e => e.preventDefault()}
@@ -917,30 +926,30 @@ function EditMemberModal({ member, onClose, onSaved }) {
         onChange={e => setNewItem(n => ({ ...n, label: e.target.value }))}
         onKeyDown={e => e.key === 'Enter' && confirmAddCustom(protoKey)}
         placeholder="Item name (required)"
-        className="w-full text-sm border border-[rgba(52,211,153,0.30)] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(52,211,153,0.40)] bg-white" />
+        className="w-full text-sm border border-[rgba(52,211,153,0.30)] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(212,175,55,0.40)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
       <input value={newItem.sub}
         onChange={e => setNewItem(n => ({ ...n, sub: e.target.value }))}
         placeholder="Description (optional)"
-        className="w-full text-sm border border-white/[0.08] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
+        className="w-full text-sm border border-white/[0.08] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
       <div className="grid grid-cols-3 gap-2">
         <div>
           <p className="text-xs text-[#9EA3B0] mb-1">From</p>
           <input type="time" value={newItem.fromTime}
             onChange={e => setNewItem(n => ({ ...n, fromTime: e.target.value }))}
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
         </div>
         <div>
           <p className="text-xs text-[#9EA3B0] mb-1">To</p>
           <input type="time" value={newItem.toTime}
             onChange={e => setNewItem(n => ({ ...n, toTime: e.target.value }))}
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
         </div>
         <div>
           <p className="text-xs text-[#9EA3B0] mb-1">Duration</p>
           <input value={newItem.totalTime}
             onChange={e => setNewItem(n => ({ ...n, totalTime: e.target.value }))}
             placeholder="30 min"
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)] bg-white" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
         </div>
       </div>
       <div className="flex gap-2">
@@ -1030,7 +1039,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         {[['identity','👤 Identity'],['protocol','📋 Protocol']].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-              tab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9EA3B0]'}`}>
+              tab === id ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6] shadow-sm' : 'text-[#9EA3B0]'}`}>
             {label}
           </button>
         ))}
@@ -1093,7 +1102,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
             {[['items','📋 Items'],['fasting','⏰ Fasting'],['macros','🎯 Macros'],['meals','🍽 Meal Plan']].map(([id, label]) => (
               <button key={id} onClick={() => setProtoTab(id)}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                  protoTab === id ? 'bg-white text-emerald-300 shadow-sm' : 'text-[#9EA3B0] hover:text-[#FFFFFF]'}`}>
+                  protoTab === id ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6] shadow-sm' : 'text-[#9EA3B0] hover:text-[#FFFFFF]'}`}>
                 {label}
               </button>
             ))}
@@ -1173,8 +1182,9 @@ function PushModal({ members, onClose }) {
             <div>
               <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Recipient</label>
               <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)}
-                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-white
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]">
+                /* Same white-on-white — the chosen push recipient was invisible. */
+                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-[#1A1C20]
+                  focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF]">
                 <option value="">📢 All active members ({members.filter(m => m.active).length})</option>
                 {members.filter(m => m.active).map(m => (
                   <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
@@ -1253,10 +1263,18 @@ function AddCoachModal({ onClose, onAdded }) {
           <div className="flex gap-2">
             {['monitor','admin'].map(r => (
               <button key={r} onClick={() => set('role', r)}
+                /* The selected state used to carry `border` a second time and
+                   TWO border colours — `border-white/[0.1]` and
+                   `border-stone-800`. Tailwind emits one class per utility, so
+                   which one won came down to stylesheet order rather than
+                   intent. The unselected state was `bg-white`: a solid white
+                   pill on a charcoal modal. Selected is now the same gold wash
+                   the admin tab strip uses, so "selected" reads the same way in
+                   both places. */
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all capitalize ${
                   form.role === r
-                    ? 'bg-white/[0.08] border border-white/[0.1] text-[#FFFFFF] border-stone-800'
-                    : 'bg-white text-[#9EA3B0] border-white/[0.08] hover:border-white/[0.1]'
+                    ? 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.30)] text-[#F0E2B6]'
+                    : 'bg-[#1A1C20] text-[#9EA3B0] border-white/[0.08] hover:border-white/[0.1]'
                 }`}>
                 {r === 'admin' ? '👑 Admin' : '🏋️ Coach'}
               </button>
@@ -1302,8 +1320,9 @@ function AssignModal({ member, coaches, onClose, onAssigned }) {
     <Modal title={`Assign Coach — ${member.name}`} onClose={onClose}>
       <div className="space-y-4">
         <select value={coachId} onChange={e => setCoachId(e.target.value)}
+          /* Same white-on-white as the Assign-to-Coach select above. */
           className="w-full border border-white/[0.08] rounded-xl px-3 py-3 text-sm
-            focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white text-[#FFFFFF]">
+            focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]">
           <option value="">— Unassigned —</option>
           {coaches.map(m => (
             <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role)} · {m.patient_count} members</option>
@@ -1422,8 +1441,14 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-5">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div>
+          {/* `min-w-0` on the name block and `flex-shrink-0` on the button.
+              Without them the two children fight over a 360px row: the name
+              block refuses to go below its longest word, so the button absorbs
+              the whole squeeze and "Sign out" breaks onto two lines — which is
+              what looked like it had been cut off. The name is the part that
+              can afford to wrap. */}
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
               <p className="text-[10px] font-bold tracking-widest uppercase text-[#F0E2B6] mb-1">FitLife Admin</p>
               <h1 className="font-display text-xl font-medium">Welcome, {user?.name} 👑</h1>
               {stats && (
@@ -1433,8 +1458,8 @@ export default function AdminDashboard() {
               )}
             </div>
             <button onClick={() => { logout(); }}
-              className="text-xs text-[#9EA3B0] hover:text-white px-3 py-1.5 border border-white/[0.1]
-                hover:border-white/[0.2] rounded-xl transition-colors">
+              className="flex-shrink-0 whitespace-nowrap text-xs text-[#9EA3B0] hover:text-white px-3 py-1.5
+                border border-white/[0.1] hover:border-white/[0.2] rounded-xl transition-colors">
               Sign out
             </button>
           </div>
@@ -1452,7 +1477,17 @@ export default function AdminDashboard() {
 
       {/* Tabs + search */}
       <div className="max-w-2xl mx-auto px-4 pt-4">
-        <div className="flex gap-2 mb-3">
+        {/* Five tabs at 14px with an emoji each need 389px of label. On a 360px
+            phone — and certainly on a 320px one — they used to push the page
+            itself sideways rather than give way.
+
+            `min-w-max` says each tab keeps its whole label, `overflow-x-auto`
+            says the STRIP scrolls when they don't all fit, and `flex-1` still
+            stretches them to fill the row on any screen where they do. Same
+            pattern as the member-list filter chips, so it already feels
+            familiar. Nothing inside is sticky, so the scroll container is
+            safe here. */}
+        <div className="flex gap-2 mb-3 overflow-x-auto">
           {[
             { id: 'overview',   label: '📊 Overview'  },
             { id: 'members',    label: '👥 Members'   },
@@ -1461,7 +1496,7 @@ export default function AdminDashboard() {
             { id: 'audit',      label: '🔍 Audit'     },
           ].map(t => (
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              className={`flex-1 min-w-max whitespace-nowrap px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 tab === t.id
                   ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6] border border-[rgba(212,175,55,0.25)]'
                   : 'text-[#7E8596] hover:text-[#9EA3B0]'
@@ -1547,7 +1582,7 @@ export default function AdminDashboard() {
                 {[['today', 'Today'], ['7d', '7-Day Average']].map(([k, l]) => (
                   <button key={k} onClick={() => setComplianceLens(k)}
                     className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                      complianceLens === k ? 'bg-[#D4AF37] text-white' : 'text-[#7E8596] hover:text-[#9EA3B0]'
+                      complianceLens === k ? 'bg-[#D4AF37] text-[#121316]' : 'text-[#7E8596] hover:text-[#9EA3B0]'
                     }`}>{l}</button>
                 ))}
               </div>
@@ -1607,11 +1642,29 @@ export default function AdminDashboard() {
         {tab === 'members' && (
           <>
             {filtered(members, 'name').length === 0 ? (
+              /* No "+ Add first member" button here. The gold "+ Add Member"
+                 button in the search row above is on screen on this tab at all
+                 times, empty list included — so this used to put two identical
+                 actions a few centimetres apart and make the page look like it
+                 had rendered twice. One action, one place.
+
+                 An empty list also has two very different causes. "No members
+                 yet" under a search for "prya" is simply wrong, and it sent
+                 people off to add a member who was already there. */
               <div className="text-center py-16 text-[#9EA3B0]">
                 <div className="text-4xl mb-3">👥</div>
-                <p className="font-medium">No members yet</p>
-                <button onClick={() => setShowAddMember(true)}
-                  className="mt-3 text-[#D4AF37] font-semibold text-sm">+ Add first member</button>
+                {search.trim() ? (
+                  <>
+                    <p className="font-medium">No member matches “{search.trim()}”</p>
+                    <button onClick={() => setSearch('')}
+                      className="mt-3 text-[#D4AF37] font-semibold text-sm">Clear search</button>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">No members yet</p>
+                    <p className="text-xs mt-1">Use “+ Add Member” above to add the first one.</p>
+                  </>
+                )}
               </div>
             ) : (
               filtered(members, 'name').map(m => {
@@ -1726,15 +1779,33 @@ export default function AdminDashboard() {
               </button>
             </div>
             {filtered(coaches, 'name').length === 0 ? (
+              /* See the members tab above — the gold "+ Add Coach" button in the
+                 search row is always present, so a second one here was the
+                 duplicate. */
               <div className="text-center py-16 text-[#9EA3B0]">
                 <div className="text-4xl mb-3">🏋️</div>
-                <p className="font-medium">No coaches yet</p>
-                <button onClick={() => setShowAddCoach(true)}
-                  className="mt-3 text-[#D4AF37] font-semibold text-sm">+ Add first coach</button>
+                {search.trim() ? (
+                  <>
+                    <p className="font-medium">No coach matches “{search.trim()}”</p>
+                    <button onClick={() => setSearch('')}
+                      className="mt-3 text-[#D4AF37] font-semibold text-sm">Clear search</button>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">No coaches yet</p>
+                    <p className="text-xs mt-1">Use “+ Add Coach” above to add the first one.</p>
+                  </>
+                )}
               </div>
             ) : (
               filtered(coaches, 'name').map(m => (
-                <div key={m.id} className={`bg-[#1A1C20] rounded-2xl border border-white/[0.08] p-4 shadow-card border
+                /* `border` and `border-white/[0.08]` were both listed here AND
+                    again in the conditional, so the card declared a border
+                    colour twice and a bare `border` a second time. Tailwind
+                    emits one class per utility, so the winner was whichever
+                    landed later in the stylesheet, not whichever was intended.
+                    One base border, one conditional colour. */
+                <div key={m.id} className={`bg-[#1A1C20] rounded-2xl p-4 shadow-card border
                   ${!m.active ? 'opacity-50 border-white/[0.08]' : 'border-white/[0.07]'}`}>
                   <div className="flex items-start justify-between">
                     <div>
@@ -1788,7 +1859,7 @@ export default function AdminDashboard() {
               <p className="text-xs text-[#9EA3B0]">{auditLog.length} recent actions</p>
               <button onClick={() => getAuditLog(100).then(r => setAuditLog(r.data || []))}
                 className="text-xs font-semibold text-[#9EA3B0] hover:text-[#FFFFFF] px-3 py-1.5
-                  bg-[#1A1C20] rounded-xl border border-white/[0.07] border border-white/[0.08] transition-colors">
+                  bg-[#1A1C20] rounded-xl border border-white/[0.08] transition-colors">
                 ↻ Refresh
               </button>
             </div>

@@ -183,8 +183,26 @@ if [ "$DB_ONLY" = "1" ]; then
 fi
 
 # ── Run every suite ──────────────────────────────────────────────────────────
-LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions test-coach-program test-coach-questions"
-DB_SUITES="test-journey test-gaps test-labs test-macrolab test-lab-insight"
+# Every test-*.js in this directory is listed below. That is the point: a suite
+# that exists but is not in the gate is 200 assertions of work that never runs
+# again, and nobody can tell it apart from one that does. Fourteen suites were
+# in exactly that state — written, passing, invisible.
+#
+# The only file NOT here is smokeTest.js, and deliberately: it checks a running
+# deployment over HTTP, so it belongs after a deploy, not in `npm test`. It says
+# so itself now if you run it with nothing listening.
+#
+# Split by whether the suite needs Postgres, which is just whether it carries
+# the localhost guard. Both lists run after DATABASE_URL is exported, so this is
+# for reading, not for wiring.
+LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
+test-coach-program test-coach-questions test-workout-merge test-image-routing \
+test-weekly-report test-layout-contracts"
+
+DB_SUITES="test-journey test-gaps test-labs test-macrolab test-lab-insight \
+test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
+test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
+test-learning-model"
 
 failed=0
 total_pass=0

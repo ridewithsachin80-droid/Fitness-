@@ -218,7 +218,39 @@ async function run() {
   if (failed > 0) process.exit(1);
 }
 
-run().catch((err) => {
-  console.error('Smoke test crashed:', err);
-  process.exit(1);
-});
+/**
+ * Preflight.
+ *
+ * This file is a POST-DEPLOY check against a running instance, not a unit
+ * suite — which is why it is deliberately not in `npm test`. Left as it was,
+ * pointing it at nothing produced a raw `connect ECONNREFUSED 127.0.0.1:3000`
+ * stack trace, and for months that made it look like a broken test rather than
+ * a tool waiting for a URL. It sat in the repo alongside the real suites with
+ * nothing to tell them apart.
+ *
+ * It still fails when it cannot reach the target — a check that passes when it
+ * did not run is worse than no check. It just says why, and what to do.
+ */
+async function preflight() {
+  try {
+    await request('GET', '/health');
+    return true;
+  } catch (err) {
+    console.error('\n  Cannot reach ' + BASE_URL + ' — ' + err.message);
+    console.error('\n  smokeTest.js checks a RUNNING instance. It is not part of');
+    console.error('  `npm test`, which runs the unit and database suites instead.');
+    console.error('\n  Against a local server:');
+    console.error('      cd server && npm start           # in one terminal');
+    console.error('      node scripts/smokeTest.js        # in another');
+    console.error('\n  Against the deployed app:');
+    console.error('      BASE_URL=https://fitness.upscale-app.com node scripts/smokeTest.js\n');
+    process.exit(1);
+  }
+}
+
+preflight()
+  .then(run)
+  .catch((err) => {
+    console.error('Smoke test crashed:', err);
+    process.exit(1);
+  });

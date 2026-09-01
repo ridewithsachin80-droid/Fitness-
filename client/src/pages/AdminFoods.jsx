@@ -147,7 +147,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
 
       <div className="flex gap-2 pt-2">
         <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()}
-          className="flex-1 py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 text-white font-bold rounded-xl transition-colors">
+          className="flex-1 py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 text-[#121316] font-bold rounded-xl transition-colors">
           {saving ? 'Saving…' : 'Save Food'}
         </button>
         <button onClick={onCancel}
@@ -397,7 +397,10 @@ export default function AdminFoods() {
                 className="flex-1 px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm text-stone-100
                   focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] disabled:opacity-50" />
               <button onClick={runAiSearch} disabled={aiLoading || aiQuery.trim().length < 2}
-                className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
+                /* White on #D4AF37 is about 1.9:1 — below any legibility bar,
+                   and the only gold button in the app that wasn't charcoal.
+                   Every other one ("+ Add Member", the AI bar) uses #121316. */
+                className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 disabled:cursor-not-allowed text-[#121316] font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
                 {aiLoading ? 'Identifying…' : 'Identify'}
               </button>
             </div>
@@ -479,12 +482,12 @@ export default function AdminFoods() {
                 {pages > 1 && (
                   <div className="flex items-center justify-between pt-2">
                     <button onClick={() => load(query, page - 1)} disabled={page <= 1}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] disabled:opacity-40 hover:bg-stone-50 transition-colors">
                       ← Prev
                     </button>
                     <span className="text-xs text-stone-500 font-medium">Page {page} of {pages}</span>
                     <button onClick={() => load(query, page + 1)} disabled={page >= pages}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] border border-stone-200 disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] disabled:opacity-40 hover:bg-stone-50 transition-colors">
                       Next →
                     </button>
                   </div>
