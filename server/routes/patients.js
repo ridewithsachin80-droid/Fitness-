@@ -69,20 +69,18 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (SELECT COUNT(*)::int FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
                AND mn.coach_read_at IS NULL) AS unread_messages,
-           -- The newest one from the last week, READ OR NOT.
-           --
-           -- This used to be unread-only, and that made a message vanish from
-           -- the dashboard the moment the coach opened that member's page for
-           -- any reason at all — to check a weight, to add a note. The message
-           -- was answered by nobody and gone from every list. Read state now
-           -- controls how the row LOOKS, not whether it exists.
+           -- Unread only. This briefly showed the last 7 days regardless of read
+           -- state, so a message stayed on the dashboard after it had been dealt
+           -- with. Sachin's rule: once he has read it, it goes. The member's own
+           -- page keeps every message permanently, so nothing is lost by
+           -- clearing the summary.
            (SELECT mn.note FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
-               AND mn.created_at > NOW() - INTERVAL '7 days'
+               AND mn.coach_read_at IS NULL
              ORDER BY mn.id DESC LIMIT 1) AS latest_message,
            (SELECT mn.created_at FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
-               AND mn.created_at > NOW() - INTERVAL '7 days'
+               AND mn.coach_read_at IS NULL
              ORDER BY mn.id DESC LIMIT 1) AS latest_message_at,
            (SELECT u2.name FROM monitor_patients mp2
             JOIN users u2 ON u2.id = mp2.monitor_id
@@ -115,20 +113,18 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (SELECT COUNT(*)::int FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
                AND mn.coach_read_at IS NULL) AS unread_messages,
-           -- The newest one from the last week, READ OR NOT.
-           --
-           -- This used to be unread-only, and that made a message vanish from
-           -- the dashboard the moment the coach opened that member's page for
-           -- any reason at all — to check a weight, to add a note. The message
-           -- was answered by nobody and gone from every list. Read state now
-           -- controls how the row LOOKS, not whether it exists.
+           -- Unread only. This briefly showed the last 7 days regardless of read
+           -- state, so a message stayed on the dashboard after it had been dealt
+           -- with. Sachin's rule: once he has read it, it goes. The member's own
+           -- page keeps every message permanently, so nothing is lost by
+           -- clearing the summary.
            (SELECT mn.note FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
-               AND mn.created_at > NOW() - INTERVAL '7 days'
+               AND mn.coach_read_at IS NULL
              ORDER BY mn.id DESC LIMIT 1) AS latest_message,
            (SELECT mn.created_at FROM monitor_notes mn
              WHERE mn.patient_id = u.id AND mn.from_member = true
-               AND mn.created_at > NOW() - INTERVAL '7 days'
+               AND mn.coach_read_at IS NULL
              ORDER BY mn.id DESC LIMIT 1) AS latest_message_at
          FROM users u
          JOIN monitor_patients mp ON mp.patient_id = u.id
@@ -1177,6 +1173,31 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientA
 });
 
 // ── Lab results ──────────────────────────────────────────────────────────────
+// ── POST /api/patients/:id/messages/read ─────────────────────────────────────
+// Clear a member's messages from the coach's summary cards without opening
+// their page.
+//
+// Opening the member already marks them read, and that covers the normal case:
+// tap the message, read it, it goes. This exists for the other one — a message
+// the coach can act on from the card itself, or has already dealt with over
+// WhatsApp, where opening the page just to clear a badge is busywork.
+//
+// It does not touch the notes themselves. The member's page keeps every
+// message permanently; this only changes whether the summary still lists it.
+router.post('/:id/messages/read', authMW, roleCheck('monitor', 'admin'), requirePatientAccess,
+  async (req, res) => {
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE monitor_notes SET coach_read_at = NOW()
+          WHERE patient_id = $1 AND from_member = true AND coach_read_at IS NULL`,
+        [req.params.id]);
+      res.json({ marked: rowCount });
+    } catch (err) {
+      console.error('POST /patients/:id/messages/read error:', err);
+      res.status(500).json({ error: 'Could not mark those as read' });
+    }
+  });
+
 // ── DELETE /api/patients/:id/notes/:noteId ───────────────────────────────────
 // Remove one entry from a member's thread — a note the coach wrote, or a
 // message the member sent that has been dealt with.

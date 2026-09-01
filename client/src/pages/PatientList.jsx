@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { getMembers }  from '../api/logs';
+import { getMembers, markMessagesRead }  from '../api/logs';
 import { today, formatDate, plural } from '../constants';
 import { Card, SectionTitle, OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
@@ -92,7 +92,9 @@ export default function MemberList() {
   // disappear because the coach happened to type a name into the search box.
   // Anyone who wrote in the last week, unread first — not unread-only, because
   // opening a member marks their messages read and the card would empty itself.
-  const withMessages = members.filter(m => m.latest_message).sort((a, b) =>
+  // Unread only — once read it leaves this card. The member's own page keeps
+  // every message, so nothing is lost by clearing the summary.
+  const withMessages = members.filter(m => (m.unread_messages || 0) > 0).sort((a, b) =>
     (b.unread_messages || 0) - (a.unread_messages || 0)
     || String(b.latest_message_at || '').localeCompare(String(a.latest_message_at || '')));
   const totalUnread  = withMessages.reduce((n, m) => n + (m.unread_messages || 0), 0);
@@ -151,9 +153,10 @@ export default function MemberList() {
             </p>
             <div className="space-y-2">
               {withMessages.map(m => (
-                <button key={m.id} onClick={() => navigate(`/coach/${m.id}`)}
-                  className="w-full text-left bg-[#121316] border border-white/[0.07] rounded-xl
-                    px-3 py-2.5 hover:border-[rgba(212,175,55,0.30)] transition-colors">
+                <div key={m.id}
+                  className="flex items-start gap-2 bg-[#121316] border border-white/[0.07]
+                    rounded-xl px-3 py-2.5 hover:border-[rgba(212,175,55,0.30)] transition-colors">
+                  <button onClick={() => navigate(`/coach/${m.id}`)} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[13px] font-bold text-white truncate">{m.name}</p>
                     {m.unread_messages > 0 && (
@@ -164,7 +167,23 @@ export default function MemberList() {
                     )}
                   </div>
                   <p className="text-xs text-[#9EA3B0] mt-1 line-clamp-2">{m.latest_message}</p>
-                </button>
+                  </button>
+                  {/* Clear it without opening them. Opening the member reads the
+                      message anyway; this is for ones already dealt with
+                      elsewhere, where opening a page to clear a badge is
+                      busywork. It deletes nothing — the member's page keeps it. */}
+                  <button
+                    onClick={async () => {
+                      try { await markMessagesRead(m.id); } catch { /* a refresh will re-show it */ }
+                      setMembers(prev => prev.map(x =>
+                        x.id === m.id ? { ...x, unread_messages: 0, latest_message: null } : x));
+                    }}
+                    title="Mark as read"
+                    className="flex-shrink-0 text-[#7E8596] hover:text-[#D4AF37] px-1.5 py-1
+                      text-sm transition-colors">
+                    ✓
+                  </button>
+                </div>
               ))}
             </div>
           </div>

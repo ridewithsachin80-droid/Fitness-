@@ -292,17 +292,28 @@ const fullDay = {
   await new Promise(r => setTimeout(r, 250));
   ck('opening the member clears the badge', (await listUnread()) === 0, await listUnread());
 
-  // ...but the message must NOT disappear with it. The first version of this
-  // card was unread-only, so opening a member's page to check their weight
-  // silently emptied the dashboard of a question nobody had answered. Read
-  // state controls how the row looks; the message stays for a week.
-  ck('the message itself survives being read',
-     (await listRow()).latest_message === 'Please assign my workout for today.',
-     await listRow());
-  ck('and carries a timestamp so the card can order by it',
-     !!(await listRow()).latest_message_at);
-  ck('the admin list keeps it too', (await adminRow()).latest_message ===
-     'Please assign my workout for today.');
+  // ...and the message leaves the summary cards with it. This flipped once:
+  // for a while the cards showed the last 7 days read or not, so a message
+  // stayed after it had been dealt with. Sachin's rule is that reading it
+  // clears it. The member's own page keeps every message permanently, which is
+  // what makes clearing the summary safe.
+  ck('the message leaves the coach card once read',
+     (await listRow()).latest_message == null, await listRow());
+  ck('and the admin card too', (await adminRow()).latest_message == null);
+  const { rows: [kept] } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM monitor_notes WHERE patient_id = $1 AND from_member = true`,
+    [mine.id]);
+  ck('but the message itself is still on the record', kept.n >= 1, kept.n);
+
+  // The explicit control: clear it WITHOUT opening the member.
+  await pool.query(
+    `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, from_member)
+     VALUES ($1,$2,CURRENT_DATE,'Second question',true)`, [link.monitor_id, mine.id]);
+  ck('a new message comes back onto the card', (await listUnread()) === 1);
+  const marked = await fetch(`http://127.0.0.1:${port}/api/patients/${mine.id}/messages/read`,
+    { method: 'POST', headers: { Authorization: 'Bearer ' + tok(link.monitor_id, 'monitor') } });
+  ck('marking read returns 200', marked.status === 200, marked.status);
+  ck('and clears the card', (await listUnread()) === 0);
 
   // ── Deleting a note ────────────────────────────────────────────────────────
   // The coach needed a way to clear a message once it is dealt with. Deleting

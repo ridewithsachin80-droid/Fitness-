@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
-import { adminResetPin, adminSendPush, getAuditLog, adminDeleteMember } from '../api/logs';
+import { adminResetPin, adminSendPush, getAuditLog, adminDeleteMember, markMessagesRead } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural } from '../constants';
 import AdminReminders from '../components/AdminReminders';
@@ -1630,7 +1630,7 @@ export default function AdminDashboard() {
               // so an unread-only card emptied itself the first time the coach
               // looked at that member for any reason.
               const withMsgs = (members || [])
-                .filter(m => m.latest_message)
+                .filter(m => (m.unread_messages || 0) > 0)   // unread only — read messages leave this card
                 .sort((a, b) => (b.unread_messages || 0) - (a.unread_messages || 0)
                              || String(b.latest_message_at || '').localeCompare(String(a.latest_message_at || '')));
               if (!withMsgs.length) return null;
@@ -1643,10 +1643,11 @@ export default function AdminDashboard() {
                   </p>
                   <div className="space-y-2">
                     {withMsgs.map(m => (
-                      <button key={m.id} onClick={() => navigate(`/coach/${m.id}`)}
-                        className={`w-full text-left bg-[#121316] rounded-xl px-3 py-2.5 border
+                      <div key={m.id}
+                        className={`flex items-start gap-2 bg-[#121316] rounded-xl px-3 py-2.5 border
                           hover:border-[rgba(212,175,55,0.30)] transition-colors ${
                           m.unread_messages > 0 ? 'border-[rgba(212,175,55,0.30)]' : 'border-white/[0.07]'}`}>
+                        <button onClick={() => navigate(`/coach/${m.id}`)} className="flex-1 min-w-0 text-left">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[13px] font-bold text-[#FFFFFF] truncate">{m.name}</p>
                           {m.unread_messages > 0 && (
@@ -1657,7 +1658,21 @@ export default function AdminDashboard() {
                           )}
                         </div>
                         <p className="text-xs text-[#9EA3B0] mt-1 line-clamp-2">{m.latest_message}</p>
-                      </button>
+                        </button>
+                        {/* Same control as the coach list: clear it here when it
+                            has already been dealt with, without opening them. */}
+                        <button
+                          onClick={async () => {
+                            try { await markMessagesRead(m.id); } catch { /* a refresh will re-show it */ }
+                            setMembers(prev => prev.map(x =>
+                              x.id === m.id ? { ...x, unread_messages: 0, latest_message: null } : x));
+                          }}
+                          title="Mark as read"
+                          className="flex-shrink-0 text-[#7E8596] hover:text-[#D4AF37] px-1.5 py-1
+                            text-sm transition-colors">
+                          ✓
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
