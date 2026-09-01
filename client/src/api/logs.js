@@ -29,6 +29,7 @@ export const createMember   = (data)           => api.post('/members', data);
 export const updateProfile   = (id, data)       => api.patch(`/members/${id}/profile`, data);
 export const addLabValue     = (id, data)       => api.post(`/members/${id}/labs`, data);
 export const addNote         = (id, data)       => api.post(`/members/${id}/notes`, data);
+export const deleteNote      = (id, noteId)     => api.delete(`/members/${id}/notes/${noteId}`);
 export const setMemberPin    = (id, pin)        => api.patch(`/members/${id}/pin`, { pin });
 export const getMyProfile    = ()               => api.get('/members/me');
 // Sprint 2: first-run setup now lives on the account, not in localStorage, so

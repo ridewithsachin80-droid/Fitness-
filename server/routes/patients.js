@@ -1177,6 +1177,44 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientA
 });
 
 // ── Lab results ──────────────────────────────────────────────────────────────
+// ── DELETE /api/patients/:id/notes/:noteId ───────────────────────────────────
+// Remove one entry from a member's thread — a note the coach wrote, or a
+// message the member sent that has been dealt with.
+//
+// Scoped THREE ways, not one:
+//   · roleCheck + requirePatientAccess — the same guard the add route uses, so
+//     a coach cannot reach a member who is not theirs
+//   · the note id must belong to THIS member — an id from another member's
+//     thread would otherwise delete across the boundary
+//   · the delete is by (id AND patient_id) in a single statement, so the check
+//     and the delete cannot come apart under a concurrent request
+//
+// It really deletes. There is no soft-delete column and adding one for a
+// coach's own housekeeping would mean every existing read path learning to
+// filter it — a much larger change than the feature is worth.
+router.delete('/:id/notes/:noteId', authMW, roleCheck('monitor', 'admin'), requirePatientAccess,
+  async (req, res) => {
+    const noteId = parseInt(req.params.noteId);
+    if (!Number.isFinite(noteId)) {
+      return res.status(400).json({ error: 'Invalid note id' });
+    }
+    try {
+      const { rows } = await pool.query(
+        `DELETE FROM monitor_notes WHERE id = $1 AND patient_id = $2
+         RETURNING id, from_member`,
+        [noteId, req.params.id]);
+      if (!rows.length) {
+        // Either it never existed or it belongs to someone else. The same
+        // answer for both, so this cannot be used to probe for ids.
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      res.json({ deleted: rows[0].id, from_member: rows[0].from_member });
+    } catch (err) {
+      console.error('DELETE /patients/:id/notes/:noteId error:', err);
+      res.status(500).json({ error: 'Could not delete that note' });
+    }
+  });
+
 const { analyseLabs } = require('../services/labAnalysis');
 
 /** Only a finite number survives; anything else becomes null. */

@@ -4,7 +4,7 @@ import {
   LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts';
-import { getMember, getMembers } from '../api/logs';
+import { getMember, getMembers, deleteNote } from '../api/logs';
 import { addLabValue } from '../api/logs';
 import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
@@ -413,6 +413,9 @@ export default function Coach() {
   // the roster — which is the actual review workflow. Resetting to 'today' on
   // every navigation would undo the thing prev/next was built for.
   const [tab, setTab] = useState('today');
+  // Which note is asking "are you sure?". One at a time, cleared on tab switch.
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleteError,   setDeleteError]   = useState(null);
 
   const TABS = [
     { id: 'today',     label: 'Today',     icon: '📋' },
@@ -469,6 +472,7 @@ export default function Coach() {
   const switchTab = (id) => {
     setTab(id);
     setSelectedLog(null);
+    setConfirmDelete(null);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
@@ -1565,6 +1569,10 @@ export default function Coach() {
               + Add
             </button>
           </div>
+          {deleteError && (
+            <p className="text-xs text-red-300 bg-red-400/10 border border-red-400/25
+              rounded-xl px-3 py-2 mb-2">{deleteError}</p>
+          )}
           {notes.length === 0 ? (
             <p className="text-xs text-stone-300 italic text-center py-4">Nothing here yet</p>
           ) : (
@@ -1607,7 +1615,43 @@ export default function Coach() {
                       </span>
                     </div>
                   </div>
-                  <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{n.note}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap flex-1">{n.note}</p>
+                    {/* Deleting is irreversible — there is no soft-delete column and
+                        no undo — so it asks first. Confirmed inline rather than with
+                        window.confirm, which iOS Safari renders as browser chrome
+                        with no visible relation to the note it is about. */}
+                    {confirmDelete === n.id ? (
+                      <span className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await deleteNote(memberId, n.id);
+                              setConfirmDelete(null);
+                              load({ quiet: true });
+                            } catch {
+                              setConfirmDelete(null);
+                              setDeleteError('Could not delete that — try again.');
+                            }
+                          }}
+                          className="text-[11px] font-bold text-red-300 bg-red-400/10 border
+                            border-red-400/30 px-2 py-1 rounded-lg">
+                          Delete
+                        </button>
+                        <button onClick={() => setConfirmDelete(null)}
+                          className="text-[11px] font-semibold text-[#9EA3B0] px-1.5 py-1">
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button onClick={() => { setDeleteError(null); setConfirmDelete(n.id); }}
+                        title="Delete"
+                        className="text-[13px] text-[#7E8596] hover:text-red-300 px-1.5 flex-shrink-0
+                          transition-colors">
+                        🗑
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

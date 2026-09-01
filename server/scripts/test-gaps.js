@@ -304,7 +304,61 @@ const fullDay = {
   ck('the admin list keeps it too', (await adminRow()).latest_message ===
      'Please assign my workout for today.');
 
-  await pool.query(`DELETE FROM monitor_notes WHERE patient_id = $1`, [mine.id]);
+  // ── Deleting a note ────────────────────────────────────────────────────────
+  // The coach needed a way to clear a message once it is dealt with. Deleting
+  // is irreversible, so the guards matter more than the happy path.
+  console.log('\n[delete a note]');
+  const coachHdr = { Authorization: 'Bearer ' + tok(link.monitor_id, 'monitor') };
+  const del = (memberId, noteId, hdr = coachHdr) =>
+    fetch(`http://127.0.0.1:${port}/api/patients/${memberId}/notes/${noteId}`,
+      { method: 'DELETE', headers: hdr });
+
+  const countNotes = async () => {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM monitor_notes WHERE patient_id = $1`, [mine.id]);
+    return rows[0].n;
+  };
+  const before = await countNotes();
+  ck('there is something to delete', before > 0, before);
+
+  const bad = await del(mine.id, 'abc');
+  ck('a non-numeric id is rejected before it reaches SQL', bad.status === 400, bad.status);
+
+  const missing = await del(mine.id, 999999);
+  ck('an id that does not exist is a 404', missing.status === 404, missing.status);
+  ck('and nothing was deleted on the way', (await countNotes()) === before);
+
+  // A note belonging to a DIFFERENT member must not be reachable through this
+  // member's path — the id alone cannot be the authority.
+  const { rows: [otherM] } = await pool.query(
+    `INSERT INTO users (name, phone, role, password, active)
+     VALUES ('Gap Delete Other', '7790000901', 'patient', 'x', true) RETURNING id`);
+  await pool.query(`INSERT INTO monitor_patients (monitor_id, patient_id) VALUES ($1,$2)`,
+    [link.monitor_id, otherM.id]);
+  const { rows: [otherNote] } = await pool.query(
+    `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, from_member)
+     VALUES ($1,$2,CURRENT_DATE,'Someone elses message',true) RETURNING id`,
+    [link.monitor_id, otherM.id]);
+  const crossed = await del(mine.id, otherNote.id);
+  ck('a note from another member cannot be deleted through this path',
+     crossed.status === 404, crossed.status);
+  const { rows: [stillThere] } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM monitor_notes WHERE id = $1`, [otherNote.id]);
+  ck('and it is still there', stillThere.n === 1);
+
+  const asMemberDel = await del(mine.id, 999999,
+    { Authorization: 'Bearer ' + tok(mine.id, 'patient') });
+  ck('a member cannot delete notes at all', asMemberDel.status === 403, asMemberDel.status);
+
+  const { rows: [own] } = await pool.query(
+    `SELECT id FROM monitor_notes WHERE patient_id = $1 ORDER BY id DESC LIMIT 1`, [mine.id]);
+  const okDel = await del(mine.id, own.id);
+  ck('the coach can delete a note on their own member', okDel.status === 200, okDel.status);
+  ck('and it is gone', (await countNotes()) === before - 1);
+
+  await pool.query(`DELETE FROM monitor_notes WHERE patient_id = ANY($1::int[])`, [[mine.id, otherM.id]]);
+  await pool.query(`DELETE FROM monitor_patients WHERE patient_id = $1`, [otherM.id]);
+  await pool.query(`DELETE FROM users WHERE id = $1`, [otherM.id]);
   ck('cleanup leaves no messages behind', (await listUnread()) === 0);
 
   srv.close();
