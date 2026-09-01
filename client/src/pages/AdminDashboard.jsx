@@ -1721,7 +1721,7 @@ export default function AdminDashboard() {
                 ))}
               </div>
 
-              {complianceLens === 'today' && overview.today_detail.map(m => {
+              {complianceLens === 'today' && (overview.today_detail || []).map(m => {
                 const pct = m.compliance_pct || 0;
                 const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-stone-200';
                 const textColor = pct >= 75 ? 'text-emerald-300' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-[#9EA3B0]';
@@ -1744,7 +1744,7 @@ export default function AdminDashboard() {
                 );
               })}
 
-              {complianceLens === '7d' && overview.compliance_7d.map(m => {
+              {complianceLens === '7d' && (overview.compliance_7d || []).map(m => {
                 const pct = parseFloat(m.avg_7d) || 0;
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.06] last:border-0">

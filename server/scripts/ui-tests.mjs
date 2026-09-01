@@ -27,6 +27,8 @@
 
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
+import puppeteerCore from 'puppeteer-core';
+import chromiumPkg from '@sparticuz/chromium';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -281,6 +283,172 @@ async function nudgeCardTest() {
   ck('takes the window from the server rather than hardcoding it', /48h of your message/.test(h));
 }
 
+
+/** Enough data for every page to render its real layout, not an empty state. */
+const OVERFLOW_API_STUB = `
+const members = Array.from({length: 8}, (_, i) => ({
+  id: i+1,
+  name: ['Subramanya Prasad','Harsha','Asha','Vishwas','Daya','Bujju','Sachin Kumar','Venkataramana Reddy'][i],
+  phone: '919000000'+i, active: true, monitor_id: 3, monitor_name: 'Sachin',
+  compliance_pct: 40+i*5, last_log: '2026-08-30', weight_kg: 84+i, start_weight: 92,
+  target_weight: 75, unread: i%3, days_since_log: i,
+}));
+const log = { log_date:'2026-09-01', weight_kg:'84.0', water_ml:1500,
+  food_items:[{id:1,name:'Ragi Mudde',grams:200,meal:'Lunch',
+    per_100g:{calories:119,protein:3,total_carbs:25,fat:0.5}}],
+  activities:{walk:true}, acv:{acv1:true}, supplements:{b12:true},
+  sleep:{bedtime:'22:30',waketime:'06:30'} };
+const ok = (data) => Promise.resolve({ data });
+export default {
+  get: async (url) => {
+    const u = String(url);
+    if (u.includes('/gaps/effectiveness')) return ok({ window_days:90, min_bucket:20,
+      response_window_hours:48,
+      overall:{label:'all',sent:27,responded:12,enough_data:true,rate_pct:44},
+      by_gap:[{label:'water',sent:24,responded:12,enough_data:true,rate_pct:50},
+              {label:'dormant',sent:3,responded:2,enough_data:false,rate_pct:null,
+               note:'only 3 sent so far'}],
+      by_hour:[{label:'18:00',sent:24,responded:12,enough_data:true,rate_pct:50}],
+      by_channel:[{label:'whatsapp',sent:24,responded:12,enough_data:true,rate_pct:50}] });
+    if (u.includes('/gaps')) return ok({ members: members.slice(0,5).map(m => ({
+      member_id:m.id, name:m.name, phone:m.phone, days_since_log:m.days_since_log,
+      gaps:[{key:'dormant',label:m.days_since_log+' days no log',severity:'blocking'},
+            {key:'water',label:'Water well under target',severity:'medium'}], show:2 })),
+      clear:3, next_check:{hour:20,label:'8pm',
+      covers:['acv doses missed','supplements not ticked']} });
+    if (u.includes('/eval-samples')) return ok({ samples:[{ id:1, patient_id:1,
+      source:'member_parse', message:'2 roti aur ek katori dal with ghee',
+      ai_output:{name:'Roti',grams:200}, corrected:{name:'Roti',grams:60}, field:'grams',
+      dismissed:false, created_at:new Date().toISOString(),
+      member_name:'Subramanya Prasad' }],
+      counts:{total:1,active:1,replayable:1,controls:0} });
+    if (u.includes('/foods/review')) return ok({ foods:[{ id:1,
+      name:'Ragi Mudde with Bassaru', category:'grain', source:'ai', verified:false,
+      per_100g:{calories:119,protein:3,total_carbs:25,fat:0.5}, members:3, times_logged:7,
+      macro_check:{status:'suspect',reason:'400 kcal stated but no macros behind it',
+      delta_pct:62} }], unverified_total:1, flagged_in_page:1, page_size:1 });
+    if (u.includes('/foods/admin/list')) return ok({ foods:[{id:1,name:'Ragi Mudde',
+      category:'grain',source:'nin',verified:true,kcal_per_100g:'119'}],
+      total:1, page:1, pages:1 });
+    if (u.includes('/admin/overview')) return ok({ stats:{total_members:8,logged_today:5,
+      avg_compliance_7d:72,total_weight_lost_kg:31.4,coaches:2},
+      alerts:members.slice(0,4).map(m=>({...m, reason:'no log in '+m.days_since_log+' days'})),
+      messages:[], today_detail:members.slice(0,4), compliance_7d:members.slice(0,4) });
+    if (u.includes('/admin/stats')) return ok({ total_members:8, coaches:2, monitors:2, active:7 });
+    if (u.includes('/admin/members')) return ok(members);
+    if (u.includes('/admin/coaches') || u.includes('/admin/monitors'))
+      return ok([{id:3,name:'Sachin',phone:'919111111',active:true,member_count:8}]);
+    if (u.includes('/admin/audit')) return ok([{id:1,actor_name:'Sachin',actor_role:'monitor',
+      action:'coach_ai_update',target_name:'Asha',
+      detail:'Set water target to 4000 ml for Asha',created_at:new Date().toISOString()}]);
+    if (u.includes('/me/today')) return ok({ log,
+      protocol:{macros:{kcal:1800,protein:120},water_target:3000,
+      meal_slots:['Breakfast','Lunch','Snack','Dinner']},
+      program:null, workoutSummary:{sets:[],cardio:[]}, mealPlans:[], notifications:[] });
+    if (u.includes('/members') || u.includes('/patients')) return ok(members);
+    if (u.includes('/logs')) return ok([log]);
+    return ok([]);
+  },
+  post: async () => ok({}), put: async () => ok({}),
+  patch: async () => ok({}), delete: async () => ok({}),
+};
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. Horizontal overflow — real layout, real browser
+// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * jsdom computes no layout, so nothing above can see a page scrolling sideways.
+ * This renders each page in headless Chrome at 320/360/390px and fails if the
+ * document is wider than the viewport.
+ *
+ * The browser binary ships INSIDE @sparticuz/chromium rather than being
+ * downloaded on first run — the reason this check sat unwritten for weeks was
+ * that Chrome's CDN is not reachable from every environment, and a test that
+ * cannot start is a test nobody runs.
+ *
+ * On failure it names the DEEPEST offending elements. A wide child makes every
+ * ancestor wide too, and listing all of them buries the one line to fix.
+ */
+const WIDTHS = [320, 360, 390];
+
+const OVERFLOW_PAGES = [
+  ['PatientList',    "import P from './pages/PatientList.jsx';"],
+  ['AdminDashboard', "import P from './pages/AdminDashboard.jsx';"],
+  ['AdminFoods',     "import P from './pages/AdminFoods.jsx';"],
+  ['Monitor',        "import P from './pages/Monitor.jsx';"],
+  ['Settings',       "import P from './pages/Settings.jsx';"],
+  ['Progress',       "import P from './pages/Progress.jsx';"],
+];
+
+async function overflowTest() {
+  console.log('\n[5] horizontal overflow at phone widths (headless Chrome)');
+
+  const chromium = chromiumPkg.default || chromiumPkg;
+  const api = stub('api-overflow.js', OVERFLOW_API_STUB);
+  const css = fs.readFileSync(path.join(CLIENT_SRC, 'index.css'), 'utf8')
+    .replace(/@import[^;]+;/g, '');
+
+  const browser = await puppeteerCore.launch({
+    executablePath: await chromium.executablePath(),
+    args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
+    headless: true,
+  });
+
+  try {
+    for (const [label, importLine] of OVERFLOW_PAGES) {
+      const code = await bundle(`
+        import { createRoot } from 'react-dom/client';
+        import { MemoryRouter } from 'react-router-dom';
+        import { useAuthStore } from './store/authStore';
+        ${importLine}
+        useAuthStore.setState({ accessToken: 'x',
+          user: { id: 3, name: 'Sachin', role: 'admin', phone: '919111111' } });
+        createRoot(document.getElementById('root')).render(
+          <MemoryRouter initialEntries={['/coach/1']}><P /></MemoryRouter>);`, api);
+
+      for (const width of WIDTHS) {
+        const page = await browser.newPage();
+        await page.setViewport({ width, height: 800, deviceScaleFactor: 2, isMobile: true });
+        await page.setContent(
+          `<!doctype html><html><head>
+           <meta name="viewport" content="width=device-width,initial-scale=1">
+           <style>${css}</style></head><body style="margin:0"><div id="root"></div></body></html>`,
+          { waitUntil: 'domcontentloaded' });
+        try { await page.addScriptTag({ content: code }); } catch { /* reported below */ }
+        await new Promise(r => setTimeout(r, 700));
+
+        const res = await page.evaluate((vw) => {
+          const mounted = document.getElementById('root').innerHTML.length;
+          const scrollW = document.documentElement.scrollWidth;
+          const offenders = [];
+          if (scrollW > vw + 1) {
+            for (const el of document.querySelectorAll('body *')) {
+              const r = el.getBoundingClientRect();
+              if ((r.width === 0 && r.height === 0) || r.right <= vw + 1) continue;
+              if ([...el.children].some(c => c.getBoundingClientRect().right > vw + 1)) continue;
+              const cls = el.className && el.className.baseVal !== undefined
+                ? el.className.baseVal : String(el.className || '');
+              offenders.push(`<${el.tagName.toLowerCase()} class="${cls.slice(0, 90)}"> right=${Math.round(r.right)}`);
+            }
+          }
+          return { mounted, scrollW, offenders: offenders.slice(0, 4) };
+        }, width);
+        await page.close();
+
+        // A page that did not mount has not been checked. Saying "no overflow"
+        // about a blank screen is the vacuous pass this repo keeps finding.
+        ck(`${label} @${width}px mounts`, res.mounted > 50, `root length ${res.mounted}`);
+        ck(`${label} @${width}px does not scroll sideways`,
+           res.scrollW <= width + 1,
+           `scrollWidth ${res.scrollW} (+${res.scrollW - width}px) · ${res.offenders.join(' · ')}`);
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 (async () => {
   try {
@@ -288,11 +456,16 @@ async function nudgeCardTest() {
     await evalSamplesTest();
     await foodsQueueTest();
     await nudgeCardTest();
+    await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
     // because a dependency is missing is worse than not having one.
     console.error('\nui-tests could not run:', err.message);
     if (/Cannot find package|Could not resolve/.test(err.message)) {
+      console.error('\n  Missing dependency. From the repo root: npm install\n' +
+                    '  and in server/: npm install  (esbuild, jsdom, puppeteer-core,\n' +
+                    '  @sparticuz/chromium — all devDependencies; build.sh installs\n' +
+                    '  the server with --omit=dev so Railway never sees them)\n');
       console.error('\n  Client dependencies are not installed:\n    npm install   (from the repo root)\n');
     }
     process.exit(1);
