@@ -197,9 +197,9 @@ fi
 # for reading, not for wiring.
 LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-workout-merge test-image-routing \
-test-weekly-report test-layout-contracts"
+test-layout-contracts"
 
-DB_SUITES="test-journey test-gaps test-labs test-macrolab test-lab-insight \
+DB_SUITES="test-weekly-report test-journey test-gaps test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
 test-learning-model"
@@ -216,6 +216,16 @@ run_suite() {
   fi
   if timeout 300 node "scripts/$name.js" >"$log" 2>&1; then
     local n; n=$(grep -c '✓' "$log")
+    # A suite that exits 0 having asserted NOTHING is not a pass. test-weekly-report
+    # skipped itself for months because it wanted TEST_DATABASE_URL and the gate
+    # exports DATABASE_URL — 214 lines of coverage printing a green tick and
+    # "0 assertions", which reads like a pass unless you look at the number.
+    if [ "$n" -eq 0 ]; then
+      failed=$((failed + 1))
+      printf "  ✗ %-22s RAN BUT ASSERTED NOTHING — skipped itself, or its output format changed\n" "$name"
+      head -5 "$log" | sed 's/^/      /'
+      return
+    fi
     total_pass=$((total_pass + n))
     printf "  ✓ %-22s %s assertions\n" "$name" "$n"
   else

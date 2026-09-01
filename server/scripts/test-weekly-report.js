@@ -2,22 +2,34 @@
 /**
  * test-weekly-report.js — the Sunday report, end to end on real Postgres.
  *
- * Runs only with TEST_DATABASE_URL set (skips cleanly otherwise): every
- * assertion here is about SQL and stored shape, which a stub pool cannot
+ * Every assertion here is about SQL and stored shape, which a stub pool cannot
  * verify — and stub pools have already shipped two SQL bugs on this project.
  *
  * The AI is injected as a fake, so no network and no axios stubbing.
+ *
+ * HOW THIS USED TO NOT RUN
+ * ------------------------
+ * This file required TEST_DATABASE_URL and exited 0 when it was absent. The
+ * gate exports DATABASE_URL, not TEST_DATABASE_URL, so every run for months
+ * printed a green tick reading "✓ test-weekly-report  0 assertions" while 214
+ * lines of coverage did nothing. A skip that exits 0 is indistinguishable from
+ * a pass at a glance, and "0 assertions" was the only tell.
+ *
+ * It now takes DATABASE_URL with the same localhost guard as every other
+ * database suite. TEST_DATABASE_URL still works as an override so existing
+ * habits do not break. `test-local.sh` separately fails any suite that reports
+ * zero assertions, so this cannot come back quietly.
  */
 'use strict';
-if (/railway|rlwy\.net|amazonaws|prod/i.test(process.env.TEST_DATABASE_URL || '')) {
-  console.error('Refusing to run: TEST_DATABASE_URL points at a live database.');
+if (process.env.TEST_DATABASE_URL) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+if (/railway|rlwy\.net|amazonaws|prod/i.test(process.env.DATABASE_URL || '')) {
+  console.error('Refusing to run: DATABASE_URL points at a live database.');
   process.exit(1);
 }
-if (!process.env.TEST_DATABASE_URL) {
-  console.log('\n(skipped: set TEST_DATABASE_URL to run the weekly-report DB tests)\n');
-  process.exit(0);
+if (!process.env.DATABASE_URL?.includes('localhost') && !process.env.ALLOW_TEST_DB) {
+  console.error('Refusing to run: DATABASE_URL is not localhost.');
+  process.exit(1);
 }
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 process.env.JWT_SECRET = 'smoke-test-secret';
 process.env.NODE_ENV = 'test';
 
@@ -38,6 +50,7 @@ const test = async (name, fn) => {
 const RUN = '2026-08-30';                       // a Sunday
 const W = wr.weekWindow(RUN);                   // 24–30 Aug, prev 17–23 Aug
 const MEMBER = 402;
+const COACH  = 300;
 
 const fakeAI = async (prompt) => ({
   text: /Padmini/.test(prompt)
@@ -47,14 +60,27 @@ const fakeAI = async (prompt) => ({
 });
 
 async function seed() {
+  // The coach has to exist before the link row: monitor_patients.monitor_id is
+  // a foreign key. This suite used to assume coach 300 was already seeded, from
+  // the old "member 214 + coach 300" fixture convention. Nothing seeds that any
+  // more — every other suite creates what it needs — so on a bare schema this
+  // died on the FK. It never surfaced because the suite was also skipping
+  // itself before it got this far.
+  await pool.query(`INSERT INTO users (id,name,phone,role,password,active)
+    VALUES ($1,'Weekly Test Coach','7790000300','monitor','x',true) ON CONFLICT (id) DO NOTHING`, [COACH]);
   await pool.query(`INSERT INTO users (id,name,phone,role,password,active)
     VALUES ($1,'Padmini Test','778','patient','x',true) ON CONFLICT (id) DO NOTHING`, [MEMBER]);
+  // Explicit ids do not advance the SERIAL sequence, so a later suite calling
+  // INSERT without an id would eventually collide with 300 or 402. Push the
+  // sequence past whatever is now the highest id.
+  await pool.query(
+    `SELECT setval(pg_get_serial_sequence('users','id'), GREATEST((SELECT MAX(id) FROM users), 1))`);
   await pool.query(`INSERT INTO patient_profiles (user_id,start_weight,target_weight,macro_kcal,macro_pro)
     VALUES ($1,94.0,80.0,1800,110)
     ON CONFLICT (user_id) DO UPDATE SET start_weight=94.0, target_weight=80.0,
       macro_kcal=1800, macro_pro=110`, [MEMBER]);
-  await pool.query(`INSERT INTO monitor_patients (monitor_id,patient_id) VALUES (300,$1)
-    ON CONFLICT DO NOTHING`, [MEMBER]);
+  await pool.query(`INSERT INTO monitor_patients (monitor_id,patient_id) VALUES ($2,$1)
+    ON CONFLICT DO NOTHING`, [MEMBER, COACH]);
   await pool.query(`DELETE FROM weekly_reports WHERE patient_id=$1`, [MEMBER]);
   await pool.query(`DELETE FROM daily_logs WHERE patient_id=$1`, [MEMBER]);
   await pool.query(`DELETE FROM workout_sessions WHERE patient_id=$1`, [MEMBER]);
@@ -105,7 +131,7 @@ async function seed() {
   await seed();
 
   const report = await wr.generateForMember(
-    { id: MEMBER, name: 'Padmini Test', monitor_id: 300 }, RUN, { ai: fakeAI });
+    { id: MEMBER, name: 'Padmini Test', monitor_id: COACH }, RUN, { ai: fakeAI });
 
   await test('a report is generated for an active week', () => {
     assert.ok(report && report.id, 'expected a stored report');
@@ -144,7 +170,7 @@ async function seed() {
   });
 
   await test('regenerating the same week updates in place, never duplicates', async () => {
-    await wr.generateForMember({ id: MEMBER, name: 'Padmini Test', monitor_id: 300 }, RUN, { ai: fakeAI });
+    await wr.generateForMember({ id: MEMBER, name: 'Padmini Test', monitor_id: COACH }, RUN, { ai: fakeAI });
     const { rows } = await pool.query(
       `SELECT COUNT(*)::int AS n FROM weekly_reports WHERE patient_id=$1 AND week_start=$2::date`,
       [MEMBER, W.start]);
@@ -165,7 +191,7 @@ async function seed() {
   await test('a failing AI still produces the report, just without a note', async () => {
     const boom = async () => { throw new Error('gemini down'); };
     await pool.query(`DELETE FROM weekly_reports WHERE patient_id=$1`, [MEMBER]);
-    const r = await wr.generateForMember({ id: MEMBER, name: 'Padmini Test', monitor_id: 300 }, RUN, { ai: boom });
+    const r = await wr.generateForMember({ id: MEMBER, name: 'Padmini Test', monitor_id: COACH }, RUN, { ai: boom });
     assert.ok(r && r.data.latestWeight === 84.9, 'the numbers matter more than the prose');
     assert.strictEqual(r.coachNote, null);
   });
