@@ -245,7 +245,8 @@ async function main() {
     console.log('  baseline  : none yet — run with --save to set one');
   }
 
-  console.log(`  API calls : ${samples.length}  (~${Math.ceil(samples.length * (DELAY_MS + 1500) / 60000)} min)`);
+  const secs = Math.round(samples.length * (DELAY_MS + 1500) / 1000);
+  console.log(`  API calls : ${samples.length}  (~${secs < 90 ? `${secs}s` : `${Math.ceil(secs / 60)} min`})`);
 
   if (DRY_RUN) {
     console.log('\n  --dry-run: stopping here. No API calls made, nothing spent.\n');
@@ -274,7 +275,14 @@ async function main() {
         outcome = scoreMemberSample(s, parseModelJSON(text));
       }
     } catch (err) {
-      outcome = { pass: null, detail: `error: ${err.message.slice(0, 80)}` };
+      // Keep the upstream status. "Request failed with status code 400" alone
+      // does not tell you it is your API key; the status does.
+      const status = err.response?.status;
+      const upstream = err.response?.data?.error?.message
+        || err.response?.data?.error
+        || err.message;
+      outcome = { pass: null,
+        detail: `error${status ? ` ${status}` : ''}: ${String(upstream).slice(0, 90)}` };
     }
 
     if (outcome.pass === true)  pass++;
@@ -335,6 +343,31 @@ async function main() {
     show('FIXED since the last run', fixed);
     show('NEWLY BROKEN since the last run', newlyBroken);
   }
+  // Samples that never reached the model. The commonest first-run cause is a
+  // missing or wrong API key, and reporting only a count leaves you guessing at
+  // which of a dozen things went wrong. The reasons are grouped because one bad
+  // key produces the same message N times.
+  const notReplayed = results.filter(r => r.pass === null);
+  if (notReplayed.length) {
+    const byReason = new Map();
+    for (const r of notReplayed) {
+      // Grouped on the message as-is. An earlier version stripped digits to
+      // merge near-identical errors and threw away the HTTP status with them,
+      // which is the one part that tells you it is your API key.
+      const key = String(r.detail || 'unknown').slice(0, 100);
+      byReason.set(key, (byReason.get(key) || 0) + 1);
+    }
+    console.log(`  COULD NOT BE REPLAYED (${notReplayed.length})`);
+    for (const [reason, n] of [...byReason].sort((a, b) => b[1] - a[1])) {
+      console.log(`    · ${n}× ${reason}`);
+    }
+    if ([...byReason.keys()].some(k =>
+        /auth|api[_ ]?key|not configured|invalid|error (400|401|403)/i.test(k))) {
+      console.log('    → set GEMINI_API_KEY (and/or GROQ_API_KEY) before re-running.');
+    }
+    console.log('');
+  }
+
   show('BROKEN CONTROLS — the model used to get these right', controlBroken);
   show('STILL WRONG', stillWrong.filter(r => r.field !== 'control'));
 
