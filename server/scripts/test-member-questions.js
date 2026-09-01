@@ -51,8 +51,21 @@ async function seedToday(pool) {
   await pool.query(`UPDATE daily_logs SET weight_kg=84.0 WHERE patient_id=214 AND log_date = $1::date - 2`, [IST]);
 }
 const poolPath = require.resolve(path.join(SERVER, 'db/pool.js'));
+// Recorded so the assertions can check WHAT was written, not just that the
+// request returned 200. A reply that says "sent" without a row is the exact
+// bug this feature exists to avoid.
+const dbWrites = [];
+let hasCoach = true;
 const stubPool = {
-  query: async (sql) => {
+  query: async (sql, params) => {
+    if (/FROM monitor_patients/.test(sql)) {
+      return hasCoach ? { rows: [{ monitor_id: 300 }], rowCount: 1 } : { rows: [], rowCount: 0 };
+    }
+    if (/INSERT INTO monitor_notes/.test(sql)) {
+      dbWrites.push({ sql, params });
+      return { rows: [{ id: 9001, note: params[2], from_member: true }], rowCount: 1 };
+    }
+    if (/SELECT name FROM users/.test(sql)) return { rows: [{ name: 'Sachin' }], rowCount: 1 };
     if (/FROM daily_logs/.test(sql)) {
       const twoDaysAgo = new Date(Date.now() + 5.5 * 3600e3 - 2 * 86400e3).toISOString().slice(0, 10);
       const weekRow = { log_date: twoDaysAgo, weight_kg: '84.0', water_ml: 2500, sleep: null,
@@ -89,6 +102,11 @@ const fake = async (url, body) => {
         { name: 'Hallucinated Biryani', grams: 500, meal: null },
         { name: 'Ghee', grams: 99999, meal: null },
       ],
+      weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [],
+      water_ml_add: null, sleep: null, foods: [], workouts: [] });
+  } else if (/Member's message: "ask my coach to assign my workout"/i.test(prompt)) {
+    text = JSON.stringify({ reply: '', question: null,
+      coach_message: 'Please assign my workout for today.',
       weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [],
       water_ml_add: null, sleep: null, foods: [], workouts: [] });
   } else if (aiCalls === 1) {
@@ -188,6 +206,39 @@ const req = (body) => new Promise(r => {
   // is not a Monday.
   t('the weekday match is a word boundary, not a substring',
     programDayForDate([{ day_number: 1, day_label: 'Monsoon Circuit', exercises: [] }], '2026-09-07') === null);
+
+  // ── Messages for the coach ─────────────────────────────────────────────────
+  // "ask my coach to assign my workout" was parsed as a log attempt and came
+  // back "Nothing new to log there" — twice, because the member rephrased and
+  // hit the same wall. The member->coach note path already existed; the chat
+  // simply never reached it.
+  t('the parse prompt tells the model to route coach messages',
+    /MESSAGE FOR THE COACH/.test(capturedPrompts[0] || ''));
+
+  const beforeWrites = dbWrites.length;
+  const cm = await req({ message: 'ask my coach to assign my workout', context: { waterTargetMl: 3000 } });
+  t('coach message: 200 response', cm.code === 200);
+  t('it is reported as sent', cm.body.sent_to_coach === true);
+  t('the reply quotes what was sent', /Sent to your coach/.test(cm.body.reply || ''));
+  t('nothing is logged as food or protocol', (cm.body.foods || []).length === 0
+      && (cm.body.activities || []).length === 0 && cm.body.weight_kg === null);
+  t('a note row was actually written', dbWrites.length === beforeWrites + 1);
+  t('written in the members own words, first person',
+    dbWrites[dbWrites.length - 1]?.params?.[2] === 'Please assign my workout for today.');
+  t('addressed to the assigned coach', dbWrites[dbWrites.length - 1]?.params?.[0] === 300);
+  t('and marked as coming FROM the member',
+    /from_member/.test(dbWrites[dbWrites.length - 1]?.sql || '')
+    && /true/.test(dbWrites[dbWrites.length - 1]?.sql || ''));
+
+  // A member with no coach assigned must be told, not told it was sent.
+  hasCoach = false;
+  const writesBeforeNoCoach = dbWrites.length;
+  const nc = await req({ message: 'ask my coach to assign my workout', context: { waterTargetMl: 3000 } });
+  t('no coach assigned: still a 200, not an error page', nc.code === 200);
+  t('no coach assigned: does NOT claim it was sent', nc.body.sent_to_coach === false);
+  t('no coach assigned: says why', /don't have a coach assigned/i.test(nc.body.reply || ''));
+  t('no coach assigned: nothing written', dbWrites.length === writesBeforeNoCoach);
+  hasCoach = true;
 
   server.close(); process.exit(ok ? 0 : 1);
 })();

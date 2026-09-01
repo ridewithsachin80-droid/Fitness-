@@ -1558,7 +1558,7 @@ export default function Coach() {
         {tab === 'today' && (<>   {/* Coach Notes */}
         <Card>
           <div className="flex items-center justify-between mb-3">
-            <SectionTitle icon="📝">Coach Notes</SectionTitle>
+            <SectionTitle icon="📝">Notes & Messages</SectionTitle>
             <button onClick={() => setShowNote(true)}
               className="text-xs font-semibold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-xl
                 hover:bg-white/[0.08] transition-colors">
@@ -1566,14 +1566,27 @@ export default function Coach() {
             </button>
           </div>
           {notes.length === 0 ? (
-            <p className="text-xs text-stone-300 italic text-center py-4">No coach notes yet</p>
+            <p className="text-xs text-stone-300 italic text-center py-4">Nothing here yet</p>
           ) : (
             <div className="space-y-2">
-              {[...notes].sort((a, b) => (b.flagged ? 1 : 0) - (a.flagged ? 1 : 0)).map(n => (
+              {/* Messages the MEMBER sent sit above the coach's own notes,
+                   below anything flagged. They arrive here from the AI chat
+                   ("ask my coach to assign my workout") and from the reply
+                   button, and until now they rendered identically to a note
+                   the coach had written themselves — same styling, and
+                   attributed to `monitor_name`, which is the coach's own name.
+                   A member asking a question that looks like your own note is
+                   a question that never gets answered. */}
+              {[...notes]
+                .sort((a, b) => (b.flagged ? 1 : 0) - (a.flagged ? 1 : 0)
+                             || (b.from_member ? 1 : 0) - (a.from_member ? 1 : 0))
+                .map(n => (
                 <div key={n.id}
                   className={`rounded-2xl px-4 py-3 border ${n.flagged
                     ? 'bg-red-50 border-red-200'
-                    : 'bg-stone-50 border-stone-100'}`}>
+                    : n.from_member
+                      ? 'bg-[rgba(212,175,55,0.08)] border-[rgba(212,175,55,0.25)]'
+                      : 'bg-stone-50 border-stone-100'}`}>
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       {n.flagged && (
@@ -1584,7 +1597,14 @@ export default function Coach() {
                       <span className="text-xs font-semibold text-stone-500">
                         {formatDate(n.note_date)}
                       </span>
-                      <span className="text-xs text-stone-400">· {n.monitor_name}</span>
+                      {n.from_member && (
+                        <span className="text-xs font-semibold text-[#D4AF37] bg-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-full">
+                          ✉️ From {data.profile?.name?.split(' ')[0] || 'them'}
+                        </span>
+                      )}
+                      <span className="text-xs text-stone-400">
+                        · {n.from_member ? (data.profile?.name || 'Member') : n.monitor_name}
+                      </span>
                     </div>
                   </div>
                   <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{n.note}</p>

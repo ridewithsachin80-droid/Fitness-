@@ -302,6 +302,17 @@ PARSING RULES:
    "grams": <new grams or null>, "meal": "<new slot or null>" }] and do NOT
    also add it to "foods" — corrections update, foods append. Only names from
    the TODAY'S LOG list are valid. "the dal" resolves to the dal item there.
+12. MESSAGE FOR THE COACH — if the member is addressing their coach rather
+   than logging or asking the app ("ask my coach to assign my workout", "tell
+   coach my knee hurts", "coach ko bolo kal nahi aa paunga", "message my
+   trainer about the diet"), set "coach_message" to what should be sent, in
+   the MEMBER'S OWN VOICE and first person ("Please assign my workout for
+   today", "My knee hurts"), and leave every other field empty/null. Do not
+   rewrite their meaning, do not add pleasantries they did not say, and do not
+   answer on the coach's behalf.
+   Only for messages clearly aimed at a person. A question about their own
+   data is rule 11, not this.
+
 11. QUESTIONS — if the message is a QUESTION about their own data, progress,
    targets or plan ("how many calories have I eaten today?", "kitna paani
    baaki hai?", "did I hit my protein target?", "what's my weight trend?")
@@ -314,6 +325,7 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
 {
   "reply": "Got it — weight 82.5, walk done, lunch logged at 290 kcal, 1L water.",
   "question": null,
+  "coach_message": null,
   "corrections": [],
   "weight_kg": 82.5,
   "activity_ids": ["walk"],
@@ -1419,6 +1431,40 @@ router.post('/parse', async (req, res) => {
 
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed   = JSON.parse(jsonText);
+
+    // ── Anything aimed at the coach becomes a message to the coach ────────────
+    // "ask my coach to assign my workout" was landing in the parser as a log
+    // attempt, so the member got "Nothing new to log there" — twice, because
+    // they rephrased and got the same wall. The member had a reasonable request
+    // and the app had a working member->coach message path since Sprint 1; the
+    // two were simply never connected.
+    //
+    // Same helper the reply button uses, so this threads, marks read and pushes
+    // to the coach identically. A second implementation here would drift.
+    const coachMsg = typeof parsed.coach_message === 'string' ? parsed.coach_message.trim() : '';
+    if (coachMsg) {
+      const EMPTY = { question: false, weight_kg: null, activities: [], acv: [], supplements: [],
+                      water_ml_add: null, sleep: null, foods: [], workouts: [],
+                      totals: { cal: 0, pro: 0, carb: 0, fat: 0 } };
+      try {
+        const { sendMemberNote } = require('./patients');
+        await sendMemberNote(req.user.id, coachMsg);
+        return res.json({ ...EMPTY, sent_to_coach: true,
+          reply: `Sent to your coach: "${coachMsg.slice(0, 120)}"` });
+      } catch (err) {
+        // Never claim it was sent when it was not — the offline queue shipped
+        // exactly that bug and it is the one thing that makes a member stop
+        // trusting the chat.
+        if (err.code === 'NO_COACH') {
+          return res.json({ ...EMPTY, sent_to_coach: false,
+            reply: "You don't have a coach assigned yet, so I couldn't send that. " +
+                   'Ask the FitLife team to assign one and try again.' });
+        }
+        console.error('coach_message send failed:', err);
+        return res.json({ ...EMPTY, sent_to_coach: false,
+          reply: "I couldn't send that to your coach just now. Please try again in a moment." });
+      }
+    }
 
     // ── Questions get answered, not parsed ────────────────────────────────────
     // "how many calories have I consumed today?" used to fall through as an

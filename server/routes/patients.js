@@ -336,71 +336,86 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   }
 });
 
+/**
+ * Send a message from a member to their coach.
+ *
+ * Extracted from the route below so the AI chat can use the SAME path. A
+ * member typing "ask my coach to assign my workout" into the chat and a member
+ * tapping reply on a note are the same act, and they must not be able to drift
+ * into two behaviours — one that threads and notifies and one that quietly
+ * does something else.
+ *
+ * Throws with a `.code` the callers can branch on rather than returning a
+ * status, because one caller answers with HTTP and the other with a sentence.
+ */
+async function sendMemberNote(memberId, note, replyTo = null) {
+  const text = String(note || '').trim().slice(0, 2000);
+  if (!text) { const e = new Error('A message is required'); e.code = 'EMPTY'; throw e; }
+
+  // Route the reply to whoever wrote the note being answered, falling back
+  // to the member's assigned coach. A reply that lands on nobody is worse
+  // than no reply feature at all.
+  // Validate reply_to against THIS member's own notes and discard it
+  // otherwise. Two reasons, both real:
+  //
+  //   · an unknown id violates the foreign key and 500s the request
+  //   · an id belonging to someone else would thread this member's reply
+  //     onto a stranger's note — the row lands in the right patient's
+  //     thread, but reply_to points into another member's conversation
+  let monitorId = null;
+  let threadId  = null;
+  if (replyTo) {
+    const { rows } = await pool.query(
+      `SELECT id, monitor_id FROM monitor_notes WHERE id = $1 AND patient_id = $2`,
+      [parseInt(replyTo) || 0, memberId]);
+    if (rows.length) { threadId = rows[0].id; monitorId = rows[0].monitor_id; }
+  }
+  if (!monitorId) {
+    const { rows } = await pool.query(
+      `SELECT monitor_id FROM monitor_patients
+       WHERE patient_id = $1 AND active = true
+       ORDER BY id LIMIT 1`, [memberId]);
+    monitorId = rows[0]?.monitor_id ?? null;
+  }
+  if (!monitorId) {
+    const e = new Error('You do not have a coach assigned yet'); e.code = 'NO_COACH'; throw e;
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO monitor_notes
+       (monitor_id, patient_id, note_date, note, flagged, from_member, reply_to, read_at)
+     VALUES ($1, $2, (NOW() AT TIME ZONE 'Asia/Kolkata')::date, $3, false, true, $4, NOW())
+     RETURNING *`,
+    [monitorId, memberId, text, threadId]);
+
+  // Mark the note being answered as read — replying is reading
+  if (threadId) {
+    await pool.query(
+      `UPDATE monitor_notes SET read_at = COALESCE(read_at, NOW())
+       WHERE id = $1 AND patient_id = $2`, [threadId, memberId]);
+  }
+
+  // Tell the coach. Their own app is where they will see it.
+  try {
+    const push = require('../services/pushService');
+    const { rows: [u] } = await pool.query(`SELECT name FROM users WHERE id = $1`, [memberId]);
+    await push.sendToUser(monitorId, `${u?.name || 'A member'} sent a message`,
+      text.slice(0, 120), 'member-reply');
+  } catch { /* a missing push subscription must not fail the message */ }
+
+  return rows[0];
+}
+
 // ── POST /api/patients/me/notes/reply ────────────────────────────────────────
 // A member answering their coach. Declared before '/:id' routes.
 router.post('/me/notes/reply', authMW, roleCheck('patient'), async (req, res) => {
   const { note, reply_to = null } = req.body || {};
-  if (!note || !String(note).trim()) {
-    return res.status(400).json({ error: 'A message is required' });
-  }
-
   try {
-    // Route the reply to whoever wrote the note being answered, falling back
-    // to the member's assigned coach. A reply that lands on nobody is worse
-    // than no reply feature at all.
-    // Validate reply_to against THIS member's own notes and discard it
-    // otherwise. Two reasons, both real:
-    //
-    //   · an unknown id violates the foreign key and 500s the request
-    //   · an id belonging to someone else would thread this member's reply
-    //     onto a stranger's note — the row lands in the right patient's
-    //     thread, but reply_to points into another member's conversation
-    let monitorId = null;
-    let threadId = null;
-    if (reply_to) {
-      const { rows } = await pool.query(
-        `SELECT id, monitor_id FROM monitor_notes WHERE id = $1 AND patient_id = $2`,
-        [parseInt(reply_to) || 0, req.user.id]);
-      if (rows.length) {
-        threadId  = rows[0].id;
-        monitorId = rows[0].monitor_id;
-      }
-    }
-    if (!monitorId) {
-      const { rows } = await pool.query(
-        `SELECT monitor_id FROM monitor_patients
-         WHERE patient_id = $1 AND active = true
-         ORDER BY id LIMIT 1`, [req.user.id]);
-      monitorId = rows[0]?.monitor_id ?? null;
-    }
-    if (!monitorId) {
-      return res.status(400).json({ error: 'You do not have a coach assigned yet' });
-    }
-
-    const { rows } = await pool.query(
-      `INSERT INTO monitor_notes
-         (monitor_id, patient_id, note_date, note, flagged, from_member, reply_to, read_at)
-       VALUES ($1, $2, (NOW() AT TIME ZONE 'Asia/Kolkata')::date, $3, false, true, $4, NOW())
-       RETURNING *`,
-      [monitorId, req.user.id, String(note).trim().slice(0, 2000), threadId]);
-
-    // Mark the note being answered as read — replying is reading
-    if (threadId) {
-      await pool.query(
-        `UPDATE monitor_notes SET read_at = COALESCE(read_at, NOW())
-         WHERE id = $1 AND patient_id = $2`, [threadId, req.user.id]);
-    }
-
-    // Tell the coach. Their own app is where they will see it.
-    try {
-      const push = require('../services/pushService');
-      const { rows: [u] } = await pool.query(`SELECT name FROM users WHERE id = $1`, [req.user.id]);
-      await push.sendToUser(monitorId, `${u?.name || 'A member'} replied`,
-        String(note).trim().slice(0, 120), 'member-reply');
-    } catch { /* a missing push subscription must not fail the reply */ }
-
-    res.status(201).json(rows[0]);
+    const row = await sendMemberNote(req.user.id, note, reply_to);
+    res.status(201).json(row);
   } catch (err) {
+    if (err.code === 'EMPTY')    return res.status(400).json({ error: err.message });
+    if (err.code === 'NO_COACH') return res.status(400).json({ error: err.message });
     console.error('POST /patients/me/notes/reply error:', err);
     res.status(500).json({ error: 'Could not send your reply' });
   }
@@ -1761,3 +1776,4 @@ router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), requirePatien
 });
 
 module.exports = router;
+module.exports.sendMemberNote = sendMemberNote;
