@@ -146,43 +146,79 @@ const CASES = [
     console.log(`  ${ok ? '\u2713' : '\u2717'} ${String(code).padEnd(4)} ${method.padEnd(5)} ${url.padEnd(34)} ${label}`);
   }
 
-  // ── Ordering: literal paths must beat their parameterised sibling ──────────
+  // ── The status code proves less than it looks like it does ─────────────────
   //
-  // A 401 does NOT prove a route exists. If /foods/presets were deleted,
-  // /foods/:id would match "presets" as an id and return 401 too — so the
-  // check above passes either way, and the label "not shadowed by /foods/:id"
-  // was claiming something it could not see. Verified by deleting the route
-  // and watching the suite stay green.
+  // The loop above calls each route unauthenticated and accepts anything that
+  // is not a 404. That is a weaker check than it reads as, in two ways:
   //
-  // Route ORDER is the thing that actually matters, so assert it directly
-  // against the registered Express stack instead of inferring it from a status
-  // code that is identical in both cases.
-  // Express 5 no longer exposes a mount path on the layer, so each router is
-  // identified by a route only it declares.
-  const ORDER = [
-    ['foods',   '/lookup', '/presets',       '/:id'],
-    ['foods',   '/lookup', '/yesterday',     '/:id'],
-    ['members', '/gaps',   '/me/today',      '/:id'],
-    ['members', '/gaps',   '/me/onboarding', '/:id'],
-    ['members', '/gaps',   '/me/profile',    '/:id'],
-  ];
-
-  function routePathsFor(fingerprint) {
+  //   1. `/foods/:id` matches "presets" as an id, so deleting `/foods/presets`
+  //      returns the same 401 and the case above still passes.
+  //   2. Worse — `routes/foods.js` and `routes/reminders.js` both call
+  //      `router.use(authMW)` at the top. Router-level middleware runs BEFORE
+  //      route matching, so an unauthenticated request to any path under those
+  //      routers gets a 401 whether or not the route exists at all. For those
+  //      two routers the 404 check can never fail.
+  //
+  // Both were verified by deleting the handler and watching this suite stay
+  // green. So the literal routes are asserted against the registered Express
+  // stack — method AND path — rather than inferred from a status code.
+  //
+  // Express 5 does not expose a mount path on the layer, so each router is
+  // identified by a fingerprint route that only it declares.
+  function layersFor(fingerprint) {
     const stack = (app._router || app.router)?.stack || [];
     for (const layer of stack) {
       if (!layer.handle?.stack) continue;
-      const paths = layer.handle.stack.filter(l => l.route).map(l => l.route.path);
-      if (paths.includes(fingerprint)) return paths;
+      const routes = layer.handle.stack.filter(l => l.route).map(l => ({
+        path:    l.route.path,
+        methods: Object.keys(l.route.methods || {}),
+      }));
+      if (routes.some(r => (Array.isArray(r.path) ? r.path : [r.path]).includes(fingerprint))) return routes;
     }
     return null;
   }
+  const declares = (routes, method, p) => routes.some(r =>
+    (Array.isArray(r.path) ? r.path : [r.path]).includes(p) && r.methods.includes(method));
+
+  // [router fingerprint, method, path that must be registered]
+  const REGISTERED = [
+    ['/lookup',          'get',    '/presets'],
+    ['/lookup',          'post',   '/presets'],
+    ['/lookup',          'delete', '/presets/:id'],
+    ['/lookup',          'get',    '/yesterday'],
+    ['/my-notifications','get',    '/my-schedule'],
+    ['/gaps',            'get',    '/me/today'],
+    ['/gaps',            'get',    '/me/onboarding'],
+    ['/gaps',            'put',    '/me/onboarding'],
+    ['/gaps',            'patch',  '/me/profile'],
+  ];
+  for (const [fp, method, routePath] of REGISTERED) {
+    const routes = layersFor(fp);
+    const ok = !!routes && declares(routes, method, routePath);
+    if (!ok) fails++;
+    console.log(`  ${ok ? '\u2713' : '\u2717'} ${(method.toUpperCase() + ' ' + routePath).padEnd(30)} ` +
+      (!routes ? `router not found (fingerprint ${fp})` : ok ? 'registered' : 'NOT REGISTERED — the 401 above came from middleware, not a route'));
+  }
+
+  // ── Ordering: literal paths must beat their parameterised sibling ──────────
+  //
+  // Registration alone is not enough: a literal declared after `/:id` never
+  // runs, because Express matches in declaration order.
+  const ORDER = [
+    ['foods',   '/lookup',           '/presets',       '/:id'],
+    ['foods',   '/lookup',           '/yesterday',     '/:id'],
+    ['members', '/gaps',             '/me/today',      '/:id'],
+    ['members', '/gaps',             '/me/onboarding', '/:id'],
+    ['members', '/gaps',             '/me/profile',    '/:id'],
+  ];
 
   for (const [name, fingerprint, literal, param] of ORDER) {
-    const paths = routePathsFor(fingerprint);
-    if (!paths) {
+    const routes = layersFor(fingerprint);
+    if (!routes) {
       console.log(`  \u2717 could not find the ${name} router (looked for ${fingerprint})`);
       fails++; continue;
     }
+    const paths = routes.map(r => r.path);
     const iLit = paths.findIndex(p => p === literal || (Array.isArray(p) && p.includes(literal)));
     const iPar = paths.findIndex(p => p === param);
     const ok = iLit > -1 && (iPar === -1 || iLit < iPar);

@@ -80,6 +80,45 @@ test('/api/patients is still mounted alongside /api/members', () => {
 
 test('/admin/monitors endpoints still answer alongside /admin/coaches', () => {
   const a = read('server/routes/admin.js');
+
+  /**
+   * Checked PER ROUTE, not per file.
+   *
+   * This used to be `a.includes("'/monitors'")` over the whole file. There are
+   * three aliased routes — GET, POST and PATCH toggle — and each writes the
+   * pair in its own array, so the file contained the string several times.
+   * Deleting the alias from ANY ONE of them left the others to satisfy the
+   * check and the gate stayed green. A mutation run proved it: removing
+   * `/monitors` from the GET route did not turn this suite red.
+   *
+   * That is the exact deploy this file exists to prevent. A member whose
+   * service worker has not updated is still calling the old path; if the alias
+   * on the route they use is gone, they get a 404 and a blank list, and it
+   * looks like their data vanished.
+   *
+   * The rule now: any route array mentioning a /coaches path must carry the
+   * matching /monitors path in the SAME array.
+   */
+  const arrays = [...a.matchAll(/router\.(get|post|put|patch|delete)\(\s*\[([^\]]*)\]/g)]
+    .map(m => ({ method: m[1], paths: m[2] }));
+
+  assert.ok(arrays.length >= 3,
+    `expected the aliased admin routes to be declared as arrays; found ${arrays.length}`);
+
+  const missing = [];
+  for (const { method, paths } of arrays) {
+    for (const [coach, legacy] of [["'/coaches'", "'/monitors'"],
+                                   ["'/coaches/:id/toggle'", "'/monitors/:id/toggle'"]]) {
+      if (paths.includes(coach) && !paths.includes(legacy)) {
+        missing.push(`${method.toUpperCase()} ${coach} has no ${legacy} alias`);
+      }
+    }
+  }
+  assert.deepStrictEqual(missing, [],
+    `stale PWA bundles would 404 on these:\n    ${missing.join('\n    ')}`);
+
+  // And the pairs must still exist at all — an array-shaped check alone would
+  // pass on a file with no aliased routes left in it.
   for (const p of ["'/coaches'", "'/monitors'", "'/coaches/:id/toggle'", "'/monitors/:id/toggle'"]) {
     assert.ok(a.includes(p), `missing admin route path ${p}`);
   }
