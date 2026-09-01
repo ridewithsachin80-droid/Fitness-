@@ -90,6 +90,81 @@ body {
 /* border-emerald-500 (checkbox border when checked) */
 .border-emerald-500 { border-color: #D4AF37; }
 
+/* ── The shades the rebrand missed ────────────────────────────────────────────
+   `.bg-emerald-500` was remapped to gold above; 600 and 700 never were. That
+   left seven PRIMARY buttons — Add Member, Add Coach, Save Weight, Add Note,
+   Send Push, and the two protocol Add buttons — rendering Tailwind's default
+   green while every other primary button in the app is gold, and one meal
+   button that was gold at rest and turned green under your thumb.
+
+   Hover and focus variants need their own rules. Tailwind emits
+   `.hover\:bg-emerald-700:hover`, which is a class PLUS a pseudo-class, so it
+   outranks a bare `.bg-emerald-700` no matter how late this file loads. Same
+   reason `.focus\:ring-emerald-*` is spelled out further down.
+
+   These are root fixes, not call-site ones: the JSX keeps its emerald class
+   names and gets the brand colour. `test-layout-contracts` [8] fails if a new
+   stone-* or emerald-* shade is used without a rule here, so this list cannot
+   silently fall behind again. */
+.bg-emerald-600 { background-color: #D4AF37; }
+.bg-emerald-700 { background-color: #C5A059; }
+/* The hover halves need !important for the ordering reason spelled out in the
+   hover-variants block below. */
+.hover\:bg-emerald-600:hover { background-color: #D4AF37 !important; }
+.hover\:bg-emerald-700:hover { background-color: #C5A059 !important; }
+.border-emerald-400 { border-color: rgba(212,175,55,0.55); }
+.accent-emerald-600 { accent-color: #D4AF37; }
+
+/* Progress-bar fill. The bar itself is gold; only the gradient stops were
+   still green. */
+.from-emerald-400 { --tw-gradient-from: #D4AF37 var(--tw-gradient-from-position); }
+.to-emerald-300   { --tw-gradient-to:   #F0E2B6 var(--tw-gradient-to-position); }
+
+/* Bar TRACKS and hairline dividers — light-theme greys sitting on charcoal.
+   `bg-stone-200` is the empty part of a progress bar and the 0%-compliance
+   bar, so it read as a bright band exactly where "nothing logged" should be
+   the quietest thing on screen. */
+.bg-stone-200      { background-color: rgba(255,255,255,0.08); }
+.divide-stone-50 > * + * { border-color: var(--border) !important; }
+
+/* ── Hover variants ───────────────────────────────────────────────────────────
+   Every rule above is a bare class, and a bare class does not reach a hover
+   variant: Tailwind emits `.hover\:text-stone-600:hover`, a class plus a
+   pseudo-class, which outranks `.text-stone-600` whatever the load order. So
+   these kept their light-theme values and only showed it under a finger or a
+   cursor — which is why they survived a colour sweep that read the file at
+   rest.
+
+   `!important` here, and it is not laziness. Vite emits Tailwind's variant
+   utilities in a LATER chunk than its base utilities, and this file lands
+   between the two — verified in dist: our `.hover\:bg-stone-50:hover` sits at
+   byte 54648 and Tailwind's at 63012, so ours loses on position at equal
+   specificity. Position cannot be fixed from inside the file, and doubling the
+   selector only buys one specificity point where `divide-*` needs three. These
+   are leaf colour utilities on a hover state; nothing overrides them inline.
+
+   The same trap already had `.focus\:ring-emerald-*` further down: written
+   months ago, never actually applied, so the focus ring has been emerald all
+   along. Fixed in the same way below.
+
+   `hover:text-stone-600` was the loud one: #57534e on charcoal is close to
+   invisible, so touching a member row on the coach list made the name fade
+   out rather than light up. `hover:bg-stone-50` flashed near-white. */
+.hover\:text-stone-600:hover       { color: var(--text-hi) !important; }
+.group:hover .group-hover\:text-stone-500,
+.group-hover\:text-stone-500       { color: var(--text-mid) !important; }
+.hover\:bg-stone-50:hover          { background-color: rgba(255,255,255,0.06) !important; }
+.hover\:bg-emerald-100:hover       { background-color: rgba(212,175,55,0.13) !important; }
+.hover\:text-emerald-300:hover,
+.hover\:text-emerald-700:hover,
+.hover\:text-emerald-800:hover     { color: #F0E2B6 !important; }
+
+/* Near-white text shades with no rule of their own. They already read as
+   white; these exist so the whole stone-* ramp is accounted for and [8] can
+   assert that with no allowlist. */
+.text-stone-200 { color: #FFFFFF; }
+.text-stone-100 { color: #FFFFFF; }
+
 /* Tinted accent backgrounds */
 .bg-emerald-50  { background-color: rgba(212,175,55,0.07); }
 .bg-emerald-100 { background-color: rgba(212,175,55,0.13); }
@@ -144,7 +219,7 @@ input[type='number'] { -moz-appearance: textfield; }
 
 /* Focus */
 .focus\:ring-emerald-300:focus,
-.focus\:ring-emerald-400:focus      { --tw-ring-color: rgba(212,175,55,0.28); }
+.focus\:ring-emerald-400:focus      { --tw-ring-color: rgba(212,175,55,0.28) !important; }
 .focus\:border-emerald-400:focus,
 .focus\:border-emerald-300:focus    { border-color: rgba(212,175,55,0.45) !important; }
 

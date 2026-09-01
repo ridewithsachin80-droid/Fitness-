@@ -623,7 +623,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                   <button onClick={() => toggleAll(meal)}
                     className="flex items-center gap-2 py-2 text-xs text-stone-500 font-semibold hover:text-emerald-700 transition-colors">
                     <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-                      (meal.items||[]).every((_,i)=>checkedSet.has(i)) ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-300 bg-white'}`}>
+                      (meal.items||[]).every((_,i)=>checkedSet.has(i)) ? 'bg-emerald-500 border-emerald-500 text-[#121316]' : 'border-stone-300 bg-white'}`}>
                       {(meal.items||[]).every((_,i)=>checkedSet.has(i)) && '✓'}
                     </span>
                     Select all / None
@@ -640,7 +640,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                             alreadyIn  ? 'bg-stone-100 border border-stone-200 opacity-60' :
                                          'bg-[#1A1C20] border border-white/[0.07] hover:border-stone-200'}`}>
                           <span className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                            isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-stone-300 bg-white'}`}>
+                            isChecked ? 'bg-emerald-500 border-emerald-500 text-[#121316]' : 'border-stone-300 bg-white'}`}>
                             {isChecked && <span className="text-xs font-bold">✓</span>}
                           </span>
                           <div className="flex-1 min-w-0">
@@ -662,7 +662,7 @@ function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                   {!fullyLogged && (
                     <button onClick={() => handleLog(meal)} disabled={checkedCount===0}
                       className={`w-full mt-3 py-3 text-sm font-bold rounded-xl transition-all active:scale-95 ${
-                        checkedCount>0 ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm' : 'bg-stone-100 text-stone-400 cursor-not-allowed'}`}>
+                        checkedCount>0 ? 'bg-emerald-500 hover:bg-emerald-600 text-[#121316] shadow-sm' : 'bg-stone-100 text-stone-400 cursor-not-allowed'}`}>
                       {checkedCount===0 ? 'Select items to log' : `📋 Log ${checkedCount} item${checkedCount>1?'s':''} · ${checkedKcal} kcal`}
                     </button>
                   )}

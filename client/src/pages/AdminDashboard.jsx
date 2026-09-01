@@ -107,11 +107,11 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
           <select
             value={form.monitor_id}
             onChange={e => set('monitor_id', e.target.value)}
-            /* `text-[#FFFFFF] bg-white` — white on white. The chosen coach's
-               name was invisible; the control looked empty however you set it.
-               Matches the select styling already used in StrengthProgress and
-               WorkoutLog, and the options carry the colours explicitly so the
-               dropdown list is readable on Android too. */
+            /* Was `text-[#FFFFFF] bg-white`. That reads as white on white and
+               was not, only because index.css remaps `.bg-white` to #1A1C20 —
+               a rule in another file, on a class named for the opposite
+               colour. Now says what it means, matching the select styling in
+               StrengthProgress and WorkoutLog. */
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
               focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]"
           >
@@ -125,7 +125,7 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
         {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
             rounded-xl transition-colors disabled:opacity-50 mt-2">
           {saving ? 'Creating…' : 'Create Member'}
         </button>
@@ -310,9 +310,9 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
               <div ref={containerRef} className="relative">
                 <input autoFocus value={foodQuery} onChange={e => handleFoodQuery(e.target.value)}
                   placeholder="Search food…"
-                  /* White text on a white box: the coach typed a food name and
-                     saw an empty field. Third of four controls with this exact
-                     pairing — see test-layout-contracts [7]. */
+                  /* Third of four controls that paired `bg-white` with white
+                     text and relied on the index.css remap to stay legible —
+                     see test-layout-contracts [7]. */
                   className="w-full text-xs px-3 py-2 rounded-xl border border-white/[0.1] bg-[#121316]
                     focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF]
                     placeholder-[#7E8596]" />
@@ -907,7 +907,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
       </div>
       <div className="flex gap-2 pt-1">
         <button onClick={onSave}
-          className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700">
+          className="flex-1 py-1.5 text-xs bg-emerald-600 text-[#121316] rounded-lg font-semibold hover:bg-emerald-700">
           ✓ Save
         </button>
         <button onClick={onCancel}
@@ -954,7 +954,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
       </div>
       <div className="flex gap-2">
         <button onClick={() => confirmAddCustom(protoKey)}
-          className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700">
+          className="flex-1 py-1.5 text-xs bg-emerald-600 text-[#121316] rounded-lg font-semibold hover:bg-emerald-700">
           + Add
         </button>
         <button onClick={() => { setAddingKey(null); setNewItem({ label:'',sub:'',fromTime:'',toTime:'',totalTime:'' }); }}
@@ -1134,7 +1134,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
       {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl mt-3">{error}</p>}
 
       <button onClick={submit} disabled={saving}
-        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
           rounded-xl transition-colors disabled:opacity-50 mt-4">
         {saving ? 'Saving…' : 'Save Changes'}
       </button>
@@ -1182,7 +1182,7 @@ function PushModal({ members, onClose }) {
             <div>
               <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Recipient</label>
               <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)}
-                /* Same white-on-white — the chosen push recipient was invisible. */
+                /* Fourth of the same four. */
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-[#1A1C20]
                   focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF]">
                 <option value="">📢 All active members ({members.filter(m => m.active).length})</option>
@@ -1320,7 +1320,7 @@ function AssignModal({ member, coaches, onClose, onAssigned }) {
     <Modal title={`Assign Coach — ${member.name}`} onClose={onClose}>
       <div className="space-y-4">
         <select value={coachId} onChange={e => setCoachId(e.target.value)}
-          /* Same white-on-white as the Assign-to-Coach select above. */
+          /* Same borrowed `.bg-white` remap as the select above. */
           className="w-full border border-white/[0.08] rounded-xl px-3 py-3 text-sm
             focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]">
           <option value="">— Unassigned —</option>
@@ -1329,7 +1329,7 @@ function AssignModal({ member, coaches, onClose, onAssigned }) {
           ))}
         </select>
         <button onClick={submit} disabled={saving || !coachId}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
             rounded-xl disabled:opacity-50 transition-colors">
           {saving ? 'Saving…' : 'Confirm Assignment'}
         </button>

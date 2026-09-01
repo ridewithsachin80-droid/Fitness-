@@ -118,13 +118,36 @@ const PAGES = ['pages/AdminDashboard.jsx', 'pages/AdminFoods.jsx', 'pages/Monito
                'pages/PatientList.jsx', 'pages/Settings.jsx', 'pages/Profile.jsx',
                'pages/Progress.jsx', 'pages/DailyLog.jsx', 'pages/Login.jsx'];
 
-/** White on #D4AF37 is about 1.9:1. Gold buttons carry charcoal text. */
+const segmentsOf = (classList) => {
+  const segs = [classList.replace(/\$\{[\s\S]*?\}/g, ' ')];
+  const inner = /['"]([^'"]*)['"]/g;
+  const exprs = classList.match(/\$\{[\s\S]*?\}/g) || [];
+  for (const e of exprs) { let q; while ((q = inner.exec(e))) segs.push(q[1]); }
+  return segs;
+};
+/**
+ * White on #D4AF37 is about 1.9:1. Gold buttons carry charcoal text.
+ *
+ * The first version of this looked for the literal `bg-[#D4AF37]` and missed
+ * ten buttons, because a background can arrive at gold two ways: written as
+ * the hex, or written as `bg-emerald-500/600/700` and remapped in index.css.
+ * Both paint the same pixels. Checking only the spelling checked half the app.
+ */
+const GOLD_BG = new Set(['bg-[#D4AF37]', 'bg-emerald-500', 'bg-emerald-600', 'bg-emerald-700',
+                         'hover:bg-emerald-600', 'hover:bg-emerald-700']);
 const whiteOnGold = [];
 for (const f of PAGES) {
   const src = read(f);
-  const re = /className=\{?[`"][^`"]*bg-\[#D4AF37\][^`"]*[`"]/g;
+  const re = /className=\{?[`"]([\s\S]*?)[`"]/g;
   let m;
-  while ((m = re.exec(src))) if (/\btext-white\b/.test(m[0])) whiteOnGold.push(f);
+  while ((m = re.exec(src))) {
+    for (const seg of segmentsOf(m[1])) {
+      const toks = seg.split(/\s+/).filter(Boolean);
+      if (toks.some(t => GOLD_BG.has(t)) && toks.includes('text-white')) {
+        whiteOnGold.push(f + ': ' + seg.trim().replace(/\s+/g, ' ').slice(0, 80));
+      }
+    }
+  }
 }
 ck('no white text on a gold button', whiteOnGold.length === 0, whiteOnGold);
 
@@ -147,13 +170,6 @@ ck('the off-brand #c9a227 gold has not come back', offBrand.length === 0, offBra
  * must not be flagged. `border border-white/[0.07] border border-stone-200` in
  * one segment is the bug — both apply, and the winner is stylesheet order.
  */
-const segmentsOf = (classList) => {
-  const segs = [classList.replace(/\$\{[\s\S]*?\}/g, ' ')];
-  const inner = /['"]([^'"]*)['"]/g;
-  const exprs = classList.match(/\$\{[\s\S]*?\}/g) || [];
-  for (const e of exprs) { let q; while ((q = inner.exec(e))) segs.push(q[1]); }
-  return segs;
-};
 const isBorderColour = (c) => /^border-(?:[a-z]+-\d{2,3}|white|black|transparent|\[)/.test(c);
 
 const borderClashes = [], repeatedTokens = [];
@@ -222,14 +238,18 @@ console.log('\n[7] invisible controls');
 /**
  * Four controls in AdminDashboard.jsx carried a solid `bg-white` AND a white
  * foreground on the same element: the Assign-to-Coach select, the Assign Coach
- * select, the push Recipient select, and the meal-plan food search input. The
- * coach typed a food name into an empty-looking box and picked a recipient
- * they could not read.
+ * select, the push Recipient select, and the meal-plan food search input.
  *
- * This is the failure mode the project's test notes warn about — nothing
- * throws, nothing looks broken in code review, and the greps that check for
- * off-brand colour all pass, because neither `bg-white` nor `text-[#FFFFFF]`
- * is wrong on its own. Only the pair is.
+ * Read literally that is white on white. It was NOT, and the reason matters:
+ * `index.css` remaps `.bg-white` to `--bg-surface` (#1A1C20), loads after
+ * Tailwind, and wins on position — so these rendered white on charcoal and
+ * looked fine. They were one deleted line away from being unreadable, and the
+ * line that saved them is 1,200 lines away in a different file.
+ *
+ * They now name their own dark background instead of borrowing a global remap
+ * of a class called `white`. This assertion keeps it that way. It is a
+ * robustness contract, not a bug that shipped — recorded honestly because a
+ * comment that overstates what it fixed is how the next person mis-scopes.
  *
  * Alpha whites (`bg-white/[0.08]`) are a wash over a dark surface and are
  * fine — the check requires the SOLID token. A white element with no text on
@@ -292,6 +312,59 @@ for (const f of PAGES) {
   }
 }
 ck('every dark-backgrounded input states its own text colour', darkNoFg.length === 0, darkNoFg);
+
+// ── 8. No light-theme class without a dark-theme rule ───────────────────────
+console.log('\n[8] palette coverage');
+
+/**
+ * The app is dark, but ~390 Tailwind `stone-*` and `emerald-*` classes are
+ * still written in the JSX. That is fine — `index.css` remaps them, which is
+ * one rule instead of 390 edits. It only works while the map is COMPLETE.
+ *
+ * Nine of them had no rule and rendered Tailwind's light-theme default:
+ * `bg-emerald-600` made seven primary buttons green, `hover:text-stone-600`
+ * turned a member's name #57534e on charcoal — near-invisible — the moment you
+ * touched the row, and `hover:bg-stone-50` flashed near-white.
+ *
+ * They survived a colour sweep because none of them is visible at rest. So the
+ * check is not "look at the colours", it is: every stone/emerald class the JSX
+ * uses must have a rule in index.css. There is no allowlist — a gap is either
+ * fixed or it is red.
+ *
+ * Alpha variants (`bg-emerald-400/10`) are skipped: Tailwind emits those as
+ * their own classes, a bare rule would not reach them, and they are the
+ * semantic status greens on lab values and confidence badges, which should
+ * stay green.
+ */
+const jsxFiles = [];
+for (const dir of ['pages', 'components']) {
+  for (const f of fs.readdirSync(path.join(CLIENT, dir))) {
+    if (f.endsWith('.jsx')) jsxFiles.push(dir + '/' + f);
+  }
+}
+ck('the client source tree was found', jsxFiles.length > 10, jsxFiles.length);
+
+const cssSrc  = read('index.css');
+const hasRule = (tok) => {
+  const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:/g, '\\\\:');
+  return new RegExp('\\.' + esc + '(?=[\\s,{:>])').test(cssSrc);
+};
+const PALETTE = /^(?:hover:|focus:|active:|disabled:|group-hover:)?(?:bg|text|border|divide|from|to|ring|placeholder|accent|fill|stroke)-(?:stone|emerald)-\d{2,3}$/;
+
+const unmapped = new Map();
+for (const f of jsxFiles) {
+  const src = read(f);
+  const re = /className=\{?[`"']([\s\S]*?)[`"']/g;
+  let m;
+  while ((m = re.exec(src))) {
+    for (const tok of m[1].split(/[\s`"'{}$?]+/)) {
+      if (!tok || tok.includes('/') || !PALETTE.test(tok) || hasRule(tok)) continue;
+      if (!unmapped.has(tok)) unmapped.set(tok, f);
+    }
+  }
+}
+ck('every stone/emerald class the JSX uses has a rule in index.css',
+   unmapped.size === 0, [...unmapped].map(([t, f]) => t + ' (' + f + ')'));
 
 console.log(`\n═══ LAYOUT CONTRACTS: ${pass} passed, ${fail} failed ═══`);
 process.exit(fail > 0 ? 1 : 0);

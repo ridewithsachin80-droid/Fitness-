@@ -224,7 +224,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
             ))}
             {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !pin || !confirm}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
                 rounded-xl transition-colors disabled:opacity-50">
               {saving ? 'Saving…' : 'Set PIN'}
             </button>
@@ -370,7 +370,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
             </div>
             {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !weight}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
                 rounded-xl transition-colors disabled:opacity-50">
               {saving ? 'Saving…' : 'Save Weight'}
             </button>
