@@ -1547,6 +1547,45 @@ export default function AdminDashboard() {
               ))}
             </div>
 
+            {/* Messages members have sent, first thing on the Overview tab.
+                This card also exists on /coach — but Sachin works from /admin,
+                so a message surfaced only on the coach page is a message he
+                never sees. Built from the full member list rather than any
+                filtered view, and it disappears once the member is opened,
+                because opening them marks their messages read. */}
+            {(() => {
+              const withMsgs = (members || [])
+                .filter(m => (m.unread_messages || 0) > 0)
+                .sort((a, b) => (b.unread_messages || 0) - (a.unread_messages || 0));
+              if (!withMsgs.length) return null;
+              const totalMsgs = withMsgs.reduce((n, m) => n + (m.unread_messages || 0), 0);
+              return (
+                <div className="bg-[#1A1C20] border border-[rgba(212,175,55,0.35)] rounded-2xl p-3.5 mb-3">
+                  <p className="text-sm font-bold text-[#D4AF37] mb-2">
+                    ✉️ {totalMsgs} {plural(totalMsgs, 'message')} from {withMsgs.length}{' '}
+                    {plural(withMsgs.length, 'member')}
+                  </p>
+                  <div className="space-y-2">
+                    {withMsgs.map(m => (
+                      <button key={m.id} onClick={() => navigate(`/coach/${m.id}`)}
+                        className="w-full text-left bg-[#121316] border border-white/[0.07] rounded-xl
+                          px-3 py-2.5 hover:border-[rgba(212,175,55,0.30)] transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[13px] font-bold text-[#FFFFFF] truncate">{m.name}</p>
+                          {m.unread_messages > 1 && (
+                            <span className="text-[10px] font-bold text-[#D4AF37] flex-shrink-0">
+                              +{m.unread_messages - 1} more
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#9EA3B0] mt-1 line-clamp-2">{m.latest_message}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Today's gaps — what to chase right now. Needs Attention below is
                 the longer-term list of members drifting away. */}
             <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl p-3.5 mb-3">

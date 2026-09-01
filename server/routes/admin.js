@@ -226,7 +226,16 @@ router.get('/members', async (req, res) => {
         (SELECT u2.name FROM monitor_patients mp JOIN users u2 ON u2.id=mp.monitor_id
          WHERE mp.patient_id=u.id AND mp.active=true LIMIT 1) AS monitor_name,
         (SELECT mp.monitor_id FROM monitor_patients mp
-         WHERE mp.patient_id=u.id AND mp.active=true LIMIT 1) AS monitor_id
+         WHERE mp.patient_id=u.id AND mp.active=true LIMIT 1) AS monitor_id,
+        -- Same two fields the coach list carries. Sachin works from /admin, not
+        -- /coach, so a member message surfaced only on the coach page is a
+        -- message he never sees.
+        (SELECT COUNT(*)::int FROM monitor_notes mn
+          WHERE mn.patient_id=u.id AND mn.from_member=true AND mn.coach_read_at IS NULL)
+          AS unread_messages,
+        (SELECT mn.note FROM monitor_notes mn
+          WHERE mn.patient_id=u.id AND mn.from_member=true AND mn.coach_read_at IS NULL
+          ORDER BY mn.id DESC LIMIT 1) AS latest_message
       FROM users u
       LEFT JOIN patient_profiles pp ON pp.user_id=u.id
       WHERE u.role='patient'

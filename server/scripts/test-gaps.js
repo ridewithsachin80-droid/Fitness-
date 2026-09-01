@@ -16,6 +16,7 @@ const { detectGaps, nextCheck } = require('../services/gapDetector');
 const app = express(); app.use(express.json()); app.use(cookieParser());
 app.use((q,_r,n) => { q.io = { to: () => ({ emit: () => {} }) }; n(); });
 app.use('/api/patients', require('../routes/patients'));
+app.use('/api/admin', require('../routes/admin'));
 
 let pass = 0, fail = 0;
 const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
@@ -233,6 +234,29 @@ const fullDay = {
      VALUES ($1, $2, CURRENT_DATE, 'Keep protein up this week.', false, false)`,
     [link.monitor_id, mine.id]);
   ck('the coach\'s own notes are not counted', (await listUnread()) === 1);
+
+  // Sachin works from /admin, so the admin member list has to carry the same
+  // two fields the coach list does. It is a separate query in a separate file,
+  // which is exactly how one of them ends up without them.
+  const adminRow = async () => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/admin/members`,
+      { headers: { Authorization: 'Bearer ' + tok(link.monitor_id, 'admin') } });
+    const rows = await r.json();
+    return (Array.isArray(rows) ? rows : []).find(m => m.id === mine.id) || {};
+  };
+  ck('the ADMIN member list carries the unread count too', (await adminRow()).unread_messages === 1,
+     await adminRow());
+  ck('and the message text with it',
+     (await adminRow()).latest_message === 'Please assign my workout for today.');
+
+  // The coach AI answered "show the msg from members" with a list of today's
+  // logs, because its roster snapshot knew about logs and nothing else.
+  const { buildCoachRosterContext } = require('../routes/aiChat');
+  const roster = await buildCoachRosterContext([{ id: mine.id, name: mine.name }]);
+  ck('the coach AI roster snapshot includes member messages',
+     /Messages from members/.test(roster), roster.slice(-200));
+  ck('with the text and an unread marker',
+     /Please assign my workout for today/.test(roster) && /\[UNREAD\]/.test(roster));
 
   const detail = await fetch(`http://127.0.0.1:${port}/api/patients/${mine.id}`,
     { headers: { Authorization: 'Bearer ' + tok(link.monitor_id, 'monitor') } });

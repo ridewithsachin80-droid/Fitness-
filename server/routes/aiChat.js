@@ -1816,6 +1816,18 @@ async function buildCoachMemberContext(member) {
     });
   lines.push(week.length ? `Previous days (last 7):\n${week.join('\n')}` : `No logs in the previous 7 days.`);
 
+  // What this member has written to their coach. Asking "what did Padmini say?"
+  // on her own page should not need the coach to go and read the card.
+  const { rows: msgs } = await pool.query(
+    `SELECT note, created_at, coach_read_at FROM monitor_notes
+      WHERE patient_id = $1 AND from_member = true
+      ORDER BY id DESC LIMIT 10`, [member.id]);
+  lines.push(msgs.length
+    ? `Messages from this member:\n` + msgs.map(m =>
+        `  ${String(m.created_at).slice(0, 10)}${m.coach_read_at ? '' : ' [UNREAD]'}: ` +
+        `"${String(m.note).slice(0, 200)}"`).join('\n')
+    : `Messages from this member: none.`);
+
   return lines.join('\n');
 }
 
@@ -1841,6 +1853,29 @@ async function buildCoachRosterContext(members) {
     if (r.compliance_pct != null) bits.push(`${r.compliance_pct}% compliance`);
     lines.push(`  ${m.name}: ${bits.join(', ')}`);
   }
+  // ── Messages members have sent ─────────────────────────────────────────────
+  // The roster context was today's logs and nothing else, so "show the msg
+  // from members" came back as a list of who had logged what — a plausible
+  // answer to a question nobody asked. The messages existed; this snapshot
+  // simply had no idea they did.
+  const { rows: msgs } = await pool.query(
+    `SELECT mn.patient_id, mn.note, mn.created_at, mn.coach_read_at
+       FROM monitor_notes mn
+      WHERE mn.patient_id = ANY($1::int[]) AND mn.from_member = true
+      ORDER BY mn.id DESC
+      LIMIT 25`, [ids]);
+  const nameOf = new Map(members.map(m => [m.id, m.name]));
+  const unread = msgs.filter(m => !m.coach_read_at);
+  if (msgs.length) {
+    lines.push('', `Messages from members (${unread.length} unread of ${msgs.length} recent):`);
+    for (const m of msgs) {
+      lines.push(`  ${nameOf.get(m.patient_id) || 'Member'}` +
+        `${m.coach_read_at ? '' : ' [UNREAD]'}: "${String(m.note).slice(0, 200)}"`);
+    }
+  } else {
+    lines.push('', 'Messages from members: none.');
+  }
+
   return lines.join('\n');
 }
 
@@ -2980,3 +3015,4 @@ module.exports.buildCoachMemberContext = buildCoachMemberContext;
 module.exports.buildCoachAnswerPrompt  = buildCoachAnswerPrompt;
 module.exports.buildCoachSummary       = buildCoachSummary;
 module.exports.programDayForDate = programDayForDate;
+module.exports.buildCoachRosterContext = buildCoachRosterContext;
