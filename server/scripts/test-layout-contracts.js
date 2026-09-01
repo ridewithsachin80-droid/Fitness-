@@ -335,6 +335,27 @@ for (const f of PAGES) {
 }
 ck('every dark-backgrounded input states its own text colour', darkNoFg.length === 0, darkNoFg);
 
+// ── 7b. plural() argument order ─────────────────────────────────────────────
+console.log('\n[7b] plural() argument order');
+
+/**
+ * `plural(count, singular)`. Reversed, it does not throw — `Number('message')`
+ * is NaN, so the `n === 1` branch is skipped and the badge renders "2 2s".
+ * Silent, and only visible on a screen with the right data on it.
+ *
+ * A string literal in the first argument is always the mistake, and it is the
+ * only form that can be caught statically.
+ */
+const badPlural = [];
+for (const dir of ['pages', 'components']) {
+  for (const g of fs.readdirSync(path.join(CLIENT, dir))) {
+    if (!g.endsWith('.jsx')) continue;
+    const f = dir + '/' + g;
+    for (const m of read(f).matchAll(/\bplural\(\s*(['"])/g)) badPlural.push(f);
+  }
+}
+ck('plural() is never called with the word first', badPlural.length === 0, [...new Set(badPlural)]);
+
 // ── 8. No light-theme class without a dark-theme rule ───────────────────────
 console.log('\n[8] palette coverage');
 

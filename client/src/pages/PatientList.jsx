@@ -302,7 +302,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
           {unread > 0 && (
             <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold
               text-[#D4AF37] bg-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-full">
-              ✉️ {unread} {plural('message', unread)}
+              ✉️ {unread} {plural(unread, 'message')}
             </span>
           )}
           <p className="text-xs text-[#5a5a68] mt-0.5">{p.phone}</p>
