@@ -78,11 +78,18 @@ export default function MemberList() {
     if (filter === 'needs_attention') return baseList.filter(p => p.last_logged !== todayStr);
     if (filter === 'low_compliance')  return baseList.filter(p => p.last_compliance != null && p.last_compliance < 50);
     if (filter === 'no_pin')          return baseList.filter(p => p.has_pin === false);
+    if (filter === 'messages')        return baseList.filter(p => (p.unread_messages || 0) > 0);
     return baseList;
   })();
 
-  const noLogToday  = filtered.filter(p => p.last_logged !== todayStr);
-  const loggedToday = filtered.filter(p => p.last_logged === todayStr);
+  // Unread messages float to the top of whichever group the member is in.
+  // A member who wrote to their coach has asked a direct question, and it is
+  // the one thing on this screen that is waiting on a person rather than on
+  // the member. Sorted inside the groups rather than across them so the
+  // "no log today" split the coach already reads down stays intact.
+  const byUnread = (a, b) => (b.unread_messages || 0) - (a.unread_messages || 0);
+  const noLogToday  = filtered.filter(p => p.last_logged !== todayStr).sort(byUnread);
+  const loggedToday = filtered.filter(p => p.last_logged === todayStr).sort(byUnread);
 
   return (
     <div className="min-h-screen bg-[#121316]">
@@ -174,6 +181,7 @@ export default function MemberList() {
               { id: 'needs_attention',  label: '⚠ No log today',   count: members.filter(p => p.last_logged !== todayStr).length },
               { id: 'low_compliance',   label: '📉 Low compliance', count: members.filter(p => p.last_compliance != null && p.last_compliance < 50).length },
               { id: 'no_pin',           label: '🔑 No PIN',         count: members.filter(p => p.has_pin === false).length },
+              { id: 'messages',         label: '✉️ Messages',       count: members.filter(p => (p.unread_messages || 0) > 0).length },
             ].map(chip => (
               <button key={chip.id} onClick={() => setFilter(chip.id)}
                 className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-all whitespace-nowrap ${
@@ -233,6 +241,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
   const badge  = complianceBadge(p.last_compliance);
   const delta  = weightDelta(p.latest_weight, p.start_weight);
   const noLog  = p.last_logged !== todayStr;
+  const unread = p.unread_messages || 0;
   const conditions = Array.isArray(p.conditions) ? p.conditions : [];
 
   const workoutDaysAgo = p.last_workout
@@ -242,11 +251,22 @@ function MemberCard({ member: p, todayStr, onClick }) {
   return (
     <div onClick={onClick}
       className={`bg-[#131317] rounded-2xl border p-4 shadow-card-raised cursor-pointer transition-all
-        hover:shadow-md active:scale-98 ${noLog ? 'border-red-500/25' : 'border-white/[0.07]'}`}>
+        hover:shadow-md active:scale-98 ${unread > 0
+          ? 'border-[rgba(212,175,55,0.45)]'
+          : noLog ? 'border-red-500/25' : 'border-white/[0.07]'}`}>
       <div className="flex items-start justify-between gap-3">
         {/* Left: name + info */}
         <div className="min-w-0 flex-1">
           <h2 className="font-display font-semibold text-[#ededf0] text-base truncate">{p.name}</h2>
+          {/* Until now the only signal a member had written was a push
+              notification, and a push that arrives while the phone is in a
+              pocket is a message nobody ever sees. */}
+          {unread > 0 && (
+            <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold
+              text-[#D4AF37] bg-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-full">
+              ✉️ {unread} {plural('message', unread)}
+            </span>
+          )}
           <p className="text-xs text-[#5a5a68] mt-0.5">{p.phone}</p>
 
           {conditions.length > 0 && (

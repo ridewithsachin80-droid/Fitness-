@@ -313,6 +313,14 @@ ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS delivered_via VARCHAR(12);
 -- messages knows which is which.
 ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS from_member BOOLEAN DEFAULT false;
 ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS reply_to INT REFERENCES monitor_notes(id) ON DELETE SET NULL;
+-- Coach-side read state for member-authored messages.
+--
+-- read_at could not be reused: sendMemberNote sets it to NOW() on insert,
+-- because a member's own outgoing message is not unread FOR THEM. read_at
+-- means "the member has seen this row"; this means "the coach has".
+ALTER TABLE monitor_notes ADD COLUMN IF NOT EXISTS coach_read_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_monitor_notes_unread_from_member
+  ON monitor_notes(patient_id) WHERE from_member = true AND coach_read_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_monitor_notes_thread ON monitor_notes(patient_id, note_date DESC, id);
 
 -- Clean reference bounds that were stored as NaN. Postgres NUMERIC accepts

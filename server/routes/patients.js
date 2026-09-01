@@ -62,6 +62,13 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (SELECT log_date       FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
            (SELECT compliance_pct FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,
            (SELECT MAX(session_date) FROM workout_sessions WHERE patient_id = u.id) AS last_workout,
+           -- Messages the MEMBER sent that this coach has not opened yet. The
+           -- push notification is the only signal today, and a push that
+           -- arrives while the phone is in a pocket is a message that is never
+           -- seen. This puts it on the list the coach already works down.
+           (SELECT COUNT(*)::int FROM monitor_notes mn
+             WHERE mn.patient_id = u.id AND mn.from_member = true
+               AND mn.coach_read_at IS NULL) AS unread_messages,
            (SELECT u2.name FROM monitor_patients mp2
             JOIN users u2 ON u2.id = mp2.monitor_id
             WHERE mp2.patient_id = u.id AND mp2.active = true LIMIT 1) AS monitor_name
@@ -85,7 +92,14 @@ router.get('/', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
            (SELECT weight_kg      FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
            (SELECT log_date       FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
            (SELECT compliance_pct FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS last_compliance,
-           (SELECT MAX(session_date) FROM workout_sessions WHERE patient_id = u.id) AS last_workout
+           (SELECT MAX(session_date) FROM workout_sessions WHERE patient_id = u.id) AS last_workout,
+           -- Messages the MEMBER sent that this coach has not opened yet. The
+           -- push notification is the only signal today, and a push that
+           -- arrives while the phone is in a pocket is a message that is never
+           -- seen. This puts it on the list the coach already works down.
+           (SELECT COUNT(*)::int FROM monitor_notes mn
+             WHERE mn.patient_id = u.id AND mn.from_member = true
+               AND mn.coach_read_at IS NULL) AS unread_messages
          FROM users u
          JOIN monitor_patients mp ON mp.patient_id = u.id
          LEFT JOIN patient_profiles pp ON pp.user_id = u.id
@@ -847,6 +861,19 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     if (!profileResult.rows.length) {
       return res.status(404).json({ error: 'Patient not found' });
     }
+
+    // Opening the member's page IS reading their messages — they are in the
+    // payload above, on the Today tab. Done after the SELECT, so this response
+    // still carries them as unread and the page can style them accordingly;
+    // the next member-list load is where the badge clears.
+    //
+    // Deliberately not awaited into the response path: a failure here must not
+    // cost the coach the member's page. Worst case the badge stays up.
+    pool.query(
+      `UPDATE monitor_notes SET coach_read_at = NOW()
+        WHERE patient_id = $1 AND from_member = true AND coach_read_at IS NULL`,
+      [id]
+    ).catch(err => console.error('marking member messages read failed:', err));
 
     res.json({
       profile: { ...profileResult.rows[0], has_pin: pinResult.rows[0]?.has_pin ?? false },

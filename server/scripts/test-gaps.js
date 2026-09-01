@@ -188,6 +188,55 @@ const fullDay = {
   })();
   ck('members cannot read it', asMember === 403, asMember);
 
+  // ── Unread member messages on the coach list ───────────────────────────────
+  // A member writing to their coach only produced a push notification, which
+  // is invisible once the phone is in a pocket. The count has to survive the
+  // round trip: written by the chat, read by the list, cleared by opening the
+  // member — and `read_at` could not be reused for it, because sendMemberNote
+  // sets that on insert.
+  console.log('\n[unread member messages]');
+  const { rows: [link] } = await pool.query(
+    `SELECT monitor_id FROM monitor_patients WHERE patient_id = $1 AND active = true LIMIT 1`,
+    [mine.id]);
+  ck('the seeded member has a coach', !!link?.monitor_id, link);
+
+  const listUnread = async () => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/patients/`,
+      { headers: { Authorization: 'Bearer ' + tok(link.monitor_id, 'monitor') } });
+    const rows = await r.json();
+    return (rows.find(m => m.id === mine.id) || {}).unread_messages;
+  };
+
+  ck('no messages -> the badge is zero, not null', (await listUnread()) === 0, await listUnread());
+
+  const { rows: [note] } = await pool.query(
+    `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged, from_member, read_at)
+     VALUES ($1, $2, CURRENT_DATE, 'Please assign my workout for today.', false, true, NOW())
+     RETURNING id`, [link.monitor_id, mine.id]);
+  ck('a member message shows as unread on the coach list', (await listUnread()) === 1);
+
+  // A note the COACH wrote is not a message waiting on the coach.
+  await pool.query(
+    `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged, from_member)
+     VALUES ($1, $2, CURRENT_DATE, 'Keep protein up this week.', false, false)`,
+    [link.monitor_id, mine.id]);
+  ck('the coach\'s own notes are not counted', (await listUnread()) === 1);
+
+  const detail = await fetch(`http://127.0.0.1:${port}/api/patients/${mine.id}`,
+    { headers: { Authorization: 'Bearer ' + tok(link.monitor_id, 'monitor') } });
+  ck('opening the member page returns 200', detail.status === 200, detail.status);
+  const detailBody = await detail.json();
+  ck('and that page still carries the message as unread',
+     (detailBody.notes || []).some(n => n.from_member && n.coach_read_at === null));
+
+  // The UPDATE is fired without awaiting so a failure cannot cost the coach
+  // the page, so give it a moment before asserting it landed.
+  await new Promise(r => setTimeout(r, 250));
+  ck('opening the member clears the badge', (await listUnread()) === 0, await listUnread());
+
+  await pool.query(`DELETE FROM monitor_notes WHERE patient_id = $1`, [mine.id]);
+  ck('cleanup leaves no messages behind', (await listUnread()) === 0);
+
   srv.close();
   console.log(`\n\u2550\u2550\u2550 GAPS: ${pass} passed, ${fail} failed \u2550\u2550\u2550`);
   process.exit(fail ? 1 : 0);
