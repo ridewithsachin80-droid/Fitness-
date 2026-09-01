@@ -30,6 +30,7 @@ import { useVoiceComposer } from './VoiceComposer';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, today, plural } from '../constants';
 import DaySummary from './DaySummary';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
+import { rollbackCard } from '../utils/chatCard';
 
 // ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
 //
@@ -864,14 +865,11 @@ export default function AIChatLog() {
       // trade-off vs. adding a destructive DELETE path just for undo).
     }
 
+    // The Undo/Edit transition lives in utils/chatCard.js — the same function
+    // test-coach-view exercises.
     setMessages(prev => {
       const next = [...prev];
-      next[mi] = { ...next[mi],
-        applied: false,
-        undone: !reopen,          // reopening isn't a revert — the card comes back
-        pending: null,
-        editing: !!reopen,
-      };
+      next[mi] = rollbackCard(next[mi], { reopen });
       return next;
     });
   }, []);

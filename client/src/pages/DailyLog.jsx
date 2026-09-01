@@ -24,6 +24,7 @@ import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
 import { deriveTodayDay } from '../utils/programDay';
+import { coachCardRows, anyRow } from '../utils/coachCard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1820,22 +1821,21 @@ export default function DailyLog() {
             {/* From your coach today — the assigned plan, visible without digging.
                 Workout row opens the panel to start logging; targets row opens food. */}
             {(() => {
-              // The card shows only what is still PENDING from the coach.
-              // Once the member acts on a row, it leaves; when nothing is
-              // pending the whole card leaves — the tiles carry the progress.
-              const workoutDone = (workoutSummary.sets || []).length > 0
-                || (workoutSummary.cardio || []).length > 0;
-              const foodLogged  = (log.food || []).length > 0;
-              const showWorkout = !!coachPlan?.todayDay && !workoutDone;
-              const showRest    = !!coachPlan && !coachPlan.todayDay;
-              const showTargets = !!protocol?.macros?.kcal && !foodLogged;
-              // A prescribed meal is pending until at least one of its items is
-              // logged under that meal slot — then the food panel's plan card
-              // takes over tracking the rest.
-              const loggedByMeal = new Set((log.food || []).map(f => `${f.meal}|${String(f.name).toLowerCase()}`));
-              const pendingMeals = mealPlans.filter(mp =>
-                !(mp.items || []).some(it => loggedByMeal.has(`${mp.meal}|${String(it.name).toLowerCase()}`)));
-              if (!showWorkout && !showRest && !showTargets && !pendingMeals.length) return null;
+              // The card shows only what is still PENDING from the coach. Once
+              // the member acts on a row it leaves; when nothing is pending the
+              // whole card leaves — the tiles carry the progress. The rules are
+              // in utils/coachCard.js, which test-coach-view runs directly.
+              const rows = coachCardRows({
+                coachPlan,
+                macrosKcal: protocol?.macros?.kcal,
+                sets:   workoutSummary.sets,
+                cardio: workoutSummary.cardio,
+                food:   log.food,
+                mealPlans,
+              });
+              const { workout: showWorkout, rest: showRest,
+                      targets: showTargets, pendingMeals } = rows;
+              if (!anyRow(rows)) return null;
               return (
               <div className="rounded-2xl border border-[rgba(212,175,55,0.25)] bg-[#1A1C20] px-4 py-3 mb-3">
                 <p className="text-[10px] font-bold tracking-[0.12em] text-[#D4AF37] uppercase mb-2">

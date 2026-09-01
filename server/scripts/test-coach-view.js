@@ -9,7 +9,16 @@
  *   2. Body-comp "trends" were rendered for any marker with 2+ ROWS, so a single
  *      DEXA panel stored as duplicate rows on one date drew a flat fake trend.
  *
- * Pure logic — no DB, no network. Mirrors the helpers in Monitor.jsx.
+ * Pure logic — no DB, no network.
+ *
+ * This file used to reimplement thirteen client helpers under comments saying
+ * "mirrors X". A copy is correct on the day it is written and silent on the day
+ * the original changes, and four real defects were found while removing them:
+ * a "Monsoon Circuit" label scheduling itself every Monday, a weight-name regex
+ * narrower in the test than in the code, an untrimmed seam between two voice
+ * takes, and a coach card rule blind to prescribed meals. Everything below now
+ * imports what actually ships — via scripts/lib/client-bundle.js for client
+ * modules — so editing the app turns these assertions red.
  *
  * PRODUCTION GUARD: refuses to run against a live database URL, matching the
  * convention in the other server/scripts/test-*.js files.
@@ -480,28 +489,27 @@ test('overlapping exercise between days keeps its sets across the switch', () =>
 });
 
 
-// ── Mirrors the "From your coach today" pending logic ─────────────────────────
-function coachCardRows({ coachPlan, macrosKcal, sets, cardio, food }) {
-  const workoutDone = (sets || []).length > 0 || (cardio || []).length > 0;
-  const foodLogged  = (food || []).length > 0;
-  return {
-    workout: !!coachPlan?.todayDay && !workoutDone,
-    rest:    !!coachPlan && !coachPlan.todayDay,
-    targets: !!macrosKcal && !foodLogged,
-  };
-}
-const anyRow = (r) => r.workout || r.rest || r.targets;
+// ── The REAL "From your coach today" rules, imported ─────────────────────────
+// The copy that sat here covered three of the four rows — it knew nothing
+// about prescribed meal plans. So "when nothing is pending the whole card
+// leaves" was asserted against a rule that could not see one of the things
+// keeping the card open.
+const { coachCardRows, anyRow } = importClient('utils/coachCard.js');
 
 console.log('\nCoach card pending logic');
 
 test('morning: workout + targets both pending', () => {
   const r = coachCardRows({ coachPlan: { todayDay: {} }, macrosKcal: 1800, sets: [], cardio: [], food: [] });
-  assert.deepStrictEqual(r, { workout: true, rest: false, targets: true });
+  assert.deepStrictEqual(
+    { workout: r.workout, rest: r.rest, targets: r.targets },
+    { workout: true, rest: false, targets: true });
 });
 
 test('after first meal the targets row leaves, workout stays', () => {
   const r = coachCardRows({ coachPlan: { todayDay: {} }, macrosKcal: 1800, sets: [], cardio: [], food: [{ name: 'Poha' }] });
-  assert.deepStrictEqual(r, { workout: true, rest: false, targets: false });
+  assert.deepStrictEqual(
+    { workout: r.workout, rest: r.rest, targets: r.targets },
+    { workout: true, rest: false, targets: false });
 });
 
 test('after logging a set the workout row leaves', () => {
@@ -516,7 +524,42 @@ test('cardio alone also completes the workout row', () => {
 
 test('rest day row stays all day (informational, no action)', () => {
   const r = coachCardRows({ coachPlan: { todayDay: null }, macrosKcal: 1800, sets: [{}], cardio: [], food: [{}] });
-  assert.deepStrictEqual(r, { workout: false, rest: true, targets: false });
+  assert.deepStrictEqual(
+    { workout: r.workout, rest: r.rest, targets: r.targets },
+    { workout: false, rest: true, targets: false });
+});
+
+test('a prescribed meal keeps the card open on its own', () => {
+  // The row the old copy was blind to. With no program and no calorie target,
+  // an unlogged prescribed meal is the only thing holding the card open — and
+  // it must.
+  const r = coachCardRows({
+    coachPlan: null, macrosKcal: null, sets: [], cardio: [], food: [],
+    mealPlans: [{ meal: 'Lunch', items: [{ name: 'Dal' }, { name: 'Rice' }] }],
+  });
+  assert.strictEqual(r.pendingMeals.length, 1);
+  assert.ok(anyRow(r), 'an unlogged prescribed meal is still pending');
+});
+
+test('logging ONE item of a prescribed meal retires that meal', () => {
+  // The food panel's plan card tracks the rest from there; two places nagging
+  // about one meal is one too many.
+  const r = coachCardRows({
+    coachPlan: null, macrosKcal: null, sets: [], cardio: [],
+    food: [{ meal: 'Lunch', name: 'dal' }],
+    mealPlans: [{ meal: 'Lunch', items: [{ name: 'Dal' }, { name: 'Rice' }] }],
+  });
+  assert.strictEqual(r.pendingMeals.length, 0, 'matching is case-insensitive');
+  assert.ok(!anyRow(r), 'nothing pending → the whole card leaves');
+});
+
+test('the same food logged under a DIFFERENT slot does not retire the meal', () => {
+  const r = coachCardRows({
+    coachPlan: null, macrosKcal: null, sets: [], cardio: [],
+    food: [{ meal: 'Dinner', name: 'Dal' }],
+    mealPlans: [{ meal: 'Lunch', items: [{ name: 'Dal' }] }],
+  });
+  assert.strictEqual(r.pendingMeals.length, 1, 'lunch is still outstanding');
 });
 
 test('no program and no targets → no card at all', () => {
@@ -721,13 +764,9 @@ test('with autoSend off the text waits in the card for the Send button', () => {
 });
 
 
-// ── Mirrors Undo / Edit card-state transitions ───────────────────────────────
-function rollbackCard(msg, { reopen }) {
-  return { ...msg, applied: false, undone: !reopen, pending: null, editing: !!reopen };
-}
-// The preview (with Apply) renders when there are items and the card is
-// neither applied nor undone — see countIncluded(...) && !applied && !undone.
-const previewVisible = (m) => !m.applied && !m.undone;
+// ── The REAL Undo / Edit transition, imported ────────────────────────────────
+// client/src/utils/chatCard.js, the same function AIChatLog's rollback calls.
+const { rollbackCard, previewVisible } = importClient('utils/chatCard.js');
 
 console.log('\nApplied card: Undo vs Edit');
 
