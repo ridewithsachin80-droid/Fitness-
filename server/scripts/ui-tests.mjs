@@ -320,10 +320,21 @@ export default {
                note:'only 3 sent so far'}],
       by_hour:[{label:'18:00',sent:24,responded:12,enough_data:true,rate_pct:50}],
       by_channel:[{label:'whatsapp',sent:24,responded:12,enough_data:true,rate_pct:50}] });
-    if (u.includes('/gaps')) return ok({ members: members.slice(0,5).map(m => ({
-      member_id:m.id, name:m.name, phone:m.phone, days_since_log:m.days_since_log,
-      gaps:[{key:'dormant',label:m.days_since_log+' days no log',severity:'blocking'},
-            {key:'water',label:'Water well under target',severity:'medium'}], show:2 })),
+    if (u.includes('/gaps')) return ok({ members: [
+      // Dormant only — no chips once the count is lifted into the numeral.
+      { member_id:1, name:'Asha', phone:'9190001', days_since_log:95,
+        gaps:[{key:'dormant',label:'95 days no log',severity:'blocking'}], show:1 },
+      // Never logged — a sentinel, so words rather than a number.
+      { member_id:2, name:'Avinash', phone:'9190002', days_since_log:9999,
+        gaps:[{key:'dormant',label:'Never logged',severity:'blocking'}], show:1 },
+      // Logged today but several things outstanding — chips wrap to two lines.
+      { member_id:3, name:'Subramanya Prasad', phone:'9190003', days_since_log:0,
+        gaps:[{key:'dinner',label:'Dinner not logged',severity:'medium'},
+              {key:'water',label:'Water well under target',severity:'medium'},
+              {key:'activity',label:'No activity ticked',severity:'medium'},
+              {key:'acv',label:'ACV doses missed',severity:'low'},
+              {key:'supplements',label:'Supplements not ticked',severity:'low'}], show:2 },
+    ],
       clear:3, next_check:{hour:20,label:'8pm',
       covers:['acv doses missed','supplements not ticked']} });
     if (u.includes('/eval-samples')) return ok({ samples:[{ id:1, patient_id:1,

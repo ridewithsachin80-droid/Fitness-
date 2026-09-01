@@ -111,60 +111,64 @@ export default function TodaysGaps() {
       <div className="divide-y divide-white/[0.055]">
         {shown.map(m => (
           <div key={m.member_id} className="py-3.5 first:pt-1">
-            <div className="flex items-baseline justify-between gap-3 mb-2">
-              <p className="text-[15px] font-semibold text-[#F2F1EE] truncate tracking-[-0.01em]">{m.name}</p>
-              {/* Days of silence, set in the display face. This is the number a
-                  coach triages on, so it is the thing with size — previously it
-                  was 10px inside a pill, the same weight as everything else. */}
-              {m.days_since_log != null && m.days_since_log < 9999 && (
-                <span className="font-display text-[19px] leading-none text-[#E8CE7A] flex-shrink-0 tabular-nums">
-                  {m.days_since_log}
-                  <span className="font-sans text-[10.5px] text-[#6E7480] ml-1 font-medium">
-                    {m.days_since_log === 1 ? 'day' : 'days'}
-                  </span>
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              {/* Chips are labels, not buttons — everything listed goes into
-                  the one message the button opens. */}
-              <div className="flex flex-wrap gap-x-2 gap-y-1 min-w-0">
-                {/* The dormant chip is dropped when the count is already set in
-                    the numeral above it — "0 days" next to "0 days no log" is
-                    the same fact twice, and the repetition made the row look
-                    like a template rather than a considered line. */}
-                {m.gaps.filter(g => !(g.key === 'dormant' && m.days_since_log != null
-                                      && m.days_since_log < 9999)).map(g => (
-                  <span key={g.key}
-                    className={`text-[11.5px] ${SEVERITY[g.severity]}`}>
-                    {/* Prefer the SERVER's label. It is computed per member and
-                        carries the real number — "86 days no log" — which is the
-                        thing a coach reacts to. GAP_LABEL is a static fallback
-                        for a key the client doesn't know yet; taking it first
-                        threw away the number and rendered the dormant case as
-                        "Not logged in days", which reads like a broken template. */}
-                    {g.label || GAP_LABEL[g.key] || g.key}
-                  </span>
-                ))}
+            {/* Name and chips on the left, the number and the action on the
+                right. Structured this way because a member whose ONLY gap is
+                dormancy has no chips at all: the previous version kept an empty
+                chips row to hold the button, which rendered as a tall blank
+                band under every long-dormant member — the exact people a coach
+                is scrolling to find. No chips now means no second line. */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold text-[#F2F1EE] truncate tracking-[-0.01em]">
+                  {m.name}
+                </p>
+                {(() => {
+                  // Dormancy is shown on the right, as a count or as words.
+                  // Keeping the chip too printed "Never logged" twice on the
+                  // same line.
+                  const chips = m.gaps.filter(g => !(g.key === 'dormant' && m.days_since_log != null));
+                  if (!chips.length) return null;
+                  return (
+                    <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1.5">
+                      {chips.map(g => (
+                        <span key={g.key} className={`text-[11.5px] ${SEVERITY[g.severity]}`}>
+                          {g.label || GAP_LABEL[g.key] || g.key}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
 
-              {/* A quiet action. Three filled gold pills stacked down the screen
-                  made every member look equally urgent and spent the brand
-                  colour on the most repeated element on the page. Gold as a
-                  hairline and a word still reads as the action, and leaves the
-                  filled treatment free for the one thing that deserves it. */}
-              {done[String(m.member_id)] ? (
-                <span className="text-[11.5px] text-[#6E8F6B] flex-shrink-0">Sent</span>
-              ) : (
-                <button onClick={() => open(m)}
-                  style={{ minHeight: 32 }}
-                  className="text-[12px] font-semibold text-[#E8CE7A] flex-shrink-0
-                    border border-[rgba(212,175,55,0.34)] rounded-full px-3.5
-                    hover:bg-[rgba(212,175,55,0.09)] active:scale-95 transition-all">
-                  Message
-                </button>
-              )}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {/* Days of silence — the number a coach triages on. A member who
+                    has never logged has no count to show, so they get the words
+                    instead of a sentinel. */}
+                {m.days_since_log != null && (
+                  m.days_since_log >= 9999 ? (
+                    <span className="text-[12px] text-[#D98A80]">Never logged</span>
+                  ) : (
+                    <span className="font-display text-[19px] leading-none text-[#E8CE7A] tabular-nums">
+                      {m.days_since_log}
+                      <span className="font-sans text-[10.5px] text-[#6E7480] ml-1 font-medium">
+                        {m.days_since_log === 1 ? 'day' : 'days'}
+                      </span>
+                    </span>
+                  )
+                )}
+
+                {done[String(m.member_id)] ? (
+                  <span className="text-[11.5px] text-[#6E8F6B]">Sent</span>
+                ) : (
+                  <button onClick={() => open(m)}
+                    style={{ minHeight: 32 }}
+                    className="text-[12px] font-semibold text-[#E8CE7A]
+                      border border-[rgba(212,175,55,0.34)] rounded-full px-3.5
+                      hover:bg-[rgba(212,175,55,0.09)] active:scale-95 transition-all">
+                    Message
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
