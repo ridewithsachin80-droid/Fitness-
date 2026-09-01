@@ -86,9 +86,20 @@ ck('Sign out cannot be squeezed onto two lines',
    !!signOut && /flex-shrink-0/.test(signOut[0]) && /whitespace-nowrap/.test(signOut[0]),
    signOut && signOut[0].slice(0, 160));
 
-ck('the name block beside it is allowed to shrink instead',
-   /<div className="min-w-0">\s*\n\s*<p className="text-\[10px\] font-bold tracking-widest uppercase text-\[#F0E2B6\]/.test(admin),
-   'name block missing min-w-0');
+// The invariant is that the name block CAN shrink, so the Sign out button
+// beside it is never pushed off-screen. The previous version of this check
+// matched the eyebrow's exact font classes as a proxy for that — so restyling
+// the type broke a layout test while the layout was untouched, and the obvious
+// response to a test failing for the wrong reason is to edit the test until it
+// stops. Assert the structural property instead: the header's name block, the
+// one holding the FitLife label and the welcome line, carries min-w-0.
+{
+  const headerBlock = admin.slice(admin.indexOf('flex items-start justify-between gap-3 mb-4'));
+  const nameBlock = headerBlock.slice(0, headerBlock.indexOf('</h1>'));
+  ck('the name block beside it is allowed to shrink instead',
+     /<div className="[^"]*min-w-0[^"]*">/.test(nameBlock) && /FitLife admin/i.test(nameBlock),
+     'name block missing min-w-0');
+}
 
 // ── 4. One action, one place ────────────────────────────────────────────────
 console.log('\n[4] duplicate add buttons');

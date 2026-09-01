@@ -111,7 +111,7 @@ export default function MemberList() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold tracking-widest uppercase text-[#4e4e5c] mb-0.5">Coach</p>
+              <p className="text-[11.5px] font-medium text-[#6E7480] mb-0.5">Coach</p>
               <h1 className="font-display text-xl font-medium">{user?.name}</h1>
               <p className="text-[#4e4e5c] text-xs mt-0.5">{members.length} {plural(members.length, 'member')} assigned</p>
             </div>
@@ -125,15 +125,21 @@ export default function MemberList() {
           </div>
 
           {/* Quick stats */}
-          <div className="grid grid-cols-3 gap-2 mt-4">
+          {/* One surface with hairlines, not three bordered boxes. "Pending" is
+              the figure that decides whether this page needs Sachin's attention
+              at all, so it carries the gold and the others stay ink — three
+              equally coloured numbers made him read all three every time. */}
+          <div className="grid grid-cols-3 mt-4 rounded-[20px] bg-[#17181C] divide-x divide-white/[0.055]"
+            style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
             {[
-              { label: 'Logged today', value: loggedToday.length, color: 'text-emerald-400' },
-              { label: 'Pending',      value: noLogToday.length,  color: noLogToday.length > 0 ? 'text-red-400' : 'text-[#4e4e5c]' },
-              { label: 'Total',        value: members.length,    color: 'text-stone-300' },
+              { label: 'Logged today', value: loggedToday.length },
+              { label: 'Pending',      value: noLogToday.length, accent: noLogToday.length > 0 },
+              { label: 'Total',        value: members.length },
             ].map(stat => (
-              <div key={stat.label} className="bg-white/[0.05] rounded-xl py-2.5 text-center border border-white/[0.06]">
-                <div className={`font-display text-xl font-semibold ${stat.color}`}>{stat.value}</div>
-                <div className="text-xs text-[#4e4e5c] mt-0.5">{stat.label}</div>
+              <div key={stat.label} className="py-3.5 text-center">
+                <div className={`font-display text-[23px] leading-none font-medium tabular-nums ${
+                  stat.accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{stat.value}</div>
+                <div className="text-[11.5px] text-[#7E8596] mt-1.5">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -149,7 +155,7 @@ export default function MemberList() {
       {withMessages.length > 0 && (
         <div className="max-w-md mx-auto px-4 pt-4">
           <div className="bg-[#1A1C20] rounded-2xl border border-[rgba(212,175,55,0.35)] p-4">
-            <p className="text-xs font-bold tracking-widest uppercase text-[#D4AF37] mb-2.5">
+            <p className="text-[12px] font-semibold text-[#8C7A46] mb-2.5">
               ✉️ Messages from members{totalUnread > 0 ? ` · ${totalUnread} new` : ''}
             </p>
             <div className="space-y-2">

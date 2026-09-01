@@ -1277,7 +1277,7 @@ function AddCoachModal({ onClose, onAdded }) {
                     ? 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.30)] text-[#F0E2B6]'
                     : 'bg-[#1A1C20] text-[#9EA3B0] border-white/[0.08] hover:border-white/[0.1]'
                 }`}>
-                {r === 'admin' ? '👑 Admin' : '🏋️ Coach'}
+                {r === 'admin' ? 'Admin' : 'Coach'}
               </button>
             ))}
           </div>
@@ -1521,8 +1521,13 @@ export default function AdminDashboard() {
               can afford to wrap. */}
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0">
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[#F0E2B6] mb-1">FitLife Admin</p>
-              <h1 className="font-display text-xl font-medium">Welcome, {user?.name} 👑</h1>
+              {/* Sentence case, and no crown. Tracked capitals plus an emoji is
+                  the chrome that made this read as a template; the product name
+                  is a quiet label, and the person's name is the headline. */}
+              <p className="text-[11.5px] font-medium text-[#8C7A46] mb-1">FitLife admin</p>
+              <h1 className="font-display text-[26px] leading-tight font-medium tracking-[-0.015em]">
+                Welcome, {user?.name}
+              </h1>
               {stats && (
                 <p className="text-[#9EA3B0] text-xs mt-0.5">
                   {stats.members} members · {stats.coaches} coaches · {stats.logsToday} logged today
@@ -1561,12 +1566,15 @@ export default function AdminDashboard() {
             safe here. */}
         <div className="flex gap-2 mb-3 overflow-x-auto">
           {[
-            { id: 'overview',   label: '📊 Overview'  },
-            { id: 'members',    label: '👥 Members'   },
-            { id: 'coaches',   label: '🏋️ Coaches'  },
-            { id: 'reminders',  label: '🔔 Reminders' },
-            { id: 'audit',      label: '🔍 Audit'     },
-            { id: 'evals',      label: '🎯 AI evals'  },
+            // Words only. Six OS-drawn emoji across one tab strip rendered at
+            // six different weights and colours, and none of them told you
+            // anything the label did not already say.
+            { id: 'overview',   label: 'Overview'  },
+            { id: 'members',    label: 'Members'   },
+            { id: 'coaches',    label: 'Coaches'   },
+            { id: 'reminders',  label: 'Reminders' },
+            { id: 'audit',      label: 'Audit'     },
+            { id: 'evals',      label: 'AI evals'  },
           ].map(t => (
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 min-w-max whitespace-nowrap px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
@@ -1606,16 +1614,23 @@ export default function AdminDashboard() {
         {tab === 'overview' && overview && (
           <div className="space-y-3">
             {/* Stat strip */}
-            <div className="grid grid-cols-4 gap-1.5">
+            {/* Four figures on one surface, divided by hairlines rather than
+                four bordered boxes in four colours. "Logged today" is the one
+                Sachin opens this page for, so it is the one in gold; the rest
+                are ink. Set in the display face at a size worth reading —
+                previously 15px bold with an 8px capitalised caption. */}
+            <div className="grid grid-cols-4 rounded-[20px] bg-[#17181C] divide-x divide-white/[0.055]"
+              style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
               {[
-                { label: 'Members',   value: overview.stats.total_members, cls: 'text-blue-300' },
-                { label: 'Logged',    value: `${overview.stats.logged_today}/${overview.stats.total_members}`, cls: 'text-emerald-300' },
-                { label: '7-day avg', value: `${overview.stats.avg_compliance_7d}%`, cls: overview.stats.avg_compliance_7d >= 75 ? 'text-emerald-300' : 'text-amber-300' },
-                { label: 'Lost',      value: `${overview.stats.total_weight_lost_kg}kg`, cls: 'text-amber-300' },
+                { label: 'Members',   value: overview.stats.total_members },
+                { label: 'Logged',    value: `${overview.stats.logged_today}/${overview.stats.total_members}`, accent: true },
+                { label: '7-day avg', value: `${overview.stats.avg_compliance_7d}%` },
+                { label: 'Lost',      value: `${overview.stats.total_weight_lost_kg}kg` },
               ].map(s => (
-                <div key={s.label} className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl px-2 py-2.5 text-center">
-                  <div className={`text-[15px] font-extrabold ${s.cls}`}>{s.value}</div>
-                  <div className="text-[8px] font-bold uppercase tracking-wider text-[#7E8596] mt-0.5">{s.label}</div>
+                <div key={s.label} className="px-2 py-3.5 text-center">
+                  <div className={`font-display text-[21px] leading-none font-medium tabular-nums ${
+                    s.accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{s.value}</div>
+                  <div className="text-[11px] text-[#7E8596] mt-1.5">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -1684,7 +1699,7 @@ export default function AdminDashboard() {
             {/* Today's gaps — what to chase right now. Needs Attention below is
                 the longer-term list of members drifting away. */}
             <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl p-3.5 mb-3">
-              <p className="text-sm font-bold text-[#D4AF37] mb-1">📋 Today's gaps</p>
+              <p className="text-[15px] font-semibold text-[#F2F1EE] mb-1 tracking-[-0.01em]">Today's gaps</p>
               <TodaysGaps />
             </div>
 
@@ -1961,7 +1976,7 @@ export default function AdminDashboard() {
                             ? 'bg-[rgba(251,191,36,0.14)] text-amber-300'
                             : 'bg-[rgba(96,165,250,0.14)] text-blue-300'
                         }`}>
-                          {m.role === 'admin' ? '👑 admin' : '🏋️ coach'}
+                          {m.role === 'admin' ? 'admin' : 'coach'}
                         </span>
                         {!m.active && <span className="text-xs bg-white/[0.06] text-[#9EA3B0] px-2 py-0.5 rounded-full">Inactive</span>}
                       </div>
