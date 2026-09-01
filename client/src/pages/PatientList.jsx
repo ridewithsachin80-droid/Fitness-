@@ -6,6 +6,7 @@ import { today, formatDate, plural } from '../constants';
 import { Card, SectionTitle, OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
 import TodaysGaps from '../components/TodaysGaps';
+import NudgeEffectiveness from '../components/NudgeEffectiveness';
 import { useSync } from '../hooks/useSync';
 
 function complianceBadge(pct) {
@@ -203,6 +204,11 @@ export default function MemberList() {
           </SectionTitle>
           <TodaysGaps />
         </Card>
+
+        {/* Whether the chasing above is actually working. Directly under the
+            gaps card on purpose — the question only makes sense next to the
+            thing it is judging. */}
+        <NudgeEffectiveness />
       </div>
 
       {/* Member cards */}

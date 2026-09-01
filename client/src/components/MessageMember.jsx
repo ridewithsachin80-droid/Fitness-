@@ -15,7 +15,13 @@ import { useState, useEffect } from 'react';
 import api from '../api/client';
 import { TEMPLATES, combinedGapMessage, openWhatsApp, openSMS, waNumber } from '../utils/personalMessage';
 
-export default function MessageMember({ member, summary = null, initialText = null, open, onClose }) {
+/**
+ * @param {function} [onSent]  called with the channel actually used once the
+ *   message has been handed to WhatsApp or SMS. Optional, so the call sites
+ *   that only want the compose sheet are unchanged — TodaysGaps uses it to
+ *   record which gap the nudge was about (Sprint L2).
+ */
+export default function MessageMember({ member, summary = null, initialText = null, open, onClose, onSent = null }) {
   // initialText lets a caller open the sheet already talking about a specific
   // thing — a missing water log, say — rather than the generic nudge.
   const [text, setText]   = useState(() => initialText || TEMPLATES.nudge(member || {}));
@@ -86,6 +92,9 @@ export default function MessageMember({ member, summary = null, initialText = nu
       return;
     }
     await record(channel);
+    // Fired before onClose, because onClose unmounts this sheet in most call
+    // sites and anything queued after it would never run.
+    try { await onSent?.(channel); } catch { /* recording must not block the coach */ }
     setBusy(false);
     onClose?.();
   };

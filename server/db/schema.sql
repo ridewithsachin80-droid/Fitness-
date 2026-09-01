@@ -633,6 +633,24 @@ CREATE TABLE IF NOT EXISTS meal_presets (
 );
 CREATE INDEX IF NOT EXISTS idx_meal_presets_member ON meal_presets(patient_id, created_at DESC);
 
+-- ── NUDGE EFFECTIVENESS (Sprint L2) ──────────────────────────────────────────
+-- The gap detector picks who needs chasing and hands the coach a written
+-- message. Then nothing: nobody records whether the member logged the next
+-- day, so the thresholds it uses (3 days dormant, water flagged after 6pm) are
+-- reasonable guesses that have never been checked against whether anyone
+-- responded.
+--
+-- gap_key is the LEADING gap — the reason the coach opened the message, not
+-- every box that happened to be unticked. One message is one send; recording a
+-- row per gap mentioned would triple the counts and make the "enough data yet"
+-- threshold reachable on a third of the real evidence.
+ALTER TABLE notifications_log ADD COLUMN IF NOT EXISTS gap_key      VARCHAR(30);
+ALTER TABLE notifications_log ADD COLUMN IF NOT EXISTS responded_at TIMESTAMPTZ;
+ALTER TABLE notifications_log ADD COLUMN IF NOT EXISTS channel      VARCHAR(20);
+ALTER TABLE notifications_log ADD COLUMN IF NOT EXISTS sent_by      INT REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_notifications_log_nudges
+  ON notifications_log(gap_key, sent_at DESC) WHERE gap_key IS NOT NULL;
+
 -- ── FOOD VERIFICATION PROVENANCE (Sprint L3) ─────────────────────────────────
 -- Who confirmed this food, and when. Verification was previously a bare
 -- boolean, so a wrong-but-verified food had no trail back to the decision and

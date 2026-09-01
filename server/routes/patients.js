@@ -376,6 +376,46 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   }
 });
 
+// ── POST /api/patients/:id/nudge ─────────────────────────────────────────────
+// Records that a coach messaged this member about a gap. The message itself
+// goes out through WhatsApp or SMS from the coach's own phone — we never send
+// it — so this is the only record that it happened at all.
+//
+// Declared here, above '/:id', for the same reason '/gaps' is.
+const nudges = require('../services/nudgeTracking');
+
+router.post('/:id/nudge', authMW, roleCheck('monitor', 'admin'), requirePatientAccess,
+  async (req, res) => {
+    const id = await nudges.recordNudge({
+      memberId: parseInt(req.params.id),
+      coachId:  req.user.id,
+      gapKey:   req.body?.gap_key,
+      channel:  req.body?.channel,
+      body:     req.body?.body,
+    });
+    // Always 200. A coach has already sent the message by the time this runs;
+    // failing the request would show them an error for something that
+    // succeeded, and they would resend.
+    res.json({ recorded: id != null, id });
+  });
+
+// ── GET /api/patients/gaps/effectiveness ─────────────────────────────────────
+// Whether the nudges are worth sending. A coach sees their own; an admin sees
+// everything. Buckets under the minimum come back with rate_pct null and a
+// sentence explaining why, so there is no percentage on screen to misread.
+router.get('/gaps/effectiveness', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(7, parseInt(req.query.days) || 90));
+    res.json(await nudges.effectiveness({
+      coachId: req.user.role === 'admin' ? null : req.user.id,
+      days,
+    }));
+  } catch (err) {
+    console.error('GET /patients/gaps/effectiveness error:', err);
+    res.status(500).json({ error: 'Could not work out nudge effectiveness' });
+  }
+});
+
 /**
  * Send a message from a member to their coach.
  *

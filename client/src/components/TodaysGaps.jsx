@@ -78,6 +78,11 @@ export default function TodaysGaps() {
       member: { id: member.member_id, name: member.name, phone: member.phone },
       text: combinedGapMessage({ name: member.name }, member.gaps.map(g => g.key), member.days_since_log),
       key: String(member.member_id),
+      // The LEADING gap — why this member is on the list at all. The server
+      // has already sorted them by severity, so gaps[0] is the reason. Stored
+      // against the send so we can eventually answer "is the 6pm water nudge
+      // worth it" instead of guessing (Sprint L2).
+      gapKey: member.gaps[0]?.key || null,
     });
   };
 
@@ -172,6 +177,20 @@ export default function TodaysGaps() {
           member={target.member}
           open={true}
           initialText={target.text}
+          onSent={async (channel) => {
+            if (!target.gapKey) return;
+            // Fire and forget. The message has already gone; a failure to
+            // record it must never surface to the coach as an error.
+            try {
+              await api.post(`/members/${target.member.id}/nudge`, {
+                gap_key: target.gapKey,
+                channel,
+                body: target.text,
+              });
+            } catch (err) {
+              console.error('could not record the nudge:', err);
+            }
+          }}
           onClose={() => {
             setDone(d => ({ ...d, [target.key]: true }));
             setTarget(null);

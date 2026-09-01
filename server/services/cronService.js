@@ -174,6 +174,17 @@ function start() {
     } catch (err) { console.error('Weekly report error:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 
+  // 00:10 IST: did yesterday's nudges land? Marks each gap nudge from the last
+  // 48h as responded if the member saved a log after it. Runs before the
+  // cleanup below so it never races it.
+  cron.schedule('10 0 * * *', async () => {
+    try {
+      const { reconcileResponses } = require('./nudgeTracking');
+      const { checked, matched } = await reconcileResponses();
+      if (checked) console.log(`📨 Nudges: ${matched} of ${checked} open ones were followed by a log`);
+    } catch (err) { console.error('Nudge reconciliation error:', err.message); }
+  }, { timezone: 'Asia/Kolkata' });
+
   // Daily at midnight IST: clean up old records
   cron.schedule('0 0 * * *', async () => {
     try {
@@ -181,9 +192,19 @@ function start() {
       const r1 = await pool.query(
         `DELETE FROM reminder_acks WHERE scheduled_for < NOW() - INTERVAL '7 days'`
       );
-      // Delete old notification logs (older than 30 days) — prevents unbounded growth
+      // Delete old notification logs — prevents unbounded growth.
+      //
+      // Coach nudges are exempt for 180 days. The effectiveness dashboard needs
+      // 20 sends in a bucket before it will quote a rate, and on a roster this
+      // size a 30-day window would delete the evidence faster than it
+      // accumulates — the dashboard would sit on "not enough data yet" forever
+      // while the rows quietly aged out behind it. Nudges are a handful a day,
+      // not the push volume this sweep was written for, so the longer retention
+      // costs nothing.
       const r2 = await pool.query(
-        `DELETE FROM notifications_log WHERE sent_at < NOW() - INTERVAL '30 days'`
+        `DELETE FROM notifications_log
+          WHERE (gap_key IS NULL     AND sent_at < NOW() - INTERVAL '30 days')
+             OR (gap_key IS NOT NULL AND sent_at < NOW() - INTERVAL '180 days')`
       );
       console.log(`🧹 Cleanup: ${r1.rowCount} acks, ${r2.rowCount} notif logs deleted`);
     } catch (err) {
