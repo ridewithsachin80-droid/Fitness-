@@ -202,20 +202,11 @@ test('a meal photo (no scale fields) parses to nulls harmlessly', () => {
 });
 
 
-// ── Mirrors the voice composer's continue-by-mic state machine ────────────────
-function voiceComposerModel() {
-  let committed = '', draft = null;
-  const join = (a, b) => (a && b ? `${a} ${b}` : a || b || '');
-  return {
-    record()        { committed = (draft || '').trim(); if (draft === null) draft = ''; },
-    interim(t)      { draft = join(committed, t); },
-    final(t)        { committed = join(committed, t); draft = committed; },
-    edit(t)         { draft = t; committed = t; },
-    send()          { const out = (draft || '').trim(); committed = ''; draft = null; return out; },
-    discard()       { committed = ''; draft = null; },
-    get draft()     { return draft; },
-  };
-}
+// ── The REAL voice composer state machine, imported ──────────────────────────
+// The copy that sat here did not .trim() the joined transcript on a finished
+// take, while the shipped one does. A leading space is invisible in a test and
+// goes straight to the parser in production.
+const { createComposerModel: voiceComposerModel } = importClient('utils/voiceComposer.js');
 
 console.log('\nVoice composer continue semantics');
 
@@ -224,6 +215,18 @@ test('a second take appends to the first with a single space', () => {
   m.record(); m.interim('2 roti'); m.final('2 roti with ghee');
   m.record(); m.interim('aur'); m.final('aur ek katori dal');
   assert.strictEqual(m.draft, '2 roti with ghee aur ek katori dal');
+});
+
+test('a finished take is trimmed before it is committed', () => {
+  // The copy that used to stand in for this file skipped the .trim() the
+  // shipped code does. Padding from the speech API is invisible on screen and
+  // reaches the parser as a leading space.
+  const m = voiceComposerModel();
+  m.record(); m.final('   weight 82.5   ');
+  assert.strictEqual(m.draft, 'weight 82.5');
+  m.record(); m.final('  500 ml water  ');
+  assert.strictEqual(m.draft, 'weight 82.5 500 ml water',
+    'takes must join with exactly one space, not with whatever padding arrived');
 });
 
 test('interim results never overwrite committed takes', () => {
@@ -668,21 +671,13 @@ test('a program with no weekdays falls back to the first day, not "rest"', () =>
     'the program the coach just assigned must not read as a rest day');
 });
 
-// ── Mirrors the voice fast-path + auto-send decisions ────────────────────────
+// ── The REAL voice routing + auto-send rules, imported ───────────────────────
 // Real report (28 Aug 2026): "76.7kg 500ml water" took 10–15s to reach the AI.
-// Cause: the hook uploaded the audio to Gemini even when on-device recognition
-// had already produced the words the member watched appear on screen.
-function transcriptionRoute({ webSpeechText, blobBytes }) {
-  if (webSpeechText) return { source: 'on-device', uploads: false };
-  if (blobBytes < 1000) return { source: 'none', uploads: false };
-  return { source: 'gemini', uploads: true };
-}
-
-function autoSendDecision({ text, autoSend }) {
-  const full = String(text || '').trim();
-  return !!(autoSend && full.length >= 2) ? { sent: full, cardOpen: false }
-                                          : { sent: null, cardOpen: full.length > 0 };
-}
+// The hook uploaded the audio to Gemini even when on-device recognition had
+// already produced the words the member watched appear on screen. Both rules
+// now live in client/src/utils/voiceComposer.js and are used by useVoiceInput
+// and by the composer itself.
+const { transcriptionRoute, autoSendDecision } = importClient('utils/voiceComposer.js');
 
 console.log('\nVoice latency: transcription routing');
 

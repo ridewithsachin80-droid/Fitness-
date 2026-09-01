@@ -26,6 +26,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api/client';
+import { transcriptionRoute } from '../utils/voiceComposer';
 
 const SR = typeof window !== 'undefined'
   ? window.SpeechRecognition || window.webkitSpeechRecognition
@@ -202,7 +203,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
     // on-device transcript, use it immediately and skip the network entirely.
     // Gemini remains the fallback for browsers without recognition (iOS
     // Safari), where it is the only way to get a transcript at all.
-    if (webSpeechText) {
+    if (transcriptionRoute({ webSpeechText }).source === 'on-device') {
       try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch { /* noop */ }
       chunksRef.current = [];
       releaseStream();
@@ -219,8 +220,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
       const blob = new Blob(chunksRef.current, { type: mimeRef.current || 'audio/webm' });
       chunksRef.current = [];
 
-      // Under ~1KB is a tap-and-release with no speech in it.
-      if (blob.size < 1000) {
+      // Under ~1KB is a tap-and-release with no speech in it. The threshold
+      // lives in utils/voiceComposer.js with the rest of the routing rule.
+      if (transcriptionRoute({ webSpeechText, blobBytes: blob.size }).source === 'none') {
         if (webSpeechText) optsRef.current.onFinal?.(webSpeechText);
         else setError("Didn't hear anything — tap the mic and start speaking");
         return;

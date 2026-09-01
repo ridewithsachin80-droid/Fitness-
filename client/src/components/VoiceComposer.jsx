@@ -20,8 +20,11 @@
 import { useCallback, useRef, useState } from 'react';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceInput } from '../hooks/useVoiceInput';
-
-const join = (a, b) => (a && b ? `${a} ${b}` : a || b || '');
+// The continue-by-mic and auto-send rules are pure and live in utils, so the
+// test suite exercises the same code this component runs rather than a copy.
+import {
+  applyInterim, applyFinal, applyEdit, startTake, shouldAutoSend,
+} from '../utils/voiceComposer';
 
 export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }) {
   // null → card hidden. '' → card open, nothing captured yet.
@@ -35,17 +38,19 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
 
   const voice = useVoiceInput({
     lang: voiceLang,
-    onInterim: (t) => setDraft(join(committedRef.current, t)),
+    onInterim: (t) => setDraft(
+      applyInterim({ committed: committedRef.current, draft: null }, t).draft),
     onFinal:   (t) => {
-      const full = join(committedRef.current, t).trim();
-      committedRef.current = full;
+      const next = applyFinal({ committed: committedRef.current, draft: null }, t);
+      const full = next.draft;
+      committedRef.current = next.committed;
       setDraft(full);
       // The pause IS the send. Waiting for a button tap after already waiting
       // for the transcript made a two-second sentence take fifteen. This is
       // safe because the parse result is a PREVIEW — nothing reaches the log
       // until the member taps Apply, so that card is the real review step.
       // Guard against a stray cough producing a one-character AI call.
-      if (autoSend && full.length >= 2) {
+      if (shouldAutoSend(full, autoSend)) {
         committedRef.current = '';
         setDraft(null);
         haptic(20);
@@ -66,8 +71,9 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
   const record = useCallback(() => {
     if (voice.listening) { voice.stop(); return; }
     if (voice.transcribing) return;
-    committedRef.current = (draft || '').trim();
-    if (draft === null) setDraft('');
+    const next = startTake({ committed: committedRef.current, draft });
+    committedRef.current = next.committed;
+    if (draft === null) setDraft(next.draft);
     haptic(15);
     voice.start();
   }, [voice, draft]);
@@ -130,7 +136,10 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
         ref={taRef}
         value={draft || ''}
         readOnly={voice.listening || voice.transcribing}
-        onChange={(e) => { setDraft(e.target.value); committedRef.current = e.target.value; }}
+        onChange={(e) => {
+          const next = applyEdit({ committed: committedRef.current, draft }, e.target.value);
+          setDraft(next.draft); committedRef.current = next.committed;
+        }}
         onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
         placeholder={voice.listening ? 'Say it — 2 roti with ghee, ek katori dal…' : ''}
         rows={2}
