@@ -172,6 +172,78 @@ function trialLogs({ days = 80, startW = 85, aRate, bRate, aKcal = 1850, bKcal =
   ck('member cannot start one either', x.status === 403, x.status);
 
   srv.close();
+  // ── Threshold boundaries ───────────────────────────────────────────────────
+  // A mutation sweep flipped the comparisons in macroLab.js one at a time and
+  // this suite noticed one change in six. The ones it missed are the gates
+  // that decide whether Macro Lab speaks at all and whether it names a
+  // difference — an off-by-one there does not crash, it just tells a member
+  // their carbs matter when the data says nothing, or stays silent when it
+  // has something real.
+  //
+  // Every case below sits exactly ON a threshold and one step off it, which is
+  // the only place these are visible.
+  console.log('\n[boundaries] the gates on the carb split');
+
+  // A day with an exact calorie count and an exact carb share.
+  const dayAt = (offset, kcal, carbPct) => {
+    const carbs = (kcal * carbPct) / 4;
+    const pro   = 120;
+    const fat   = Math.max(0, (kcal - carbs * 4 - pro * 4) / 9);
+    const d = new Date(); d.setDate(d.getDate() - offset);
+    return { log_date: iso(d), weight_kg: '85.0', food_items: food(kcal, pro, carbs, fat) };
+  };
+  // n days, half at `lowPct` and half at `highPct`.
+  const split = (n, lowPct, highPct, kcalOf = () => 2000) => {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      out.push(dayAt(n - i, kcalOf(i), i < n / 2 ? lowPct : highPct));
+    }
+    return out;
+  };
+
+  // 14 fully logged days is the bar for saying anything at all.
+  ck('14 logged days is enough to look at', adherence(split(14, 0.30, 0.42)).enough === true,
+     adherence(split(14, 0.30, 0.42)).reason);
+  const d13 = adherence(split(13, 0.30, 0.42));
+  ck('13 is not, and it says how far short', d13.enough === false
+     && /13 of 14 fully logged days/.test(d13.reason || ''), d13.reason);
+
+  // The halves must actually differ: spread >= 0.08 of carb share.
+  const wide = adherence(split(20, 0.30, 0.38));
+  ck('a carb spread of exactly 8 points is enough to compare', wide.enough === true, wide.reason);
+  const narrow = adherence(split(20, 0.30, 0.37));
+  ck('7 points is not — it refuses rather than splitting noise',
+     narrow.enough === false, narrow);
+  ck('and the refusal names the reason a member would recognise',
+     /barely varies/.test(narrow.reason || ''), narrow.reason);
+
+  // On-target means within 10% of the calorie target, inclusive.
+  const onEdge = adherence(split(20, 0.30, 0.40, () => 2200), { kcalTarget: 2000 });
+  ck('a day exactly 10% over target still counts as on target',
+     onEdge.enough && onEdge.groups.every(a => a.on_target_pct === 100), onEdge.groups);
+  const overEdge = adherence(split(20, 0.30, 0.40, () => 2201), { kcalTarget: 2000 });
+  ck('a day just past 10% does not',
+     overEdge.enough && overEdge.groups.every(a => a.on_target_pct === 0), overEdge.groups);
+
+  // Whether Macro Lab NAMES a difference. Below the bar it must stay quiet:
+  // "you hit your calories more often on high-carb days" is a claim a member
+  // will act on, so it should not be made about a 14-point gap that is
+  // day-to-day variation wearing a costume.
+  //
+  // 20 days, halves of 10. Making k of the low-carb days miss the calorie
+  // target moves that half's on_target_pct by exactly 10k points.
+  const gap = (missesInLowHalf) => adherence(
+    split(20, 0.30, 0.42, i => (i < missesInLowHalf ? 2500 : 2000)),
+    { kcalTarget: 2000 });
+  const near = gap(1);   // 90% vs 100% -> 10 points, under the bar
+  ck('a 10-point difference in hitting the target is not called out',
+     near.enough && !/calorie target on/.test(near.verdict || ''), near.verdict);
+  const wideGap = gap(2); // 80% vs 100% -> 20 points, over the bar
+  ck('a 20-point difference is', wideGap.enough
+     && /calorie target on/.test(wideGap.verdict || ''), wideGap.verdict);
+  ck('and when nothing is called out it says so rather than going blank',
+     /No meaningful difference/.test(near.note || ''), near.note);
+
   console.log(`\n\u2550\u2550\u2550 MACRO LAB: ${pass} passed, ${fail} failed \u2550\u2550\u2550`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR:', e); process.exit(1); });

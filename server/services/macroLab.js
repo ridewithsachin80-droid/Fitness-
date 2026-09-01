@@ -131,6 +131,11 @@ function adherence(logs = [], { kcalTarget = null } = {}) {
   // eats the same ratio daily has nothing to compare, and saying so is more
   // honest than splitting noise down the middle.
   const spread = mean(higher.map(d => d.carbPct)) - mean(lower.map(d => d.carbPct));
+  // `lower.length < 5` and `higher.length < 5` can never fire: the 14-day gate
+  // above guarantees at least 7 days in each half. Kept as belt and braces in
+  // case that gate is ever lowered, but a mutation sweep flagged them as
+  // unreachable and that is worth knowing rather than assuming they are load
+  // bearing. The spread check is the one that actually decides.
   if (lower.length < 5 || higher.length < 5 || spread < 0.08) {
     return { enough: false, logged_days: days.length,
              reason: `their carb share barely varies (${Math.round(spread * 100)} points between halves) — nothing to compare` };
