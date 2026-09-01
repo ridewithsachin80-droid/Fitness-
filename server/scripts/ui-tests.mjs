@@ -33,6 +33,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import http from 'http';
 
 const HERE       = path.dirname(fileURLToPath(import.meta.url));
 const ROOT       = path.resolve(HERE, '../..');
@@ -60,7 +61,16 @@ async function bundle(contents, apiStub = null) {
   if (apiStub) {
     plugins.push({
       name: 'stub-api',
-      setup(b) { b.onResolve({ filter: /api\/client$/ }, () => ({ path: apiStub })); },
+      setup(b) {
+        // Both spellings. Components import '../api/client', but api/logs.js
+        // imports './client' from inside that folder — a filter on 'api/client'
+        // alone missed it, so every page reaching the API through api/logs got
+        // the REAL axios, fetched the test server's HTML shell, and threw on
+        // the first .map. It looked like a render bug for three screens.
+        b.onResolve({ filter: /(?:^|\/)client$/ }, (args) =>
+          (/api\/client$/.test(args.path) || args.importer.includes(`${path.sep}api${path.sep}`))
+            ? { path: apiStub } : null);
+      },
     });
   }
   const out = await build({
@@ -341,12 +351,28 @@ export default {
     if (u.includes('/admin/audit')) return ok([{id:1,actor_name:'Sachin',actor_role:'monitor',
       action:'coach_ai_update',target_name:'Asha',
       detail:'Set water target to 4000 ml for Asha',created_at:new Date().toISOString()}]);
+    // Ordering matters: '/members/me/logs' contains BOTH '/members' and
+    // '/logs'. Matching '/members' first handed a page expecting log rows an
+    // array of members, and it threw on the first .map. Specific paths first.
+    if (u.includes('/logs')) return ok([log]);
+    if (u.includes('push') || u.includes('subscription')) return ok([]);
     if (u.includes('/me/today')) return ok({ log,
       protocol:{macros:{kcal:1800,protein:120},water_target:3000,
       meal_slots:['Breakfast','Lunch','Snack','Dinner']},
       program:null, workoutSummary:{sets:[],cardio:[]}, mealPlans:[], notifications:[] });
+    // A single member's detail page, not the roster. Same prefix, different
+    // shape — the roster array reached a screen expecting { member, logs, … }.
+    const seg = u.split('?')[0].split('/').filter(Boolean);
+    const isDetail = (u.includes('/members/') || u.includes('/patients/'))
+      && seg.length && String(Number(seg[seg.length - 1])) === seg[seg.length - 1];
+    if (isDetail) return ok({
+      member: members[0], profile: { water_target: 3000, macros: { kcal: 1800, protein: 120 },
+        meal_slots: ['Breakfast','Lunch','Snack','Dinner'], start_weight: 92, target_weight: 75,
+        height_cm: 172, protocol_activities: [], protocol_acv: [], protocol_supplements: [] },
+      logs: [log], labs: [], notes: [], program: null, days: [],
+      sessions: [], mealPlans: [], trial: null, adherence: null,
+    });
     if (u.includes('/members') || u.includes('/patients')) return ok(members);
-    if (u.includes('/logs')) return ok([log]);
     return ok([]);
   },
   post: async () => ok({}), put: async () => ok({}),
@@ -379,6 +405,7 @@ const OVERFLOW_PAGES = [
   ['Monitor',        "import P from './pages/Monitor.jsx';"],
   ['Settings',       "import P from './pages/Settings.jsx';"],
   ['Progress',       "import P from './pages/Progress.jsx';"],
+  ['DailyLog',       "import P from './pages/DailyLog.jsx';"],
 ];
 
 async function overflowTest() {
@@ -407,6 +434,22 @@ async function overflowTest() {
   }
   const css = fs.readFileSync(path.join(distDir, cssFile), 'utf8');
 
+  // Served over http rather than page.setContent(). setContent leaves the page
+  // on an opaque origin, where localStorage and IndexedDB throw SecurityError —
+  // so DailyLog, the screen a member opens every day, could not mount and was
+  // silently absent from this check. A real origin is also closer to how the
+  // app actually runs.
+  const shell = (css) => `<!doctype html><html><head>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>${css}</style></head><body style="margin:0"><div id="root"></div></body></html>`;
+
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(shell(css));
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const origin = `http://127.0.0.1:${server.address().port}/`;
+
   const browser = await puppeteerCore.launch({
     executablePath: await chromium.executablePath(),
     args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
@@ -417,22 +460,24 @@ async function overflowTest() {
     for (const [label, importLine] of OVERFLOW_PAGES) {
       const code = await bundle(`
         import { createRoot } from 'react-dom/client';
-        import { MemoryRouter } from 'react-router-dom';
+        import { MemoryRouter, Routes, Route } from 'react-router-dom';
         import { useAuthStore } from './store/authStore';
         ${importLine}
         useAuthStore.setState({ accessToken: 'x',
           user: { id: 3, name: 'Sachin', role: 'admin', phone: '919111111' } });
+        // A real Route, not just a Router. Without one useParams() is empty, so
+        // the coach's member page requested /members/undefined, got the roster
+        // back and threw — which read as a render bug rather than a missing
+        // route in the harness.
         createRoot(document.getElementById('root')).render(
-          <MemoryRouter initialEntries={['/coach/1']}><P /></MemoryRouter>);`, api);
+          <MemoryRouter initialEntries={['/coach/1']}>
+            <Routes><Route path="/coach/:memberId" element={<P />} /></Routes>
+          </MemoryRouter>);`, api);
 
       for (const width of WIDTHS) {
         const page = await browser.newPage();
         await page.setViewport({ width, height: 800, deviceScaleFactor: 2, isMobile: true });
-        await page.setContent(
-          `<!doctype html><html><head>
-           <meta name="viewport" content="width=device-width,initial-scale=1">
-           <style>${css}</style></head><body style="margin:0"><div id="root"></div></body></html>`,
-          { waitUntil: 'domcontentloaded' });
+        await page.goto(origin, { waitUntil: 'domcontentloaded' });
         try { await page.addScriptTag({ content: code }); } catch { /* reported below */ }
         await new Promise(r => setTimeout(r, 700));
 
@@ -464,6 +509,7 @@ async function overflowTest() {
     }
   } finally {
     await browser.close();
+    await new Promise(r => server.close(r));
   }
 }
 
