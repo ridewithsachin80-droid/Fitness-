@@ -151,6 +151,9 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
+        // Eval set (Sprint L1): the instruction that produced these actions, so
+        // anything the coach switches off before applying can be paired to it.
+        evalMessage: text,
         actions: (data.actions || []).map(a => ({ ...a, on: a.resolved })),
         applied: false,
       }]);
@@ -193,6 +196,26 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         next[mi] = { ...next[mi], applied: true, results: data.results || [] };
         return next;
       });
+
+      // ── Eval set (Sprint L1) ───────────────────────────────────────────────
+      // The coach cannot edit a proposed action, only switch it off. Switching
+      // one off before applying IS the correction: the model proposed something
+      // for this instruction that the coach did not want. The server never sees
+      // it — coach-apply is sent only the actions that survived — so it is
+      // recorded from here.
+      const resolved = msg.actions.filter(a => a.resolved);
+      const dropped  = resolved.filter(a => !a.on);
+      if (msg.evalMessage && dropped.length) {
+        const shape = a => ({ member_name: a.member_name, is_all: !!a.is_all, ops: a.ops });
+        api.post('/ai-chat/eval-sample', {
+          source:    'coach_parse',
+          message:   msg.evalMessage,
+          field:     'ops',
+          ai_output: resolved.map(shape),
+          corrected: toApply.map(shape),
+        }).catch(() => {});   // bookkeeping — never surfaces to the coach
+      }
+
       haptic(30);
       onApplied?.();   // let the page refresh member lists / stats
     } catch (err) {

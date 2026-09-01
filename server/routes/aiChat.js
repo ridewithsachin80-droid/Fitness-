@@ -421,6 +421,165 @@ async function recordPortions(patientId, corrections) {
   }
 }
 
+// ── AI EVAL SET (Sprint L1) ──────────────────────────────────────────────────
+// A correction is the only free source of ground truth this app has. Portion
+// memory already consumes it and throws the rest away. Everything below keeps
+// it, so `scripts/replay-evals.js` can score a prompt change instead of us
+// shipping one on a feeling.
+//
+// Every write here is best-effort and swallowed. A member logging their dinner
+// must never see an error because the eval set had a bad day.
+
+const crypto = require('crypto');
+
+const EVAL_SOURCES = new Set(['member_parse', 'coach_parse', 'photo']);
+const EVAL_FIELDS  = new Set(['grams', 'meal', 'food_name', 'exercise', 'target', 'ops']);
+
+// One member correcting a lot in one evening should not drown out everyone
+// else. 40 is far above normal use and far below "this is now noise".
+const EVAL_DAILY_CAP = 40;
+
+/** Stable identity for a sample, so the same lesson is not stored twice. */
+function evalDedupKey(source, message, aiOutput, corrected) {
+  return crypto.createHash('md5').update(JSON.stringify([
+    source,
+    String(message || '').trim().toLowerCase(),
+    aiOutput ?? null,
+    corrected ?? null,
+  ])).digest('hex');
+}
+
+/**
+ * Store one corrected parse.
+ * Returns 'stored' | 'duplicate' | 'capped' | 'invalid' | 'error' — the reason
+ * is returned rather than logged only, so the tests can assert on it.
+ */
+async function recordEvalSample({ patientId, source, message, aiOutput, corrected, field = null }) {
+  const msg = String(message || '').trim();
+  if (!EVAL_SOURCES.has(source)) return 'invalid';
+  if (!msg || msg.length < 2)    return 'invalid';
+  if (aiOutput === undefined || corrected === undefined) return 'invalid';
+  const fld = EVAL_FIELDS.has(field) ? field : null;
+  const pid = parseInt(patientId);
+  if (!Number.isFinite(pid)) return 'invalid';
+
+  try {
+    const { rows: cnt } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM ai_parse_samples
+        WHERE patient_id = $1 AND created_at > NOW() - INTERVAL '24 hours'`,
+      [pid]
+    );
+    if ((cnt[0]?.n || 0) >= EVAL_DAILY_CAP) return 'capped';
+
+    const { rows } = await pool.query(
+      `INSERT INTO ai_parse_samples
+         (patient_id, source, message, ai_output, corrected, field, dedup_key)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)
+       ON CONFLICT (patient_id, dedup_key) DO NOTHING
+       RETURNING id`,
+      [pid, source, msg.slice(0, 2000), JSON.stringify(aiOutput),
+       JSON.stringify(corrected), fld,
+       evalDedupKey(source, msg, aiOutput, corrected)]
+    );
+    return rows.length ? 'stored' : 'duplicate';
+  } catch (err) {
+    console.error('recordEvalSample failed:', err.message);
+    return 'error';
+  }
+}
+
+/**
+ * Remember what this parse returned, keyed to the message that produced it.
+ *
+ * Written at PARSE time, not apply time, on purpose: this is the model's own
+ * output, before the member edits the grams in the preview. If they do edit,
+ * the edit is the correction and this is what it corrects.
+ */
+async function rememberParseTurn(patientId, message, foods) {
+  const list = (Array.isArray(foods) ? foods : []).slice(0, 25).map(f => ({
+    name:     String(f?.name || '').slice(0, 100),
+    grams:    Number(f?.grams) || 0,
+    meal:     f?.meal ? String(f.meal).slice(0, 40) : null,
+    qty_text: String(f?.qty_text || '').slice(0, 60),
+  })).filter(f => f.name);
+  if (!list.length) return;
+  try {
+    await pool.query(
+      `INSERT INTO ai_parse_turns (patient_id, message, foods)
+       VALUES ($1, $2, $3::jsonb)`,
+      [patientId, String(message).slice(0, 2000), JSON.stringify(list)]
+    );
+    // Bounded cache: keep the 30 most recent turns per member and nothing else.
+    await pool.query(
+      `DELETE FROM ai_parse_turns
+        WHERE patient_id = $1
+          AND id NOT IN (
+            SELECT id FROM ai_parse_turns WHERE patient_id = $1
+             ORDER BY created_at DESC, id DESC LIMIT 30)`,
+      [patientId]
+    );
+  } catch (err) {
+    console.error('rememberParseTurn failed:', err.message);
+  }
+}
+
+/**
+ * The message that made this food, and the grams the model gave it.
+ * Null when we cannot pair the two — a sample we cannot replay is worse than
+ * no sample, so we never guess at the question.
+ */
+async function findOriginalTurn(patientId, foodName) {
+  const name = String(foodName || '').trim().toLowerCase();
+  if (!name) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT message, foods FROM ai_parse_turns
+        WHERE patient_id = $1
+          AND created_at > NOW() - INTERVAL '7 days'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 30`,
+      [patientId]
+    );
+    for (const r of rows) {
+      const hit = (r.foods || []).find(f => String(f.name).toLowerCase() === name);
+      if (hit) return { message: r.message, food: hit };
+    }
+    return null;
+  } catch (err) {
+    console.error('findOriginalTurn failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Turn an applied corrections op into eval samples.
+ * "make the dal 250g" tells us the earlier parse of "2 katori dal" was wrong;
+ * this walks back to that message and records the pair.
+ */
+async function captureCorrectionSamples(patientId, corrections) {
+  for (const c of corrections) {
+    const orig = await findOriginalTurn(patientId, c.name);
+    if (!orig) continue;                       // no question, no sample
+    const before = orig.food;
+    const after  = {
+      name:  before.name,
+      grams: c.grams != null ? c.grams : before.grams,
+      meal:  c.meal  != null ? c.meal  : (before.meal || null),
+    };
+    const gramsChanged = Number(after.grams) !== Number(before.grams);
+    const mealChanged  = (after.meal || null) !== (before.meal || null);
+    if (!gramsChanged && !mealChanged) continue;
+    await recordEvalSample({
+      patientId,
+      source:    'member_parse',
+      message:   orig.message,
+      aiOutput:  { name: before.name, grams: before.grams, meal: before.meal || null },
+      corrected: after,
+      field:     gramsChanged ? 'grams' : 'meal',
+    });
+  }
+}
+
 // ── Learning back into the food database ─────────────────────────────────────
 // The chat used to read from `foods` but never write to it, so a member could
 // log "upma" every morning and the AI would re-estimate it from scratch every
@@ -1147,6 +1306,7 @@ Return ONLY raw JSON, no markdown fences:
     // gets their preview immediately and the learning happens behind it.
     learnFoods(foods).catch(err => console.error('learnFoods failed:', err.message));
 
+
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
     for (const f of foods) {
       // The phrase this food's portion would be remembered under, so the
@@ -1562,6 +1722,13 @@ router.post('/parse', async (req, res) => {
       })
       .filter(c => c.grams !== null || c.meal !== null);
 
+    // Eval set: a correction is the member telling us the earlier parse was
+    // wrong. Fire-and-forget — this is bookkeeping, not part of their log.
+    if (corrections.length) {
+      captureCorrectionSamples(req.user.id, corrections)
+        .catch(err => console.error('captureCorrectionSamples failed:', err.message));
+    }
+
     // ── Foods ──
     const rawFoods = Array.isArray(parsed.foods) ? parsed.foods : [];
     const validFoods = rawFoods
@@ -1581,6 +1748,12 @@ router.post('/parse', async (req, res) => {
     // Feed anything new back into the food database. Not awaited — the member
     // gets their preview immediately and the learning happens behind it.
     learnFoods(foods).catch(err => console.error('learnFoods failed:', err.message));
+
+    // Eval set: hold on to what the model returned for THIS message, so a
+    // correction arriving three messages later can be paired back to it.
+    // Only here, in /parse — a photo has no replayable text to pair against.
+    rememberParseTurn(req.user.id, cleanMsg, foods)
+      .catch(err => console.error('rememberParseTurn failed:', err.message));
 
     // Per-item macros + totals computed server-side — never trust AI arithmetic
     let totCal = 0, totPro = 0, totCarb = 0, totFat = 0;
@@ -2369,6 +2542,26 @@ router.post('/portions', async (req, res) => {
   res.json({ learned: portions.length, portions });
 });
 
+// ── POST /api/ai-chat/eval-sample ────────────────────────────────────────────
+// Client-side corrections that the server cannot see for itself:
+//   · the member edited the grams in the preview before applying
+//   · the member unticked an item the AI invented
+//   · the coach turned off a proposed action before applying
+// Body: { source, message, ai_output, corrected, field }
+// Always 200 — a rejected sample is a no-op, never an error the member sees.
+router.post('/eval-sample', async (req, res) => {
+  const { source, message, ai_output, corrected, field } = req.body || {};
+  const result = await recordEvalSample({
+    patientId: req.user.id,
+    source,
+    message,
+    aiOutput:  ai_output,
+    corrected,
+    field,
+  });
+  res.json({ result });
+});
+
 // ── GET /api/ai-chat/portions ────────────────────────────────────────────────
 // What the app has learned about this member's portions, so it can be shown
 // back to them — learning they cannot see feels like the app guessing.
@@ -3033,3 +3226,11 @@ module.exports.buildCoachSummary       = buildCoachSummary;
 module.exports.programDayForDate = programDayForDate;
 module.exports.buildCoachRosterContext = buildCoachRosterContext;
 module.exports.buildCoachPrompt = buildCoachPrompt;
+// Sprint L1 — the replay tool and test-evals reach these directly.
+module.exports.buildParsePrompt   = buildParsePrompt;
+module.exports.recordEvalSample   = recordEvalSample;
+module.exports.rememberParseTurn  = rememberParseTurn;
+module.exports.findOriginalTurn   = findOriginalTurn;
+module.exports.captureCorrectionSamples = captureCorrectionSamples;
+module.exports.evalDedupKey       = evalDedupKey;
+module.exports.EVAL_DAILY_CAP     = EVAL_DAILY_CAP;

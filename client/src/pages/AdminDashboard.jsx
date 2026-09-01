@@ -9,6 +9,7 @@ import AdminReminders from '../components/AdminReminders';
 import MessageMember from '../components/MessageMember';
 import TodaysGaps from '../components/TodaysGaps';
 import CoachAIChat, { CoachAIFab, useCoachAI } from '../components/CoachAIChat';
+import EvalSamples from '../components/EvalSamples';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ value, label, icon, color }) {
@@ -1565,6 +1566,7 @@ export default function AdminDashboard() {
             { id: 'coaches',   label: '🏋️ Coaches'  },
             { id: 'reminders',  label: '🔔 Reminders' },
             { id: 'audit',      label: '🔍 Audit'     },
+            { id: 'evals',      label: '🎯 AI evals'  },
           ].map(t => (
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 min-w-max whitespace-nowrap px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
@@ -1995,6 +1997,9 @@ export default function AdminDashboard() {
         {tab === 'reminders' && (
           <AdminReminders members={members} />
         )}
+
+        {/* ── AI evals tab (Sprint L1) ── */}
+        {tab === 'evals' && <EvalSamples />}
 
         {tab === 'audit' && (
           <>

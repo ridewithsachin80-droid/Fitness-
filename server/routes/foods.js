@@ -25,6 +25,7 @@ const pool   = require('../db/pool');
 const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const role   = require('../middleware/roleCheck');
+const { macroPlausibility } = require('../services/macroCheck');
 
 // ─── All routes require authentication ────────────────────────────────────────
 router.use(authMW);
@@ -135,9 +136,14 @@ function mapOffNutrients(nutriments = {}) {
 // on the food forty members eat rather than the one logged once.
 //
 // Declared before '/:id' so "review" is not read as a food id.
-router.get('/review', authMW, role('monitor', 'admin'), async (req, res) => {
+// '/unverified' is the name Sprint L3 specifies; '/review' is what the shipped
+// client already calls. One handler on both paths — the same pattern as
+// /coaches|/monitors in admin.js — because a PWA whose service worker has not
+// updated is still asking for the old one. Two handlers would drift.
+router.get(['/review', '/unverified'], authMW, role('monitor', 'admin'), async (req, res) => {
   try {
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+    const flaggedOnly = req.query.flagged === '1';
     const { rows } = await pool.query(
       `WITH logged AS (
          SELECT LOWER(TRIM(item->>'name')) AS name,
@@ -151,6 +157,7 @@ router.get('/review', authMW, role('monitor', 'admin'), async (req, res) => {
          GROUP BY 1
        )
        SELECT f.id, f.name, f.category, f.source, f.verified, f.per_100g, f.created_at,
+              f.verified_by, f.verified_at,
               COALESCE(l.times_logged, 0) AS times_logged,
               COALESCE(l.members, 0)      AS members,
               l.last_logged
@@ -162,10 +169,29 @@ router.get('/review', authMW, role('monitor', 'admin'), async (req, res) => {
                 f.created_at DESC
        LIMIT $1`, [limit]);
 
+    // ── Macro consistency (L3.3) ─────────────────────────────────────────────
+    // The highest-value part of this queue and the easiest to skip. A food
+    // whose stated calories contradict its own macros is wrong in a way that
+    // needs no human to detect — and those are exactly the rows quietly
+    // distorting every calorie total for every member who logs them. So they
+    // are computed here and sorted to the front, ahead of pure usage.
+    const flagged = rows.map(f => ({ ...f, macro_check: macroPlausibility(f.per_100g, f.name) }));
+    const suspect = f => (f.macro_check.status === 'suspect' ? 1 : 0);
+    flagged.sort((a, b) => suspect(b) - suspect(a));
+
+    const out = flaggedOnly ? flagged.filter(f => f.macro_check.status === 'suspect') : flagged;
+
     const { rows: [tot] } = await pool.query(
       `SELECT COUNT(*)::int AS unverified FROM foods WHERE verified = false`);
 
-    res.json({ foods: rows, unverified_total: tot.unverified });
+    res.json({
+      foods: out,
+      unverified_total: tot.unverified,
+      // Counted over the page, not the table — say so rather than let it read
+      // as "3 bad foods in the database".
+      flagged_in_page: flagged.filter(f => f.macro_check.status === 'suspect').length,
+      page_size: rows.length,
+    });
   } catch (err) {
     console.error('GET /foods/review error:', err);
     res.status(500).json({ error: 'Could not load the review queue' });
@@ -176,9 +202,18 @@ router.get('/review', authMW, role('monitor', 'admin'), async (req, res) => {
 // One tap to mark a food trusted, which is the whole point of the queue.
 router.patch('/:id/verify', authMW, role('monitor', 'admin'), async (req, res) => {
   try {
+    const on = req.body?.verified !== false;
+    // Provenance (L3.4). Nothing is recomputed — the macros stand as they are;
+    // we only record that a human looked. Un-verifying clears the trail rather
+    // than leaving a stale name attached to a food nobody stands behind.
     const { rows } = await pool.query(
-      `UPDATE foods SET verified = $2 WHERE id = $1 RETURNING id, name, verified`,
-      [req.params.id, req.body?.verified !== false]);
+      `UPDATE foods
+          SET verified    = $2,
+              verified_by = CASE WHEN $2 THEN $3::int ELSE NULL END,
+              verified_at = CASE WHEN $2 THEN NOW()   ELSE NULL END
+        WHERE id = $1
+    RETURNING id, name, verified, verified_by, verified_at`,
+      [req.params.id, on, req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Food not found' });
     res.json(rows[0]);
   } catch (err) {

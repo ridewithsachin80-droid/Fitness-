@@ -168,17 +168,30 @@ export default function AdminFoods() {
   const [verifying, setVerifying]   = useState({});
   const navigate    = useNavigate();
 
-  const loadReview = async () => {
+  const loadReview = async (opts = {}) => {
+    const onlyFlagged = opts.flagged ?? false;
     try {
-      const { data } = await api.get('/foods/review');
+      const { data } = await api.get('/foods/review', {
+        params: onlyFlagged ? { flagged: '1' } : {},
+      });
       setReview(data);
+      setQueueIdx(0);
     } catch {
-      setReview({ foods: [], unverified_total: 0 });
+      setReview({ foods: [], unverified_total: 0, flagged_in_page: 0, page_size: 0 });
+      setQueueIdx(0);
     }
   };
 
+  // One food at a time (L3.2). A list of forty invites scrolling and nothing
+  // getting decided; a single card with three buttons is a queue you can
+  // actually finish. `queueIdx` is where in review.foods we are.
+  const [queueIdx, setQueueIdx] = useState(0);
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [queueError, setQueueError] = useState('');
+
   const verify = async (food) => {
     setVerifying(v => ({ ...v, [food.id]: true }));
+    setQueueError('');
     try {
       await api.patch(`/foods/${food.id}/verify`, { verified: true });
       // Drop it from the list rather than reloading — the coach is working
@@ -188,8 +201,32 @@ export default function AdminFoods() {
         foods: r.foods.filter(f => f.id !== food.id),
         unverified_total: Math.max(0, r.unverified_total - 1),
       }));
-    } catch {
+      // No pointer arithmetic here on purpose. Removing the current card shifts
+      // the next one into this index, and at the end of the list the render
+      // clamps to the last item — one mechanism, in one place, rather than the
+      // same correction written three times and only one of them tested.
+    } catch (e) {
       setVerifying(v => ({ ...v, [food.id]: false }));
+      setQueueError(e.response?.data?.error || "Couldn't verify that one — try again.");
+    }
+  };
+
+  // Delete from inside the queue. Same endpoint as the list, but it also has to
+  // mend the queue pointer, so it cannot just reuse handleDelete.
+  const deleteFromQueue = async (food) => {
+    if (!window.confirm(`Delete "${food.name}"? This cannot be undone.`)) return;
+    setVerifying(v => ({ ...v, [food.id]: true }));
+    setQueueError('');
+    try {
+      await api.delete(`/foods/${food.id}`);
+      setReview(r => ({
+        ...r,
+        foods: r.foods.filter(f => f.id !== food.id),
+        unverified_total: Math.max(0, r.unverified_total - 1),
+      }));
+    } catch (e) {
+      setVerifying(v => ({ ...v, [food.id]: false }));
+      setQueueError(e.response?.data?.error || "Couldn't delete that one — try again.");
     }
   };
 
@@ -335,42 +372,144 @@ export default function AdminFoods() {
                 </p>
               ) : (
                 <>
-                  <p className="text-xs text-stone-500 mt-1 mb-3">
-                    {review.unverified_total} unverified {review.unverified_total === 1 ? 'food' : 'foods'},
-                    most-eaten first. Confirming one fixes it for every member.
+                  <p className="text-xs text-stone-500 mt-1 mb-2">
+                    {review.unverified_total} unverified {review.unverified_total === 1 ? 'food' : 'foods'}.
+                    Ones whose calories disagree with their own macros come first,
+                    then the ones most members eat. Confirming one fixes it for everybody.
                   </p>
-                  <div className="space-y-1.5">
-                    {review.foods.map(f => (
-                      <div key={f.id} className="flex items-center gap-3 py-2 border-b border-stone-50 last:border-0">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-stone-700 truncate">{f.name}</p>
-                          <p className="text-[11px] text-stone-400">
-                            {Math.round(f.per_100g?.calories ?? 0)} kcal · P{f.per_100g?.protein ?? 0}
-                            {' · '}C{f.per_100g?.total_carbs ?? 0} · F{f.per_100g?.fat ?? 0}
-                            {f.members > 0 && (
-                              <span className="text-amber-600 font-semibold">
-                                {' · '}{f.members} {plural(f.members, 'member')}, {f.times_logged}×
-                              </span>
-                            )}
-                          </p>
+
+                  {/* Filter: only the foods whose numbers contradict themselves.
+                      Counted over this page, not the whole table — the label
+                      says so rather than implying the database has only three. */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <button
+                      onClick={() => { const next = !flaggedOnly; setFlaggedOnly(next); loadReview({ flagged: next }); }}
+                      style={{ minHeight: 30 }}
+                      className={`text-[11px] font-bold px-3 rounded-lg border transition-colors ${
+                        flaggedOnly
+                          ? 'bg-amber-50 border-amber-300 text-amber-700'
+                          : 'bg-white border-stone-200 text-stone-500'
+                      }`}>
+                      {flaggedOnly ? '⚠ Showing only mismatched' : '⚠ Only mismatched macros'}
+                    </button>
+                    {!flaggedOnly && review.flagged_in_page > 0 && (
+                      <span className="text-[11px] text-amber-600 font-semibold">
+                        {review.flagged_in_page} of these {review.page_size} look wrong
+                      </span>
+                    )}
+                  </div>
+
+                  {queueError && (
+                    <p className="text-[11px] text-red-600 font-semibold mb-2">{queueError}</p>
+                  )}
+
+                  {/* ── One card at a time ── */}
+                  {(() => {
+                    const f = review.foods[Math.min(queueIdx, review.foods.length - 1)];
+                    if (!f) return null;
+                    const mc = f.macro_check || {};
+                    const busy = !!verifying[f.id];
+                    const idx = Math.min(queueIdx, review.foods.length - 1);
+                    return (
+                      <div className="border border-stone-200 rounded-2xl p-4">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-base font-bold text-stone-800 leading-snug">{f.name}</p>
+                          <span className="text-[11px] text-stone-400 flex-shrink-0 mt-1">
+                            {idx + 1} of {review.foods.length}
+                          </span>
                         </div>
+
+                        <p className="text-[11px] text-stone-400 mb-2">
+                          {f.category || 'uncategorised'} · from {f.source === 'ai' ? 'AI estimate' : f.source}
+                        </p>
+
+                        <div className="grid grid-cols-4 gap-1.5 mb-3">
+                          {[
+                            ['kcal', Math.round(f.per_100g?.calories ?? 0)],
+                            ['P',    f.per_100g?.protein ?? 0],
+                            ['C',    f.per_100g?.total_carbs ?? 0],
+                            ['F',    f.per_100g?.fat ?? 0],
+                          ].map(([k, v]) => (
+                            <div key={k} className="bg-stone-50 rounded-xl px-2 py-2 text-center">
+                              <div className="text-sm font-extrabold text-stone-700">{v}</div>
+                              <div className="text-[9px] font-bold uppercase tracking-wider text-stone-400">{k}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* The macro-consistency verdict. This is the part worth
+                            reading before tapping Verify: it is arithmetic, not
+                            an opinion, and it is usually right. */}
+                        {mc.status === 'suspect' && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
+                            <p className="text-[11px] font-bold text-amber-800">⚠ These numbers disagree with each other</p>
+                            <p className="text-[11px] text-amber-700 leading-snug mt-0.5">
+                              {mc.reason}
+                              {mc.delta_pct != null ? ` — off by ${mc.delta_pct}%.` : '.'}
+                              {' '}Fix it before verifying, or it skews every member who logs this.
+                            </p>
+                          </div>
+                        )}
+                        {mc.status === 'unknown' && (
+                          <p className="text-[11px] text-stone-400 mb-3">
+                            Can't cross-check this one — {mc.reason}.
+                          </p>
+                        )}
+                        {mc.status === 'ok' && (
+                          <p className="text-[11px] text-emerald-600 font-semibold mb-3">
+                            ✓ Calories match its macros
+                          </p>
+                        )}
+
+                        <p className="text-[11px] text-stone-500 mb-3">
+                          {f.members > 0
+                            ? <>Logged by <span className="font-bold text-amber-600">{f.members} {plural(f.members, 'member')}</span>, {f.times_logged}× in total.</>
+                            : <>Nobody has logged this yet.</>}
+                        </p>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => verify(f)}
+                            disabled={busy}
+                            style={{ minHeight: 40 }}
+                            className="flex-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200
+                              rounded-xl px-3 disabled:opacity-50">
+                            {busy ? '…' : '✓ Verify'}
+                          </button>
+                          <button
+                            onClick={() => { setEditing(f); setMode('edit'); }}
+                            disabled={busy}
+                            style={{ minHeight: 40 }}
+                            className="flex-1 text-xs font-bold text-stone-600 bg-white border border-stone-200
+                              rounded-xl px-3 disabled:opacity-50">
+                            Fix
+                          </button>
+                          <button
+                            onClick={() => deleteFromQueue(f)}
+                            disabled={busy}
+                            style={{ minHeight: 40 }}
+                            className="text-xs font-bold text-red-600 bg-white border border-red-200
+                              rounded-xl px-3 disabled:opacity-50">
+                            Delete
+                          </button>
+                        </div>
+
+                        {/* Skip leaves it in the queue. Not every food can be
+                            decided on the spot, and forcing a verdict is how a
+                            queue gets verified wrongly just to clear it. */}
                         <button
-                          onClick={() => { setEditing(f); setMode('edit'); }}
-                          className="text-[11px] font-semibold text-stone-500 px-2 py-1">
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => verify(f)}
-                          disabled={verifying[f.id]}
-                          style={{ minHeight: 32 }}
-                          className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200
-                            rounded-lg px-3 disabled:opacity-50">
-                          {verifying[f.id] ? '…' : '✓ Verify'}
+                          onClick={() => setQueueIdx(i => Math.min(i + 1, review.foods.length - 1))}
+                          disabled={idx >= review.foods.length - 1}
+                          className="w-full text-[11px] font-semibold text-stone-400 mt-2.5 py-1 disabled:opacity-40">
+                          {idx >= review.foods.length - 1 ? 'Last one in the queue' : 'Skip for now →'}
                         </button>
                       </div>
-                    ))}
-                  </div>
-                  <button onClick={loadReview} className="text-[11px] font-bold text-emerald-600 mt-3">
+                    );
+                  })()}
+
+                  <button
+                    onClick={() => loadReview({ flagged: flaggedOnly })}
+                    className="text-[11px] font-bold text-emerald-600 mt-3">
                     Refresh
                   </button>
                 </>

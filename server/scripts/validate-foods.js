@@ -34,6 +34,7 @@
  */
 
 const path = require('path');
+const { macroPlausibility } = require('../services/macroCheck');
 const Module = require('module');
 
 // The seed files connect to Postgres on require. Stub the pool so this can run
@@ -120,14 +121,17 @@ function checkFood(name, category, p) {
   if ((+p.net_carbs || 0) > carb + 0.5)      add('warn',  name, `net carbs ${p.net_carbs} > total ${carb}`);
 
   // ── Atwater ──
-  const atwater = 4 * pro + 4 * carb + 9 * fat;
-  if (!PER_UNIT.test(name) && (cal > 0 || atwater > 0)) {
-    const diff = Math.abs(cal - atwater);
-    const tol = Math.max(30, atwater * 0.25);
-    if (diff > tol) {
-      add(cal < atwater * 0.5 || cal > atwater * 1.6 ? 'error' : 'warn', name,
-        `stated ${cal} kcal vs ${Math.round(atwater)} from macros (P${pro} C${carb} F${fat})`);
-    }
+  // Shared with the live review queue via services/macroCheck.js — one
+  // implementation, so the seed audit and the coach's queue can never disagree
+  // about whether a food's calories match its macros. The 25% tolerance here is
+  // kept deliberately: it has run against this corpus for months, and tightening
+  // it would re-flag hundreds of already-reviewed rows as a side effect of an
+  // unrelated sprint. The queue runs at 20%, which is stated where it is set.
+  const check = macroPlausibility(p, name, { tolerance: 0.25, floorKcal: 30 });
+  if (check.status === 'suspect') {
+    const atwater = check.atwater;
+    add(cal < atwater * 0.5 || cal > atwater * 1.6 ? 'error' : 'warn', name,
+      `stated ${cal} kcal vs ${Math.round(atwater)} from macros (P${pro} C${carb} F${fat})`);
   }
 
   // ── density ──

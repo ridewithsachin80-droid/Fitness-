@@ -633,6 +633,65 @@ CREATE TABLE IF NOT EXISTS meal_presets (
 );
 CREATE INDEX IF NOT EXISTS idx_meal_presets_member ON meal_presets(patient_id, created_at DESC);
 
+-- ── FOOD VERIFICATION PROVENANCE (Sprint L3) ─────────────────────────────────
+-- Who confirmed this food, and when. Verification was previously a bare
+-- boolean, so a wrong-but-verified food had no trail back to the decision and
+-- no way to tell a 2024 confirmation from this morning's.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS verified_by INT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_foods_unverified
+  ON foods(created_at DESC) WHERE verified = false;
+
+-- ── AI EVAL SET (Sprint L1) ──────────────────────────────────────────────────
+-- Every correction a member or coach makes to an AI parse is a test case: a
+-- real Hinglish message, from a real member, with a known-correct answer, in a
+-- domain no public dataset covers. Until now that signal was used once (to
+-- update portion memory) and then thrown away. Here it is kept, so a prompt
+-- change can be SCORED instead of guessed at — see scripts/replay-evals.js.
+--
+-- ON DELETE SET NULL, not CASCADE: deleting a member must not destroy the eval
+-- set. The message text survives; it stops being attributable to anyone.
+CREATE TABLE IF NOT EXISTS ai_parse_samples (
+  id           SERIAL PRIMARY KEY,
+  patient_id   INT REFERENCES users(id) ON DELETE SET NULL,  -- NOT member_id, see RENAME.md
+  source       VARCHAR(20) NOT NULL,   -- 'member_parse' | 'coach_parse' | 'photo'
+  message      TEXT NOT NULL,          -- exactly what was typed or spoken
+  ai_output    JSONB NOT NULL,         -- what the model returned
+  corrected    JSONB NOT NULL,         -- what it should have been
+  field        VARCHAR(40),            -- 'grams' | 'meal' | 'food_name' | 'exercise' | 'target' | 'ops'
+  dismissed    BOOLEAN DEFAULT false,  -- marked "not a real error" by an admin
+  -- md5 of (source, message, ai_output, corrected), computed in Node. Correcting
+  -- the same dal three evenings running is one lesson, not three; without this
+  -- the set fills with one member's repeats and the replay score is dominated
+  -- by whoever logs most.
+  dedup_key    VARCHAR(32),
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_parse_samples_recent
+  ON ai_parse_samples(created_at DESC) WHERE dismissed = false;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_ai_parse_samples_dedup
+  ON ai_parse_samples(patient_id, dedup_key);
+
+-- ── AI parse turn cache (Sprint L1) ──────────────────────────────────────────
+-- A correction ("make the dal 250g") arrives as its own message, minutes after
+-- the message that caused the mistake. The chat context carries the last few
+-- turns as PLAIN TEXT and today's foods as name/grams/meal — the structured
+-- thing the model actually returned for the earlier message is already gone.
+--
+-- Without it there is no way to say "'2 roti' should have been 60g": we would
+-- know the right answer and not the question. This holds each parse's own
+-- output just long enough to pair the two. Working cache, not a record — hence
+-- CASCADE, a 30-row cap per member, and a 7-day lookback.
+CREATE TABLE IF NOT EXISTS ai_parse_turns (
+  id           SERIAL PRIMARY KEY,
+  patient_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message      TEXT NOT NULL,
+  foods        JSONB NOT NULL DEFAULT '[]',
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_parse_turns_member
+  ON ai_parse_turns(patient_id, created_at DESC);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

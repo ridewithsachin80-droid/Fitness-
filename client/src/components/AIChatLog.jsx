@@ -250,6 +250,11 @@ export default function AIChatLog() {
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
+        // Eval set: what produced this card. A photo has no replayable text, so
+        // it is tagged as such rather than stored as "photo attached" — a
+        // sample whose question is not the real question scores nothing.
+        evalSource: 'photo',
+        evalMessage: null,
         parsed: {
           // Scale screenshots return a weight and body metrics; meal photos
           // return foods. Same preview card handles both.
@@ -467,6 +472,10 @@ export default function AIChatLog() {
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
+        // Eval set: the exact message that produced this card, so an edit the
+        // member makes below can be paired with the question that caused it.
+        evalSource: 'member_parse',
+        evalMessage: text,
         parsed: {
           weight_kg:    data.weight_kg,
           weightOn:     data.weight_kg != null,
@@ -776,6 +785,43 @@ export default function AIChatLog() {
     if (corrections.length) {
       api.post('/ai-chat/portions', { corrections })
         .catch(err => console.error('portion learning failed:', err));
+    }
+
+    // ── Eval set (Sprint L1) ─────────────────────────────────────────────────
+    // Portion memory above only learns from foods that came with a recognisable
+    // unit phrase ("2 katori"). The eval set wants every edit, phrase or not —
+    // "Chicken Curry 300g → 180g" is exactly as much of a parsing error, and
+    // the replay tool has no way to find it otherwise.
+    //
+    // Two signals, both unambiguous:
+    //   · grams changed  → the model's portion was wrong
+    //   · item unticked  → the model logged something that was never said
+    // A meal-slot edit is NOT captured: the preview has no slot control, so a
+    // wrong slot cannot be observed here. Recording it would be a guess.
+    if (msg.evalMessage) {
+      const edits = [
+        ...p.foods
+          .filter(f => f.on && Number(f.grams) > 0 && Number(f.grams) !== Number(f.ai_grams))
+          .map(f => ({
+            field:     'grams',
+            ai_output: { name: f.name, grams: Number(f.ai_grams), meal: f.meal || null },
+            corrected: { name: f.name, grams: Number(f.grams),    meal: f.meal || null },
+          })),
+        ...p.foods
+          .filter(f => !f.on)
+          .map(f => ({
+            field:     'food_name',
+            ai_output: { name: f.name, grams: Number(f.ai_grams), meal: f.meal || null },
+            corrected: null,      // null = the member says this item does not exist
+          })),
+      ];
+      for (const e of edits) {
+        api.post('/ai-chat/eval-sample', {
+          source:  msg.evalSource || 'member_parse',
+          message: msg.evalMessage,
+          ...e,
+        }).catch(() => {});   // bookkeeping — never surfaces to the member
+      }
     }
 
     const workoutsOn = p.workouts.filter(w => w.on);

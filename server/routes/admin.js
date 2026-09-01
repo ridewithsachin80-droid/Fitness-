@@ -678,4 +678,74 @@ router.get('/audit', async (req, res) => {
   }
 });
 
+// ── AI EVAL SET (Sprint L1) ──────────────────────────────────────────────────
+// Browse the corrections the app has collected, and mark one "not a real
+// error". Dismissal matters: a member who types 250g because they genuinely
+// ate more is not a parsing mistake, and scoring a prompt against it would
+// punish the model for being right. Left in the set, those rows quietly make
+// every replay run look worse than it is.
+
+// GET /api/admin/eval-samples?limit=&source=&field=&include_dismissed=
+router.get('/eval-samples', async (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+    const where  = [];
+    const params = [];
+    if (req.query.include_dismissed !== '1') where.push('s.dismissed = false');
+    if (req.query.source) { params.push(String(req.query.source)); where.push(`s.source = $${params.length}`); }
+    if (req.query.field)  { params.push(String(req.query.field));  where.push(`s.field  = $${params.length}`); }
+    const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    params.push(limit, offset);
+    const { rows } = await pool.query(
+      `SELECT s.id, s.patient_id, s.source, s.message, s.ai_output, s.corrected,
+              s.field, s.dismissed, s.created_at, u.name AS member_name
+         FROM ai_parse_samples s
+         LEFT JOIN users u ON u.id = s.patient_id
+         ${clause}
+        ORDER BY s.created_at DESC, s.id DESC
+        LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    // Counts are computed over the WHOLE set, not the page, so "12 samples"
+    // does not silently mean "12 on this screen".
+    const { rows: tot } = await pool.query(
+      `SELECT
+         COUNT(*)::int                                          AS total,
+         COUNT(*) FILTER (WHERE dismissed = false)::int          AS active,
+         COUNT(*) FILTER (WHERE dismissed = false
+                            AND source <> 'photo')::int          AS replayable
+       FROM ai_parse_samples`
+    );
+
+    res.json({ samples: rows, counts: tot[0] || { total: 0, active: 0, replayable: 0 } });
+  } catch (err) {
+    console.error('GET /admin/eval-samples error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch eval samples' });
+  }
+});
+
+// PATCH /api/admin/eval-samples/:id/dismiss   body: { dismissed: true|false }
+// Reversible on purpose — dismissing is a judgement call, and a one-way button
+// on a judgement call means people stop pressing it.
+router.patch('/eval-samples/:id/dismiss', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id' });
+    const dismissed = req.body?.dismissed !== false;
+    const { rows } = await pool.query(
+      `UPDATE ai_parse_samples SET dismissed = $2 WHERE id = $1
+       RETURNING id, dismissed`,
+      [id, dismissed]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Sample not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('PATCH /admin/eval-samples/:id/dismiss error:', err.message);
+    res.status(500).json({ error: 'Failed to update sample' });
+  }
+});
+
 module.exports = router;
