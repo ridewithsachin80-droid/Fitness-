@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
-import { adminResetPin, adminSendPush, getAuditLog } from '../api/logs';
+import { adminResetPin, adminSendPush, getAuditLog, adminDeleteMember } from '../api/logs';
 import { Card, SectionTitle, PageLoader } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural } from '../constants';
 import AdminReminders from '../components/AdminReminders';
@@ -1339,6 +1339,76 @@ function AssignModal({ member, coaches, onClose, onAssigned }) {
 }
 
 // ── Main Admin Dashboard ──────────────────────────────────────────────────────
+
+/**
+ * Typed confirmation for deleting a member.
+ *
+ * The server checks the same thing, so this dialog is not the security
+ * boundary — it is there so the destructive path FEELS different from every
+ * other button in the menu. Everything else in the app is one tap; this asks
+ * you to write the person's name.
+ */
+function DeleteMemberModal({ member, onClose, onDeleted }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy]   = useState(false);
+  const [err, setErr]     = useState(null);
+  const matches = typed.trim() === String(member.name).trim();
+
+  const go = async () => {
+    if (!matches || busy) return;
+    setBusy(true); setErr(null);
+    try {
+      await adminDeleteMember(member.id, typed.trim());
+      onDeleted(member.id);
+    } catch (e) {
+      setErr(e?.response?.data?.error || 'Could not delete that member.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="Delete member" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm text-[#FFFFFF]">
+          This permanently deletes <span className="font-bold">{member.name}</span> and every
+          log, weight, lab result, workout and message belonging to them.
+        </p>
+        <p className="text-xs text-[#9EA3B0]">
+          There is no undo. If you only want to stop them using the app, close this and
+          choose “Disable” instead — that keeps their history and can be reversed.
+        </p>
+        <div>
+          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+            Type “{member.name}” to confirm
+          </label>
+          <input value={typed} onChange={e => setTyped(e.target.value)}
+            placeholder={member.name}
+            className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
+              bg-[#1A1C20] text-[#FFFFFF] placeholder-[#7E8596]
+              focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />
+        </div>
+        {err && (
+          <p className="text-xs text-red-300 bg-red-400/10 border border-red-400/25
+            rounded-xl px-3 py-2">{err}</p>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#1A1C20]
+              border border-white/[0.08] text-[#9EA3B0]">
+            Cancel
+          </button>
+          <button onClick={go} disabled={!matches || busy}
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-500/90 text-[#121316]
+              disabled:opacity-40 disabled:cursor-not-allowed">
+            {busy ? 'Deleting…' : 'Delete permanently'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
 export default function AdminDashboard() {
   const navigate         = useNavigate();
   const { user, logout } = useAuthStore();
@@ -1385,6 +1455,7 @@ export default function AdminDashboard() {
   const [stats,     setStats]     = useState(null);
   const [overview,  setOverview]  = useState(null);
   const [members,   setMembers]   = useState([]);
+  const [deleteMember, setDeleteMember] = useState(null);   // member pending deletion
   const [coaches,  setCoaches]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [showAddMember,  setShowAddMember]  = useState(false);
@@ -1803,6 +1874,17 @@ export default function AdminDashboard() {
                               m.active ? 'text-red-400' : 'text-emerald-300'}`}>
                             {m.active ? '🚫 Disable' : '✓ Enable'}
                           </button>
+                          {/* Disable is the reversible action and stays directly
+                              above, because it is what someone reaching for
+                              "remove this person" almost always wants. Delete
+                              takes their logs, labs, workouts and messages with
+                              it, so it opens a dialog that will not accept a
+                              tap — the name has to be typed. */}
+                          <button onClick={() => { setMenuFor(null); setDeleteMember(m); }}
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-red-400
+                              hover:bg-red-400/[0.06] border-t border-white/[0.06]">
+                            🗑 Delete permanently
+                          </button>
                         </div>
                       </>
                     )}
@@ -1929,6 +2011,7 @@ export default function AdminDashboard() {
                     coach_created:     { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
                     monitor_assigned:  { icon: '🔗', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
                     coach_assigned:    { icon: '🔗', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
+                    member_deleted:    { icon: '🗑', color: 'bg-[rgba(248,113,113,0.10)] border-[rgba(248,113,113,0.30)] text-red-300' },
                     member_toggled:    { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     monitor_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     coach_toggled:     { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
@@ -1979,6 +2062,10 @@ export default function AdminDashboard() {
       </div>
 
       {/* Modals */}
+      {deleteMember && (
+        <DeleteMemberModal member={deleteMember} onClose={() => setDeleteMember(null)}
+          onDeleted={(id) => { setDeleteMember(null); setMembers(prev => prev.filter(x => x.id !== id)); load(); }} />
+      )}
       {showAddMember  && <AddMemberModal  coaches={coaches} onClose={() => setShowAddMember(false)}  onAdded={u => { setMembers(prev => [u, ...prev]); load(); }} />}
       {showAddCoach && <AddCoachModal onClose={() => setShowAddCoach(false)} onAdded={u => { setCoaches(prev => [u, ...prev]); load(); }} />}
       {showPush       && <PushModal members={members} onClose={() => setShowPush(false)} />}

@@ -356,6 +356,52 @@ const fullDay = {
   ck('the coach can delete a note on their own member', okDel.status === 200, okDel.status);
   ck('and it is gone', (await countNotes()) === before - 1);
 
+  // ── Deleting a member ──────────────────────────────────────────────────────
+  // The most destructive thing in the app: every table referencing users(id)
+  // cascades, so one statement takes the member's logs, labs, workouts and
+  // messages with them. The name has to be typed back exactly — a tap cannot
+  // satisfy that, and neither can a stale id in a retried request.
+  console.log('\n[delete a member]');
+  const adminHdr = { Authorization: 'Bearer ' + tok(link.monitor_id, 'admin'),
+                     'content-type': 'application/json' };
+  const delMember = (id, body, hdr = adminHdr) =>
+    fetch(`http://127.0.0.1:${port}/api/admin/members/${id}`,
+      { method: 'DELETE', headers: hdr, body: JSON.stringify(body || {}) });
+
+  const exists = async (id) => {
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM users WHERE id = $1`, [id]);
+    return rows[0].n === 1;
+  };
+
+  const noName = await delMember(otherM.id, {});
+  ck('no confirmation name is refused', noName.status === 400, noName.status);
+  ck('and the member is untouched', await exists(otherM.id));
+
+  const wrongName = await delMember(otherM.id, { confirm_name: 'Someone Else' });
+  ck('the wrong name is refused', wrongName.status === 400, wrongName.status);
+  ck('still untouched', await exists(otherM.id));
+
+  const asCoach = await delMember(otherM.id, { confirm_name: 'Gap Delete Other' },
+    { Authorization: 'Bearer ' + tok(link.monitor_id, 'monitor'), 'content-type': 'application/json' });
+  ck('a coach cannot delete a member at all', asCoach.status === 403, asCoach.status);
+  ck('and nothing happened', await exists(otherM.id));
+
+  // The cascade is the part worth proving: a note attached to them must go too.
+  const { rows: [cascadeNote] } = await pool.query(
+    `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, from_member)
+     VALUES ($1,$2,CURRENT_DATE,'attached to a deleted member',true) RETURNING id`,
+    [link.monitor_id, otherM.id]);
+
+  const good = await delMember(otherM.id, { confirm_name: 'Gap Delete Other' });
+  ck('the exact name deletes the member', good.status === 200, good.status);
+  ck('the member row is gone', !(await exists(otherM.id)));
+  const { rows: [gone] } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM monitor_notes WHERE id = $1`, [cascadeNote.id]);
+  ck('and their notes cascaded with them', gone.n === 0, gone.n);
+  const { rows: [aud] } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM audit_log WHERE action = 'member_deleted'`);
+  ck('the deletion is written to the audit log', aud.n >= 1, aud.n);
+
   await pool.query(`DELETE FROM monitor_notes WHERE patient_id = ANY($1::int[])`, [[mine.id, otherM.id]]);
   await pool.query(`DELETE FROM monitor_patients WHERE patient_id = $1`, [otherM.id]);
   await pool.query(`DELETE FROM users WHERE id = $1`, [otherM.id]);

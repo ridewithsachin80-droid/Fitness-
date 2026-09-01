@@ -522,6 +522,54 @@ router.put('/members/:id', async (req, res) => {
 
 // ── PATCH /api/admin/members/:id/toggle ───────────────────────────────────────
 // Activate / deactivate a member
+// ── DELETE /api/admin/members/:id ────────────────────────────────────────────
+// Remove a member and everything attached to them.
+//
+// This is the most destructive thing in the app. Every table that references
+// users(id) does so ON DELETE CASCADE, so one statement takes the member's
+// daily logs, lab values, workout sessions, notes, portions and trials with
+// them. There is no undo and no backup step in this deploy model.
+//
+// Two guards, and neither is a dialog:
+//   · admin only — router.use(role('admin')) at the top of this file already
+//     enforces that, so a coach cannot reach it at all
+//   · the caller must send the member's EXACT name back. A tap cannot satisfy
+//     that, which is the point: "Disable" is the reversible action for a
+//     mis-tap, and this one has to be typed.
+//
+// Disabling is almost always what someone actually wants. That stays one tap
+// away in the same menu.
+router.delete('/members/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid member id' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name FROM users WHERE id = $1 AND role = 'patient'`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Member not found' });
+    const member = rows[0];
+
+    const typed = String(req.body?.confirm_name ?? '').trim();
+    if (typed !== String(member.name).trim()) {
+      return res.status(400).json({
+        error: 'Type the member\'s name exactly to confirm deletion',
+        expected_name: member.name,
+      });
+    }
+
+    // Audit BEFORE the delete. Afterwards the row is gone and the entry would
+    // have to carry a name reconstructed from the request, which is the one
+    // place it could be wrong.
+    audit(req.user, 'member_deleted', member.id, member.name,
+      `Deleted member ${member.name} and all their data`);
+
+    await pool.query(`DELETE FROM users WHERE id = $1`, [id]);
+    res.json({ deleted: member.id, name: member.name });
+  } catch (err) {
+    console.error('DELETE /admin/members/:id error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.patch('/members/:id/toggle', async (req, res) => {
   try {
     const result = await pool.query(

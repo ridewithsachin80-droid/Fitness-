@@ -206,6 +206,22 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
             <p className="text-[10px] text-[#4e4e5c] leading-tight">Manage protocols & messages by chat</p>
           </div>
         </div>
+
+        {/* Clear the thread.
+            The chat is held in component state and is not persisted, so this
+            only has to reset what is on screen — nothing was ever written down.
+            It appears only when there is something to clear, so it cannot be
+            tapped on an already-empty screen, and it does not ask: there is no
+            data behind it and a confirmation for a no-op teaches people to tap
+            through confirmations. */}
+        {messages.length > 0 && (
+          <button onClick={() => { setMessages([]); setInput(''); }}
+            style={{ minHeight: 36 }}
+            className="ml-auto px-3 rounded-full text-[11px] font-semibold text-[#8e8e9a]
+              hover:text-white hover:bg-white/[0.06] transition-colors">
+            Clear
+          </button>
+        )}
       </div>
 
       {/* ── Messages ── */}

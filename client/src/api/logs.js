@@ -61,6 +61,10 @@ export const logWeightForMember = (id, date, weight_kg) =>
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 export const adminResetPin   = (id, pin)        => api.patch(`/admin/members/${id}/pin`, { pin });
+// Destructive and irreversible — the server refuses unless confirm_name matches
+// the member's name exactly, so this cannot be triggered by a mis-tap.
+export const adminDeleteMember = (id, confirmName) =>
+  api.delete(`/admin/members/${id}`, { data: { confirm_name: confirmName } });
 export const adminSendPush   = (data)           => api.post('/admin/push', data);
 // Sprint 13: audit log
 export const getAuditLog     = (limit = 100)    => api.get(`/admin/audit?limit=${limit}`);
