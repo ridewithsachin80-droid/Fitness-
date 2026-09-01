@@ -21,11 +21,11 @@ import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS, plural } from '../constants';
 import { useSync } from '../hooks/useSync';
 import { useAuthStore } from '../store/authStore';
+import { UNSORTED_MEAL, groupByMeal, deriveBodyComp } from '../utils/coachView';
 
 // Bucket for food rows whose meal slot is null, blank, or no longer part of the
 // member's protocol. Never rendered as a real slot — it exists so an item can
 // never be filtered out of the coach's view.
-const UNSORTED_MEAL = 'Unsorted';
 
 // ── Nutrition helper — Sprint 1 foods have per_100g, legacy fall back to NUTRITION_DB
 function calcN(item) {
@@ -667,39 +667,10 @@ export default function Coach() {
   // Body composition — group lab rows by marker. Two rows from the SAME panel on
   // the SAME date are one reading, so the series is deduped per date (last write
   // wins) and a marker only becomes trendable once it has 2+ distinct dates.
-  const bodyComp = (() => {
-    const byTest = new Map();
-    labs.forEach(l => {
-      const date = String(l.test_date || '').slice(0, 10);
-      if (!date) return;
-      const value = parseFloat(l.value);
-      if (!Number.isFinite(value)) return;
-      if (!byTest.has(l.test_name)) byTest.set(l.test_name, new Map());
-      byTest.get(l.test_name).set(date, value);
-    });
-
-    const scanDates = [...new Set(labs.map(l => String(l.test_date || '').slice(0, 10)).filter(Boolean))].sort();
-    const markers = [...byTest.entries()].map(([name, dateMap]) => {
-      const series = [...dateMap.entries()]
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([date, value]) => ({ date, value }));
-      const latest = series[series.length - 1];
-      const prev   = series.length > 1 ? series[series.length - 2] : null;
-      return {
-        name,
-        series,
-        latest: latest ? latest.value : null,
-        change: prev ? +(latest.value - prev.value).toFixed(2) : null,
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name));
-
-    return {
-      markers,
-      scanDates,
-      latestDate: scanDates[scanDates.length - 1] || null,
-      trendable: markers.filter(m => m.series.length >= 2),
-    };
-  })();
+  // Grouped by marker, deduped per date. Two rows from one panel on one date
+  // are a single reading — see utils/coachView.js, which test-coach-view now
+  // exercises directly instead of a copy.
+  const bodyComp = deriveBodyComp(labs);
 
   // Logging streak — last 14 days, so the coach sees engagement before anything else
   const streak14 = (() => {
@@ -964,30 +935,13 @@ export default function Coach() {
                           <span className="text-xs font-bold text-[#D4AF37]">{eatenKcal} kcal total</span>
                         </div>
                         {(() => {
-                          // Meal slot names are member-configurable and the AI logger can
-                          // persist meal = null. Hardcoding 'Meal 1/2/3' silently dropped
-                          // every item that did not match, leaving the coach with a day
-                          // total and no rows. Group by whatever slot each item carries and
-                          // sweep the rest into 'Unsorted' so nothing can ever disappear.
-                          const slotOf = (f) => {
-                            const s = f.meal == null ? '' : String(f.meal).trim();
-                            return s || UNSORTED_MEAL;
-                          };
-                          const protocolSlots = (data?.profile?.meal_slots || [])
-                            .map(s => (typeof s === 'string' ? s : s?.name))
-                            .filter(Boolean);
-                          const present = [];
-                          (log.food_items || []).forEach(f => {
-                            const s = slotOf(f);
-                            if (!present.includes(s)) present.push(s);
-                          });
-                          const ordered = [
-                            ...protocolSlots.filter(s => present.includes(s)),
-                            ...present.filter(s => !protocolSlots.includes(s) && s !== UNSORTED_MEAL),
-                            ...(present.includes(UNSORTED_MEAL) ? [UNSORTED_MEAL] : []),
-                          ];
-                          return ordered.map(meal => {
-                          const mealItems = log.food_items.filter(f => slotOf(f) === meal);
+                          // Slot names are member-configurable and the AI logger can persist
+                          // meal = null, so everything without a usable slot lands in
+                          // 'Unsorted' rather than vanishing. The rules live in
+                          // utils/coachView.js so the coach screen and the test suite run
+                          // the same code.
+                          return groupByMeal(log.food_items || [], data?.profile?.meal_slots || [])
+                            .map(({ meal, items: mealItems }) => {
                           if (!mealItems.length) return null;
                           const mealCal = mealItems.reduce((s, f) => s + (calcN(f)?.cal || 0), 0);
                           return (

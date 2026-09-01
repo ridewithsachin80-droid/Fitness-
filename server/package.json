@@ -8,7 +8,8 @@
     "dev": "nodemon index.js",
     "test:aichat": "node scripts/test-aichat.js",
     "test": "bash scripts/test-local.sh",
-    "test:db": "bash scripts/test-local.sh --db-only"
+    "test:db": "bash scripts/test-local.sh --db-only",
+    "test:ui": "node scripts/ui-tests.mjs"
   },
   "keywords": [],
   "author": "",
@@ -31,6 +32,8 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "esbuild": "^0.21.5",
+    "jsdom": "^24.1.0"
   }
 }

@@ -32,27 +32,16 @@ function test(name, fn) {
   catch (err) { console.error('  \u2717', name, '\n   ', err.message); process.exitCode = 1; }
 }
 
-const UNSORTED_MEAL = 'Unsorted';
-
-// ── Mirrors the grouping in Monitor.jsx Daily Log ─────────────────────────────
-function groupByMeal(foodItems = [], protocolSlots = []) {
-  const slotOf = (f) => {
-    const s = f.meal == null ? '' : String(f.meal).trim();
-    return s || UNSORTED_MEAL;
-  };
-  const slots = protocolSlots.map(s => (typeof s === 'string' ? s : s && s.name)).filter(Boolean);
-  const present = [];
-  foodItems.forEach(f => {
-    const s = slotOf(f);
-    if (!present.includes(s)) present.push(s);
-  });
-  const ordered = [
-    ...slots.filter(s => present.includes(s)),
-    ...present.filter(s => !slots.includes(s) && s !== UNSORTED_MEAL),
-    ...(present.includes(UNSORTED_MEAL) ? [UNSORTED_MEAL] : []),
-  ];
-  return ordered.map(meal => ({ meal, items: foodItems.filter(f => slotOf(f) === meal) }));
-}
+// ── The REAL Monitor.jsx derivations, imported ───────────────────────────────
+// These were copies, pasted under comments saying "mirrors the grouping in
+// Monitor.jsx". A copy is right on the day it is written and silent on the day
+// the original changes — the same trap that let three computeDayTotals
+// assertions run against a pasted function for months.
+//
+// The logic now lives in client/src/utils/coachView.js, imported by Monitor.jsx
+// and by this file, so editing the coach screen turns these assertions red.
+const { importClient } = require('./lib/client-bundle');
+const { UNSORTED_MEAL, groupByMeal, deriveBodyComp } = importClient('utils/coachView.js');
 
 const rendered = (groups) => groups.reduce((n, g) => n + g.items.length, 0);
 
@@ -112,27 +101,6 @@ test('empty food list produces no groups', () => {
   assert.deepStrictEqual(groupByMeal([], ['Meal 1']), []);
 });
 
-// ── Mirrors the bodyComp derivation in Monitor.jsx ────────────────────────────
-function deriveBodyComp(labs = []) {
-  const byTest = new Map();
-  labs.forEach(l => {
-    const date = String(l.test_date || '').slice(0, 10);
-    if (!date) return;
-    const value = parseFloat(l.value);
-    if (!Number.isFinite(value)) return;
-    if (!byTest.has(l.test_name)) byTest.set(l.test_name, new Map());
-    byTest.get(l.test_name).set(date, value);
-  });
-  const markers = [...byTest.entries()].map(([name, dateMap]) => {
-    const series = [...dateMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, value]) => ({ date, value }));
-    const latest = series[series.length - 1];
-    const prev = series.length > 1 ? series[series.length - 2] : null;
-    return { name, series, latest: latest ? latest.value : null,
-             change: prev ? +(latest.value - prev.value).toFixed(2) : null };
-  }).sort((a, b) => a.name.localeCompare(b.name));
-  return { markers, trendable: markers.filter(m => m.series.length >= 2) };
-}
 
 console.log('\nBody composition');
 
@@ -434,23 +402,14 @@ test('coach digest with nobody quiet celebrates instead', () => {
   assert.ok(/Nobody has gone quiet/.test(body));
 });
 
-// ── Member streak (mirrors StreakCard.computeStreak) ──────────────────────────
-function computeStreak(logs, todayStr) {
-  const logged = new Set((logs || [])
-    .filter(l => (l.food_items?.length || 0) > 0 || l.weight_kg != null)
-    .map(l => String(l.log_date).slice(0, 10)));
-  const day = (offset) => {
-    const d = new Date(todayStr + 'T00:00:00Z');
-    d.setUTCDate(d.getUTCDate() - offset);
-    return d.toISOString().slice(0, 10);
-  };
-  const cells = [];
-  for (let i = 13; i >= 0; i--) cells.push({ date: day(i), logged: logged.has(day(i)) });
-  let streak = 0;
-  let offset = logged.has(day(0)) ? 0 : 1;
-  while (logged.has(day(offset + streak))) streak++;
-  return { cells, streak };
-}
+// ── Member streak — the REAL StreakCard.computeStreak, imported ───────────────
+// This was a copy, character-identical to the shipped function at the time it
+// was pasted. That is exactly what makes a copy dangerous: it looks correct on
+// the day it is written, and nothing turns red the day the original changes.
+// StreakCard already exports the function; there was never anything to copy
+// around. scripts/lib/client-bundle.js transpiles the module so a CommonJS
+// suite can require it, which is the only reason the copy existed.
+const { computeStreak } = importClient('components/StreakCard.jsx');
 
 console.log('\nMember streak');
 
@@ -476,17 +435,12 @@ test('empty logs and no-content logs count zero', () => {
 });
 
 
-// ── Mirrors WorkoutLog day-chip switch semantics ──────────────────────────────
-function switchProgramDay(prev, day) {
-  const hasLoggedData = (ex) =>
-    (ex.sets || []).some(st => String(st.reps).trim() !== '' || String(st.weight_kg).trim() !== '');
-  const dayIds = new Set(day.exercises.map(ex => ex.exercise_id));
-  const kept = prev.filter(ex => !ex.fromProgram || dayIds.has(ex.exercise_id) || hasLoggedData(ex));
-  const have = new Set(kept.map(ex => ex.exercise_id));
-  const added = day.exercises.filter(ex => !have.has(ex.exercise_id))
-    .map(ex => ({ exercise_id: ex.exercise_id, exercise_name: ex.exercise_name, sets: [], fromProgram: true }));
-  return [...kept.map(ex => dayIds.has(ex.exercise_id) ? { ...ex, fromProgram: true } : ex), ...added];
-}
+// ── The REAL WorkoutLog day-switch rules, imported ───────────────────────────
+// Six assertions guarding the stacked-circuits bug used to run against a copy
+// of these rules, so the component could have regressed without one of them
+// turning red. The pure part now lives in client/src/utils/workoutSession.js;
+// the haptics, state and toast stay in WorkoutLog.jsx.
+const { applyProgramDay: switchProgramDay } = importClient('utils/workoutSession.js');
 
 console.log('\nProgram day switching (the stacked-circuits bug)');
 
@@ -581,15 +535,17 @@ test('no program and no targets → no card at all', () => {
 });
 
 
-// ── Mirrors the scheduled/unscheduled today-day derivation ────────────────────
-function deriveTodayDay(days, todayWd) {
-  const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const scheduled = days.some(d => WD.some(w => String(d.day_label || '').includes(w)));
-  const todayDay = scheduled
-    ? days.find(d => String(d.day_label || '').includes(todayWd)) || null
-    : days[0] || null;
-  return { scheduled, todayDay };
-}
+// ── The REAL today-day derivation, imported ──────────────────────────────────
+// The copy that used to sit here matched with `.includes('Mon')`. The SERVER
+// matches on a word boundary. So "Monsoon Circuit" was today's session on the
+// member's dashboard and was not according to the server — and the only test
+// covering it ran against a fourth copy that shared the client's bug, so the
+// gate stayed green.
+//
+// One rule now, in client/src/utils/programDay.js, used by WorkoutLog and
+// DailyLog and asserted below to agree with the server.
+const { deriveTodayDay } = importClient('utils/programDay.js');
+const { programDayForDate } = require('../routes/aiChat');
 
 console.log('\nToday-day derivation (the "Rest day on Core Workout" bug)');
 
@@ -620,6 +576,66 @@ test('a day label merely containing weekday-ish letters does not trip scheduling
   assert.strictEqual(r.todayDay.day_label, 'Strength');
 });
 
+
+console.log('\nClient/server agreement on weekday scheduling');
+
+// The two implementations live on opposite sides of the wire and cannot import
+// each other. This is the thing that stops them drifting: if either changes its
+// matching rule, these go red.
+const PARITY_LABELS = [
+  { day_number: 1, day_label: 'Push · Mon' },
+  { day_number: 2, day_label: 'Monsoon Circuit' },
+  { day_number: 3, day_label: 'Pull · Wed' },
+  { day_number: 4, day_label: 'Sunday Long Walk' },
+  { day_number: 5, day_label: 'Core Workout' },
+];
+
+// Monsoon FIRST, deliberately. With the array the other way round the real
+// Monday day is found first and a `.includes` implementation passes by luck —
+// an assertion that cannot fail, which is worse than not having one.
+const MONSOON_FIRST = [
+  { day_number: 9, day_label: 'Monsoon Circuit' },
+  { day_number: 1, day_label: 'Push · Mon' },
+];
+
+test('"Monsoon Circuit" is not a Monday session — client', () => {
+  const { todayDay } = deriveTodayDay(MONSOON_FIRST, 'Mon');
+  assert.strictEqual(todayDay.day_label, 'Push · Mon',
+    'a label merely containing "Mon" must not win over the real Monday day');
+});
+
+test('"Monsoon Circuit" is not a Monday session — server', () => {
+  const d = programDayForDate(MONSOON_FIRST, '2026-08-31');   // a Monday
+  assert.strictEqual(d.day_label, 'Push · Mon');
+});
+
+test('a Monsoon-only program schedules nothing on Monday', () => {
+  const only = [{ day_number: 9, day_label: 'Monsoon Circuit' }];
+  const { scheduled } = deriveTodayDay(only, 'Mon');
+  assert.strictEqual(scheduled, false,
+    '"Monsoon" contains no weekday, so this program is not weekday-scheduled at all');
+});
+
+test('client and server pick the same day for every weekday', () => {
+  // 2026-08-31 is a Monday, so this walks Mon..Sun.
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  days.forEach((abbr, i) => {
+    const date = `2026-08-${31 + i <= 31 ? String(31 + i).padStart(2, '0') : String(i - 0).padStart(2, '0')}`;
+    const iso = new Date(Date.UTC(2026, 7, 31 + i)).toISOString().slice(0, 10);
+    const serverDay = programDayForDate(PARITY_LABELS, iso);
+    const { todayDay } = deriveTodayDay(PARITY_LABELS, abbr);
+    assert.strictEqual(todayDay ? todayDay.day_number : null,
+                       serverDay ? serverDay.day_number : null,
+                       `disagreed on ${abbr} (${iso})`);
+  });
+});
+
+test('a program with no weekdays falls back to the first day, not "rest"', () => {
+  const { scheduled, todayDay } = deriveTodayDay([{ day_number: 1, day_label: 'Core Workout' }], 'Tue');
+  assert.strictEqual(scheduled, false);
+  assert.strictEqual(todayDay.day_label, 'Core Workout',
+    'the program the coach just assigned must not read as a rest day');
+});
 
 // ── Mirrors the voice fast-path + auto-send decisions ────────────────────────
 // Real report (28 Aug 2026): "76.7kg 500ml water" took 10–15s to reach the AI.

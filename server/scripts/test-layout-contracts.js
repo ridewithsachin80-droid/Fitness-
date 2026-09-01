@@ -249,7 +249,13 @@ ck('the content region and the modal block are both findable',
 
 let depth = 0;
 const orphans = [];
-const KNOWN_TABS = new Set(['today', 'nutrition', 'training', 'labs']);
+// Read from the component's own TABS array rather than hardcoded here. With a
+// fixed list, adding a legitimate fifth tab fails this suite for the wrong
+// reason — the check would report a correct change as a bad tab id, and the
+// natural response to that is to edit the test until it goes quiet.
+const tabsDecl   = monitor.slice(monitor.indexOf('const TABS = ['));
+const KNOWN_TABS = new Set(
+  [...tabsDecl.slice(0, tabsDecl.indexOf(']')).matchAll(/id:\s*'([^']+)'/g)].map(m => m[1]));
 const badTabIds  = [];
 
 for (let i = startIdx; i < endIdx; i++) {
@@ -264,8 +270,10 @@ for (let i = startIdx; i < endIdx; i++) {
 
 ck('every card on the coach page sits inside a tab group', orphans.length === 0, orphans);
 ck('no tab guard references a tab id that does not exist', badTabIds.length === 0, badTabIds);
-ck('all four tab groups are actually used',
-   [...KNOWN_TABS].every(t => monitor.includes(`{tab === '${t}' && (<>`)), 'a tab group renders nothing');
+ck('the tab list was parsed out of the component', KNOWN_TABS.size >= 2, [...KNOWN_TABS]);
+ck('every declared tab group is actually used',
+   [...KNOWN_TABS].every(t => monitor.includes(`{tab === '${t}' && (<>`)),
+   [...KNOWN_TABS].filter(t => !monitor.includes(`{tab === '${t}' && (<>`)));
 
 // ── Summary ─────────────────────────────────────────────────────────────────
 // ── 7. Nothing invisible ────────────────────────────────────────────────────

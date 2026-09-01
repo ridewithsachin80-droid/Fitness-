@@ -244,6 +244,36 @@ echo "▸ Database suites (these self-seed; no fixtures required)"
 for s in $DB_SUITES; do run_suite "$s"; done
 
 echo
+echo "▸ UI suites (jsdom — needs client dependencies installed)"
+# Bundles the real client and mounts it in jsdom. Deliberately NOT written as
+# "skip if the dependencies are missing": a suite that skips itself while
+# printing a green tick is how test-weekly-report reported 214 lines of
+# coverage and zero assertions for months. If it cannot run, it fails and says
+# what to install.
+if [ ! -f "scripts/ui-tests.mjs" ]; then
+  printf "  %-24s %s\n" "ui-tests" "— not present, skipped"
+elif [ ! -d "$ROOT/../node_modules/react" ] && [ ! -d "$ROOT/../client/node_modules/react" ]; then
+  printf "  %-24s %s\n" "ui-tests" "✗ client dependencies missing — run: npm install (from the repo root)"
+  failed=$((failed + 1))
+else
+  uilog=/tmp/fitlife-ui-tests.log
+  if timeout 300 node scripts/ui-tests.mjs >"$uilog" 2>&1; then
+    n=$(grep -c '✓' "$uilog")
+    if [ "$n" -eq 0 ]; then
+      printf "  %-24s %s\n" "ui-tests" "✗ exited 0 having asserted nothing"
+      failed=$((failed + 1))
+    else
+      printf "  %-24s %s\n" "ui-tests" "✓ $n assertions"
+      total_pass=$((total_pass + n))
+    fi
+  else
+    printf "  %-24s %s\n" "ui-tests" "✗ FAILED"
+    grep -E '✗|could not run' "$uilog" | head -8 | sed 's/^/        /'
+    failed=$((failed + 1))
+  fi
+fi
+
+echo
 if [ "$failed" -eq 0 ]; then
   echo "✅ All suites passed — $total_pass assertions"
 else

@@ -22,6 +22,8 @@ import { useLogStore } from '../store/logStore';
 import { useAIChat } from './AIChatLog';
 import { plural } from '../constants';
 import { useVoiceComposer } from './VoiceComposer';
+import { applyProgramDay, switchCounts } from '../utils/workoutSession';
+import { istWeekday, isWeekdayScheduled, labelHasWeekday } from '../utils/programDay';
 
 function formatTarget(ex) {
   const reps = ex.target_reps_max && ex.target_reps_max !== ex.target_reps_min
@@ -268,9 +270,6 @@ export default function WorkoutLog({ date }) {
     return () => clearTimeout(t);
   }, [switchNote]);
 
-  const hasLoggedData = (ex) =>
-    (ex.sets || []).some(st => String(st.reps).trim() !== '' || String(st.weight_kg).trim() !== '');
-
   // Named switchProgramDay, not addProgramDay: tapping a chip REPLACES the
   // previous day's untouched exercises. The old name described what it did
   // before the switch-semantics fix and was the last thing still claiming
@@ -278,15 +277,12 @@ export default function WorkoutLog({ date }) {
   const switchProgramDay = (day) => {
     haptic(15);
     const previous = activeProgramDay;
-    const dayIds   = new Set(day.exercises.map(ex => ex.exercise_id));
 
     // The kept/dropped split is computed HERE, from current state, rather than
     // inside the setState updater. An updater must be pure — React runs it
     // twice in StrictMode, so calling setSwitchNote from inside would fire the
     // toast twice and make the counts unreliable.
     const current = exercisesInSession;
-    const kept = current.filter(ex =>
-      !ex.fromProgram || dayIds.has(ex.exercise_id) || hasLoggedData(ex));
 
     // ── 5.4: say what just happened ─────────────────────────────────────────
     // Switching silently made five exercises vanish. Worse, if some had sets
@@ -294,8 +290,7 @@ export default function WorkoutLog({ date }) {
     // part gone — with no explanation for the pattern. Only announce a real
     // switch, not the first tap of the day.
     if (previous != null && previous !== day.day_number) {
-      const removed     = current.length - kept.length;
-      const keptWithData = kept.filter(ex => ex.fromProgram && !dayIds.has(ex.exercise_id)).length;
+      const { removed, keptWithData } = switchCounts(current, day);
       const label = day.day_label || `Day ${day.day_number}`;
       const parts = [];
       if (removed)      parts.push(`${removed} ${plural(removed, 'exercise')} swapped out`);
@@ -305,20 +300,10 @@ export default function WorkoutLog({ date }) {
     }
 
     setActiveProgramDay(day.day_number);
-    setExercisesInSession(prev => {
-      // Recomputed from `prev` so the update stays correct even if state moved
-      // between the read above and this updater running.
-      const keptNow = prev.filter(ex =>
-        !ex.fromProgram || dayIds.has(ex.exercise_id) || hasLoggedData(ex));
-      const have = new Set(keptNow.map(ex => ex.exercise_id));
-      const added = day.exercises
-        .filter(ex => !have.has(ex.exercise_id))
-        .map(ex => ({ exercise_id: ex.exercise_id, exercise_name: ex.exercise_name,
-                      sets: [], fromProgram: true }));
-      // Existing entries that belong to this day get (re)marked as program ones
-      return [...keptNow.map(ex => dayIds.has(ex.exercise_id) ? { ...ex, fromProgram: true } : ex),
-              ...added];
-    });
+    // Recomputed from `prev` so the update stays correct even if state moved
+    // between the read above and this updater running. The switch rules live in
+    // utils/workoutSession.js — the same function test-coach-view now runs.
+    setExercisesInSession(prev => applyProgramDay(prev, day));
   };
 
   const removeExercise = (exerciseId) => {
@@ -457,14 +442,16 @@ export default function WorkoutLog({ date }) {
               // Programs assigned by the coach carry the weekday in the label
               // ("Push · Mon"). Highlight today's day so the member doesn't
               // have to think about which circuit is due.
-              const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
-              const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-              const scheduled = programDays.some(d => WD.some(w => String(d.day_label || '').includes(w)));
+              // Word-boundary matching lives in utils/programDay.js and is shared
+              // with DailyLog and asserted against the server. `.includes('Mon')`
+              // here used to make "Monsoon Circuit" a Monday session.
+              const todayWd = istWeekday();
+              const scheduled = isWeekdayScheduled(programDays);
               return programDays.map((day, di) => {
                 // Unscheduled program (no weekdays in labels): the first day is
                 // today's default rather than nothing being highlighted.
                 const isToday = scheduled
-                  ? String(day.day_label || '').includes(todayWd)
+                  ? labelHasWeekday(day.day_label, todayWd)
                   : di === 0;
                 const isActive = activeProgramDay != null
                   ? activeProgramDay === day.day_number   // member picked one → that wins

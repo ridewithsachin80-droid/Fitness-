@@ -39,7 +39,15 @@ echo "=== Installing server dependencies ==="
 cd "$ROOT_DIR/server"
 echo "Server dir: $(pwd)"
 
-npm install --prefer-offline 2>&1 | tail -5
+# --omit=dev: nothing the server RUNS comes from devDependencies. `npm start`
+# is `node index.js`; nodemon, esbuild and jsdom exist only for `npm test` and
+# the UI suites, which never execute on Railway.
+#
+# Without this flag every test dependency is installed on every deploy, which
+# is why the jsdom/esbuild tooling was held back in the first place — the cost
+# landed on the build rather than on the developer running the tests. With it,
+# server devDependencies are free and that trade-off disappears.
+npm install --omit=dev --prefer-offline 2>&1 | tail -5
 echo "✅ Server install complete"
 
 echo ""

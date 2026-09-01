@@ -23,6 +23,7 @@ import { dailyRead } from '../utils/dailyRead';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
+import { deriveTodayDay } from '../utils/programDay';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -814,16 +815,13 @@ export default function DailyLog() {
     const handle = ({ data }) => {
       if (!data?.program) return;
       const days = data.days || [];
-      const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
       // A program is "scheduled" only if its labels actually carry weekdays.
       // "Core Workout" assigned for today has none — showing "Rest day" on the
       // program the coach just assigned would be exactly wrong. Unscheduled →
       // today's session is simply the first (usually only) day.
-      const scheduled = days.some(d => WD.some(w => String(d.day_label || '').includes(w)));
-      const todayDay = scheduled
-        ? days.find(d => String(d.day_label || '').includes(todayWd)) || null
-        : days[0] || null;
+      // The rule lives in utils/programDay.js, shared with WorkoutLog and
+      // asserted against the server's programDayForDate.
+      const { scheduled, todayDay } = deriveTodayDay(days);
       setCoachPlan({ programName: data.program.name, todayDay, dayCount: days.length, scheduled });
     };
 
