@@ -133,6 +133,48 @@ function simulate({ days, trueTDEE, intake, startW, noise = 0.8, foodEvery = 1, 
   ck('member blocked from the coach route', r.status === 403, r.status);
 
   srv.close();
+  // ── Threshold boundaries ───────────────────────────────────────────────────
+  // A mutation sweep flipped every `>=` in this file to `>` and this suite
+  // noticed one change in six. The comparisons it missed are the ones that
+  // decide whether a member is told a maintenance number at all, and how much
+  // confidence to put on it — so an off-by-one there does not crash, it just
+  // quietly answers "insufficient data" to someone who has logged for a
+  // fortnight, or stamps "high confidence" on a fortnight of noise.
+  //
+  // Boundary cases only. Each pair sits exactly ON the threshold and one step
+  // below it, which is the only place an off-by-one is visible.
+  console.log('\n[boundaries] the thresholds that gate the answer');
+
+  const at = (opts) => analyse(simulate({ trueTDEE: 2400, intake: 2000, startW: 85, noise: 0.2, ...opts }));
+
+  // MIN_DAYS_WEIGHT = 14, MIN_DAYS_FOOD = 10, coverage >= 0.6
+  ck('14 days of weight is enough — exactly at the bar',
+     at({ days: 14 }).confidence !== 'insufficient', at({ days: 14 }).reason);
+  ck('13 days is not, and it says which bar was missed',
+     at({ days: 13 }).confidence === 'insufficient'
+       && /13 of 14 days of weight/.test(at({ days: 13 }).reason || ''), at({ days: 13 }).reason);
+
+  // foodEvery: 2 -> food on half the days, which is below the 0.6 coverage bar.
+  const sparseFood = at({ days: 20, foodEvery: 2 });
+  ck('food logged on only half the days is refused, not averaged',
+     sparseFood.confidence === 'insufficient', sparseFood.reason);
+  ck('and the reason names coverage rather than day counts',
+     /food logged on only/.test(sparseFood.reason || ''), sparseFood.reason);
+
+  // Confidence bands: high needs 28 days, moderate needs 21.
+  const d28 = at({ days: 28 }), d27 = at({ days: 27 }), d21 = at({ days: 21 }), d20 = at({ days: 20 });
+  ck('28 clean days reads as high confidence', d28.confidence === 'high', d28);
+  ck('27 does not', d27.confidence !== 'high', d27.confidence);
+  ck('21 clean days is at least moderate',
+     ['moderate', 'high'].includes(d21.confidence), d21.confidence);
+  ck('20 days is below the moderate bar', d20.confidence === 'low', d20.confidence);
+
+  // The absurd-output guard: 800..6000 kcal.
+  const absurd = analyse(simulate({ days: 30, trueTDEE: 2400, intake: 200, startW: 85, noise: 0.2 }));
+  ck('an impossible maintenance number is withheld, not printed',
+     absurd.observed_tdee === null || (absurd.observed_tdee >= 800 && absurd.observed_tdee <= 6000),
+     absurd.observed_tdee);
+
   console.log(`\n\u2550\u2550\u2550 ADAPTIVE ENGINE: ${pass} passed, ${fail} failed \u2550\u2550\u2550`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR:', e); process.exit(1); });
