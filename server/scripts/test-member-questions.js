@@ -156,5 +156,38 @@ const req = (body) => new Promise(r => {
     !(corr.body.corrections || []).some(c => c.name === 'Ghee'));
   t('parse prompt carried the logged-foods list',
     /Dal Tadka · 150g · Lunch/.test(capturedPrompts[2] || ''));
+  // ── Training context in the answer snapshot ────────────────────────────────
+  // The snapshot carried food, water, weight, sleep and protocol and nothing
+  // about the assigned programme, so "what's my workout today?" was answered
+  // with "I don't have that" by an app that did have it.
+  t('answer prompt carries a training section',
+    /Workout programme:/.test(capturedPrompts[1] || ''));
+  t('with no programme assigned it says so rather than going silent',
+    /Workout programme: none assigned/.test(capturedPrompts[1] || ''));
+  t('and reports recent training separately from the programme',
+    /No workouts logged in the last 7 days/.test(capturedPrompts[1] || ''));
+  t('the prompt tells the model not to invent exercises',
+    /never\s+suggest one the coach has not programmed/i.test(capturedPrompts[1] || ''));
+
+  // ── Weekday scheduling, as a pure function ─────────────────────────────────
+  // Weekday scheduling lives in day_label text ("Push · Mon"), not a column.
+  // These dates are fixed calendar days, so the mapping is deterministic.
+  const { programDayForDate } = require(path.join(SERVER, 'routes/aiChat.js'));
+  const wkDays = [
+    { day_number: 1, day_label: 'Push · Mon', exercises: [] },
+    { day_number: 2, day_label: 'Pull · Wed', exercises: [] },
+    { day_number: 3, day_label: 'Legs · Fri', exercises: [] },
+  ];
+  t('Monday resolves to the Monday day',    programDayForDate(wkDays, '2026-09-07')?.day_number === 1);
+  t('Wednesday resolves to the Wednesday day', programDayForDate(wkDays, '2026-09-09')?.day_number === 2);
+  t('Sunday is a rest day, not day 1',      programDayForDate(wkDays, '2026-09-13') === null);
+  t('an unlabelled programme resolves to no day rather than guessing',
+    programDayForDate([{ day_number: 1, day_label: 'Day 1', exercises: [] }], '2026-09-07') === null);
+  t('no days at all is null, not a crash',  programDayForDate([], '2026-09-07') === null);
+  // "Mon" must not match inside another word — a label like "Monsoon Circuit"
+  // is not a Monday.
+  t('the weekday match is a word boundary, not a substring',
+    programDayForDate([{ day_number: 1, day_label: 'Monsoon Circuit', exercises: [] }], '2026-09-07') === null);
+
   server.close(); process.exit(ok ? 0 : 1);
 })();

@@ -1212,10 +1212,37 @@ Return ONLY raw JSON, no markdown fences:
 // THAT SNAPSHOT ONLY. Deterministic numbers, conversational delivery.
 
 const { computeDayTotals } = require('../services/digests');
+const { loadProgramDays } = require('./programs');
+
+/**
+ * Which program day is scheduled for a given IST date.
+ *
+ * Weekday scheduling lives in the day_label text — "Push · Mon" — not in a
+ * column (see the project brief), so the match is on the label. Programs with
+ * unlabelled days ("Day 1", "Day 2") are not weekday-scheduled at all; those
+ * return null and the snapshot says so rather than guessing a day and telling
+ * a member to train legs on the wrong morning.
+ *
+ * The abbreviations and their order mirror `WD` in WorkoutLog.jsx.
+ */
+const WD_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function programDayForDate(days, istDate) {
+  if (!days || !days.length) return null;
+  // getUTCDay() on a bare YYYY-MM-DD is the calendar weekday of that date, and
+  // istDate is already the IST calendar date — no second timezone shift.
+  const jsDow = new Date(istDate + 'T00:00:00Z').getUTCDay();   // 0 = Sunday
+  const abbr  = WD_ABBR[(jsDow + 6) % 7];                        // 0 = Monday
+  // Both boundaries. `\bMon` alone matches "Monsoon Circuit", which would
+  // schedule a member's Monsoon session every Monday.
+  const re    = new RegExp('\\b' + abbr + '\\b', 'i');
+  return days.find(d => re.test(d.day_label || '')) || null;
+}
+const isWeekdayScheduled = (days) =>
+  (days || []).some(d => /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i.test(d.day_label || ''));
 
 async function buildDayContext(userId, ctx) {
   const today = getISTDate();
-  const [{ rows: logs }, { rows: prof }] = await Promise.all([
+  const [{ rows: logs }, { rows: prof }, { rows: progRows }, { rows: sessions }] = await Promise.all([
     pool.query(
       `SELECT log_date, weight_kg, water_ml, sleep, activities, acv, supplements, food_items
        FROM daily_logs WHERE patient_id=$1 AND log_date > ($2::date - 7)
@@ -1223,6 +1250,21 @@ async function buildDayContext(userId, ctx) {
     pool.query(
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target, target_weight, start_weight
        FROM patient_profiles WHERE user_id=$1`, [userId]),
+    pool.query(
+      `SELECT id, name FROM workout_programs WHERE patient_id=$1 AND active = true LIMIT 1`,
+      [userId]),
+    // Sets are counted in SQL rather than pulled back and reduced in JS — a
+    // member with a long history would otherwise drag every set row of the
+    // week into memory to produce one number.
+    pool.query(
+      `SELECT ws.session_date, ws.duration_min,
+              COUNT(ss.id)::int AS set_count,
+              COALESCE(SUM(ss.reps * ss.weight_kg), 0)::float AS volume_kg
+         FROM workout_sessions ws
+         LEFT JOIN session_sets ss ON ss.session_id = ws.id
+        WHERE ws.patient_id = $1 AND ws.session_date > ($2::date - 7)
+        GROUP BY ws.id, ws.session_date, ws.duration_min
+        ORDER BY ws.session_date DESC`, [userId, today]),
   ]);
 
   const t = logs.find(l => String(l.log_date).slice(0, 10) === today) || null;
@@ -1256,6 +1298,45 @@ async function buildDayContext(userId, ctx) {
     if (tg.length) lines.push(`Targets: ${tg.join(', ')}`);
   }
 
+  // ── Training ────────────────────────────────────────────────────────────────
+  // "What's my workout today?" was the most obvious question this snapshot
+  // could not answer. It carried food, water, weight, sleep and protocol, and
+  // nothing about the programme the coach had assigned — so the member got
+  // "I don't have that" from an app that did.
+  const prog = progRows[0] || null;
+  if (prog) {
+    const days     = await loadProgramDays(prog.id);
+    const todayDay = programDayForDate(days, today);
+    lines.push(`Workout programme: "${prog.name}" (${days.length} day${days.length === 1 ? '' : 's'})`);
+    if (todayDay) {
+      const ex = todayDay.exercises.map(e => {
+        const reps = e.target_reps_min && e.target_reps_max
+          ? `${e.target_reps_min}-${e.target_reps_max}` : (e.target_reps_min || '');
+        return `${e.exercise_name}${e.target_sets ? ` ${e.target_sets}x${reps || '?'}` : ''}`;
+      });
+      lines.push(`  Today is: ${todayDay.day_label} - ${ex.join(', ') || 'no exercises listed'}`);
+    } else if (isWeekdayScheduled(days)) {
+      lines.push(`  Today is a rest day - no programme day is scheduled for today.`);
+    } else {
+      lines.push(`  Days: ${days.map(d => d.day_label).join(', ')} - not scheduled to weekdays, ` +
+                 `so the member chooses which day to train.`);
+    }
+  } else {
+    lines.push(`Workout programme: none assigned.`);
+  }
+
+  const todaySession = sessions.find(w => String(w.session_date).slice(0, 10) === today);
+  if (todaySession) {
+    lines.push(`  Trained today: ${todaySession.set_count} set(s)` +
+      (todaySession.volume_kg ? `, ${Math.round(todaySession.volume_kg)} kg total volume` : '') +
+      (todaySession.duration_min ? `, ${todaySession.duration_min} min` : ''));
+  } else if (sessions.length) {
+    lines.push(`  Not trained today. Last session: ${String(sessions[0].session_date).slice(0, 10)} ` +
+      `(${sessions[0].set_count} sets).`);
+  } else {
+    lines.push(`  No workouts logged in the last 7 days.`);
+  }
+
   const week = logs
     .filter(l => String(l.log_date).slice(0, 10) !== today)
     .map(l => {
@@ -1285,6 +1366,9 @@ RULES:
   if there is no target, give the eaten total and say no target is set.
 - No medical advice, no diagnosis, no supplement or medication suggestions.
   Progress questions get facts, not clinical interpretation.
+- Training questions: name the exercises exactly as listed, with their sets and
+  reps. If today is a rest day, say so. Never invent an exercise, and never
+  suggest one the coach has not programmed.
 
 Return ONLY the answer text, nothing else.`;
 }
@@ -2849,3 +2933,4 @@ module.exports.callAI = callAI;   // reused by weeklyReport.js — same provider
 module.exports.buildCoachMemberContext = buildCoachMemberContext;
 module.exports.buildCoachAnswerPrompt  = buildCoachAnswerPrompt;
 module.exports.buildCoachSummary       = buildCoachSummary;
+module.exports.programDayForDate = programDayForDate;

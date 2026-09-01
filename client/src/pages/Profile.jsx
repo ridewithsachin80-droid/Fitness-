@@ -538,7 +538,7 @@ export default function Profile() {
                 { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-[rgba(251,146,60,0.08)] border-[rgba(251,146,60,0.16)] text-orange-300' },
                 { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300' },
                 { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300' },
-                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-[rgba(192,132,252,0.08)] border-[rgba(192,132,252,0.16)] text-amber-300' },
+                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-[rgba(212,175,55,0.08)] border-[rgba(212,175,55,0.16)] text-[#D4AF37]' },
               ].filter(m => m.value).map(m => (
                 <div key={m.label} className={`rounded-xl border px-3 py-2.5 text-center ${m.color}`}>
                   <p className="font-display text-xl font-semibold">{m.value}<span className="text-xs font-normal ml-1">{m.unit}</span></p>

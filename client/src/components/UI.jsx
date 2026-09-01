@@ -139,7 +139,7 @@ export function StatPill({ value, label, color = 'stone' }) {
   const colors = {
     stone: 'bg-white/[0.06] text-[#FFFFFF]', emerald: 'bg-[rgba(212,175,55,0.10)] text-[#D4AF37]',
     amber: 'bg-[rgba(251,191,36,0.10)] text-amber-400', red: 'bg-[rgba(248,113,113,0.10)] text-red-400',
-    blue: 'bg-[rgba(96,165,250,0.10)] text-blue-400', purple: 'bg-[rgba(192,132,252,0.10)] text-amber-400',
+    blue: 'bg-[rgba(96,165,250,0.10)] text-blue-400', purple: 'bg-[rgba(212,175,55,0.10)] text-amber-400',
   };
   return (
     <div className={`text-center rounded-xl py-1.5 px-2 border border-white/[0.06] ${colors[color]}`}>

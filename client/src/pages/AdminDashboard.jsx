@@ -15,7 +15,7 @@ function StatCard({ value, label, icon, color }) {
   const colors = {
     emerald: 'bg-[rgba(52,211,153,0.10)] text-emerald-300',
     blue:    'bg-[rgba(96,165,250,0.10)]    text-blue-300',
-    purple:  'bg-[rgba(192,132,252,0.10)]  text-amber-300',
+    purple:  'bg-[rgba(212,175,55,0.10)]  text-amber-300',
   };
   return (
     <div className={`rounded-2xl p-4 ${colors[color]}`}>
@@ -252,7 +252,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
     emerald: 'bg-[rgba(52,211,153,0.14)] text-emerald-300 border-[rgba(52,211,153,0.25)]',
     blue:    'bg-[rgba(96,165,250,0.14)] text-blue-300 border-[rgba(96,165,250,0.25)]',
     orange:  'bg-[rgba(251,146,60,0.14)] text-orange-300 border-[rgba(251,146,60,0.25)]',
-    purple:  'bg-[rgba(192,132,252,0.14)] text-amber-300 border-[rgba(192,132,252,0.25)]',
+    purple:  'bg-[rgba(212,175,55,0.14)] text-amber-300 border-[rgba(212,175,55,0.25)]',
     rose:    'bg-[rgba(251,113,133,0.14)] text-rose-300 border-[rgba(251,113,133,0.25)]',
   };
   const dotMap = {
@@ -849,7 +849,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
                     onChange={e => setRda(key, e.target.value)}
                     placeholder={`${meta.rda} ${meta.unit}`}
                     className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-300 ${
-                      current ? 'border-[rgba(192,132,252,0.40)] bg-[rgba(192,132,252,0.10)] text-amber-300 font-semibold' : 'border-white/[0.08]'}`}
+                      current ? 'border-[rgba(212,175,55,0.40)] bg-[rgba(212,175,55,0.10)] text-amber-300 font-semibold' : 'border-white/[0.08]'}`}
                   />
                   <span className="text-xs text-[#9EA3B0] w-10">{meta.unit}</span>
                   {current && (
@@ -1881,8 +1881,8 @@ export default function AdminDashboard() {
                     member_created:    { icon: '➕', color: 'bg-[rgba(52,211,153,0.10)] border-[rgba(52,211,153,0.25)] text-emerald-300' },
                     monitor_created:   { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
                     coach_created:     { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    monitor_assigned:  { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
-                    coach_assigned:    { icon: '🔗', color: 'bg-[rgba(192,132,252,0.10)] border-[rgba(192,132,252,0.25)] text-amber-300' },
+                    monitor_assigned:  { icon: '🔗', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
+                    coach_assigned:    { icon: '🔗', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
                     member_toggled:    { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     monitor_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
                     coach_toggled:     { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },

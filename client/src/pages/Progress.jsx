@@ -214,7 +214,7 @@ function StatBox({ value, label, sub, color = 'emerald' }) {
     emerald: 'bg-[rgba(212,175,55,0.08)] text-[#D4AF37] border border-[rgba(212,175,55,0.14)]',
     blue:    'bg-[rgba(96,165,250,0.08)] text-blue-400 border border-[rgba(96,165,250,0.14)]',
     orange:  'bg-[rgba(251,146,60,0.08)] text-orange-400 border border-[rgba(251,146,60,0.14)]',
-    purple:  'bg-[rgba(192,132,252,0.08)] text-amber-400 border border-[rgba(192,132,252,0.14)]',
+    purple:  'bg-[rgba(212,175,55,0.08)] text-amber-400 border border-[rgba(212,175,55,0.14)]',
     amber:   'bg-[rgba(251,191,36,0.08)] text-amber-400 border border-[rgba(251,191,36,0.14)]',
     // Reserved for genuine streak/achievement milestones, not routine stats.
     gold:    'bg-[rgba(212,175,106,0.10)] text-gold-300 border border-[rgba(212,175,106,0.22)] shadow-glow-gold',

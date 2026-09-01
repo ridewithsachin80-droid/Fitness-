@@ -151,6 +151,28 @@ for (const f of PAGES) {
 }
 ck('no white text on a gold button', whiteOnGold.length === 0, whiteOnGold);
 
+/**
+ * The pre-rebrand PURPLE. Fourteen `rgba(192,132,252,…)` values survived the
+ * gold sweep, every one of them a background sitting under amber or gold TEXT
+ * — a half-finished edit where the foreground was changed and the background
+ * was not, so the pill read as an amber chip on a lilac wash.
+ *
+ * Scanned across the whole client, not just PAGES: four of the fourteen were
+ * in `components/UI.jsx`, which PAGES does not cover.
+ */
+const purpleLeftovers = [];
+for (const f of ['index.css'].concat(PAGES)) {
+  if (/rgba\(\s*192\s*,\s*132\s*,\s*252/.test(read(f))) purpleLeftovers.push(f);
+}
+for (const dir of ['components']) {
+  for (const g of fs.readdirSync(path.join(CLIENT, dir))) {
+    if (g.endsWith('.jsx') && /rgba\(\s*192\s*,\s*132\s*,\s*252/.test(read(dir + '/' + g))) {
+      purpleLeftovers.push(dir + '/' + g);
+    }
+  }
+}
+ck('the pre-rebrand purple has not come back', purpleLeftovers.length === 0, purpleLeftovers);
+
 /** The pre-rebrand gold. sprint6 removed it; this keeps it removed. */
 const offBrand = PAGES.concat(['index.css']).filter(f => /#c9a227/i.test(read(f)));
 ck('the off-brand #c9a227 gold has not come back', offBrand.length === 0, offBrand);
