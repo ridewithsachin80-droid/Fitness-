@@ -304,7 +304,7 @@ router.get('/population/prior', authMW, roleCheck('monitor', 'admin'), async (re
 // see at a glance who is worth a message and about what.
 //
 // Declared before '/:id' so "gaps" is not read as a member id.
-const { detectGaps, nextCheck } = require('../services/gapDetector');
+const { detectGaps, nextCheck, NEVER_LOGGED } = require('../services/gapDetector');
 
 router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   try {
@@ -348,7 +348,7 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     const out = members.map(m => {
       const p = profByMember.get(m.id) || {};
       // A member who has never logged at all reads as maximally dormant
-      const days = lastByMember.has(m.id) ? lastByMember.get(m.id) : 9999;
+      const days = lastByMember.has(m.id) ? lastByMember.get(m.id) : NEVER_LOGGED;
       return detectGaps(m, logByMember.get(m.id) || null, {
         water_target: p.water_target,
         activities:   p.protocol_activities,
@@ -509,7 +509,7 @@ router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAcc
 
     const p = profRes.rows[0] || {};
     const raw = lastRes.rows[0]?.days_since;
-    const days = raw == null ? 9999 : parseInt(raw);
+    const days = raw == null ? NEVER_LOGGED : parseInt(raw);
 
     res.json({
       ...detectGaps(userRes.rows[0], logRes.rows[0] || null, {

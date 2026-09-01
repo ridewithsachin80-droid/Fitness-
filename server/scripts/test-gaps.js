@@ -189,6 +189,28 @@ const fullDay = {
   })();
   ck('members cannot read it', asMember === 403, asMember);
 
+  // ── A member who has never logged ──────────────────────────────────────────
+  // "Never logged at all" is carried as the sentinel 9999 so the member still
+  // sorts to the top of a list ordered by days of silence. It was being printed
+  // to the coach verbatim: "9999 days no log", next to real numbers like 95 and
+  // 53. A count nobody could have earned reads as a bug and makes the rest of
+  // the card look untrustworthy.
+  console.log('\n[never logged]');
+  const { detectGaps: dg, NEVER_LOGGED } = require('../services/gapDetector');
+  const neverRes = dg(M, null, P, { daysSince: NEVER_LOGGED, now: at(15) });
+  const dormant  = neverRes.gaps.find(g => g.key === 'dormant');
+  ck('a member with no logs still shows as dormant', !!dormant, keys(neverRes));
+  ck('and the label says so in words, not as a number',
+     dormant?.label === 'Never logged', dormant?.label);
+  ck('no rendered label contains the sentinel',
+     !neverRes.gaps.some(g => /9999/.test(g.label)), neverRes.gaps.map(g => g.label));
+
+  // A real count is still a real count.
+  const realGap = dg(M, null, P, { daysSince: 95, now: at(15) });
+  ck('a member who logged 95 days ago still sees the number',
+     realGap.gaps.find(g => g.key === 'dormant')?.label === '95 days no log',
+     realGap.gaps.find(g => g.key === 'dormant')?.label);
+
   // ── Unread member messages on the coach list ───────────────────────────────
   // A member writing to their coach only produced a push notification, which
   // is invisible once the phone is in a pocket. The count has to survive the

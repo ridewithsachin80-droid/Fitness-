@@ -36,6 +36,13 @@ const ticked = obj => Object.values(obj || {}).filter(Boolean).length;
  *   severity   drives ordering and colour; 'blocking' means nothing else
  *              matters until this is fixed
  */
+/**
+ * "Never logged at all", as a number, so a member with no logs still sorts to
+ * the top of a list ordered by days of silence. It is a sentinel, not a count —
+ * anything rendering it has to say so in words.
+ */
+const NEVER_LOGGED = 9999;
+
 const GAPS = [
   {
     key: 'dormant',
@@ -170,9 +177,14 @@ function detectGaps(member, log, protocol = {}, opts = {}) {
     days_since_log: daysSince,
     gaps: gaps.map(g => ({
       key: g.key,
-      // A dormant member's label carries the actual number, which is the
-      // thing a coach reacts to — "86 days" lands differently from "dormant".
-      label: g.key === 'dormant' ? `${daysSince} days no log` : g.label,
+      // A dormant member's label carries the actual number, which is the thing
+      // a coach reacts to — but a member who has NEVER logged has no number,
+      // and the sentinel used for "maximally dormant" was being printed
+      // straight to the screen as "9999 days no log". A count nobody could
+      // have earned reads as a bug and makes the whole card look unreliable.
+      label: g.key === 'dormant'
+        ? (daysSince >= NEVER_LOGGED ? 'Never logged' : `${daysSince} days no log`)
+        : g.label,
       severity: g.severity,
     })),
     // How many to show as chips before collapsing to "+n more"
@@ -208,4 +220,4 @@ function nextCheck(now = new Date()) {
   };
 }
 
-module.exports = { detectGaps, istHour, nextCheck, GAPS };
+module.exports = { detectGaps, istHour, nextCheck, GAPS, NEVER_LOGGED };
