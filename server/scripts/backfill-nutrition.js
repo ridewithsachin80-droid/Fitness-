@@ -33,7 +33,8 @@
 
 const pool = require('../db/pool');
 const { normaliseNutrients } = require('../services/nutrients');
-const { macroPlausibility, cookingFatPlausibility } = require('../services/macroCheck');
+const { macroPlausibility, cookingFatPlausibility, massBalance } = require('../services/macroCheck');
+const { saturatedPlausibility } = require('../services/fatProfile');
 
 const argv     = process.argv.slice(2);
 const APPLY    = argv.includes('--apply');
@@ -153,6 +154,8 @@ async function report() {
     const kcal = +f.per_100g?.calories || 0;
     const macro = macroPlausibility(f.per_100g, f.name);
     const cook  = cookingFatPlausibility(f.per_100g, f.name);
+    const mass  = massBalance(f.per_100g);
+    const sat   = saturatedPlausibility(f.per_100g);
 
     let lighter = null;
     if (kcal) {
@@ -164,11 +167,20 @@ async function report() {
         if (kcal < +b.per_100g.calories * 0.9) lighter = b.name;
       }
     }
-    if (macro.status === 'suspect' || cook.status === 'suspect' || lighter) {
-      flagged.push({ name: f.name, kcal: Math.round(kcal),
-        why: macro.status === 'suspect' ? macro.reason
+    // Same order the review queue uses, so the list here and the queue there
+    // agree about what is most wrong. Impossible first — it is arithmetic, not
+    // a judgement call.
+    if (mass.status === 'impossible' || macro.status === 'suspect'
+        || cook.status === 'suspect' || sat.status === 'suspect' || lighter) {
+      flagged.push({
+        name: f.name, kcal: Math.round(kcal),
+        hard: mass.status === 'impossible',
+        why: mass.status === 'impossible' ? mass.reason
+           : macro.status === 'suspect' ? macro.reason
            : lighter ? `lighter than plain ${lighter}`
-           : cook.reason });
+           : cook.status === 'suspect' ? cook.reason
+           : sat.reason,
+      });
     }
   }
   return flagged;
@@ -191,9 +203,13 @@ async function report() {
     (REENRICH ? `, ${m.itemsReenriched} re-enriched from the food table` : ''));
 
   const flagged = await report();
+  flagged.sort((a, b) => (b.hard ? 1 : 0) - (a.hard ? 1 : 0));
+  const hard = flagged.filter(x => x.hard).length;
   console.log('');
-  console.log(`  Needs a human: ${flagged.length} unverified foods look wrong`);
-  flagged.slice(0, 15).forEach(x => console.log(`    · ${x.name} (${x.kcal} kcal) — ${x.why}`));
+  console.log(`  Needs a human: ${flagged.length} unverified foods look wrong` +
+    (hard ? `  (${hard} cannot be true at all)` : ''));
+  flagged.slice(0, 15).forEach(x =>
+    console.log(`    ${x.hard ? '✗' : '·'} ${x.name} (${x.kcal} kcal) — ${x.why}`));
   if (flagged.length > 15) console.log(`    … and ${flagged.length - 15} more`);
   console.log('');
   console.log(APPLY
