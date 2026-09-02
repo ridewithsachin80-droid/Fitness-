@@ -202,52 +202,11 @@ async function identifyFoodViaAI(prompt) {
   throw lastErr; // every provider/model in the chain failed
 }
 
-// ── Re-use the normaliser from foods.js ──────────────────────────────────────
-function normaliseNutrients(raw = {}) {
-  const fiber     = parseFloat(raw.fiber)       || 0;
-  const totalCarb = parseFloat(raw.total_carbs) || 0;
-  return {
-    calories:      parseFloat(raw.calories)      || 0,
-    protein:       parseFloat(raw.protein)       || 0,
-    total_carbs:   totalCarb,
-    net_carbs:     parseFloat(raw.net_carbs)     ?? Math.max(0, +(totalCarb - fiber).toFixed(1)),
-    fat:           parseFloat(raw.fat)           || 0,
-    fiber,
-    sugar:         parseFloat(raw.sugar)         || 0,
-    saturated_fat: parseFloat(raw.saturated_fat) || 0,
-    trans_fat:     parseFloat(raw.trans_fat)     || 0,
-    cholesterol:   parseFloat(raw.cholesterol)   || 0,
-    omega3_ala:    parseFloat(raw.omega3_ala)    || 0,
-    omega3_epa:    parseFloat(raw.omega3_epa)    || 0,
-    omega3_dha:    parseFloat(raw.omega3_dha)    || 0,
-    omega6:        parseFloat(raw.omega6)        || 0,
-    omega9_mufa:   parseFloat(raw.omega9_mufa)   || 0,
-    vit_a:   parseFloat(raw.vit_a)   || 0,
-    vit_b1:  parseFloat(raw.vit_b1)  || 0,
-    vit_b2:  parseFloat(raw.vit_b2)  || 0,
-    vit_b3:  parseFloat(raw.vit_b3)  || 0,
-    vit_b5:  parseFloat(raw.vit_b5)  || 0,
-    vit_b6:  parseFloat(raw.vit_b6)  || 0,
-    vit_b12: parseFloat(raw.vit_b12) || 0,
-    vit_c:   parseFloat(raw.vit_c)   || 0,
-    vit_d:   parseFloat(raw.vit_d)   || 0,
-    vit_e:   parseFloat(raw.vit_e)   || 0,
-    vit_k:   parseFloat(raw.vit_k)   || 0,
-    folate:  parseFloat(raw.folate)  || 0,
-    biotin:  parseFloat(raw.biotin)  || 0,
-    choline: parseFloat(raw.choline) || 0,
-    calcium:    parseFloat(raw.calcium)    || 0,
-    iron:       parseFloat(raw.iron)       || 0,
-    magnesium:  parseFloat(raw.magnesium)  || 0,
-    phosphorus: parseFloat(raw.phosphorus) || 0,
-    potassium:  parseFloat(raw.potassium)  || 0,
-    sodium:     parseFloat(raw.sodium)     || 0,
-    zinc:       parseFloat(raw.zinc)       || 0,
-    copper:     parseFloat(raw.copper)     || 0,
-    manganese:  parseFloat(raw.manganese)  || 0,
-    selenium:   parseFloat(raw.selenium)   || 0,
-  };
-}
+// One implementation, in services/nutrients.js. The copy that stood here had
+// already drifted: it returned net_carbs as NaN where the other returned a
+// number.
+const { normaliseNutrients } = require('../services/nutrients');
+
 
 // ── Category mapper — Gemini → schema ───────────────────────────────────────
 // Gemini returns human-readable categories like "Cereals & Grains" or "Meat & Fish".

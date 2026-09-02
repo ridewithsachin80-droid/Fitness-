@@ -138,39 +138,10 @@ async function callAI(prompt) {
   throw lastErr;
 }
 
-// ── Nutrition normaliser — guarantees all 36 fields exist ────────────────────
-function normaliseNutrients(raw = {}) {
-  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
-  const fiber     = num(raw.fiber);
-  const totalCarb = num(raw.total_carbs);
-  const netRaw    = parseFloat(raw.net_carbs);
-  return {
-    calories:      num(raw.calories),
-    protein:       num(raw.protein),
-    total_carbs:   totalCarb,
-    net_carbs:     Number.isFinite(netRaw) ? netRaw : Math.max(0, +(totalCarb - fiber).toFixed(1)),
-    fat:           num(raw.fat),
-    fiber,
-    sugar:         num(raw.sugar),
-    saturated_fat: num(raw.saturated_fat),
-    trans_fat:     num(raw.trans_fat),
-    cholesterol:   num(raw.cholesterol),
-    omega3_ala:    num(raw.omega3_ala),
-    omega3_epa:    num(raw.omega3_epa),
-    omega3_dha:    num(raw.omega3_dha),
-    omega6:        num(raw.omega6),
-    omega9_mufa:   num(raw.omega9_mufa),
-    vit_a: num(raw.vit_a), vit_b1: num(raw.vit_b1), vit_b2: num(raw.vit_b2),
-    vit_b3: num(raw.vit_b3), vit_b5: num(raw.vit_b5), vit_b6: num(raw.vit_b6),
-    vit_b12: num(raw.vit_b12), vit_c: num(raw.vit_c), vit_d: num(raw.vit_d),
-    vit_e: num(raw.vit_e), vit_k: num(raw.vit_k),
-    folate: num(raw.folate), biotin: num(raw.biotin), choline: num(raw.choline),
-    calcium: num(raw.calcium), iron: num(raw.iron), magnesium: num(raw.magnesium),
-    phosphorus: num(raw.phosphorus), potassium: num(raw.potassium),
-    sodium: num(raw.sodium), zinc: num(raw.zinc), copper: num(raw.copper),
-    manganese: num(raw.manganese), selenium: num(raw.selenium),
-  };
-}
+// Nutrition shape lives in services/nutrients.js — one implementation for
+// every path a food can enter by. See that file for why.
+const { normaliseNutrients } = require('../services/nutrients');
+
 
 // ── Context sanitiser ────────────────────────────────────────────────────────
 // The client sends the member's assigned protocol items. Cap counts + string
@@ -706,7 +677,11 @@ async function learnFoods(foods) {
          ON CONFLICT (lower(name), source) DO UPDATE
            SET per_100g = EXCLUDED.per_100g
          RETURNING id`,
-        [name, category, JSON.stringify(f.per_100g)]
+        // Normalised before it is stored. This inserted whatever partial object
+        // the model returned, so a food learned from chat could land in the
+        // table with six fields — and every member who logged it afterwards
+        // inherited those gaps, through every other path.
+        [name, category, JSON.stringify(normaliseNutrients(f.per_100g))]
       );
     } catch (err) {
       // A learning failure is not worth failing the member's log over
@@ -3555,6 +3530,7 @@ module.exports.buildParsePrompt   = buildParsePrompt;
 module.exports.normaliseMealPlan  = normaliseMealPlan;
 module.exports.describeOps        = describeOps;
 module.exports.dietPlanMacros     = dietPlanMacros;
+module.exports.learnFoods         = learnFoods;
 module.exports.recordEvalSample   = recordEvalSample;
 module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;
