@@ -442,7 +442,17 @@ export default function AdminFoods() {
                             an opinion, and it is usually right. */}
                         {mc.status === 'suspect' && (
                           <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
-                            <p className="text-[11px] font-bold text-amber-800">⚠ These numbers disagree with each other</p>
+                            {/* The heading follows the reason. "These numbers
+                                disagree with each other" is wrong for a masala
+                                dosa whose numbers agree perfectly and are simply
+                                too low — the coach would look for a mismatch
+                                that isn't there. */}
+                            <p className="text-[11px] font-bold text-amber-800">
+                              {f.checks?.lighter_than_base ? '⚠ Lighter than the plain version of itself'
+                               : f.checks?.cooking === 'suspect' && f.checks?.macro === 'ok'
+                                 ? '⚠ Cooked dish with no cooking fat'
+                                 : '⚠ These numbers disagree with each other'}
+                            </p>
                             <p className="text-[11px] text-amber-700 leading-snug mt-0.5">
                               {mc.reason}
                               {mc.delta_pct != null ? ` — off by ${mc.delta_pct}%.` : '.'}

@@ -97,4 +97,48 @@ function pct(delta, atwater) {
   return Math.round((delta / atwater) * 100);
 }
 
-module.exports = { atwaterKcal, macroPlausibility, PER_UNIT };
+
+/**
+ * Dishes that are cooked in fat, by name.
+ *
+ * The Atwater check compares a food's calories with its own macros, so it is
+ * blind to a food that is internally consistent and simply wrong. A masala
+ * dosa entered as 140 kcal / 3g fat per 100g passes it perfectly — the numbers
+ * agree, they just describe a dosa nobody cooked.
+ *
+ * That is the commonest failure in AI-guessed Indian food: the model returns
+ * the batter, not the dish. Two spoons of oil on the tawa is 16-20g of fat that
+ * never appears, and the member under-reports by 150-200 kcal every time they
+ * log it.
+ */
+const FRIED_OR_TEMPERED = /\b(dosa|poori|puri|paratha|vada|pakora|pakoda|bhaji|bajji|bonda|samosa|cutlet|tikki|fry|fried|roast|masala|curry|sabzi|subzi|sabji|gravy|kofta|malai|korma|biryani|pulao|halwa|ladoo|laddu|chikki|puran)\b/i;
+
+/** Dishes that genuinely carry little fat despite matching above. */
+const LOW_FAT_EXCEPTIONS = /\b(rasam|sambar|dal|chutney|raita|buttermilk|kanji|soup|steam(ed)?|idli|idly|appam|kozhukattai)\b/i;
+
+/** Fat per 100g below which a cooked dish is not credible. */
+const COOKED_FAT_FLOOR = 4;
+
+/**
+ * Does this look like a cooked dish someone forgot the cooking fat for?
+ * @returns {{status:'ok'|'suspect'|'unknown', reason:string|null}}
+ */
+function cookingFatPlausibility(per100g = {}, name = '') {
+  const n = String(name || '');
+  if (!FRIED_OR_TEMPERED.test(n))  return { status: 'unknown', reason: 'not a cooked-in-fat dish by name' };
+  if (LOW_FAT_EXCEPTIONS.test(n))  return { status: 'unknown', reason: 'this dish is legitimately low fat' };
+  if (PER_UNIT.test(n))            return { status: 'unknown', reason: 'values look per-unit, not per-100g' };
+
+  const fat = +per100g.fat || 0;
+  const cal = +per100g.calories || 0;
+  if (cal === 0) return { status: 'unknown', reason: 'no nutrition data to check' };
+
+  if (fat >= COOKED_FAT_FLOOR) return { status: 'ok', reason: null };
+  return {
+    status: 'suspect',
+    reason: `${fat}g fat per 100g — a cooked dish with no cooking fat in it`,
+  };
+}
+
+module.exports = { atwaterKcal, macroPlausibility, cookingFatPlausibility,
+                   PER_UNIT, FRIED_OR_TEMPERED, COOKED_FAT_FLOOR };

@@ -27,7 +27,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
 
 const express = require('express'), jwt = require('jsonwebtoken'), cookieParser = require('cookie-parser');
 const pool = require('../db/pool');
-const { macroPlausibility, atwaterKcal } = require('../services/macroCheck');
+const { macroPlausibility, atwaterKcal, cookingFatPlausibility } = require('../services/macroCheck');
 
 const app = express(); app.use(express.json()); app.use(cookieParser());
 app.use('/api/foods', require('../routes/foods'));
@@ -91,6 +91,42 @@ const per = (cal, pro, carb, fat) => JSON.stringify({ calories: cal, protein: pr
 
     ck('delta_pct is reported for a suspect food',
       macroPlausibility({ calories: 100, protein: 25, total_carbs: 20, fat: 50 }, 'Peanut Butter').delta_pct > 0);
+  }
+
+  // ── 1b. Cooked dishes that forgot the cooking fat ─────────────────────────
+  // Real report: a member logged "Masala Dosa" at 112 kcal for 80g — about 140
+  // per 100g, with 3g of fat. Two spoons of oil on the tawa is 16-20g of fat
+  // that never appeared. Atwater cannot see it: the numbers agree with each
+  // other, they just describe a dish nobody cooked.
+  console.log('\n[1b] a cooked dish with no cooking fat');
+  {
+    const dosa = { calories: 140, protein: 3, total_carbs: 23, fat: 3 };
+    ck('the Atwater check passes it — which is why this check exists',
+      macroPlausibility(dosa, 'Masala Dosa').status === 'ok',
+      macroPlausibility(dosa, 'Masala Dosa'));
+    ck('but the cooking-fat check catches it',
+      cookingFatPlausibility(dosa, 'Masala Dosa').status === 'suspect');
+    ck('and says what is missing',
+      /no cooking fat/.test(cookingFatPlausibility(dosa, 'Masala Dosa').reason || ''));
+
+    ck('a properly-oiled dish passes',
+      cookingFatPlausibility({ calories: 240, fat: 14 }, 'Paneer Butter Masala').status === 'ok');
+    ck('a paratha with no ghee is caught',
+      cookingFatPlausibility({ calories: 180, fat: 2 }, 'Aloo Paratha').status === 'suspect');
+
+    // The exceptions matter as much as the rule. Flagging every steamed and
+    // simmered dish would fill the queue with correct entries, and a queue full
+    // of false alarms is one nobody works.
+    ck('sambar is not a fried dish',
+      cookingFatPlausibility({ calories: 60, fat: 1.5 }, 'Sambar').status === 'unknown');
+    ck('idli is steamed, not fried',
+      cookingFatPlausibility({ calories: 110, fat: 0.4 }, 'Idli').status === 'unknown');
+    ck('dal is named in the exception list even though "masala" dishes are not',
+      cookingFatPlausibility({ calories: 120, fat: 2 }, 'Dal Tadka Masala').status === 'unknown');
+    ck('a food with no nutrition is unknown, not suspect',
+      cookingFatPlausibility({}, 'Masala Dosa').status === 'unknown');
+    ck('a per-unit supplement is not judged on fat',
+      cookingFatPlausibility({ calories: 5, fat: 0 }, 'Curry Leaf Capsule (60000 IU)').status === 'unknown');
   }
 
   // ── 2. Ranking and the endpoint ────────────────────────────────────────────
@@ -179,6 +215,38 @@ const per = (cal, pro, carb, fat) => JSON.stringify({ calories: cal, protein: pr
     ck('flagged_in_page reports the page, and says 1', r.data.flagged_in_page === 1, r.data.flagged_in_page);
     ck('page_size is reported alongside it, so the number can be read honestly',
       r.data.page_size === 3, r.data.page_size);
+  }
+
+  console.log('\n[2b] lighter than the plain version of itself');
+  {
+    // The verified plain dosa is the reference. Nothing is hardcoded — the
+    // check asks the food table, so it gets better as the queue is worked.
+    await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Dosa (Plain)','grain','nin',true,$1::jsonb)`, [per(168, 3.8, 24, 6.5)]);
+    const { rows: [md] } = await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Masala Dosa','grain','ai',false,$1::jsonb) RETURNING id`, [per(140, 3, 23, 3)]);
+
+    const r = await call('GET', '/api/foods/review', tok(coach.id, 'monitor'));
+    const found = r.data.foods.find(f => f.id === md.id);
+    ck('the masala dosa is in the queue', !!found, r.data.foods.map(f => f.name));
+    ck('and it is flagged', found?.macro_check?.status === 'suspect', found?.macro_check);
+    ck('with the plain dosa named as the reference',
+      /plain Dosa/i.test(found?.macro_check?.reason || ''), found?.macro_check?.reason);
+    ck('the individual checks are reported separately',
+      found?.checks?.lighter_than_base === true, found?.checks);
+
+    // A dish that IS heavier than its base must not be flagged for this.
+    const { rows: [ok] } = await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Ghee Dosa','grain','ai',false,$1::jsonb) RETURNING id`, [per(240, 4, 24, 13)]);
+    const r2 = await call('GET', '/api/foods/review', tok(coach.id, 'monitor'));
+    const good = r2.data.foods.find(f => f.id === ok.id);
+    ck('a richer dish that costs more is not flagged',
+      good?.checks?.lighter_than_base === false, good?.checks);
+
+    await pool.query(`DELETE FROM foods WHERE name IN ('Dosa (Plain)','Masala Dosa','Ghee Dosa')`);
   }
 
   console.log('\n[3] /unverified and /review are one handler');

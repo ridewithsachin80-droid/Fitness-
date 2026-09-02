@@ -25,7 +25,7 @@ const pool   = require('../db/pool');
 const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const role   = require('../middleware/roleCheck');
-const { macroPlausibility } = require('../services/macroCheck');
+const { macroPlausibility, cookingFatPlausibility } = require('../services/macroCheck');
 
 // ─── All routes require authentication ────────────────────────────────────────
 router.use(authMW);
@@ -121,7 +121,52 @@ router.get(['/review', '/unverified'], authMW, role('monitor', 'admin'), async (
     // needs no human to detect — and those are exactly the rows quietly
     // distorting every calorie total for every member who logs them. So they
     // are computed here and sorted to the front, ahead of pure usage.
-    const flagged = rows.map(f => ({ ...f, macro_check: macroPlausibility(f.per_100g, f.name) }));
+    // ── Cross-check against the verified table ───────────────────────────────
+    // "Masala Dosa" at 140 kcal/100g passes the Atwater check — its numbers
+    // agree with each other. What gives it away is that the VERIFIED "Dosa
+    // (Plain)" is 168. A dish cannot be lighter than the plain version of
+    // itself: the masala one has the oil plus a potato filling.
+    //
+    // This needs no hardcoded figures. It asks the food table what the plain
+    // version costs, and that reference improves as the queue gets worked.
+    const { rows: baseline } = await pool.query(
+      `SELECT name, (per_100g->>'calories')::float AS kcal
+         FROM foods
+        WHERE verified = true AND (per_100g->>'calories')::float > 0`);
+
+    const lighterThanBase = (f) => {
+      const kcal = parseFloat(f.per_100g?.calories) || 0;
+      if (!kcal) return null;
+      const words = String(f.name).toLowerCase().replace(/[()]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+      if (words.length < 2) return null;   // a one-word name has no base to compare with
+      let worst = null;
+      for (const b of baseline) {
+        const bn = String(b.name).toLowerCase().replace(/\(.*$/, '').trim();
+        if (bn.length < 4 || bn === String(f.name).toLowerCase()) continue;
+        // The unverified name must CONTAIN the verified one — "Masala Dosa"
+        // contains "Dosa". A richer dish, so it cannot cost less.
+        if (!words.includes(bn) && !String(f.name).toLowerCase().includes(` ${bn}`)) continue;
+        if (kcal < b.kcal * 0.9 && (!worst || b.kcal > worst.kcal)) worst = b;
+      }
+      return worst
+        ? `${Math.round(kcal)} kcal, but plain ${worst.name} is ${Math.round(worst.kcal)} — a richer dish cannot cost less`
+        : null;
+    };
+
+    const flagged = rows.map(f => {
+      const macro   = macroPlausibility(f.per_100g, f.name);
+      const cooking = cookingFatPlausibility(f.per_100g, f.name);
+      const lighter = lighterThanBase(f);
+      // One verdict for the UI, worst-first, so the queue can sort on it.
+      const reason = macro.status === 'suspect' ? macro.reason
+                   : lighter ? lighter
+                   : cooking.status === 'suspect' ? cooking.reason
+                   : null;
+      return { ...f,
+        macro_check: reason ? { ...macro, status: 'suspect', reason } : macro,
+        checks: { macro: macro.status, cooking: cooking.status, lighter_than_base: !!lighter },
+      };
+    });
     const suspect = f => (f.macro_check.status === 'suspect' ? 1 : 0);
     flagged.sort((a, b) => suspect(b) - suspect(a));
 
