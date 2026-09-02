@@ -203,6 +203,29 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
       /cooking fat/i.test(e?.warning || ''), e?.warning);
     ck('and the blast radius is attached', e?.impact !== undefined, e?.impact);
 
+    // The words a coach reaches for when they want the portion, not the macros.
+    // Every one of these reported "I have no food called grams masala dosa".
+    for (const phrase of [
+      'edit grams of masala dosa',
+      'edit masala dosa weight',
+      'edit portion size of masala dosa',
+      'edit serving of masala dosa',
+      'edit default portion masala dosa',
+      'edit "masala dosa" weight',
+    ]) {
+      ck(`"${phrase}" finds the food`,
+        (await ai.detectFoodEdit(phrase, asAdmin))?.name === 'Masala Dosa',
+        (await ai.detectFoodEdit(phrase, asAdmin))?.not_found);
+    }
+
+    // A number in the message must not end up inside the food name.
+    const withNum = await ai.detectFoodEdit('edit masala dosa portion to 200', asAdmin);
+    ck('a number does not break the lookup', withNum?.name === 'Masala Dosa', withNum?.not_found);
+    ck('and it is offered as the serving, ready to save',
+      withNum?.suggested_grams === 200, withNum?.suggested_grams);
+    ck('a number in a macro edit is NOT taken as a serving',
+      (await ai.detectFoodEdit('edit masala dosa calories to 210', asAdmin))?.suggested_grams === null);
+
     ck('a bare "edit masala dosa" works too',
       (await ai.detectFoodEdit('edit masala dosa', asAdmin))?.name === 'Masala Dosa');
     ck('so does "fix"',

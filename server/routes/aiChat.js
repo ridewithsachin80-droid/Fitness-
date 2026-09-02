@@ -3025,8 +3025,14 @@ async function detectFoodEdit(msg, user) {
   if (/\b(water|target weight|macro target|protocol|programme|program|reminder|push|message)\b/.test(t)) return null;
 
   // Strip the instruction words; whatever remains is the dish.
-  const STOP = /\b(need|needs|want|wanna|to|i|we|please|pls|the|a|an|of|for|in|its|and|with|edit|change|correct|fix|update|amend|calorie|calories|kcal|macro|macros|micro|micros|nutrition|nutrient|nutrients|protein|carb|carbs|fat|fibre|fiber|value|values|detail|details|data|entry|food|database|db)\b/g;
-  const name = t.replace(STOP, ' ').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const STOP = /\b(need|needs|want|wanna|to|i|we|please|pls|the|a|an|of|for|in|its|and|with|edit|change|correct|fix|update|amend|calorie|calories|kcal|macro|macros|micro|micros|nutrition|nutrient|nutrients|protein|carb|carbs|fat|fibre|fiber|value|values|detail|details|data|entry|food|database|db|gram|grams|g|weight|portion|serving|servings|size|qty|quantity|default|standard|typical|normal|per|100|100g)\b/g;
+  // Strip bare numbers too. "edit masala dosa portion to 200" would otherwise
+  // search for a food literally called "masala dosa 200" and report it missing.
+  // The number is captured separately so the editor can open pre-filled.
+  const wanted = (t.match(/\b(\d{2,4})\s*(?:g|gram|grams)?\b/) || [])[1];
+  const name = t.replace(STOP, ' ')
+    .replace(/\b\d+\b/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   if (name.length < 3) return null;
 
   const { rows } = await pool.query(
@@ -3055,6 +3061,10 @@ async function detectFoodEdit(msg, user) {
     verified: f.verified,
     per_100g: normaliseNutrients(f.per_100g),
     default_grams: f.default_grams,
+    // "edit masala dosa portion to 200" opens with 200 already in the box.
+    // Suggested, never saved — the coach still presses the button.
+    suggested_grams: /\b(portion|serving|gram|grams|weight|size|qty|quantity)\b/.test(t)
+      && wanted ? parseInt(wanted) : null,
     impact,
     warning: macro.status === 'suspect' ? macro.reason
            : cook.status === 'suspect'  ? cook.reason : null,

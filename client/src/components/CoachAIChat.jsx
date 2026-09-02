@@ -59,7 +59,8 @@ const MACRO_FIELDS = [
 
 function FoodEditCard({ food, onSaved }) {
   const [vals, setVals]   = useState(food.per_100g || {});
-  const [defG, setDefG]   = useState(food.default_grams ?? '');
+  // Pre-filled when the coach said a number: "edit masala dosa portion to 200".
+  const [defG, setDefG]   = useState(food.suggested_grams ?? food.default_grams ?? '');
   const [more, setMore]   = useState(false);
   const [prop, setProp]   = useState(false);
   const [busy, setBusy]   = useState(false);
