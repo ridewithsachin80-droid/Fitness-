@@ -35,7 +35,7 @@ const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
 const { cleanScalePayload } = require('../services/scaleParse');
-const { cookingFatPlausibility } = require('../services/macroCheck');
+const { cookingFatPlausibility, macroPlausibility } = require('../services/macroCheck');
 
 router.use(authMW);
 
@@ -2885,6 +2885,83 @@ RULES
   }
 });
 
+/**
+ * A coach asking about a FOOD, not about a member.
+ *
+ * "chk masala dosa calories with macros" was answered as though it were a
+ * question about the member whose page the coach happened to be on: "the member
+ * would need to log the Masala Dosa". The coach was not asking what Vishwas
+ * ate. They were asking what the app thinks a masala dosa IS — and the coach is
+ * exactly the person who fixes that when it is wrong.
+ *
+ * The food table was simply not in scope for questions. This puts it there,
+ * answered from the database rather than by the model, with the same
+ * plausibility verdicts the review queue uses — so the answer to "check this
+ * food" includes whether it looks wrong.
+ *
+ * @returns {Promise<string|null>} an answer, or null if this is not a food question
+ */
+async function answerFoodQuestion(qText) {
+  const t = String(qText || '').toLowerCase();
+  // Only when the question is about the food itself. "How many calories has
+  // Padmini eaten" is a member question that also mentions calories.
+  // Leading boundary only. A trailing \b requires a non-word character after
+  // the stem, so "calories", "macros" and "carbs" — the words a coach actually
+  // types — all failed to match, and every food question fell through to being
+  // answered as a question about a member.
+  if (!/\b(calorie|kcal|macro|micro|nutrition|nutrient|protein|carb|fat|per\s*100)/.test(t)) return null;
+  if (/\b(eaten|ate|logged|log|today|yesterday|week|consumed|left|remaining)\b/.test(t)) return null;
+
+  // The food name is what remains once the question words are stripped.
+  const name = t
+    .replace(/\b(chk|check|what|whats|what's|is|are|the|of|for|with|and|show|me|tell|per\s*100g?|calorie[s]?|kcal|macro[s]?|micro[s]?|nutrition|nutrient[s]?|protein|carb[s]?|fat|in|a|an|please)\b/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (name.length < 3) return null;
+
+  const { rows } = await pool.query(
+    `SELECT name, source, verified, per_100g
+       FROM foods
+      WHERE lower(name) = $1 OR lower(name) LIKE $2
+      ORDER BY verified DESC, (lower(name) = $1) DESC, length(name)
+      LIMIT 3`,
+    [name, `%${name}%`]
+  );
+  if (!rows.length) return `I have no food called "${name}" in the database yet.`;
+
+  const f = rows[0];
+  const n = f.per_100g || {};
+  const r = (v) => Math.round((+v || 0) * 10) / 10;
+  const lines = [
+    `${f.name} — per 100g: ${r(n.calories)} kcal, ${r(n.protein)}g protein, ` +
+    `${r(n.total_carbs)}g carbs, ${r(n.fat)}g fat, ${r(n.fiber)}g fibre.`,
+    `Iron ${r(n.iron)}mg · calcium ${r(n.calcium)}mg · vitamin C ${r(n.vit_c)}mg.`,
+    f.verified ? 'Verified.' : `From ${f.source === 'ai' ? 'an AI estimate' : f.source}, not yet verified.`,
+  ];
+
+  const macro = macroPlausibility(n, f.name);
+  const cook  = cookingFatPlausibility(n, f.name);
+  if (macro.status === 'suspect')      lines.push(`⚠ ${macro.reason}.`);
+  else if (cook.status === 'suspect')  lines.push(`⚠ ${cook.reason}.`);
+
+  // The plain version of the same dish, when there is one — the comparison that
+  // makes a wrong number obvious.
+  const base = String(f.name).toLowerCase().split(/\s+/).filter(w => w.length > 3).pop();
+  if (base) {
+    const { rows: b } = await pool.query(
+      `SELECT name, per_100g FROM foods
+        WHERE verified = true AND lower(name) LIKE $1 AND lower(name) <> $2
+        ORDER BY length(name) LIMIT 1`,
+      [`${base}%`, String(f.name).toLowerCase()]);
+    if (b.length && +b[0].per_100g?.calories > 0) {
+      lines.push(`For comparison, ${b[0].name} is ${Math.round(+b[0].per_100g.calories)} kcal per 100g.`);
+    }
+  }
+  if (rows.length > 1) lines.push(`Also matched: ${rows.slice(1).map(x => x.name).join(', ')}.`);
+  if (!f.verified) lines.push('Fix it in Admin → Foods; you can push the correction to logs already saved.');
+
+  return lines.join(' ');
+}
+
 router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
   const { message, context_member_id } = req.body;
   // Last few turns, so a two-part instruction survives. Capped and truncated
@@ -2969,6 +3046,15 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
           answered_for: qMember.name,
         });
       }
+
+      // A question about a food is answered from the food table, before any
+      // member context is built — it is not about a member at all.
+      try {
+        const foodAnswer = await answerFoodQuestion(qText);
+        if (foodAnswer) {
+          return res.json({ reply: null, actions: [], answer: foodAnswer, answered_for: null });
+        }
+      } catch (e) { console.error('answerFoodQuestion failed:', e.message); }
 
       const context = qMember
         ? await buildCoachMemberContext(qMember)
@@ -3561,6 +3647,7 @@ module.exports.describeOps        = describeOps;
 module.exports.dietPlanMacros     = dietPlanMacros;
 module.exports.learnFoods         = learnFoods;
 module.exports.enrichFromDB       = enrichFromDB;
+module.exports.answerFoodQuestion = answerFoodQuestion;
 module.exports.recordEvalSample   = recordEvalSample;
 module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;

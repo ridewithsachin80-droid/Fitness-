@@ -154,6 +154,33 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
     await pool.query(`DELETE FROM foods WHERE name IN ('Masala Dosa','Idli')`);
   }
 
+  console.log('\n[7] the coach can ask about a food');
+  {
+    // "chk masala dosa calories with macros" was answered as a question about
+    // the member whose page the coach was on. The food table was not in scope
+    // for questions at all — and the coach is the person who fixes it.
+    await pool.query(`DELETE FROM foods WHERE name IN ('Masala Dosa','Dosa (Plain)')`);
+    await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g) VALUES
+       ('Dosa (Plain)','grain','nin',true,$1::jsonb),
+       ('Masala Dosa','grain','ai',false,$2::jsonb)`,
+      [JSON.stringify(normaliseNutrients({ calories: 168, protein: 3.8, total_carbs: 24, fat: 6.5, iron: 1.1 })),
+       JSON.stringify(normaliseNutrients({ calories: 140, protein: 3, total_carbs: 25, fat: 3, iron: 0.8 }))]);
+
+    const a = await ai.answerFoodQuestion('chk masala dosa calories with macros');
+    ck('a food question is answered', !!a, a);
+    ck('with the per-100g figures', /140 kcal/.test(a || '') && /3g protein/.test(a || ''), a);
+    ck('it says the food is not verified', /not yet verified/i.test(a || ''), a);
+    ck('it carries the plausibility warning', /cooked dish with no cooking fat/i.test(a || ''), a);
+    ck('it compares with the plain version — the thing that makes it obvious',
+      /Dosa \(Plain\) is 168 kcal/.test(a || ''), a);
+    ck('micros are included, since that is what was asked', /Iron/.test(a || ''), a);
+    ck('and it says where to fix it', /Admin → Foods/.test(a || ''), a);
+    ck('an unknown food says so plainly',
+      /no food called/i.test(await ai.answerFoodQuestion('calories in zorbfruit') || ''));
+    await pool.query(`DELETE FROM foods WHERE name IN ('Masala Dosa','Dosa (Plain)')`);
+  }
+
   console.log(`\n${fail === 0 ? '✅' : '❌'} test-nutrition-contract: ${pass} passed, ${fail} failed\n`);
   await pool.end();
   process.exit(fail === 0 ? 0 : 1);

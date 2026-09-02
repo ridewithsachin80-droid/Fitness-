@@ -278,6 +278,24 @@ const ckq = (n, c, d) => c ? ok(n) : bad(n, JSON.stringify(d || '').slice(0, 200
   ckq('and the new message is still the one being parsed',
      /Coach's message: "sachin"/.test(warm));
 
+  // ── A food question is not a member question ──────────────────────────────
+  // Real report: "chk masala dosa calories with macros" was answered as though
+  // it were about the member whose page the coach was on. These are the
+  // discrimination cases, which need no database — the lookup itself is
+  // asserted in test-nutrition-contract, which runs against real Postgres.
+  console.log('\nFood questions');
+  {
+    const ai = require('../routes/aiChat');
+    ckq('"how many calories has Padmini eaten" stays a member question',
+      (await ai.answerFoodQuestion('how many calories has Padmini eaten today')) === null);
+    ckq('"what did Asha log yesterday" stays a member question',
+      (await ai.answerFoodQuestion('what did Asha log yesterday')) === null);
+    ckq('a message with no nutrition words is not a food question',
+      (await ai.answerFoodQuestion('message Asha to log daily')) === null);
+    ckq('a nutrition word alone, with no food name, is not one either',
+      (await ai.answerFoodQuestion('macros')) === null);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   server.close();
   process.exit(fail ? 1 : 0);
