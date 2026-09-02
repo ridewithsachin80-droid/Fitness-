@@ -35,6 +35,7 @@ const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
 const { cleanScalePayload } = require('../services/scaleParse');
+const { cookingFatPlausibility } = require('../services/macroCheck');
 
 router.use(authMW);
 
@@ -702,6 +703,32 @@ async function learnFoods(foods) {
 // guessing a correction would be worse than telling the member to check.
 const DENSE_FOOD = /\b(whey|casein|protein powder|protein isolate|oil|ghee|butter|peanut butter|almond butter|nut butter|sugar|jaggery|honey|mayonnaise|nuts?|almond|cashew|walnut|seeds?)\b/i;
 
+/**
+ * A cooked dish with no cooking fat in it.
+ *
+ * Real report: "Malasa dosa" logged as 200g / 280 kcal / 6g fat. That is a
+ * dosa nobody put on a tawa — two spoons of oil is 16-20g of fat, so the real
+ * figure is closer to 400 kcal. The member under-reported by a third of a meal
+ * and the app told them the number with complete confidence.
+ *
+ * The same check runs in the coach's verification queue. Here it runs at the
+ * moment of logging, because that is when the member can still say "that's not
+ * right" — a warning in a queue they never open is a warning nobody reads.
+ *
+ * Marked, never rewritten. Guessing how much oil went in would be inventing
+ * data, which is how the wrong number got there in the first place.
+ */
+function flagCookingFat(food) {
+  if (food.warning) return food;                    // already flagged, don't stack
+  const verdict = cookingFatPlausibility(food?.per_100g, food.name || '');
+  if (verdict.status !== 'suspect') return food;
+  return {
+    ...food,
+    confidence: 'low',
+    warning: `Looks light for a cooked dish — ${verdict.reason}. Your coach will check it.`,
+  };
+}
+
 function flagSuspectDensity(food) {
   const cal = parseFloat(food?.per_100g?.calories) || 0;
   if (!DENSE_FOOD.test(food.name || '')) return food;
@@ -790,7 +817,9 @@ async function enrichFromDB(foods) {
     } catch (e) {
       console.error('ai-chat DB enrich failed for', f.name, e.message);
     }
-    out.push(flagSuspectDensity({ ...f, food_id, per_100g: per100g, source }));
+    // Both checks, in order: a per-serving label is the more specific
+    // diagnosis, so it wins if both would fire.
+    out.push(flagCookingFat(flagSuspectDensity({ ...f, food_id, per_100g: per100g, source })));
   }
   return out;
 }
@@ -3531,6 +3560,7 @@ module.exports.normaliseMealPlan  = normaliseMealPlan;
 module.exports.describeOps        = describeOps;
 module.exports.dietPlanMacros     = dietPlanMacros;
 module.exports.learnFoods         = learnFoods;
+module.exports.enrichFromDB       = enrichFromDB;
 module.exports.recordEvalSample   = recordEvalSample;
 module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;

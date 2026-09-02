@@ -118,6 +118,42 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
       CONTRACT.every(k => k in off), CONTRACT.filter(k => !(k in off)));
   }
 
+  console.log('\n[6] the member is told when a number looks wrong');
+  {
+    // Real report: "Malasa dosa" logged as 200g / 280 kcal / 6g fat. The app
+    // stated it with complete confidence and the member had no signal at all.
+    await pool.query(`DELETE FROM foods WHERE name IN ('Masala Dosa','Idli')`);
+    await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Masala Dosa','grain','ai',false,$1::jsonb)`,
+      [JSON.stringify(normaliseNutrients({ calories: 140, protein: 3, total_carbs: 25, fat: 3 }))]);
+    await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Idli','grain','nin',true,$1::jsonb)`,
+      [JSON.stringify(normaliseNutrients({ calories: 110, protein: 2.5, total_carbs: 23, fat: 0.4 }))]);
+
+    const [dosa] = await ai.enrichFromDB([{ name: 'Masala Dosa', grams: 200,
+      per_100g: { calories: 140, protein: 3, total_carbs: 25, fat: 3 } }]);
+    ck('a cooked dish with no cooking fat is flagged at log time',
+      dosa.confidence === 'low' && /cooked dish/i.test(dosa.warning || ''), dosa.warning);
+    ck('and the member is told who will check it',
+      /coach will check/i.test(dosa.warning || ''), dosa.warning);
+
+    // Steamed food must not be flagged, or every idli carries a warning and
+    // members learn to ignore all of them.
+    const [idli] = await ai.enrichFromDB([{ name: 'Idli', grams: 100,
+      per_100g: { calories: 110, protein: 2.5, total_carbs: 23, fat: 0.4 } }]);
+    ck('a steamed food is NOT flagged', !idli.warning, idli.warning);
+
+    // The per-serving diagnosis is more specific, so it must not be replaced.
+    const [whey] = await ai.enrichFromDB([{ name: 'Whey Protein Masala', grams: 30,
+      per_100g: { calories: 120, protein: 24, total_carbs: 3, fat: 1.5 } }]);
+    ck('a per-serving label keeps its own, more specific warning',
+      /per-serving/i.test(whey.warning || ''), whey.warning);
+
+    await pool.query(`DELETE FROM foods WHERE name IN ('Masala Dosa','Idli')`);
+  }
+
   console.log(`\n${fail === 0 ? '✅' : '❌'} test-nutrition-contract: ${pass} passed, ${fail} failed\n`);
   await pool.end();
   process.exit(fail === 0 ? 0 : 1);
