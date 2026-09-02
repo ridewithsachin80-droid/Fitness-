@@ -189,6 +189,54 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
   }, []);
 
   // ── Apply → coach-apply ────────────────────────────────────────────────────
+  /**
+   * Attach a diet plan (PDF, or a photo of a printed one) for a member.
+   *
+   * It comes back as the SAME actions the typed chat produces, so it lands in
+   * the same preview with the same per-line toggles and the same Apply button.
+   * Nothing reaches a member until the coach approves it — a plan read out of a
+   * PDF is a draft, not an instruction, and the plans that get uploaded here
+   * are exactly the ones with medical context attached.
+   */
+  const sendDoc = useCallback(async (fileObj) => {
+    if (!fileObj || busy) return;
+    if (fileObj.size > 7 * 1024 * 1024) {
+      setMessages(m => [...m, { role: 'ai',
+        text: 'That file is over 7MB — try a single-page export or a photo of the plan.' }]);
+      return;
+    }
+    setBusy(true);
+    setMessages(m => [...m, { role: 'coach', text: `Attached ${fileObj.name}` }]);
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(',')[1]);
+        r.onerror = () => rej(new Error('Could not read that file'));
+        r.readAsDataURL(fileObj);
+      });
+      const { data } = await api.post('/ai-chat/coach-doc', {
+        file: b64,
+        mimeType: fileObj.type || 'application/pdf',
+        fileName: fileObj.name,
+        // If the chat was opened from a member's page, that is who the plan is
+        // for — better than making the model guess from the document.
+        member_name: contextMember?.name || null,
+      });
+      setMessages(m => [...m, {
+        role: 'ai',
+        text: data.reply,
+        evalMessage: `diet plan: ${fileObj.name}`,
+        actions: (data.actions || []).map(a => ({ ...a, on: a.resolved })),
+        applied: false,
+      }]);
+    } catch (e) {
+      setMessages(m => [...m, { role: 'ai',
+        text: e.response?.data?.error || "I couldn't read that file just now." }]);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, contextMember]);
+
   const applyAll = useCallback(async (mi) => {
     const msg = messages[mi];
     if (!msg?.actions || msg.applied || applying) return;
@@ -454,6 +502,20 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
               className="flex-1 bg-transparent text-sm text-white placeholder-[#4e4e5c] py-3 outline-none min-w-0"
             />
             {vc.micButton}
+            {/* Attach a diet plan. Sits beside the mic because both are ways of
+                saying the same thing — one spoken, one on paper. */}
+            <label
+              style={{ minWidth: 40, minHeight: 40 }}
+              title="Attach a diet plan (PDF or photo)"
+              className={`flex items-center justify-center rounded-full flex-shrink-0 cursor-pointer
+                transition-colors ${busy ? 'text-[#4e4e5c]' : 'text-[#9EA3B0] hover:text-[#E8CE7A]'}`}>
+              <input type="file" accept="application/pdf,image/*" className="hidden" disabled={busy}
+                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; sendDoc(f); }} />
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21.4 11.1l-8.5 8.5a5 5 0 01-7.1-7.1l8.5-8.5a3.3 3.3 0 014.7 4.7l-8.5 8.5a1.7 1.7 0 01-2.4-2.4l7.9-7.8" />
+              </svg>
+            </label>
           </div>
           <button
             onClick={() => send()}

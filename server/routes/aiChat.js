@@ -2507,6 +2507,12 @@ function normaliseMealPlan(raw) {
     const n = parseFloat(v);
     return Number.isFinite(n) && n >= lo && n <= hi ? n : null;
   };
+  // How many days forward this plan holds. Coach chat prescribes for today
+  // (1); an uploaded diet plan is a standing structure the member follows every
+  // day, so it lands on a stretch of dates. Defaults to 1, so every existing
+  // caller behaves exactly as before.
+  const repeat_days = Math.min(30, Math.max(1, parseInt(raw.repeat_days) || 1));
+
   const meals = raw.meals.slice(0, 6).map(m => {
     if (!m || typeof m !== 'object') return null;
     const meal = m.meal ? String(m.meal).trim().slice(0, 40) : '';
@@ -2528,7 +2534,7 @@ function normaliseMealPlan(raw) {
     const mode = String(m.mode || '').toLowerCase() === 'append' ? 'append' : 'replace';
     return meal && items.length ? { meal, items, mode } : null;
   }).filter(Boolean);
-  return meals.length ? { meals } : null;
+  return meals.length ? { meals, repeat_days } : null;
 }
 
 // ── Command validator/normaliser ─────────────────────────────────────────────
@@ -2580,7 +2586,12 @@ function describeOps(cmd) {
     for (const m of cmd.meal_plan.meals) {
       const kcal = Math.round(m.items.reduce((a, it) => a + (it.per_100g.calories * it.grams / 100), 0));
       const names = m.items.slice(0, 4).map(it => `${it.name} ${it.grams}g`).join(', ');
-      out.push({ icon: '🍽️', text: `${m.mode === 'append' ? `Add to ${m.meal} plan` : `${m.meal} plan`} (~${kcal} kcal): ${names}${m.items.length > 4 ? ` +${m.items.length - 4} more` : ''}` });
+      // Say how long it holds. "Lunch plan" that silently covers a fortnight is
+      // a different commitment from one that covers today, and the coach is
+      // about to approve it.
+      const span = (cmd.meal_plan.repeat_days || 1) > 1
+        ? ` · next ${cmd.meal_plan.repeat_days} days` : '';
+      out.push({ icon: '🍽️', text: `${m.mode === 'append' ? `Add to ${m.meal} plan` : `${m.meal} plan`}${span} (~${kcal} kcal): ${names}${m.items.length > 4 ? ` +${m.items.length - 4} more` : ''}` });
     }
   }
   if (cmd.program) {
@@ -2637,6 +2648,175 @@ router.get('/portions', async (req, res) => {
 // Body: { message }
 // Returns: { reply, actions: [{ member_id|null, member_name, resolved, is_all,
 //            ops (validated command), changes: [{icon,text}] }] }
+/**
+ * Targets read out of a diet plan, in the op shape /coach-apply expects.
+ *
+ * The op keys are kcal/pro/carb/fat — the same names that reach macro_pro and
+ * macro_carb in patient_profiles. A document naturally says "protein" and
+ * "carbohydrates", so the model returns those words; mapping them wrong parses
+ * the plan perfectly and then drops two of the four targets on the floor, with
+ * no error raised anywhere. Both spellings are accepted, and this is a plain
+ * function so the mapping can be asserted without a model call.
+ */
+function dietPlanMacros(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const mk = (v, max) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 && n <= max ? n : null; };
+  const macros = {
+    kcal: mk(raw.kcal ?? raw.calories, 6000),
+    pro:  mk(raw.pro ?? raw.protein, 500),
+    carb: mk(raw.carb ?? raw.carbs ?? raw.carbohydrates, 800),
+    fat:  mk(raw.fat, 400),
+  };
+  return (macros.kcal == null && macros.pro == null
+       && macros.carb == null && macros.fat == null) ? null : macros;
+}
+
+// ── POST /api/ai-chat/coach-doc ──────────────────────────────────────────────
+// A coach uploads a diet plan — a PDF from a dietitian, a photo of a printed
+// sheet — and it becomes a prescribed plan for one member.
+//
+// Deliberately returns the SAME { reply, actions } shape as /coach-parse, so
+// the existing preview, the per-action toggles and /coach-apply all work
+// untouched. A second apply path for documents would be a second place for the
+// "did this actually save" bug to live.
+//
+// The coach still approves every line. Nothing a model reads out of a PDF is
+// written to a member's plan without a human looking at it first — the sample
+// plan we built this against carries diabetic-range HbA1c and a note to consult
+// a doctor, which is exactly the kind of document that must not auto-apply.
+router.post('/coach-doc', roleCheck('monitor', 'admin'), async (req, res) => {
+  const { file, mimeType, fileName, member_name } = req.body || {};
+
+  if (!file || typeof file !== 'string') {
+    return res.status(400).json({ error: 'Attach a diet plan file' });
+  }
+  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+  const mt = allowed.includes(mimeType) ? mimeType : 'application/pdf';
+  if (file.length > 10_000_000) {
+    return res.status(413).json({ error: 'File too large — try a single-page export or a photo' });
+  }
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'Reading documents needs GEMINI_API_KEY to be set' });
+  }
+
+  try {
+    const members = await coachMembers(req.user.id, req.user.role);
+    if (!members.length) return res.json({ reply: 'No members assigned to you yet.', actions: [] });
+
+    const prompt = `You are reading a DIET PLAN document a fitness coach uploaded
+for one of their members. Extract it into JSON. Reply with JSON only.
+
+The member this plan is for:${member_name ? ` the coach says it is for "${member_name}".` : ''}
+Names on your roster: ${members.map(m => m.name).join(', ')}.
+If the document names a person, match it to the closest roster name. If you
+cannot tell who it is for, set member_name to null.
+
+{
+  "member_name": "<roster name, or null>",
+  "plan_title": "<short title, e.g. 'Low-carb plan'>",
+  "macros": { "kcal": <int|null>, "protein": <int|null>,
+              "carbs": <int|null>, "fat": <int|null> },
+  "meals": [
+    { "meal": "Breakfast|Lunch|Snack|Dinner|<as printed>",
+      "items": [ { "name": "<food>", "grams": <int>,
+                   "qty_text": "<as printed, e.g. '1 scoop'>" } ] }
+  ],
+  "repeat_days": <int 1-30>,
+  "summary": "<one sentence for the coach>"
+}
+
+RULES
+· A RANGE of calories or protein ("1,400-1,500 kcal", "120-140 g") takes the
+  LOWER bound. A target the member overshoots is a target they met; one they
+  undershoot is a conversation. Never average the two.
+· grams must be a number. Convert household measures using ordinary Indian
+  portions: 1 scoop whey ~30g, 1 small roti ~40g, 2 tbsp cooked rice ~40g,
+  1 egg ~50g, half an avocado ~75g. If a quantity is genuinely absent, omit
+  that item rather than inventing a weight.
+· Put the printed wording in qty_text so the coach can check your conversion.
+· A plan that says it is the same every day sets repeat_days to 14. A plan for
+  a single day sets 1. Never exceed 30.
+· Include ONLY foods with a stated quantity in a named meal. Foods-to-avoid
+  lists, weekly rotations, and general advice are NOT items.
+· If the document is not a diet plan at all, return meals: [] and say so in
+  summary.`;
+
+    const { text, provider } = await callAI([
+      { text: prompt },
+      { inline_data: { mime_type: mt, data: file } },
+    ]);
+
+    const parsed = JSON.parse(String(text).replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+
+    const nameRaw = String(parsed.member_name || member_name || '').trim();
+    const lc = nameRaw.toLowerCase();
+    const member = lc
+      ? (members.find(m => m.name.toLowerCase() === lc) ||
+         members.find(m => m.name.toLowerCase().includes(lc) || lc.includes(m.name.toLowerCase())) || null)
+      : null;
+
+    const meal_plan = normaliseMealPlan({
+      meals: (Array.isArray(parsed.meals) ? parsed.meals : [])
+        .map(m => ({ ...m, mode: 'replace' })),
+      repeat_days: parsed.repeat_days,
+    });
+
+    // Real nutrition from the food database, the same enrichment the member
+    // chat runs. Without it the plan card shows a calorie figure the model
+    // invented for a food we already have measured values for.
+    if (meal_plan) {
+      for (const m of meal_plan.meals) {
+        const enriched = await enrichFromDB(m.items).catch(() => null);
+        if (enriched) {
+          m.items = m.items.map((it, i) => (
+            enriched[i]?.per_100g ? { ...it, per_100g: enriched[i].per_100g } : it
+          ));
+        }
+      }
+    }
+
+    const macros = dietPlanMacros(parsed.macros);
+
+    const ops = {
+      water_target: null, macros, target_weight: null, program: null,
+      meal_plan, activities: null, acv: null, supplements: null,
+      note: parsed.plan_title
+        ? { text: `Diet plan attached: ${String(parsed.plan_title).slice(0, 120)}${fileName ? ` (${String(fileName).slice(0, 80)})` : ''}`, flagged: false }
+        : null,
+      push: null,
+    };
+
+    const changes = describeOps(ops);
+    if (!changes.length) {
+      return res.json({
+        reply: String(parsed.summary || '').slice(0, 400) ||
+          "I couldn't find a meal plan with quantities in that file.",
+        actions: [], aiProvider: provider,
+      });
+    }
+
+    return res.json({
+      reply: String(parsed.summary || '').slice(0, 400) ||
+        `Read the plan${member ? ` for ${member.name}` : ''}. Review each line before applying.`,
+      actions: [{
+        member_id:   member ? member.id : null,
+        member_name: member ? member.name : (nameRaw || 'Unknown member'),
+        resolved:    !!member,
+        is_all:      false,
+        ops, changes,
+      }],
+      aiProvider: provider,
+    });
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : err.message;
+    console.error('coach-doc error | status:', err.response?.status, '| detail:', detail);
+    if (err instanceof SyntaxError) {
+      return res.status(502).json({ error: "I couldn't read that file as a diet plan — try a clearer export." });
+    }
+    return res.status(502).json({ error: 'Could not read that document just now' });
+  }
+});
+
 router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
   const { message, context_member_id } = req.body;
   // Last few turns, so a two-part instruction survives. Capped and truncated
@@ -3042,6 +3222,18 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
           'coach-ai').catch(() => {});
       }
       if (ops.meal_plan) {
+        // A standing plan covers a stretch of days, one row per meal per date.
+        // repeat_days is 1 for everything the coach types, so the ordinary
+        // "add whey to lunch" path still touches today and nothing else.
+        const planDates = [];
+        {
+          const base = new Date(`${getISTDate()}T00:00:00Z`);
+          for (let d = 0; d < (ops.meal_plan.repeat_days || 1); d++) {
+            const dt = new Date(base);
+            dt.setUTCDate(dt.getUTCDate() + d);
+            planDates.push(dt.toISOString().slice(0, 10));
+          }
+        }
         for (const m of ops.meal_plan.meals) {
           // Same-day re-prescription replaces — the UNIQUE constraint makes the
           // upsert atomic, and the member always sees exactly one plan per meal.
@@ -3053,7 +3245,7 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
             const { rows: [existing] } = await client.query(
               `SELECT items FROM meal_plans
                WHERE patient_id=$1 AND plan_date=$2 AND meal=$3`,
-              [memberId, getISTDate(), m.meal]);
+              [memberId, planDates[0], m.meal]);
             if (existing?.items?.length) {
               const newNames = new Set(m.items.map(it => it.name.toLowerCase()));
               itemsToStore = [
@@ -3062,13 +3254,15 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
               ].slice(0, 20);
             }
           }
-          await client.query(
-            `INSERT INTO meal_plans (patient_id, monitor_id, plan_date, meal, items)
-             VALUES ($1,$2,$3,$4,$5)
-             ON CONFLICT (patient_id, plan_date, meal)
-             DO UPDATE SET items = EXCLUDED.items, monitor_id = EXCLUDED.monitor_id,
-                           created_at = NOW()`,
-            [memberId, req.user.id, getISTDate(), m.meal, JSON.stringify(itemsToStore)]);
+          for (const pd of planDates) {
+            await client.query(
+              `INSERT INTO meal_plans (patient_id, monitor_id, plan_date, meal, items)
+               VALUES ($1,$2,$3,$4,$5)
+               ON CONFLICT (patient_id, plan_date, meal)
+               DO UPDATE SET items = EXCLUDED.items, monitor_id = EXCLUDED.monitor_id,
+                             created_at = NOW()`,
+              [memberId, req.user.id, pd, m.meal, JSON.stringify(itemsToStore)]);
+          }
         }
         appliedBits.push(`meal plan (${ops.meal_plan.meals.map(m => m.meal).join(', ')})`);
         require('../services/pushService').sendToUser(memberId, 'Meal plan from your coach',
@@ -3292,6 +3486,11 @@ module.exports.buildCoachRosterContext = buildCoachRosterContext;
 module.exports.buildCoachPrompt = buildCoachPrompt;
 // Sprint L1 — the replay tool and test-evals reach these directly.
 module.exports.buildParsePrompt   = buildParsePrompt;
+// Exported for test-diet-plan: the multi-day plan rules are pure and are
+// asserted directly rather than inferred from an HTTP round trip.
+module.exports.normaliseMealPlan  = normaliseMealPlan;
+module.exports.describeOps        = describeOps;
+module.exports.dietPlanMacros     = dietPlanMacros;
 module.exports.recordEvalSample   = recordEvalSample;
 module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;
