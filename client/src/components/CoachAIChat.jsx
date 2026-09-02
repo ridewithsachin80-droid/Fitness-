@@ -59,6 +59,7 @@ const MACRO_FIELDS = [
 
 function FoodEditCard({ food, onSaved }) {
   const [vals, setVals]   = useState(food.per_100g || {});
+  const [defG, setDefG]   = useState(food.default_grams ?? '');
   const [more, setMore]   = useState(false);
   const [prop, setProp]   = useState(false);
   const [busy, setBusy]   = useState(false);
@@ -73,7 +74,10 @@ function FoodEditCard({ food, onSaved }) {
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      const { data } = await api.put(`/foods/${food.id}`, { per_100g: vals, propagate: prop });
+      const { data } = await api.put(`/foods/${food.id}`, {
+        per_100g: vals, propagate: prop,
+        default_grams: defG === '' ? null : parseInt(defG),
+      });
       setDone(data.propagated
         ? `Saved. ${data.propagated.entries} logged ${data.propagated.entries === 1 ? 'entry' : 'entries'} across ${data.propagated.members} ${data.propagated.members === 1 ? 'member' : 'members'} corrected too.`
         : 'Saved. Applies to every member from now on.');
@@ -98,6 +102,24 @@ function FoodEditCard({ food, onSaved }) {
       {food.warning && (
         <p className="text-[11px] text-[#D9A66B] mt-1.5 leading-snug">⚠ {food.warning}</p>
       )}
+
+      {/* One normal portion. Without it a member typing "masala dosa" with no
+          number gets whatever the model guesses — 80g, a third of a real one —
+          and their day comes out light with nothing looking wrong. The model
+          does not know what a dosa looks like on an Indian plate; the coach
+          does. A member who names a quantity still overrides it. */}
+      <label className="flex items-center gap-2 mt-3">
+        <input type="number" inputMode="numeric" value={defG} placeholder="—"
+          onChange={e => setDefG(e.target.value)} disabled={!food.editable || busy}
+          className="w-[74px] bg-[#121316] border border-[rgba(212,175,55,0.3)] rounded-lg
+            px-2 py-1.5 text-[13px] text-[#E8CE7A] tabular-nums disabled:opacity-50" />
+        <span className="text-[11.5px] text-[#9EA3B0]">
+          g — one typical serving
+          <span className="block text-[10.5px] text-[#7E8596]">
+            Used when a member logs this without saying how much.
+          </span>
+        </span>
+      </label>
 
       <div className="grid grid-cols-2 gap-2 mt-3">
         {MACRO_FIELDS.map(([k, label]) => (

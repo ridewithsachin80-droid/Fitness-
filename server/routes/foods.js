@@ -570,6 +570,7 @@ router.put('/:id', async (req, res) => {
     name, name_hindi, name_local,
     category, source, verified,
     per_100g,
+    default_grams,
     propagate = false,
   } = req.body;
 
@@ -594,6 +595,7 @@ router.put('/:id', async (req, res) => {
 
     const { rows } = await pool.query(
       `UPDATE foods SET
+        default_grams = $9,
         name        = $1,
         name_hindi  = $2,
         name_local  = $3,
@@ -612,6 +614,10 @@ router.put('/:id', async (req, res) => {
         verified   != null ? verified : prev.verified,
         JSON.stringify(normNutrients),
         id,
+        // Null clears it; undefined leaves whatever was there.
+        default_grams === undefined ? prev.default_grams
+          : (Number.isFinite(parseInt(default_grams)) && parseInt(default_grams) > 0
+             ? parseInt(default_grams) : null),
       ]
     );
 

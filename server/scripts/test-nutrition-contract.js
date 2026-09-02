@@ -228,6 +228,75 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
     await pool.query(`DELETE FROM foods WHERE name = 'Masala Dosa'`);
   }
 
+  console.log('\n[9] a typical serving, when the member names no quantity');
+  {
+    // "masala dosa" with no number landed at whatever the model guessed — 80g,
+    // a third of a real one — and the member's day came out ~250 kcal light
+    // with nothing on screen looking wrong.
+    const dosa = [{ name: 'Masala Dosa', grams: 80, qty_text: '', default_grams: 200 }];
+
+    ck('no quantity given → the coach\'s serving is used',
+      ai.applyDefaultPortions('masala dosa', dosa)[0].grams === 200,
+      ai.applyDefaultPortions('masala dosa', dosa)[0].grams);
+    ck('and it is labelled, so the member can see where it came from',
+      /typical serving/.test(ai.applyDefaultPortions('masala dosa', dosa)[0].qty_text || ''));
+
+    // The rule that keeps this safe: the moment the member says how much, that
+    // is an observation about their own meal and nothing may override it.
+    ck('"2 masala dosa" is the member\'s own count — untouched',
+      ai.applyDefaultPortions('2 masala dosa', dosa)[0].grams === 80);
+    ck('"masala dosa 150g" is untouched',
+      ai.applyDefaultPortions('masala dosa 150g', dosa)[0].grams === 80);
+    ck('"half a masala dosa" is untouched — a measure without a digit',
+      ai.applyDefaultPortions('half a masala dosa', dosa)[0].grams === 80);
+    ck('"one katori dal and masala dosa" is untouched',
+      ai.applyDefaultPortions('one katori dal and masala dosa', dosa)[0].grams === 80);
+
+    ck('a food with no serving set is left alone',
+      ai.applyDefaultPortions('poha', [{ name: 'Poha', grams: 90 }])[0].grams === 90);
+    ck('a nonsense serving is ignored rather than applied',
+      ai.applyDefaultPortions('x', [{ name: 'X', grams: 50, default_grams: 0 }])[0].grams === 50);
+
+    ck('memberGaveQuantity recognises digits and measures',
+      ai.memberGaveQuantity('2 roti') && ai.memberGaveQuantity('a bowl of dal')
+      && !ai.memberGaveQuantity('masala dosa'));
+
+    // End to end: the column exists, and the editor offers it.
+    await pool.query(`DELETE FROM foods WHERE name = 'Serving Test Dosa'`);
+    await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g,default_grams)
+       VALUES ('Serving Test Dosa','grain','ai',false,$1::jsonb,200)`,
+      [JSON.stringify(normaliseNutrients({ calories: 210, protein: 4, total_carbs: 26, fat: 10 }))]);
+    const e = await ai.detectFoodEdit('edit serving test dosa', { role: 'admin', id: 1 });
+    ck('the editor carries the serving size', e?.default_grams === 200, e?.default_grams);
+    const [enriched] = await ai.enrichFromDB([{ name: 'Serving Test Dosa', grams: 80,
+      per_100g: { calories: 210 } }]);
+    ck('and enrichment carries it out of the food table',
+      enriched.default_grams === 200, enriched.default_grams);
+
+    // Wiring, not just logic. Every assertion above calls the helper directly,
+    // so all of them stayed green while the call sat in the WRONG ROUTE — it
+    // landed in /photo, where cleanMsg does not exist, and every meal photo
+    // 502'd. The same enrichFromDB line appears in both routes; that is twice
+    // now that an anchor has matched the first one.
+    const fs = require('fs');
+    const src = fs.readFileSync(require('path').join(__dirname, '..', 'routes', 'aiChat.js'), 'utf8');
+    const routeOf = (needle) => {
+      const at = src.indexOf(needle);
+      if (at < 0) return null;
+      const before = src.slice(0, at);
+      const m = [...before.matchAll(/router\.(?:post|get)\('([^']+)'/g)].pop();
+      return m ? m[1] : null;
+    };
+    ck('the default is applied inside /parse',
+      routeOf('applyDefaultPortions(cleanMsg') === '/parse',
+      routeOf('applyDefaultPortions(cleanMsg'));
+    ck('and nowhere that has no message to read',
+      (src.match(/applyDefaultPortions\(/g) || []).length === 2,   // definition + one call
+      (src.match(/applyDefaultPortions\(/g) || []).length);
+    await pool.query(`DELETE FROM foods WHERE name = 'Serving Test Dosa'`);
+  }
+
   console.log(`\n${fail === 0 ? '✅' : '❌'} test-nutrition-contract: ${pass} passed, ${fail} failed\n`);
   await pool.end();
   process.exit(fail === 0 ? 0 : 1);

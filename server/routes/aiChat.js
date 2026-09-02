@@ -740,6 +740,39 @@ function flagSuspectDensity(food) {
   };
 }
 
+/**
+ * Use the food's typical serving when the member did not give a quantity.
+ *
+ * "masala dosa" with no number got whatever the model guessed — 80g, a third of
+ * a real one, and the member's day came out 250 kcal light without anything
+ * looking wrong. The model does not know what a dosa looks like on an Indian
+ * plate. The coach does, and can now say so once on the food itself.
+ *
+ * Applied ONLY when the member gave no quantity at all. The moment they say a
+ * number or a measure — "2 dosa", "half a plate", "1 katori" — that is an
+ * observation about their own meal and nothing overrides it.
+ *
+ * Personal portion memory is not touched: it reaches the model through the
+ * prompt, so what THIS member means by "1 dosa" already shapes the guess before
+ * this ever runs.
+ */
+const QUANTITY_WORD = /\b(katori|plate|piece|pieces|bowl|cup|glass|spoon|spoons|tbsp|tsp|scoop|slice|slices|packet|handful|half|quarter|full|small|medium|large|one|two|three|four|five|dozen)\b/i;
+
+function memberGaveQuantity(message) {
+  const m = String(message || '');
+  return /\d/.test(m) || QUANTITY_WORD.test(m);
+}
+
+function applyDefaultPortions(message, foods) {
+  if (memberGaveQuantity(message)) return foods;
+  return (foods || []).map(f => {
+    const def = parseInt(f.default_grams);
+    if (!Number.isFinite(def) || def <= 0) return f;
+    if (Number(f.grams) === def) return f;
+    return { ...f, grams: def, qty_text: f.qty_text || 'typical serving' };
+  });
+}
+
 // ── DB enrichment for foods ──────────────────────────────────────────────────
 async function enrichFromDB(foods) {
   const out = [];
@@ -747,6 +780,9 @@ async function enrichFromDB(foods) {
     let food_id = null;
     let per100g = normaliseNutrients(f.per_100g);
     let source  = 'ai';
+    // The coach's typical serving for this food, carried through so the parse
+    // can fall back to it when the member named no quantity.
+    let defaultGrams = null;
     try {
       // Match on every name column the seeds populate, not just `name`.
       // The seeds put the everyday name in `name_local` ("Whey Protein") and
@@ -778,7 +814,7 @@ async function enrichFromDB(foods) {
       //   5  anything else that matched
       const { rows } = await pool.query(
         `WITH c AS (
-           SELECT id, name, per_100g, verified,
+           SELECT id, name, per_100g, verified, default_grams,
                   LOWER(BTRIM(SPLIT_PART(name, '(', 1))) AS base
            FROM foods
            WHERE LOWER(name)       = $1
@@ -787,7 +823,7 @@ async function enrichFromDB(foods) {
               OR LOWER(name_aliases::text) LIKE $2
               OR LOWER(name)       LIKE $3
          )
-         SELECT id, name, per_100g, verified,
+         SELECT id, name, per_100g, verified, default_grams,
                 CASE
                   WHEN LOWER(name) = $1                              THEN 0
                   WHEN base = $1                                     THEN 1
@@ -813,13 +849,17 @@ async function enrichFromDB(foods) {
         food_id = rows[0].id;
         per100g = normaliseNutrients(rows[0].per_100g);
         source  = rows[0].verified ? 'db-verified' : 'db';
+        defaultGrams = rows[0].default_grams;
       }
     } catch (e) {
       console.error('ai-chat DB enrich failed for', f.name, e.message);
     }
     // Both checks, in order: a per-serving label is the more specific
     // diagnosis, so it wins if both would fire.
-    out.push(flagCookingFat(flagSuspectDensity({ ...f, food_id, per_100g: per100g, source })));
+    out.push(flagCookingFat(flagSuspectDensity({
+      ...f, food_id, per_100g: per100g, source,
+      default_grams: defaultGrams,
+    })));
   }
   return out;
 }
@@ -1807,11 +1847,15 @@ router.post('/parse', async (req, res) => {
         per_100g: f.per_100g || {},
       }));
 
-    const foods = await enrichFromDB(validFoods);
+    let foods = await enrichFromDB(validFoods);
 
     // Feed anything new back into the food database. Not awaited — the member
     // gets their preview immediately and the learning happens behind it.
     learnFoods(foods).catch(err => console.error('learnFoods failed:', err.message));
+
+    // The coach's typical serving, when the member named no quantity at all.
+    // "masala dosa" with no number was landing at whatever the model guessed.
+    foods = applyDefaultPortions(cleanMsg, foods);
 
     // Eval set: hold on to what the model returned for THIS message, so a
     // correction arriving three messages later can be paired back to it.
@@ -2986,7 +3030,7 @@ async function detectFoodEdit(msg, user) {
   if (name.length < 3) return null;
 
   const { rows } = await pool.query(
-    `SELECT id, name, source, verified, per_100g FROM foods
+    `SELECT id, name, source, verified, per_100g, default_grams FROM foods
       WHERE lower(name) = $1 OR lower(name) LIKE $2
       ORDER BY (lower(name) = $1) DESC, verified DESC, length(name)
       LIMIT 1`,
@@ -3010,6 +3054,7 @@ async function detectFoodEdit(msg, user) {
     source: f.source,
     verified: f.verified,
     per_100g: normaliseNutrients(f.per_100g),
+    default_grams: f.default_grams,
     impact,
     warning: macro.status === 'suspect' ? macro.reason
            : cook.status === 'suspect'  ? cook.reason : null,
@@ -3726,6 +3771,8 @@ module.exports.learnFoods         = learnFoods;
 module.exports.enrichFromDB       = enrichFromDB;
 module.exports.answerFoodQuestion = answerFoodQuestion;
 module.exports.detectFoodEdit     = detectFoodEdit;
+module.exports.applyDefaultPortions = applyDefaultPortions;
+module.exports.memberGaveQuantity = memberGaveQuantity;
 module.exports.recordEvalSample   = recordEvalSample;
 module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;

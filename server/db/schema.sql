@@ -660,6 +660,18 @@ ALTER TABLE foods ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_foods_unverified
   ON foods(created_at DESC) WHERE verified = false;
 
+-- ── TYPICAL SERVING SIZE ─────────────────────────────────────────────────────
+-- What one normal portion of this food weighs.
+--
+-- A member typing "masala dosa" with no quantity got whatever the model
+-- guessed — 80g, which is a third of a real one. The model has no idea what a
+-- dosa looks like on an Indian plate; the coach does. Set it once and every
+-- member who logs it without saying a number gets a sane figure.
+--
+-- Personal portion memory still wins: what THIS member means by "1 dosa"
+-- beats the generic default.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS default_grams INT;
+
 -- ── AI EVAL SET (Sprint L1) ──────────────────────────────────────────────────
 -- Every correction a member or coach makes to an AI parse is a test case: a
 -- real Hinglish message, from a real member, with a known-correct answer, in a
