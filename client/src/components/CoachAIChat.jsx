@@ -48,15 +48,25 @@ export function CoachAIFab({ bottomOffset = 40 }) {
     <button
       onClick={openChat}
       aria-label="Coach AI"
-      className="fixed z-40 flex items-center justify-center bg-gradient-to-br from-[#D4AF37] to-[#8a6a1e] shadow-[0_4px_20px_rgba(212,175,55,0.45)] border border-r-0 border-white/[0.15] active:scale-95 transition-transform"
+      // Flush to the right edge on purpose — it is thumb-reachable there and
+      // never scrolls away. But a radial gradient with a rounded left side read
+      // as an orb someone had cut in half, so it now presents as a deliberate
+      // tab: flat gold, a hairline down the open edge, and a drawn glyph
+      // instead of whatever spark the phone's emoji font supplies.
+      className="fixed z-40 flex items-center justify-center bg-[#D4AF37]
+        shadow-[0_2px_14px_rgba(212,175,55,0.28)] active:scale-95 transition-transform"
       style={{
         right: 0,
         bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))`,
-        width: 46, height: 52,
-        borderTopLeftRadius: 16, borderBottomLeftRadius: 16,
-        paddingRight: 2, fontSize: 20,
+        width: 44, height: 54,
+        borderTopLeftRadius: 14, borderBottomLeftRadius: 14,
+        boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.22), 0 2px 14px rgba(212,175,55,0.28)',
       }}>
-      ✨
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#121316"
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5z" />
+        <path d="M18.5 4v3M20 5.5h-3" />
+      </svg>
     </button>
   );
 }
@@ -305,7 +315,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                       : 'bg-[#16161c] border-white/[0.07] text-[#d8d8de]'
                 }`}>
                   {(m.isAnswer || m.summary) && m.answeredFor && (
-                    <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-[#D4AF37] mb-1.5">
+                    <p className="text-[10px] font-bold text-[#D4AF37] mb-1.5">
                       {m.answeredFor}
                     </p>
                   )}

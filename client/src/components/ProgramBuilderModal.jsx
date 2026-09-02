@@ -186,7 +186,7 @@ export default function ProgramBuilderModal({ memberId, memberName, onClose, onS
           {/* Quick-assign a template */}
           {templates.length > 0 && (
             <div>
-              <p className="text-[10px] text-[#5a5a68] font-semibold uppercase tracking-wide mb-1.5">Use a template</p>
+              <p className="text-[10px] text-[#5a5a68] font-semibold tracking-wide mb-1.5">Use a template</p>
               <div className="flex gap-1.5 flex-wrap">
                 {templates.map(t => (
                   <button key={t.id} onClick={() => handleUseTemplate(t.id)} disabled={saving}
@@ -201,7 +201,7 @@ export default function ProgramBuilderModal({ memberId, memberName, onClose, onS
 
           {/* Program name */}
           <div>
-            <label className="block text-[10px] text-[#5a5a68] font-semibold uppercase tracking-wide mb-1.5">Program name</label>
+            <label className="block text-[10px] text-[#5a5a68] font-semibold tracking-wide mb-1.5">Program name</label>
             <input value={programName} onChange={e => setProgramName(e.target.value)}
               placeholder="e.g. Push / Pull / Legs"
               className="w-full px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm text-[#ededf0] placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />

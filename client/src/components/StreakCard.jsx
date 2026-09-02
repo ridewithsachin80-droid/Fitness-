@@ -72,7 +72,7 @@ export default function StreakCard() {
   return (
     <div className="rounded-2xl border border-white/[0.07] bg-[#1A1C20] px-4 py-3 mb-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold text-[#9EA3B0] uppercase tracking-[0.10em]">
+        <span className="text-xs font-bold text-[#9EA3B0]">
           🔥 {data.streak > 0 ? `${data.streak}-day streak` : 'Logging streak'}
         </span>
         <span className="text-[10px] text-[#7E8596]">last 14 days</span>

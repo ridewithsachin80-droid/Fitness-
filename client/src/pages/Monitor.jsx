@@ -141,7 +141,7 @@ function AddLabModal({ memberId, onClose, onAdded }) {
           { key: 'ref_max',   label: 'Ref max',   type: 'number', placeholder: '5.6' },
         ].map(({ key, label, type, placeholder }) => (
           <div key={key}>
-            <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
+            <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">{label}</label>
             <input type={type} value={form[key]} placeholder={placeholder}
               onChange={e => set(key, e.target.value)}
               className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
@@ -206,7 +206,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
               { label: 'Confirm PIN', value: confirm, onChange: setConfirm },
             ].map(({ label, value, onChange }) => (
               <div key={label}>
-                <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">{label}</label>
+                <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">{label}</label>
                 <div className="relative">
                   <input type={show ? 'text' : 'password'} inputMode="numeric" value={value}
                     onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
@@ -266,7 +266,7 @@ function AddNoteModal({ memberId, onClose, onAdded }) {
         </div>
 
         <div>
-          <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
+          <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Date</label>
           <input type="date" value={form.note_date} max={today}
             onChange={e => set('note_date', e.target.value)}
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
@@ -274,7 +274,7 @@ function AddNoteModal({ memberId, onClose, onAdded }) {
         </div>
 
         <div>
-          <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Note</label>
+          <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Note</label>
           <textarea value={form.note} onChange={e => set('note', e.target.value)}
             rows={4} placeholder="Observations, progress notes, instructions…"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
@@ -350,14 +350,14 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
               Creates or updates the weight entry for the selected date. Other log data is preserved.
             </p>
             <div>
-              <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Date</label>
+              <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Date</label>
               <input type="date" value={date} max={todayStr}
                 onChange={e => setDate(e.target.value)}
                 className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
                   focus:outline-none focus:ring-2 focus:ring-emerald-300" />
             </div>
             <div>
-              <label className="block text-[10px] text-[#7E8596] font-semibold uppercase tracking-[0.10em] mb-1.5">Weight (kg)</label>
+              <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Weight (kg)</label>
               <div className="flex items-center gap-2">
                 <input type="number" step="0.1" inputMode="decimal" value={weight}
                   onChange={e => setWeight(e.target.value)}
@@ -905,7 +905,7 @@ export default function Coach() {
                     {data?.profile?.meal_plan?.length > 0 && (
                       <div className="rounded-xl border border-white/[0.07] overflow-hidden">
                         <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06]">
-                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🍽 Meal Plan Adherence</span>
+                          <span className="text-[10px] font-bold text-[#7E8596]">🍽 Meal Plan Adherence</span>
                         </div>
                         <div className="px-3 py-2.5 flex flex-wrap gap-2">
                           {data.profile.meal_plan.map(meal => {
@@ -931,7 +931,7 @@ export default function Coach() {
                     {log.food_items?.length > 0 && (
                       <div className="rounded-xl border border-white/[0.07] overflow-hidden">
                         <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06] flex justify-between">
-                          <span className="text-[10px] font-bold text-[#7E8596] uppercase tracking-[0.10em]">🥗 Food Log</span>
+                          <span className="text-[10px] font-bold text-[#7E8596]">🥗 Food Log</span>
                           <span className="text-xs font-bold text-[#D4AF37]">{eatenKcal} kcal total</span>
                         </div>
                         {(() => {
@@ -947,7 +947,7 @@ export default function Coach() {
                           return (
                             <div key={meal} className="border-b border-white/[0.05] last:border-0">
                               <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
-                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${
+                                <span className={`text-[10px] font-semibold tracking-wide ${
                                   meal === UNSORTED_MEAL ? 'text-amber-400' : 'text-[#6a6a78]'
                                 }`}>
                                   {meal}{meal === UNSORTED_MEAL && ' · no meal slot'}
@@ -1024,7 +1024,7 @@ export default function Coach() {
                         return (
                           <div key={group.title}>
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-xs font-bold text-[#6a6a78] uppercase tracking-wide">{group.title}</span>
+                              <span className="text-xs font-bold text-[#6a6a78] tracking-wide">{group.title}</span>
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                 doneCount === group.items.length
                                   ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6]'
@@ -1242,7 +1242,7 @@ export default function Coach() {
                 <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
                   {foodItems.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                      <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">
                         🥗 Food {totalKcal > 0 && <span className="font-normal text-orange-500 normal-case">· {totalKcal} kcal</span>}
                       </p>
                       <div className="space-y-1">
@@ -1266,7 +1266,7 @@ export default function Coach() {
                   )}
                   {fl.notes && (
                     <div>
-                      <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">📝 Notes</p>
+                      <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">📝 Notes</p>
                       <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{fl.notes}</p>
                     </div>
                   )}
@@ -1623,7 +1623,7 @@ export default function Coach() {
           <details className="rounded-2xl border border-white/[0.07] bg-[#1A1C20] overflow-hidden">
             <summary className="px-4 py-3.5 cursor-pointer list-none flex items-center justify-between">
               <div>
-                <span className="text-xs font-bold text-[#9EA3B0] uppercase tracking-[0.10em]">📉 Body Composition</span>
+                <span className="text-xs font-bold text-[#9EA3B0]">📉 Body Composition</span>
                 <p className="text-[11px] text-[#7E8596] mt-0.5">
                   {bodyComp.scanDates.length} scan{bodyComp.scanDates.length === 1 ? '' : 's'}
                   {bodyComp.latestDate ? ` · latest ${formatDate(bodyComp.latestDate)}` : ''}

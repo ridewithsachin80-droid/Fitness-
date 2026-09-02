@@ -17,7 +17,7 @@
 export default function DaySummary({ s }) {
   const Row = ({ label, children }) => (
     <div className="py-2 border-t border-white/[0.06] first:border-t-0 first:pt-0">
-      <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-[#7E8596] mb-1">{label}</p>
+      <p className="text-[10px] font-bold text-[#7E8596] mb-1">{label}</p>
       {children}
     </div>
   );

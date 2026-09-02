@@ -46,7 +46,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, type = 'text', value, onChange, placeholder, required }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+      <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
@@ -102,7 +102,7 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
 
         {/* Assign coach */}
         <div>
-          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
             Assign to Coach
           </label>
           <select
@@ -360,7 +360,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
       {mealPlan.length > 0 && (
         <div className="bg-white/[0.08] border border-white/[0.1] text-[#FFFFFF] rounded-2xl px-4 py-3 space-y-2">
-          <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0]">Day Total</p>
+          <p className="text-[12px] font-semibold text-[#A9B0BF]">Day Total</p>
           <div className="flex gap-4 flex-wrap">
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
             <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
@@ -683,7 +683,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+            <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
               Fast Begins ⏸
             </label>
             <input type="time" value={fasting.start} onChange={e => setF('start', e.target.value)}
@@ -691,7 +691,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
                 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+            <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
               Eating Window Opens ▶
             </label>
             <input type="time" value={fasting.end} onChange={e => setF('end', e.target.value)}
@@ -723,7 +723,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
             Protocol Label (shown to member)
           </label>
           <input value={fasting.label} onChange={e => setF('label', e.target.value)}
@@ -733,7 +733,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
             Member-Facing Note
           </label>
           <textarea value={fasting.note} onChange={e => setF('note', e.target.value)} rows={2}
@@ -770,7 +770,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         </p>
 
         <div>
-          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
             Daily Calorie Target (kcal)
           </label>
           <input type="number" value={macros.kcal} onChange={e => setM('kcal', e.target.value)}
@@ -782,7 +782,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         <div className="grid grid-cols-3 gap-2">
           {[['pro','Protein (g)','66'],['carb','Net Carbs (g)','144'],['fat','Fat (g)','57']].map(([k,lbl,ph]) => (
             <div key={k}>
-              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">{lbl}</label>
+              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">{lbl}</label>
               <input type="number" value={macros[k]} onChange={e => setM(k, e.target.value)}
                 placeholder={ph}
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
@@ -811,7 +811,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
             Phase / Label (shown to member)
           </label>
           <input value={macros.phase} onChange={e => setM('phase', e.target.value)}
@@ -830,7 +830,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         {/* Sprint 5: Clinical RDA Overrides */}
         <div className="border-t border-white/[0.07] pt-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-[#9EA3B0] uppercase tracking-wider">★ Clinical RDA Overrides</p>
+            <p className="text-xs font-bold text-[#9EA3B0] tracking-wider">★ Clinical RDA Overrides</p>
             <span className="text-xs text-[#9EA3B0]">Leave blank = use defaults</span>
           </div>
           <p className="text-xs text-[#9EA3B0] mb-3">
@@ -973,7 +973,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="border border-white/[0.07] rounded-2xl p-3 space-y-1">
-        <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0] mb-2">{icon} {label}</p>
+        <p className="text-[12px] font-semibold text-[#A9B0BF] mb-2">{icon} {label}</p>
 
         {allItems.map(item => {
           const ov       = overrides[item.id] || {};
@@ -1048,13 +1048,13 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
       {tab === 'identity' && (
         <div className="space-y-3">
-          <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0]">Identity</p>
+          <p className="text-[12px] font-semibold text-[#A9B0BF]">Identity</p>
           <Field label="Full Name"        value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
           <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
 
           <div className="border border-white/[0.07] rounded-2xl p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0]">PIN / Password</p>
+              <p className="text-[12px] font-semibold text-[#A9B0BF]">PIN / Password</p>
               <button onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
                 className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
                   showPin ? 'bg-[rgba(248,113,113,0.10)] text-red-400' : 'bg-[rgba(52,211,153,0.10)] text-emerald-300'}`}>
@@ -1071,11 +1071,11 @@ function EditMemberModal({ member, onClose, onSaved }) {
             )}
           </div>
 
-          <p className="text-xs font-bold tracking-widest uppercase text-[#9EA3B0] mt-1">Profile</p>
+          <p className="text-[12px] font-semibold text-[#A9B0BF] mt-1">Profile</p>
           <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
           <Field label="Date of birth"      type="date"   value={form.dob}           onChange={v=>set('dob',v)} />
           <div>
-            <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Sex</label>
+            <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Sex</label>
             <div className="flex gap-2">
               {[['male','Male'],['female','Female']].map(([val,label]) => (
                 <button key={val} type="button"
@@ -1181,7 +1181,7 @@ function PushModal({ members, onClose }) {
         ) : (
           <>
             <div>
-              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Recipient</label>
+              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Recipient</label>
               <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)}
                 /* Fourth of the same four. */
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-[#1A1C20]
@@ -1194,7 +1194,7 @@ function PushModal({ members, onClose }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Title</label>
+              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Title</label>
               <input value={form.title} onChange={e => set('title', e.target.value)}
                 placeholder="e.g. Reminder: Log your weight today"
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
@@ -1202,7 +1202,7 @@ function PushModal({ members, onClose }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Message</label>
+              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Message</label>
               <textarea value={form.body} onChange={e => set('body', e.target.value)} rows={3}
                 placeholder="e.g. Great work this week! Don't forget to log your morning weight."
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm resize-none
@@ -1260,7 +1260,7 @@ function AddCoachModal({ onClose, onAdded }) {
         <Field label="Password" type="password" value={form.password} onChange={v=>set('password',v)} placeholder="Min 8 characters" required />
 
         <div>
-          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">Role</label>
+          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Role</label>
           <div className="flex gap-2">
             {['monitor','admin'].map(r => (
               <button key={r} onClick={() => set('role', r)}
@@ -1379,7 +1379,7 @@ function DeleteMemberModal({ member, onClose, onDeleted }) {
           choose “Disable” instead — that keeps their history and can be reversed.
         </p>
         <div>
-          <label className="block text-xs font-semibold text-[#9EA3B0] uppercase tracking-wider mb-1.5">
+          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
             Type “{member.name}” to confirm
           </label>
           <input value={typed} onChange={e => setTyped(e.target.value)}
@@ -1716,7 +1716,7 @@ export default function AdminDashboard() {
                   className="w-full rounded-xl text-xs font-extrabold text-[#F0E2B6]
                     bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.35)]
                     active:scale-[0.99] transition-transform disabled:opacity-50">
-                  {remindBusy['all'] ? 'Sending…' : `✨ Send an in-app reminder to all ${overview.alerts.length}`}
+                  {remindBusy['all'] ? 'Sending…' : `Send an in-app reminder to all ${overview.alerts.length}`}
                 </button>
                 <p className="text-[9px] text-[#7E8596] mt-2 text-center">
                   Push notification and a coach message inside the app, logged in Audit.

@@ -58,7 +58,7 @@ function Group({ title, buckets }) {
   if (!buckets?.length) return null;
   return (
     <div className="mt-3">
-      <p className="text-[10px] font-bold uppercase tracking-[0.10em] text-[#7E8596] mb-0.5">{title}</p>
+      <p className="text-[10px] font-bold text-[#7E8596] mb-0.5">{title}</p>
       {buckets.map(b => <Row key={b.label} b={b} />)}
     </div>
   );

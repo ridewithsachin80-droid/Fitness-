@@ -17,7 +17,7 @@ function PulseRing({ delay = 0, size = 80, opacity = 0.06 }) {
 function Field({ label, children }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-[10px] font-semibold text-[#7E8596] uppercase tracking-[0.12em]">
+      <label className="block text-[10px] font-semibold text-[#7E8596]">
         {label}
       </label>
       {children}

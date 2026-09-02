@@ -606,8 +606,7 @@ export default function DeviceConnect() {
         {connectedTrackers.length > 0 && (
           <div style={{ marginBottom: 8 }}>
             <p style={{
-              fontSize: 10, fontWeight: 700, color: '#6a6a78',
-              letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10,
+              fontSize: 10, fontWeight: 700, color: '#6a6a78', marginBottom: 10,
             }}>Connected ({connectedTrackers.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {connectedTrackers.map(tracker => (
@@ -630,8 +629,7 @@ export default function DeviceConnect() {
         {availableTrackers.length > 0 && (
           <div style={{ marginTop: connectedTrackers.length > 0 ? 20 : 0 }}>
             <p style={{
-              fontSize: 10, fontWeight: 700, color: '#6a6a78',
-              letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10,
+              fontSize: 10, fontWeight: 700, color: '#6a6a78', marginBottom: 10,
             }}>Available ({availableTrackers.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {availableTrackers.map(tracker => (
@@ -778,7 +776,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
                 <span style={{
                   fontSize: 9, fontWeight: 800, color: badgeColor,
                   background: `${badgeColor}18`, border: `1px solid ${badgeColor}44`,
-                  borderRadius: 20, padding: '2px 7px', letterSpacing: '0.05em', textTransform: 'uppercase',
+                  borderRadius: 20, padding: '2px 7px',
                 }}>{badge}</span>
               );
             })()}

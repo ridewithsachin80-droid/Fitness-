@@ -647,7 +647,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       {/* Quick re-add strip — always visible when we have recent foods */}
       {recentFoods.length > 0 && !showForm && (
         <div>
-          <p className="text-xs text-[#4e4e5c] font-semibold mb-2 uppercase tracking-wider">Quick re-add</p>
+          <p className="text-xs text-[#4e4e5c] font-semibold mb-2 tracking-wider">Quick re-add</p>
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
             {recentFoods.slice(0,6).map((food, i) => {
               const kcal = food.per_100g?.calories ? Math.round(food.per_100g.calories * (food.last_g || 100) / 100) : null;
@@ -670,7 +670,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
           something new. */}
       {!showForm && (yesterdayCount > 0 || presets.length > 0) && (
         <div className="mb-3">
-          <p className="text-xs font-bold text-[#4e4e5c] uppercase tracking-wider mb-1.5">
+          <p className="text-xs font-bold text-[#4e4e5c] tracking-wider mb-1.5">
             Repeat into {meal}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -753,7 +753,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         return (
           <div key={m}>
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-xs font-bold text-[#4e4e5c] uppercase tracking-wider">{m}</span>
+              <span className="text-xs font-bold text-[#4e4e5c] tracking-wider">{m}</span>
               {mealItems.length > 0 && (
                 <>
                   <span className="text-xs text-[#3a3a46]">{mealItems.reduce((s,i)=>s+i.grams,0).toFixed(0)}g</span>
@@ -821,7 +821,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         }, { cal:0, pro:0, carb:0, fat:0 });
         return (
           <div className="flex items-center justify-between bg-white/[0.04] rounded-2xl px-4 py-2.5 border border-white/[0.06]">
-            <span className="text-xs font-bold text-[#4e4e5c] uppercase tracking-wider">Day total</span>
+            <span className="text-xs font-bold text-[#4e4e5c] tracking-wider">Day total</span>
             <div className="flex gap-3">
               <span className="text-xs font-bold text-orange-400">{dayTotal.cal} kcal</span>
               <span className="text-xs text-blue-400">P {dayTotal.pro.toFixed(1)}g</span>

@@ -85,29 +85,29 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2">
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Name *</label>
+          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Name *</label>
           <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Brown Rice (Cooked)"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Hindi Name</label>
+          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Hindi Name</label>
           <input value={form.name_hindi} onChange={e => set('name_hindi', e.target.value)} placeholder="ब्राउन राइस"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Local / Brand Name</label>
+          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Local / Brand Name</label>
           <input value={form.name_local} onChange={e => set('name_local', e.target.value)} placeholder="Aashirvaad Brown Rice"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Category</label>
+          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Category</label>
           <select value={form.category} onChange={e => set('category', e.target.value)}
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] bg-white">
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Source</label>
+          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Source</label>
           <select value={form.source} onChange={e => set('source', e.target.value)}
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] bg-white">
             {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -121,7 +121,7 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Nutrients per 100g</p>
+        <p className="text-xs font-semibold text-stone-500 tracking-wider mb-2">Nutrients per 100g</p>
         <div className="flex gap-1 bg-stone-100 p-1 rounded-xl mb-3">
           {NUTRIENT_GROUPS.map(g => (
             <button key={g.label} onClick={() => setNutrientTab(g.label)}
@@ -432,7 +432,7 @@ export default function AdminFoods() {
                           ].map(([k, v]) => (
                             <div key={k} className="bg-stone-50 rounded-xl px-2 py-2 text-center">
                               <div className="text-sm font-extrabold text-stone-700">{v}</div>
-                              <div className="text-[9px] font-bold uppercase tracking-wider text-stone-400">{k}</div>
+                              <div className="text-[9px] font-bold tracking-wider text-stone-400">{k}</div>
                             </div>
                           ))}
                         </div>

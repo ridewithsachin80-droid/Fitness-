@@ -126,7 +126,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
       {/* Out of range — stated, never interpreted */}
       {flags.length > 0 && (
         <div className="mb-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-1.5">
+          <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-1.5">
             Outside reference range
           </p>
           <div className="space-y-1.5">
@@ -226,7 +226,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
               message that matters. */}
           {insight && !insight.error && insight.urgent?.length > 0 && (
             <div className="bg-red-500/[0.08] border border-red-500/35 rounded-xl px-3.5 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-red-300 mb-1.5">
+              <p className="text-[11px] font-bold tracking-wider text-red-300 mb-1.5">
                 Needs medical review first
               </p>
               <p className="text-[12px] text-[#FFFFFF] leading-relaxed mb-2">{insight.summary}</p>
@@ -266,7 +266,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
               {insight.macro_targets && (
                 <div className="bg-[#1A1C20] border border-[rgba(212,175,55,0.25)] rounded-xl p-3 mb-3">
                   <div className="flex items-baseline justify-between mb-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">
+                    <p className="text-[10px] font-bold tracking-wider text-[#D4AF37]">
                       Macro target
                     </p>
                     <p className="text-[13px] font-extrabold text-[#FFFFFF]">
@@ -291,7 +291,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
                       <div key={label}>
                         <p className={`text-sm font-extrabold ${cls}`}>{pctv}%</p>
                         <p className="text-[11px] text-[#FFFFFF]">{g}g</p>
-                        <p className="text-[9px] uppercase tracking-wider text-[#7E8596]">{label}</p>
+                        <p className="text-[9px] tracking-wider text-[#7E8596]">{label}</p>
                       </div>
                     ))}
                   </div>
@@ -312,7 +312,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
 
               {(insight.meal_ideas || []).length > 0 && (
                 <>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-1.5">
+                  <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-1.5">
                     Meal ideas
                   </p>
                   <div className="space-y-1.5 mb-3">
@@ -360,7 +360,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
             <div key={i} className="bg-[#121316] border border-white/[0.07] rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[12px] font-bold text-[#FFFFFF]">{c.test_name}</span>
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                <span className={`text-[10px] font-bold tracking-wider ${
                   c.direction === 'improved' ? 'text-emerald-300'
                   : c.direction === 'worsened' ? 'text-amber-300' : 'text-[#9EA3B0]'}`}>
                   {c.direction}
@@ -377,7 +377,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
 
               {/* What was happening in that window */}
               <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[#7E8596] mb-1">
+                <p className="text-[9px] font-bold tracking-wider text-[#7E8596] mb-1">
                   During this interval
                 </p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
@@ -431,13 +431,13 @@ export default function LabResults({ memberId = null, memberName = '' }) {
           <div className="bg-[#121316] border border-white/[0.08] rounded-xl p-3">
             <div className="flex gap-2 mb-2">
               <label className="flex-1">
-                <span className="block text-[9px] uppercase tracking-wider text-[#7E8596] mb-1">Test date</span>
+                <span className="block text-[9px] tracking-wider text-[#7E8596] mb-1">Test date</span>
                 <input type="date" value={testDate} max={new Date().toISOString().slice(0, 10)}
                   onChange={e => setTestDate(e.target.value)} style={{ minHeight: 38 }}
                   className="w-full bg-[#1A1C20] border border-white/[0.12] rounded-lg px-2 text-xs text-[#FFFFFF]" />
               </label>
               <label className="flex-1">
-                <span className="block text-[9px] uppercase tracking-wider text-[#7E8596] mb-1">Lab (optional)</span>
+                <span className="block text-[9px] tracking-wider text-[#7E8596] mb-1">Lab (optional)</span>
                 <input value={labName} onChange={e => setLabName(e.target.value)} placeholder="e.g. Metropolis"
                   style={{ minHeight: 38 }}
                   className="w-full bg-[#1A1C20] border border-white/[0.12] rounded-lg px-2 text-xs text-[#FFFFFF] placeholder-[#7E8596]" />

@@ -105,7 +105,7 @@ export default function MacroLab({ memberId, onChanged }) {
       {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
 
       {/* ── Adherence — needs no trial, works on existing logs ── */}
-      <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-2">
+      <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-2">
         What they actually sustain
       </p>
 
@@ -149,7 +149,7 @@ export default function MacroLab({ memberId, onChanged }) {
 
       {/* ── Trial ── */}
       <div className="border-t border-white/[0.06] pt-3">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mb-2">
+        <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-2">
           Controlled trial
         </p>
 
@@ -200,7 +200,7 @@ export default function MacroLab({ memberId, onChanged }) {
                     <p className="text-[11px] font-bold text-[#FFFFFF]">Arm {k} · {arm.label}</p>
                     <p className="text-[10px] text-[#7E8596]">C {arm.carbs_g}g · F {arm.fat_g}g</p>
                   </div>
-                  <span className={`text-[9px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 border ${
+                  <span className={`text-[9px] font-bold tracking-wider rounded-full px-2 py-0.5 border ${
                     active ? 'text-[#D4AF37] border-[rgba(212,175,55,0.4)]'
                     : done ? 'text-emerald-300 border-emerald-400/40'
                            : 'text-[#7E8596] border-white/[0.12]'}`}>

@@ -171,7 +171,7 @@ export default function EvalSamples() {
               }`}>
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596]">
+                  <span className="text-[10px] font-bold tracking-wider text-[#7E8596]">
                     {SOURCE_LABEL[s.source] || s.source}
                   </span>
                   {s.field && (

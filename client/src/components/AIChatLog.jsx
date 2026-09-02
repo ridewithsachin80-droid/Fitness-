@@ -120,7 +120,7 @@ function GroupHeader({ icon, title, count }) {
   return (
     <div className="flex items-center gap-1.5 mb-1.5">
       <span className="text-xs">{icon}</span>
-      <span className="text-[10px] font-bold text-[#9EA3B0] uppercase tracking-widest">{title}</span>
+      <span className="text-[10px] font-bold text-[#9EA3B0] tracking-widest">{title}</span>
       {count != null && <span className="text-[10px] text-[#7E8596]">· {count}</span>}
     </div>
   );
@@ -1244,7 +1244,7 @@ export default function AIChatLog() {
                             ))}
                             {m.parsed.totals && m.parsed.foods.filter(f => f.on).length > 1 && (
                               <div className="flex items-center justify-between px-3 py-2 bg-[#D4AF37]/[0.10] border border-[#D4AF37]/25 rounded-xl">
-                                <span className="text-[11px] font-bold text-[#F0E2B6] uppercase tracking-wider">Food total</span>
+                                <span className="text-[11px] font-bold text-[#F0E2B6] tracking-wider">Food total</span>
                                 <span className="text-[13px] font-bold text-white">
                                   {m.parsed.foods.filter(f => f.on).reduce((s, f) => s + (f.macros?.cal || 0), 0)} kcal
                                 </span>

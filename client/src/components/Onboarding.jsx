@@ -236,7 +236,7 @@ function Logo() {
   return (
     <div style={{ textAlign: 'center', marginBottom: 32 }}>
       <div style={{ fontSize: 48, marginBottom: 8 }}>🏃</div>
-      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: '#D4AF37', textTransform: 'uppercase', fontFamily: 'Outfit, sans-serif' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#D4AF37', fontFamily: 'Outfit, sans-serif' }}>
         FitLife
       </div>
     </div>
@@ -283,7 +283,7 @@ const s = {
   goalGrid:  { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 },
   goalCard:  { borderRadius: 16, padding: '16px 10px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
   goalLabel: { fontSize: 14, fontWeight: 600, color: '#ededf0' },
-  fieldLabel:{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: '#7E8596', marginBottom: 6 },
+  fieldLabel:{ display: 'block', fontSize: 10, fontWeight: 700, color: '#7E8596', marginBottom: 6 },
   input:     { width: '100%', boxSizing: 'border-box', background: '#1A1C20', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: '12px 14px', color: '#FFFFFF', fontSize: 15, fontWeight: 600, outline: 'none' },
   warn:      { fontSize: 12, color: '#f87171', marginTop: 10, textAlign: 'center' },
   hint:      { fontSize: 11, color: '#6a6a78', marginTop: 10, textAlign: 'center', lineHeight: 1.5 },

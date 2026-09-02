@@ -69,7 +69,7 @@ export default function WeeklyReportCard() {
   return (
     <div className="rounded-2xl border border-[rgba(212,175,55,0.3)] bg-[#1A1C20] p-4 mb-4">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-[10px] font-bold tracking-[0.16em] text-[#D4AF37] uppercase">
+        <p className="text-[10px] font-bold text-[#D4AF37]">
           Your week · {fmtDate(report.week_start)}–{fmtDate(report.week_end)}
         </p>
         {isNew && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#D4AF37] text-[#121316]">NEW</span>}
@@ -112,7 +112,7 @@ export default function WeeklyReportCard() {
 
       {report.coach_note && (
         <div className="mb-3">
-          <p className="text-[9px] font-bold tracking-[0.14em] text-[#7E8596] uppercase mb-1">From your coach</p>
+          <p className="text-[9px] font-bold text-[#7E8596] mb-1">From your coach</p>
           <p className="text-[13px] text-[#EDEDF0] leading-relaxed italic"
              style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
             "{report.coach_note}"
@@ -128,7 +128,7 @@ export default function WeeklyReportCard() {
 
       {history.length > 0 && (
         <div className="mt-3 pt-2.5 border-t border-white/[0.06]">
-          <p className="text-[9px] font-bold tracking-wider text-[#7E8596] uppercase mb-1.5">Previous weeks</p>
+          <p className="text-[9px] font-bold tracking-wider text-[#7E8596] mb-1.5">Previous weeks</p>
           {history.slice(0, 4).map(h => (
             <div key={h.week_start} className="flex justify-between py-0.5">
               <span className="text-[11px] text-[#9EA3B0]">{fmtDate(h.week_start)}–{fmtDate(h.week_end)}</span>

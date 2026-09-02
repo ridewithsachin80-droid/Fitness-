@@ -280,7 +280,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
       </div>
 
       {/* Macros */}
-      <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8, fontFamily: font }}>
+      <div style={{ fontSize: 11, color: muted, fontWeight: 700, marginBottom: 8, fontFamily: font }}>
         Macros · per {grams}g
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
@@ -294,7 +294,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
 
       {/* Vitamins — collapsible */}
       <details style={{ marginBottom: 8 }}>
-        <summary style={{ fontSize: 11, color: muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', marginBottom: 8, fontFamily: font }}>
+        <summary style={{ fontSize: 11, color: muted, fontWeight: 700, cursor: 'pointer', marginBottom: 8, fontFamily: font }}>
           ▶ Vitamins · tap to expand
         </summary>
         <div style={micro}>
@@ -309,7 +309,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
 
       {/* Minerals — collapsible */}
       <details style={{ marginBottom: 8 }}>
-        <summary style={{ fontSize: 11, color: muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', marginBottom: 8, fontFamily: font }}>
+        <summary style={{ fontSize: 11, color: muted, fontWeight: 700, cursor: 'pointer', marginBottom: 8, fontFamily: font }}>
           ▶ Minerals · tap to expand
         </summary>
         <div style={micro}>
@@ -324,7 +324,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
 
       {/* Omega fatty acids — collapsible */}
       <details style={{ marginBottom: 12 }}>
-        <summary style={{ fontSize: 11, color: muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', marginBottom: 8, fontFamily: font }}>
+        <summary style={{ fontSize: 11, color: muted, fontWeight: 700, cursor: 'pointer', marginBottom: 8, fontFamily: font }}>
           ▶ Omega fatty acids · tap to expand
         </summary>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6 }}>

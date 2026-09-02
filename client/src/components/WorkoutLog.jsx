@@ -497,7 +497,7 @@ export default function WorkoutLog({ date }) {
                 <button key={r.id} onClick={() => addExercise(r)}
                   className="w-full text-left px-3 py-2.5 text-sm text-[#d8d8de] hover:bg-white/[0.05] flex items-center justify-between">
                   <span>{r.name}</span>
-                  {r.muscle_group && <span className="text-[10px] text-[#5a5a68] uppercase">{r.muscle_group}</span>}
+                  {r.muscle_group && <span className="text-[10px] text-[#5a5a68]">{r.muscle_group}</span>}
                 </button>
               ))}
               {results.length === 0 && search.length >= 2 && !searching && (
@@ -548,7 +548,7 @@ export default function WorkoutLog({ date }) {
 
               {ex.sets.length > 0 && (
                 <div className="space-y-1.5 mb-2">
-                  <div className="flex gap-2 text-[10px] text-[#5a5a68] uppercase font-semibold px-1">
+                  <div className="flex gap-2 text-[10px] text-[#5a5a68] font-semibold px-1">
                     <span className="w-8">Set</span>
                     <span className="flex-1 min-w-0 text-center">Weight (kg)</span>
                     <span className="flex-1 min-w-0 text-center">Reps</span>
@@ -616,7 +616,7 @@ export default function WorkoutLog({ date }) {
       {/* ── Cardio ── */}
       <div className="mt-3 pt-3 border-t border-white/[0.06]">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-bold text-[#5a5a68] uppercase tracking-wider">Cardio</span>
+          <span className="text-[10px] font-bold text-[#5a5a68] tracking-wider">Cardio</span>
           <button onClick={() => setCardio(c => [...c, { type: 'walking', duration_min: 30, speed_kmh: 5 }])}
             style={{ minHeight: 32 }}
             className="text-[11px] font-bold text-[#e0c98a] bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.25)] rounded-lg px-3 active:scale-95 transition-transform">
@@ -650,7 +650,7 @@ export default function WorkoutLog({ date }) {
                   </div>
                   <div className="flex gap-2">
                     <label className="flex-1 min-w-0">
-                      <span className="block text-[9px] text-[#5a5a68] uppercase tracking-wider mb-1">Minutes</span>
+                      <span className="block text-[9px] text-[#5a5a68] tracking-wider mb-1">Minutes</span>
                       <input type="number" inputMode="numeric" value={c.duration_min ?? ''}
                         onChange={e => patch('duration_min', e.target.value)}
                         placeholder="30"
@@ -658,7 +658,7 @@ export default function WorkoutLog({ date }) {
                     </label>
                     {t.speed && (
                       <label className="flex-1 min-w-0">
-                        <span className="block text-[9px] text-[#5a5a68] uppercase tracking-wider mb-1">Speed km/h</span>
+                        <span className="block text-[9px] text-[#5a5a68] tracking-wider mb-1">Speed km/h</span>
                         <input type="number" inputMode="decimal" step="0.5" value={c.speed_kmh ?? ''}
                           onChange={e => patch('speed_kmh', e.target.value)}
                           placeholder="5"
@@ -687,7 +687,7 @@ export default function WorkoutLog({ date }) {
           <div className="mt-3 pt-3 border-t border-white/[0.06]">
             <div className="bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.22)] rounded-xl px-3.5 py-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-[#e0c98a] uppercase tracking-wider">Calories burned</span>
+                <span className="text-[11px] font-bold text-[#e0c98a] tracking-wider">Calories burned</span>
                 <span className="font-display text-xl font-bold text-orange-400">{e.totalKcal} kcal</span>
               </div>
               <div className="space-y-0.5">
@@ -723,7 +723,7 @@ export default function WorkoutLog({ date }) {
           (walks, cycling, yoga). Without this they were saved but invisible. */}
       {sessionNotes && (
         <div className="mt-3 pt-3 border-t border-white/[0.06]">
-          <p className="text-[10px] font-bold text-[#5a5a68] uppercase tracking-wider mb-1.5">Session notes</p>
+          <p className="text-[10px] font-bold text-[#5a5a68] tracking-wider mb-1.5">Session notes</p>
           <p className="text-xs text-[#b6b6c2] leading-relaxed whitespace-pre-wrap bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2.5">
             {sessionNotes}
           </p>

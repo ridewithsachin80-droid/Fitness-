@@ -111,7 +111,7 @@ function PastLogModal({ log, onClose }) {
           {/* Activities */}
           {checkedActs.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">🏃 Activities</p>
+              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">🏃 Activities</p>
               <div className="flex flex-wrap gap-1.5">
                 {checkedActs.map(a => (
                   <span key={a.id} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-full font-medium">
@@ -125,7 +125,7 @@ function PastLogModal({ log, onClose }) {
           {/* ACV */}
           {checkedAcv.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">🍶 ACV</p>
+              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">🍶 ACV</p>
               <div className="flex flex-wrap gap-1.5">
                 {checkedAcv.map(a => (
                   <span key={a.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full font-medium">
@@ -139,7 +139,7 @@ function PastLogModal({ log, onClose }) {
           {/* Food */}
           {foodItems.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">
                 🥗 Food {kcal > 0 && <span className="font-normal text-orange-500 normal-case">· {kcal} kcal</span>}
               </p>
               <div className="space-y-1">
@@ -158,7 +158,7 @@ function PastLogModal({ log, onClose }) {
           {/* Water */}
           {log.water_ml > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">💧 Water</p>
+              <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">💧 Water</p>
               <p className="text-sm text-blue-600 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
             </div>
           )}
@@ -166,7 +166,7 @@ function PastLogModal({ log, onClose }) {
           {/* Supplements */}
           {checkedSupps.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">💊 Supplements</p>
+              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">💊 Supplements</p>
               <div className="flex flex-wrap gap-1.5">
                 {checkedSupps.map(s => (
                   <span key={s.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full font-medium">
@@ -180,7 +180,7 @@ function PastLogModal({ log, onClose }) {
           {/* Sleep */}
           {(sleep.bedtime || sleep.waketime) && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">🌙 Sleep</p>
+              <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">🌙 Sleep</p>
               <p className="text-sm text-stone-600">
                 {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
                 {sleep.bedtime && sleep.waketime && ' → '}
@@ -193,7 +193,7 @@ function PastLogModal({ log, onClose }) {
           {/* Notes */}
           {log.notes && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">📝 Notes</p>
+              <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">📝 Notes</p>
               <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{log.notes}</p>
             </div>
           )}

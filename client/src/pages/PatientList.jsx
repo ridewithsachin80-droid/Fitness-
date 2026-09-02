@@ -283,7 +283,7 @@ export default function MemberList() {
         {/* Pending logs first */}
         {noLogToday.length > 0 && (
           <div>
-            <p className="text-[10px] font-semibold text-red-400 uppercase tracking-[0.12em] mb-2 px-1">
+            <p className="text-[10px] font-semibold text-red-400 mb-2 px-1">
               ⚠ No log today ({noLogToday.length})
             </p>
             {noLogToday.map(p => <MemberCard key={p.id} member={p} todayStr={todayStr} onClick={() => navigate(`/coach/${p.id}`)} />)}
@@ -293,7 +293,7 @@ export default function MemberList() {
         {loggedToday.length > 0 && (
           <div>
             {noLogToday.length > 0 && (
-              <p className="text-[10px] font-semibold text-[#D4AF37] uppercase tracking-[0.12em] mb-2 mt-4 px-1">
+              <p className="text-[10px] font-semibold text-[#D4AF37] mb-2 mt-4 px-1">
                 ✓ Logged today ({loggedToday.length})
               </p>
             )}

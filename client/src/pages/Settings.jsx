@@ -201,7 +201,7 @@ export default function Settings() {
 
           {/* Font size */}
           <div className="mb-4">
-            <p className="text-xs text-[#6a6a78] mb-2 font-medium uppercase tracking-wider">Text size</p>
+            <p className="text-xs text-[#6a6a78] mb-2 font-medium tracking-wider">Text size</p>
             <div className="flex gap-2">
               {[['normal','Aa','Normal'],['large','AA','Large']].map(([id, sample, label]) => (
                 <button key={id} onClick={() => { setFontSize(id); haptic(15); }}
@@ -217,7 +217,7 @@ export default function Settings() {
 
           {/* Nutrition view */}
           <div>
-            <p className="text-xs text-[#6a6a78] mb-2 font-medium uppercase tracking-wider">Nutrition display</p>
+            <p className="text-xs text-[#6a6a78] mb-2 font-medium tracking-wider">Nutrition display</p>
             <div className="flex gap-2">
               {[['simple','🚦','Simple — traffic lights'],['detailed','🔬','Detailed — all numbers']].map(([id, emoji, label]) => (
                 <button key={id} onClick={() => { setNutritionView(id); haptic(15); }}
@@ -616,7 +616,7 @@ function ChangePin() {
 
   const field = (label, value, setter, placeholder) => (
     <div>
-      <label className="block text-[10px] font-semibold text-[#7E8596] uppercase tracking-[0.10em] mb-1.5">
+      <label className="block text-[10px] font-semibold text-[#7E8596] mb-1.5">
         {label}
       </label>
       <input

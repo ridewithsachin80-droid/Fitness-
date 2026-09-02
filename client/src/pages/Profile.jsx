@@ -379,11 +379,11 @@ export default function Profile() {
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
                   <p className="text-lg font-extrabold text-[#FFFFFF]">{bmr}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mt-0.5">BMR at rest</p>
+                  <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mt-0.5">BMR at rest</p>
                 </div>
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
                   <p className="text-lg font-extrabold text-[#F0E2B6]">{totalOut}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8596] mt-0.5">Burned today</p>
+                  <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mt-0.5">Burned today</p>
                 </div>
               </div>
 
@@ -619,7 +619,7 @@ function EditDetails({ profile, onCancel, onSaved }) {
     }
   };
 
-  const label = "block text-[10px] font-semibold text-[#7E8596] uppercase tracking-[0.10em] mb-1.5";
+  const label = "block text-[10px] font-semibold text-[#7E8596] mb-1.5";
   const input = `w-full bg-[#121316] border border-white/[0.10] rounded-xl px-3 py-2.5
     text-sm text-white outline-none focus:border-[rgba(212,175,55,0.40)]
     focus:ring-2 focus:ring-[rgba(212,175,55,0.12)]`;

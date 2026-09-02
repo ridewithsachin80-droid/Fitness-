@@ -99,13 +99,13 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
             ].map(s => (
               <div key={s.l} className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2">
                 <p className={`text-base font-extrabold ${s.c}`}>{s.v}</p>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[#5a5a68] mt-0.5">{s.l}</p>
+                <p className="text-[9px] font-bold tracking-wider text-[#5a5a68] mt-0.5">{s.l}</p>
               </div>
             ))}
           </div>
 
           {/* Volume trend — simple bars, no chart library needed */}
-          <p className="text-[9px] font-bold uppercase tracking-wider text-[#5a5a68] mb-1.5">
+          <p className="text-[9px] font-bold tracking-wider text-[#5a5a68] mb-1.5">
             Volume per session
           </p>
           <div className="flex items-end gap-1 h-16 mb-3">
@@ -121,7 +121,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
           </div>
 
           {/* Recent sessions */}
-          <p className="text-[9px] font-bold uppercase tracking-wider text-[#5a5a68] mb-1.5">
+          <p className="text-[9px] font-bold tracking-wider text-[#5a5a68] mb-1.5">
             Recent sessions
           </p>
           <div className="space-y-1.5">
