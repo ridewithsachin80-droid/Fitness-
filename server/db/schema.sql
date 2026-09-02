@@ -660,6 +660,16 @@ ALTER TABLE foods ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_foods_unverified
   ON foods(created_at DESC) WHERE verified = false;
 
+-- ── WHAT THIS MEMBER COOKS IN ────────────────────────────────────────────────
+-- The same dosa is 1.1g saturated fat in sunflower oil and 8.7g in coconut.
+-- The FOOD knows its total fat; only the member knows which fat went in, and
+-- it is a property of their kitchen, not of the dish.
+--
+-- Asked once, not per meal. This app's value is logging a day in one message;
+-- a question after every fried item would destroy that for a number most
+-- members will never look at.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS cooking_fat VARCHAR(20);
+
 -- ── TYPICAL SERVING SIZE ─────────────────────────────────────────────────────
 -- What one normal portion of this food weighs.
 --

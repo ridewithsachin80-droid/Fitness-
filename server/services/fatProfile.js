@@ -78,4 +78,57 @@ function saturatedPlausibility(per100g = {}) {
   };
 }
 
-module.exports = { FATS, DEFAULT_FAT, suggestFatSplit, saturatedPlausibility, SATURATED_FLOOR_FAT };
+
+/**
+ * Which fat a member's own words point at.
+ *
+ * Far better than asking. "ghee masala dosa" is the member telling us, in the
+ * message they were already typing — no extra question, no friction, and it is
+ * specific to THAT meal rather than a blanket setting. A member who normally
+ * uses sunflower but had a butter naan at a restaurant gets it right.
+ *
+ * Includes the words people actually use in Indian kitchens, not only the
+ * English ones: tuppa, makhan, sarson, nariyal.
+ *
+ * Precedence, highest first:
+ *   1. what they said in this message
+ *   2. what they said in the food's own name
+ *   3. their kitchen default on their profile
+ *   4. the house default
+ */
+const FAT_WORDS = [
+  ['ghee',      /\b(ghee|ghi|tuppa|clarified butter)\b/i],
+  ['butter',    /\b(butter|makhan|makkhan|amul butter)\b/i],
+  ['coconut',   /\b(coconut oil|nariyal (ka )?tel|kobbari enne)\b/i],
+  ['mustard',   /\b(mustard oil|sarson (ka )?tel|kadugu enne)\b/i],
+  ['olive',     /\b(olive oil|extra virgin)\b/i],
+  ['sesame',    /\b(sesame oil|gingelly|til (ka )?tel|ellu enne)\b/i],
+  ['groundnut', /\b(groundnut|peanut oil|moongphali)\b/i],
+  ['ricebran',  /\b(rice bran)\b/i],
+  ['palm',      /\b(palm oil|palmolein)\b/i],
+  ['vanaspati', /\b(vanaspati|dalda)\b/i],
+  ['sunflower', /\b(sunflower|refined oil|cooking oil|\boil\b)\b/i],
+];
+
+/**
+ * @param {string} message   what the member typed
+ * @param {string} foodName  the matched food's name
+ * @param {string} [profileDefault]  their kitchen default
+ * @returns {{ fat:string, from:'said'|'name'|'profile'|'default' }}
+ */
+function detectCookingFat(message, foodName = '', profileDefault = null) {
+  // "ghee" beats "oil" when both appear — the specific fat wins over the
+  // generic word, so "ghee dosa fried in oil" is still ghee. The list is
+  // ordered accordingly: sunflower's catch-all /oil/ is checked last.
+  for (const [key, re] of FAT_WORDS) {
+    if (re.test(String(message || ''))) return { fat: key, from: 'said' };
+  }
+  for (const [key, re] of FAT_WORDS) {
+    if (re.test(String(foodName || ''))) return { fat: key, from: 'name' };
+  }
+  if (profileDefault && FATS[profileDefault]) return { fat: profileDefault, from: 'profile' };
+  return { fat: DEFAULT_FAT, from: 'default' };
+}
+
+module.exports = { FATS, DEFAULT_FAT, FAT_WORDS, suggestFatSplit,
+                   saturatedPlausibility, detectCookingFat, SATURATED_FLOOR_FAT };

@@ -339,6 +339,50 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
       'condition not found');
   }
 
+  console.log('\n[11] the split reaches the logged item');
+  {
+    const dosa = [{ name: 'Masala Dosa', grams: 200,
+                    per_100g: normaliseNutrients({ calories: 212, protein: 3, total_carbs: 25, fat: 10 }) }];
+
+    const plain = ai.applyCookingFat(dosa, 'masala dosa', null)[0];
+    ck('a plain dosa gets the house oil', plain.per_100g.saturated_fat === 1.1, plain.per_100g.saturated_fat);
+    ck('and records which fat was assumed, so it can be argued with',
+      plain.cooking_fat === 'sunflower' && plain.cooking_fat_from === 'default', plain.cooking_fat_from);
+
+    const ghee = ai.applyCookingFat(dosa, 'ghee masala dosa', null)[0];
+    ck('a ghee dosa gets ghee — six times the saturated fat',
+      ghee.per_100g.saturated_fat === 6.5, ghee.per_100g.saturated_fat);
+    ck('and says the member told us', ghee.cooking_fat_from === 'said');
+
+    // A food that already knows its own saturated fat is never overwritten. A
+    // packaged label beats any inference we could make.
+    const known = [{ name: 'Masala Dosa', grams: 200,
+                     per_100g: normaliseNutrients({ calories: 212, fat: 10, saturated_fat: 4 }) }];
+    ck('a food that already records saturated fat is left alone',
+      ai.applyCookingFat(known, 'ghee masala dosa', null)[0].per_100g.saturated_fat === 4);
+
+    // Nor is a food that was never cooked in fat.
+    const curd = [{ name: 'Curd', grams: 120,
+                    per_100g: normaliseNutrients({ calories: 60, fat: 4 }) }];
+    ck('curd is not a fried dish — untouched',
+      ai.applyCookingFat(curd, 'curd', null)[0].per_100g.saturated_fat === 0);
+
+    const trace = [{ name: 'Masala Dosa', grams: 200,
+                     per_100g: normaliseNutrients({ calories: 100, fat: 1 }) }];
+    ck('a trace of fat is not worth splitting',
+      ai.applyCookingFat(trace, 'masala dosa', null)[0].per_100g.saturated_fat === 0);
+
+    ck('the member\'s kitchen default applies when they say nothing',
+      ai.applyCookingFat(dosa, 'masala dosa', 'coconut')[0].per_100g.saturated_fat === 8.7);
+
+    // Wiring: the same anchor mistake has already been made twice this session.
+    const fs = require('fs'), path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'aiChat.js'), 'utf8');
+    const at = src.indexOf('applyCookingFat(foods, cleanMsg');
+    const route = [...src.slice(0, at).matchAll(/router\.(?:post|get)\('([^']+)'/g)].pop();
+    ck('the split is applied inside /parse, not /photo', route?.[1] === '/parse', route?.[1]);
+  }
+
   console.log(`\n${fail === 0 ? '✅' : '❌'} test-nutrition-contract: ${pass} passed, ${fail} failed\n`);
   await pool.end();
   process.exit(fail === 0 ? 0 : 1);

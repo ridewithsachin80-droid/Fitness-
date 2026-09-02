@@ -28,7 +28,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
 const express = require('express'), jwt = require('jsonwebtoken'), cookieParser = require('cookie-parser');
 const pool = require('../db/pool');
 const { macroPlausibility, atwaterKcal, cookingFatPlausibility } = require('../services/macroCheck');
-const { suggestFatSplit, saturatedPlausibility, FATS } = require('../services/fatProfile');
+const { suggestFatSplit, saturatedPlausibility, FATS, detectCookingFat } = require('../services/fatProfile');
 
 const app = express(); app.use(express.json()); app.use(cookieParser());
 app.use('/api/foods', require('../routes/foods'));
@@ -176,6 +176,48 @@ const per = (cal, pro, carb, fat, sat = Math.round(fat * 0.25 * 10) / 10) =>
         const s = suggestFatSplit(100, k);
         return s.saturated + s.mufa + s.pufa <= 100.5;
       }));
+  }
+
+  // ── 1d. The member tells us which fat ─────────────────────────────────────
+  // Better than asking: "ghee masala dosa" is the member saying it, in the
+  // message they were already typing. No extra question, and it is specific to
+  // THAT meal — someone who normally uses sunflower but had a butter naan out
+  // gets it right.
+  console.log('\n[1d] which fat, from what they said');
+  {
+    const d = (msg, name = 'Masala Dosa', prof = null) => detectCookingFat(msg, name, prof);
+
+    ck('"ghee masala dosa" is ghee', d('ghee masala dosa').fat === 'ghee');
+    ck('"butter masala dosa" is butter', d('butter masala dosa').fat === 'butter');
+    ck('"dosa in coconut oil" is coconut', d('dosa in coconut oil').fat === 'coconut');
+    ck('plain "masala dosa" falls back to the house default',
+      d('masala dosa').fat === 'sunflower' && d('masala dosa').from === 'default');
+
+    // The words people actually use, not only the English ones.
+    ck('"tuppa dosa" is ghee — Kannada', d('tuppa dosa').fat === 'ghee');
+    ck('"roti with makhan" is butter — Hindi', d('2 roti with makhan').fat === 'butter');
+    ck('"sarson ka tel" is mustard', d('sabzi in sarson ka tel').fat === 'mustard');
+
+    // The specific fat must beat the generic word, or "ghee dosa fried in oil"
+    // silently becomes sunflower and understates the saturated fat sixfold.
+    ck('a named fat beats the generic word "oil"',
+      d('ghee dosa fried in oil').fat === 'ghee');
+
+    ck('the fat can also come from the food name itself',
+      d('two of them', 'Ghee Roast Dosa').fat === 'ghee'
+      && d('two of them', 'Ghee Roast Dosa').from === 'name');
+    ck('their kitchen default is used when nothing is said',
+      d('masala dosa', 'Masala Dosa', 'coconut').fat === 'coconut'
+      && d('masala dosa', 'Masala Dosa', 'coconut').from === 'profile');
+    ck('but what they said still beats their default',
+      d('ghee masala dosa', 'Masala Dosa', 'coconut').fat === 'ghee');
+    ck('a nonsense default falls back rather than breaking',
+      d('masala dosa', 'Masala Dosa', 'unicorn').fat === 'sunflower');
+
+    // And the number that results.
+    ck('ghee makes the same dosa six times higher in saturated fat',
+      suggestFatSplit(10, 'ghee').saturated === 6.5
+      && suggestFatSplit(10, 'sunflower').saturated === 1.1);
   }
 
   // ── 2. Ranking and the endpoint ────────────────────────────────────────────

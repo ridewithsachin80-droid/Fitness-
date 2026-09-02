@@ -36,7 +36,8 @@ const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
 const { cleanScalePayload } = require('../services/scaleParse');
 const { cookingFatPlausibility, macroPlausibility } = require('../services/macroCheck');
-const { FATS, DEFAULT_FAT, saturatedPlausibility } = require('../services/fatProfile');
+const { FATS, DEFAULT_FAT, saturatedPlausibility, suggestFatSplit,
+        detectCookingFat } = require('../services/fatProfile');
 
 router.use(authMW);
 
@@ -771,6 +772,55 @@ function applyDefaultPortions(message, foods) {
     if (!Number.isFinite(def) || def <= 0) return f;
     if (Number(f.grams) === def) return f;
     return { ...f, grams: def, qty_text: f.qty_text || 'typical serving' };
+  });
+}
+
+/**
+ * Split a cooked dish's fat using the fat THIS member cooks in.
+ *
+ * The food table stores one total fat for everyone, which is right — a dosa is
+ * a dosa. But the saturated share is a property of the kitchen, not the dish:
+ * Asha frying in coconut oil and Bujju in sunflower are eating the same dosa
+ * with 8.7g and 1.1g of saturated fat respectively.
+ *
+ * Logged items keep their own nutrition snapshot, so each member's copy can
+ * carry their own split without the shared row ever disagreeing with itself.
+ *
+ * Only applied where it is true: a dish cooked in fat, and only when the food
+ * itself has not already recorded a real saturated figure. A packaged food's
+ * label beats any inference we could make.
+ */
+function applyCookingFat(foods, message, profileDefault = null) {
+  return (foods || []).map(f => {
+    const n = f.per_100g || {};
+    const fat = +n.fat || 0;
+    if (fat < 3) return f;
+    if ((+n.saturated_fat || 0) > 0) return f;      // the food already knows
+    if (cookingFatPlausibility(n, f.name || '').status === 'unknown') return f;
+
+    // What they SAID wins. "ghee masala dosa" is the member telling us which
+    // fat went in, for this meal, without being asked anything.
+    const { fat: key, from } = detectCookingFat(message, f.name, profileDefault);
+    const split = suggestFatSplit(fat, key);
+    if (!split) return f;
+    return { ...f,
+      cooking_fat: key,
+      cooking_fat_from: from,
+      per_100g: { ...n,
+        saturated_fat: split.saturated,
+        omega9_mufa: (+n.omega9_mufa || 0) || split.mufa,
+      },
+    };
+  });
+}
+
+/** Did this parse include a cooked dish we could not split? */
+function needsCookingFat(foods) {
+  return (foods || []).some(f => {
+    const n = f.per_100g || {};
+    return (+n.fat || 0) >= 3
+      && (+n.saturated_fat || 0) === 0
+      && cookingFatPlausibility(n, f.name || '').status !== 'unknown';
   });
 }
 
@@ -1692,6 +1742,17 @@ router.post('/parse', async (req, res) => {
 
   try {
     const portions = await loadPortions(req.user.id);
+
+    // The member's usual kitchen fat, used when this message names none.
+    // Cheap, and it means "masala dosa" from someone who cooks in coconut is
+    // not silently recorded as sunflower.
+    let kitchenFat = null;
+    try {
+      const { rows } = await pool.query(
+        `SELECT cooking_fat FROM patient_profiles WHERE user_id = $1`, [req.user.id]);
+      kitchenFat = rows[0]?.cooking_fat || null;
+    } catch (e) { console.error('cooking_fat lookup failed:', e.message); }
+
     const { text: rawText, provider, model } = await callAI(buildParsePrompt(cleanMsg, ctx, portions));
 
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -1857,6 +1918,12 @@ router.post('/parse', async (req, res) => {
     // The coach's typical serving, when the member named no quantity at all.
     // "masala dosa" with no number was landing at whatever the model guessed.
     foods = applyDefaultPortions(cleanMsg, foods);
+
+    // The fat a cooked dish was made with, taken from the member's own words.
+    // "ghee masala dosa" is 6.5g saturated per 100g; plain "masala dosa" is
+    // 1.1g. The food table holds one total fat for everyone; the split belongs
+    // to the meal.
+    foods = applyCookingFat(foods, cleanMsg, kitchenFat);
 
     // Eval set: hold on to what the model returned for THIS message, so a
     // correction arriving three messages later can be paired back to it.
@@ -3790,6 +3857,8 @@ module.exports.answerFoodQuestion = answerFoodQuestion;
 module.exports.detectFoodEdit     = detectFoodEdit;
 module.exports.applyDefaultPortions = applyDefaultPortions;
 module.exports.memberGaveQuantity = memberGaveQuantity;
+module.exports.applyCookingFat    = applyCookingFat;
+module.exports.needsCookingFat    = needsCookingFat;
 module.exports.recordEvalSample   = recordEvalSample;
 module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;
