@@ -26,6 +26,7 @@ const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const role   = require('../middleware/roleCheck');
 const { macroPlausibility, cookingFatPlausibility } = require('../services/macroCheck');
+const { propagationImpact, propagateFoodNutrition } = require('../services/foodPropagate');
 
 // ─── All routes require authentication ────────────────────────────────────────
 router.use(authMW);
@@ -487,6 +488,20 @@ router.post('/lookup', async (req, res) => {
 });
 
 // ─── Admin-only routes below ──────────────────────────────────────────────────
+// GET /api/foods/:id/impact — what a correction would touch, before doing it.
+// Declared above PUT so the coach can be shown the number first; nothing is
+// written by this call.
+router.get('/:id/impact', authMW, role('monitor', 'admin'), async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid food id' });
+  try {
+    res.json(await propagationImpact(id));
+  } catch (err) {
+    console.error('GET /foods/:id/impact error:', err.message);
+    res.status(500).json({ error: 'Could not work out the impact' });
+  }
+});
+
 router.use(role('admin'));
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -546,6 +561,7 @@ router.post('/', async (req, res) => {
 // Admin edits a food. Can update any field including verified status.
 // Partial update — only supplied fields are changed.
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/foods/:id   body may include { propagate: true }
 router.put('/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid food id' });
@@ -554,6 +570,7 @@ router.put('/:id', async (req, res) => {
     name, name_hindi, name_local,
     category, source, verified,
     per_100g,
+    propagate = false,
   } = req.body;
 
   try {
@@ -598,7 +615,25 @@ router.put('/:id', async (req, res) => {
       ]
     );
 
-    res.json(rows[0]);
+    // ── Push the correction back through history, if asked ────────────────
+    // Opt-in. A logged food keeps a snapshot of its nutrition on purpose, so a
+    // member's history does not silently rewrite itself whenever the table is
+    // edited. But a food that was WRONG was wrong for everyone who ever logged
+    // it, and their weekly reports and adaptive calorie estimates were computed
+    // from it — so the coach gets to say "yes, fix those too".
+    let propagated = null;
+    if (propagate && per_100g) {
+      try {
+        propagated = await propagateFoodNutrition(id, normNutrients);
+      } catch (err) {
+        // The food itself is already corrected. Failing the whole request here
+        // would suggest nothing was saved, and the coach would edit it again.
+        console.error('propagateFoodNutrition failed:', err.message);
+        propagated = { error: 'The food was corrected, but existing logs could not be updated' };
+      }
+    }
+
+    res.json({ ...rows[0], propagated });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Another food with this name already exists from this source' });

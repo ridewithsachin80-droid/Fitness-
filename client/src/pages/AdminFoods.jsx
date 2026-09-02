@@ -74,7 +74,8 @@ function emptyForm() {
   };
 }
 
-function FoodForm({ initial, onSave, onCancel, saving }) {
+function FoodForm({ initial, onSave, onCancel, saving,
+                    impact = null, propagate = false, onPropagateChange }) {
   const [form, setForm] = useState(initial || emptyForm());
   const [nutrientTab, setNutrientTab] = useState('Macros');
 
@@ -146,6 +147,31 @@ function FoodForm({ initial, onSave, onCancel, saving }) {
       </div>
 
       <div className="flex gap-2 pt-2">
+        {/* Correcting a shared food fixes it for every member from now on. What
+            it does NOT do by default is change what people have already logged —
+            a logged food keeps a snapshot on purpose, so history does not rewrite
+            itself whenever the table is edited.
+        
+            But a food that was wrong was wrong for everyone who ever ate it, and
+            their weekly reports and calorie estimates were built on it. So the
+            choice is offered here, with the number attached, rather than left as
+            something you would have to know to ask for. */}
+        {impact && impact.entries > 0 && (
+          <label className="flex items-start gap-2.5 mt-4 mb-1 cursor-pointer">
+            <input type="checkbox" checked={propagate} className="mt-0.5"
+              onChange={e => onPropagateChange?.(e.target.checked)} />
+            <span className="text-[12px] text-stone-600 leading-snug">
+              Also correct <strong>{impact.entries}</strong> {impact.entries === 1 ? 'entry' : 'entries'} already
+              logged by <strong>{impact.members}</strong> {impact.members === 1 ? 'member' : 'members'}
+              {impact.earliest ? <> since {impact.earliest}</> : null}.
+              <span className="block text-[11px] text-stone-400 mt-0.5">
+                Their totals for those days will change. Grams stay as they logged them —
+                only what 100g contains is corrected.
+              </span>
+            </span>
+          </label>
+        )}
+
         <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()}
           className="flex-1 py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 text-[#121316] font-bold rounded-xl transition-colors">
           {saving ? 'Saving…' : 'Save Food'}
@@ -298,11 +324,24 @@ export default function AdminFoods() {
     }
   };
 
+  // How many logged entries a correction would touch, fetched when an edit
+  // opens so the choice is in front of the coach rather than buried.
+  const [impact, setImpact] = useState(null);
+  const [propagate, setPropagate] = useState(false);
+
+  useEffect(() => {
+    setImpact(null); setPropagate(false);
+    if (!editing?.id) return;
+    api.get(`/foods/${editing.id}/impact`)
+      .then(({ data }) => setImpact(data))
+      .catch(() => setImpact(null));
+  }, [editing?.id]);
+
   const handleSave = async (form) => {
     setSaving(true); setError('');
     try {
       if (editing) {
-        await api.put(`/foods/${editing.id}`, form);
+        await api.put(`/foods/${editing.id}`, { ...form, propagate });
       } else {
         await api.post('/foods', form);
       }
@@ -575,6 +614,9 @@ export default function AdminFoods() {
               initial={mode === 'edit' && editing
                 ? { ...editing, per_100g: { ...DEFAULT_NUTRIENTS, ...(editing.per_100g || {}) } }
                 : (mode === 'add' && aiPrefill ? aiPrefill : null)}
+              impact={impact}
+              propagate={propagate}
+              onPropagateChange={setPropagate}
               onSave={handleSave}
               onCancel={() => { setMode('list'); setEditing(null); setAiPrefill(null); }}
               saving={saving}
