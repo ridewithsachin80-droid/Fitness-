@@ -64,6 +64,7 @@ function FoodEditCard({ food, onSaved }) {
   const [more, setMore]   = useState(false);
   const [prop, setProp]   = useState(false);
   const [propG, setPropG] = useState(false);
+  const [fatSrc, setFatSrc] = useState(food.default_fat_source || 'sunflower');
   const [busy, setBusy]   = useState(false);
   const [err,  setErr]    = useState('');
   const [done, setDone]   = useState(null);
@@ -140,6 +141,48 @@ function FoodEditCard({ food, onSaved }) {
         ))}
       </div>
 
+      {/* Saturated fat cannot be computed from total fat — the share depends
+          entirely on which fat went in. Sunflower is about a ninth saturated,
+          ghee two thirds, coconut nearly all of it. So the coach names the fat
+          and the split follows from that fat's real composition; a fixed ratio
+          would be inventing a number, which is how the wrong figures got here.
+          Suggested with its reasoning visible, applied only on a tap. */}
+      {(() => {
+        const fat = parseFloat(vals.fat) || 0;
+        const sat = parseFloat(vals.saturated_fat) || 0;
+        if (!food.editable || fat < 3 || sat > 0) return null;
+        const src = (food.fat_sources || []).find(f => f.key === fatSrc)
+                 || { label: 'Sunflower oil', sat: 0.11 };
+        const suggested = Math.round(fat * src.sat * 10) / 10;
+        return (
+          <div className="mt-3 rounded-xl bg-[rgba(212,175,55,0.06)] px-3 py-2.5">
+            <p className="text-[11.5px] text-[#D9A66B] leading-snug">
+              ⚠ {fat}g fat with no saturated fat recorded — no fat is 0% saturated.
+            </p>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="text-[11.5px] text-[#9EA3B0]">Cooked in</span>
+              <select value={fatSrc} onChange={e => setFatSrc(e.target.value)}
+                className="bg-[#121316] border border-white/[0.09] rounded-lg px-2 py-1
+                  text-[12px] text-[#F2F1EE]">
+                {(food.fat_sources || []).map(f => (
+                  <option key={f.key} value={f.key}>{f.label}</option>
+                ))}
+              </select>
+              <span className="text-[11.5px] text-[#9EA3B0]">
+                → <strong className="text-[#E8CE7A]">{suggested}g</strong> saturated
+                {' '}({Math.round(src.sat * 100)}% of the fat)
+              </span>
+              <button
+                onClick={() => setVals(o => ({ ...o, saturated_fat: suggested }))}
+                className="text-[11.5px] font-semibold text-[#E8CE7A] border
+                  border-[rgba(212,175,55,0.34)] rounded-full px-2.5 py-0.5">
+                Use
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       <button onClick={() => setMore(v => !v)}
         className="text-[11px] font-semibold text-[#8C7A46] mt-2.5">
         {more ? 'Hide' : `Show ${micros.length} more nutrients`}
@@ -184,7 +227,12 @@ function FoodEditCard({ food, onSaved }) {
           how much — "80g" for a dosa logged as just "masala dosa" is the
           model's guess, and a guess we now know is wrong is worth fixing. The
           moment they typed "2 dosa", that is theirs and stays. */}
-      {food.editable && defG !== '' && parseInt(defG) !== food.default_grams
+      {/* Shown whenever a serving is set and there are guessed portions —
+          NOT only when the number changed in this session. Gating on "changed"
+          meant a coach who had already set the serving correctly had no way to
+          apply it to entries logged before that, and the option simply was not
+          on screen. */}
+      {food.editable && defG !== '' && parseInt(defG) > 0
         && food.impact?.guessed > 0 && (
         <label className="flex items-start gap-2 mt-2 cursor-pointer">
           <input type="checkbox" checked={propG} onChange={e => setPropG(e.target.checked)} className="mt-0.5" />

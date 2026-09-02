@@ -27,6 +27,7 @@ const authMW = require('../middleware/auth');
 const role   = require('../middleware/roleCheck');
 const { macroPlausibility, cookingFatPlausibility } = require('../services/macroCheck');
 const { propagationImpact, propagateFoodNutrition } = require('../services/foodPropagate');
+const { saturatedPlausibility } = require('../services/fatProfile');
 
 // ─── All routes require authentication ────────────────────────────────────────
 router.use(authMW);
@@ -157,15 +158,18 @@ router.get(['/review', '/unverified'], authMW, role('monitor', 'admin'), async (
     const flagged = rows.map(f => {
       const macro   = macroPlausibility(f.per_100g, f.name);
       const cooking = cookingFatPlausibility(f.per_100g, f.name);
+      const sat     = saturatedPlausibility(f.per_100g);
       const lighter = lighterThanBase(f);
       // One verdict for the UI, worst-first, so the queue can sort on it.
       const reason = macro.status === 'suspect' ? macro.reason
                    : lighter ? lighter
                    : cooking.status === 'suspect' ? cooking.reason
+                   : sat.status === 'suspect' ? sat.reason
                    : null;
       return { ...f,
         macro_check: reason ? { ...macro, status: 'suspect', reason } : macro,
-        checks: { macro: macro.status, cooking: cooking.status, lighter_than_base: !!lighter },
+        checks: { macro: macro.status, cooking: cooking.status,
+                  saturated: sat.status, lighter_than_base: !!lighter },
       };
     });
     const suspect = f => (f.macro_check.status === 'suspect' ? 1 : 0);

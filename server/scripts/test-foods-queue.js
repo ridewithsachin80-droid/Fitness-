@@ -28,6 +28,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
 const express = require('express'), jwt = require('jsonwebtoken'), cookieParser = require('cookie-parser');
 const pool = require('../db/pool');
 const { macroPlausibility, atwaterKcal, cookingFatPlausibility } = require('../services/macroCheck');
+const { suggestFatSplit, saturatedPlausibility, FATS } = require('../services/fatProfile');
 
 const app = express(); app.use(express.json()); app.use(cookieParser());
 app.use('/api/foods', require('../routes/foods'));
@@ -36,7 +37,17 @@ let pass = 0, fail = 0;
 const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
                             : (fail++, console.log('  \u2717 ' + n + ' ' + JSON.stringify(e ?? '').slice(0, 200))); };
 
-const per = (cal, pro, carb, fat) => JSON.stringify({ calories: cal, protein: pro, total_carbs: carb, fat });
+/**
+ * Fixture nutrition.
+ *
+ * `sat` defaults to a plausible share of the fat rather than to zero. It used
+ * to be absent, so every fatty fixture food read as "67g fat, none of it
+ * saturated" — impossible, and it made the new saturated check fire on foods
+ * these tests intended to be CORRECT. A fixture that could not exist in
+ * reality tests the wrong thing.
+ */
+const per = (cal, pro, carb, fat, sat = Math.round(fat * 0.25 * 10) / 10) =>
+  JSON.stringify({ calories: cal, protein: pro, total_carbs: carb, fat, saturated_fat: sat });
 
 (async () => {
   // ── 1. The macro check, in isolation ───────────────────────────────────────
@@ -127,6 +138,44 @@ const per = (cal, pro, carb, fat) => JSON.stringify({ calories: cal, protein: pr
       cookingFatPlausibility({}, 'Masala Dosa').status === 'unknown');
     ck('a per-unit supplement is not judged on fat',
       cookingFatPlausibility({ calories: 5, fat: 0 }, 'Curry Leaf Capsule (60000 IU)').status === 'unknown');
+  }
+
+  // ── 1c. Fat with no saturated fat in it ───────────────────────────────────
+  // "10g fat, 0g saturated" is not possible for anything cooked in oil. It is
+  // detectable without a human, like the Atwater check — and it is the field a
+  // member managing cholesterol would actually be reading.
+  console.log('\n[1c] saturated fat');
+  {
+    ck('real fat with no saturated fat is flagged',
+      saturatedPlausibility({ fat: 10, saturated_fat: 0 }).status === 'suspect');
+    ck('and says why, so it does not look arbitrary',
+      /no fat is 0% saturated/.test(saturatedPlausibility({ fat: 10, saturated_fat: 0 }).reason || ''));
+    ck('a food with saturated fat recorded passes',
+      saturatedPlausibility({ fat: 10, saturated_fat: 2 }).status === 'ok');
+    ck('a trace of fat is not judged — a dosa is not a cholesterol question',
+      saturatedPlausibility({ fat: 1, saturated_fat: 0 }).status === 'unknown');
+    // The other direction. A part cannot exceed its whole.
+    ck('more saturated than total fat is flagged too',
+      saturatedPlausibility({ fat: 5, saturated_fat: 9 }).status === 'suspect');
+    ck('equal is allowed — coconut oil is very nearly all saturated',
+      saturatedPlausibility({ fat: 10, saturated_fat: 10 }).status === 'ok');
+
+    // The suggestion is grounded in a real composition, not a fixed ratio.
+    ck('sunflower gives about a ninth', suggestFatSplit(10, 'sunflower').saturated === 1.1);
+    ck('ghee gives about two thirds',   suggestFatSplit(10, 'ghee').saturated === 6.5);
+    ck('coconut gives nearly all of it', suggestFatSplit(10, 'coconut').saturated === 8.7);
+    ck('they genuinely differ — which is why it cannot be computed from the total',
+      suggestFatSplit(10, 'sunflower').saturated !== suggestFatSplit(10, 'ghee').saturated);
+    ck('the reasoning travels with the number',
+      /65% of the fat/.test(suggestFatSplit(10, 'ghee').note || ''));
+    ck('an unknown fat falls back rather than returning nothing',
+      suggestFatSplit(10, 'unicorn oil').saturated === 1.1);
+    ck('no fat means no suggestion', suggestFatSplit(0) === null);
+    ck('every fat splits into parts that cannot exceed the whole',
+      Object.keys(FATS).every(k => {
+        const s = suggestFatSplit(100, k);
+        return s.saturated + s.mufa + s.pufa <= 100.5;
+      }));
   }
 
   // ── 2. Ranking and the endpoint ────────────────────────────────────────────

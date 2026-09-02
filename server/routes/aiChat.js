@@ -36,6 +36,7 @@ const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
 const { cleanScalePayload } = require('../services/scaleParse');
 const { cookingFatPlausibility, macroPlausibility } = require('../services/macroCheck');
+const { FATS, DEFAULT_FAT, saturatedPlausibility } = require('../services/fatProfile');
 
 router.use(authMW);
 
@@ -3053,6 +3054,7 @@ async function detectFoodEdit(msg, user) {
 
   const macro = macroPlausibility(f.per_100g, f.name);
   const cook  = cookingFatPlausibility(f.per_100g, f.name);
+  const sat   = saturatedPlausibility(f.per_100g);
 
   return {
     id: f.id,
@@ -3066,8 +3068,13 @@ async function detectFoodEdit(msg, user) {
     suggested_grams: /\b(portion|serving|gram|grams|weight|size|qty|quantity)\b/.test(t)
       && wanted ? parseInt(wanted) : null,
     impact,
+    // The cooking fats a coach can pick from, so saturated fat can be suggested
+    // from a real composition rather than a made-up ratio.
+    fat_sources: Object.entries(FATS).map(([k, v]) => ({ key: k, label: v.label, sat: v.sat })),
+    default_fat_source: DEFAULT_FAT,
     warning: macro.status === 'suspect' ? macro.reason
-           : cook.status === 'suspect'  ? cook.reason : null,
+           : cook.status === 'suspect'  ? cook.reason
+           : sat.status === 'suspect'   ? sat.reason : null,
     // Editing a shared food changes it for every member, so it stays with the
     // admin. A coach gets the numbers and a clear next step instead of a
     // silent no-op.

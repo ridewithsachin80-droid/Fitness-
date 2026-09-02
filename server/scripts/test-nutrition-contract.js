@@ -320,6 +320,25 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
     await pool.query(`DELETE FROM foods WHERE name = 'Serving Test Dosa'`);
   }
 
+  console.log('\n[10] the portion-reset option is reachable');
+  {
+    // The option was rendered only when the serving CHANGED in that session.
+    // A coach who had already set it correctly had no way to apply it to
+    // entries logged before — the checkbox simply was not on screen, and the
+    // member's 80g dosa stayed 80g however many times they saved.
+    //
+    // The client condition is asserted here because it is the whole feature:
+    // the server work is useless if the control never renders.
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '..', '..', 'client', 'src', 'components', 'CoachAIChat.jsx'), 'utf8');
+    ck('the portion-reset control does not require the value to have changed',
+      !/parseInt\(defG\) !== food\.default_grams/.test(src));
+    ck('it renders whenever a serving is set and portions were guessed',
+      /defG !== '' && parseInt\(defG\) > 0\s*\n?\s*&& food\.impact\?\.guessed > 0/.test(src),
+      'condition not found');
+  }
+
   console.log(`\n${fail === 0 ? '✅' : '❌'} test-nutrition-contract: ${pass} passed, ${fail} failed\n`);
   await pool.end();
   process.exit(fail === 0 ? 0 : 1);
