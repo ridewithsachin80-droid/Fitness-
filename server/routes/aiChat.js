@@ -2962,6 +2962,64 @@ async function answerFoodQuestion(qText) {
   return lines.join(' ');
 }
 
+/**
+ * A coach asking to EDIT a food, not to note something about a member.
+ *
+ * "need to edit calorie, macros of masala dosa" was classified by the model as
+ * a note and filed against the member whose page the coach was on. Nothing was
+ * edited and a meaningless note was attached to Vishwas Gundurao.
+ *
+ * Intent this explicit should not be a model's judgement call. It is matched
+ * before the model is asked anything, so "edit X" always means edit X.
+ *
+ * @returns {Promise<object|null>} a food_edit payload, or null
+ */
+async function detectFoodEdit(msg, user) {
+  const t = String(msg || '').toLowerCase().trim();
+  if (!/\b(edit|change|correct|fix|update|amend)\b/.test(t)) return null;
+  // Editing a MEMBER's targets is a different thing entirely and already works.
+  if (/\b(water|target weight|macro target|protocol|programme|program|reminder|push|message)\b/.test(t)) return null;
+
+  // Strip the instruction words; whatever remains is the dish.
+  const STOP = /\b(need|needs|want|wanna|to|i|we|please|pls|the|a|an|of|for|in|its|and|with|edit|change|correct|fix|update|amend|calorie|calories|kcal|macro|macros|micro|micros|nutrition|nutrient|nutrients|protein|carb|carbs|fat|fibre|fiber|value|values|detail|details|data|entry|food|database|db)\b/g;
+  const name = t.replace(STOP, ' ').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (name.length < 3) return null;
+
+  const { rows } = await pool.query(
+    `SELECT id, name, source, verified, per_100g FROM foods
+      WHERE lower(name) = $1 OR lower(name) LIKE $2
+      ORDER BY (lower(name) = $1) DESC, verified DESC, length(name)
+      LIMIT 1`,
+    [name, `%${name}%`]);
+  if (!rows.length) return { not_found: name };
+
+  const f = rows[0];
+  // How many logged entries a correction would move — shown before deciding,
+  // because "this applies to everyone" is the whole point and should not be a
+  // surprise discovered afterwards.
+  let impact = { entries: 0, members: 0, earliest: null };
+  try { impact = await require('../services/foodPropagate').propagationImpact(f.id); }
+  catch (e) { console.error('impact lookup failed:', e.message); }
+
+  const macro = macroPlausibility(f.per_100g, f.name);
+  const cook  = cookingFatPlausibility(f.per_100g, f.name);
+
+  return {
+    id: f.id,
+    name: f.name,
+    source: f.source,
+    verified: f.verified,
+    per_100g: normaliseNutrients(f.per_100g),
+    impact,
+    warning: macro.status === 'suspect' ? macro.reason
+           : cook.status === 'suspect'  ? cook.reason : null,
+    // Editing a shared food changes it for every member, so it stays with the
+    // admin. A coach gets the numbers and a clear next step instead of a
+    // silent no-op.
+    editable: user.role === 'admin',
+  };
+}
+
 router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
   const { message, context_member_id } = req.body;
   // Last few turns, so a two-part instruction survives. Capped and truncated
@@ -2978,6 +3036,25 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
   const cleanMsg = String(message).trim().slice(0, 1200);
 
   try {
+    // ── "edit <food>" is handled before the model sees it ────────────────────
+    // The model classified this as a note about a member and filed it against
+    // whoever's page the coach was on. Explicit intent should not be a
+    // judgement call.
+    try {
+      const edit = await detectFoodEdit(cleanMsg, req.user);
+      if (edit?.not_found) {
+        return res.json({ reply: `I have no food called "${edit.not_found}" in the database.`, actions: [] });
+      }
+      if (edit) {
+        return res.json({
+          reply: edit.editable
+            ? `Editing ${edit.name}. These values apply to every member.`
+            : `${edit.name} is a shared food — ask an admin to correct it.`,
+          actions: [], food_edit: edit,
+        });
+      }
+    } catch (e) { console.error('detectFoodEdit failed:', e.message); }
+
     const members = await coachMembers(req.user);
     if (!members.length) {
       return res.json({ reply: 'You have no active members assigned yet.', actions: [] });
@@ -3648,6 +3725,7 @@ module.exports.dietPlanMacros     = dietPlanMacros;
 module.exports.learnFoods         = learnFoods;
 module.exports.enrichFromDB       = enrichFromDB;
 module.exports.answerFoodQuestion = answerFoodQuestion;
+module.exports.detectFoodEdit     = detectFoodEdit;
 module.exports.recordEvalSample   = recordEvalSample;
 module.exports.rememberParseTurn  = rememberParseTurn;
 module.exports.findOriginalTurn   = findOriginalTurn;

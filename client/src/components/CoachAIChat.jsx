@@ -40,6 +40,135 @@ const SUGGESTION_CHIPS = [
 
 /** Edge-docked side tab — export so pages can drop it in one line.
  *  Pass bottomOffset (px) on pages with a fixed bottom nav so it clears the nav. */
+/**
+ * Edit a shared food from the chat.
+ *
+ * The values here belong to every member, not to the one whose page the coach
+ * happens to be on — so the card says so, and shows how many logged entries a
+ * correction would move BEFORE the coach commits to it.
+ *
+ * Macros are always visible because they are what gets corrected in practice.
+ * The micronutrients are behind a toggle: forty fields on screen turns a
+ * two-second fix into a form nobody finishes.
+ */
+const MACRO_FIELDS = [
+  ['calories', 'kcal'], ['protein', 'g protein'], ['total_carbs', 'g carbs'],
+  ['fat', 'g fat'], ['fiber', 'g fibre'], ['sugar', 'g sugar'],
+  ['saturated_fat', 'g sat fat'], ['sodium', 'mg sodium'],
+];
+
+function FoodEditCard({ food, onSaved }) {
+  const [vals, setVals]   = useState(food.per_100g || {});
+  const [more, setMore]   = useState(false);
+  const [prop, setProp]   = useState(false);
+  const [busy, setBusy]   = useState(false);
+  const [err,  setErr]    = useState('');
+  const [done, setDone]   = useState(null);
+
+  const micros = Object.keys(food.per_100g || {})
+    .filter(k => !MACRO_FIELDS.some(([m]) => m === k) && k !== 'net_carbs');
+
+  const set = (k, v) => setVals(o => ({ ...o, [k]: v === '' ? 0 : parseFloat(v) || 0 }));
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      const { data } = await api.put(`/foods/${food.id}`, { per_100g: vals, propagate: prop });
+      setDone(data.propagated
+        ? `Saved. ${data.propagated.entries} logged ${data.propagated.entries === 1 ? 'entry' : 'entries'} across ${data.propagated.members} ${data.propagated.members === 1 ? 'member' : 'members'} corrected too.`
+        : 'Saved. Applies to every member from now on.');
+      onSaved?.();
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Could not save that.');
+    } finally { setBusy(false); }
+  };
+
+  if (done) {
+    return <p className="text-[12px] text-[#6E8F6B] mt-2">{done}</p>;
+  }
+
+  return (
+    <div className="mt-2 rounded-2xl bg-[#17181C] px-3.5 py-3"
+      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      <p className="text-[14px] font-semibold text-[#F2F1EE]">{food.name}</p>
+      <p className="text-[11px] text-[#7E8596] mt-0.5">
+        Per 100g · {food.verified ? 'verified' : `from ${food.source}, unverified`} ·
+        {' '}applies to every member
+      </p>
+      {food.warning && (
+        <p className="text-[11px] text-[#D9A66B] mt-1.5 leading-snug">⚠ {food.warning}</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 mt-3">
+        {MACRO_FIELDS.map(([k, label]) => (
+          <label key={k} className="flex items-center gap-2">
+            <input type="number" inputMode="decimal" value={vals[k] ?? 0}
+              onChange={e => set(k, e.target.value)}
+              disabled={!food.editable || busy}
+              className="w-[74px] bg-[#121316] border border-white/[0.09] rounded-lg
+                px-2 py-1.5 text-[13px] text-[#F2F1EE] tabular-nums disabled:opacity-50" />
+            <span className="text-[11px] text-[#8C93A3]">{label}</span>
+          </label>
+        ))}
+      </div>
+
+      <button onClick={() => setMore(v => !v)}
+        className="text-[11px] font-semibold text-[#8C7A46] mt-2.5">
+        {more ? 'Hide' : `Show ${micros.length} more nutrients`}
+      </button>
+
+      {more && (
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          {micros.map(k => (
+            <label key={k} className="flex items-center gap-2">
+              <input type="number" inputMode="decimal" value={vals[k] ?? 0}
+                onChange={e => set(k, e.target.value)}
+                disabled={!food.editable || busy}
+                className="w-[74px] bg-[#121316] border border-white/[0.09] rounded-lg
+                  px-2 py-1.5 text-[12px] text-[#F2F1EE] tabular-nums disabled:opacity-50" />
+              <span className="text-[11px] text-[#8C93A3]">{k.replace(/_/g, ' ')}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/* Existing logs keep a snapshot of the nutrition they were saved with.
+          A food that was wrong was wrong for everyone who ate it, so the option
+          is offered here with the count attached rather than left as something
+          you would have to know to ask for. */}
+      {food.editable && food.impact?.entries > 0 && (
+        <label className="flex items-start gap-2 mt-3 cursor-pointer">
+          <input type="checkbox" checked={prop} onChange={e => setProp(e.target.checked)} className="mt-0.5" />
+          <span className="text-[11.5px] text-[#9EA3B0] leading-snug">
+            Also correct <strong className="text-[#E8CE7A]">{food.impact.entries}</strong> already
+            logged by <strong className="text-[#E8CE7A]">{food.impact.members}</strong>
+            {food.impact.members === 1 ? ' member' : ' members'}
+            {food.impact.earliest ? ` since ${food.impact.earliest}` : ''}.
+            <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
+              Grams stay as they logged them — only what 100g contains changes.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {err && <p className="text-[11.5px] text-red-300 mt-2">{err}</p>}
+
+      {food.editable ? (
+        <button onClick={save} disabled={busy}
+          style={{ minHeight: 38 }}
+          className="w-full mt-3 text-[13px] font-semibold text-[#121316] bg-[#D4AF37]
+            rounded-xl disabled:opacity-50 active:scale-95 transition-transform">
+          {busy ? 'Saving…' : 'Save for all members'}
+        </button>
+      ) : (
+        <p className="text-[11.5px] text-[#7E8596] mt-3">
+          Shared foods are corrected by an admin.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function CoachAIFab({ bottomOffset = 40 }) {
   const openChat = useCoachAI(s => s.openChat);
   const open     = useCoachAI(s => s.open);
@@ -161,6 +290,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
+        foodEdit: data.food_edit || null,
         // Eval set (Sprint L1): the instruction that produced these actions, so
         // anything the coach switches off before applying can be paired to it.
         evalMessage: text,
@@ -370,6 +500,10 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                   {m.summary
                     ? <DaySummary s={m.summary} />
                     : <p className="leading-relaxed whitespace-pre-line">{m.text}</p>}
+
+                  {/* Editing a shared food — not a per-member action, so it
+                      renders its own card with its own Save. */}
+                  {m.foodEdit && <FoodEditCard food={m.foodEdit} />}
 
                   {/* Per-member action cards */}
                   {m.actions?.length > 0 && (

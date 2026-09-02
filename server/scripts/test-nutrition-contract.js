@@ -181,6 +181,53 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
     await pool.query(`DELETE FROM foods WHERE name IN ('Masala Dosa','Dosa (Plain)')`);
   }
 
+  console.log('\n[8] the coach can edit a food from the chat');
+  {
+    // "need to edit calorie, macros of masala dosa" was classified by the model
+    // as a NOTE and filed against the member whose page the coach was on.
+    // Nothing was edited and Vishwas Gundurao got a meaningless note. Intent
+    // this explicit is matched before the model is asked anything.
+    await pool.query(`DELETE FROM foods WHERE name = 'Masala Dosa'`);
+    await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Masala Dosa','grain','ai',false,$1::jsonb)`,
+      [JSON.stringify(normaliseNutrients({ calories: 140, protein: 3, total_carbs: 25, fat: 3 }))]);
+
+    const asAdmin = { role: 'admin', id: 1 };
+    const e = await ai.detectFoodEdit('need to edit calorie, macros of masala dosa', asAdmin);
+    ck('the edit intent is recognised, not filed as a note', !!e && !e.not_found, e);
+    ck('the right food is found', e?.name === 'Masala Dosa', e?.name);
+    ck('EVERY parameter is offered, not just the four macros',
+      Object.keys(e?.per_100g || {}).length === 45, Object.keys(e?.per_100g || {}).length);
+    ck('the plausibility warning comes with it',
+      /cooking fat/i.test(e?.warning || ''), e?.warning);
+    ck('and the blast radius is attached', e?.impact !== undefined, e?.impact);
+
+    ck('a bare "edit masala dosa" works too',
+      (await ai.detectFoodEdit('edit masala dosa', asAdmin))?.name === 'Masala Dosa');
+    ck('so does "fix"',
+      (await ai.detectFoodEdit('fix masala dosa nutrition', asAdmin))?.name === 'Masala Dosa');
+
+    // The discrimination that matters: editing a MEMBER's settings is a
+    // different feature and must not be hijacked.
+    ck('"set water target 4L for asha" is not a food edit',
+      (await ai.detectFoodEdit('set water target 4L for asha', asAdmin)) === null);
+    ck('"change asha target weight to 70" is not a food edit',
+      (await ai.detectFoodEdit('change asha target weight to 70', asAdmin)) === null);
+    ck('a message with no edit verb is not a food edit',
+      (await ai.detectFoodEdit('masala dosa calories', asAdmin)) === null);
+    ck('an unknown dish reports itself rather than matching something else',
+      (await ai.detectFoodEdit('edit zorbfruit', asAdmin))?.not_found === 'zorbfruit');
+
+    // A shared food belongs to every member, so correcting it stays with the
+    // admin. A coach still gets the numbers and a clear next step.
+    const asCoach = await ai.detectFoodEdit('edit masala dosa', { role: 'monitor', id: 2 });
+    ck('a coach sees the food but cannot edit it', asCoach?.editable === false, asCoach?.editable);
+    ck('an admin can', e?.editable === true, e?.editable);
+
+    await pool.query(`DELETE FROM foods WHERE name = 'Masala Dosa'`);
+  }
+
   console.log(`\n${fail === 0 ? '✅' : '❌'} test-nutrition-contract: ${pass} passed, ${fail} failed\n`);
   await pool.end();
   process.exit(fail === 0 ? 0 : 1);
