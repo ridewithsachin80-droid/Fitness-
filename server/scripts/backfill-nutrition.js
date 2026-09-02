@@ -31,6 +31,7 @@
  * never deletes, and it runs each table in its own transaction.
  */
 
+const fs = require('fs');
 const pool = require('../db/pool');
 const { normaliseNutrients } = require('../services/nutrients');
 const { macroPlausibility, cookingFatPlausibility, massBalance } = require('../services/macroCheck');
@@ -39,6 +40,10 @@ const { saturatedPlausibility } = require('../services/fatProfile');
 const argv     = process.argv.slice(2);
 const APPLY    = argv.includes('--apply');
 const REENRICH = argv.includes('--reenrich');
+const RESTORE  = argv.includes('--restore');
+const FILE     = (argv[argv.indexOf('--restore') + 1] || '').startsWith('--')
+  ? 'nutrition-backup.json'
+  : (argv[argv.indexOf('--restore') + 1] || 'nutrition-backup.json');
 
 const CONTRACT = Object.keys(normaliseNutrients({}));
 
@@ -186,12 +191,70 @@ async function report() {
   return flagged;
 }
 
+/**
+ * Write every value this script could change to a file, before changing it.
+ *
+ * Railway's snapshots are a paid feature, so on a smaller plan there is no
+ * rollback — and "it only adds missing fields" is a promise, not a safety net.
+ * This is the safety net: a plain JSON file of exactly the rows about to be
+ * touched, restorable with one command.
+ *
+ * Written automatically on every --apply. It costs a second and it means the
+ * question "can I undo this?" always has the same answer.
+ */
+async function writeBackup(file) {
+  const foods = await pool.query(`SELECT id, per_100g FROM foods ORDER BY id`);
+  const plans = await pool.query(`SELECT id, items FROM meal_plans ORDER BY id`);
+  const payload = {
+    taken_at: new Date().toISOString(),
+    foods: foods.rows,
+    meal_plans: plans.rows,
+  };
+  fs.writeFileSync(file, JSON.stringify(payload));
+  return { file, foods: foods.rows.length, plans: plans.rows.length,
+           kb: Math.round(fs.statSync(file).size / 1024) };
+}
+
+/** Put everything back exactly as it was. */
+async function restoreBackup(file) {
+  if (!fs.existsSync(file)) throw new Error(`No backup file at ${file}`);
+  const b = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let n = 0;
+  for (const f of b.foods || []) {
+    await pool.query(`UPDATE foods SET per_100g = $2::jsonb WHERE id = $1`,
+      [f.id, JSON.stringify(f.per_100g)]);
+    n++;
+  }
+  let m = 0;
+  for (const r of b.meal_plans || []) {
+    await pool.query(`UPDATE meal_plans SET items = $2::jsonb WHERE id = $1`,
+      [r.id, JSON.stringify(r.items)]);
+    m++;
+  }
+  return { taken_at: b.taken_at, foods: n, plans: m };
+}
+
 (async () => {
   console.log('');
+
+  if (RESTORE) {
+    const r = await restoreBackup(FILE);
+    console.log(`  Restored ${r.foods} foods and ${r.plans} meal plans`);
+    console.log(`  from the backup taken ${r.taken_at}\n`);
+    await pool.end();
+    return;
+  }
+
   console.log(`  FitLife — nutrition backfill   ${APPLY ? 'APPLYING' : 'DRY RUN (nothing written)'}`);
   console.log(`  contract  : ${CONTRACT.length} fields`);
   console.log(`  re-enrich : ${REENRICH ? 'on — meal-plan values may change' : 'off (additive only)'}`);
   console.log('');
+
+  if (APPLY) {
+    const b = await writeBackup(FILE);
+    console.log(`  backup    : ${b.foods} foods + ${b.plans} meal plans → ${b.file} (${b.kb} KB)`);
+    console.log(`              undo with:  node scripts/backfill-nutrition.js --restore\n`);
+  }
 
   const f = await backfillFoods();
   console.log(`  foods       ${f.touched} of ${f.total} rows need work`);
