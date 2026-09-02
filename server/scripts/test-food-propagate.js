@@ -133,7 +133,53 @@ const RIGHT = { calories: 210, protein: 4, total_carbs: 26, fat: 10 };
       b.map(x => x.name).join('|') === 'Masala Dosa|Idli|masala dosa', b.map(x => x.name));
   }
 
-  console.log('\n[4] access');
+  console.log('\n[4] resetting a portion nobody chose');
+  {
+    // The gap this closes: the coach set the serving to 200g, ticked propagate,
+    // and the member's log still showed 80g. Correcting nutrition never touched
+    // grams — deliberately, because how much someone ate is their observation.
+    // But 80g was NEVER an observation: the member typed "masala dosa" with no
+    // quantity and the model guessed. A guess we now know is wrong is worth
+    // fixing; a stated quantity is not ours to touch.
+    await pool.query('DELETE FROM daily_logs');
+    await logFor(asha, 0, [
+      // No qty_text — the member said nothing about how much.
+      { name: 'Masala Dosa', grams: 80, meal: 'Breakfast', food_id: dosa.id, per_100g: RIGHT },
+    ]);
+    await logFor(bujju, 1, [
+      // They said "2 dosa". Theirs, however wrong we think it is.
+      { name: 'Masala Dosa', grams: 300, meal: 'Breakfast', food_id: dosa.id,
+        qty_text: '2 dosa', per_100g: RIGHT },
+    ]);
+
+    const imp = await call('GET', `/api/foods/${dosa.id}/impact`, tok(coach, 'monitor'));
+    ck('the impact separates guessed portions from stated ones',
+      imp.data.entries === 2 && imp.data.guessed === 1, imp.data);
+
+    const r = await call('PUT', `/api/foods/${dosa.id}`, tok(admin, 'admin'),
+      { per_100g: RIGHT, default_grams: 200, propagate: true, propagate_portion: true });
+    ck('the response says how many portions moved',
+      r.data.propagated?.grams_fixed === 1, r.data.propagated);
+
+    const a = (await itemsFor(asha))[0].food_items[0];
+    ck('a portion nobody chose is corrected to the real serving', a.grams === 200, a.grams);
+    const b = (await itemsFor(bujju))[0].food_items[0];
+    ck('a portion the member stated is left exactly as they logged it',
+      b.grams === 300, b.grams);
+
+    // Without the flag, nothing about grams changes at all.
+    await pool.query('DELETE FROM daily_logs');
+    await logFor(asha, 0, [{ name: 'Masala Dosa', grams: 80, meal: 'Breakfast', food_id: dosa.id, per_100g: WRONG }]);
+    await call('PUT', `/api/foods/${dosa.id}`, tok(admin, 'admin'),
+      { per_100g: RIGHT, default_grams: 200, propagate: true });
+    ck('not asking for it leaves every portion alone',
+      (await itemsFor(asha))[0].food_items[0].grams === 80,
+      (await itemsFor(asha))[0].food_items[0].grams);
+    ck('while the nutrition is still corrected',
+      (await itemsFor(asha))[0].food_items[0].per_100g.fat === 10);
+  }
+
+  console.log('\n[4b] access');
   {
     const r = await call('PUT', `/api/foods/${dosa.id}`, tok(asha, 'patient'),
       { per_100g: WRONG, propagate: true });

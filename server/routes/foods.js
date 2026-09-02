@@ -572,6 +572,7 @@ router.put('/:id', async (req, res) => {
     per_100g,
     default_grams,
     propagate = false,
+    propagate_portion = false,
   } = req.body;
 
   try {
@@ -630,7 +631,10 @@ router.put('/:id', async (req, res) => {
     let propagated = null;
     if (propagate && per_100g) {
       try {
-        propagated = await propagateFoodNutrition(id, normNutrients);
+        propagated = await propagateFoodNutrition(id, normNutrients, {
+          // Only when the coach asked for the portion to be reset too.
+          grams: propagate_portion ? parseInt(default_grams) : null,
+        });
       } catch (err) {
         // The food itself is already corrected. Failing the whole request here
         // would suggest nothing was saved, and the coach would edit it again.

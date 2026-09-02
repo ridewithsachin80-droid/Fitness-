@@ -63,6 +63,7 @@ function FoodEditCard({ food, onSaved }) {
   const [defG, setDefG]   = useState(food.suggested_grams ?? food.default_grams ?? '');
   const [more, setMore]   = useState(false);
   const [prop, setProp]   = useState(false);
+  const [propG, setPropG] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [err,  setErr]    = useState('');
   const [done, setDone]   = useState(null);
@@ -76,11 +77,15 @@ function FoodEditCard({ food, onSaved }) {
     setBusy(true); setErr('');
     try {
       const { data } = await api.put(`/foods/${food.id}`, {
-        per_100g: vals, propagate: prop,
+        per_100g: vals, propagate: prop || propG,
+        propagate_portion: propG,
         default_grams: defG === '' ? null : parseInt(defG),
       });
-      setDone(data.propagated
-        ? `Saved. ${data.propagated.entries} logged ${data.propagated.entries === 1 ? 'entry' : 'entries'} across ${data.propagated.members} ${data.propagated.members === 1 ? 'member' : 'members'} corrected too.`
+      const p = data.propagated;
+      setDone(p
+        ? `Saved. ${p.entries} logged ${p.entries === 1 ? 'entry' : 'entries'} across ` +
+          `${p.members} ${p.members === 1 ? 'member' : 'members'} corrected` +
+          (p.grams_fixed ? `, and ${p.grams_fixed} portion${p.grams_fixed === 1 ? '' : 's'} reset to ${defG}g.` : '.')
         : 'Saved. Applies to every member from now on.');
       onSaved?.();
     } catch (e) {
@@ -169,6 +174,26 @@ function FoodEditCard({ food, onSaved }) {
             {food.impact.earliest ? ` since ${food.impact.earliest}` : ''}.
             <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
               Grams stay as they logged them — only what 100g contains changes.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {/* A separate choice from correcting the nutrition, because it is a
+          different claim. Only offered for entries where the member never said
+          how much — "80g" for a dosa logged as just "masala dosa" is the
+          model's guess, and a guess we now know is wrong is worth fixing. The
+          moment they typed "2 dosa", that is theirs and stays. */}
+      {food.editable && defG !== '' && parseInt(defG) !== food.default_grams
+        && food.impact?.guessed > 0 && (
+        <label className="flex items-start gap-2 mt-2 cursor-pointer">
+          <input type="checkbox" checked={propG} onChange={e => setPropG(e.target.checked)} className="mt-0.5" />
+          <span className="text-[11.5px] text-[#9EA3B0] leading-snug">
+            Also reset the portion to <strong className="text-[#E8CE7A]">{defG}g</strong> on
+            {' '}<strong className="text-[#E8CE7A]">{food.impact.guessed}</strong>
+            {food.impact.guessed === 1 ? ' entry' : ' entries'} where no quantity was given.
+            <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
+              Entries where the member said how much are left alone.
             </span>
           </span>
         </label>

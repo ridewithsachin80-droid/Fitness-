@@ -35,13 +35,19 @@ async function propagationImpact(foodId) {
   const { rows } = await pool.query(
     `SELECT COUNT(*)::int                        AS entries,
             COUNT(DISTINCT dl.patient_id)::int   AS members,
-            MIN(dl.log_date)::text               AS earliest
+            MIN(dl.log_date)::text               AS earliest,
+            -- Entries where the member never said how much. The grams on these
+            -- are a model's guess, not something anyone observed, so they are
+            -- the only ones a corrected serving size may safely rewrite.
+            COUNT(*) FILTER (
+              WHERE COALESCE(NULLIF(TRIM(it->>'qty_text'), ''), 'typical serving') = 'typical serving'
+            )::int                               AS guessed
        FROM daily_logs dl,
             LATERAL jsonb_array_elements(COALESCE(dl.food_items, '[]'::jsonb)) it
       WHERE (it->>'food_id')::int = $1`,
     [foodId]
   );
-  return rows[0] || { entries: 0, members: 0, earliest: null };
+  return rows[0] || { entries: 0, members: 0, earliest: null, guessed: 0 };
 }
 
 /**
@@ -52,9 +58,16 @@ async function propagationImpact(foodId) {
  *
  * @returns {Promise<{ entries:number, members:number, logs:number }>}
  */
-async function propagateFoodNutrition(foodId, per100g) {
+/**
+ * @param {number} foodId
+ * @param {object} per100g
+ * @param {object} [opts]
+ * @param {number|null} [opts.grams]  also reset the portion, but ONLY on
+ *   entries where the member never said how much — see below.
+ */
+async function propagateFoodNutrition(foodId, per100g, opts = {}) {
   const impact = await propagationImpact(foodId);
-  if (!impact.entries) return { ...impact, logs: 0 };
+  if (!impact.entries) return { ...impact, logs: 0, grams_fixed: 0 };
 
   const { rows } = await pool.query(
     `UPDATE daily_logs dl
@@ -63,7 +76,20 @@ async function propagateFoodNutrition(foodId, per100g) {
          SELECT dl2.id,
                 jsonb_agg(
                   CASE WHEN (it->>'food_id')::int = $1
-                       THEN jsonb_set(it, '{per_100g}', $2::jsonb)
+                       THEN CASE
+                         -- The portion is rewritten only where nobody stated
+                         -- one. "80g" for a dosa the member logged as just
+                         -- "masala dosa" is the model's guess, and a guess we
+                         -- now know to be wrong is worth correcting. The moment
+                         -- they typed "2 dosa" or "150g", that is theirs and
+                         -- stays untouched however wrong we think it is.
+                         WHEN $4::int IS NOT NULL
+                          AND COALESCE(NULLIF(TRIM(it->>'qty_text'), ''), 'typical serving') = 'typical serving'
+                         THEN jsonb_set(
+                                jsonb_set(it, '{per_100g}', $2::jsonb),
+                                '{grams}', to_jsonb($4::int))
+                         ELSE jsonb_set(it, '{per_100g}', $2::jsonb)
+                       END
                        ELSE it END
                   ORDER BY ord
                 ) AS items
@@ -75,10 +101,12 @@ async function propagateFoodNutrition(foodId, per100g) {
        ) sub
       WHERE dl.id = sub.id
   RETURNING dl.id`,
-    [foodId, JSON.stringify(per100g), JSON.stringify([{ food_id: foodId }])]
+    [foodId, JSON.stringify(per100g), JSON.stringify([{ food_id: foodId }]),
+     Number.isFinite(parseInt(opts.grams)) && parseInt(opts.grams) > 0 ? parseInt(opts.grams) : null]
   );
 
-  return { entries: impact.entries, members: impact.members, logs: rows.length };
+  return { entries: impact.entries, members: impact.members, logs: rows.length,
+           grams_fixed: opts.grams ? impact.guessed : 0 };
 }
 
 module.exports = { propagationImpact, propagateFoodNutrition };
