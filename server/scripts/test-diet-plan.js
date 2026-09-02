@@ -25,7 +25,42 @@ if (!process.env.DATABASE_URL?.includes('localhost') && !process.env.ALLOW_TEST_
 }
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
 
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'stub-key';
+
 const express = require('express'), jwt = require('jsonwebtoken'), cookieParser = require('cookie-parser');
+const path = require('path');
+
+// AI transport stubbed, everything else real. The route's own work — resolving
+// which member the plan is for, mapping the document's words onto op keys,
+// enriching items from the food table — runs for real, which is where the bugs
+// have actually been.
+const axiosPath = require.resolve('axios', { paths: [path.join(__dirname, '..')] });
+require(axiosPath);
+const realAxios = require.cache[axiosPath].exports;
+const PLAN_JSON = {
+  member_name: 'T V Sharada',
+  plan_title: 'Low-carb plan',
+  macros: { kcal: 1400, protein: 120, carbs: 60, fat: 50 },
+  meals: [
+    { meal: 'Breakfast', items: [ { name: 'Avocado', grams: 75, qty_text: '1/2 avocado' },
+                                  { name: 'Paneer',  grams: 50, qty_text: '50g' } ] },
+    { meal: 'Lunch',     items: [ { name: 'Egg',   grams: 100, qty_text: '2 eggs' },
+                                  { name: 'Roti',  grams: 40,  qty_text: '1 small roti' } ] },
+    { meal: 'Dinner',    items: [ { name: 'Paneer', grams: 50, qty_text: '50g' } ] },
+  ],
+  repeat_days: 14,
+  summary: 'Low-carb plan for T V Sharada — carbs at lunch only.',
+};
+const stubbedPost = async (url, body, cfg) => {
+  if (String(url).includes('generativelanguage') || String(url).includes('groq')) {
+    return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(PLAN_JSON) }] } }] } };
+  }
+  return realAxios.post(url, body, cfg);
+};
+require.cache[axiosPath].exports = new Proxy(realAxios, {
+  get: (t, k) => (k === 'post' ? stubbedPost : t[k]),
+});
+
 const pool = require('../db/pool');
 const ai   = require('../routes/aiChat');
 
@@ -182,6 +217,37 @@ const item = (name, grams) => ({ name, grams, qty_text: `${grams} g`,
     });
     const rows = await planRows();
     ck('"add paneer to dinner" writes exactly one row', rows.length === 1, rows.length);
+  }
+
+  // ── 4b. The upload route, end to end ──────────────────────────────────────
+  // The bug this exists for: the route called coachMembers(id, role) when the
+  // helper takes the whole user object, so the roster came back EMPTY and every
+  // upload answered "No members assigned to you yet" — while the typed chat,
+  // which calls it correctly, worked fine. Nothing in the suite reached this
+  // line, because the access tests all return before it.
+  console.log('\n[4b] uploading a plan');
+  {
+    const r = await call('POST', '/api/ai-chat/coach-doc', tok(coach, 'monitor'), {
+      file: 'JVBERi0xLjQK', mimeType: 'application/pdf',
+      fileName: 'Low-Carb-Diet-Plan-TV-Sharada.pdf',
+    });
+    ck('the upload is accepted', r.status === 200, r.data);
+    ck('the coach\'s roster is found — not "no members assigned"',
+      !/No members assigned/i.test(r.data.reply || ''), r.data.reply);
+    ck('one action comes back', (r.data.actions || []).length === 1, r.data.actions?.length);
+
+    const a = (r.data.actions || [])[0] || {};
+    ck('the member named in the document is resolved', a.resolved === true, a);
+    ck('to the right person', a.member_id === member, a.member_id);
+    ck('three meals are prescribed', a.ops?.meal_plan?.meals?.length === 3,
+      a.ops?.meal_plan?.meals?.map(m => m.meal));
+    ck('the plan spans the days the document implies',
+      a.ops?.meal_plan?.repeat_days === 14, a.ops?.meal_plan?.repeat_days);
+    ck('targets carry through in op spelling',
+      a.ops?.macros?.pro === 120 && a.ops?.macros?.carb === 60, a.ops?.macros);
+    ck('the preview lists the changes', (a.changes || []).length >= 3, a.changes);
+    ck('nothing is applied yet — the coach still approves it',
+      (await planRows()).length === 1, 'meal_plans should be untouched by a preview');
   }
 
   // ── 5. Access ──────────────────────────────────────────────────────────────

@@ -2700,7 +2700,7 @@ router.post('/coach-doc', roleCheck('monitor', 'admin'), async (req, res) => {
   }
 
   try {
-    const members = await coachMembers(req.user.id, req.user.role);
+    const members = await coachMembers(req.user);
     if (!members.length) return res.json({ reply: 'No members assigned to you yet.', actions: [] });
 
     const prompt = `You are reading a DIET PLAN document a fitness coach uploaded
