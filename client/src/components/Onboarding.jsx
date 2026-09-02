@@ -44,7 +44,7 @@ const GOALS = [
   { id: 'strength', label: 'Get stronger',  emoji: '\ud83c\udfcb\ufe0f' },
 ];
 
-export default function Onboarding() {
+export default function Onboarding({ onDone } = {}) {
   const [step, setStep]         = useState(0); // 0=who, 1=goal+weights, 2=avatar, 3=finish
   const [ageMode, setAgeMode]   = useState(null);
   const [avatarIdx, setAvatarI] = useState(0);
@@ -80,6 +80,12 @@ export default function Onboarding() {
       // would let them through with nothing actually recorded.
       setAvatarIdx(avatarIdx);
       finishOnboarding(ageMode);
+      onDone?.();
+      // Never leave the button reading "Saving…". If the gate above somehow
+      // does not swap this screen out, the member gets a tappable button back
+      // instead of a spinner they cannot escape — the PUT is idempotent, so a
+      // second tap costs nothing.
+      setSaving(false);
     } catch (err) {
       setSaveErr(
         err.response?.data?.error ||

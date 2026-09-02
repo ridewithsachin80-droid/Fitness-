@@ -654,6 +654,41 @@ test('"Weight (kg)" is stripped from body_metrics, not left to duplicate', () =>
     'the main weight must not also land in lab history');
 });
 
+console.log('\nOnboarding gate — a member must be able to leave first-run setup');
+
+// Live bug: a new member completed setup, the PUT succeeded, and they landed
+// straight back on the same screen with the button stuck on "Saving…". The
+// server flag was read once on mount (false, correctly), and the gate ignored
+// the local completion flag because the server value had "settled". Nobody
+// could finish registering.
+const { needsOnboarding } = importClient('utils/onboardingGate.js');
+
+test('a brand-new member is sent to setup', () => {
+  assert.strictEqual(needsOnboarding({ serverOnboarded: false, onboardingDone: false }), true);
+});
+
+test('finishing setup gets them OUT of it — the bug that blocked registration', () => {
+  // serverOnboarded is still the value fetched on mount. It is stale the moment
+  // the member finishes, and staleness must not outrank what just happened.
+  assert.strictEqual(
+    needsOnboarding({ serverOnboarded: false, onboardingDone: true, justFinished: true }),
+    false, 'a member who just completed setup must never be shown it again');
+});
+
+test('a returning member is not asked to do it twice', () => {
+  assert.strictEqual(needsOnboarding({ serverOnboarded: true, onboardingDone: false }), false);
+});
+
+test('the server outranks a stale local flag on a fresh device', () => {
+  // Local storage on a shared or reset phone can claim done when it is not.
+  assert.strictEqual(needsOnboarding({ serverOnboarded: false, onboardingDone: true }), true);
+});
+
+test('offline falls back to the local flag rather than trapping anyone', () => {
+  assert.strictEqual(needsOnboarding({ serverOnboarded: null, onboardingDone: true }), false);
+  assert.strictEqual(needsOnboarding({ serverOnboarded: null, onboardingDone: false }), true);
+});
+
 console.log('\nClient/server agreement on weekday scheduling');
 
 // The two implementations live on opposite sides of the wire and cannot import

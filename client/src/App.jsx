@@ -17,6 +17,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminFoods     from './pages/AdminFoods';
 import DeviceConnect  from './pages/DeviceConnect';
 import Onboarding     from './components/Onboarding';
+import { needsOnboarding } from './utils/onboardingGate';
 
 // Preserves the member id when redirecting an old /monitor/:id link to /coach/:id.
 function LegacyMonitorRedirect() {
@@ -70,6 +71,7 @@ export default function App() {
   // the source of truth; the local flag is a cache that avoids a flash of the
   // onboarding screen on every cold start.
   const [serverOnboarded, setServerOnboarded] = useState(null); // null = unknown
+  const [justOnboarded,   setJustOnboarded]   = useState(false);
   useEffect(() => {
     if (user?.role !== 'patient') return;
     getMyOnboarding()
@@ -90,9 +92,11 @@ export default function App() {
   }, [user?.id]);
 
   if (user?.role === 'patient') {
-    const settled = serverOnboarded !== null;
-    const needsOnboarding = settled ? !serverOnboarded : !onboardingDone;
-    if (needsOnboarding) return <Onboarding />;
+    if (needsOnboarding({ serverOnboarded, onboardingDone, justFinished: justOnboarded })) {
+      // onDone marks the completion as newer than the value fetched on mount.
+      // Without it the member finishes setup and lands straight back on it.
+      return <Onboarding onDone={() => setJustOnboarded(true)} />;
+    }
   }
 
   return (
