@@ -2521,13 +2521,30 @@ function normaliseMealPlan(raw) {
       const name = it && it.name ? String(it.name).trim().slice(0, 100) : '';
       const grams = num(it?.grams, 1, 2000);
       if (!name || grams === null) return null;
+      // ── Full nutrition, not just the four macros ──────────────────────────
+      // This used to keep calories, protein, carbs and fat and DROP the other
+      // 37 fields. The food table has them and enrichFromDB returns them, so a
+      // member who logged palak by typing it got iron and vitamin K, and a
+      // member who logged the SAME palak from their coach's plan got zeroes.
+      //
+      // That is the wrong way round: the prescribed path is the one a member
+      // following a plan uses every day, so their micronutrient page was
+      // under-reporting precisely for the people doing what they were told.
+      //
+      // The clamps stay on the four macros — they guard against a model
+      // returning nonsense per-100g values — and everything else passes
+      // through the shared normaliser.
       const n = it.per_100g || {};
       const per_100g = {
+        ...normaliseNutrients(n),
         calories:    num(n.calories, 0, 900)  ?? 0,
         protein:     num(n.protein, 0, 100)   ?? 0,
         total_carbs: num(n.total_carbs, 0, 100) ?? 0,
         fat:         num(n.fat, 0, 100)       ?? 0,
       };
+      // Recomputed after clamping, or a clamped carb figure leaves net_carbs
+      // describing the unclamped one.
+      per_100g.net_carbs = Math.max(0, +(per_100g.total_carbs - per_100g.fiber).toFixed(1));
       return { name, grams,
                qty_text: it.qty_text ? String(it.qty_text).slice(0, 40) : `${grams} g`,
                per_100g };

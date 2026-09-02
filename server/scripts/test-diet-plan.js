@@ -142,6 +142,50 @@ const item = (name, grams) => ({ name, grams, qty_text: `${grams} g`,
       ai.dietPlanMacros({}) === null && ai.dietPlanMacros(null) === null);
   }
 
+  // ── 1c. Micronutrients survive the plan ───────────────────────────────────
+  // The point of the whole coach → member → log loop: what a member logs from
+  // their plan must be the same food, nutritionally, as the one they would have
+  // typed. It was not — the plan kept four macros and dropped 37 fields, so the
+  // members most closely following their coach had the emptiest micronutrient
+  // page.
+  console.log('\n[1c] micronutrients through the prescribed path');
+  {
+    const palak = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2.2,
+                    iron: 2.7, vit_k: 483, folate: 194, calcium: 99, magnesium: 79,
+                    vit_a: 469, vit_c: 28, potassium: 558, zinc: 0.53 };
+    const plan = ai.normaliseMealPlan({
+      meals: [{ meal: 'Lunch', items: [{ name: 'Palak', grams: 100, per_100g: palak }] }] });
+    const kept = plan.meals[0].items[0].per_100g;
+
+    ck('the four macros still arrive',
+      kept.calories === 23 && kept.protein === 2.9 && kept.fat === 0.4, kept);
+    ck('iron is not lost', kept.iron === 2.7, kept.iron);
+    ck('vitamin K is not lost', kept.vit_k === 483, kept.vit_k);
+    ck('folate, calcium, magnesium survive',
+      kept.folate === 194 && kept.calcium === 99 && kept.magnesium === 79, kept);
+    ck('every field the normaliser guarantees is present',
+      ['vit_b12', 'vit_d', 'selenium', 'omega3_dha', 'cholesterol']
+        .every(k => k in kept), Object.keys(kept).length);
+    ck('fibre carries through, so net carbs mean something',
+      kept.fiber === 2.2 && kept.net_carbs === 1.4, { fiber: kept.fiber, net: kept.net_carbs });
+
+    // The clamps are the reason this was ever a four-field literal. They must
+    // still hold, or a model returning 9000 kcal/100g writes it into a plan.
+    const silly = ai.normaliseMealPlan({ meals: [{ meal: 'Lunch', items: [
+      { name: 'X', grams: 100, per_100g: { calories: 99999, protein: 900, total_carbs: 500, fat: 400, iron: 3 } }] }] });
+    const c = silly.meals[0].items[0].per_100g;
+    ck('an implausible calorie figure is still clamped away', c.calories === 0, c.calories);
+    ck('an implausible protein figure is still clamped away', c.protein === 0, c.protein);
+    ck('but a legitimate micro alongside it is kept', c.iron === 3, c.iron);
+
+    ck('a food with no nutrition at all yields zeroes, not undefined',
+      (() => {
+        const none = ai.normaliseMealPlan({ meals: [{ meal: 'Lunch',
+          items: [{ name: 'Mystery', grams: 50 }] }] }).meals[0].items[0].per_100g;
+        return none.iron === 0 && none.calories === 0 && none.vit_d === 0;
+      })());
+  }
+
   // ── 2. Applying it ─────────────────────────────────────────────────────────
   console.log('\n[2] applying a multi-day plan');
   {
