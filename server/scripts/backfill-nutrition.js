@@ -128,17 +128,38 @@ async function backfillFoods() {
   const { rows } = await pool.query(`SELECT id, name, per_100g FROM foods ORDER BY id`);
   let touched = 0, addedTotal = 0, repairedTotal = 0;
   const samples = [];
+  const pending = [];
 
   for (const f of rows) {
     const { out, added, repaired } = fill(f.per_100g || {});
     if (!changed(out, f.per_100g)) continue;
     touched++; addedTotal += added; repairedTotal += repaired;
     if (samples.length < 5) samples.push(`${f.name}: +${added} fields${repaired ? `, ${repaired} repaired` : ''}`);
-    if (APPLY) {
-      await pool.query(`UPDATE foods SET per_100g = $2::jsonb WHERE id = $1`,
-        [f.id, JSON.stringify(out)]);
-    }
+    if (APPLY) pending.push([f.id, JSON.stringify(out)]);
   }
+
+  // Written in batches, not one row at a time.
+  //
+  // 573 separate UPDATEs meant 573 round trips from a laptop in Bengaluru to
+  // Railway's servers. At a couple of hundred milliseconds each that is a
+  // quarter of an hour of waiting, and it looks like the script has hung.
+  // One statement per 200 rows turns it into a few seconds.
+  if (APPLY && pending.length) {
+    const BATCH = 200;
+    for (let i = 0; i < pending.length; i += BATCH) {
+      const slice = pending.slice(i, i + BATCH);
+      await pool.query(
+        `UPDATE foods AS f
+            SET per_100g = v.per_100g::jsonb
+           FROM (SELECT * FROM unnest($1::int[], $2::text[]) AS t(id, per_100g)) v
+          WHERE f.id = v.id`,
+        [slice.map(r => r[0]), slice.map(r => r[1])]
+      );
+      process.stdout.write(`\r  writing foods… ${Math.min(i + BATCH, pending.length)}/${pending.length}   `);
+    }
+    process.stdout.write('\r' + ' '.repeat(46) + '\r');
+  }
+
   return { total: rows.length, touched, addedTotal, repairedTotal, samples };
 }
 
@@ -152,6 +173,7 @@ async function backfillMealPlans() {
   const byName = new Map(foods.map(f => [String(f.name).toLowerCase().replace(/\s*\(.*$/, '').trim(), f.per_100g]));
 
   let touched = 0, itemsFilled = 0, itemsReenriched = 0;
+  const pendingPlans = [];
   for (const r of rows) {
     const items = Array.isArray(r.items) ? r.items : [];
     let rowChanged = false;
@@ -172,9 +194,20 @@ async function backfillMealPlans() {
     });
     if (!rowChanged) continue;
     touched++;
-    if (APPLY) {
-      await pool.query(`UPDATE meal_plans SET items = $2::jsonb WHERE id = $1`,
-        [r.id, JSON.stringify(next)]);
+    if (APPLY) pendingPlans.push([r.id, JSON.stringify(next)]);
+  }
+
+  if (APPLY && pendingPlans.length) {
+    const BATCH = 200;
+    for (let i = 0; i < pendingPlans.length; i += BATCH) {
+      const slice = pendingPlans.slice(i, i + BATCH);
+      await pool.query(
+        `UPDATE meal_plans AS m
+            SET items = v.items::jsonb
+           FROM (SELECT * FROM unnest($1::int[], $2::text[]) AS t(id, items)) v
+          WHERE m.id = v.id`,
+        [slice.map(r => r[0]), slice.map(r => r[1])]
+      );
     }
   }
   return { total: rows.length, touched, itemsFilled, itemsReenriched };
