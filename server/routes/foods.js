@@ -25,7 +25,7 @@ const pool   = require('../db/pool');
 const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const role   = require('../middleware/roleCheck');
-const { macroPlausibility, cookingFatPlausibility } = require('../services/macroCheck');
+const { macroPlausibility, cookingFatPlausibility, massBalance } = require('../services/macroCheck');
 const { propagationImpact, propagateFoodNutrition } = require('../services/foodPropagate');
 const { saturatedPlausibility } = require('../services/fatProfile');
 
@@ -159,20 +159,28 @@ router.get(['/review', '/unverified'], authMW, role('monitor', 'admin'), async (
       const macro   = macroPlausibility(f.per_100g, f.name);
       const cooking = cookingFatPlausibility(f.per_100g, f.name);
       const sat     = saturatedPlausibility(f.per_100g);
+      const mass    = massBalance(f.per_100g);
       const lighter = lighterThanBase(f);
       // One verdict for the UI, worst-first, so the queue can sort on it.
-      const reason = macro.status === 'suspect' ? macro.reason
+      // Impossible outranks merely suspicious. A food describing 125g of
+      // substance inside 100g is not a judgement call, and it should not sit
+      // behind three softer warnings in the queue.
+      const reason = mass.status === 'impossible' ? mass.reason
+                   : macro.status === 'suspect' ? macro.reason
                    : lighter ? lighter
                    : cooking.status === 'suspect' ? cooking.reason
                    : sat.status === 'suspect' ? sat.reason
                    : null;
       return { ...f,
         macro_check: reason ? { ...macro, status: 'suspect', reason } : macro,
-        checks: { macro: macro.status, cooking: cooking.status,
-                  saturated: sat.status, lighter_than_base: !!lighter },
+        checks: { macro: macro.status, cooking: cooking.status, saturated: sat.status,
+                  mass: mass.status, lighter_than_base: !!lighter },
+        mass_balance: mass,
       };
     });
-    const suspect = f => (f.macro_check.status === 'suspect' ? 1 : 0);
+    // Impossible first, then merely suspect.
+    const suspect = f => (f.checks?.mass === 'impossible' ? 2
+                        : f.macro_check.status === 'suspect' ? 1 : 0);
     flagged.sort((a, b) => suspect(b) - suspect(a));
 
     const out = flaggedOnly ? flagged.filter(f => f.macro_check.status === 'suspect') : flagged;

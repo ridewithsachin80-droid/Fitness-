@@ -140,5 +140,66 @@ function cookingFatPlausibility(per100g = {}, name = '') {
   };
 }
 
-module.exports = { atwaterKcal, macroPlausibility, cookingFatPlausibility,
+
+/**
+ * Does this food's composition add up to something that can exist?
+ *
+ * The Atwater check compares calories against macros. It says nothing about
+ * whether the macros themselves are possible. A food claiming 60g protein and
+ * 60g carbs in 100g passes Atwater happily — 480 kcal, all consistent — while
+ * describing 120g of substance inside 100g of food.
+ *
+ * These are arithmetic facts, not judgement calls, so a failure is definite
+ * rather than suspicious:
+ *
+ *   · protein + carbs + fat cannot exceed 100g per 100g. What is left is water
+ *     and ash, so a cooked dish is typically 30-50g of macros and a dry powder
+ *     up to about 95g.
+ *   · fibre and sugar are PARTS of total carbohydrate and cannot exceed it.
+ *   · saturated fat is part of total fat.
+ *   · nothing can carry more than 900 kcal per 100g — that is pure fat.
+ *
+ * Each one is a different mistake with a different fix, so they are reported
+ * separately rather than as one "looks wrong".
+ */
+function massBalance(per100g = {}) {
+  const n   = (k) => +per100g[k] || 0;
+  const pro = n('protein'), carb = n('total_carbs'), fat = n('fat');
+  const problems = [];
+
+  const mass = pro + carb + fat;
+  if (mass > 100.5) {
+    problems.push(`${round1(mass)}g of protein, carbs and fat inside 100g of food`);
+  }
+  if (n('fiber') > carb + 0.05 && carb > 0) {
+    problems.push(`${n('fiber')}g fibre inside ${carb}g of carbohydrate`);
+  }
+  if (n('sugar') > carb + 0.05 && carb > 0) {
+    problems.push(`${n('sugar')}g sugar inside ${carb}g of carbohydrate`);
+  }
+  if (n('saturated_fat') > fat + 0.05 && fat > 0) {
+    problems.push(`${n('saturated_fat')}g saturated inside ${fat}g of fat`);
+  }
+  if (n('calories') > 900) {
+    problems.push(`${Math.round(n('calories'))} kcal per 100g — pure fat is 900`);
+  }
+  // Minerals are stored in mg. A hundred grams of food cannot hold more than a
+  // few grams of them; far past that is a unit slip, usually grams typed into
+  // a milligram field.
+  const mineralMg = ['calcium','iron','magnesium','phosphorus','potassium',
+                     'sodium','zinc','copper','manganese','selenium']
+    .reduce((a, k) => a + n(k), 0);
+  if (mineralMg > 10000) {
+    problems.push(`${Math.round(mineralMg / 1000)}g of minerals in 100g — check mg vs g`);
+  }
+
+  if (!problems.length) {
+    return { status: mass === 0 ? 'unknown' : 'ok', reason: null, macro_mass: round1(mass), problems: [] };
+  }
+  return { status: 'impossible', reason: problems[0], macro_mass: round1(mass), problems };
+}
+
+function round1(n) { return Math.round(n * 10) / 10; }
+
+module.exports = { atwaterKcal, macroPlausibility, cookingFatPlausibility, massBalance,
                    PER_UNIT, FRIED_OR_TEMPERED, COOKED_FAT_FLOOR };

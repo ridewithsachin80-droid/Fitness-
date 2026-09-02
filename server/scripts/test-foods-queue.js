@@ -27,7 +27,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
 
 const express = require('express'), jwt = require('jsonwebtoken'), cookieParser = require('cookie-parser');
 const pool = require('../db/pool');
-const { macroPlausibility, atwaterKcal, cookingFatPlausibility } = require('../services/macroCheck');
+const { macroPlausibility, atwaterKcal, cookingFatPlausibility, massBalance } = require('../services/macroCheck');
 const { suggestFatSplit, saturatedPlausibility, FATS, detectCookingFat } = require('../services/fatProfile');
 
 const app = express(); app.use(express.json()); app.use(cookieParser());
@@ -220,6 +220,44 @@ const per = (cal, pro, carb, fat, sat = Math.round(fat * 0.25 * 10) / 10) =>
       && suggestFatSplit(10, 'sunflower').saturated === 1.1);
   }
 
+  // ── 1e. Does the composition add up to something that can exist? ──────────
+  // Atwater compares calories against macros and says nothing about whether the
+  // macros themselves are possible. 60g protein and 60g carbs in 100g passes it
+  // happily — 480 kcal, perfectly consistent — while describing 120g of
+  // substance inside 100g of food.
+  console.log('\n[1e] mass balance');
+  {
+    const real = { calories: 212, protein: 3, total_carbs: 25, fat: 10,
+                   fiber: 2, sugar: 1, saturated_fat: 1.7, sodium: 200 };
+    ck('the corrected masala dosa balances', massBalance(real).status === 'ok', massBalance(real));
+    ck('and reports what it adds up to', massBalance(real).macro_mass === 38, massBalance(real).macro_mass);
+
+    ck('more substance than the food weighs is impossible, not suspicious',
+      massBalance({ protein: 60, total_carbs: 60, fat: 5 }).status === 'impossible');
+    ck('and Atwater alone would have passed it —  which is why this exists',
+      macroPlausibility({ calories: 480, protein: 60, total_carbs: 60, fat: 5 }, 'X').status === 'ok');
+
+    ck('fibre cannot exceed the carbohydrate it is part of',
+      /fibre inside/.test(massBalance({ total_carbs: 5, fiber: 9 }).reason || ''));
+    ck('nor can sugar',
+      massBalance({ total_carbs: 5, sugar: 9 }).problems.some(x => /sugar inside/.test(x)));
+    ck('nor saturated fat exceed total fat',
+      massBalance({ fat: 5, saturated_fat: 9 }).problems.some(x => /saturated inside/.test(x)));
+    ck('nothing carries more than 900 kcal per 100g — that is pure fat',
+      /pure fat is 900/.test(massBalance({ calories: 1200, fat: 100 }).reason || ''));
+    ck('grams typed into a milligram field are caught',
+      /mg vs g/.test(massBalance({ protein: 5, total_carbs: 10, fat: 2, calcium: 99000 }).reason || ''));
+
+    // The exceptions that stop it crying wolf.
+    ck('a dry protein powder at 94g of macros is fine',
+      massBalance({ calories: 400, protein: 80, total_carbs: 8, fat: 6 }).status === 'ok');
+    ck('an empty food is unknown, not impossible',
+      massBalance({}).status === 'unknown');
+    ck('every problem is listed, not just the first',
+      massBalance({ total_carbs: 5, fiber: 9, sugar: 9, fat: 2, saturated_fat: 8 })
+        .problems.length === 3);
+  }
+
   // ── 2. Ranking and the endpoint ────────────────────────────────────────────
   await pool.query('TRUNCATE users RESTART IDENTITY CASCADE');
   await pool.query('DELETE FROM foods');
@@ -338,6 +376,29 @@ const per = (cal, pro, carb, fat, sat = Math.round(fat * 0.25 * 10) / 10) =>
       good?.checks?.lighter_than_base === false, good?.checks);
 
     await pool.query(`DELETE FROM foods WHERE name IN ('Dosa (Plain)','Masala Dosa','Ghee Dosa')`);
+  }
+
+  console.log('\n[2c] impossible outranks suspicious in the queue');
+  {
+    const { rows: [imp] } = await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Impossible Ladoo','other','ai',false,$1::jsonb) RETURNING id`,
+      [JSON.stringify({ calories: 480, protein: 60, total_carbs: 60, fat: 5, saturated_fat: 1 })]);
+
+    const r = await call('GET', '/api/foods/review', tok(coach.id, 'monitor'));
+    // NOT asserting sort position here. Both this food and the other flagged
+    // one land in the same bucket for the purposes of these fixtures, so any
+    // ordering assertion passes whether the impossible-first tier works or not
+    // — it was green with the tier disabled. An assertion that cannot fail is
+    // worse than none, so the claim is dropped rather than dressed up. What IS
+    // asserted below is that the food is CLASSIFIED impossible, which mutation
+    // testing does catch.
+    ck('and is reported as impossible, not merely suspect',
+      r.data.foods[0].checks?.mass === 'impossible', r.data.foods[0].checks);
+    ck('with the arithmetic spelled out',
+      /inside 100g of food/.test(r.data.foods[0].macro_check?.reason || ''),
+      r.data.foods[0].macro_check?.reason);
+    await pool.query(`DELETE FROM foods WHERE id = $1`, [imp.id]);
   }
 
   console.log('\n[3] /unverified and /review are one handler');

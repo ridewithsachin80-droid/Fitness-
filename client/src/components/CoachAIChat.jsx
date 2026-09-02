@@ -110,6 +110,28 @@ function FoodEditCard({ food, onSaved }) {
         <p className="text-[11px] text-[#D9A66B] mt-1.5 leading-snug">⚠ {food.warning}</p>
       )}
 
+      {/* Arithmetic that cannot be true, listed in full rather than one at a
+          time — each is a different mistake with a different fix, and fixing
+          one only to be shown the next is a bad way to spend a coach's
+          attention. Shown in red because these are not judgement calls. */}
+      {food.mass_balance?.problems?.length > 1 && (
+        <ul className="mt-1.5 space-y-0.5">
+          {food.mass_balance.problems.slice(1).map((x, i) => (
+            <li key={i} className="text-[11px] text-[#D98A80] leading-snug">⚠ {x}</li>
+          ))}
+        </ul>
+      )}
+
+      {/* What the numbers add up to, always visible. 38g of macros in 100g
+          leaves 62g of water, which is right for a cooked dish and obviously
+          wrong for a dry powder — but only if someone can see it. */}
+      {food.mass_balance?.macro_mass > 0 && (
+        <p className="text-[10.5px] text-[#7E8596] mt-1.5">
+          {food.mass_balance.macro_mass}g of protein, carbs and fat per 100g
+          {' '}· {Math.round((100 - food.mass_balance.macro_mass) * 10) / 10}g water and ash
+        </p>
+      )}
+
       {/* One normal portion. Without it a member typing "masala dosa" with no
           number gets whatever the model guesses — 80g, a third of a real one —
           and their day comes out light with nothing looking wrong. The model
