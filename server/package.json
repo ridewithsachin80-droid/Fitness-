@@ -9,7 +9,8 @@
     "test:aichat": "node scripts/test-aichat.js",
     "test": "bash scripts/test-local.sh",
     "test:db": "bash scripts/test-local.sh --db-only",
-    "test:ui": "node scripts/ui-tests.mjs"
+    "test:ui": "node scripts/ui-tests.mjs",
+    "test:ui:install": "npm i --no-save puppeteer-core @sparticuz/chromium"
   },
   "keywords": [],
   "author": "",
@@ -34,8 +35,6 @@
   "devDependencies": {
     "nodemon": "^3.1.14",
     "esbuild": "^0.21.5",
-    "jsdom": "^24.1.0",
-    "puppeteer-core": "^24.10.0",
-    "@sparticuz/chromium": "^131.0.0"
+    "jsdom": "^24.1.0"
   }
 }

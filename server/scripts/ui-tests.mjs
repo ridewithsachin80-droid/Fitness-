@@ -27,8 +27,17 @@
 
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
-import puppeteerCore from 'puppeteer-core';
-import chromiumPkg from '@sparticuz/chromium';
+// puppeteer-core and @sparticuz/chromium are loaded ON DEMAND, not imported.
+//
+// They are 78MB together, and this repo has no railway.json or nixpacks.toml —
+// so whether the deploy runs build.sh (which installs the server with
+// --omit=dev) or its own detected build is not something the code can
+// guarantee. 78MB of test-only weight that MIGHT ship on every deploy is not a
+// trade worth making for one check, so they are no longer dependencies at all.
+//
+//   cd server && npm run test:ui:install
+//
+// installs them without touching package.json.
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -422,6 +431,18 @@ const OVERFLOW_PAGES = [
 async function overflowTest() {
   console.log('\n[5] horizontal overflow at phone widths (headless Chrome)');
 
+  let puppeteerCore, chromiumPkg;
+  try {
+    puppeteerCore = (await import('puppeteer-core')).default;
+    chromiumPkg   = (await import('@sparticuz/chromium')).default;
+  } catch {
+    // Announced, never silent. The count of assertions this suite reports drops
+    // when the browser is absent, so a green tick can never stand in for a
+    // check that did not run.
+    console.log('  – browser not installed, overflow check NOT RUN');
+    console.log('    cd server && npm run test:ui:install');
+    return;
+  }
   const chromium = chromiumPkg.default || chromiumPkg;
   const api = stub('api-overflow.js', OVERFLOW_API_STUB);
   // The COMPILED stylesheet, not src/index.css.
