@@ -307,8 +307,8 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
   const netKcal = Math.round(totals.kcal) - burnTotal;
 
   const bars = [
-    { key:'kcal', label:'Calories',  icon:'🔥', unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-orange-400', light:'bg-orange-50', text:'text-orange-600' },
-    { key:'pro',  label:'Protein',   icon:'💪', unit:'g',    current:+totals.pro.toFixed(1),  target:macros.pro,  bg:'bg-blue-500',   light:'bg-blue-50',   text:'text-blue-600' },
+    { key:'kcal', label:'Calories',  icon:null, unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-orange-400', light:'bg-orange-50', text:'text-orange-600' },
+    { key:'pro',  label:'Protein',   icon:null, unit:'g',    current:+totals.pro.toFixed(1),  target:macros.pro,  bg:'bg-blue-500',   light:'bg-blue-50',   text:'text-blue-600' },
     { key:'carb', label:'Net Carbs', icon:'🌾', unit:'g',    current:+totals.carb.toFixed(1), target:macros.carb, bg:'bg-amber-400',  light:'bg-amber-50',  text:'text-amber-600' },
     { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-amber-500', light:'bg-amber-50', text:'text-amber-600' },
   ];
@@ -328,9 +328,9 @@ function MacroProgress({ macros, foodItems, supplements, activeActivities, activ
           netKcal <= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
           <div className="flex gap-3">
             <span>🍽 Eaten <strong>{Math.round(totals.kcal)}</strong></span>
-            <span>🔥 Burned <strong>{burnTotal}</strong></span>
+            <span>Burned <strong>{burnTotal}</strong></span>
           </div>
-          <span className="font-bold">Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal{netKcal <= 0 && ' 🎯'}</span>
+          <span className="font-bold">Net {netKcal > 0 ? `+${netKcal}` : netKcal} kcal</span>
         </div>
       )}
 
@@ -1009,20 +1009,20 @@ export default function DailyLog() {
     if (kgMilestone >= 1 && kgMilestone > (seen.lastKgMilestone || 0)) {
       remember({ lastKgMilestone: kgMilestone });
       setMilestone({
-        icon: '🏆',
+        icon: 'trophy',
         title: `${kgMilestone} kg lost!`,
         body: `You've shed ${kgMilestone} kg since you started. That's real progress — keep going!`,
       });
     } else if ([7, 14, 21, 30, 50, 100].includes(streak) && seen.lastStreak !== streak) {
       remember({ lastStreak: streak });
       setMilestone({
-        icon: '🔥',
+        icon: 'flame',
         title: `${streak}-day streak!`,
         body: `${streak} ${plural(streak, 'day')} logged in a row. You're building an unstoppable habit!`,
       });
     } else if (volumePB) {
       setMilestone({
-        icon: '💪',
+        icon: 'arm',
         title: 'New personal best!',
         body: `${volumePB.toLocaleString()} kg lifted today — the most you've ever done in one session. Strong work!`,
       });
@@ -1162,7 +1162,7 @@ export default function DailyLog() {
             <div className="flex items-center gap-2">
               {streak >= 2 && (
                 <span className="text-[10px] font-bold text-[#D4AF37] bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.28)] rounded-full px-2.5 py-1">
-                  🔥 {streak} days{streakIsBest && streak >= 3 ? ' · best this month' : ''}
+                  {streak} {streak === 1 ? 'day' : 'days'}{streakIsBest && streak >= 3 ? ' · best this month' : ''}
                 </span>
               )}
               <NotificationBell />
@@ -1892,7 +1892,7 @@ export default function DailyLog() {
                     className={`w-full text-left flex items-start gap-2.5 py-1.5 ${
                       (showWorkout || showRest) ? 'border-t border-white/[0.06] mt-1 pt-2.5' : ''
                     }`}>
-                    <span className="text-base leading-none mt-0.5">🎯</span>
+
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-white">
                         Eat to today's targets
@@ -2072,12 +2072,33 @@ export default function DailyLog() {
           onClick={() => setMilestone(null)}>
           <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] p-8 max-w-xs w-full text-center shadow-2xl"
             onClick={e => e.stopPropagation()}>
-            <div className="text-6xl mb-3">{milestone.icon}</div>
+            {/* Drawn, at a size a celebration deserves. A 60px OS emoji was the
+                single largest thing on the most emotionally-loaded screen in
+                the app, rendered in whatever style the phone happened to have.
+                Struck in gold instead — the same metal as the brand. */}
+            <div className="flex justify-center mb-4">
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#D4AF37"
+                strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {milestone.icon === 'flame' && (
+                  <path d="M12 3s5 4 5 9a5 5 0 01-10 0c0-2 1-3 2-4 0 2 1 3 2 3s1-5 1-8z" />
+                )}
+                {milestone.icon === 'arm' && (
+                  <path d="M4 14a5 5 0 015-5h4l4 4v4H8a4 4 0 01-4-3z" />
+                )}
+                {(milestone.icon === 'trophy' || !['flame','arm'].includes(milestone.icon)) && (
+                  <>
+                    <path d="M7 4h10v5a5 5 0 01-10 0V4z" />
+                    <path d="M7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3" />
+                    <path d="M12 14v4M9 21h6M10 18h4" />
+                  </>
+                )}
+              </svg>
+            </div>
             <h2 className="text-xl font-bold text-[#FFFFFF] mb-2">{milestone.title}</h2>
             <p className="text-sm text-[#6a6a78] leading-relaxed mb-6">{milestone.body}</p>
             <button onClick={() => setMilestone(null)}
               className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] font-bold rounded-2xl transition-colors active:scale-95">
-              Let's keep going! 💪
+              Let's keep going.
             </button>
           </div>
         </div>

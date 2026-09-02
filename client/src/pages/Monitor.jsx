@@ -882,8 +882,8 @@ export default function Coach() {
                     {/* Weight + stats row */}
                     <div className="grid grid-cols-3 gap-2">
                       <StatPill value={log.weight_kg ? `${log.weight_kg} kg` : '—'} label="Weight" color="emerald" />
-                      <StatPill value={`${((log.water_ml || 0) / 1000).toFixed(1)}L`} label="Water" color="blue" />
-                      <StatPill value={log.sleep?.quality > 0 ? '⭐'.repeat(log.sleep.quality) : '—'} label="Sleep" color="purple" />
+                      <StatPill value={`${((log.water_ml || 0) / 1000).toFixed(1)}L`} label="Water" />
+                      <StatPill value={log.sleep?.quality > 0 ? `${log.sleep.quality}/5` : '—'} label="Sleep" />
                     </div>
 
                     {/* Net calorie row */}

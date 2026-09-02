@@ -210,16 +210,22 @@ export function CardSkeleton({ lines = 3, className = '' }) {
   );
 }
 
-export function StatPill({ value, label, color = 'stone' }) {
-  const colors = {
-    stone: 'bg-white/[0.06] text-[#FFFFFF]', emerald: 'bg-[rgba(212,175,55,0.10)] text-[#D4AF37]',
-    amber: 'bg-[rgba(251,191,36,0.10)] text-amber-400', red: 'bg-[rgba(248,113,113,0.10)] text-red-400',
-    blue: 'bg-[rgba(96,165,250,0.10)] text-blue-400', purple: 'bg-[rgba(212,175,55,0.10)] text-amber-400',
-  };
+/**
+ * A small figure in a row of figures, used on the coach's member page.
+ *
+ * `color` is kept as a prop so existing call sites still work, but only
+ * `accent` changes anything now. Weight was gold, water was blue and sleep was
+ * amber — three colours for three facts about the same day, which told a coach
+ * nothing and made the row read as a set of unrelated badges.
+ */
+export function StatPill({ value, label, color = 'stone', accent = false }) {
+  const isAccent = accent || color === 'emerald';
   return (
-    <div className={`text-center rounded-xl py-1.5 px-2 border border-white/[0.06] ${colors[color]}`}>
-      <div className="font-bold text-sm leading-tight">{value}</div>
-      <div className="text-xs opacity-60 mt-0.5">{label}</div>
+    <div className={`text-center rounded-xl py-2 px-2 ${
+      isAccent ? 'bg-[rgba(212,175,55,0.08)]' : 'bg-white/[0.045]'}`}>
+      <div className={`font-display text-[15px] leading-tight font-medium tabular-nums ${
+        isAccent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{value}</div>
+      <div className="text-[11px] text-[#8C93A3] mt-1">{label}</div>
     </div>
   );
 }

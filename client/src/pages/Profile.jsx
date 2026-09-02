@@ -143,20 +143,26 @@ const CONDITION_LABELS = {
 
 // ── Stat pill ─────────────────────────────────────────────────────────────────
 
-function StatPill({ label, value, unit, color = 'emerald' }) {
-  const colors = {
-    emerald: 'bg-[rgba(212,175,55,0.08)] border-[rgba(212,175,55,0.16)] text-[#F0E2B6]',
-    blue:    'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300',
-    amber:   'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300',
-    stone:   'bg-white/[0.04] border-white/[0.08] text-[#9EA3B0]',
-  };
+/**
+ * A single figure about the member.
+ *
+ * Five of these sat in two rows in four different colours — gold, blue, amber,
+ * grey — with a tinted background and a tinted border each. Colour was decoration:
+ * nothing about "total logs" is blue, and with five tinted boxes competing there
+ * was no way to tell which number mattered. The member opens this page to see
+ * their weight, so that one is gold and the rest are ink.
+ */
+function StatPill({ label, value, unit, accent = false }) {
   return (
-    <div className={`rounded-2xl border px-4 py-3 text-center ${colors[color]}`}>
-      <p className="font-display text-2xl font-semibold">
+    <div className={`rounded-2xl px-3 py-3 text-center ${
+      accent ? 'bg-[rgba(212,175,55,0.07)]' : 'bg-[#17181C]'}`}
+      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      <p className={`font-display text-[23px] leading-none font-medium tabular-nums ${
+        accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>
         {value ?? '—'}
-        {unit && <span className="text-sm font-normal ml-1 opacity-70">{unit}</span>}
+        {unit && <span className="text-[13px] font-normal ml-1 text-[#7E8596]">{unit}</span>}
       </p>
-      <p className="text-xs font-medium mt-0.5 opacity-70">{label}</p>
+      <p className="text-[11.5px] mt-1.5 text-[#8C93A3]">{label}</p>
     </div>
   );
 }
@@ -289,21 +295,21 @@ export default function Profile() {
 
         {/* Weight stats */}
         <div className="grid grid-cols-3 gap-2">
-          <StatPill label="Current weight" value={p.current_weight} unit="kg" color="emerald" />
+          <StatPill label="Current weight" value={p.current_weight} unit="kg" accent />
           <StatPill label="Lost so far"
             value={lostKg !== null ? (lostKg >= 0 ? lostKg : `+${Math.abs(lostKg)}`) : null}
-            unit="kg" color={lostKg > 0 ? 'emerald' : 'amber'} />
+            unit="kg" />
           <StatPill label="To reach goal"
             value={toGoKg !== null ? (toGoKg > 0 ? toGoKg : '✓') : null}
-            unit={toGoKg > 0 ? 'kg' : ''} color={toGoKg <= 0 ? 'emerald' : 'stone'} />
+            unit={toGoKg > 0 ? 'kg' : ''} />
         </div>
 
         {/* Activity stats */}
         <div className="grid grid-cols-2 gap-2">
-          <StatPill label="Total logs" value={p.total_logs} color="blue" />
+          <StatPill label="Total logs" value={p.total_logs} />
           <StatPill label="30-day compliance"
             value={p.avg_compliance !== null ? `${p.avg_compliance}%` : null}
-            color={p.avg_compliance >= 75 ? 'emerald' : p.avg_compliance >= 50 ? 'amber' : 'stone'} />
+            />
         </div>
 
         {/* BMI */}

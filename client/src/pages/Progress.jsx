@@ -494,7 +494,7 @@ export default function Progress() {
                   <ReferenceLine y={targetW} stroke="#e0c98a" strokeDasharray="4 4"
                     label={{ value: `Goal ${targetW}`, position: 'right', fontSize: 9, fill: '#e0c98a' }} />
                 )}
-                <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2.5}
+                <Line type="monotone" dataKey="weight" stroke="#8FA8C8" strokeWidth={2.5}
                   dot={{ fill: '#3b82f6', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -526,14 +526,14 @@ export default function Progress() {
                 <Tooltip content={<ComplianceTip />} />
                 <ReferenceLine y={75} stroke="#e0c98a" strokeDasharray="3 3" />
                 <Bar dataKey="score" radius={[3, 3, 0, 0]}
-                  fill="#10b981"
+                  fill="#D4AF37"
                   label={false}
                 />
               </BarChart>
             </ResponsiveContainer>
             <div className="flex justify-between text-xs text-stone-400 mt-1 px-1">
               <span>Each bar = 1 day</span>
-              <span>Green line = 75% target</span>
+              <span>Dashed line = 75% target</span>
             </div>
           </Card>
         )}
@@ -564,7 +564,7 @@ export default function Progress() {
                 {profile?.macros?.kcal && (
                   <ReferenceLine y={profile.macros.kcal} stroke="#e0c98a" strokeDasharray="3 3" />
                 )}
-                <Bar dataKey="kcal" fill="#fb923c" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="kcal" fill="#B08A4A" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
 
@@ -577,7 +577,7 @@ export default function Progress() {
                 <YAxis tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }}
                   formatter={(v, name) => [`${v}g`, name.charAt(0).toUpperCase() + name.slice(1)]} />
-                <Line type="monotone" dataKey="pro"  stroke="#60a5fa" strokeWidth={2} dot={{ r: 3, fill: '#60a5fa' }} />
+                <Line type="monotone" dataKey="pro"  stroke="#8FA8C8" strokeWidth={2} dot={{ r: 3, fill: '#8FA8C8' }} />
                 <Line type="monotone" dataKey="carb" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3, fill: '#fbbf24' }} />
                 <Line type="monotone" dataKey="fat"  stroke="#d9b451" strokeWidth={2} dot={{ r: 3, fill: '#d9b451' }} />
               </ComposedChart>
