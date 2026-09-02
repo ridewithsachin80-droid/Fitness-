@@ -32,7 +32,44 @@
  */
 
 const fs = require('fs');
-const pool = require('../db/pool');
+const { Pool, types } = require('pg');
+
+/**
+ * Its own connection, not the app's.
+ *
+ * db/pool.js is tuned for the server sitting next to the database inside
+ * Railway: a 3-second connect timeout and three connections. Run from a laptop,
+ * over the internet, through Railway's TCP proxy, three seconds is not enough
+ * to finish a TLS handshake — the script died with "Connection terminated due
+ * to connection timeout" before it had asked for anything.
+ *
+ * SSL is on unconditionally here. Railway's public proxy requires it, and
+ * making that depend on remembering to set NODE_ENV was one more thing to get
+ * wrong at the command line.
+ */
+types.setTypeParser(types.builtins.INT8, v => (v === null ? null : parseInt(v, 10)));
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // On for anything remote, off for a database on this machine — otherwise
+  // pointing it at a local Postgres fails with a TLS error that has nothing to
+  // do with the data.
+  ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '')
+    ? false : { rejectUnauthorized: false },
+  max: 2,
+  connectionTimeoutMillis: 30000,   // 30s — a laptop on a home connection
+  idleTimeoutMillis: 10000,
+  statement_timeout: 120000,
+});
+
+if (!process.env.DATABASE_URL) {
+  console.error('\n  DATABASE_URL is not set.\n');
+  console.error('  Command Prompt:  set DATABASE_URL=postgresql://...');
+  console.error('  PowerShell:      $env:DATABASE_URL="postgresql://..."');
+  console.error('\n  Use Railway → Postgres → Variables → DATABASE_PUBLIC_URL,');
+  console.error('  not DATABASE_URL (that one only works inside Railway).\n');
+  process.exit(1);
+}
 const { normaliseNutrients } = require('../services/nutrients');
 const { macroPlausibility, cookingFatPlausibility, massBalance } = require('../services/macroCheck');
 const { saturatedPlausibility } = require('../services/fatProfile');
@@ -281,4 +318,16 @@ async function restoreBackup(file) {
       '  restore micros on existing coach meal plans.\n');
 
   await pool.end();
-})().catch(err => { console.error('backfill failed:', err.message); pool.end().then(() => process.exit(1)); });
+})().catch(err => {
+  const m = String(err.message || '');
+  console.error('\n  Could not finish:', m, '\n');
+  if (/timeout|ENOTFOUND|ECONNREFUSED/i.test(m)) {
+    console.error('  That is a connection problem, not a data problem. Check:');
+    console.error('   · the URL is DATABASE_PUBLIC_URL, not the internal one');
+    console.error('   · the password in it is the real one, not a placeholder');
+    console.error('   · you are on a network that allows outbound port connections\n');
+  } else if (/password|authentication/i.test(m)) {
+    console.error('  The password in the URL is wrong.\n');
+  }
+  pool.end().then(() => process.exit(1));
+});
