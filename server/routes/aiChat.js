@@ -2649,6 +2649,56 @@ router.get('/portions', async (req, res) => {
 // Returns: { reply, actions: [{ member_id|null, member_name, resolved, is_all,
 //            ops (validated command), changes: [{icon,text}] }] }
 /**
+ * Ask Gemini about a FILE — a PDF or a photo — and get JSON back.
+ *
+ * `callAI(prompt)` takes a STRING. Handing it a parts array builds a malformed
+ * request that fails at the API, surfaces as a 502, and tells you nothing about
+ * why: it is the mistake this function exists to stop anyone making twice.
+ *
+ * responseMimeType asks the API itself to guarantee JSON, which is far more
+ * reliable than asking the prompt nicely and stripping code fences afterwards.
+ *
+ * @returns {Promise<{ parsed: object, model: string }>}
+ */
+async function callGeminiOnFile({ prompt, mimeType, data, maxOutputTokens = 16000, timeout = 50000 }) {
+  if (!GEMINI_API_KEY) {
+    const err = new Error('Reading documents needs GEMINI_API_KEY to be set');
+    err.response = { status: 500 };
+    throw err;
+  }
+  const models = [...new Set([
+    process.env.GEMINI_DOC_MODEL || 'gemini-2.5-flash',
+    ...GEMINI_MODELS,
+  ])].filter(Boolean);
+
+  let lastErr;
+  for (const model of models) {
+    try {
+      const response = await axios.post(
+        `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
+        {
+          contents: [{ parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data } },
+          ] }],
+          generationConfig: { temperature: 0, maxOutputTokens, responseMimeType: 'application/json' },
+        },
+        { timeout },
+      );
+      const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Empty response from the model');
+      return {
+        parsed: JSON.parse(String(text).replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()),
+        model,
+      };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error('No model could read the file');
+}
+
+/**
  * Targets read out of a diet plan, in the op shape /coach-apply expects.
  *
  * The op keys are kcal/pro/carb/fat — the same names that reach macro_pro and
@@ -2741,12 +2791,8 @@ RULES
 · If the document is not a diet plan at all, return meals: [] and say so in
   summary.`;
 
-    const { text, provider } = await callAI([
-      { text: prompt },
-      { inline_data: { mime_type: mt, data: file } },
-    ]);
-
-    const parsed = JSON.parse(String(text).replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    const { parsed, model } = await callGeminiOnFile({ prompt, mimeType: mt, data: file });
+    const provider = `gemini/${model}`;
 
     const nameRaw = String(parsed.member_name || member_name || '').trim();
     const lc = nameRaw.toLowerCase();

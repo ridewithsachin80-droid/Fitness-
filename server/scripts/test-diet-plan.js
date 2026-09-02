@@ -51,8 +51,10 @@ const PLAN_JSON = {
   repeat_days: 14,
   summary: 'Low-carb plan for T V Sharada — carbs at lunch only.',
 };
+let lastAIBody = null;
 const stubbedPost = async (url, body, cfg) => {
   if (String(url).includes('generativelanguage') || String(url).includes('groq')) {
+    lastAIBody = body;
     return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(PLAN_JSON) }] } }] } };
   }
   return realAxios.post(url, body, cfg);
@@ -246,6 +248,19 @@ const item = (name, grams) => ({ name, grams, qty_text: `${grams} g`,
     ck('targets carry through in op spelling',
       a.ops?.macros?.pro === 120 && a.ops?.macros?.carb === 60, a.ops?.macros);
     ck('the preview lists the changes', (a.changes || []).length >= 3, a.changes);
+    // The request shape itself. callAI(prompt) takes a STRING; handing it a
+    // parts array builds a malformed request that fails at the API and comes
+    // back as a bare 502 with nothing to debug from. Asserting the outgoing
+    // body is the only way that stays caught.
+    ck('the file is sent to the model as an inline part alongside the prompt',
+      !!lastAIBody?.contents?.[0]?.parts?.some(p => p.inline_data?.data),
+      JSON.stringify(lastAIBody).slice(0, 160));
+    ck('and the prompt travels with it',
+      !!lastAIBody?.contents?.[0]?.parts?.some(p => typeof p.text === 'string' && p.text.length > 50));
+    ck('JSON is requested from the API, not just asked for in the prompt',
+      lastAIBody?.generationConfig?.responseMimeType === 'application/json',
+      lastAIBody?.generationConfig);
+
     ck('nothing is applied yet — the coach still approves it',
       (await planRows()).length === 1, 'meal_plans should be untouched by a preview');
   }
