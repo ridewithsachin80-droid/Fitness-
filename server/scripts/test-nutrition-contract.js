@@ -239,6 +239,29 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
       (await ai.detectFoodEdit('change asha target weight to 70', asAdmin)) === null);
     ck('a message with no edit verb is not a food edit',
       (await ai.detectFoodEdit('masala dosa calories', asAdmin)) === null);
+    // Ambiguity is asked about, never guessed at. "edit dosa" silently opened
+    // the shortest of four matches; the coach would have pressed "Save for all
+    // members" on a food they never chose, with nothing suggesting a choice had
+    // been made for them.
+    await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g) VALUES
+       ('Dosa (Plain)','grain','nin',true,$1::jsonb),
+       ('Set Dosa','grain','ai',false,$1::jsonb)`,
+      [JSON.stringify(normaliseNutrients({ calories: 168, fat: 6.5 }))]);
+
+    const amb = await ai.detectFoodEdit('edit dosa', asAdmin);
+    ck('several matches are asked about, not guessed at', !!amb?.ambiguous, amb?.name);
+    ck('and every candidate is offered', amb?.choices?.length >= 3, amb?.choices?.length);
+    ck('nothing is opened for editing while it is ambiguous',
+      amb?.per_100g === undefined, Object.keys(amb || {}));
+
+    // An exact name is never ambiguous, even when longer names contain it.
+    ck('an exact name still opens straight away',
+      (await ai.detectFoodEdit('edit masala dosa', asAdmin))?.name === 'Masala Dosa');
+    ck('and so does another exact name that shares the word',
+      (await ai.detectFoodEdit('edit set dosa', asAdmin))?.name === 'Set Dosa');
+    await pool.query(`DELETE FROM foods WHERE name IN ('Dosa (Plain)','Set Dosa')`);
+
     ck('an unknown dish reports itself rather than matching something else',
       (await ai.detectFoodEdit('edit zorbfruit', asAdmin))?.not_found === 'zorbfruit');
 

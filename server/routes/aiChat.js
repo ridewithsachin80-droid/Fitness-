@@ -3107,11 +3107,25 @@ async function detectFoodEdit(msg, user) {
     `SELECT id, name, source, verified, per_100g, default_grams FROM foods
       WHERE lower(name) = $1 OR lower(name) LIKE $2
       ORDER BY (lower(name) = $1) DESC, verified DESC, length(name)
-      LIMIT 1`,
+      LIMIT 6`,
     [name, `%${name}%`]);
   if (!rows.length) return { not_found: name };
 
-  const f = rows[0];
+  // Ambiguity is asked about, never guessed at.
+  //
+  // "edit dosa" matched four foods and silently opened the shortest one. The
+  // coach would have edited what they believed was their dish, pressed "Save
+  // for all members", and changed a different food for everybody — with
+  // nothing on screen suggesting a choice had been made for them.
+  //
+  // An exact name match is not ambiguous: "Masala Dosa" means that one even
+  // though "Masala Dosa Special" also contains it.
+  const exact = rows.filter(r => r.name.toLowerCase() === name);
+  if (!exact.length && rows.length > 1) {
+    return { ambiguous: name, choices: rows.map(r => ({ id: r.id, name: r.name })) };
+  }
+
+  const f = exact[0] || rows[0];
   // How many logged entries a correction would move — shown before deciding,
   // because "this applies to everyone" is the whole point and should not be a
   // surprise discovered afterwards.
@@ -3176,6 +3190,13 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
       const edit = await detectFoodEdit(cleanMsg, req.user);
       if (edit?.not_found) {
         return res.json({ reply: `I have no food called "${edit.not_found}" in the database.`, actions: [] });
+      }
+      if (edit?.ambiguous) {
+        return res.json({
+          reply: `${edit.choices.length} foods match "${edit.ambiguous}" — which one? ` +
+                 edit.choices.map(c => c.name).join(' · '),
+          actions: [],
+        });
       }
       if (edit) {
         return res.json({

@@ -32,6 +32,27 @@ const pool = require('../db/pool');
  * Read-only — this is what the coach is shown BEFORE they decide.
  */
 async function propagationImpact(foodId) {
+  // Entries that name this food but were never LINKED to it — food_id null.
+  // They happen constantly: the food was created after the log, or enrichment
+  // missed the name that day. Correcting a food could never reach them, which
+  // is why editing Aloo Bhaji changed nothing for a member who had clearly
+  // logged Aloo Bhaji.
+  //
+  // Offered as a SEPARATE choice, because matching on a name is a weaker claim
+  // than matching on an id: "masala dosa" typed after a restaurant meal is a
+  // different dish. The coach sees the count and decides.
+  const { rows: un } = await pool.query(
+    `SELECT COUNT(*)::int                      AS entries,
+            COUNT(DISTINCT dl.patient_id)::int AS members
+       FROM daily_logs dl,
+            LATERAL jsonb_array_elements(COALESCE(dl.food_items, '[]'::jsonb)) it,
+            foods f
+      WHERE f.id = $1
+        AND it->>'food_id' IS NULL
+        AND lower(TRIM(it->>'name')) = lower(TRIM(f.name))`,
+    [foodId]
+  );
+
   const { rows } = await pool.query(
     `SELECT COUNT(*)::int                        AS entries,
             COUNT(DISTINCT dl.patient_id)::int   AS members,
@@ -47,7 +68,8 @@ async function propagationImpact(foodId) {
       WHERE (it->>'food_id')::int = $1`,
     [foodId]
   );
-  return rows[0] || { entries: 0, members: 0, earliest: null, guessed: 0 };
+  return { ...(rows[0] || { entries: 0, members: 0, earliest: null, guessed: 0 }),
+           unlinked: un[0]?.entries || 0, unlinked_members: un[0]?.members || 0 };
 }
 
 /**
@@ -109,4 +131,61 @@ async function propagateFoodNutrition(foodId, per100g, opts = {}) {
            grams_fixed: opts.grams ? impact.guessed : 0 };
 }
 
-module.exports = { propagationImpact, propagateFoodNutrition };
+/**
+ * Correct entries that NAME this food but were never linked to it.
+ *
+ * Also writes the food_id, so they are linked from then on and every future
+ * correction reaches them through the ordinary id match. The gap closes rather
+ * than being worked around each time.
+ *
+ * Exact, case-insensitive name equality only — never a substring. "Aloo Bhaji"
+ * must not sweep up "Aloo Bhaji Masala", which is a different dish with
+ * different numbers.
+ */
+async function propagateUnlinked(foodId, per100g, grams = null) {
+  const { rows } = await pool.query(
+    `UPDATE daily_logs dl
+        SET food_items = sub.items
+       FROM (
+         SELECT dl2.id,
+                jsonb_agg(
+                  CASE WHEN it->>'food_id' IS NULL
+                        AND lower(TRIM(it->>'name')) = lower(TRIM(f.name))
+                       THEN jsonb_set(
+                              jsonb_set(
+                                CASE WHEN $4::int IS NOT NULL
+                                      AND COALESCE(NULLIF(TRIM(it->>'qty_text'), ''), 'typical serving') = 'typical serving'
+                                     THEN jsonb_set(it, '{grams}', to_jsonb($4::int))
+                                     ELSE it END,
+                                '{per_100g}', $2::jsonb),
+                              '{food_id}', to_jsonb($1::int))
+                       ELSE it END
+                  ORDER BY ord
+                ) AS items
+           FROM daily_logs dl2,
+                LATERAL jsonb_array_elements(COALESCE(dl2.food_items, '[]'::jsonb))
+                        WITH ORDINALITY AS t(it, ord),
+                foods f
+          WHERE f.id = $1
+            AND dl2.food_items @> $3::jsonb
+          GROUP BY dl2.id
+       ) sub
+      WHERE dl.id = sub.id
+  RETURNING dl.id`,
+    [foodId, JSON.stringify(per100g),
+     JSON.stringify([{ food_id: null }]),
+     Number.isFinite(parseInt(grams)) && parseInt(grams) > 0 ? parseInt(grams) : null]
+  );
+  // rows.length is how many daily_logs ROWS were rewritten, and a row is
+  // rewritten whenever it contains ANY unlinked item — including ones this
+  // food does not match. Counting rows reported 2 when a single entry changed.
+  // The number the coach is shown must be entries.
+  const { rows: after } = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM daily_logs dl,
+            LATERAL jsonb_array_elements(COALESCE(dl.food_items, '[]'::jsonb)) it
+      WHERE (it->>'food_id')::int = $1`, [foodId]);
+  return { rows_touched: rows.length, entries: after[0]?.n || 0 };
+}
+
+module.exports = { propagationImpact, propagateFoodNutrition, propagateUnlinked };

@@ -179,7 +179,71 @@ const RIGHT = { calories: 210, protein: 4, total_carbs: 26, fat: 10 };
       (await itemsFor(asha))[0].food_items[0].per_100g.fat === 10);
   }
 
-  console.log('\n[4b] access');
+  console.log('\n[5] entries that were never linked to the food');
+  {
+    // Real report: the coach edited Aloo Bhaji, saw "Saved. Applies to every
+    // member from now on", and the member's log did not move. The entry named
+    // Aloo Bhaji but carried food_id null — logged before the food existed, or
+    // enrichment missed the name that day — so correcting the food could never
+    // reach it. Masala Dosa happened to be linked; Aloo Bhaji was not.
+    await pool.query('DELETE FROM daily_logs');
+    const { rows: [bhaji] } = await pool.query(
+      `INSERT INTO foods (name,category,source,verified,per_100g)
+       VALUES ('Aloo Bhaji','vegetable','ai',false,$1::jsonb) RETURNING id`,
+      [JSON.stringify({ calories: 80, protein: 1.5, total_carbs: 13.5, fat: 3 })]);
+
+    await logFor(asha, 0, [
+      { name: 'Aloo Bhaji', grams: 100, meal: 'Breakfast', food_id: null,
+        per_100g: { calories: 80, protein: 1.5, total_carbs: 13.5, fat: 3 } },
+    ]);
+    await logFor(bujju, 1, [
+      // A different dish that merely starts with the same words. Must not be
+      // swept up — that is why the match is exact, never a substring.
+      { name: 'Aloo Bhaji Masala', grams: 150, meal: 'Lunch', food_id: null,
+        per_100g: { calories: 80, protein: 1.5, total_carbs: 13.5, fat: 3 } },
+    ]);
+
+    const imp = await call('GET', `/api/foods/${bhaji.id}/impact`, tok(coach, 'monitor'));
+    ck('unlinked entries are counted', imp.data.unlinked === 1, imp.data);
+    ck('and reported separately from linked ones',
+      imp.data.entries === 0 && imp.data.unlinked === 1, imp.data);
+
+    const CORRECT = { calories: 140, protein: 1.5, total_carbs: 15, fat: 7, saturated_fat: 1.2 };
+    let r = await call('PUT', `/api/foods/${bhaji.id}`, tok(admin, 'admin'), { per_100g: CORRECT });
+    ck('without consent the unlinked entry is untouched',
+      (await itemsFor(asha))[0].food_items[0].per_100g.calories === 80);
+
+    r = await call('PUT', `/api/foods/${bhaji.id}`, tok(admin, 'admin'),
+      { per_100g: CORRECT, propagate_unlinked: true });
+    ck('with consent it is corrected',
+      (await itemsFor(asha))[0].food_items[0].per_100g.calories === 140,
+      (await itemsFor(asha))[0].food_items[0].per_100g.calories);
+    ck('the response says how many', r.data.propagated?.unlinked_fixed === 1, r.data.propagated);
+    ck('and it is now LINKED, so the next correction reaches it by id',
+      (await itemsFor(asha))[0].food_items[0].food_id === bhaji.id,
+      (await itemsFor(asha))[0].food_items[0].food_id);
+
+    ck('a differently-named dish is NOT swept up',
+      (await itemsFor(bujju))[0].food_items[0].per_100g.calories === 80,
+      (await itemsFor(bujju))[0].food_items[0].per_100g.calories);
+    ck('and stays unlinked', (await itemsFor(bujju))[0].food_items[0].food_id === null);
+
+    // Having linked it, the ordinary id path now covers it.
+    const imp2 = await call('GET', `/api/foods/${bhaji.id}/impact`, tok(coach, 'monitor'));
+    ck('the gap has closed — it now counts as a linked entry',
+      imp2.data.entries === 1 && imp2.data.unlinked === 0, imp2.data);
+
+    await pool.query(`DELETE FROM foods WHERE id = $1`, [bhaji.id]);
+    await pool.query('DELETE FROM daily_logs');
+    // Restore what the access block below expects to find. Deleting shared
+    // fixture state and leaving the next block to fall over is a test bug, not
+    // a product one.
+    await logFor(asha, 0, [
+      { name: 'Masala Dosa', grams: 200, meal: 'Breakfast', food_id: dosa.id, per_100g: RIGHT },
+    ]);
+  }
+
+  console.log('\n[6] access');
   {
     const r = await call('PUT', `/api/foods/${dosa.id}`, tok(asha, 'patient'),
       { per_100g: WRONG, propagate: true });

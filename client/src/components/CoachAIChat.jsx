@@ -64,6 +64,7 @@ function FoodEditCard({ food, onSaved }) {
   const [more, setMore]   = useState(false);
   const [prop, setProp]   = useState(false);
   const [propG, setPropG] = useState(false);
+  const [propU, setPropU] = useState(false);
   const [fatSrc, setFatSrc] = useState(food.default_fat_source || 'sunflower');
   const [busy, setBusy]   = useState(false);
   const [err,  setErr]    = useState('');
@@ -80,13 +81,15 @@ function FoodEditCard({ food, onSaved }) {
       const { data } = await api.put(`/foods/${food.id}`, {
         per_100g: vals, propagate: prop || propG,
         propagate_portion: propG,
+        propagate_unlinked: propU,
         default_grams: defG === '' ? null : parseInt(defG),
       });
       const p = data.propagated;
       setDone(p
         ? `Saved. ${p.entries} logged ${p.entries === 1 ? 'entry' : 'entries'} across ` +
           `${p.members} ${p.members === 1 ? 'member' : 'members'} corrected` +
-          (p.grams_fixed ? `, and ${p.grams_fixed} portion${p.grams_fixed === 1 ? '' : 's'} reset to ${defG}g.` : '.')
+          (p.grams_fixed ? `, ${p.grams_fixed} portion${p.grams_fixed === 1 ? '' : 's'} reset to ${defG}g` : '') +
+          (p.unlinked_fixed ? `, ${p.unlinked_fixed} unlinked ${p.unlinked_fixed === 1 ? 'entry' : 'entries'} linked and corrected` : '') + '.'
         : 'Saved. Applies to every member from now on.');
       onSaved?.();
     } catch (e) {
@@ -264,6 +267,29 @@ function FoodEditCard({ food, onSaved }) {
             {food.impact.guessed === 1 ? ' entry' : ' entries'} where no quantity was given.
             <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
               Entries where the member said how much are left alone.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {/* Entries that NAME this food but were never linked to it — food_id null.
+          They happen constantly: the food was created after the log, or
+          enrichment missed the name that day. Correcting the food could never
+          reach them, so editing Aloo Bhaji changed nothing for a member who
+          had clearly logged Aloo Bhaji.
+
+          Separate consent, because matching on a name is a weaker claim than
+          matching on an id. Ticking it also LINKS them, so the gap closes
+          rather than needing this every time. */}
+      {food.editable && food.impact?.unlinked > 0 && (
+        <label className="flex items-start gap-2 mt-2 cursor-pointer">
+          <input type="checkbox" checked={propU} onChange={e => setPropU(e.target.checked)} className="mt-0.5" />
+          <span className="text-[11.5px] text-[#9EA3B0] leading-snug">
+            Also correct <strong className="text-[#E8CE7A]">{food.impact.unlinked}</strong>
+            {food.impact.unlinked === 1 ? ' entry' : ' entries'} named "{food.name}" that were
+            never linked to this food.
+            <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
+              Matched on the exact name. They get linked, so future corrections reach them automatically.
             </span>
           </span>
         </label>

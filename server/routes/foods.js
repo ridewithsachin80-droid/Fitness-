@@ -26,7 +26,7 @@ const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const role   = require('../middleware/roleCheck');
 const { macroPlausibility, cookingFatPlausibility, massBalance } = require('../services/macroCheck');
-const { propagationImpact, propagateFoodNutrition } = require('../services/foodPropagate');
+const { propagationImpact, propagateFoodNutrition, propagateUnlinked } = require('../services/foodPropagate');
 const { saturatedPlausibility } = require('../services/fatProfile');
 
 // ─── All routes require authentication ────────────────────────────────────────
@@ -585,6 +585,7 @@ router.put('/:id', async (req, res) => {
     default_grams,
     propagate = false,
     propagate_portion = false,
+    propagate_unlinked = false,
   } = req.body;
 
   try {
@@ -641,12 +642,19 @@ router.put('/:id', async (req, res) => {
     // it, and their weekly reports and adaptive calorie estimates were computed
     // from it — so the coach gets to say "yes, fix those too".
     let propagated = null;
-    if (propagate && per_100g) {
+    if ((propagate || propagate_unlinked) && per_100g) {
       try {
         propagated = await propagateFoodNutrition(id, normNutrients, {
           // Only when the coach asked for the portion to be reset too.
           grams: propagate_portion ? parseInt(default_grams) : null,
         });
+        // Entries that named this food but were never linked to it. Separate
+        // consent, because a name match is a weaker claim than an id match.
+        if (propagate_unlinked) {
+          const u = await propagateUnlinked(
+            id, normNutrients, propagate_portion ? parseInt(default_grams) : null);
+          propagated.unlinked_fixed = u.entries - (propagated.entries || 0);
+        }
       } catch (err) {
         // The food itself is already corrected. Failing the whole request here
         // would suggest nothing was saved, and the coach would edit it again.
