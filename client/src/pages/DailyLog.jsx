@@ -1136,7 +1136,7 @@ export default function DailyLog() {
         <div className="max-w-md mx-auto" id="section-hero">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[#F0E2B6] mb-1.5">FitLife</p>
+              <p className="text-[11.5px] font-medium text-[#8C7A46] mb-1.5">FitLife</p>
               <h1 className="font-display text-2xl font-medium flex items-center gap-2 leading-tight">
                 <span>{AVATARS_LIST[avatarIdx]}</span>
                 {(() => {
@@ -1286,7 +1286,7 @@ export default function DailyLog() {
                     ? 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.40)]'
                     : 'bg-[rgba(212,175,55,0.05)] border-[rgba(212,175,55,0.24)]'
                 }`}>
-                  <p className="text-[9px] font-bold tracking-[0.14em] text-[#D4AF37] uppercase mb-1">
+                  <p className="text-[11.5px] font-medium text-[#8C7A46] mb-1">
                     Today's read
                   </p>
                   <p className="text-[12.5px] text-[#FFFFFF] leading-relaxed">{read.text}</p>
@@ -1355,7 +1355,7 @@ export default function DailyLog() {
                       <span className={`text-[11px] font-extrabold ${surplus ? 'text-amber-300' : 'text-emerald-300'}`}>
                         {surplus ? '↑' : '↓'} {surplus ? '+' : '−'}{Math.abs(balance).toLocaleString()} kcal
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#9EA3B0]">
+                      <span className="text-[11.5px] font-medium text-[#8C93A3]">
                         {surplus ? 'surplus' : 'deficit'}
                       </span>
                     </button>
@@ -1409,7 +1409,7 @@ export default function DailyLog() {
                         className={`${tileBase} ${heroPanel === 'weight' ? on : off}`}>
                         <div className="min-w-0">
                           <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">{log.weight ? `${log.weight} kg` : '— kg'}</span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">
+                        <span className="block text-[11.5px] font-medium text-[#8C93A3] mt-1">
                           ⚖ {(() => {
                             if (!log.weight) return 'Tap to log';
                             if (yesterdayWeight == null) return 'Logged';
@@ -1430,7 +1430,7 @@ export default function DailyLog() {
                             ? <>{kcal}<span className="text-[11px] text-[#7E8596]"> /{protocol.macros.kcal}</span></>
                             : kcal}
                         </span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">🔥 kcal eaten</span>
+                        <span className="block text-[11.5px] font-medium text-[#8C93A3] mt-1">Calories eaten</span>
                         </div>
                         <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
@@ -1440,7 +1440,7 @@ export default function DailyLog() {
                         className={`${tileBase} ${heroPanel === 'protocol' ? on : off}`}>
                         <div className="min-w-0">
                           <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">{actDone + acvDone + suppDone} / {activeActivities.length + activeACV.length + activeSupplements.length}</span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">✓ protocol</span>
+                        <span className="block text-[11.5px] font-medium text-[#8C93A3] mt-1">Protocol</span>
                         </div>
                         <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
@@ -1450,7 +1450,7 @@ export default function DailyLog() {
                         className={`${tileBase} ${heroPanel === 'water' ? on : off}`}>
                         <div className="min-w-0">
                           <span className="block font-display text-[20px] font-semibold leading-tight tracking-tight">{((log.water || 0) / 1000).toFixed(1)} L</span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">💧 of {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
+                        <span className="block text-[11.5px] font-medium text-[#8C93A3] mt-1">Water · target {((protocol?.water_target || 3000) / 1000).toFixed(1)}L</span>
                         </div>
                         <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
@@ -1466,7 +1466,7 @@ export default function DailyLog() {
                               ? <span className="text-[#D4AF37]">{coachPlan.todayDay.day_label}</span>
                               : <span className="text-[#7E8596]">— none</span>}
                         </span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">
+                        <span className="block text-[11.5px] font-medium text-[#8C93A3] mt-1">
                           🏋️ {workoutKcal > 0 ? 'burned'
                             : coachPlan?.todayDay ? `workout · ${coachPlan.todayDay.exercises.length} ${plural(coachPlan.todayDay.exercises.length, 'exercise')}`
                             : 'workout'}
@@ -1483,7 +1483,7 @@ export default function DailyLog() {
                           {sleepDur || <span className="text-[#7E8596]">— set times</span>}
                           {sleepDur && <span className="text-[11px] text-[#7E8596] font-semibold"> · {bt} → {wt}</span>}
                         </span>
-                        <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">🌙 {terms.sleep}</span>
+                        <span className="block text-[11.5px] font-medium text-[#8C93A3] mt-1">{terms.sleep}</span>
                         </div>
                         <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
@@ -1497,7 +1497,7 @@ export default function DailyLog() {
                               ? <>{micro.met}<span className="text-[11px] text-[#7E8596]"> / {micro.total} targets met</span></>
                               : <span className="text-[#7E8596]">— log food first</span>}
                           </span>
-                          <span className="block text-[10px] font-bold tracking-wider text-[#9EA3B0] uppercase mt-0.5">🔬 nutrition</span>
+                          <span className="block text-[11.5px] font-medium text-[#8C93A3] mt-1">Nutrition</span>
                         </div>
                         <span className="text-[#7E8596] text-sm flex-shrink-0">›</span>
                       </button>
@@ -1577,14 +1577,14 @@ export default function DailyLog() {
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1 min-w-0">
-                    <label className="block text-[9px] font-bold text-[#7E8596] uppercase tracking-wider mb-1">Bedtime</label>
+                    <label className="block text-[11.5px] font-medium text-[#8C93A3] mb-1">Bedtime</label>
                     <input type="time" value={log.sleep?.bedtime || ''}
                       onChange={e => update('sleep', { ...log.sleep, bedtime: e.target.value })}
                       style={{ minHeight: 46 }}
                       className="w-full text-sm font-bold bg-[#1A1C20] border border-white/[0.12] rounded-xl px-2 text-[#FFFFFF] focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <label className="block text-[9px] font-bold text-[#7E8596] uppercase tracking-wider mb-1">Wake time</label>
+                    <label className="block text-[11.5px] font-medium text-[#8C93A3] mb-1">Wake time</label>
                     <input type="time" value={log.sleep?.waketime || ''}
                       onChange={e => update('sleep', { ...log.sleep, waketime: e.target.value })}
                       style={{ minHeight: 46 }}
@@ -1675,7 +1675,7 @@ export default function DailyLog() {
                       {activeActivities.length > 0 && (
                         <div className="mb-3.5">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#7E8596] uppercase">🏃 {terms.activities} · {actDone}/{activeActivities.length}</span>
+                            <span className="text-[11.5px] font-medium text-[#8C93A3]">{terms.activities} · {actDone}/{activeActivities.length}</span>
 
                           </div>
                           <div className="flex flex-wrap gap-1.5">
@@ -1692,7 +1692,7 @@ export default function DailyLog() {
                       {activeACV.length > 0 && (
                         <div className="mb-3.5">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#7E8596] uppercase">🍶 ACV · {acvDone}/{activeACV.length}</span>
+                            <span className="text-[11.5px] font-medium text-[#8C93A3]">ACV · {acvDone}/{activeACV.length}</span>
                             <button onClick={() => setAcvExpanded(v => !v)}
                               className="text-[10px] text-[#D4AF37] font-bold">{acvExpanded ? 'Hide' : '?'}</button>
                           </div>
@@ -1716,7 +1716,7 @@ export default function DailyLog() {
                           <div className="mb-2">
                             <SectionTitle icon="💊"
                               tooltip="These supplements are prescribed by your coach. They are not medical advice — always check with your doctor if you take other medications.">
-                              <span className="text-[9px] font-extrabold tracking-[0.12em] text-[#7E8596] uppercase">{terms.supplements} · {suppDone}/{activeSupplements.length}</span>
+                              <span className="text-[11.5px] font-medium text-[#8C93A3]">{terms.supplements} · {suppDone}/{activeSupplements.length}</span>
                             </SectionTitle>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
@@ -1838,7 +1838,7 @@ export default function DailyLog() {
               if (!anyRow(rows)) return null;
               return (
               <div className="rounded-2xl border border-[rgba(212,175,55,0.25)] bg-[#1A1C20] px-4 py-3 mb-3">
-                <p className="text-[10px] font-bold tracking-[0.12em] text-[#D4AF37] uppercase mb-2">
+                <p className="text-[12px] font-semibold text-[#8C7A46] mb-2">
                   📋 From your coach today
                 </p>
 

@@ -275,7 +275,12 @@ export function MemberBottomNav() {
 
   return (
     <>
-      <div style={{ height: 80 }} />
+      {/* Spacer under the page content.
+          The nav card is ~64px plus 12px of padding, and the orb is lifted 22px
+          ABOVE the card's top edge — so the furniture occupies ~98px, not 80.
+          At 80 the orb sat on top of the last card on every screen: on Progress
+          it covered the compliance chart. Measured, not guessed. */}
+      <div style={{ height: 104 }} />
       <div className="fixed bottom-0 left-0 right-0 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-md mx-auto px-3 pb-3">
           <div className="glass rounded-2xl shadow-float flex items-center relative">
@@ -288,9 +293,16 @@ export function MemberBottomNav() {
                 aria-label="Log with AI Chat"
                 style={{ width: 56, height: 56, marginTop: -22 }}
                 className="orb-breathe rounded-full bg-gradient-to-br from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
-                  flex items-center justify-center text-xl border-4 border-[#121316]
+                  flex items-center justify-center border-4 border-[#121316]
                   active:scale-90 transition-transform">
-                ✨
+                {/* Drawn, not an emoji. This is the most-tapped control in the
+                    app and it was rendering as whatever spark the phone's font
+                    happened to supply. */}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#121316"
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5z" />
+                  <path d="M18.5 4v3M20 5.5h-3" />
+                </svg>
               </button>
             </div>
 
