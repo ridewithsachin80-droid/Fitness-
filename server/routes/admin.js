@@ -273,6 +273,26 @@ router.get('/members/:id', async (req, res) => {
   }
 });
 
+/**
+ * A coach who can actually take a member.
+ *
+ * Filtering the dropdown in the client is not enough: a stale PWA still holds
+ * the old option list, and the endpoint is reachable directly. A member handed
+ * to a disabled account sits on a roster nobody reads — they are never chased,
+ * and nothing on the members list explains why.
+ *
+ * Returns an error string, or null when the assignment is allowed.
+ */
+async function coachAssignable(monitorId) {
+  if (!monitorId) return null;                     // unassigned is a valid choice
+  const { rows } = await pool.query(
+    `SELECT name, active, role FROM users WHERE id = $1`, [monitorId]);
+  if (!rows.length) return 'That coach no longer exists';
+  if (!['monitor', 'admin'].includes(rows[0].role)) return 'That account is not a coach';
+  if (rows[0].active === false) return `${rows[0].name} is disabled — enable them first, or leave the member unassigned`;
+  return null;
+}
+
 // ── GET /api/admin/monitors ────────────────────────────────────────────────────
 router.get(['/coaches', '/monitors'], async (req, res) => {
   try {
@@ -312,6 +332,8 @@ router.post('/members', async (req, res) => {
     );
 
     if (monitor_id) {
+      const bad = await coachAssignable(monitor_id);
+      if (bad) { await client.query('ROLLBACK'); return res.status(400).json({ error: bad }); }
       await client.query(
         `INSERT INTO monitor_patients (monitor_id, patient_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
         [monitor_id, user.id]
@@ -360,6 +382,9 @@ router.post('/assign', async (req, res) => {
   if (!monitor_id || !patient_id) return res.status(400).json({ error: 'monitor_id and patient_id required' });
 
   try {
+    const bad = await coachAssignable(monitor_id);
+    if (bad) return res.status(400).json({ error: bad });
+
     // Remove any existing assignment first
     await pool.query(
       `UPDATE monitor_patients SET active=false WHERE patient_id=$1`,

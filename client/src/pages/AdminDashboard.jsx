@@ -62,6 +62,28 @@ function Field({ label, type = 'text', value, onChange, placeholder, required })
 }
 
 // ── Add Member modal ──────────────────────────────────────────────────────────
+/**
+ * The coaches a member may actually be assigned to.
+ *
+ * Disabled coaches were listed alongside active ones, so a member could be
+ * handed to an account that cannot sign in — they would sit on someone's
+ * roster with nobody reading it, and nothing on the members list would say
+ * why they were never being chased.
+ *
+ * Duplicate display names get their email appended. Two accounts both reading
+ * "Sachin (Admin)" are indistinguishable in a dropdown; the person choosing
+ * has no way to pick the right one, and picking the wrong one is silent.
+ */
+function assignableCoaches(coaches = []) {
+  const live = (coaches || []).filter(c => c.active !== false);
+  const seen = new Map();
+  live.forEach(c => seen.set(c.name, (seen.get(c.name) || 0) + 1));
+  return live.map(c => ({
+    ...c,
+    display: seen.get(c.name) > 1 && c.email ? `${c.name} · ${c.email}` : c.name,
+  }));
+}
+
 function AddMemberModal({ coaches, onClose, onAdded }) {
   const [form, setForm] = useState({
     name: '', phone: '', height_cm: '', start_weight: '',
@@ -117,8 +139,8 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
               focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]"
           >
             <option value="">— Unassigned —</option>
-            {coaches.map(m => (
-              <option key={m.id} value={m.id}>{m.name} ({roleLabel(m.role)})</option>
+            {assignableCoaches(coaches).map(m => (
+              <option key={m.id} value={m.id}>{m.display} ({roleLabel(m.role)})</option>
             ))}
           </select>
         </div>
@@ -1325,8 +1347,8 @@ function AssignModal({ member, coaches, onClose, onAssigned }) {
           className="w-full border border-white/[0.08] rounded-xl px-3 py-3 text-sm
             focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]">
           <option value="">— Unassigned —</option>
-          {coaches.map(m => (
-            <option key={m.id} value={m.id}>{m.name} · {roleLabel(m.role)} · {m.patient_count} members</option>
+          {assignableCoaches(coaches).map(m => (
+            <option key={m.id} value={m.id}>{m.display} · {roleLabel(m.role)} · {m.patient_count} members</option>
           ))}
         </select>
         <button onClick={submit} disabled={saving || !coachId}

@@ -202,7 +202,7 @@ test-layout-contracts"
 DB_SUITES="test-weekly-report test-journey test-gaps test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
-test-learning-model test-evals test-foods-queue test-nudges test-diet-plan"
+test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign"
 
 failed=0
 total_pass=0
