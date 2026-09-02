@@ -654,6 +654,51 @@ test('"Weight (kg)" is stripped from body_metrics, not left to duplicate', () =>
     'the main weight must not also land in lab history');
 });
 
+console.log('\nWhat to call someone');
+
+// Live bug: the member's home screen said "Good morning, T" to T V Sharada,
+// and the same split reached her coach messages and her weekly report. Indian
+// names are frequently written with leading initials and the given name last;
+// taking the first token is right for "Subramanya Prasad" and wrong for a
+// large share of this roster. Being addressed by an initial in your own
+// coaching app reads as the app not knowing who you are.
+const { firstName: clientFirstName } = importClient('utils/personName.js');
+const { firstName: serverFirstName } = require('../services/personName');
+
+const NAME_CASES = [
+  ['T V Sharada',        'Sharada',            'leading initials, given name last'],
+  ['K. Krishna Jinka',   'Krishna',            'dotted initial is skipped'],
+  ['MP Pradeep',         'Pradeep',            'two capitals are an abbreviation'],
+  ['Subramanya Prasad',  'Subramanya',         'ordinary first-name-first still works'],
+  ['Mrs. Padmini',       'Padmini',            'a title is not a name'],
+  ['Pradeep MP',         'Pradeep',            'trailing initials are irrelevant'],
+  ['HARSHA',             'HARSHA',             'a single name is returned as given'],
+  ['Bo Jackson',         'Bo',                 'a real two-letter name is not an initial'],
+  ['T V S',              'T V S',              'all initials — do not greet by one letter'],
+  ['  Suresh  patu  ',   'Suresh',             'stray whitespace'],
+];
+
+NAME_CASES.forEach(([input, want, why]) => {
+  test(`"${input}" is greeted as "${want}" — ${why}`, () => {
+    assert.strictEqual(clientFirstName(input), want);
+  });
+});
+
+test('client and server agree on every one of them', () => {
+  // The greeting is client-side; coach messages and the weekly report are
+  // server-side. A member addressed as "Sharada" on her home screen and "T" in
+  // her weekly report is worse than either alone.
+  NAME_CASES.forEach(([input]) => {
+    assert.strictEqual(clientFirstName(input), serverFirstName(input),
+      `disagreed on "${input}"`);
+  });
+});
+
+test('an empty name falls back rather than greeting nobody', () => {
+  assert.strictEqual(clientFirstName('', 'them'), 'them');
+  assert.strictEqual(serverFirstName(null, 'them'), 'them');
+});
+
 console.log('\nOnboarding gate — a member must be able to leave first-run setup');
 
 // Live bug: a new member completed setup, the PUT succeeded, and they landed

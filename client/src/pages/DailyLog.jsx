@@ -25,6 +25,7 @@ import { usePush }        from '../hooks/usePush';
 import { useOfflineSync } from '../hooks/useOfflineQueue';
 import { deriveTodayDay } from '../utils/programDay';
 import { coachCardRows, anyRow } from '../utils/coachCard';
+import { firstName } from '../utils/personName';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1142,7 +1143,7 @@ export default function DailyLog() {
                 {(() => {
                   const h = new Date().getHours();
                   const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-                  return `${greet}, ${user?.name?.split(' ')[0] || ''}`;
+                  return `${greet}, ${firstName(user?.name)}`;
                 })()}
               </h1>
               {/* Save feedback sits HERE, next to where the member is editing.

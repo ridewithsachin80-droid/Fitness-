@@ -22,6 +22,7 @@ import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGE
 import { useSync } from '../hooks/useSync';
 import { useAuthStore } from '../store/authStore';
 import { UNSORTED_MEAL, groupByMeal, deriveBodyComp } from '../utils/coachView';
+import { firstName } from '../utils/personName';
 
 // Bucket for food rows whose meal slot is null, blank, or no longer part of the
 // member's protocol. Never rendered as a real slot — it exists so an item can
@@ -1561,7 +1562,7 @@ export default function Coach() {
                       </span>
                       {n.from_member && (
                         <span className="text-xs font-semibold text-[#D4AF37] bg-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-full">
-                          ✉️ From {data.profile?.name?.split(' ')[0] || 'them'}
+                          ✉️ From {firstName(data.profile?.name, 'them')}
                         </span>
                       )}
                       <span className="text-xs text-stone-400">

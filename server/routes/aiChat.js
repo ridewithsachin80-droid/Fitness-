@@ -33,6 +33,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const axios  = require('axios');
 const authMW = require('../middleware/auth');
+const { firstName } = require('../services/personName');
 const { cleanScalePayload } = require('../services/scaleParse');
 
 router.use(authMW);
@@ -3380,8 +3381,8 @@ router.post('/remind', roleCheck('monitor', 'admin'), async (req, res) => {
       const { rows } = await pool.query(
         `SELECT name FROM users WHERE id=$1 AND role='patient' AND active=true`, [memberId]);
       if (!rows.length) { results.push({ id: memberId, ok: false, detail: 'Not found' }); continue; }
-      const firstName = rows[0].name.split(' ')[0];
-      const noteText  = REMIND_TEMPLATES[memberId % REMIND_TEMPLATES.length](firstName);
+      const greetName = firstName(rows[0].name);
+      const noteText  = REMIND_TEMPLATES[memberId % REMIND_TEMPLATES.length](greetName);
 
       // Dedupe: the dashboard's Needs Attention list can be tapped repeatedly and
       // each tap used to append an identical flagged note, burying real clinical
@@ -3410,7 +3411,7 @@ router.post('/remind', roleCheck('monitor', 'admin'), async (req, res) => {
         // push-only nudge is delivered to everyone except its audience.
         const messaging = require('../services/messaging');
         await messaging.notify(memberId, 'nudge',
-          [firstName, 'your daily log'],
+          [greetName, 'your daily log'],
           { title: 'Your coach checked in 👋',
             body: `${req.user.name} sent you a message. Open FitLife to see it.` });
       } catch { /* no push subscription — note still lands */ }
@@ -3462,7 +3463,7 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
     ]);
 
     if (!userRes.rows.length) return res.status(404).json({ error: 'Member not found' });
-    const firstName = userRes.rows[0].name.split(' ')[0];
+    const greetName = firstName(userRes.rows[0].name);
 
     const logs = logsRes.rows;
     const weights = logs.filter(l => l.weight_kg != null).map(l => parseFloat(l.weight_kg));
@@ -3475,7 +3476,7 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
       return s + c.reduce((t, x) => t + (parseFloat(x?.duration_min) || 0), 0);
     }, 0));
 
-    const lines = [`Hi ${firstName}, here's your week:`];
+    const lines = [`Hi ${greetName}, here's your week:`];
     lines.push(`• Logged ${logs.length} of 7 days`);
     if (avgComp != null) lines.push(`• Average compliance ${avgComp}%`);
     if (change != null) {
@@ -3505,7 +3506,7 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
       const pushService = require('../services/pushService');
       const messaging = require('../services/messaging');
       await messaging.notify(memberId, 'summary',
-        [firstName, `${logs.length} of 7 days`],
+        [greetName, `${logs.length} of 7 days`],
         { title: 'Your weekly summary 📊',
           body: `${logs.length}/7 days logged${change != null && change < 0 ? ` · ${Math.abs(change)} kg down` : ''}` });
     } catch { /* no push subscription — the note still lands */ }

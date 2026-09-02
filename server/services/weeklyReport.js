@@ -18,6 +18,7 @@ const pool = require('../db/pool');
 const { computeDayTotals } = require('./digests');
 const { regress } = require('./adaptiveEngine');
 const { detectMilestones } = require('./milestones');
+const { firstName } = require('./personName');
 
 const IST = 'Asia/Kolkata';
 const istDateStr = (d = new Date()) =>
@@ -213,7 +214,7 @@ async function generateForMember(member, runDate, { ai } = {}) {
   try {
     const call = ai || require('../routes/aiChat').callAI;
     const { text } = await call(buildNotePrompt({
-      name: member.name.split(' ')[0], week,
+      name: firstName(member.name), week,
       targets: { kcal: p.macro_kcal, pro: p.macro_pro }, win: winText,
     }));
     coachNote = String(text || '').trim().slice(0, 300) || null;
