@@ -302,6 +302,72 @@ router.get('/population/prior', authMW, roleCheck('monitor', 'admin'), async (re
 // Declared before '/:id' so "gaps" is not read as a member id.
 const { detectGaps, nextCheck, NEVER_LOGGED } = require('../services/gapDetector');
 
+// ── GET /api/members/morning-nudges ─────────────────────────────────────────
+// Today's morning message per member, composed but NOT sent, so the coach can
+// send each one from their own WhatsApp while the Meta template is still
+// awaiting approval.
+//
+// Declared ABOVE '/:id'. Express matches in declaration order, so a route
+// added below it would be swallowed — "morning-nudges" would be parsed as a
+// member id. smoke-routes.js asserts this ordering because it has bitten this
+// file before.
+router.get('/morning-nudges', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const { rows: members } = await pool.query(
+      isAdmin
+        ? `SELECT u.id FROM users u WHERE u.role = 'patient' AND u.active = true`
+        : `SELECT u.id FROM users u
+           JOIN monitor_patients mp ON mp.patient_id = u.id
+           WHERE mp.monitor_id = $1 AND mp.active = true AND u.active = true`,
+      isAdmin ? [] : [req.user.id]
+    );
+    if (!members.length) return res.json({ date: getISTDate(), members: [] });
+
+    const { composeMorningMessages } = require('../services/digests');
+    const date = getISTDate();
+    const composed = await composeMorningMessages(date, members.map(m => m.id));
+
+    // A member with nothing worth saying, or who opted out, is not offered —
+    // handing the coach a blank message to send would be worse than silence.
+    res.json({
+      date,
+      members: composed.filter(m => m.message && !m.opted_out),
+    });
+  } catch (err) {
+    console.error('morning-nudges error:', err);
+    res.status(500).json({ message: 'Could not build today\'s messages' });
+  }
+});
+
+// ── POST /api/members/:id/morning-nudges/sent ───────────────────────────────
+// Records that the coach sent today's message by hand.
+//
+// This is what stops the 06:30 cron sending a second copy: it writes the same
+// notifications_log row the automatic send would have, so alreadyAttemptedToday
+// sees it. It also means the nudge-effectiveness dashboard counts manual sends
+// alongside automatic ones rather than treating them as a gap.
+router.post('/:id/morning-nudges/sent', authMW, roleCheck('monitor', 'admin'),
+  requirePatientAccess, async (req, res) => {
+  try {
+    const memberId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(memberId)) return res.status(400).json({ message: 'Bad member id' });
+
+    const date = getISTDate();
+    const { alreadyAttemptedToday, logSent } = require('../services/digests');
+    if (await alreadyAttemptedToday(memberId, 'morning_nudge', date)) {
+      return res.json({ recorded: false, reason: 'already sent today' });
+    }
+
+    const body = typeof req.body?.message === 'string' ? req.body.message : '';
+    await logSent(memberId, 'morning_nudge', 'Good morning (sent by coach)', body, true);
+    res.json({ recorded: true, date });
+  } catch (err) {
+    console.error('morning-nudges/sent error:', err);
+    res.status(500).json({ message: 'Could not record the send' });
+  }
+});
+
 router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';

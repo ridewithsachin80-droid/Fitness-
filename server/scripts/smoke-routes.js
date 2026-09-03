@@ -105,6 +105,7 @@ const CASES = [
   ['GET',  '/api/patients/me',            'LEGACY self profile'],
   ['GET',  '/api/members/1',              'member detail'],
   ['GET',  '/api/members/gaps',           'gaps must not be shadowed by /:id'],
+  ['GET',  '/api/members/morning-nudges',  'morning-nudges must not be shadowed by /:id'],
   // Sprint 2/3 member self-service. All of these live under /me, so the point
   // of smoking them is that "me" is not swallowed by the /:id handler — the
   // same shadowing trap /gaps and /population already guard against.

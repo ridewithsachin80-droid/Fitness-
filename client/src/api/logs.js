@@ -77,3 +77,10 @@ export const getMyNotifications  = ()           => api.get('/reminders/my-notifi
 export const markNotificationsRead = ()         => api.post('/reminders/my-notifications/mark-read');
 export const getSubscriptions= ()               => api.get('/notifications/subscriptions');
 export const getNotifLog     = ()               => api.get('/notifications/log');
+
+// Today's morning message per member, composed by the server but not sent —
+// the coach sends each from their own WhatsApp while the Meta template is
+// still awaiting approval.
+export const getMorningNudges = ()              => api.get('/members/morning-nudges');
+export const markMorningNudgeSent = (id, message) =>
+  api.post(`/members/${id}/morning-nudges/sent`, { message });

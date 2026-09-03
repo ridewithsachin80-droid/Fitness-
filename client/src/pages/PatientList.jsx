@@ -6,6 +6,7 @@ import { today, formatDate, plural } from '../constants';
 import { Card, SectionTitle, OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
 import TodaysGaps from '../components/TodaysGaps';
+import MorningNudges from '../components/MorningNudges';
 import NudgeEffectiveness from '../components/NudgeEffectiveness';
 import { useSync } from '../hooks/useSync';
 
@@ -208,6 +209,8 @@ export default function MemberList() {
           <SectionTitle icon="🎯" tooltip="Members with something missing today, most urgent first. Nothing sends automatically — each message is yours to review.">
             Needs a nudge
           </SectionTitle>
+          <MorningNudges />
+
           <TodaysGaps />
         </Card>
 

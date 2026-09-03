@@ -270,6 +270,60 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     ck('a member with no history either gets a real message or none — never an empty one',
        cRows.rows.every(r => (r.body || '').trim().length > 0), cRows.rows);
 
+    // ── Manual coach send ─────────────────────────────────────────────────
+    // While the Meta template awaits approval, the coach sends today's message
+    // from their own WhatsApp. It must be composed by the SAME code as the
+    // cron — a second copy in a route is how the weekday logic ended up with
+    // three implementations and two answers.
+    console.log('\nManual coach send');
+
+    await pool.query(`DELETE FROM notifications_log WHERE type='morning_nudge'`);
+    const d2 = await mk('Manual Test', '9000000021');
+    await pool.query(
+      `INSERT INTO daily_logs (patient_id, log_date, weight_kg, food_items)
+       VALUES ($1,$2,80.1,$3)`,
+      [d2, yesterday, JSON.stringify([{ name: 'Rice', grams: 150, per_100g: { calories: 130 } }])]);
+
+    let composed = await D.composeMorningMessages(today, [d2]);
+    ck('one row per member', composed.length === 1, composed);
+    ck('the message is not empty', (composed[0].message || '').length > 0, composed[0]);
+    ck('it greets by first name', /^Good morning, Manual\./.test(composed[0].message), composed[0].message);
+    ck('it carries yesterday\'s real numbers', /80\.1 kg/.test(composed[0].message), composed[0].message);
+    ck('the phone is returned so the coach can open WhatsApp',
+       composed[0].phone === '9000000021', composed[0].phone);
+    ck('not yet marked as sent', composed[0].already_sent === false);
+
+    // Composing must NOT send or record anything — a coach opening the screen
+    // twice would otherwise suppress the 06:30 message for everyone.
+    const afterCompose = (await pool.query(
+      `SELECT COUNT(*)::int n FROM notifications_log WHERE type='morning_nudge'`)).rows[0].n;
+    ck('composing records nothing — opening the screen must not suppress the automatic send',
+       afterCompose === 0, afterCompose);
+
+    // Recording a manual send must block the cron, or the member gets two.
+    await D.logSent(d2, 'morning_nudge', 'Good morning (sent by coach)', composed[0].message, true);
+    composed = await D.composeMorningMessages(today, [d2]);
+    ck('a manually sent member shows as sent', composed[0].already_sent === true);
+
+    const sentCount = await D.sendMorningNudges(today);
+    const rowsNow = (await pool.query(
+      `SELECT COUNT(*)::int n FROM notifications_log WHERE user_id=$1 AND type='morning_nudge'`,
+      [d2])).rows[0].n;
+    ck('the 06:30 cron does NOT send a second copy to a member the coach already messaged',
+       rowsNow === 1, { rowsNow, sentCount });
+
+    // An opted-out member must never be offered to the coach either.
+    const d3 = await mk('Opted Out', '9000000022');
+    await pool.query(
+      `INSERT INTO patient_profiles (user_id, notify_opted_out) VALUES ($1, true)
+       ON CONFLICT (user_id) DO UPDATE SET notify_opted_out = true`, [d3]);
+    const optedRow = (await D.composeMorningMessages(today, [d3]))[0];
+    ck('an opted-out member is flagged so the coach screen can hide them',
+       optedRow.opted_out === true, optedRow);
+
+    ck('composing for nobody returns an empty list rather than throwing',
+       (await D.composeMorningMessages(today, [])).length === 0);
+
   } catch (err) {
     fail++;
     console.log('  \u2717 suite threw: ' + (err && err.stack ? err.stack : err));

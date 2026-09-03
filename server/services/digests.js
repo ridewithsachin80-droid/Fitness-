@@ -207,6 +207,77 @@ function firstNameOr(name, fallback) {
 }
 
 /**
+ * Composes today's morning message for a set of members WITHOUT sending it.
+ *
+ * The coach screen uses this to hand Sachin a ready-to-send WhatsApp message
+ * per member while the Meta template is still awaiting approval. It runs the
+ * same query and the same builders the 06:30 cron does, so the manual message
+ * and the automatic one can never say different things — the alternative was
+ * a second copy of this logic in a route, which is how the weekday matching
+ * came to have three implementations and two answers.
+ *
+ * @param {string} istDate
+ * @param {number[]} memberIds
+ * @returns {Promise<Array<{id, name, phone, message, already_sent, opted_out}>>}
+ */
+async function composeMorningMessages(istDate, memberIds) {
+  const { preferences } = require('./messaging');
+  const { deriveTodayDay } = require('./programDay');
+  if (!memberIds || !memberIds.length) return [];
+
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.phone,
+            y.food_items      AS y_food,
+            y.weight_kg       AS y_weight,
+            (y.patient_id IS NOT NULL) AS y_logged,
+            (t.weight_kg IS NOT NULL)  AS weighed_today,
+            wp.id             AS program_id
+     FROM users u
+     LEFT JOIN daily_logs y ON y.patient_id = u.id AND y.log_date = ($1::date - 1)
+     LEFT JOIN daily_logs t ON t.patient_id = u.id AND t.log_date = $1::date
+     LEFT JOIN workout_programs wp ON wp.patient_id = u.id AND wp.active = true
+     WHERE u.id = ANY($2::int[]) AND u.role = 'patient' AND u.active = true
+     ORDER BY u.name`, [istDate, memberIds]);
+
+  const out = [];
+  for (const m of rows) {
+    let scheduled = false, todayDay = null;
+    if (m.program_id) {
+      const { rows: dayRows } = await pool.query(
+        `SELECT DISTINCT day_number, day_label
+         FROM program_exercises WHERE program_id = $1 ORDER BY day_number`, [m.program_id]);
+      ({ scheduled, todayDay } = deriveTodayDay(dayRows, istDate));
+    }
+
+    const totals = computeDayTotals(m.y_food);
+    const yesterday = {
+      logged:   m.y_logged === true,
+      kcal:     totals.cal,
+      weightKg: m.y_weight != null ? Number(m.y_weight) : null,
+    };
+
+    // The manual send goes from Sachin's own WhatsApp, not the Business API,
+    // so it is NOT bound by template rules. It can therefore use the fuller
+    // push copy — which drops clauses that do not apply — rather than the
+    // always-filled template slots.
+    const body = buildMorningBody({
+      yesterday, todayDay, scheduled, weighedToday: m.weighed_today === true,
+    });
+
+    const prefs = await preferences(m.id);
+    out.push({
+      id: m.id,
+      name: m.name,
+      phone: m.phone,
+      message: body ? `Good morning, ${firstNameOr(m.name, 'there')}. ${body}` : '',
+      already_sent: await alreadyAttemptedToday(m.id, 'morning_nudge', istDate),
+      opted_out: prefs.optedOut === true,
+    });
+  }
+  return out;
+}
+
+/**
  * Sends the morning nudge to every active member.
  *
  * Deduped per member per IST day in notifications_log, like every other
@@ -406,4 +477,5 @@ async function sendCoachDigests(istDate) {
 
 module.exports = { computeDayTotals, buildRecapBody, buildDigestBody,
                    buildMorningBody, buildMorningParams, sendMorningNudges, alreadyAttemptedToday,
+                   composeMorningMessages, logSent,
                    sendEveningRecaps, sendCoachDigests, alreadySentToday };
