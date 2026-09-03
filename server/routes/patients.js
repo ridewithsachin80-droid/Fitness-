@@ -340,6 +340,34 @@ router.get('/morning-nudges', authMW, roleCheck('monitor', 'admin'), async (req,
   }
 });
 
+// ── GET /api/members/:id/morning-message ────────────────────────────────────
+// Today's composed message for ONE member, so the coach can send it from the
+// member's own page rather than having to go back to the list. Composed, not
+// sent — recording happens via the POST below when they actually send it.
+router.get('/:id/morning-message', authMW, roleCheck('monitor', 'admin'),
+  requirePatientAccess, async (req, res) => {
+  try {
+    const memberId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(memberId)) return res.status(400).json({ message: 'Bad member id' });
+
+    const { composeMorningMessages } = require('../services/digests');
+    const [row] = await composeMorningMessages(getISTDate(), [memberId]);
+    if (!row) return res.status(404).json({ message: 'Member not found' });
+
+    res.json({
+      date: getISTDate(),
+      message: row.message,
+      phone: row.phone,
+      delivered: row.delivered,
+      already_sent: row.already_sent,
+      opted_out: row.opted_out,
+    });
+  } catch (err) {
+    console.error('morning-message error:', err);
+    res.status(500).json({ message: "Could not build today's message" });
+  }
+});
+
 // ── POST /api/members/:id/morning-nudges/sent ───────────────────────────────
 // Records that the coach sent today's message by hand.
 //

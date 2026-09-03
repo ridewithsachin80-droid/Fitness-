@@ -7,6 +7,8 @@ import {
 import { getMember, getMembers, deleteNote } from '../api/logs';
 import { addLabValue } from '../api/logs';
 import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
+import { getMemberMorningMessage, markMorningNudgeSent } from '../api/logs';
+import { openWhatsApp } from '../utils/personalMessage';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
@@ -395,6 +397,46 @@ export default function Coach() {
   // panels sees a short list of dates rather than two hundred rows.
   const [openPanels,    setOpenPanels] = useState(null);
   const [msgOpen,       setMsgOpen]    = useState(false);
+  const [morningBusy,   setMorningBusy] = useState(false);
+
+  /**
+   * Send today's morning message to this member over WhatsApp, from the
+   * coach's own WhatsApp.
+   *
+   * This lives on the member's page because that is where the coach already
+   * is when they notice a message did not arrive. The same action exists on
+   * the All members list, but making someone navigate back to a list to fix
+   * one member is the kind of friction that means it never gets done.
+   *
+   * The text is fetched from the server, never built here — the same composer
+   * the 06:30 job and the coach AI chat use, so all three say the same thing.
+   */
+  const sendMorningWhatsApp = async () => {
+    setMorningBusy(true);
+    try {
+      const { data } = await getMemberMorningMessage(memberId);
+      if (data.opted_out) {
+        alert(`${profile.name} has turned off messages from FitLife.`);
+        return;
+      }
+      if (!data.message) {
+        alert('Nothing to send this morning — no logs yet and no program day.');
+        return;
+      }
+      if (!openWhatsApp(data.phone, data.message)) {
+        alert("That member's phone number isn't usable for WhatsApp.");
+        return;
+      }
+      // Recorded on opening the link, not on delivery — the browser cannot see
+      // whether the coach pressed send inside WhatsApp. Marking it is the safer
+      // error: a missed nudge beats a duplicate at 06:30.
+      await markMorningNudgeSent(memberId, data.message).catch(() => {});
+    } catch (err) {
+      alert("Couldn't build today's message.");
+    } finally {
+      setMorningBusy(false);
+    }
+  };
   const [showPinForm,   setShowPin]   = useState(false);
   const [showNoteForm,  setShowNote]  = useState(false);
   const [showWeightForm,setShowWeight]= useState(false);
@@ -772,6 +814,12 @@ export default function Coach() {
                         <button onClick={() => setMsgOpen(true)}
               className="text-xs font-semibold text-[#121316] bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37] px-3 py-1.5 rounded-xl active:scale-95 transition-transform">
               💬 Message
+            </button>
+            <button onClick={sendMorningWhatsApp} disabled={morningBusy}
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
+                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20
+                disabled:opacity-40">
+              🌅 {morningBusy ? 'Opening…' : 'Morning msg'}
             </button>
 <button onClick={() => setShowNote(true)}
               className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100

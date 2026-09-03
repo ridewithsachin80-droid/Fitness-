@@ -82,5 +82,6 @@ export const getNotifLog     = ()               => api.get('/notifications/log')
 // the coach sends each from their own WhatsApp while the Meta template is
 // still awaiting approval.
 export const getMorningNudges = ()              => api.get('/members/morning-nudges');
+export const getMemberMorningMessage = (id)     => api.get(`/members/${id}/morning-message`);
 export const markMorningNudgeSent = (id, message) =>
   api.post(`/members/${id}/morning-nudges/sent`, { message });
