@@ -108,6 +108,16 @@ async function alreadyAttemptedToday(userId, type, istDate) {
   return rows.length > 0;
 }
 
+/** Did a message of this type actually REACH the member today? */
+async function deliveredToday(userId, type, istDate) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM notifications_log
+     WHERE user_id=$1 AND type=$2 AND failed=false
+       AND (sent_at AT TIME ZONE 'Asia/Kolkata')::date = $3::date
+     LIMIT 1`, [userId, type, istDate]);
+  return rows.length > 0;
+}
+
 async function logSent(userId, type, title, body, ok) {
   await pool.query(
     `INSERT INTO notifications_log (user_id, type, title, body, failed)
@@ -272,6 +282,11 @@ async function composeMorningMessages(istDate, memberIds) {
       first_name: firstNameOr(m.name, 'there'),
       message: body ? `Good morning, ${firstNameOr(m.name, 'there')}. ${body}` : '',
       already_sent: await alreadyAttemptedToday(m.id, 'morning_nudge', istDate),
+      // Attempted and DELIVERED are different questions, and the coach needs
+      // the second one. An attempt with failed=true means the message never
+      // reached the member — usually because they have no push subscription —
+      // and that is precisely when the coach should send it by hand.
+      delivered: await deliveredToday(m.id, 'morning_nudge', istDate),
       opted_out: prefs.optedOut === true,
 
       // The raw pieces, so a caller that needs to SEND rather than display —
@@ -364,7 +379,7 @@ async function sendMorningNudges(istDate) {
     //
     // Quiet hours exist to stop unscheduled nudges landing at a bad moment.
     // This one IS the schedule, chosen deliberately, so it is exempt.
-    let ok = false, channel = null;
+    let ok = false, channel = null, reason = null;
 
     const wa = await sendWhatsApp(m.phone, 'morning',
       buildMorningParams({ name: m.name, yesterday: yesterdayFacts, todayDay, scheduled }));
@@ -375,13 +390,18 @@ async function sendMorningNudges(istDate) {
     // either way, and the switch to WhatsApp needs no code change — only the
     // WHATSAPP_TOKEN / WHATSAPP_PHONE_ID env vars.
     if (!ok && prefs.push) {
-      try { await push.sendToUser(m.id, title, body, 'morning_nudge'); ok = true; channel = 'push'; }
-      catch { /* logged as failed below */ }
+      try {
+        // sendToUser returns a RESULT. Treating "did not throw" as delivered
+        // is how a member with no push subscription was reported as messaged.
+        const r = await push.sendToUser(m.id, title, body, 'morning_nudge');
+        if (r && r.ok) { ok = true; channel = 'push'; }
+        else if (r && r.reason) reason = r.reason;
+      } catch { /* logged as failed below */ }
     }
 
     await logSent(m.id, 'morning_nudge', title, body, ok);
     if (ok) sent++;
-    void channel;
+    void channel; void reason;
   }
   return sent;
 }
@@ -487,5 +507,5 @@ async function sendCoachDigests(istDate) {
 
 module.exports = { computeDayTotals, buildRecapBody, buildDigestBody,
                    buildMorningBody, buildMorningParams, sendMorningNudges, alreadyAttemptedToday,
-                   composeMorningMessages, logSent,
+                   composeMorningMessages, logSent, deliveredToday,
                    sendEveningRecaps, sendCoachDigests, alreadySentToday };

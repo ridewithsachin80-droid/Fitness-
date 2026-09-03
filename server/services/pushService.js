@@ -33,7 +33,22 @@ function ensureVapid() {
 // ── sendToUser ────────────────────────────────────────────────────────────────
 /**
  * Send a push notification to all active subscriptions for a user.
- * Silently no-ops if VAPID env vars are not configured.
+ *
+ * RETURNS A RESULT. It used to return undefined in three separate
+ * not-delivered cases — VAPID unconfigured, the subscription lookup failing,
+ * and the member simply having no subscriptions — which is indistinguishable
+ * from success to any caller that only watches for a thrown error.
+ *
+ * That is not academic. The coach AI chat reported "morning message sent" for
+ * a member who had never granted notification permission: nothing left the
+ * server, and the coach was told it had. A caller must be able to tell
+ * delivered from silently-skipped.
+ *
+ * Existing callers ignore the return value and are unaffected.
+ *
+ * @returns {Promise<{ok: boolean, sent: number, failed: number, reason: string|null}>}
+ *          reason is one of 'not-configured' | 'lookup-failed' |
+ *          'no-subscriptions' | 'all-failed', or null when something was sent.
  *
  * @param {number} userId  - Recipient's user ID
  * @param {string} title   - Notification title
@@ -41,7 +56,7 @@ function ensureVapid() {
  * @param {string} type    - 'weight' | 'acv' | 'water' | 'supplement' | 'no_log'
  */
 async function sendToUser(userId, title, body, type, extraData = {}) {
-  if (!ensureVapid()) return;   // Push disabled — skip silently
+  if (!ensureVapid()) return { ok: false, sent: 0, failed: 0, reason: 'not-configured' };
 
   let subs;
   try {
@@ -52,10 +67,14 @@ async function sendToUser(userId, title, body, type, extraData = {}) {
     subs = result.rows;
   } catch (err) {
     console.error('pushService: DB query failed:', err.message);
-    return;
+    return { ok: false, sent: 0, failed: 0, reason: 'lookup-failed' };
   }
 
-  if (!subs.length) return;
+  // The commonest silent non-delivery: the member never granted notification
+  // permission, or is on iOS Safari without installing to the home screen.
+  if (!subs.length) return { ok: false, sent: 0, failed: 0, reason: 'no-subscriptions' };
+
+  let sent = 0, failed = 0;
 
   const payload = JSON.stringify({
     title,
@@ -77,6 +96,7 @@ async function sendToUser(userId, title, body, type, extraData = {}) {
         'INSERT INTO notifications_log (user_id, type, title, body) VALUES ($1,$2,$3,$4)',
         [userId, type, title, body]
       );
+      sent++;
     } catch (err) {
       // 410 Gone / 404 Not Found — the browser dropped it.
       // 403 Forbidden      — the subscription was created under a DIFFERENT
@@ -109,8 +129,16 @@ async function sendToUser(userId, title, body, type, extraData = {}) {
           [userId, type, title, body]
         );
       }
+      failed++;
     }
   }
+
+  return {
+    ok: sent > 0,
+    sent,
+    failed,
+    reason: sent > 0 ? null : 'all-failed',
+  };
 }
 
 module.exports = { sendToUser };

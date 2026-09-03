@@ -362,6 +362,44 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     ck('a message sent from the coach AI chat stops the 06:30 cron sending a second copy',
        n4 === 1, n4);
 
+    // ── Honest delivery reporting ─────────────────────────────────────────
+    // pushService.sendToUser returns undefined in THREE not-delivered cases:
+    // VAPID unconfigured, the subscription lookup failing, and the member
+    // simply having no subscriptions. A caller that only watches for a thrown
+    // error cannot tell any of them from success — and that is exactly what
+    // happened: the coach AI chat reported "morning message sent" for a member
+    // who had never granted notification permission. Nothing left the server.
+    console.log('\nHonest delivery reporting');
+
+    const push = require('../services/pushService');
+    const d5 = await mk('No Subscription', '9000000024');
+
+    const r = await push.sendToUser(d5, 'Title', 'Body', 'morning_nudge');
+    ck('sendToUser RETURNS a result rather than undefined', r && typeof r === 'object', r);
+    ck('a member with no push subscription is reported as NOT ok', r.ok === false, r);
+    ck('...with a reason the coach can act on', typeof r.reason === 'string' && r.reason.length > 0, r.reason);
+    ck('nothing is counted as sent', r.sent === 0, r);
+
+    // deliveredToday must distinguish an attempt from an arrival.
+    await pool.query(`DELETE FROM notifications_log WHERE user_id=$1`, [d5]);
+    await D.logSent(d5, 'morning_nudge', 'T', 'B', false);      // attempted, failed
+    ck('a FAILED attempt counts as attempted', await D.alreadyAttemptedToday(d5, 'morning_nudge', today) === true);
+    ck('...but NOT as delivered — the coach needs to know it never arrived',
+       await D.deliveredToday(d5, 'morning_nudge', today) === false);
+
+    await D.logSent(d5, 'morning_nudge', 'T', 'B', true);       // then sent by hand
+    ck('a later successful send marks it delivered',
+       await D.deliveredToday(d5, 'morning_nudge', today) === true);
+
+    // The composed row must carry both, or the card cannot show the difference.
+    const d6 = await mk('Undelivered Member', '9000000025');
+    await pool.query(
+      `INSERT INTO daily_logs (patient_id, log_date, weight_kg) VALUES ($1,$2,70.0)`, [d6, yesterday]);
+    await D.logSent(d6, 'morning_nudge', 'T', 'B', false);
+    const [urow] = await D.composeMorningMessages(today, [d6]);
+    ck('a member the cron failed to reach shows attempted', urow.already_sent === true, urow);
+    ck('...and NOT delivered, so the card can offer a retry', urow.delivered === false, urow);
+
   } catch (err) {
     fail++;
     console.log('  \u2717 suite threw: ' + (err && err.stack ? err.stack : err));

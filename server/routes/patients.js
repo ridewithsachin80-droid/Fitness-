@@ -354,9 +354,14 @@ router.post('/:id/morning-nudges/sent', authMW, roleCheck('monitor', 'admin'),
     if (!Number.isInteger(memberId)) return res.status(400).json({ message: 'Bad member id' });
 
     const date = getISTDate();
-    const { alreadyAttemptedToday, logSent } = require('../services/digests');
-    if (await alreadyAttemptedToday(memberId, 'morning_nudge', date)) {
-      return res.json({ recorded: false, reason: 'already sent today' });
+    const { deliveredToday, logSent } = require('../services/digests');
+
+    // Gated on DELIVERED, not merely attempted. The 06:30 job may have tried
+    // and failed — a member with notifications off — and that is exactly when
+    // the coach sends it by hand. Blocking on the failed attempt would leave
+    // the member permanently marked as not reached with no way to fix it.
+    if (await deliveredToday(memberId, 'morning_nudge', date)) {
+      return res.json({ recorded: false, reason: 'already delivered today' });
     }
 
     const body = typeof req.body?.message === 'string' ? req.body.message : '';

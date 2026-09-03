@@ -3713,13 +3713,20 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
                 }));
               if (wa.ok) ok = true;
 
+              let why = wa.skipped || null;
               if (!ok) {
                 try {
-                  await pushService.sendToUser(
+                  // sendToUser returns a RESULT — it no-ops silently when the
+                  // member has no subscription, when VAPID is unset, and when
+                  // the lookup fails. Reading only "did it throw" reported a
+                  // message as sent when nothing had left the server.
+                  const r = await pushService.sendToUser(
                     memberId, `Good morning, ${composed.first_name}`, composed.body, 'morning_nudge');
-                  ok = true;
+                  if (r && r.ok) ok = true;
+                  else if (r && r.reason) why = r.reason;
                 } catch (e) {
                   console.error('coach-apply morning nudge push failed:', e.message);
+                  why = 'push-error';
                 }
               }
 
@@ -3728,7 +3735,20 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
               // may well have received the first.
               await logSent(memberId, 'morning_nudge',
                 `Good morning (sent by coach)`, composed.message, ok);
-              appliedBits.push(ok ? 'morning message sent' : 'morning message failed to send');
+
+              // Say WHY, in words the coach can act on. "Failed to send" sends
+              // them hunting; "hasn't turned on notifications" tells them to
+              // send it from their own WhatsApp instead.
+              const EXPLAIN = {
+                'no-subscriptions': "not delivered — member hasn't turned on notifications. Send it from the Morning messages card instead",
+                'not-configured':   'not delivered — push is not configured on the server',
+                'lookup-failed':    'not delivered — could not read subscriptions',
+                'all-failed':       'not delivered — every subscription rejected it',
+                'push-error':       'not delivered — push error',
+              };
+              appliedBits.push(ok
+                ? 'morning message sent'
+                : `morning message ${EXPLAIN[why] || 'not delivered'}`);
             }
           }
         } catch (e) {
