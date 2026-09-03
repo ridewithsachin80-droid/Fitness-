@@ -730,8 +730,26 @@ test('the server outranks a stale local flag on a fresh device', () => {
 });
 
 test('offline falls back to the local flag rather than trapping anyone', () => {
+  // Still true, and still the point of this test: a member whose device
+  // remembers finishing gets into the app even with no server answer.
   assert.strictEqual(needsOnboarding({ serverOnboarded: null, onboardingDone: true }), false);
-  assert.strictEqual(needsOnboarding({ serverOnboarded: null, onboardingDone: false }), true);
+});
+
+test('an unknown server state NEVER sends anyone to setup', () => {
+  // This line used to assert the OPPOSITE — `null + false === true`, i.e.
+  // "we have not heard back and this device does not remember, so make them
+  // register". That is the iPhone bug, written down as intended behaviour.
+  //
+  // `serverOnboarded` is null on EVERY first render, before the fetch
+  // resolves, and `onboardingDone` lives in localStorage, which iOS clears
+  // along with the session cookie. A member of eight months was asked who was
+  // using the app and what their goal was — and onboarding OVERWRITES the
+  // answers they already gave.
+  //
+  // The rule now: setup requires POSITIVE evidence it has not been done.
+  // Not knowing is not an answer; the caller waits and offers a retry.
+  // See utils/onboardingGate.js and scripts/test-session-logic.js.
+  assert.strictEqual(needsOnboarding({ serverOnboarded: null, onboardingDone: false }), false);
 });
 
 console.log('\nClient/server agreement on weekday scheduling');

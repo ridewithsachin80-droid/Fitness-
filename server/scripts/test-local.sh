@@ -197,12 +197,12 @@ fi
 # for reading, not for wiring.
 LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-workout-merge test-image-routing \
-test-layout-contracts"
+test-layout-contracts test-session-logic"
 
 DB_SUITES="test-weekly-report test-journey test-gaps test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
-test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate"
+test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session"
 
 failed=0
 total_pass=0

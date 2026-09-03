@@ -17,7 +17,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminFoods     from './pages/AdminFoods';
 import DeviceConnect  from './pages/DeviceConnect';
 import Onboarding     from './components/Onboarding';
-import { needsOnboarding } from './utils/onboardingGate';
+import { onboardingDecision } from './utils/onboardingGate';
+import { refreshRequestBody, sessionLossReport } from './utils/session';
 
 // Preserves the member id when redirecting an old /monitor/:id link to /coach/:id.
 function LegacyMonitorRedirect() {
@@ -51,14 +52,48 @@ export default function App() {
     applyFontSize(ageMode === 'senior' ? 'large' : fontSize);
   }, []);
 
+  // Cold start: restore the session before rendering anything.
+  //
+  // This call used to post an EMPTY body, relying entirely on the cookie —
+  // even though api/client.js carried a localStorage fallback written for
+  // exactly this situation. On an installed iOS app, which has its own cookie
+  // jar and sheds site data readily, the cookie is precisely the copy most
+  // likely to be missing, and this is the FIRST request of the session, before
+  // any interceptor can help. Sending the stored token here is what makes the
+  // fallback reach the case it was written for.
   useEffect(() => {
     axios
-      .post('/api/auth/refresh', {}, { withCredentials: true })
+      .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true })
       .then(({ data }) => {
-        const payload = JSON.parse(atob(data.accessToken.split('.')[1]));
-        login(data.accessToken, { id: payload.id, name: payload.name, role: payload.role });
+        // Prefer the user object the server sends; fall back to decoding the
+        // JWT so an older server (mid-deploy, or a stale service worker
+        // talking to a new one) still restores rather than logging out.
+        let u = data.user;
+        if (!u || typeof u.id === 'undefined') {
+          const payload = JSON.parse(atob(data.accessToken.split('.')[1]));
+          u = { id: payload.id, name: payload.name, role: payload.role };
+        }
+        login(data.accessToken, u, data.refreshToken || null);
       })
-      .catch(() => { setRestored(); });
+      .catch((err) => {
+        // A 401 means the session is genuinely gone and the member must sign
+        // in. Anything else — offline, server restarting, DNS — is NOT a
+        // reason to record a session loss; doing so would drown the real
+        // signal in noise from every flaky connection.
+        if (err?.response?.status === 401) {
+          try {
+            const body = JSON.stringify(sessionLossReport('cold-start'));
+            fetch('/api/auth/session-loss', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+              keepalive: true,
+              credentials: 'include',
+            }).catch(() => {});
+          } catch (_) { /* diagnostics must never break boot */ }
+        }
+        setRestored();
+      });
   }, []);
 
   const { user } = useAuthStore();
@@ -70,12 +105,21 @@ export default function App() {
   // and the coach could not see the mode they had chosen. The server is now
   // the source of truth; the local flag is a cache that avoids a flash of the
   // onboarding screen on every cold start.
-  const [serverOnboarded, setServerOnboarded] = useState(null); // null = unknown
+  const [serverOnboarded, setServerOnboarded] = useState(null); // null = not yet known
   const [justOnboarded,   setJustOnboarded]   = useState(false);
+  const [checkFailed,     setCheckFailed]     = useState(false);
+  const [checkAttempt,    setCheckAttempt]    = useState(0);
+
   useEffect(() => {
-    if (user?.role !== 'patient') return;
+    if (user?.role !== 'patient') return undefined;
+
+    // A member switching accounts must not be handed the previous answer.
+    let cancelled = false;
+    setCheckFailed(false);
+
     getMyOnboarding()
       .then(({ data }) => {
+        if (cancelled) return;
         setServerOnboarded(data.onboarding_done === true);
         // Mirror the member's saved mode so font size and terminology follow
         // them onto this device.
@@ -86,13 +130,54 @@ export default function App() {
           }
         }
       })
-      // Offline or the endpoint is unreachable: fall back to the local flag
-      // rather than trapping a returning member in onboarding they already did.
-      .catch(() => setServerOnboarded(null));
-  }, [user?.id]);
+      .catch(() => {
+        if (cancelled) return;
+        // We now know NOTHING about this member's setup state. That is not the
+        // same as knowing they have not done it, and the gate no longer treats
+        // it as such — see utils/onboardingGate.js.
+        setCheckFailed(true);
+      });
+
+    return () => { cancelled = true; };
+  }, [user?.id, checkAttempt]);
 
   if (user?.role === 'patient') {
-    if (needsOnboarding({ serverOnboarded, onboardingDone, justFinished: justOnboarded })) {
+    const decision = onboardingDecision({
+      serverOnboarded,
+      onboardingDone,
+      justFinished: justOnboarded,
+      checkFailed,
+    });
+
+    // 'wait' is the case that used to render the setup screen over the top of
+    // an existing member. It never does that now: either we are still asking
+    // the server, or the ask failed and the member gets a retry.
+    if (decision === 'wait') {
+      return (
+        <div className="min-h-screen bg-[#121316] flex flex-col items-center justify-center gap-5 px-8 text-center">
+          {!checkFailed ? (
+            <div className="w-8 h-8 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <>
+              <p className="text-[#E8E6E1] text-base">
+                Couldn't reach FitLife just now.
+              </p>
+              <p className="text-[#9A968E] text-sm">
+                Check your connection — your log is safe.
+              </p>
+              <button
+                onClick={() => setCheckAttempt((n) => n + 1)}
+                className="mt-1 px-6 py-3 rounded-xl bg-[#D4AF37] text-[#121316] font-semibold"
+              >
+                Try again
+              </button>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    if (decision === 'onboarding') {
       // onDone marks the completion as newer than the value fetched on mount.
       // Without it the member finishes setup and lands straight back on it.
       return <Onboarding onDone={() => setJustOnboarded(true)} />;

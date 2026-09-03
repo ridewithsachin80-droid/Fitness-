@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuthStore, takeLogoutReason } from '../store/authStore';
+import { getRememberedMember, forgetMember } from '../utils/session';
 import { useNavigate } from 'react-router-dom';
 
 // ── Animated pulse ring decoration ───────────────────────────────────────────
@@ -138,8 +139,14 @@ function CoachForm({ email, password, loading, error, onEmail, onPassword, onLog
 
 // ── Main Login Page ───────────────────────────────────────────────────────────
 export default function Login() {
+  // Who was signed in on this device last. Only a display hint — the PIN is
+  // still required — but it is what turns an unexpected logout into "welcome
+  // back" instead of what looks like a registration form to a member who has
+  // been using FitLife for months.
+  const remembered = useState(() => getRememberedMember())[0];
+
   const [mode, setMode]         = useState('patient');
-  const [phone, setPhone]       = useState('');
+  const [phone, setPhone]       = useState(remembered?.phone || '');
   const [pin, setPin]           = useState('');
   const [showPin, setShowPin]   = useState(false);
   const [email, setEmail]       = useState('');
@@ -165,7 +172,10 @@ export default function Login() {
     setLoading(true); setError(''); setNotice('');
     try {
       const { data } = await axios.post('/api/auth/pin-login', { phone, pin }, { withCredentials: true });
-      login(data.accessToken, data.user);
+      // Third argument is the fallback copy of the refresh token. Without it
+      // an iPhone whose cookie jar does not persist is signed out again on the
+      // very next cold start.
+      login(data.accessToken, data.user, data.refreshToken || null);
       navigate('/');
     } catch (e) {
       const data = e.response?.data;
@@ -180,7 +190,7 @@ export default function Login() {
     setLoading(true); setError(''); setNotice('');
     try {
       const { data } = await axios.post('/api/auth/login', { email, password }, { withCredentials: true });
-      login(data.accessToken, data.user);
+      login(data.accessToken, data.user, data.refreshToken || null);
       navigate(data.user.role === 'admin' ? '/admin' : '/coach');
     } catch (e) {
       setError(e.response?.data?.error || 'Invalid email or password.');
@@ -189,7 +199,17 @@ export default function Login() {
 
   const switchMode = m => {
     setMode(m); setError('');
-    setPhone(''); setPin(''); setEmail(''); setPassword('');
+    // Returning to the member tab restores the remembered number rather than
+    // clearing it — retyping a phone number you did not choose to erase is
+    // exactly the friction this change exists to remove.
+    setPhone(m === 'patient' ? (remembered?.phone || '') : '');
+    setPin(''); setEmail(''); setPassword('');
+  };
+
+  /** "Not you?" — clears the hint and the prefilled number. */
+  const notMe = () => {
+    forgetMember();
+    setPhone(''); setPin(''); setError(''); setNotice('');
   };
 
   return (
@@ -272,6 +292,24 @@ export default function Login() {
           </div>
 
           <div className="p-6">
+            {/* Welcome back.
+                A member whose session was lost — an iPhone that shed its
+                cookie, a cleared cache — used to arrive at a blank form and
+                read it as being asked to register from scratch. Naming them
+                makes it obviously the same account, and the number is already
+                filled in, so it is one PIN away rather than a fresh start. */}
+            {mode === 'patient' && remembered?.name && (
+              <div className="mb-5 text-center">
+                <div className="text-[#E8E6E1] text-base">
+                  Welcome back, <span className="text-[#D4AF37] font-semibold">{remembered.name.split(' ')[0]}</span>
+                </div>
+                <button onClick={notMe}
+                  className="mt-1 text-xs text-[#7E8596] underline underline-offset-2">
+                  Not you?
+                </button>
+              </div>
+            )}
+
             {mode === 'patient' ? (
               <PinForm phone={phone} pin={pin} showPin={showPin} loading={loading} error={error}
                 onPhone={setPhone} onPin={setPin} onTogglePin={() => setShowPin(s => !s)} onLogin={pinLogin}

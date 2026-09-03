@@ -732,6 +732,29 @@ CREATE TABLE IF NOT EXISTS ai_parse_turns (
 CREATE INDEX IF NOT EXISTS idx_ai_parse_turns_member
   ON ai_parse_turns(patient_id, created_at DESC);
 
+-- ── Session loss diagnostics ─────────────────────────────────────────────────
+-- Written by the unauthenticated /api/auth/session-loss beacon when a client
+-- could not restore its session. Carries NO personal data: no id, no name, no
+-- phone, no token. Only enough to tell apart a separate cookie jar, storage
+-- eviction, and an expired token.
+--
+-- CREATE before any INSERT/UPDATE, per the ordering rule at the bottom of this
+-- file: schema.sql runs as a single pool.query(), so one statement referencing
+-- a table that does not exist yet rolls back the ENTIRE file on a fresh
+-- database and the server never boots.
+CREATE TABLE IF NOT EXISTS session_loss_log (
+  id          SERIAL PRIMARY KEY,
+  reason      VARCHAR(40),
+  platform    VARCHAR(12),
+  standalone  BOOLEAN,
+  had_token   BOOLEAN,
+  days_since  INT,
+  user_agent  VARCHAR(200),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_session_loss_created
+  ON session_loss_log(created_at DESC);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

@@ -169,7 +169,10 @@ router.post('/pin-login', async (req, res) => {
 
     res.json({
       accessToken,
-      user: { id: user.id, name: user.name, role: user.role },
+      // Fallback copy for clients whose cookie jar does not survive — see
+      // client/src/utils/session.js. The cookie above remains primary.
+      refreshToken,
+      user: { id: user.id, name: user.name, role: user.role, phone: user.phone || null },
     });
   } catch (err) {
     console.error('pin-login error:', err);
@@ -271,7 +274,10 @@ router.post('/verify-otp', async (req, res) => {
 
     res.json({
       accessToken,
-      user: { id: user.id, name: user.name, role: user.role },
+      // Fallback copy for clients whose cookie jar does not survive — see
+      // client/src/utils/session.js. The cookie above remains primary.
+      refreshToken,
+      user: { id: user.id, name: user.name, role: user.role, phone: user.phone || null },
     });
   } catch (err) {
     console.error('verify-otp error:', err);
@@ -320,7 +326,10 @@ router.post('/login', async (req, res) => {
 
     res.json({
       accessToken,
-      user: { id: user.id, name: user.name, role: user.role },
+      // Fallback copy for clients whose cookie jar does not survive — see
+      // client/src/utils/session.js. The cookie above remains primary.
+      refreshToken,
+      user: { id: user.id, name: user.name, role: user.role, phone: user.phone || null },
     });
   } catch (err) {
     console.error('login error:', err);
@@ -351,9 +360,26 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    const { accessToken } = signTokens(user);
+    // ROTATE the refresh token, do not just mint a new access token.
+    //
+    // The cookie's maxAge was set once, at login, and never extended. A member
+    // who opened the app every single day was still signed out exactly 30 days
+    // after logging in, because the refresh call renewed the short-lived half
+    // of the pair and left the long-lived half to run out underneath them.
+    // Re-issuing here makes the window slide: active members stay signed in,
+    // and a genuinely abandoned session still expires on schedule.
+    const { accessToken, refreshToken } = signTokens(user);
+    setRefreshCookie(res, refreshToken);
     setAccessCookie(res, accessToken);
-    res.json({ accessToken });
+
+    // refreshToken is returned in the BODY as well as the cookie so the client
+    // can keep a fallback copy. See client/src/utils/session.js for why that
+    // is necessary on iOS and what the trade-off is.
+    res.json({
+      accessToken,
+      refreshToken,
+      user: { id: user.id, name: user.name, role: user.role, phone: user.phone || null },
+    });
   } catch (err) {
     // Invalid or expired refresh token — force re-login
     res.clearCookie('refreshToken');
@@ -363,12 +389,84 @@ router.post('/refresh', async (req, res) => {
 
 // ── POST /api/auth/logout ───────────────────────────────────────────────────
 router.post('/logout', (req, res) => {
-  res.clearCookie('refreshToken', {
+  const opts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-  });
+  };
+  res.clearCookie('refreshToken', opts);
+  // The access cookie was set on login and refresh but never cleared here, so
+  // a signed-out browser kept a valid (if short-lived) credential in its jar.
+  res.clearCookie('accessToken', opts);
   res.json({ message: 'Logged out successfully' });
+});
+
+// ── POST /api/auth/session-loss ─────────────────────────────────────────────
+// A beacon, not an API. The client posts here when a session could not be
+// restored, so that sessions ending are VISIBLE rather than being something
+// only a member complaining tells us about.
+//
+// Deliberately unauthenticated: by definition the caller has no credential.
+// That means it must be treated as hostile input — every field is clamped, and
+// the route is rate-limited per IP so it cannot be used to fill the table.
+//
+// It stores no name, no phone, no id and no token. Only which platform,
+// whether the app was installed to the home screen, whether a fallback copy of
+// the token existed, and how long since the session last worked. That is
+// enough to tell the three suspected causes apart:
+//
+//   ios + standalone + had_token=false + days_since=null  → separate cookie
+//                                        jar; they logged in inside Safari
+//                                        and the installed app never saw it
+//   ios + had_token=false + days_since>=7                 → storage eviction
+//   any + had_token=true                                  → the token itself
+//                                        was rejected: expiry or rotation
+router.post('/session-loss', async (req, res) => {
+  // Always 204. A diagnostic endpoint must never turn into an error the
+  // client has to handle on a path that is already failing.
+  const done = () => res.status(204).end();
+
+  try {
+    const ip = getIp(req);
+    if (!checkRateLimit(`session-loss:${ip}`, 20, 60 * 60 * 1000)) return done();
+
+    const b = req.body || {};
+
+    const str = (v, max) => {
+      if (typeof v !== 'string') return null;
+      const t = v.trim();
+      return t ? t.slice(0, max) : null;
+    };
+
+    // Number.isFinite(+null) === true, so a null must be rejected BEFORE it is
+    // coerced. This exact coercion has already shipped one silent bug in this
+    // codebase (nudge effectiveness scoped to sent_by = 0).
+    const intOrNull = (v) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = Number(v);
+      if (!Number.isFinite(n)) return null;
+      return Math.max(0, Math.min(3650, Math.trunc(n)));
+    };
+
+    const platform = str(b.platform, 12);
+
+    await pool.query(
+      `INSERT INTO session_loss_log (reason, platform, standalone, had_token, days_since, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        str(b.reason, 40),
+        platform && ['ios', 'android', 'other'].includes(platform) ? platform : 'other',
+        b.standalone === true,
+        b.had_token === true,
+        intOrNull(b.days_since),
+        str(req.headers['user-agent'], 200),
+      ]
+    );
+  } catch (err) {
+    // Never surfaces to the member. Logged so a broken beacon is visible to us.
+    console.error('session-loss beacon:', err.message);
+  }
+  return done();
 });
 
 // ── PATCH /api/auth/change-password ────────────────────────────────────────
