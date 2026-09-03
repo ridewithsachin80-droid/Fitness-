@@ -145,6 +145,21 @@ function start() {
     }
   }, { timezone: 'Asia/Kolkata' });
 
+  // 06:30 IST: the one daily prompt to log. Carries yesterday's real numbers
+  // and today's program day, so it is worth reading rather than being a
+  // generic "don't forget". Deduped per member per day in notifications_log.
+  //
+  // This replaced a plan for FIVE scheduled reminders a day (weight, activity,
+  // and one per meal). Five is how members mute the app — and a muted app also
+  // loses the evening recap and the coach's messages.
+  cron.schedule('30 6 * * *', async () => {
+    try {
+      const { sendMorningNudges } = require('./digests');
+      const n = await sendMorningNudges(getISTDateStr());
+      if (n) console.log(`\u2600\ufe0f  Morning nudge sent to ${n} member(s)`);
+    } catch (err) { console.error('Morning nudge error:', err.message); }
+  }, { timezone: 'Asia/Kolkata' });
+
   // 20:30 IST: evening recap for members who logged today — real numbers,
   // never a generic nudge. Deduped per member per day in notifications_log.
   cron.schedule('30 20 * * *', async () => {

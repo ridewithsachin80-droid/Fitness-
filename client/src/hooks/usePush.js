@@ -12,6 +12,37 @@ function urlBase64ToUint8Array(base64String) {
   return new Uint8Array([...raw].map((c) => c.charCodeAt(0)));
 }
 
+/**
+ * Do the bytes of an existing subscription's server key match the key this
+ * build ships with?
+ *
+ * A PushSubscription is bound to the applicationServerKey it was created with.
+ * Rotate VAPID and every existing subscription silently becomes undeliverable:
+ * the browser keeps returning it from getSubscription(), the client happily
+ * reuses it, and the server's sends fail with 403 forever. Nothing surfaces to
+ * the member, the coach, or the logs beyond a failed row a day.
+ *
+ * `options.applicationServerKey` is an ArrayBuffer of the DECODED key, so the
+ * comparison has to be byte-wise against the decoded current key — comparing
+ * the base64 strings would always differ.
+ *
+ * Some older browsers do not expose `options` at all. In that case this
+ * returns true (assume it matches) rather than churning a working
+ * subscription on every app open.
+ */
+export function keyMatches(subscription, currentKeyBytes) {
+  try {
+    const existing = subscription?.options?.applicationServerKey;
+    if (!existing) return true;
+    const a = new Uint8Array(existing);
+    if (a.length !== currentKeyBytes.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== currentKeyBytes[i]) return false;
+    return true;
+  } catch (_) {
+    return true;
+  }
+}
+
 /** Is push even possible on this device? */
 export function pushSupported() {
   return typeof window !== 'undefined'
@@ -50,11 +81,24 @@ export async function registerPushSubscription() {
 
   try {
     const registration = await navigator.serviceWorker.ready;
+    const keyBytes = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+
     let subscription = await registration.pushManager.getSubscription();
+
+    // An existing subscription created under a DIFFERENT VAPID key is dead
+    // weight — the server cannot deliver to it. Drop it and take a fresh one.
+    // Without this, rotating the VAPID key breaks push for every existing
+    // member permanently, with no error anyone would notice.
+    if (subscription && !keyMatches(subscription, keyBytes)) {
+      console.warn('registerPushSubscription: VAPID key changed — re-subscribing');
+      try { await subscription.unsubscribe(); } catch (_) { /* best effort */ }
+      subscription = null;
+    }
+
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly:      true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey: keyBytes,
       });
     }
     const key  = subscription.getKey('p256dh');

@@ -1552,20 +1552,13 @@ const { loadProgramDays } = require('./programs');
  *
  * The abbreviations and their order mirror `WD` in WorkoutLog.jsx.
  */
-const WD_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-function programDayForDate(days, istDate) {
-  if (!days || !days.length) return null;
-  // getUTCDay() on a bare YYYY-MM-DD is the calendar weekday of that date, and
-  // istDate is already the IST calendar date — no second timezone shift.
-  const jsDow = new Date(istDate + 'T00:00:00Z').getUTCDay();   // 0 = Sunday
-  const abbr  = WD_ABBR[(jsDow + 6) % 7];                        // 0 = Monday
-  // Both boundaries. `\bMon` alone matches "Monsoon Circuit", which would
-  // schedule a member's Monsoon session every Monday.
-  const re    = new RegExp('\\b' + abbr + '\\b', 'i');
-  return days.find(d => re.test(d.day_label || '')) || null;
-}
-const isWeekdayScheduled = (days) =>
-  (days || []).some(d => /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i.test(d.day_label || ''));
+// Extracted to services/programDay.js. The two copies had drifted: the local
+// isWeekdayScheduled was missing its trailing word boundary, so "Monsoon
+// Circuit" counted as a Monday and "Sunrise Flow" as a Sunday — the program
+// read as weekday-scheduled while programDayForDate, which DID check both
+// boundaries, found no day for today. A member on such a program was told it
+// was a rest day every single day.
+const { programDayForDate, isWeekdayScheduled } = require('../services/programDay');
 
 async function buildDayContext(userId, ctx) {
   const today = getISTDate();

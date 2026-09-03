@@ -78,12 +78,30 @@ async function sendToUser(userId, title, body, type, extraData = {}) {
         [userId, type, title, body]
       );
     } catch (err) {
-      if (err.statusCode === 410 || err.statusCode === 404) {
+      // 410 Gone / 404 Not Found — the browser dropped it.
+      // 403 Forbidden      — the subscription was created under a DIFFERENT
+      //                      VAPID key than the one we are signing with. That
+      //                      never recovers on its own, so retrying it daily
+      //                      forever just writes a failed row a day and hides
+      //                      a total outage behind a log nobody reads. Mark it
+      //                      dead; the client re-subscribes on next open (see
+      //                      keyMatches in client/src/hooks/usePush.js).
+      if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
         await pool.query(
           'UPDATE push_subscriptions SET active = false WHERE id = $1',
           [sub.id]
         );
-        console.log(`pushService: deactivated expired subscription ${sub.id}`);
+        if (err.statusCode === 403) {
+          // Loud, because this one usually means every subscription is dead.
+          // If VAPID_PUBLIC_KEY and VITE_VAPID_PUBLIC_KEY have drifted apart,
+          // this fires for the whole member list at once.
+          console.error(
+            `pushService: 403 on subscription ${sub.id} — VAPID key mismatch. ` +
+            'Check VAPID_PUBLIC_KEY matches VITE_VAPID_PUBLIC_KEY.'
+          );
+        } else {
+          console.log(`pushService: deactivated expired subscription ${sub.id}`);
+        }
       } else {
         console.error(`pushService: failed to send to sub ${sub.id}:`, err.message);
         await pool.query(

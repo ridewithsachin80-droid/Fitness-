@@ -1,8 +1,10 @@
 /**
  * digests.js — the two daily proactive messages, built from real logged data.
  *
- *   Evening recap (member, 20:30 IST): "1,450 of 1,800 kcal, water 2.1 of 3L…"
- *   Morning digest (coach, 08:00 IST): who logged yesterday, who has gone quiet.
+ *   Morning nudge  (member, 06:30 IST): "Yesterday 1,780 kcal · 78.4 kg.
+ *                                        Today's Push · Mon. Weight when you're up."
+ *   Evening recap  (member, 20:30 IST): "1,450 of 1,800 kcal, water 2.1 of 3L…"
+ *   Morning digest (coach,  08:00 IST): who logged yesterday, who has gone quiet.
  *
  * Design rules learned the hard way in this codebase:
  *   - Messages must reflect the member's actual state, never generic nudges.
@@ -81,10 +83,157 @@ async function alreadySentToday(userId, type, istDate) {
   return rows.length > 0;
 }
 
+/**
+ * Was a message of this type ATTEMPTED today, successful or not?
+ *
+ * `alreadySentToday` filters on failed=false, so a send that errored does not
+ * block a later retry. That is right for the evening recap, where a transient
+ * push failure is worth retrying.
+ *
+ * It is wrong for the morning nudge. A member with no push subscription at all
+ * — never granted permission, or on iOS Safari without installing — fails
+ * EVERY time, so the "retry" can never succeed and each attempt writes another
+ * row. Worse, a send that threw after the notification had already been
+ * delivered would send a second one.
+ *
+ * The morning nudge's whole design is one message per member per day. That has
+ * to mean one ATTEMPT, not one success.
+ */
+async function alreadyAttemptedToday(userId, type, istDate) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM notifications_log
+     WHERE user_id=$1 AND type=$2
+       AND (sent_at AT TIME ZONE 'Asia/Kolkata')::date = $3::date
+     LIMIT 1`, [userId, type, istDate]);
+  return rows.length > 0;
+}
+
 async function logSent(userId, type, title, body, ok) {
   await pool.query(
     `INSERT INTO notifications_log (user_id, type, title, body, failed)
      VALUES ($1,$2,$3,$4,$5)`, [userId, type, title, body.slice(0, 1000), !ok]).catch(() => {});
+}
+
+
+// ── Morning nudge ────────────────────────────────────────────────────────────
+
+/**
+ * The one daily prompt to log, at 06:30 IST.
+ *
+ * Sachin's first plan was five scheduled reminders a day — weight, activity,
+ * and one per meal. One replaced them, deliberately: five push notifications
+ * a day is how members mute the app, and a muted app also loses the evening
+ * recap and the coach's messages. One message that carries real numbers is
+ * worth more than five that say "don't forget".
+ *
+ * Unlike the gap nudges this is NOT conditional on having failed to log —
+ * at 06:30 nobody has logged anything yet. It earns its place by being
+ * specific instead: what yesterday actually came to, and what today is.
+ *
+ * @param {object} yesterday  { kcal, weightKg, logged }  — real numbers, or logged:false
+ * @param {object|null} todayDay  program day for today, when the program is weekday-scheduled
+ * @param {boolean} scheduled     whether the program is weekday-scheduled at all
+ */
+function buildMorningBody({ yesterday, todayDay, scheduled, weighedToday }) {
+  const parts = [];
+
+  // Yesterday first: it is the only part that is genuinely theirs.
+  if (yesterday && yesterday.logged) {
+    const bits = [];
+    if (yesterday.kcal > 0)          bits.push(`${yesterday.kcal.toLocaleString('en-IN')} kcal`);
+    if (yesterday.weightKg != null)  bits.push(`${yesterday.weightKg} kg`);
+    if (bits.length) parts.push(`Yesterday: ${bits.join(' · ')}`);
+  }
+
+  // Today's training. Only when the program actually schedules by weekday —
+  // guessing would tell someone to train legs on the wrong morning.
+  if (scheduled) {
+    parts.push(todayDay && todayDay.day_label
+      ? `Today: ${todayDay.day_label}`
+      : `Today: rest day`);
+  }
+
+  // The ask. Dropped entirely if they have somehow already weighed in, so the
+  // message never tells a member to do something they have just done.
+  if (!weighedToday) parts.push(`Weigh-in when you're up`);
+
+  // Sections join with a full stop, NOT ' · '. Day labels already contain a
+  // middot ("Push · Mon"), so a middot separator produced
+  // "1,780 kcal · 78.4 kg · Today: Push · Mon · Weigh-in" — four dots of equal
+  // weight and no way to see where one fact ends and the next begins.
+  return parts.join('. ') + (parts.length ? '.' : '');
+}
+
+/**
+ * Sends the morning nudge to every active member.
+ *
+ * Deduped per member per IST day in notifications_log, like every other
+ * proactive message here. Opt-outs and channel preferences are honoured
+ * through messaging.preferences() — a member who turned notifications off
+ * gets nothing, and that is checked BEFORE anything is composed.
+ */
+async function sendMorningNudges(istDate) {
+  const { preferences } = require('./messaging');
+  const push = require('./pushService');
+  const { deriveTodayDay } = require('./programDay');
+  const { firstName } = require('./personName');
+
+  // Yesterday's numbers, today's weigh-in state, and the member's active
+  // program in one pass. LEFT JOINs throughout: a member with no log
+  // yesterday and no program must still appear, and still get a message.
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name,
+            y.food_items      AS y_food,
+            y.weight_kg       AS y_weight,
+            (y.patient_id IS NOT NULL) AS y_logged,
+            (t.weight_kg IS NOT NULL)  AS weighed_today,
+            wp.id             AS program_id
+     FROM users u
+     LEFT JOIN daily_logs y ON y.patient_id = u.id AND y.log_date = ($1::date - 1)
+     LEFT JOIN daily_logs t ON t.patient_id = u.id AND t.log_date = $1::date
+     LEFT JOIN workout_programs wp ON wp.patient_id = u.id AND wp.active = true
+     WHERE u.role = 'patient' AND u.active = true`, [istDate]);
+
+  let sent = 0;
+  for (const m of rows) {
+    if (await alreadyAttemptedToday(m.id, 'morning_nudge', istDate)) continue;
+    const prefs = await preferences(m.id);
+    if (prefs.optedOut || !prefs.push) continue;
+
+    // Program days, only for members who have a program at all.
+    let scheduled = false, todayDay = null;
+    if (m.program_id) {
+      const { rows: dayRows } = await pool.query(
+        `SELECT DISTINCT day_number, day_label
+         FROM program_exercises WHERE program_id = $1
+         ORDER BY day_number`, [m.program_id]);
+      ({ scheduled, todayDay } = deriveTodayDay(dayRows, istDate));
+    }
+
+    const totals = computeDayTotals(m.y_food);
+    const body = buildMorningBody({
+      yesterday: {
+        logged:   m.y_logged === true,
+        kcal:     totals.cal,
+        weightKg: m.y_weight != null ? Number(m.y_weight) : null,
+      },
+      todayDay,
+      scheduled,
+      weighedToday: m.weighed_today === true,
+    });
+
+    // Nothing worth saying — no yesterday, no program, already weighed in.
+    // Silence beats "Good morning" on its own.
+    if (!body) continue;
+
+    const title = `Good morning${firstName(m.name) ? ', ' + firstName(m.name) : ''}`;
+    let ok = true;
+    try { await push.sendToUser(m.id, title, body, 'morning_nudge'); }
+    catch { ok = false; }
+    await logSent(m.id, 'morning_nudge', title, body, ok);
+    if (ok) sent++;
+  }
+  return sent;
 }
 
 // ── Evening recap ────────────────────────────────────────────────────────────
@@ -187,4 +336,5 @@ async function sendCoachDigests(istDate) {
 }
 
 module.exports = { computeDayTotals, buildRecapBody, buildDigestBody,
+                   buildMorningBody, sendMorningNudges, alreadyAttemptedToday,
                    sendEveningRecaps, sendCoachDigests, alreadySentToday };
