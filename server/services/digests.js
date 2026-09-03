@@ -165,6 +165,48 @@ function buildMorningBody({ yesterday, todayDay, scheduled, weighedToday }) {
 }
 
 /**
+ * The three template variables for the WhatsApp morning nudge.
+ *
+ *     Good morning {{1}}. {{2}} Today: {{3}}. Log your weigh-in when you're up.
+ *
+ * A business-initiated WhatsApp message must match a template Meta approved in
+ * advance — free text outside a service window gets the number BANNED, not
+ * merely rejected. That is why the push copy and this cannot share a builder:
+ * the push version drops whole clauses when they do not apply, and
+ * **Meta rejects an empty parameter**. Every slot here always has content.
+ *
+ * @returns {[string, string, string]}
+ */
+function buildMorningParams({ name, yesterday, todayDay, scheduled }) {
+  const who = firstNameOr(name, 'there');
+
+  let yLine;
+  if (yesterday && yesterday.logged) {
+    const bits = [];
+    if (yesterday.kcal > 0)         bits.push(`${yesterday.kcal.toLocaleString('en-IN')} kcal`);
+    if (yesterday.weightKg != null) bits.push(`${yesterday.weightKg} kg`);
+    yLine = bits.length ? `Yesterday: ${bits.join(', ')}.` : 'Nothing logged yesterday.';
+  } else {
+    yLine = 'Nothing logged yesterday.';
+  }
+
+  // Never empty, and never claims a rest day for a program that is not
+  // weekday-scheduled — see services/programDay.js for why that matters.
+  let tLine;
+  if (scheduled) tLine = todayDay && todayDay.day_label ? todayDay.day_label : 'rest day';
+  else           tLine = 'your usual plan';
+
+  return [who, yLine, tLine];
+}
+
+/** firstName(), but never returns '' — an empty template slot is rejected. */
+function firstNameOr(name, fallback) {
+  const { firstName } = require('./personName');
+  const f = firstName(name, '');
+  return f && f.trim() ? f.trim() : fallback;
+}
+
+/**
  * Sends the morning nudge to every active member.
  *
  * Deduped per member per IST day in notifications_log, like every other
@@ -173,16 +215,15 @@ function buildMorningBody({ yesterday, todayDay, scheduled, weighedToday }) {
  * gets nothing, and that is checked BEFORE anything is composed.
  */
 async function sendMorningNudges(istDate) {
-  const { preferences } = require('./messaging');
+  const { preferences, sendWhatsApp } = require('./messaging');
   const push = require('./pushService');
   const { deriveTodayDay } = require('./programDay');
-  const { firstName } = require('./personName');
 
   // Yesterday's numbers, today's weigh-in state, and the member's active
   // program in one pass. LEFT JOINs throughout: a member with no log
   // yesterday and no program must still appear, and still get a message.
   const { rows } = await pool.query(
-    `SELECT u.id, u.name,
+    `SELECT u.id, u.name, u.phone,
             y.food_items      AS y_food,
             y.weight_kg       AS y_weight,
             (y.patient_id IS NOT NULL) AS y_logged,
@@ -198,7 +239,12 @@ async function sendMorningNudges(istDate) {
   for (const m of rows) {
     if (await alreadyAttemptedToday(m.id, 'morning_nudge', istDate)) continue;
     const prefs = await preferences(m.id);
-    if (prefs.optedOut || !prefs.push) continue;
+    // Opt-out is absolute. But a member with push disabled is no longer
+    // skipped outright — WhatsApp is now the primary channel, and requiring
+    // push here would have silently excluded exactly the members this change
+    // is meant to reach (iPhone users who never installed to the home screen).
+    if (prefs.optedOut) continue;
+    if (!prefs.push && !prefs.whatsapp) continue;
 
     // Program days, only for members who have a program at all.
     let scheduled = false, todayDay = null;
@@ -211,14 +257,13 @@ async function sendMorningNudges(istDate) {
     }
 
     const totals = computeDayTotals(m.y_food);
+    const yesterdayFacts = {
+      logged:   m.y_logged === true,
+      kcal:     totals.cal,
+      weightKg: m.y_weight != null ? Number(m.y_weight) : null,
+    };
     const body = buildMorningBody({
-      yesterday: {
-        logged:   m.y_logged === true,
-        kcal:     totals.cal,
-        weightKg: m.y_weight != null ? Number(m.y_weight) : null,
-      },
-      todayDay,
-      scheduled,
+      yesterday: yesterdayFacts, todayDay, scheduled,
       weighedToday: m.weighed_today === true,
     });
 
@@ -226,12 +271,36 @@ async function sendMorningNudges(istDate) {
     // Silence beats "Good morning" on its own.
     if (!body) continue;
 
-    const title = `Good morning${firstName(m.name) ? ', ' + firstName(m.name) : ''}`;
-    let ok = true;
-    try { await push.sendToUser(m.id, title, body, 'morning_nudge'); }
-    catch { ok = false; }
+    const title = `Good morning, ${firstNameOr(m.name, 'there')}`;
+
+    // WhatsApp first, push as the fallback.
+    //
+    // Deliberately NOT messaging.notify(): that chain tries push FIRST and
+    // stops at the first success, which is the opposite order for this
+    // message. It also refuses to send during quiet hours (default 21:00-07:00
+    // IST) — and 06:30 is inside that window, so routing this through notify()
+    // would silently send nothing at all, every day, with no error.
+    //
+    // Quiet hours exist to stop unscheduled nudges landing at a bad moment.
+    // This one IS the schedule, chosen deliberately, so it is exempt.
+    let ok = false, channel = null;
+
+    const wa = await sendWhatsApp(m.phone, 'morning',
+      buildMorningParams({ name: m.name, yesterday: yesterdayFacts, todayDay, scheduled }));
+    if (wa.ok) { ok = true; channel = 'whatsapp'; }
+
+    // Falls through whenever WhatsApp is not configured yet (before Meta
+    // approval lands) or a single send fails. Members keep getting the message
+    // either way, and the switch to WhatsApp needs no code change — only the
+    // WHATSAPP_TOKEN / WHATSAPP_PHONE_ID env vars.
+    if (!ok && prefs.push) {
+      try { await push.sendToUser(m.id, title, body, 'morning_nudge'); ok = true; channel = 'push'; }
+      catch { /* logged as failed below */ }
+    }
+
     await logSent(m.id, 'morning_nudge', title, body, ok);
     if (ok) sent++;
+    void channel;
   }
   return sent;
 }
@@ -336,5 +405,5 @@ async function sendCoachDigests(istDate) {
 }
 
 module.exports = { computeDayTotals, buildRecapBody, buildDigestBody,
-                   buildMorningBody, sendMorningNudges, alreadyAttemptedToday,
+                   buildMorningBody, buildMorningParams, sendMorningNudges, alreadyAttemptedToday,
                    sendEveningRecaps, sendCoachDigests, alreadySentToday };

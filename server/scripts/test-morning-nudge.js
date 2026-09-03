@@ -134,6 +134,56 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     ck('no emoji in the body — this is read by screen readers and shown in a notification shade',
        !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(full), full);
 
+    // ── WhatsApp template parameters ──────────────────────────────────────
+    // A business-initiated WhatsApp message must match a template Meta
+    // approved in advance; free text outside a service window gets the number
+    // BANNED, not merely rejected. Meta also rejects an EMPTY parameter, so
+    // unlike the push copy — which drops clauses that do not apply — every
+    // slot here must always carry content.
+    console.log('\nWhatsApp template parameters');
+
+    const pFull = D.buildMorningParams({
+      name: 'Avinash Kumar', yesterday: { logged: true, kcal: 1780, weightKg: 78.4 },
+      todayDay: { day_label: 'Push · Mon' }, scheduled: true });
+    ck('three parameters, matching the three template slots', pFull.length === 3, pFull);
+    ck('first name only in slot 1', pFull[0] === 'Avinash', pFull[0]);
+    ck('yesterday\'s numbers in slot 2', /1,780 kcal, 78\.4 kg/.test(pFull[1]), pFull[1]);
+    ck('today\'s day in slot 3', pFull[2] === 'Push · Mon', pFull[2]);
+
+    // THE REGRESSION RISK. Meta rejects a blank parameter, per member, at send
+    // time, with an unhelpful error.
+    const cases = [
+      { name: '',      yesterday: { logged: false },                          todayDay: null, scheduled: false },
+      { name: null,    yesterday: null,                                       todayDay: null, scheduled: true  },
+      { name: 'Asha',  yesterday: { logged: true, kcal: 0, weightKg: null },  todayDay: null, scheduled: true  },
+      { name: '  ',    yesterday: { logged: true, kcal: 1200, weightKg: null },todayDay: null, scheduled: false },
+    ];
+    let allFilled = true;
+    for (const c of cases) {
+      const p = D.buildMorningParams(c);
+      if (p.length !== 3 || p.some(x => typeof x !== 'string' || x.trim() === '')) {
+        allFilled = false; console.log('      empty slot for', JSON.stringify(c), '->', JSON.stringify(p));
+      }
+    }
+    ck('NO parameter is ever empty, whatever the member data — Meta rejects a blank slot',
+       allFilled);
+
+    ck('a member with no name still gets a usable greeting rather than "Good morning, ."',
+       D.buildMorningParams({ name: null, yesterday: null, todayDay: null, scheduled: false })[0] === 'there');
+
+    ck('an unscheduled program never claims a rest day in the template either',
+       D.buildMorningParams({ name: 'A', yesterday: null, todayDay: null, scheduled: false })[2] === 'your usual plan');
+
+    // Meta rejects parameters containing newlines, tabs or long space runs.
+    const { cleanTemplateParam } = require('../services/messaging');
+    ck('a newline in a parameter is flattened, not sent — Meta rejects it',
+       !/[\r\n]/.test(cleanTemplateParam('Push\nMon')));
+    ck('a tab is flattened', !/\t/.test(cleanTemplateParam('Push\tMon')));
+    ck('a long run of spaces is collapsed', !/ {4,}/.test(cleanTemplateParam('Push      Mon')));
+    ck('null becomes an empty string rather than the text "null"',
+       cleanTemplateParam(null) === '');
+    ck('a parameter is capped at 200 characters', cleanTemplateParam('x'.repeat(500)).length === 200);
+
     // ── Sending ───────────────────────────────────────────────────────────
     console.log('\nSending');
 

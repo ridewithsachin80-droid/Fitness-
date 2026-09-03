@@ -52,6 +52,9 @@ const cfg = () => ({
     nudge:   process.env.WA_TPL_NUDGE   || 'fitlife_log_reminder',
     summary: process.env.WA_TPL_SUMMARY || 'fitlife_weekly_summary',
     coach:   process.env.WA_TPL_COACH   || 'fitlife_coach_message',
+    // The 06:30 daily prompt. Submit to Meta as UTILITY, never marketing —
+    // marketing is roughly 7.5x the price for the same message.
+    morning: process.env.WA_TPL_MORNING || 'fitlife_morning_nudge',
   },
   quietFrom:     parseInt(process.env.QUIET_HOURS_FROM ?? '21', 10),  // 21:00
   quietTo:       parseInt(process.env.QUIET_HOURS_TO   ?? '7',  10),  // 07:00
@@ -86,6 +89,20 @@ function normalisePhone(raw) {
 
 // ── channel implementations ──────────────────────────────────────────────────
 
+/**
+ * Meta rejects a template parameter containing a newline, a tab, or more than
+ * four consecutive spaces — with an unhelpful error, at send time, per member.
+ * Our parameters are built from member data (names, day labels), so they can
+ * carry anything. Clean them at the boundary rather than trusting every caller.
+ */
+function cleanTemplateParam(v) {
+  return String(v == null ? '' : v)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/ {4,}/g, '   ')
+    .trim()
+    .slice(0, 200);
+}
+
 async function sendWhatsApp(phone, templateKey, params) {
   const c = cfg();
   if (!has(c.waToken, c.waPhoneId)) return { ok: false, skipped: 'whatsapp not configured' };
@@ -109,7 +126,7 @@ async function sendWhatsApp(phone, templateKey, params) {
           // Body variables only. Free-form text is not permitted for a
           // business-initiated message and would be rejected outright.
           components: params.length
-            ? [{ type: 'body', parameters: params.map(t => ({ type: 'text', text: String(t).slice(0, 200) })) }]
+            ? [{ type: 'body', parameters: params.map(t => ({ type: 'text', text: cleanTemplateParam(t) })) }]
             : undefined,
         },
       },
@@ -234,6 +251,6 @@ async function notify(userId, templateKey, params = [], opts = {}) {
 }
 
 module.exports = {
-  notify, sendWhatsApp, sendSMS, preferences,
+  notify, sendWhatsApp, sendSMS, preferences, cleanTemplateParam,
   normalisePhone, inQuietHours, istHour,
 };
