@@ -324,6 +324,44 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     ck('composing for nobody returns an empty list rather than throwing',
        (await D.composeMorningMessages(today, [])).length === 0);
 
+    // ── Coach AI chat: "send morning msg to Asha" ─────────────────────────
+    // The apply handler in routes/aiChat.js builds the WhatsApp template
+    // parameters from the composed row. If composeMorningMessages stops
+    // returning the raw facts, that handler silently sends a malformed
+    // template — Meta rejects it per member, at send time, with an unhelpful
+    // error. These assertions pin the shape.
+    console.log('\nCoach AI chat op');
+
+    const d4 = await mk('Asha Chat', '9000000023');
+    await pool.query(
+      `INSERT INTO daily_logs (patient_id, log_date, weight_kg, food_items)
+       VALUES ($1,$2,66.3,$3)`,
+      [d4, yesterday, JSON.stringify([{ name: 'Idli', grams: 100, per_100g: { calories: 160 } }])]);
+
+    const [row] = await D.composeMorningMessages(today, [d4]);
+    for (const k of ['first_name', 'body', 'yesterday', 'todayDay', 'scheduled', 'phone']) {
+      ck(`composed row carries "${k}" — the AI apply handler reads it`, k in row, Object.keys(row));
+    }
+    ck('first_name is never blank, so the greeting cannot read "Good morning, ."',
+       typeof row.first_name === 'string' && row.first_name.trim().length > 0, row.first_name);
+
+    // The AI path must produce the SAME template parameters as the cron.
+    const viaChat = D.buildMorningParams({
+      name: row.name, yesterday: row.yesterday, todayDay: row.todayDay, scheduled: row.scheduled });
+    ck('template parameters built from a composed row are valid (3 slots, none empty)',
+       viaChat.length === 3 && viaChat.every(x => typeof x === 'string' && x.trim()), viaChat);
+    ck('the coach-sent message says the same thing as the automatic one',
+       viaChat[1].includes('66.3 kg'), viaChat);
+
+    // Sending from chat must block the cron, exactly as the manual card does.
+    await D.logSent(d4, 'morning_nudge', 'Good morning (sent by coach)', row.message, true);
+    await D.sendMorningNudges(today);
+    const n4 = (await pool.query(
+      `SELECT COUNT(*)::int n FROM notifications_log WHERE user_id=$1 AND type='morning_nudge'`,
+      [d4])).rows[0].n;
+    ck('a message sent from the coach AI chat stops the 06:30 cron sending a second copy',
+       n4 === 1, n4);
+
   } catch (err) {
     fail++;
     console.log('  \u2717 suite threw: ' + (err && err.stack ? err.stack : err));

@@ -269,9 +269,19 @@ async function composeMorningMessages(istDate, memberIds) {
       id: m.id,
       name: m.name,
       phone: m.phone,
+      first_name: firstNameOr(m.name, 'there'),
       message: body ? `Good morning, ${firstNameOr(m.name, 'there')}. ${body}` : '',
       already_sent: await alreadyAttemptedToday(m.id, 'morning_nudge', istDate),
       opted_out: prefs.optedOut === true,
+
+      // The raw pieces, so a caller that needs to SEND rather than display —
+      // the coach AI chat — can build the WhatsApp template parameters from
+      // the same facts instead of trying to parse them back out of the
+      // finished sentence.
+      body,
+      yesterday,
+      todayDay,
+      scheduled,
     });
   }
   return out;

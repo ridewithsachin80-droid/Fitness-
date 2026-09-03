@@ -2459,6 +2459,12 @@ SUPPORTED OPERATIONS per command:
   keeping the coach's intent. If coach gives exact words, use them.
 - push: { "title": "...", "body": "..." } — instant phone notification.
   Only when the coach says notify/push/alert immediately.
+- morning_nudge: true — sends TODAY'S morning message: yesterday's real
+  numbers plus today's program day. Use for "send morning msg to Asha",
+  "send the morning nudge", "remind her to weigh in". Do NOT write the text
+  yourself — the server composes it from the member's actual log, exactly as
+  the 06:30 job does. Set morning_nudge, leave push null.
+  If the coach dictates their own wording instead, that is a push, not this.
 - CELEBRATION / ENCOURAGEMENT: when the coach asks to congratulate, celebrate,
   encourage, motivate or "write a message" to a member, put the message in
   note.text (and set push so it reaches their phone). Write it yourself:
@@ -2562,6 +2568,7 @@ Return ONLY a raw JSON object, no markdown fences:
       "supplements": null,
       "note": { "text": "Please log your meals daily — I review them every morning.", "flagged": false },
       "push": null,
+      "morning_nudge": null,
       "program": null,
       "meal_plan": null
     }
@@ -2727,6 +2734,10 @@ function describeOps(cmd) {
   }
   if (cmd.note) out.push({ icon: '💬', text: `${cmd.note.flagged ? 'Flagged message' : 'Message'}: "${cmd.note.text}"` });
   if (cmd.push) out.push({ icon: '🔔', text: `Push notification: ${cmd.push.title} — ${cmd.push.body}` });
+  // The text is deliberately NOT shown here: it is composed at send time from
+  // the member's log, so anything previewed now could be stale by the time the
+  // coach taps apply.
+  if (cmd.morning_nudge) out.push({ icon: '🔔', text: `Send today's morning message (yesterday's numbers + today's program day)` });
   return out;
 }
 
@@ -3340,8 +3351,13 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
       if (raw.push && raw.push.title && raw.push.body) {
         push = { title: String(raw.push.title).slice(0, 90), body: String(raw.push.body).slice(0, 250) };
       }
+      // A flag, not text. The model must not author this message — the server
+      // builds it from the member's real log at send time, so the coach's
+      // version and the 06:30 version can never disagree.
+      const morning_nudge = raw.morning_nudge === true ? true : null;
 
       const ops = {
+        morning_nudge,
         water_target,
         macros,
         target_weight,
@@ -3655,6 +3671,71 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
       }
 
       await client.query('COMMIT');
+
+      // Today's morning message, on demand.
+      //
+      // Post-commit alongside push, for the same reason: a delivery failure
+      // must not roll back protocol changes the coach also made in the same
+      // turn.
+      //
+      // The text is composed HERE, by the same service the 06:30 cron uses —
+      // never by the model. Letting the AI write it would mean the coach's
+      // version and the automatic version saying different things to the same
+      // member, and would lose the real numbers that make it worth reading.
+      if (ops.morning_nudge) {
+        try {
+          const {
+            composeMorningMessages, buildMorningParams, buildMorningBody,
+            alreadyAttemptedToday, logSent,
+          } = require('../services/digests');
+          const { sendWhatsApp } = require('../services/messaging');
+          const pushService = require('../services/pushService');
+          const istDate = getISTDate();
+
+          if (await alreadyAttemptedToday(memberId, 'morning_nudge', istDate)) {
+            appliedBits.push('morning message already sent today');
+          } else {
+            const [composed] = await composeMorningMessages(istDate, [memberId]);
+            if (!composed || !composed.message) {
+              appliedBits.push('nothing to say this morning');
+            } else if (composed.opted_out) {
+              appliedBits.push('member has opted out of messages');
+            } else {
+              // WhatsApp first, push as the fallback — the same order the cron
+              // uses, so the channel does not change depending on who sent it.
+              let ok = false;
+              const wa = await sendWhatsApp(composed.phone, 'morning',
+                buildMorningParams({
+                  name: composed.name,
+                  yesterday: composed.yesterday,
+                  todayDay: composed.todayDay,
+                  scheduled: composed.scheduled,
+                }));
+              if (wa.ok) ok = true;
+
+              if (!ok) {
+                try {
+                  await pushService.sendToUser(
+                    memberId, `Good morning, ${composed.first_name}`, composed.body, 'morning_nudge');
+                  ok = true;
+                } catch (e) {
+                  console.error('coach-apply morning nudge push failed:', e.message);
+                }
+              }
+
+              // Recorded either way. A failed row is still today's attempt —
+              // otherwise the 06:30 cron sends a second copy to a member who
+              // may well have received the first.
+              await logSent(memberId, 'morning_nudge',
+                `Good morning (sent by coach)`, composed.message, ok);
+              appliedBits.push(ok ? 'morning message sent' : 'morning message failed to send');
+            }
+          }
+        } catch (e) {
+          console.error('coach-apply morning nudge failed:', e.message);
+          appliedBits.push('morning message failed to send');
+        }
+      }
 
       // Push is post-commit — a push failure must not roll back protocol changes
       if (ops.push) {
