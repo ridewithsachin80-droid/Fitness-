@@ -400,6 +400,128 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     ck('a member the cron failed to reach shows attempted', urow.already_sent === true, urow);
     ck('...and NOT delivered, so the card can offer a retry', urow.delivered === false, urow);
 
+    // ── An explicit coach instruction must never be refused ──────────────
+    // The dedupe exists to stop the 06:30 CRON sending twice. It must not
+    // argue with a coach who typed "send morning msg to Sachin".
+    //
+    // This was a real dead end: the first buggy send logged itself as
+    // delivered while nothing had left the server, and every attempt
+    // afterwards answered "already sent today" with no way to override.
+    console.log('\nExplicit coach instruction');
+
+    const d7 = await mk('Resend Member', '9000000026');
+    await pool.query(
+      `INSERT INTO daily_logs (patient_id, log_date, weight_kg) VALUES ($1,$2,72.5)`,
+      [d7, yesterday]);
+
+    // A prior record — as the buggy send would have left behind.
+    await D.logSent(d7, 'morning_nudge', 'T', 'B', true);
+    ck('the member is recorded as messaged today',
+       await D.alreadyAttemptedToday(d7, 'morning_nudge', today) === true);
+
+    // Composing must still hand back a message. Returning nothing here is what
+    // left the coach with no way forward.
+    const [again] = await D.composeMorningMessages(today, [d7]);
+    ck('a message is still composed for a member already messaged today — the coach must be able to resend',
+       !!(again && again.message), again);
+    ck('...and it still carries the phone, so WhatsApp can be opened',
+       again.phone === '9000000026', again.phone);
+    ck('...and is flagged as already sent, so the reply can say "sent again"',
+       again.already_sent === true);
+
+    // The cron, by contrast, must still refuse.
+    const before7 = (await pool.query(
+      `SELECT COUNT(*)::int n FROM notifications_log WHERE user_id=$1 AND type='morning_nudge'`,
+      [d7])).rows[0].n;
+    await D.sendMorningNudges(today);
+    const after7 = (await pool.query(
+      `SELECT COUNT(*)::int n FROM notifications_log WHERE user_id=$1 AND type='morning_nudge'`,
+      [d7])).rows[0].n;
+    ck('the 06:30 cron still refuses — the dedupe applies to the schedule, not to the coach',
+       after7 === before7, { before7, after7 });
+
+    // ── The coach routes, over real HTTP ──────────────────────────────────
+    // These exist because the service layer passing told us nothing. The
+    // route crashed with `ReferenceError: getISTDate is not defined` — it was
+    // called in patients.js as if it were global, which is how it looks when
+    // every other file that uses it defines its own copy at the top. The
+    // endpoint 500'd and the coach's card said "Couldn't load today's
+    // messages" with no clue why.
+    //
+    // Calling composeMorningMessages directly could never have caught that.
+    // The route has to be exercised through HTTP, with a real token.
+    console.log('\nCoach routes over HTTP');
+
+    const express = require('express');
+    const cookieParser = require('cookie-parser');
+    const jwt = require('jsonwebtoken');
+    process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
+
+    const app = express();
+    app.use(express.json());
+    app.use(cookieParser());
+    app.use('/api/members', require('../routes/patients'));
+
+    const coachId = (await pool.query(
+      `INSERT INTO users (name, email, password, role, active)
+       VALUES ('Route Coach','routecoach@x.com','x','monitor',true) RETURNING id`)).rows[0].id;
+    const mem = await mk('Route Member', '9000000031');
+    await pool.query(
+      `INSERT INTO monitor_patients (monitor_id, patient_id, active) VALUES ($1,$2,true)`,
+      [coachId, mem]);
+    await pool.query(
+      `INSERT INTO daily_logs (patient_id, log_date, weight_kg) VALUES ($1,$2,72.5)`,
+      [mem, yesterday]);
+
+    const srv2 = express().listen(0);
+    srv2.close();
+    const server = app.listen(0);
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const tok = jwt.sign({ id: coachId, role: 'monitor', name: 'Route Coach' },
+                         process.env.JWT_SECRET, { expiresIn: '1h' });
+    const authed = (path, opts = {}) => fetch(base + path, {
+      ...opts, headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+
+    try {
+      const list = await authed('/api/members/morning-nudges');
+      ck('GET /morning-nudges returns 200, not 500 (the getISTDate crash)',
+         list.status === 200, list.status);
+      const listBody = await list.json();
+      ck('...and carries a date', typeof listBody.date === 'string', listBody.date);
+      ck('...and the assigned member', Array.isArray(listBody.members), listBody);
+
+      const one = await authed(`/api/members/${mem}/morning-message`);
+      ck('GET /:id/morning-message returns 200', one.status === 200, one.status);
+      const oneBody = await one.json();
+      ck('...with a composed message', (oneBody.message || '').includes('72.5 kg'), oneBody.message);
+      ck('...and the phone to open WhatsApp with', oneBody.phone === '9000000031', oneBody.phone);
+      ck('...and a delivered flag so the card can show the difference',
+         'delivered' in oneBody, Object.keys(oneBody));
+
+      const rec = await authed(`/api/members/${mem}/morning-nudges/sent`,
+        { method: 'POST', body: JSON.stringify({ message: oneBody.message }) });
+      ck('POST /:id/morning-nudges/sent records it', rec.status === 200, rec.status);
+      ck('...and is reflected as delivered',
+         (await (await authed(`/api/members/${mem}/morning-message`)).json()).delivered === true);
+
+      // A coach must not be able to read or message someone else's member.
+      const otherCoach = (await pool.query(
+        `INSERT INTO users (name, email, password, role, active)
+         VALUES ('Other Coach','other@x.com','x','monitor',true) RETURNING id`)).rows[0].id;
+      const otherTok = jwt.sign({ id: otherCoach, role: 'monitor', name: 'Other' },
+                                process.env.JWT_SECRET, { expiresIn: '1h' });
+      const forbidden = await fetch(`${base}/api/members/${mem}/morning-message`,
+        { headers: { Authorization: `Bearer ${otherTok}` } });
+      ck('a coach cannot read the morning message of a member who is not theirs',
+         forbidden.status === 403 || forbidden.status === 404, forbidden.status);
+
+      const noAuth = await fetch(`${base}/api/members/morning-nudges`);
+      ck('the route requires a token', noAuth.status === 401, noAuth.status);
+    } finally {
+      server.close();
+    }
+
   } catch (err) {
     fail++;
     console.log('  \u2717 suite threw: ' + (err && err.stack ? err.stack : err));

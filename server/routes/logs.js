@@ -7,11 +7,8 @@ const roleCheck = require('../middleware/roleCheck');
 // Railway runs in UTC. India is UTC+5:30. Always use IST for business-date
 // comparisons so members aren't rejected for "future date" between midnight
 // and 5:30 AM IST.
-function getISTDate() {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  return ist.toISOString().split('T')[0];
-}
+// Was a local copy; now the shared one in utils/istDate.js.
+const { getISTDate } = require('../utils/istDate');
 
 
 

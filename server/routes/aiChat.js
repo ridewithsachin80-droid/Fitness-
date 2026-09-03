@@ -2063,10 +2063,9 @@ const CATALOG = {
   ],
 };
 
-function getISTDate() {
-  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  return ist.toISOString().split('T')[0];
-}
+// Was a local copy; now the shared one in utils/istDate.js. Three files had
+// written this independently and a fourth was about to.
+const { getISTDate } = require('../utils/istDate');
 
 // Members visible to this coach: admin → all active patients, monitor → assigned
 // ── Coach questions ──────────────────────────────────────────────────────────
@@ -3682,46 +3681,70 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
       // never by the model. Letting the AI write it would mean the coach's
       // version and the automatic version saying different things to the same
       // member, and would lose the real numbers that make it worth reading.
+      // Today's morning message, on demand.
+      //
+      // Post-commit alongside push, for the same reason: a delivery failure
+      // must not roll back protocol changes made in the same turn.
+      //
+      // The text is composed HERE, by the same service the 06:30 cron and the
+      // coach's Morning messages card use — never by the model. Letting the AI
+      // write it would mean the coach's version and the automatic version
+      // saying different things to the same member, and would throw away the
+      // real numbers that make it worth reading.
+      let whatsappFallback = null;
       if (ops.morning_nudge) {
         try {
           const {
-            composeMorningMessages, buildMorningParams, buildMorningBody,
-            alreadyAttemptedToday, logSent,
+            composeMorningMessages, buildMorningParams, deliveredToday, logSent,
           } = require('../services/digests');
-          const { sendWhatsApp } = require('../services/messaging');
+          const { sendWhatsApp, normalisePhone } = require('../services/messaging');
           const pushService = require('../services/pushService');
           const istDate = getISTDate();
 
-          if (await alreadyAttemptedToday(memberId, 'morning_nudge', istDate)) {
-            appliedBits.push('morning message already sent today');
+          // Gated on DELIVERED, not merely attempted.
+          //
+          // Gating on attempts turned one bad record into a permanent dead
+          // end. The first send reported success while nothing had left the
+          // server — the member had no push subscription — and every attempt
+          // afterwards answered "already sent today" with no way to override
+          // it. A coach typing "send morning msg to Sachin" is a deliberate
+          // instruction; if it did not arrive, it must be allowed to try
+          // again.
+          //
+          // The 06:30 cron still gates on attempts, so a member who cannot be
+          // reached is not retried automatically every morning.
+          if (await deliveredToday(memberId, 'morning_nudge', istDate)) {
+            appliedBits.push('morning message already delivered today');
           } else {
             const [composed] = await composeMorningMessages(istDate, [memberId]);
+
             if (!composed || !composed.message) {
               appliedBits.push('nothing to say this morning');
             } else if (composed.opted_out) {
               appliedBits.push('member has opted out of messages');
             } else {
-              // WhatsApp first, push as the fallback — the same order the cron
-              // uses, so the channel does not change depending on who sent it.
-              let ok = false;
+              // WhatsApp template first, push as the fallback — the same order
+              // the cron uses, so the channel does not depend on who sent it.
+              let ok = false, why = null;
+
               const wa = await sendWhatsApp(composed.phone, 'morning',
                 buildMorningParams({
-                  name: composed.name,
+                  name:      composed.name,
                   yesterday: composed.yesterday,
-                  todayDay: composed.todayDay,
+                  todayDay:  composed.todayDay,
                   scheduled: composed.scheduled,
                 }));
-              if (wa.ok) ok = true;
+              if (wa.ok) ok = true; else why = wa.skipped || 'whatsapp-failed';
 
-              let why = wa.skipped || null;
               if (!ok) {
                 try {
-                  // sendToUser returns a RESULT — it no-ops silently when the
+                  // sendToUser returns a RESULT. It no-ops silently when the
                   // member has no subscription, when VAPID is unset, and when
-                  // the lookup fails. Reading only "did it throw" reported a
-                  // message as sent when nothing had left the server.
+                  // the lookup fails — so reading only "did it throw" reported
+                  // a message as sent when nothing had been sent.
                   const r = await pushService.sendToUser(
-                    memberId, `Good morning, ${composed.first_name}`, composed.body, 'morning_nudge');
+                    memberId, `Good morning, ${composed.first_name}`,
+                    composed.body, 'morning_nudge');
                   if (r && r.ok) ok = true;
                   else if (r && r.reason) why = r.reason;
                 } catch (e) {
@@ -3730,25 +3753,41 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
                 }
               }
 
-              // Recorded either way. A failed row is still today's attempt —
-              // otherwise the 06:30 cron sends a second copy to a member who
-              // may well have received the first.
+              // Recorded either way: a failed row is still today's attempt, so
+              // the 06:30 cron does not send a second copy to a member who may
+              // well have received the first.
               await logSent(memberId, 'morning_nudge',
-                `Good morning (sent by coach)`, composed.message, ok);
+                'Good morning (sent by coach)', composed.message, ok);
 
-              // Say WHY, in words the coach can act on. "Failed to send" sends
-              // them hunting; "hasn't turned on notifications" tells them to
-              // send it from their own WhatsApp instead.
-              const EXPLAIN = {
-                'no-subscriptions': "not delivered — member hasn't turned on notifications. Send it from the Morning messages card instead",
-                'not-configured':   'not delivered — push is not configured on the server',
-                'lookup-failed':    'not delivered — could not read subscriptions',
-                'all-failed':       'not delivered — every subscription rejected it',
-                'push-error':       'not delivered — push error',
-              };
-              appliedBits.push(ok
-                ? 'morning message sent'
-                : `morning message ${EXPLAIN[why] || 'not delivered'}`);
+              if (ok) {
+                appliedBits.push('morning message sent');
+              } else {
+                // Say WHY, in words that point at the next action. "Failed to
+                // send" sends the coach hunting; naming the cause does not.
+                const EXPLAIN = {
+                  'no-subscriptions':          "member hasn't turned on notifications",
+                  'not-configured':            'push is not configured on the server',
+                  'lookup-failed':             'could not read subscriptions',
+                  'all-failed':                'every subscription rejected it',
+                  'push-error':                'push error',
+                  'whatsapp not configured':   'WhatsApp is not connected yet',
+                  'unusable phone number':     'phone number is not usable',
+                };
+                appliedBits.push(`morning message not delivered — ${EXPLAIN[why] || why || 'unknown reason'}`);
+
+                // Hand back a one-tap WhatsApp link so the coach can send it
+                // themselves without leaving the chat. Reporting a failure and
+                // making them go and find a button elsewhere is how a nudge
+                // quietly never gets sent at all.
+                const to = normalisePhone(composed.phone);
+                if (to) {
+                  whatsappFallback = {
+                    url: `https://wa.me/${to}?text=${encodeURIComponent(composed.message)}`,
+                    member_id: memberId,
+                    message: composed.message,
+                  };
+                }
+              }
             }
           }
         } catch (e) {
@@ -3770,7 +3809,14 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
 
       coachAudit(req.user, 'coach_ai_update', memberId, memberName,
         `AI chat applied: ${appliedBits.join(', ')}`);
-      results.push({ member_name: memberName, ok: true, detail: appliedBits.join(', ') || 'no changes' });
+      results.push({
+        member_name: memberName,
+        ok: true,
+        detail: appliedBits.join(', ') || 'no changes',
+        // Present only when the morning message could not be delivered — the
+        // chat renders it as a "Send on WhatsApp" button.
+        whatsapp: whatsappFallback,
+      });
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
       console.error('coach-apply error for member', memberId, ':', err.message);

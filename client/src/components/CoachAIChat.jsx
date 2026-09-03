@@ -24,6 +24,7 @@ import { haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { plural } from '../constants';
 import DaySummary from './DaySummary';
+import { markMorningNudgeSent } from '../api/logs';
 
 export const useCoachAI = create((set) => ({
   open: false,
@@ -715,10 +716,30 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                         <div className="bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl px-3.5 py-3 space-y-1.5">
                           <p className="text-[13px] font-bold text-emerald-400">✓ Applied</p>
                           {(m.results || []).map((r, ri) => (
-                            <p key={ri} className={`text-[11px] leading-relaxed ${r.ok ? 'text-[#b6b6c2]' : 'text-red-300'}`}>
-                              {r.ok ? '✓' : '✗'} <span className="font-semibold">{r.member_name}</span>
-                              {r.detail ? ` — ${r.detail}` : ''}
-                            </p>
+                            <div key={ri}>
+                              <p className={`text-[11px] leading-relaxed ${r.ok ? 'text-[#b6b6c2]' : 'text-red-300'}`}>
+                                {r.ok ? '✓' : '✗'} <span className="font-semibold">{r.member_name}</span>
+                                {r.detail ? ` — ${r.detail}` : ''}
+                              </p>
+                              {/* A morning message the server could not deliver —
+                                  almost always a member who never turned on
+                                  notifications. Offer the send right here rather
+                                  than reporting the failure and leaving the coach
+                                  to go and find a button on another screen. */}
+                              {r.whatsapp?.url && (
+                                <button
+                                  onClick={() => {
+                                    window.open(r.whatsapp.url, '_blank', 'noopener');
+                                    markMorningNudgeSent(r.whatsapp.member_id, r.whatsapp.message)
+                                      .catch(() => {});
+                                  }}
+                                  className="mt-1.5 mb-0.5 text-[11px] font-semibold text-[#121316]
+                                             bg-[#25D366] px-3 py-1.5 rounded-lg active:scale-95
+                                             transition-transform">
+                                  Send on WhatsApp
+                                </button>
+                              )}
+                            </div>
                           ))}
                           <p className="text-[10px] text-[#4e4e5c] pt-0.5">
                             Members see protocol changes on next app open · logged in Audit

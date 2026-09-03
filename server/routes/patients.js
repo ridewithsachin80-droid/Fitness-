@@ -1,5 +1,10 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
+// getISTDate was called in the morning-message routes below as if it were
+// global — it is not. Every other file that uses it defines its own copy at
+// the top, which is exactly what makes it look global. The endpoint threw
+// ReferenceError and returned 500.
+const { getISTDate } = require('../utils/istDate');
 const authMW = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 const { loadProgramDays } = require('./programs');

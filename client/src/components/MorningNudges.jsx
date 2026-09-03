@@ -31,15 +31,21 @@ export default function MorningNudges() {
   const [rows,    setRows]    = useState(null);
   const [busyId,  setBusyId]  = useState(null);
   const [error,   setError]   = useState(null);
+  const [failed,  setFailed]  = useState(false);
 
   const load = useCallback(async () => {
-    setError(null);
+    setError(null); setFailed(false);
     try {
       const { data } = await getMorningNudges();
       setRows(data.members || []);
     } catch (err) {
+      // NOT setRows([]) — an empty list renders "Nothing to send this
+      // morning", so a failed request showed the coach an error AND a
+      // reassurance directly beneath it, which is worse than either alone.
+      // null keeps the list unrendered so only the error and a retry show.
       setError("Couldn't load today's messages.");
-      setRows([]);
+      setRows(null);
+      setFailed(true);
     }
   }, []);
 
@@ -71,7 +77,17 @@ export default function MorningNudges() {
     return (
       <Card>
         <SectionTitle>Morning messages</SectionTitle>
-        <p className="text-sm text-[#7E8596]">Loading…</p>
+        {failed ? (
+          <>
+            <p className="text-sm text-[#E4572E] mt-1">Couldn't load today's messages.</p>
+            <button onClick={load}
+              className="mt-3 px-4 py-2 rounded-lg text-xs font-semibold bg-[#D4AF37] text-[#121316]">
+              Try again
+            </button>
+          </>
+        ) : (
+          <p className="text-sm text-[#7E8596]">Loading…</p>
+        )}
       </Card>
     );
   }
