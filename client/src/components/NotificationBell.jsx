@@ -155,11 +155,19 @@ export default function NotificationBell() {
                     <span className="text-[10px] text-[#5a5a68] flex-shrink-0 mt-0.5 whitespace-nowrap">{timeAgo(n.sent_at)}</span>
                   </div>
                   <p className="text-xs text-[#9a9aa6] mt-1 leading-relaxed">{n.body}</p>
-                  {n.failed && (
-                    <span className="inline-block mt-1.5 text-[10px] font-semibold text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
-                      ⚠ Delivery failed — your coach may want to know
-                    </span>
-                  )}
+                  {/* There used to be a red "Delivery failed — your coach may
+                      want to know" badge here, shown to the MEMBER.
+                      Two things wrong with it:
+                      1. `failed` means the PUSH transport was rejected — the
+                         member had no subscription, or a stale one. It is our
+                         plumbing, not their problem, and there is nothing they
+                         can do about it.
+                      2. It appeared underneath a message they were, at that
+                         moment, reading. Telling someone a message failed to
+                         reach them while they read it is nonsense, and it
+                         makes the app look broken when it is working.
+                      The failure still matters — but to the COACH, on the
+                      Morning messages card, which is where it now lives. */}
                 </div>
               ))}
             </div>

@@ -510,5 +510,25 @@ for (const f of jsxFiles) {
 ck('every stone/emerald class the JSX uses has a rule in index.css',
    unmapped.size === 0, [...unmapped].map(([t, f]) => t + ' (' + f + ')'));
 
+
+// ── Internal plumbing must not leak into member-facing copy ─────────────────
+// The member's Reminders panel showed a red badge reading
+// "Delivery failed — your coach may want to know" whenever notifications_log
+// had failed=true for that message.
+//
+// `failed` means the PUSH TRANSPORT was rejected — the member had no
+// subscription, or a stale one. That is our plumbing. They can do nothing
+// about it, and the badge rendered directly underneath a message they were at
+// that moment reading, which makes a working app look broken.
+//
+// The failure still matters, but to the COACH, on the Morning messages card.
+{
+  const bell = stripComments(read('components/NotificationBell.jsx'));
+  ck('no "Delivery failed" badge is rendered to the member',
+     !/Delivery failed/i.test(bell));
+  ck('no push-transport wording leaks into the member notification panel',
+     !/(delivery (failed|error)|could not be delivered|push failed)/i.test(bell));
+}
+
 console.log(`\n═══ LAYOUT CONTRACTS: ${pass} passed, ${fail} failed ═══`);
 process.exit(fail > 0 ? 1 : 0);
