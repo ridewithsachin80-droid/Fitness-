@@ -230,6 +230,21 @@ function firstNameOr(name, fallback) {
  * @param {number[]} memberIds
  * @returns {Promise<Array<{id, name, phone, message, already_sent, opted_out}>>}
  */
+/**
+ * The app URL to put in a member-facing message.
+ *
+ * Its own line with a blank line above it: WhatsApp auto-links a bare URL, and
+ * on its own line it reads as a call to action rather than interrupting the
+ * sentence. The existing gap nudge does the same thing, which is the shape
+ * members already recognise.
+ *
+ * CLIENT_URL is already set on Railway, so this follows the deployment rather
+ * than hard-coding a domain that would be wrong in any other environment.
+ */
+function appLink() {
+  return process.env.CLIENT_URL || 'https://fitness.upscale-app.com';
+}
+
 async function composeMorningMessages(istDate, memberIds) {
   const { preferences } = require('./messaging');
   const { deriveTodayDay } = require('./programDay');
@@ -280,7 +295,16 @@ async function composeMorningMessages(istDate, memberIds) {
       name: m.name,
       phone: m.phone,
       first_name: firstNameOr(m.name, 'there'),
-      message: body ? `Good morning, ${firstNameOr(m.name, 'there')}. ${body}` : '',
+      // The link matters more than it looks. A morning message that only says
+      // "weigh-in when you're up" gives the member nothing to tap — they have
+      // to remember the app exists and go find it. The gap nudge has always
+      // carried the link; this one was shipped without it.
+      //
+      // Only on the MANUAL message. A push notification opens the app when
+      // tapped, so a URL in its body would be noise.
+      message: body
+        ? `Good morning, ${firstNameOr(m.name, 'there')}. ${body}\n\n${appLink()}`
+        : '',
       already_sent: await alreadyAttemptedToday(m.id, 'morning_nudge', istDate),
       // Attempted and DELIVERED are different questions, and the coach needs
       // the second one. An attempt with failed=true means the message never
@@ -507,5 +531,5 @@ async function sendCoachDigests(istDate) {
 
 module.exports = { computeDayTotals, buildRecapBody, buildDigestBody,
                    buildMorningBody, buildMorningParams, sendMorningNudges, alreadyAttemptedToday,
-                   composeMorningMessages, logSent, deliveredToday,
+                   composeMorningMessages, logSent, deliveredToday, appLink,
                    sendEveningRecaps, sendCoachDigests, alreadySentToday };

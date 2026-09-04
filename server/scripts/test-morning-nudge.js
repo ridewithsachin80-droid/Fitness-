@@ -291,6 +291,27 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     ck('it carries yesterday\'s real numbers', /80\.1 kg/.test(composed[0].message), composed[0].message);
     ck('the phone is returned so the coach can open WhatsApp',
        composed[0].phone === '9000000021', composed[0].phone);
+
+    // The link is the difference between a message a member can act on and one
+    // that tells them to go find the app themselves. The gap nudge has always
+    // carried it; the morning message shipped without it.
+    ck('the manual message ends with the app link, as the gap nudge does',
+       composed[0].message.trim().endsWith(D.appLink()), composed[0].message);
+    ck('...on its own line, with a blank line above — WhatsApp auto-links a bare URL and it reads as a call to action there',
+       composed[0].message.includes(`\n\n${D.appLink()}`), JSON.stringify(composed[0].message));
+    ck('the link follows CLIENT_URL rather than being hard-coded to one domain',
+       D.appLink() === (process.env.CLIENT_URL || 'https://fitness.upscale-app.com'));
+
+    // A push notification opens the app when tapped, so a URL in its body is
+    // noise. The two channels carry different text on purpose.
+    ck('the PUSH body does NOT carry the link',
+       !D.buildMorningBody({ yesterday: { logged: true, kcal: 900, weightKg: 70 },
+                             todayDay: null, scheduled: false, weighedToday: false })
+         .includes('http'));
+    ck('nor do the WhatsApp template parameters — a template carries static text of its own',
+       !D.buildMorningParams({ name: 'A', yesterday: { logged: true, kcal: 900, weightKg: 70 },
+                               todayDay: null, scheduled: false })
+         .some(x => x.includes('http')));
     ck('not yet marked as sent', composed[0].already_sent === false);
 
     // Composing must NOT send or record anything — a coach opening the screen
