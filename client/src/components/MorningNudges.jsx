@@ -66,7 +66,8 @@ export default function MorningNudges() {
     // "Undo" puts it back if the coach changes their mind.
     try {
       await markMorningNudgeSent(m.id, m.message);
-      setRows(rs => rs.map(r => (r.id === m.id ? { ...r, already_sent: true, delivered: true } : r)));
+      setRows(rs => rs.map(r => (r.id === m.id
+        ? { ...r, already_sent: true, delivered: true, status: 'coach_sent' } : r)));
     } catch {
       setError('Sent, but it could not be recorded — check before 06:30 so it is not sent twice.');
     }
@@ -96,9 +97,12 @@ export default function MorningNudges() {
   // tried and failed to reach — almost always because they have no push
   // subscription — needs sending by hand, so they belong with the pending
   // ones, not filed away as done.
-  const pending   = rows.filter(r => !r.already_sent);
-  const undeliv   = rows.filter(r =>  r.already_sent && !r.delivered);
-  const done      = rows.filter(r =>  r.already_sent &&  r.delivered);
+  // Ordered by how much attention each needs, not by whether we think the
+  // message arrived — because for push we genuinely cannot know.
+  const pending = rows.filter(r => r.status === 'none');
+  const unreached = rows.filter(r => r.status === 'push_failed');
+  const pushed  = rows.filter(r => r.status === 'push_sent');
+  const byCoach = rows.filter(r => r.status === 'coach_sent');
 
   return (
     <Card>
@@ -106,14 +110,15 @@ export default function MorningNudges() {
         <SectionTitle>Morning messages</SectionTitle>
         {rows.length > 0 && (
           <span className="text-sm text-[#7E8596]">
-            {done.length} of {rows.length} delivered
+            {byCoach.length} of {rows.length} sent by you
           </span>
         )}
       </div>
 
       <p className="text-xs text-[#7E8596] mb-4">
         Sent from your own WhatsApp until the automatic one is approved.
-        Marking them here stops a duplicate going out at 6:30.
+        Phone notifications can't be confirmed as read, so send again whenever
+        you're not sure.
       </p>
 
       {error && (
@@ -127,18 +132,26 @@ export default function MorningNudges() {
       )}
 
       <div className="divide-y divide-white/[0.06]">
-        {[...pending, ...undeliv, ...done].map(m => {
+        {[...pending, ...unreached, ...pushed, ...byCoach].map(m => {
           const usable = !!waNumber(m.phone);
           return (
             <div key={m.id} className="py-3 flex items-start gap-3">
               <div className="min-w-0 flex-1">
-                <p className={`text-sm ${m.already_sent && m.delivered ? 'text-[#7E8596]' : 'text-[#E8E6E1]'}`}>
+                <p className={`text-sm ${m.status === 'coach_sent' ? 'text-[#7E8596]' : 'text-[#E8E6E1]'}`}>
                   {m.name}
                 </p>
-                {m.already_sent && !m.delivered && (
+                {m.status === 'push_failed' && (
                   <p className="text-xs text-[#E4572E] mt-0.5">
-                    Tried at 6:30, didn't reach them — notifications are off. Send it here.
+                    Tried at 6:30, couldn't reach them — notifications are off.
                   </p>
+                )}
+                {m.status === 'push_sent' && (
+                  <p className="text-xs text-[#B08D2F] mt-0.5">
+                    Phone notification sent at 6:30 — no way to tell if they saw it.
+                  </p>
+                )}
+                {m.status === 'coach_sent' && (
+                  <p className="text-xs text-[#7E8596] mt-0.5">You sent this on WhatsApp.</p>
                 )}
                 <p className="text-xs text-[#7E8596] mt-0.5 leading-relaxed">
                   {m.message}
@@ -148,17 +161,19 @@ export default function MorningNudges() {
                 )}
               </div>
 
-              {m.already_sent && m.delivered ? (
-                <span className="text-xs text-[#7E8596] shrink-0 pt-0.5">Delivered</span>
-              ) : (
-                <button
-                  onClick={() => send(m)}
-                  disabled={busyId === m.id || !usable}
-                  className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold
-                             bg-[#D4AF37] text-[#121316] disabled:opacity-40">
-                  {busyId === m.id ? '…' : (m.already_sent ? 'Retry' : 'Send')}
-                </button>
-              )}
+              {/* Always a button. A status the coach cannot verify must never
+                  take away their ability to act on it — and for push, nobody
+                  can verify it, including us. */}
+              <button
+                onClick={() => send(m)}
+                disabled={busyId === m.id || !usable}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold
+                           disabled:opacity-40 ${
+                             m.status === 'coach_sent'
+                               ? 'bg-white/10 text-[#E8E6E1] border border-white/20'
+                               : 'bg-[#D4AF37] text-[#121316]'}`}>
+                {busyId === m.id ? '…' : (m.status === 'none' ? 'Send' : 'Send again')}
+              </button>
             </div>
           );
         })}

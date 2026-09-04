@@ -419,7 +419,45 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     await D.logSent(d6, 'morning_nudge', 'T', 'B', false);
     const [urow] = await D.composeMorningMessages(today, [d6]);
     ck('a member the cron failed to reach shows attempted', urow.already_sent === true, urow);
-    ck('...and NOT delivered, so the card can offer a retry', urow.delivered === false, urow);
+    ck('...and NOT handed off, so the card can offer a retry', urow.delivered === false, urow);
+
+    // ── Status must not overclaim ─────────────────────────────────────────
+    // Web push has NO read receipt. sendNotification resolves when Google's or
+    // Mozilla's push service accepts the payload — a stale subscription on a
+    // laptop the member used once accepts exactly the same as a live phone.
+    // The card called that "Delivered" AND removed the send button for those
+    // rows, so a coach who knew the member had received nothing was locked out
+    // of fixing it.
+    console.log('\nStatus must not overclaim');
+
+    const dS = await mk("Status Member", "9000000041");
+    ck('no message yet reads as "none"',
+       await D.morningStatus(dS, today) === 'none');
+
+    await D.logSent(dS, 'morning_nudge', 'Good morning, Status', 'body', false);
+    ck('a failed push reads as push_failed',
+       await D.morningStatus(dS, today) === 'push_failed');
+
+    await D.logSent(dS, 'morning_nudge', 'Good morning, Status', 'body', true);
+    ck('an accepted push reads as push_sent — NOT delivered, because nothing tells us it was seen',
+       await D.morningStatus(dS, today) === 'push_sent');
+
+    await D.logSent(dS, 'morning_nudge', 'Good morning (sent by coach)', 'body', true);
+    ck('a coach WhatsApp send reads as coach_sent — the only channel here with a real delivery signal',
+       await D.morningStatus(dS, today) === 'coach_sent');
+
+    ck('coach_sent outranks an earlier push, whatever order the rows are read in',
+       await D.morningStatus(dS, today) === 'coach_sent');
+
+    const [srow] = await D.composeMorningMessages(today, [dS]);
+    ck('the composed row carries the status so the card can label it truthfully',
+       srow.status === 'coach_sent', srow.status);
+
+    // Yesterday's rows must not colour today.
+    const older = new Date(new Date(today + 'T00:00:00Z').getTime() - 5 * 86400000)
+                    .toISOString().slice(0, 10);
+    ck('a message five days ago does not count as today',
+       await D.morningStatus(dS, older) === 'none');
 
     // ── An explicit coach instruction must never be refused ──────────────
     // The dedupe exists to stop the 06:30 CRON sending twice. It must not
@@ -430,19 +468,19 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     // afterwards answered "already sent today" with no way to override.
     console.log('\nExplicit coach instruction');
 
-    const d7 = await mk('Resend Member', '9000000026');
+    const dR = await mk('Resend Member', '9000000026');
     await pool.query(
       `INSERT INTO daily_logs (patient_id, log_date, weight_kg) VALUES ($1,$2,72.5)`,
-      [d7, yesterday]);
+      [dR, yesterday]);
 
     // A prior record — as the buggy send would have left behind.
-    await D.logSent(d7, 'morning_nudge', 'T', 'B', true);
+    await D.logSent(dR, 'morning_nudge', 'T', 'B', true);
     ck('the member is recorded as messaged today',
-       await D.alreadyAttemptedToday(d7, 'morning_nudge', today) === true);
+       await D.alreadyAttemptedToday(dR, 'morning_nudge', today) === true);
 
     // Composing must still hand back a message. Returning nothing here is what
     // left the coach with no way forward.
-    const [again] = await D.composeMorningMessages(today, [d7]);
+    const [again] = await D.composeMorningMessages(today, [dR]);
     ck('a message is still composed for a member already messaged today — the coach must be able to resend',
        !!(again && again.message), again);
     ck('...and it still carries the phone, so WhatsApp can be opened',
@@ -453,11 +491,11 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     // The cron, by contrast, must still refuse.
     const before7 = (await pool.query(
       `SELECT COUNT(*)::int n FROM notifications_log WHERE user_id=$1 AND type='morning_nudge'`,
-      [d7])).rows[0].n;
+      [dR])).rows[0].n;
     await D.sendMorningNudges(today);
     const after7 = (await pool.query(
       `SELECT COUNT(*)::int n FROM notifications_log WHERE user_id=$1 AND type='morning_nudge'`,
-      [d7])).rows[0].n;
+      [dR])).rows[0].n;
     ck('the 06:30 cron still refuses — the dedupe applies to the schedule, not to the coach',
        after7 === before7, { before7, after7 });
 

@@ -108,14 +108,55 @@ async function alreadyAttemptedToday(userId, type, istDate) {
   return rows.length > 0;
 }
 
-/** Did a message of this type actually REACH the member today? */
-async function deliveredToday(userId, type, istDate) {
+/**
+ * Was a message of this type handed off successfully today?
+ *
+ * READ THE NAME CAREFULLY. This does NOT mean the member saw it, and the UI
+ * must not claim they did.
+ *
+ * Web push has no read receipt. `webpush.sendNotification` resolves when the
+ * PUSH SERVICE — Google's or Mozilla's — accepts the payload. A subscription
+ * belonging to a browser the member has not opened in a month, or to a laptop
+ * they used once to log in, accepts exactly the same as a live phone. The only
+ * failures we ever see are a rejected subscription (410/404/403), never
+ * "nobody looked at it".
+ *
+ * The card used to label this "Delivered" AND hide the send button for those
+ * rows, so a coach who knew perfectly well the member had not received
+ * anything was locked out of doing something about it. Both were wrong: the
+ * word overclaimed, and the gate turned an unverifiable guess into a refusal.
+ */
+async function handedOffToday(userId, type, istDate) {
   const { rows } = await pool.query(
     `SELECT 1 FROM notifications_log
      WHERE user_id=$1 AND type=$2 AND failed=false
        AND (sent_at AT TIME ZONE 'Asia/Kolkata')::date = $3::date
      LIMIT 1`, [userId, type, istDate]);
   return rows.length > 0;
+}
+
+/** Back-compat for callers still using the old name. */
+const deliveredToday = handedOffToday;
+
+/**
+ * What happened to today's message, in terms the coach can act on.
+ *
+ * 'coach_sent' is the only status that means a human definitely sent it from
+ * their own WhatsApp, which is the only channel here with any real delivery
+ * signal — the coach can see the ticks.
+ *
+ * @returns {'none'|'push_failed'|'push_sent'|'coach_sent'}
+ */
+async function morningStatus(userId, istDate) {
+  const { rows } = await pool.query(
+    `SELECT failed, title FROM notifications_log
+     WHERE user_id=$1 AND type='morning_nudge'
+       AND (sent_at AT TIME ZONE 'Asia/Kolkata')::date = $2::date
+     ORDER BY sent_at DESC`, [userId, istDate]);
+  if (!rows.length) return 'none';
+  if (rows.some(r => !r.failed && /sent by coach/i.test(r.title || ''))) return 'coach_sent';
+  if (rows.some(r => !r.failed)) return 'push_sent';
+  return 'push_failed';
 }
 
 async function logSent(userId, type, title, body, ok) {
@@ -310,7 +351,10 @@ async function composeMorningMessages(istDate, memberIds) {
       // the second one. An attempt with failed=true means the message never
       // reached the member — usually because they have no push subscription —
       // and that is precisely when the coach should send it by hand.
-      delivered: await deliveredToday(m.id, 'morning_nudge', istDate),
+      // Kept for any existing caller, but the card no longer uses it as a
+      // gate — see morningStatus for what is actually shown.
+      delivered: await handedOffToday(m.id, 'morning_nudge', istDate),
+      status: await morningStatus(m.id, istDate),
       opted_out: prefs.optedOut === true,
 
       // The raw pieces, so a caller that needs to SEND rather than display —
@@ -531,5 +575,6 @@ async function sendCoachDigests(istDate) {
 
 module.exports = { computeDayTotals, buildRecapBody, buildDigestBody,
                    buildMorningBody, buildMorningParams, sendMorningNudges, alreadyAttemptedToday,
-                   composeMorningMessages, logSent, deliveredToday, appLink,
+                   composeMorningMessages, logSent, deliveredToday, handedOffToday,
+                   morningStatus, appLink,
                    sendEveningRecaps, sendCoachDigests, alreadySentToday };

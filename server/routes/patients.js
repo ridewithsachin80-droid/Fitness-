@@ -364,6 +364,7 @@ router.get('/:id/morning-message', authMW, roleCheck('monitor', 'admin'),
       message: row.message,
       phone: row.phone,
       delivered: row.delivered,
+      status: row.status,
       already_sent: row.already_sent,
       opted_out: row.opted_out,
     });
