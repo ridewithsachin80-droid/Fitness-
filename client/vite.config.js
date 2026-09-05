@@ -15,7 +15,17 @@ export default defineConfig({
         name: 'FitLife',
         short_name: 'FitLife',
         description: 'Transform your health, one day at a time',
-        theme_color: '#c9a227',
+        // The brand gold. Was #c9a227 — an older shade that sprint6-test is
+        // meant to fail on, but that test was never wired into the gate and
+        // the manifest was never checked.
+        //
+        // This matters more now than it did as a website: a Trusted Web
+        // Activity uses theme_color for the SPLASH SCREEN and status bar, so
+        // the wrong gold would be the first thing every Android member sees on
+        // every single launch.
+        theme_color: '#D4AF37',
+        // Play requires a stable manifest id for a TWA.
+        id: '/',
         // Was #ffffff, which flashed a white screen on every cold start before
         // the app painted. Matching the app's own background removes the flash.
         background_color: '#0b0b0e',

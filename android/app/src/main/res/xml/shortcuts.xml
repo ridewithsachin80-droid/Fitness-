@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Google Assistant App Actions.
+
+  READ THIS BEFORE DEBUGGING A PHRASE THAT DOES NOT FIRE:
+
+  1. App Actions require a SEPARATE Google review from the Play review. Your
+     app can be live on the Play Store while shortcuts.xml is still pending,
+     and the phrase will not work for members until that second review passes.
+     Accept the App Actions terms in Play Console under Advanced settings.
+
+  2. Google is moving Android from Assistant to Gemini, and custom App Actions
+     are not confirmed to work there. If the phrase never fires on a Gemini
+     device, that is the reason, and the fallback is the app shortcut below —
+     which is an ordinary Android shortcut and does not depend on App Actions
+     at all.
+
+  The static shortcut is therefore not a nicety. It is the part that works
+  regardless: long-press the icon, or "Hey Google, open Log with FitLife".
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android"
+           xmlns:tools="http://schemas.android.com/tools"
+           tools:ignore="MissingClass">
+
+    <!-- Voice capability. START_EXERCISE is the closest built-in intent that
+         carries free text for a fitness app; the dictated words arrive as the
+         exercise name extra, which QuickLogActivity reads. -->
+    <capability android:name="actions.intent.START_EXERCISE">
+        <intent
+            android:action="app.upscale.fitlife.QUICK_LOG"
+            android:targetPackage="app.upscale.fitlife"
+            android:targetClass="app.upscale.fitlife.QuickLogActivity">
+            <parameter
+                android:name="exercise.name"
+                android:key="query" />
+        </intent>
+        <!-- Required fallback: a capability must have an intent that resolves
+             with no parameter, or Assistant has nothing to do when the member
+             says the phrase without saying what to log. -->
+        <intent
+            android:action="app.upscale.fitlife.QUICK_LOG"
+            android:targetPackage="app.upscale.fitlife"
+            android:targetClass="app.upscale.fitlife.QuickLogActivity" />
+    </capability>
+
+    <!-- Plain Android shortcut. Works with no App Actions review and on
+         devices where Assistant has been replaced by Gemini. Long-press the
+         app icon to reach it. -->
+    <shortcut
+        android:shortcutId="quick_log"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_short"
+        android:shortcutLongLabel="@string/shortcut_long">
+        <intent
+            android:action="app.upscale.fitlife.QUICK_LOG"
+            android:targetPackage="app.upscale.fitlife"
+            android:targetClass="app.upscale.fitlife.QuickLogActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

@@ -151,6 +151,18 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS rda_overrides JSONB DEFAUL
 
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS meal_plan JSONB DEFAULT NULL;
 
+-- The member's meal slot names ("Breakfast", "Lunch", "Pre-workout"...).
+--
+-- These have only ever lived in the browser's local storage (settingsStore),
+-- and were sent to the server inside each request's context. That works while
+-- a screen is driving, but voice logging has no client to ask — and it also
+-- means a member who clears their browser silently loses custom slots.
+--
+-- Nullable on purpose: NULL means "never synced", which is different from an
+-- empty list, and lets memberLogApply fall back to the slots the member has
+-- actually been using rather than assuming the defaults.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS meal_slots JSONB DEFAULT NULL;
+
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_start  TIME;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_end    TIME;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS fasting_note   TEXT;
@@ -754,6 +766,33 @@ CREATE TABLE IF NOT EXISTS session_loss_log (
 );
 CREATE INDEX IF NOT EXISTS idx_session_loss_created
   ON session_loss_log(created_at DESC);
+
+-- ── Voice logging (sprint V0) ────────────────────────────────────────────────
+-- A long-lived, WRITE-ONLY credential so a phone shortcut, a WhatsApp webhook
+-- or an SMS gateway can log on the member's behalf without a login session.
+--
+-- Deliberately separate from the JWT: revoking voice access must not sign the
+-- member out of the app, and losing this token must not expose anything else.
+-- Rotating the value IS the revoke.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS quick_log_token  VARCHAR(64);
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS quick_log_issued TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_quick_log_token
+  ON patient_profiles(quick_log_token) WHERE quick_log_token IS NOT NULL;
+
+-- Every voice turn: conversation memory, an audit trail, and the record of
+-- what members actually say to their phones — which will not be what anyone
+-- predicted, and is what the eval set needs.
+CREATE TABLE IF NOT EXISTS quick_log_turns (
+  id          SERIAL PRIMARY KEY,
+  patient_id  INT REFERENCES users(id) ON DELETE CASCADE,
+  source      VARCHAR(12),
+  text        TEXT,
+  reply       TEXT,
+  outcome     VARCHAR(20),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_quick_log_turns_patient
+  ON quick_log_turns(patient_id, created_at DESC);
 
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they

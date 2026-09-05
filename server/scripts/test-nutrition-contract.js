@@ -327,12 +327,26 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
     // now that an anchor has matched the first one.
     const fs = require('fs');
     const src = fs.readFileSync(require('path').join(__dirname, '..', 'routes', 'aiChat.js'), 'utf8');
+    // Sprint V0 lifted the /parse handler body out into a named function,
+    // `parseMemberMessage`, so that voice logging can call the same parser
+    // without an HTTP request. The handler is now a function declaration that
+    // sits ABOVE router.post('/parse'), so walking back to the nearest
+    // router.post() lands on whatever route was declared before it — /photo —
+    // and these checks failed while the code was in exactly the right place.
+    //
+    // The check itself is still the one that matters: the same enrichFromDB
+    // line appears in both paths, and an anchor has matched the wrong one
+    // twice now. So the function is treated as the /parse handler it is,
+    // rather than loosening the assertion.
     const routeOf = (needle) => {
       const at = src.indexOf(needle);
       if (at < 0) return null;
       const before = src.slice(0, at);
-      const m = [...before.matchAll(/router\.(?:post|get)\('([^']+)'/g)].pop();
-      return m ? m[1] : null;
+      const marks = [...before.matchAll(
+        /router\.(?:post|get)\('([^']+)'|async function (parseMemberMessage)\(/g)];
+      const m = marks.pop();
+      if (!m) return null;
+      return m[2] ? '/parse' : m[1];
     };
     ck('the default is applied inside /parse',
       routeOf('applyDefaultPortions(cleanMsg') === '/parse',
@@ -401,9 +415,15 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
     // Wiring: the same anchor mistake has already been made twice this session.
     const fs = require('fs'), path = require('path');
     const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'aiChat.js'), 'utf8');
+    // Same walk-back as above, and the same V0 caveat: the /parse handler is
+    // now the named function parseMemberMessage, declared above the route, so
+    // it has to count as a boundary or this lands on /photo while the code is
+    // exactly where it should be.
     const at = src.indexOf('applyCookingFat(foods, cleanMsg');
-    const route = [...src.slice(0, at).matchAll(/router\.(?:post|get)\('([^']+)'/g)].pop();
-    ck('the split is applied inside /parse, not /photo', route?.[1] === '/parse', route?.[1]);
+    const mark = [...src.slice(0, at).matchAll(
+      /router\.(?:post|get)\('([^']+)'|async function (parseMemberMessage)\(/g)].pop();
+    const route = mark ? (mark[2] ? '/parse' : mark[1]) : null;
+    ck('the split is applied inside /parse, not /photo', route === '/parse', route);
   }
 
   console.log(`\n${fail === 0 ? '✅' : '❌'} test-nutrition-contract: ${pass} passed, ${fail} failed\n`);

@@ -72,11 +72,44 @@ app.use('/api/trackers',      trackerRoutes);
 app.use('/api/workouts',      workoutRoutes);
 app.use('/api/programs',      programRoutes);
 app.use('/api/ai-chat',       aiChatRoutes);  // Fittr-style AI chat logging
+// Voice logging. Its own mount, NOT under /api/ai-chat, because that router
+// applies authMW to everything in it — and this endpoint is authenticated by a
+// write-only token instead, since the caller is a phone shortcut with no
+// login session. A separate path also avoids any route-ordering subtlety.
+app.use('/api/quick-log',     require('./routes/quickLog'));
 app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ── Digital Asset Links ────────────────────────────────────────────────
+// Android verifies that the installed app owns this domain before it will
+// hide the browser chrome in a Trusted Web Activity. Without this file the
+// app shows a URL bar and looks broken to every member.
+//
+// Served from Express rather than dropped in client/public so it survives
+// the Vite build and cannot be lost to a stale dist/. If it ever 404s, every
+// Android member gets a browser bar overnight — smoke-routes asserts it.
+//
+// TWA_FINGERPRINT is the SHA-256 of the app signing certificate, from
+// `keytool -list -v -keystore <your.keystore>` or the Play Console under
+// Setup > App signing. Until it is set, this returns an empty list, which is
+// valid JSON and simply means "no app is verified yet".
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const fp  = process.env.TWA_FINGERPRINT || '';
+  const pkg = process.env.TWA_PACKAGE || 'app.upscale.fitlife';
+  res.type('application/json');
+  if (!fp) return res.json([]);
+  res.json([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: pkg,
+      sha256_cert_fingerprints: fp.split(',').map(f => f.trim()).filter(Boolean),
+    },
+  }]);
 });
 
 // ── Serve React app in production ─────────────────────────────────────────────

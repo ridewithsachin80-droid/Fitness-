@@ -6,6 +6,7 @@ import api from '../api/client';
 import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword, getNotifLog } from '../api/logs';
 import { disconnectSocket } from '../hooks/useSync';
 import { Card, SectionTitle, BackButton, MemberBottomNav, BottomNav } from '../components/UI';
+import VoiceLogging from '../components/VoiceLogging';
 import { roleLabel } from '../constants';
 import { changeMyPin, getMyReminderSchedule } from '../api/logs';
 import { pushPermission, registerPushSubscription } from '../hooks/usePush';
@@ -195,6 +196,9 @@ export default function Settings() {
             )}
           </Card>
         )}
+
+        {/* Members only — a coach has no day to log by voice. */}
+        {user?.role === 'patient' && <VoiceLogging />}
 
         <Card>
           <SectionTitle icon="🎨">Appearance</SectionTitle>

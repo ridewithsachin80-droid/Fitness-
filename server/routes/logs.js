@@ -17,30 +17,11 @@ const { getISTDate } = require('../utils/istDate');
 // Falls back to counting only the keys that are present in the log objects,
 // which reflects whatever the client sent — correct for custom protocols.
 // Never hardcodes 16; uses the actual number of assigned items.
-function calcCompliance(activities = {}, acv = {}, supplements = {}, protocolTotal = null) {
-  const actDone  = Object.values(activities).filter(Boolean).length;
-  const acvDone  = Object.values(acv).filter(Boolean).length;
-  const suppDone = Object.values(supplements).filter(Boolean).length;
-  const done     = actDone + acvDone + suppDone;
-
-  // If the client sends the total number of assigned items, use it — that is
-  // the only reliable source, since the payload only carries items the member
-  // has interacted with.
-  //
-  // Fallback: derive from the keys present. This is a floor, not a truth: a
-  // payload of {walk:true} alone would otherwise score 100%. Clamping to the
-  // default protocol size (6 activities + 3 ACV + 7 supplements = 16) keeps a
-  // partial payload from inflating the number. The real client always sends
-  // protocol_total, so this path only guards against future callers.
-  const DEFAULT_PROTOCOL_TOTAL = 16;
-  const keyTotal = Object.keys(activities).length + Object.keys(acv).length + Object.keys(supplements).length;
-  const total = protocolTotal && protocolTotal > 0
-    ? protocolTotal
-    : Math.max(keyTotal, DEFAULT_PROTOCOL_TOTAL);
-
-  if (!total) return 0;
-  return Math.min(100, Math.round((done / total) * 100));
-}
+// calcCompliance moved to services/compliance.js. Voice logging writes
+// daily_logs too, and two definitions of "how compliant was today" would mean
+// the same day scoring differently depending on whether the member typed it or
+// spoke it — with the coach's dashboard showing whichever landed last.
+const { calcCompliance } = require('../services/compliance');
 
 // ── GET /api/logs/recent-foods ────────────────────────────────────────────────
 // Sprint 12: Returns the top 8 most-used foods from the member's last 30 logs.

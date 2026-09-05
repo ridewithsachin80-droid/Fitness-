@@ -107,6 +107,12 @@ const CASES = [
   ['GET',  '/api/members/gaps',           'gaps must not be shadowed by /:id'],
   ['GET',  '/api/members/morning-nudges',  'morning-nudges must not be shadowed by /:id'],
   ['GET',  '/api/members/1/morning-message', 'per-member morning message route exists'],
+  // Voice logging. Mounted OUTSIDE /api/ai-chat because that router applies
+  // authMW to everything in it, and this one uses a write-only token instead.
+  ["POST", "/api/quick-log",         "voice logging endpoint is mounted"],
+  ["GET",  "/api/quick-log/status",  "voice logging status is mounted"],
+  // If this 404s, every Android member gets a browser URL bar overnight.
+  ["GET",  "/.well-known/assetlinks.json", "digital asset links are served"],
   // Sprint 2/3 member self-service. All of these live under /me, so the point
   // of smoking them is that "me" is not swallowed by the /:id handler — the
   // same shadowing trap /gaps and /population already guard against.

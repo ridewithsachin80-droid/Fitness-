@@ -1,0 +1,63 @@
+// FitLife Android wrapper — Trusted Web Activity.
+//
+// This builds a shell around fitness.upscale-app.com. It has no copy of the
+// web app: deploying to Railway still reaches members immediately with no Play
+// release. A new .aab is only needed when THIS file, the manifest, or the
+// Kotlin changes — which should be rare.
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'app.upscale.fitlife'
+    compileSdk 36
+
+    defaultConfig {
+        // PERMANENT. Cannot be changed after the first Play release, and it is
+        // what assetlinks.json verifies against.
+        applicationId "app.upscale.fitlife"
+        minSdk 23
+        // Play requires new apps and updates to target API 36 (Android 16).
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+
+        // Read by QuickLogActivity. Kept here rather than hard-coded so a
+        // staging build can point somewhere else without editing Kotlin.
+        buildConfigField "String", "BASE_URL", "\"https://fitness.upscale-app.com\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signing config is intentionally NOT in this file. Keep the
+            // keystore and its passwords out of the repository — losing the
+            // keystore means the app can never be updated again, and putting
+            // it in git means anyone with repo access can sign as you.
+            // Configure signing in Android Studio, or use Play App Signing so
+            // Google holds the master key and a lost local key is recoverable.
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+}
+
+dependencies {
+    // The TWA implementation itself.
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    // Required by App Actions capabilities in shortcuts.xml.
+    implementation 'androidx.core:core-ktx:1.13.1'
+    // EncryptedSharedPreferences, for the voice token.
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+}

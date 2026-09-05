@@ -1707,11 +1707,28 @@ Return ONLY the answer text, nothing else.`;
 // Returns: { reply, weight_kg, activities:[{id,label}], acv:[...],
 //            supplements:[...], water_ml_add, sleep, foods:[...],
 //            workouts:[...], totals:{cal,pro,carb,fat} }
-router.post('/parse', async (req, res) => {
-  const { message, context } = req.body;
+/**
+ * Parses one member message into the preview shape the app and voice both use.
+ *
+ * EXTRACTED FROM THE ROUTE, NOT REWRITTEN. Sprint V0 needs this callable
+ * without an HTTP request, because voice logging has no client to POST from —
+ * a phone shortcut sends a sentence and the server has to do the rest.
+ *
+ * The prompt text below is deliberately untouched. The stub-AI cache in
+ * test-member-questions, test-aichat and test-coach-program routes on the
+ * `message:` line of the prompt, so reflowing it breaks those stubs SILENTLY:
+ * they keep passing while testing nothing.
+ *
+ * Returns the response body. A `__status` key means the caller should send
+ * that HTTP status; its absence means 200.
+ *
+ * @param {{userId: number, message: string, context: object}} args
+ */
+async function parseMemberMessage({ userId, message, context }) {
+  
 
   if (!message || String(message).trim().length < 2) {
-    return res.status(400).json({ error: 'Message required' });
+    return ({ __status: 400,  error: 'Message required' });
   }
   const cleanMsg = String(message).trim().slice(0, 1200);
 
@@ -1734,7 +1751,7 @@ router.post('/parse', async (req, res) => {
   };
 
   try {
-    const portions = await loadPortions(req.user.id);
+    const portions = await loadPortions(userId);
 
     // The member's usual kitchen fat, used when this message names none.
     // Cheap, and it means "masala dosa" from someone who cooks in coconut is
@@ -1742,7 +1759,7 @@ router.post('/parse', async (req, res) => {
     let kitchenFat = null;
     try {
       const { rows } = await pool.query(
-        `SELECT cooking_fat FROM patient_profiles WHERE user_id = $1`, [req.user.id]);
+        `SELECT cooking_fat FROM patient_profiles WHERE user_id = $1`, [userId]);
       kitchenFat = rows[0]?.cooking_fat || null;
     } catch (e) { console.error('cooking_fat lookup failed:', e.message); }
 
@@ -1767,20 +1784,20 @@ router.post('/parse', async (req, res) => {
                       totals: { cal: 0, pro: 0, carb: 0, fat: 0 } };
       try {
         const { sendMemberNote } = require('./patients');
-        await sendMemberNote(req.user.id, coachMsg);
-        return res.json({ ...EMPTY, sent_to_coach: true,
+        await sendMemberNote(userId, coachMsg);
+        return ({  ...EMPTY, sent_to_coach: true,
           reply: `Sent to your coach: "${coachMsg.slice(0, 120)}"` });
       } catch (err) {
         // Never claim it was sent when it was not — the offline queue shipped
         // exactly that bug and it is the one thing that makes a member stop
         // trusting the chat.
         if (err.code === 'NO_COACH') {
-          return res.json({ ...EMPTY, sent_to_coach: false,
+          return ({  ...EMPTY, sent_to_coach: false,
             reply: "You don't have a coach assigned yet, so I couldn't send that. " +
                    'Ask the FitLife team to assign one and try again.' });
         }
         console.error('coach_message send failed:', err);
-        return res.json({ ...EMPTY, sent_to_coach: false,
+        return ({  ...EMPTY, sent_to_coach: false,
           reply: "I couldn't send that to your coach just now. Please try again in a moment." });
       }
     }
@@ -1800,9 +1817,9 @@ router.post('/parse', async (req, res) => {
         if (/\b(summar(y|ise|ize)|rundown|full update|overview|how('s| is| am) (my|i) doing|whole day|entire day|my day (today|so far))\b/i
               .test(parsed.question)) {
           const { rows: me } = await pool.query(
-            'SELECT id, name FROM users WHERE id = $1', [req.user.id]);
+            'SELECT id, name FROM users WHERE id = $1', [userId]);
           if (me[0]) {
-            return res.json({
+            return ({ 
               reply: null,
               summary: await buildCoachSummary(me[0]),
               question: true,
@@ -1813,10 +1830,10 @@ router.post('/parse', async (req, res) => {
           }
         }
 
-        const dayContext = await buildDayContext(req.user.id, ctx);
+        const dayContext = await buildDayContext(userId, ctx);
         const { text: answerText, provider: ap, model: am } =
           await callAI(buildAnswerPrompt(parsed.question.slice(0, 300), dayContext));
-        return res.json({
+        return ({ 
           reply: String(answerText || '').trim().slice(0, 700)
             || "I couldn't work that out from your data — try asking in a different way.",
           question: true,
@@ -1829,7 +1846,7 @@ router.post('/parse', async (req, res) => {
         // A failure ANSWERING must not read like a failure LOGGING — return a
         // normal reply, not a 500, so the member knows the app itself is fine.
         console.error('question answering failed:', qErr.message);
-        return res.json({
+        return ({ 
           reply: "I couldn't pull up your numbers just now — give it another try in a moment.",
           question: true,
           weight_kg: null, activities: [], acv: [], supplements: [],
@@ -1884,7 +1901,7 @@ router.post('/parse', async (req, res) => {
     // Eval set: a correction is the member telling us the earlier parse was
     // wrong. Fire-and-forget — this is bookkeeping, not part of their log.
     if (corrections.length) {
-      captureCorrectionSamples(req.user.id, corrections)
+      captureCorrectionSamples(userId, corrections)
         .catch(err => console.error('captureCorrectionSamples failed:', err.message));
     }
 
@@ -1921,12 +1938,12 @@ router.post('/parse', async (req, res) => {
     // Eval set: hold on to what the model returned for THIS message, so a
     // correction arriving three messages later can be paired back to it.
     // Only here, in /parse — a photo has no replayable text to pair against.
-    rememberParseTurn(req.user.id, cleanMsg, foods)
+    rememberParseTurn(userId, cleanMsg, foods)
       .catch(err => console.error('rememberParseTurn failed:', err.message));
 
     // Eval set: occasionally keep a parse nobody corrected, so a prompt change
     // can be scored on the easy cases too and not just the hard ones.
-    maybeRecordControl(req.user.id, cleanMsg, foods)
+    maybeRecordControl(userId, cleanMsg, foods)
       .catch(err => console.error('maybeRecordControl failed:', err.message));
 
     // Per-item macros + totals computed server-side — never trust AI arithmetic
@@ -1978,7 +1995,7 @@ router.post('/parse', async (req, res) => {
     const nothingParsed = !weight_kg && !activities.length && !acv.length &&
       !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length && corrections.length === 0;
 
-    return res.json({
+    return ({ 
       // When nothing was parsed the model's own sentence is NOT trustworthy: a
       // repeated "walking 40 minutes" produced "Got it — logged a 40-minute
       // walk" with empty arrays, so the app claimed a save that never
@@ -2009,7 +2026,7 @@ router.post('/parse', async (req, res) => {
     console.error('ai-chat parse error | status:', err.response?.status, '| detail:', detail);
 
     if (err instanceof SyntaxError) {
-      return res.status(502).json({ error: 'AI returned malformed data — please try again' });
+      return ({ __status: 502,  error: 'AI returned malformed data — please try again' });
     }
     const upstreamStatus = err.response?.status;
     const userMsg = upstreamStatus === 401
@@ -2022,8 +2039,24 @@ router.post('/parse', async (req, res) => {
       ? 'AI service not configured — no API key set'
       : 'AI service error — please try again';
     const statusToSend = (upstreamStatus === 429 || upstreamStatus === 503) ? upstreamStatus : 502;
-    return res.status(statusToSend).json({ error: userMsg });
+    return ({ __status: statusToSend, error: userMsg });
   }
+}
+
+// ── POST /api/ai-chat/parse ──────────────────────────────────────────────────
+// Thin wrapper. All the work is in parseMemberMessage above so that voice
+// logging can call the same code path without inventing a second parser.
+router.post('/parse', async (req, res) => {
+  const result = await parseMemberMessage({
+    userId:  req.user.id,
+    message: req.body.message,
+    context: req.body.context,
+  });
+  if (result && result.__status) {
+    const { __status, ...rest } = result;
+    return res.status(__status).json(rest);
+  }
+  return res.json(result);
 });
 
 
@@ -3998,7 +4031,12 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
   }
 });
 
+// The router is the default export. parseMemberMessage is attached so voice
+// logging can call the same parser without an HTTP request — see
+// routes/quickLog.js. Attaching rather than switching to a named-export object
+// keeps every existing `require('./aiChat')` working unchanged.
 module.exports = router;
+module.exports.parseMemberMessage = parseMemberMessage;
 module.exports.callAI = callAI;   // reused by weeklyReport.js — same providers, same fallback
 // Exported for tests: the coach-question snapshot is the thing that decides
 // whether an answer can be complete, so it needs to be inspectable directly.

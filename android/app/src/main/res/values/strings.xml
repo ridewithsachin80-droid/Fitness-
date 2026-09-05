@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FitLife</string>
+    <string name="launch_url">https://fitness.upscale-app.com/</string>
+    <string name="shortcut_short">Log</string>
+    <string name="shortcut_long">Log with FitLife</string>
+</resources>
