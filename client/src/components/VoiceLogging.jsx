@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, SectionTitle } from './UI';
 import api from '../api/client';
 import { platformName, isStandalone } from '../utils/session';
+import { useHandsFreeToggle } from './HandsFree';
 
 /**
  * MIGHT this be the Android wrapper rather than the installed PWA?
@@ -207,6 +208,49 @@ export default function VoiceLogging() {
       <p className="text-xs text-[#7E8596] mt-3 leading-relaxed">
         Turning this off never signs you out of the app.
       </p>
+
+      <HandsFreeSetting />
     </Card>
+  );
+}
+
+
+/**
+ * The hands-free toggle.
+ *
+ * Deliberately worded around what it costs, not just what it does. To hear a
+ * wake phrase the microphone has to be genuinely open the whole time — there
+ * is no wake-word API in a browser — and a member agreeing to that should know
+ * they are agreeing to it.
+ */
+function HandsFreeSetting() {
+  const [on, toggle] = useHandsFreeToggle();
+  const supported = typeof window !== 'undefined' &&
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  if (!supported) return null;
+
+  return (
+    <div className="mt-5 pt-4 border-t border-white/[0.06]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm text-[#E8E6E1]">Hands-free while the app is open</p>
+          <p className="text-xs text-[#7E8596] mt-1 leading-relaxed">
+            Say &ldquo;Hey FitLife&rdquo; and speak. It reads back what it heard
+            before saving, so you never need to look at the screen.
+          </p>
+          <p className="text-xs text-[#7E8596] mt-1 leading-relaxed">
+            The microphone stays on while this is on, and only while FitLife is
+            open on screen.
+          </p>
+        </div>
+        <button onClick={() => toggle(!on)}
+          className={`shrink-0 w-12 h-7 rounded-full transition-colors ${
+            on ? 'bg-[#D4AF37]' : 'bg-white/15'}`}>
+          <span className={`block w-5 h-5 rounded-full bg-[#121316] transition-transform ${
+            on ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+      </div>
+    </div>
   );
 }

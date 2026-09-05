@@ -18,6 +18,7 @@ import AdminFoods     from './pages/AdminFoods';
 import DeviceConnect  from './pages/DeviceConnect';
 import Onboarding     from './components/Onboarding';
 import { onboardingDecision } from './utils/onboardingGate';
+import HandsFree from './components/HandsFree';
 import { refreshRequestBody, sessionLossReport } from './utils/session';
 
 // Preserves the member id when redirecting an old /monitor/:id link to /coach/:id.
@@ -186,6 +187,11 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      {/* Inside the router — it navigates on command — and rendered for every
+          role, because a coach standing at the gym has the same hands-full
+          problem a member does. It renders nothing unless switched on. */}
+      <HandsFree />
+
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<PrivateRoute roles={['patient']}><DailyLog /></PrivateRoute>} />

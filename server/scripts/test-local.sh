@@ -197,7 +197,7 @@ fi
 # for reading, not for wiring.
 LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-workout-merge test-image-routing \
-test-layout-contracts test-session-logic test-push-vapid test-twa-contract"
+test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free"
 
 DB_SUITES="test-weekly-report test-journey test-gaps test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \

@@ -50,10 +50,37 @@ function withinRateLimit(userId) {
   return true;
 }
 
-/** Resolves the bearer token to a member. No token, no member, no access. */
+/**
+ * Resolves the bearer credential to a member.
+ *
+ * Accepts EITHER the write-only voice token OR a normal login JWT. Both end up
+ * at the same place, which is the point: hands-free mode inside the app is the
+ * same conversation as a phone shortcut, and giving it its own endpoint would
+ * mean two copies of the parse-apply-reply path drifting apart.
+ *
+ * The JWT is tried first only because it is cheap to verify and needs no
+ * database round trip.
+ */
 async function tokenAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
+
+  // A logged-in member using hands-free mode in the app.
+  if (token && token.split('.').length === 3) {
+    try {
+      const jwtLib  = require('jsonwebtoken');
+      const payload = jwtLib.verify(token, process.env.JWT_SECRET);
+      if (payload && payload.role === 'patient' && payload.id) {
+        const { rows } = await pool.query(
+          `SELECT id, name, active FROM users WHERE id = $1`, [payload.id]);
+        if (rows[0] && rows[0].active) { req.member = rows[0]; return next(); }
+      }
+      return res.status(401).json({ error: 'Voice logging is for members.' });
+    } catch (_) {
+      // Not a valid JWT — fall through and try it as a voice token. A voice
+      // token is hex and can never contain dots, so this cannot misfire.
+    }
+  }
 
   // Length-checked before hitting the database so a garbage header costs
   // nothing, and so a short value cannot match by accident.
