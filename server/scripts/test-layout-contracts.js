@@ -511,6 +511,24 @@ ck('every stone/emerald class the JSX uses has a rule in index.css',
    unmapped.size === 0, [...unmapped].map(([t, f]) => t + ' (' + f + ')'));
 
 
+// ── Voice logging must not promise what is not set up ───────────────────────
+// The card issues a CODE. Something else — a phone shortcut — has to use it.
+//
+// An earlier version guessed that an Android device in standalone mode was the
+// native wrapper, fired a fitlife:// deep link, showed "Ready. Say Hey Google,
+// log with FitLife", and never displayed the code. On an installed PWA, which
+// is what most Android members run, nothing handles that scheme: the link did
+// nothing and the member was left with a success message and no token.
+{
+  const voice = stripComments(read('components/VoiceLogging.jsx'));
+  ck('the setup code is always shown, never hidden behind an unverifiable deep link',
+     /setToken\(data\.token\)/.test(voice));
+  ck('no "Ready" claim — a deep link that may have gone nowhere cannot be reported as success',
+     !/Ready\. Say/.test(voice));
+  ck('the intro does not promise hands-free logging before a shortcut exists',
+     !/speaking to your phone, without opening/i.test(voice));
+}
+
 // ── Internal plumbing must not leak into member-facing copy ─────────────────
 // The member's Reminders panel showed a red badge reading
 // "Delivery failed — your coach may want to know" whenever notifications_log

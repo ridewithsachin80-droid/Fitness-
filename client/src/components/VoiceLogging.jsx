@@ -4,13 +4,23 @@ import api from '../api/client';
 import { platformName, isStandalone } from '../utils/session';
 
 /**
- * Is this the Android wrapper rather than a browser?
+ * MIGHT this be the Android wrapper rather than the installed PWA?
  *
- * The TWA sets no user-agent flag we can rely on, so this is a best guess:
- * Android, running standalone. A false positive costs nothing — the deep link
- * simply does not resolve and the member falls back to copying the code.
+ * There is no reliable way to tell. The TWA sets no user-agent flag, and an
+ * installed PWA on Android reports standalone display-mode exactly as the
+ * wrapper does.
+ *
+ * An earlier version treated that guess as certainty: it fired the deep link,
+ * said "Ready", and never showed the code. On an installed PWA — which is what
+ * most Android members are running — nothing is registered for fitlife://, so
+ * the link did nothing at all and the member was left with a success message
+ * and no token. The comment on that code claimed a false positive "costs
+ * nothing". It cost them the whole feature.
+ *
+ * So the guess is now only used to ATTEMPT a convenience. The code is shown
+ * either way, and nothing claims success that cannot be verified.
  */
-function looksLikeAndroidApp() {
+function mightBeAndroidApp() {
   return platformName() === 'android' && isStandalone();
 }
 
@@ -41,7 +51,6 @@ export default function VoiceLogging() {
   const [busy,    setBusy]    = useState(false);
   const [error,   setError]   = useState(null);
   const [copied,  setCopied]  = useState(false);
-  const [handedOff, setHandedOff] = useState(false);
 
   const load = async () => {
     try {
@@ -59,18 +68,22 @@ export default function VoiceLogging() {
     try {
       const { data } = await api.post('/quick-log/token', {});
 
-      // Inside the Android app, hand the token straight to the native side.
-      // Asking a member to copy a 64-character string is exactly where
-      // non-technical people give up.
-      if (looksLikeAndroidApp()) {
+      // Always show the code. There is no way to confirm the deep link was
+      // received, so the code is the thing that definitely works.
+      setToken(data.token);
+
+      // If the native wrapper happens to be installed it will pick this up and
+      // store it, saving the member from copying 64 characters. If not,
+      // nothing is registered for fitlife:// and this quietly does nothing —
+      // which is fine, because the code is on screen regardless.
+      if (mightBeAndroidApp()) {
         try {
-          window.location.href = `fitlife://quick-log-token?t=${encodeURIComponent(data.token)}`;
-          setHandedOff(true);
-        } catch (_) {
-          setToken(data.token);   // deep link blocked — show it instead
-        }
-      } else {
-        setToken(data.token);
+          const frame = document.createElement('iframe');
+          frame.style.display = 'none';
+          frame.src = `fitlife://quick-log-token?t=${encodeURIComponent(data.token)}`;
+          document.body.appendChild(frame);
+          setTimeout(() => frame.remove(), 1500);
+        } catch (_) { /* convenience only */ }
       }
       await load();
     } catch (_) {
@@ -111,18 +124,17 @@ export default function VoiceLogging() {
         Voice logging
       </SectionTitle>
 
+      {/* Deliberately does NOT promise hands-free logging on its own. This
+          screen issues a code; something else — a phone shortcut — has to use
+          it. Saying "speak to your phone without opening FitLife" before that
+          exists sends members off to try a phrase that does nothing. */}
       <p className="text-sm text-[#9A968E] leading-relaxed mt-1">
-        Log your day by speaking to your phone, without opening FitLife.
-        Set this up once and it keeps working.
+        Get a code here, then set up the FitLife shortcut on your phone.
+        After that you can log by speaking, without opening the app.
+        Ask your coach for the shortcut link.
       </p>
 
       {error && <p className="text-sm text-[#E4572E] mt-3">{error}</p>}
-
-      {handedOff && (
-        <p className="text-sm text-[#D4AF37] mt-3">
-          Ready. Say &ldquo;Hey Google, log with FitLife&rdquo;.
-        </p>
-      )}
 
       {/* Platform-specific instructions. Shown only once it is set up —
           telling someone how to use a thing they have not enabled is noise. */}
@@ -136,7 +148,7 @@ export default function VoiceLogging() {
           </p>
         </div>
       )}
-      {status.enabled && !token && platformName() === 'android' && !looksLikeAndroidApp() && (
+      {status.enabled && !token && platformName() === 'android' && !mightBeAndroidApp() && (
         <div className="mt-4 text-xs text-[#9A968E] leading-relaxed">
           <p className="text-[#E8E6E1] font-semibold mb-1">On Android</p>
           <p>
@@ -150,6 +162,9 @@ export default function VoiceLogging() {
         <div className="mt-4 p-3 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/30">
           <p className="text-xs text-[#D4AF37] font-semibold mb-2">
             Your setup code — copy it now, it won't be shown again
+          </p>
+          <p className="text-[11px] text-[#9A968E] mb-2 leading-relaxed">
+            Paste this into the FitLife shortcut when it asks.
           </p>
           <p className="text-[11px] text-[#E8E6E1] break-all font-mono leading-relaxed">
             {token}
