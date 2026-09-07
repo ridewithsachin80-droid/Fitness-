@@ -560,8 +560,12 @@ ck('auto-derived protocol ticks are still additive only (tick, never untick)',
    /if \(derived\[id\] && !cur\[id\]\) patch\[id\] = true;/.test(model));
 
 const strip = read('components/today/DayStrip.jsx');
-ck('day strip scrolls horizontally inside its own box and chips never shrink',
-   /overflow-x-auto/.test(strip) && /flex-shrink-0/.test(strip), 'strip may widen the page');
+// Sprint 4.1: the strip no longer scrolls sideways — members could not tell
+// there were more tiles. A two-column grid shows every tile at once.
+ck('day strip is a fixed grid, never a sideways scroller',
+   /grid grid-cols-2/.test(strip) && !/overflow-x-auto/.test(strip) && !/snap-x/.test(strip), 'strip scrolls sideways');
+ck('every tile with a target draws a progress bar so the day reads without numbers',
+   /pct=\{kcalTarget/.test(strip) && /pct=\{\(water/.test(strip) && /sleepMins \/ 480/.test(strip) && /micro\.met \/ micro\.total/.test(strip));
 
 // z-order: sheet (80) must sit above the chat orb nav and below the milestone
 // celebration (85); the protocol popover must live INSIDE the sheet, not on a

@@ -615,12 +615,12 @@ async function todayTest() {
   ck('the balance chip shows a deficit for 666 kcal eaten against a 1699 BMR', q('balance-chip') && /deficit/.test(q('balance-chip').textContent) && /↓/.test(q('balance-chip').textContent), q('balance-chip')?.textContent);
 
   const strip = q('day-strip');
-  ck('day strip renders five chips and scrolls horizontally instead of widening the page',
-     !!strip && strip.querySelectorAll('button').length === 5 && /overflow-x-auto/.test(strip.className));
+  ck('day strip renders all five tiles in a fixed grid (nothing to swipe)',
+     !!strip && strip.querySelectorAll('button').length === 5 && /grid-cols-2/.test(strip.className) && !/overflow-x/.test(strip.className));
   ck('food chip: 666 / 1,800 kcal', /666/.test(q('chip-food').textContent) && /1,800/.test(q('chip-food').textContent), q('chip-food').textContent);
   ck('water chip: 1.5 / 3.0 L', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent));
   ck('sleep chip: 7h 45m', /7h 45m/.test(q('chip-sleep').textContent));
-  ck('workout chip shows the coach\'s program day when nothing is logged yet', /Push ·/.test(q('chip-workout').textContent) && /2 exercises/.test(q('chip-workout').textContent), q('chip-workout').textContent);
+  ck('workout tile shows the coach\'s program day when nothing is logged yet', /Push ·/.test(q('chip-workout').textContent) && /2 exercises/.test(q('chip-workout').textContent), q('chip-workout').textContent);
   ck('nutrition chip: N / 31 targets met', /\/ 31/.test(q('chip-nutrition').textContent) && /targets met/.test(q('chip-nutrition').textContent));
 
   const coach = q('coach-card');
