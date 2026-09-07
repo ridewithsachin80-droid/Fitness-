@@ -564,7 +564,7 @@ const TODAY_API_STUB = `
       [/^\\/logs\\/range\\//,                      () => [{ log_date: T }, { log_date: Y }, { log_date: istDaysAgo(2) }]],
       [/^\\/members\\/me\\/today$/,                () => ({ meal_plan: { meals: [{ meal: 'Dinner', items: [{ name: 'Dal', grams: 200, per_100g: { calories: 110 } }, { name: 'Rice', grams: 150, per_100g: { calories: 130 } }] }] },
                                                           program: { program: { name: 'Foundation' }, days: [{ day_label: 'Push · ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T12:00:00').getDay()], exercises: [{ exercise_name: 'Bench press' }, { exercise_name: 'Shoulder press' }] }] } })],
-      [/^\\/members\\/me$/,                        () => ({ height_cm: '172', gender: 'male', dob: '1985-03-10', coach_notes: [{ id: 41, note: 'Great week — add a walk after dinner.', note_date: T, monitor_name: 'Sachin', read_at: null, flagged: false }] })],
+      [/^\\/members\\/me$/,                        () => ({ height_cm: '172', gender: 'male', dob: '1985-03-10', created_at: istDaysAgo(37) + 'T09:00:00.000Z', coach_notes: [{ id: 41, note: 'Great week — add a walk after dinner.', note_date: T, monitor_name: 'Sachin', read_at: null, flagged: false }] })],
       [/^\\/workouts$/,                            () => ({ exercises: [], session: null, cardio: [] })],
       [/^\\/workouts\\/summary$/,                  () => ({ sessions: [] })],
     ];
@@ -610,23 +610,20 @@ async function todayTest() {
   ck('the hero number is today\'s weight, in kg, with the delta vs yesterday',
      q('hero-weight') && /82\.4/.test(q('hero-weight').textContent) && /↓ 0\.3/.test(q('hero-weight').textContent), q('hero-weight')?.textContent);
   ck('Today\'s read is present and mentions the day (tap opens the AI chat)', !!q('ai-read') && q('ai-read').textContent.length > 30);
+  // ── Sprint 5b: Today's Plan replaces coach card + tiles + deficit chip + dots card
+  const plan = q('todays-plan');
+  ck('Today\'s Plan renders one section with Move, Eat and Recover rows', !!plan && ['plan-move', 'plan-eat', 'plan-recover'].every(id => plan.querySelector(`[data-testid="${id}"]`)));
+  ck('the old cards are gone: no day strip, no coach card, no deficit chip, no dots card', !q('day-strip') && !q('coach-card') && !q('balance-chip'));
+  ck('Move: the coach\'s program day with exercise count and Start workout', /Push ·/.test(q('plan-move').textContent) && /2 exercises/.test(q('plan-move').textContent) && /Start workout/.test(q('plan-move').textContent), q('plan-move').textContent);
+  ck('Eat: 666 / 1,800 kcal and 37 / 120 g protein', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent) && /37/.test(q('plan-eat').textContent) && /120 g protein/.test(q('plan-eat').textContent), q('plan-eat').textContent);
+  ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /1 meal plan pending/.test(q('plan-eat').textContent) && /1,373 kcal under target/.test(q('plan-balance').textContent), q('plan-eat').textContent);
+  ck('Eat: View meal plan is the action while a plan is pending', /View meal plan/.test(q('plan-eat').textContent));
+  ck('Eat: nutrients N/31 inline', /\/31 nutrients/.test(q('chip-nutrition').textContent));
+  ck('Recover: 1.5 / 3.0 L and 7h 45m inline', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent) && /7h 45m/.test(q('chip-sleep').textContent));
   const dots = q('protocol-dots');
-  ck('protocol dots: one dot per item, "3 of 5 done"', !!dots && dots.querySelectorAll('span.block.w-3').length === 5 && /3 of 5 done/.test(dots.textContent), dots?.textContent);
-  ck('the balance chip shows a deficit for 666 kcal eaten against a 1699 BMR', q('balance-chip') && /deficit/.test(q('balance-chip').textContent) && /↓/.test(q('balance-chip').textContent), q('balance-chip')?.textContent);
-
-  const strip = q('day-strip');
-  ck('day strip renders all five tiles in a fixed grid (nothing to swipe)',
-     !!strip && strip.querySelectorAll('button').length === 5 && /grid-cols-2/.test(strip.className) && !/overflow-x/.test(strip.className));
-  ck('food chip: 666 / 1,800 kcal', /666/.test(q('chip-food').textContent) && /1,800/.test(q('chip-food').textContent), q('chip-food').textContent);
-  ck('water chip: 1.5 / 3.0 L', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent));
-  ck('sleep chip: 7h 45m', /7h 45m/.test(q('chip-sleep').textContent));
-  ck('workout tile shows the coach\'s program day when nothing is logged yet', /Push ·/.test(q('chip-workout').textContent) && /2 exercises/.test(q('chip-workout').textContent), q('chip-workout').textContent);
-  ck('nutrition chip: N / 31 targets met', /\/ 31/.test(q('chip-nutrition').textContent) && /targets met/.test(q('chip-nutrition').textContent));
-
-  const coach = q('coach-card');
-  ck('coach card: pending workout and pending Dinner plan; targets row gone because food is already logged',
-     !!coach && /Push ·/.test(coach.textContent) && /Dinner plan — 2 items/.test(coach.textContent) && !/Eat to today/.test(coach.textContent), coach?.textContent.slice(0, 200));
-  ck('coach card prescribed-meal kcal is computed from per_100g (220 + 195 = 415)', /~415 kcal/.test(coach.textContent), coach.textContent.match(/~\d+ kcal/g));
+  ck('Recover: the protocol dots — one per item, "3 of 5" — live inside the row', !!dots && dots.querySelectorAll('span.block.w-2\\.5').length === 5 && /3 of 5/.test(dots.textContent), dots?.textContent);
+  ck('the read carries ONE action, derived from the day (food is logged, workout planned → Start today\'s workout)', q('read-action') && /Start today/.test(q('read-action').textContent), q('read-action')?.textContent);
+  ck('the header shows the date and Week N (joined 6 weeks ago in the fixture)', /Week 6/.test(q('date-line').textContent), q('date-line').textContent);
 
   const tl = q('timeline');
   ck('timeline lists weight, both meals, water and sleep in day order',
@@ -636,7 +633,10 @@ async function todayTest() {
   ck('no workout row when nothing was logged (the coach plan is not a log)', !tl.querySelector('[data-testid="row-workout"]'));
   ck('unread coach message shows with Reply and Got it', d.querySelectorAll('[data-testid="coach-note"]').length === 1 && /add a walk after dinner/.test(h) && /Reply/.test(h));
   ck('no legacy inline drawer ids remain on the page', !d.getElementById('section-water') && !d.getElementById('section-protocol') && !d.getElementById('section-hero'));
-  ck('the streak badge shows 3 days', q('streak-badge') && /3 days/.test(q('streak-badge').textContent), q('streak-badge')?.textContent);
+  ck('the streak is one line in the header, not a card', q('streak-badge') && /3-day streak/.test(q('streak-badge').textContent) && !/14-day/.test(html()), q('streak-badge')?.textContent);
+  ck('notes are collapsed to a row until tapped', !!q('notes-row') && !q('notes'));
+  q('notes-row').click(); await tick(100);
+  ck('tapping the row opens the textarea', !!q('notes'));
 
   // ── Sheets open from their chips and save through the store ─────────────
   q('chip-water').click(); await tick(300);
@@ -669,7 +669,7 @@ async function todayTest() {
   dlg.querySelector('[data-testid="chip-walk"]').click(); await tick(100);
   ck('tapping an AUTO chip explains instead of ticking', w.__logStore.getState().log.activities.walk === false && /Ticks automatically/.test(dlg.textContent));
   w.__click('Done'); await tick(500);
-  ck('dots now read 4 of 5', /4 of 5 done/.test(q('protocol-dots').textContent));
+  ck('dots now read 4 of 5', /4 of 5/.test(q('protocol-dots').textContent));
 
   q('chip-sleep').click(); await tick(300);
   dlg = d.querySelector('[role=dialog]');
@@ -678,9 +678,9 @@ async function todayTest() {
      /6h 30m/.test(dlg.querySelector('[data-testid="sleep-duration"]').textContent) && w.__logStore.getState().log.sleep.waketime === '05:00');
   w.__click('Done'); await tick(500);
 
-  q('chip-food').click(); await tick(400);
+  q('plan-eat-action').click(); await tick(400);
   dlg = d.querySelector('[role=dialog]');
-  ck('food chip opens the food sheet with the real FoodLog and macro bars', !!dlg && !!dlg.querySelector('#section-food') && /Protein|protein/.test(dlg.textContent));
+  ck('the Eat action opens the food sheet with the real FoodLog and macro bars', !!dlg && !!dlg.querySelector('#section-food') && /Protein|protein/.test(dlg.textContent));
   w.__click('Done'); await tick(500);
 
   q('chip-nutrition').click(); await tick(300);
@@ -745,7 +745,7 @@ async function todayTest() {
   ck('Apply writes weight 82.0, +500 ml and the B12 tick into the store', st.weight === '82' && st.water === waterBefore + 500 && st.supplements.b12 === true, [st.weight, st.water, st.supplements]);
   ck('the thread shows "Applied & saved" with Edit and Undo', /Applied/.test(q('ai-messages').textContent) && /Undo/.test(q('ai-messages').textContent) && /Edit/.test(q('ai-messages').textContent));
   ck('Apply stamps lastAppliedAt (the workout-refresh signal replaces "overlay closed")', w.__aiChat.getState().lastAppliedAt != null && w.__aiChat.getState().lastAppliedAt !== beforeApplied);
-  ck('the hero, chips and dots reflect the applied day without a reload', /(^|\D)82(\D|$)/.test(q('hero-weight').textContent) && !/82\.1/.test(q('hero-weight').textContent) && /2\.0/.test(q('chip-water').textContent) && /4 of 5 done/.test(q('protocol-dots').textContent), [q('hero-weight').textContent, q('chip-water').textContent, q('protocol-dots').textContent]);
+  ck('the hero, chips and dots reflect the applied day without a reload', /(^|\D)82(\D|$)/.test(q('hero-weight').textContent) && !/82\.1/.test(q('hero-weight').textContent) && /2\.0/.test(q('chip-water').textContent) && /4 of 5/.test(q('protocol-dots').textContent), [q('hero-weight').textContent, q('chip-water').textContent, q('protocol-dots').textContent]);
 
   // The debounce itself: one more edit, then wait past 4s and the ONE save fires.
   q('chip-water').click(); await tick(300);
@@ -853,7 +853,7 @@ async function todayVisualTest() {
       await new Promise(r => setTimeout(r, 400));
       const dock = await page.evaluate(() => {
         const c = document.querySelector('[data-testid="composer"]');
-        const n = document.querySelector('[data-testid="notes"]');
+        const n = document.querySelector('[data-testid="notes-row"]') || document.querySelector('[data-testid="notes"]');
         const nav = document.querySelector('nav') || document.querySelector('[class*="fixed bottom"]');
         const cr = c && c.getBoundingClientRect(), nr = n && n.getBoundingClientRect(), vr = nav && nav.getBoundingClientRect();
         return { composerTop: cr && Math.round(cr.top), composerBottom: cr && Math.round(cr.bottom), notesBottom: nr && Math.round(nr.bottom),
@@ -865,7 +865,7 @@ async function todayVisualTest() {
       if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-bottom.png') });
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' })); await new Promise(r => setTimeout(r, 300));
 
-      await tapVisible(page, '[data-testid="chip-food"]'); await new Promise(r => setTimeout(r, 900));
+      await tapVisible(page, '[data-testid="plan-eat-action"]'); await new Promise(r => setTimeout(r, 900));
       m = await measure(page, width);
       ck(`Today @${width}px with the food sheet open still does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
       ck(`the food sheet @${width}px fills the viewport width`, m.dialogW != null && m.dialogW >= width - 2 && m.dialogW <= width, JSON.stringify(m));
@@ -883,6 +883,112 @@ async function todayVisualTest() {
   } finally {
     await browser.close();
     await new Promise(r => server.close(r));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 10. Progress (Sprint 5) — hero weight, range, journey, heat grid
+// ═══════════════════════════════════════════════════════════════════════════
+async function progressTest() {
+  console.log('\n[10] Progress — weight hero, 7/30/90 window, 30-day grid');
+  const api = stub('api-progress.js', `
+    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    window.__calls = [];
+    // 20 logged days out of the last 30: weight drifting 84.0 → 82.4, compliance
+    // alternating, food on the last 3 days. Day -3, -5 and -9 are missing on purpose.
+    const skip = new Set([3, 5, 9, 12, 15, 17, 19, 22, 25, 27]);
+    const logs = [];
+    for (let i = 29; i >= 0; i--) {
+      if (skip.has(i)) continue;
+      logs.push({
+        log_date: istDaysAgo(i),
+        weight_kg: (82.4 + i * 0.055).toFixed(1),
+        compliance_pct: i % 3 === 0 ? 90 : i % 3 === 1 ? 60 : 30,
+        food_items: i < 3 ? [{ name: 'Idli', grams: 120, per_100g: { calories: 130, protein: 3.5, total_carbs: 28, fat: 0.8 } }] : [],
+      });
+    }
+    // the 90-day request also gets one old point so 90d differs from 30d
+    const routes = [
+      [/^\\/logs\\/range\\//, () => [{ log_date: istDaysAgo(60), weight_kg: '86.0', compliance_pct: 80, food_items: [] }, ...logs]],
+      [/^\\/members\\/me$/, () => ({ start_weight: '88', target_weight: '78', height_cm: '172', labs: [] })],
+      [/^\\/members\\/me\\/weekly-report$/, () => ({ report: null, history: [] })],
+      [/^\\/workouts\\/summary$/, () => ({ sessions: [] })],
+      [/^\\/workouts\\/logged-exercises$/, () => []],
+      [/^\\/workouts\\/muscle-coverage/, () => ({ coverage: [], weeks: [] })],
+    ];
+    const get = async (url, opts) => { window.__calls.push(url); const hit = routes.find(([re]) => re.test(url)); return { data: hit ? hit[1](opts) : {} }; };
+    const post = async (url, body) => ({ data: { ok: true } });
+    export default { get, post, put: post, patch: post, delete: post };`);
+
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Progress from './pages/Progress.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><Progress /></MemoryRouter>);`, api);
+
+  const { w, errors, html } = run(code);
+  await tick(900);
+  const d = w.document;
+  const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  const h = html();
+  ck('Progress mounts without throwing', errors.length === 0, errors.join('|'));
+  ck('hero shows the latest weight in kg with the change over the default 30-day window',
+     q('progress-hero') && /82\.4/.test(q('progress-hero').textContent) && /↓/.test(q('progress-hero').textContent) && /over 30 days/.test(q('progress-hero').textContent), q('progress-hero')?.textContent);
+  ck('journey line: start 88 → goal 78, 56% there, 5.6 kg lost',
+     q('journey') && /88 kg/.test(q('journey').textContent) && /78 kg/.test(q('journey').textContent) && /56% there/.test(q('journey').textContent) && /5\.6 kg lost/.test(q('journey').textContent), q('journey')?.textContent);
+  // Recharts measures a 0px container in jsdom and draws nothing; the real
+  // browser check below proves the SVG. Here: the chart slot exists and is
+  // not the "log two weigh-ins" fallback.
+  ck('the weight chart slot renders (not the empty-state text) when there are two+ weigh-ins',
+     q('weight-chart') && !/weigh-in/.test(q('weight-chart').textContent));
+
+  const tabs = [...d.querySelectorAll('[role=tab]')];
+  ck('7 / 30 / 90 segmented control is present', tabs.length === 3 && tabs.map(t => t.textContent.trim()).join(',') === '7d,30d,90d');
+  tabs[2].click(); await tick(200);
+  ck('90d widens the window: the change now includes the 86.0 point (↓ 3.6 kg over 90 days)',
+     /over 90 days/.test(q('progress-hero').textContent) && /3\.6/.test(q('progress-hero').textContent), q('progress-hero').textContent);
+  tabs[0].click(); await tick(200);
+  ck('7d narrows it (change over 7 days is small)', /over 7 days/.test(q('progress-hero').textContent) && /0\.[0-9]/.test(q('progress-hero').textContent), q('progress-hero').textContent);
+
+  const grid = q('heat-grid');
+  const cells = grid ? [...grid.querySelectorAll('[data-testid="heat-cell"]')] : [];
+  ck('30-day grid has exactly 30 day cells in 7 weekday columns', cells.length === 30 && /grid-cols-7/.test(grid.innerHTML));
+  const missing = cells.filter(c => /not logged/.test(c.getAttribute('aria-label')));
+  ck('the 10 unlogged days read as "not logged"', missing.length === 10, missing.length);
+  missing[0].click(); await tick(100);
+  ck('tapping an unlogged cell opens nothing', !d.querySelector('.fixed.inset-0'));
+  const logged = cells.find(c => /: 90%/.test(c.getAttribute('aria-label')));
+  logged.click(); await tick(200);
+  ck('tapping a logged cell opens that day\'s full log', d.querySelector('.fixed.inset-0') != null && /Compliance|compliance/.test(html()));
+  ck('no purple/blue header leftovers on the page', !/#0d0b18|text-blue-200/.test(h));
+  ck('nutrition trend gets its macros from lib/day (no hand-copied reduce)', !/const macros = items\.reduce/.test(fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8')));
+  ck('no error escaped', errors.length === 0, errors.join('|'));
+
+  // One real-browser screenshot at 360 so a human can look at it.
+  try {
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+    const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+      await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+      await page.addScriptTag({ content: code });
+      await new Promise(r => setTimeout(r, 1500));
+      const m = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, chart: !!document.querySelector('[data-testid="weight-chart"] svg'), gold: /goldFill/.test(document.querySelector('[data-testid="weight-chart"]')?.innerHTML || '') }));
+      ck('Progress @360px in real Chrome: no sideways scroll, the gold area chart drew', m.sw <= 361 && m.chart && m.gold, JSON.stringify(m));
+      fs.mkdirSync('/tmp/fitlife-shots', { recursive: true });
+      await page.screenshot({ path: '/tmp/fitlife-shots/progress-360.png', fullPage: true });
+    } finally { await browser.close(); await new Promise(r => server.close(r)); }
+  } catch (e) {
+    console.log('  – browser not installed, Progress screenshot NOT taken (' + String(e.message).slice(0, 60) + ')');
   }
 }
 
@@ -1013,6 +1119,7 @@ async function overflowTest() {
     await primitivesTest();
     await todayTest();
     await todayVisualTest();
+    await progressTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

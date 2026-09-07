@@ -9,7 +9,7 @@ import { haptic } from '../../store/settingsStore';
  * Tapping it opens the AI chat, because the natural next move after reading
  * "protein's behind" is to say what you're about to eat.
  */
-export default function AIRead({ read, onOpenChat }) {
+export default function AIRead({ read, action, onOpenChat, onOpen }) {
   if (!read) return null;
   const win = read.tone === 'win';
   return (
@@ -27,6 +27,14 @@ export default function AIRead({ read, onOpenChat }) {
         </span>
         <Icon name="chevron-right" size={16} className="text-lo flex-shrink-0 mt-2" />
       </div>
+      {action && (
+        <span role="button" tabIndex={0} data-testid="read-action"
+          onClick={(e) => { e.stopPropagation(); haptic(10); onOpen?.(action.sheet); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onOpen?.(action.sheet); } }}
+          className="mt-3 ml-10 inline-flex items-center gap-1 text-caption font-bold text-charcoal bg-gold rounded-full px-3 py-1.5 active:scale-95 transition-transform">
+          {action.label} <Icon name="arrow-right" size={12} />
+        </span>
+      )}
     </button>
   );
 }

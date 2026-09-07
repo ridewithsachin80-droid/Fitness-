@@ -4,28 +4,29 @@ import { HeroNumber, SkeletonCard, Skeleton, Eyebrow } from '../components/primi
 import { haptic } from '../store/settingsStore';
 import AIChatLog, { useAIChat } from '../components/AIChatLog';
 import InstallPrompt from '../components/InstallPrompt';
-import StreakCard    from '../components/StreakCard';
 import PendingSync   from '../components/PendingSync';
 import PushPrimer    from '../components/PushPrimer';
 import Greeting      from '../components/today/Greeting';
 import DateNav       from '../components/today/DateNav';
 import AIRead        from '../components/today/AIRead';
-import ProtocolDots  from '../components/today/ProtocolDots';
-import DayStrip      from '../components/today/DayStrip';
+import TodaysPlan    from '../components/today/TodaysPlan';
+import NotesRow      from '../components/today/NotesRow';
 import Timeline      from '../components/today/Timeline';
-import CoachCard     from '../components/today/CoachCard';
 import CoachNotes    from '../components/today/CoachNotes';
 import MilestoneModal from '../components/today/MilestoneModal';
 import { FastingBar } from '../components/today/DayWidgets';
+import { nextAction } from '../lib/day';
 import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet } from '../components/sheets';
 
 /**
- * Today — the member's home screen (Sprint 3).
+ * Today — the member's home screen (Sprint 3 → 5b).
  *
- * One scrolling surface, in reading order:
- *   greeting → date → the ONE number (weight) → today's read → protocol dots
- *   → day strip → from your coach → timeline → streak → coach messages
- *   → fasting → notes
+ * One scrolling surface, in reading order (Sprint 5b, "Today v2"):
+ *   greeting + date · week N → the ONE number (weight) → today's read with one
+ *   action → Today's Plan (Move · Eat · Recover, dots inside Recover)
+ *   → the AI thread → logged today → streak → coach messages → fasting → notes
+ * Today's Plan replaced the coach card, the four tiles, the deficit chip and
+ * the dots card — one section instead of four competing for the same screen.
  * Every logging action is a bottom sheet (components/sheets/), never an
  * inline drawer that pushes the page around.
  *
@@ -52,7 +53,7 @@ export default function Today() {
       <header className="px-4 pt-8 pb-4 bg-gradient-to-b from-surface to-charcoal">
         <div className="max-w-md mx-auto">
           <Greeting user={m.user} avatar={m.avatar} autoSaved={m.autoSaved} queued={m.queued} error={m.error}
-            streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} />
+            streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} weekNumber={m.weekNumber} date={m.date} />
           <PendingSync />
           <PushPrimer hasLogged={m.hasLoggedAnything} />
           <DateNav date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
@@ -82,23 +83,18 @@ export default function Today() {
           </>
         ) : (
           <>
-            <AIRead read={m.read} onOpenChat={() => openChat()} />
+            <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
+              action={nextAction({
+                isToday, hour: new Date().getHours(),
+                weight: log.weight, foodCount: (log.food || []).length,
+                waterMl: log.water || 0, waterTarget: protocol?.water_target || 3000,
+                protocolDone: m.protocolDone, protocolTotal: m.protocolTotal,
+                sleepSet: !!(log.sleep?.bedtime && log.sleep?.waketime),
+                workoutPlanned: !!m.coachPlan?.todayDay,
+                workoutLogged: (m.workoutSummary.count || 0) > 0 || (m.workoutSummary.cardio || []).length > 0,
+              })} />
 
-            <ProtocolDots activeActivities={m.activeActivities} activeACV={m.activeACV} activeSupplements={m.activeSupplements}
-              log={log} done={m.protocolDone} total={m.protocolTotal} terms={terms} onOpen={() => openSheet('protocol')} />
-
-            {m.balance != null && (
-              <button type="button" onClick={() => openSheet('food')} data-testid="balance-chip"
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 border active:scale-95 transition-transform ${
-                  m.balance > 0 ? 'bg-amber-400/10 border-amber-400/30' : 'bg-ok/10 border-ok/30'}`}>
-                <span className={`text-caption font-extrabold tabular-nums ${m.balance > 0 ? 'text-amber-300' : 'text-gold-light'}`}>
-                  {m.balance > 0 ? '↑ +' : '↓ −'}{Math.abs(m.balance).toLocaleString('en-IN')} kcal
-                </span>
-                <span className="text-micro font-medium text-mute">{m.balance > 0 ? 'surplus' : 'deficit'} so far</span>
-              </button>
-            )}
-
-            <DayStrip m={m} onOpen={openSheet} />
+            <TodaysPlan m={m} onOpen={openSheet} />
 
             {!protocol && (
               <Card>
@@ -112,12 +108,10 @@ export default function Today() {
               </Card>
             )}
 
-            <CoachCard rows={m.coachRows} coachPlan={m.coachPlan} protocol={protocol} onOpen={openSheet} />
-
-            <Card>
-              <Eyebrow className="mb-2">{isToday ? 'Today so far' : 'That day'}</Eyebrow>
+            <section className="px-1 pt-2" data-testid="logged-section">
+              <Eyebrow className="mb-1">{isToday ? 'Logged today' : 'Logged that day'}</Eyebrow>
               <Timeline m={m} onOpen={openSheet} onOpenChat={() => openChat()} />
-            </Card>
+            </section>
 
             {/* The conversation. Its composer is docked above the nav (portaled
                 from inside AIChatLog), so it is reachable from anywhere on the page. */}
@@ -125,7 +119,6 @@ export default function Today() {
               <AIChatLog />
             </Card>
 
-            <StreakCard />
             <CoachNotes m={m} />
 
             {protocol?.fasting && (() => {
@@ -144,13 +137,10 @@ export default function Today() {
               return <FastingBar fasting={protocol.fasting} />;
             })()}
 
-            <Card>
-              <div id="section-notes" />
-              <Eyebrow className="mb-2">{terms.notes}</Eyebrow>
-              <textarea value={log.notes} onChange={e => m.update('notes', e.target.value)} data-testid="notes"
-                placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} rows={3}
-                className="w-full text-sm border border-white/[0.12] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold/30 resize-none" />
-            </Card>
+            <div id="section-notes" className="px-1">
+              <NotesRow value={log.notes} onChange={v => m.update('notes', v)} label={terms.notes}
+                placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} />
+            </div>
           </>
         )}
       </main>

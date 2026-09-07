@@ -149,6 +149,24 @@ console.log('\n[7] pendingLabels');
   ck('nothing logged → all counts', eq(p4, ['3 habits', '1 ACV dose', '2 supplements', 'sleep times']), p4);
 }
 
+// ── 7b. nextAction — the one button on Today's read ──────────────────────
+console.log('\n[7b] nextAction');
+{
+  const base = { isToday: true, weight: '82', foodCount: 2, waterMl: 2000, waterTarget: 3000, protocolDone: 5, protocolTotal: 5, sleepSet: true, workoutPlanned: false, workoutLogged: false };
+  const a = (o) => day.nextAction({ ...base, ...o });
+  ck('past day → nothing',                            a({ isToday: false, weight: null }) === null);
+  ck('no weight before 11 → log weight first',       a({ weight: null, hour: 8 })?.sheet === 'weight');
+  ck('nothing eaten after 9 → log food',              a({ foodCount: 0, hour: 13 })?.sheet === 'food');
+  ck('food logged, workout planned, not done → start the workout', a({ workoutPlanned: true, hour: 12 })?.sheet === 'workout');
+  ck('workout logged → not asked again',              a({ workoutPlanned: true, workoutLogged: true, hour: 12 }) === null);
+  ck('protocol items left → tick, with the count',    eq(a({ protocolDone: 3, hour: 12 }), { sheet: 'protocol', label: 'Tick the protocol · 2 left' }));
+  ck('water under half target after 14:00 → water',   a({ waterMl: 1000, hour: 15 })?.sheet === 'water');
+  ck('water not nagged before 14:00',                 a({ waterMl: 1000, hour: 10 }) === null);
+  ck('sleep unset in the evening → sleep',            a({ sleepSet: false, hour: 20 })?.sheet === 'sleep');
+  ck('complete day → nothing',                        a({ hour: 21 }) === null);
+  ck('priority order: food beats protocol',           a({ foodCount: 0, protocolDone: 0, hour: 12 })?.sheet === 'food');
+}
+
 // ── 8. The page and Profile import from lib/day — no private copies left ────
 console.log('\n[8] no mirrored copies');
 {

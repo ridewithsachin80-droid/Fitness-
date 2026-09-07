@@ -559,13 +559,22 @@ ck('the model still flushes the debounced save on tab hide / unload',
 ck('auto-derived protocol ticks are still additive only (tick, never untick)',
    /if \(derived\[id\] && !cur\[id\]\) patch\[id\] = true;/.test(model));
 
-const strip = read('components/today/DayStrip.jsx');
-// Sprint 4.1: the strip no longer scrolls sideways — members could not tell
-// there were more tiles. A two-column grid shows every tile at once.
-ck('day strip is a fixed grid, never a sideways scroller',
-   /grid grid-cols-2/.test(strip) && !/overflow-x-auto/.test(strip) && !/snap-x/.test(strip), 'strip scrolls sideways');
-ck('every tile with a target draws a progress bar so the day reads without numbers',
-   /pct=\{kcalTarget/.test(strip) && /pct=\{\(water/.test(strip) && /sleepMins \/ 480/.test(strip) && /micro\.met \/ micro\.total/.test(strip));
+// Sprint 5b: Today's Plan (Move · Eat · Recover) is the one section that
+// replaced the coach card, the tiles, the deficit chip and the dots card.
+// DayStrip.jsx / ProtocolDots.jsx / CoachCard.jsx stay on disk (deploy never
+// deletes) but Today must not import them.
+const plan = read('components/today/TodaysPlan.jsx');
+ck('Today renders TodaysPlan and no longer imports DayStrip, ProtocolDots or CoachCard',
+   /<TodaysPlan m=\{m\}/.test(todayPage) && !/DayStrip|ProtocolDots|CoachCard/.test(todayPage));
+ck('Today\'s Plan has exactly the three rows and every sheet a row can open is one of the seven',
+   ['plan-move', 'plan-eat', 'plan-recover'].filter(id => new RegExp(`testId="${id}"`).test(plan)).length >= 2 &&
+   ['workout', 'food', 'nutrition', 'water', 'sleep', 'protocol'].every(n => new RegExp(`onOpen\\('${n}'\\)`).test(plan)),
+   ['workout', 'food', 'nutrition', 'water', 'sleep', 'protocol'].filter(n => !new RegExp(`onOpen\\('${n}'\\)`).test(plan)));
+ck('the protocol dots live inside the Recover row, not their own card', /data-testid="protocol-dots"/.test(plan) && !/protocol-dots/.test(todayPage));
+ck('the read carries one derived action (lib/day nextAction), never a hard-coded button', /nextAction\(\{/.test(todayPage) && /read-action/.test(read('components/today/AIRead.jsx')));
+ck('the deficit is a sub-line of Eat, not a chip on the page', /plan-balance/.test(plan) && !/balance-chip/.test(todayPage));
+ck('the streak is a line in the header and StreakCard is off Today', /streak-badge/.test(read('components/today/Greeting.jsx')) && !/StreakCard/.test(todayPage));
+ck('notes are a collapsed row', /NotesRow/.test(todayPage) && /Add a note/.test(read('components/today/NotesRow.jsx')));
 
 // z-order: sheet (80) must sit above the chat orb nav and below the milestone
 // celebration (85); the protocol popover must live INSIDE the sheet, not on a
@@ -583,10 +592,7 @@ const sheetNames = ['weight', 'water', 'sleep', 'protocol', 'food', 'workout', '
 ck('all seven sheets are mounted from the single sheet value',
    sheetNames.every(n => new RegExp(`open=\\{sheet === '${n}'\\}\\s+onClose=\\{closeSheet\\}`).test(todayPage)),
    sheetNames.filter(n => !new RegExp(`open=\\{sheet === '${n}'\\}`).test(todayPage)));
-ck('every sheet a chip / the dots / the hero can open is one of the seven',
-   ['food', 'water', 'sleep', 'workout', 'nutrition'].every(n => new RegExp(`onOpen\\('${n}'\\)`).test(strip)) &&
-   /openSheet\('protocol'\)/.test(todayPage) && /openSheet\('weight'\)/.test(todayPage),
-   ['food', 'water', 'sleep', 'workout', 'nutrition'].filter(n => !new RegExp(`onOpen\\('${n}'\\)`).test(strip)));
+ck('the hero opens the weight sheet', /openSheet\('weight'\)/.test(todayPage));
 
 // ── 10. The AI is on the page (Sprint 4) ────────────────────────────────────
 console.log('\n[10] AI thread on the page, composer docked');

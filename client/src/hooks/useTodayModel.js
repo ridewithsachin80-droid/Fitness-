@@ -36,7 +36,7 @@ import { useOfflineSync } from '../hooks/useOfflineQueue';
 import { deriveTodayDay } from '../utils/programDay';
 import { coachCardRows } from '../utils/coachCard';
 import {
-  countMicrosMet, calcBMR, foodKcal, sleepMinutes, formatSleep,
+  countMicrosMet, calcBMR, foodKcal, calcFoodMacros, sleepMinutes, formatSleep,
   AUTO_TICK_IDS, deriveActivityTicks, pendingLabels,
 } from '../lib/day';
 
@@ -89,6 +89,7 @@ export default function useTodayModel() {
   const [replyBusy, setReplyBusy] = useState(false);
   const [replied, setReplied]     = useState({});
   const [profileAge, setProfileAge] = useState(null);
+  const [joinedAt, setJoinedAt] = useState(null);       // Sprint 5b: 'Week N' in the header
 
   // Only unread messages appear on Today; read ones live in the bell.
   const unreadNotes = coachNotes.filter(n => !n.read_at);
@@ -195,6 +196,7 @@ export default function useTodayModel() {
 
   useEffect(() => {
     getMyProfile().then(({ data }) => {
+      if (data?.created_at) setJoinedAt(String(data.created_at).slice(0, 10));
       if (data?.coach_notes?.length) setCoachNotes(data.coach_notes);
       if (data?.dob) {
         const diff = Date.now() - new Date(data.dob).getTime();
@@ -529,6 +531,16 @@ export default function useTodayModel() {
   // just be the whole day's TDEE and mislead.
   const balance = (bmr && kcalIn > 0) ? kcalIn - (Math.round(bmr * 1.2) + workoutKcal) : null;
 
+  // Week N since joining — a member on week 6 is in a different place than
+  // one on day 2, and the header should say so. Null until /members/me lands.
+  const weekNumber = joinedAt
+    ? Math.max(1, Math.floor((new Date(date + 'T12:00:00') - new Date(joinedAt + 'T12:00:00')) / (7 * 86400000)) + 1)
+    : null;
+
+  const macrosToday = calcFoodMacros(log.food || []);
+  const proteinIn     = Math.round(macrosToday.pro);
+  const proteinTarget = protocol?.macros?.pro || null;
+
   const protocolDone  = actDone + acvDone + suppDone;
   const protocolTotal = activeActivities.length + activeACV.length + activeSupplements.length;
 
@@ -617,7 +629,8 @@ export default function useTodayModel() {
     actDone, acvDone, suppDone, protocolDone, protocolTotal, compliance,
     acvExpanded, setAcvExpanded,
     // numbers
-    weightKg, weightDelta, yesterdayWeight, kcalIn, kcalTarget, bmr, balance,
+    weightKg, weightDelta, yesterdayWeight, kcalIn, kcalTarget, proteinIn, proteinTarget, bmr, balance,
+    weekNumber, joinedAt,
     workoutKcal, workoutSummary, workoutRefreshKey, micro, sleepMins, sleepText,
     // AI read + pending
     read, pending,
