@@ -653,7 +653,7 @@ async function todayTest() {
   dlg = d.querySelector('[role=dialog]');
   ck('tapping the hero weight opens the weight sheet with the current value', !!dlg && dlg.querySelector('[data-testid="weight-input"]')?.value === '82.4');
   const wi = dlg.querySelector('[data-testid="weight-input"]');
-  const setVal = (el, v) => { const setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set; setter.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  const setVal = (el, v) => { const proto = el.tagName === 'TEXTAREA' ? w.HTMLTextAreaElement.prototype : w.HTMLInputElement.prototype; const setter = Object.getOwnPropertyDescriptor(proto, 'value').set; setter.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
   setVal(wi, '350'); await tick(100);
   ck('an implausible weight shows the warning and is still stored (member decides)', /looks unusual/.test(dlg.textContent) && w.__logStore.getState().log.weight === '350');
   setVal(wi, '82.1'); await tick(100);
@@ -712,7 +712,7 @@ async function todayTest() {
   ck('suggestion chips show while the conversation is empty', !!q('ai-suggestions') && q('ai-suggestions').querySelectorAll('button').length >= 3);
   const composer = q('composer');
   ck('the composer is docked: portaled to <body>, position fixed, above the nav', !!composer && composer.parentElement === d.body && /fixed/.test(composer.className) && /bottom/.test(composer.getAttribute('style') || ''), composer && composer.getAttribute('style'));
-  const composerInput = composer && composer.querySelector('input:not([type=file])');
+  const composerInput = composer && composer.querySelector('[data-testid="composer-input"]');
   ck('the composer has the text field, mic, camera and lab-report controls', !!composerInput && !!composer.querySelector('[aria-label="Log food from a photo"]') && !!composer.querySelector('[aria-label="Upload a lab report"]'), composer && composer.innerHTML.length);
 
   // The flush on ‹ was this device's first save of the day, and the fixture
@@ -734,6 +734,11 @@ async function todayTest() {
 
   // Send → preview → Apply, through the stubbed parser
   const beforeApplied = w.__aiChat.getState().lastAppliedAt;
+  ck('the composer is a multi-line textarea, not a single-line input (a dictated day stays readable)', composerInput.tagName === 'TEXTAREA' && composerInput.getAttribute('rows') === '1' && /maxHeight|max-height/.test(composerInput.getAttribute('style') || ''));
+  composerInput.focus(); await tick(50);
+  ck('focusing the composer slides the bottom nav away (keyboard + composer + thread share the screen)', w.__aiChat.getState().composerFocused === true && d.querySelector('[data-testid="member-nav"]').dataset.composing === '1');
+  composerInput.blur(); await tick(50);
+  ck('blur brings the nav back', w.__aiChat.getState().composerFocused === false && d.querySelector('[data-testid="member-nav"]').dataset.composing === '0');
   setVal(composerInput, 'drank 500ml water, took b12, weight 82.0'); await tick(50);
   composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
   ck('Enter sends: the member bubble and the AI reply appear in the thread', /drank 500ml water/.test(q('ai-messages').textContent) && /Got it — water, B12/.test(q('ai-messages').textContent), q('ai-messages').textContent.slice(0, 160));
@@ -863,6 +868,23 @@ async function todayVisualTest() {
       ck(`composer @${width}px is docked inside the viewport, above the bottom nav`, dock.composerVisible && (dock.navTop == null || dock.composerBottom <= dock.navTop + 2), dock);
       ck(`scrolled to the end @${width}px, the notes card clears the composer (page bottom is reachable)`, dock.notesBottom != null && dock.notesBottom <= dock.composerTop, JSON.stringify(dock));
       if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-bottom.png') });
+
+      // Sprint 5b.1: a long dictated day must be fully visible while typing.
+      await page.focus('[data-testid="composer-input"]');
+      await page.type('[data-testid="composer-input"]', '2 idli and sambar for breakfast, 100g whey protein 1 scoop after the walk, chicken curry with 2 chapati for lunch, drank 2 litres water so far', { delay: 0 });
+      await new Promise(r => setTimeout(r, 300));
+      const grown = await page.evaluate(() => {
+        const t = document.querySelector('[data-testid="composer-input"]');
+        const nav = document.querySelector('[data-testid="member-nav"]');
+        return { h: t.clientHeight, sh: t.scrollHeight, lines: Math.round(t.clientHeight / 22), navHidden: nav.dataset.composing === '1', navRight: nav.getBoundingClientRect().top >= window.innerHeight - 2 };
+      });
+      // Fits entirely, or has reached the 5-line cap and scrolls inside (never a clipped single line).
+      ck(`composer @${width}px grows to fit the text (${Math.min(grown.lines, 5)} lines shown${grown.h < grown.sh - 2 ? ', capped and scrolling' : ''})`, grown.lines >= 3 && (grown.h >= grown.sh - 2 || grown.h >= 5 * 22 + 16 - 4), JSON.stringify(grown));
+      ck(`while typing @${width}px the bottom nav is off-screen`, grown.navHidden && grown.navRight, JSON.stringify(grown));
+      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-composing.png') });
+      await page.evaluate(() => { const t = document.querySelector('[data-testid="composer-input"]'); t.blur(); });
+      await page.evaluate(() => { const t = document.querySelector('[data-testid="composer-input"]'); const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(t, ''); t.dispatchEvent(new Event('input', { bubbles: true })); });
+      await new Promise(r => setTimeout(r, 300));
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' })); await new Promise(r => setTimeout(r, 300));
 
       await tapVisible(page, '[data-testid="plan-eat-action"]'); await new Promise(r => setTimeout(r, 900));

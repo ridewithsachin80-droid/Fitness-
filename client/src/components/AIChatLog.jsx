@@ -61,6 +61,10 @@ export const useAIChat = create((set, get) => ({
   // overlay to close any more).
   lastAppliedAt: null,
   markApplied: () => set({ lastAppliedAt: Date.now() }),
+  // While the member is typing, the bottom nav steps aside so the keyboard,
+  // the composer and the thread share the screen (MemberBottomNav reads this).
+  composerFocused: false,
+  setComposerFocused: (v) => set({ composerFocused: !!v }),
 
   messages: [],
   input: '',
@@ -108,6 +112,14 @@ const SpeechRecognition =
 // Measured in UI.jsx (the nav's own spacer is 104px); the composer sits just
 // above the orb's crown.
 const COMPOSER_BOTTOM_PX = 100;
+const COMPOSER_BOTTOM_FOCUSED_PX = 12;   // nav hidden while typing
+
+// Grow the textarea to its content, capped by its max-height (5 lines).
+function autoGrow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
 
 const SUGGESTION_CHIPS = [
   'weight 82.5, morning walk done',
@@ -195,6 +207,7 @@ export default function AIChatLog() {
   }, [messages, busy]);
 
   const focusRequest = useAIChat(s => s.focusRequest);
+  const composerFocused = useAIChat(s => s.composerFocused);
   const threadRef = useRef(null);
   const kbInset   = useKeyboardInset();
 
@@ -452,6 +465,7 @@ export default function AIChatLog() {
     if (!text || busy) return;
 
     setInput('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';   // collapse the grown textarea
     setMessages(m => [...m, { role: 'user', text }]);
     setBusy(true);
     haptic(10);
@@ -1406,57 +1420,71 @@ export default function AIChatLog() {
         covers iOS, which ignores that and needs the visualViewport delta. */}
     {typeof document !== 'undefined' && createPortal(
       <div data-testid="composer" className="fixed left-0 right-0 z-[45] pointer-events-none"
-        style={{ bottom: `calc(${COMPOSER_BOTTOM_PX + kbInset}px + env(safe-area-inset-bottom))` }}>
+        style={{ bottom: `calc(${(composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
       <div className="max-w-md mx-auto px-3 pointer-events-auto">
-      <div className="glass rounded-2xl shadow-float px-3 py-2">
+      <div className="glass rounded-2xl shadow-float px-3 pt-2 pb-2">
         {vc.card}
-        <div className="flex items-end gap-2">
-          <div className="flex-1 flex items-center bg-surface border border-white/[0.10] rounded-2xl px-3">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-              placeholder="Tell me about your day…"
-              className="flex-1 bg-transparent text-sm text-white placeholder-lo py-3 outline-none min-w-0"
-            />
-            <button onClick={() => labRef.current?.click()}
-              disabled={labBusy}
-              aria-label="Upload a lab report"
-              style={{ minWidth: 40, minHeight: 40 }}
-              className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                labBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold'
-              }`}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="9" y1="15" x2="15" y2="15" />
-              </svg>
-            </button>
-            <input ref={labRef} type="file" accept="application/pdf,image/*"
-              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendLabReport(f); }}
-              style={{ display: 'none' }} />
-            <button onClick={() => fileRef.current?.click()}
-              disabled={photoBusy}
-              aria-label="Log food from a photo"
-              style={{ minWidth: 40, minHeight: 40 }}
-              className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                photoBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold-light'
-              }`}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment"
-              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
-              style={{ display: 'none' }} />
-            {vc.micButton}
-          </div>
+        {/* Sprint 5b.1: two rows. The text gets the full width and grows to
+            five lines (a dictated day is often three), the tools sit
+            underneath — so "2 idli, sambar, 100g whey protein 1 scoop, walked
+            30 min" is READABLE while you are still typing it. Enter sends;
+            Shift+Enter is a new line. */}
+        <textarea
+          ref={inputRef}
+          value={input}
+          rows={1}
+          onChange={(e) => { setInput(e.target.value); autoGrow(e.target); }}
+          onFocus={() => useAIChat.getState().setComposerFocused(true)}
+          onBlur={() => useAIChat.getState().setComposerFocused(false)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Tell me about your day…"
+          aria-label="Tell FitLife about your day"
+          data-testid="composer-input"
+          style={{ maxHeight: 5 * 22 + 16 }}
+          className="block w-full bg-surface border border-white/[0.10] rounded-2xl px-3 py-2.5 text-body leading-[22px] text-white placeholder-lo outline-none resize-none focus:border-gold/40 transition-colors"
+        />
+        <div className="flex items-center gap-1 mt-1.5">
+          <button onClick={() => labRef.current?.click()}
+            disabled={labBusy}
+            aria-label="Upload a lab report"
+            style={{ minWidth: 40, minHeight: 40 }}
+            className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
+              labBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold'
+            }`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="9" y1="15" x2="15" y2="15" />
+            </svg>
+          </button>
+          <input ref={labRef} type="file" accept="application/pdf,image/*"
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendLabReport(f); }}
+            style={{ display: 'none' }} />
+          <button onClick={() => fileRef.current?.click()}
+            disabled={photoBusy}
+            aria-label="Log food from a photo"
+            style={{ minWidth: 40, minHeight: 40 }}
+            className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
+              photoBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold-light'
+            }`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment"
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
+            style={{ display: 'none' }} />
+          {vc.micButton}
+          <span className="flex-1" />
+          {input.trim() && (
+            <span className="text-tiny text-lo tabular-nums mr-1" aria-hidden="true">{input.trim().length}</span>
+          )}
           <button
             onClick={() => send()}
             disabled={!input.trim() || busy}
-            style={{ minWidth: 48, minHeight: 48 }}
+            aria-label="Send"
+            style={{ minWidth: 44, minHeight: 44 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
                 ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'

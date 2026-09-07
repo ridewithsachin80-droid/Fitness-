@@ -73,7 +73,7 @@ export default function Today() {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 space-y-3 pb-20">
+      <main className="max-w-md mx-auto px-4 space-y-3 pb-32">
         {loading ? (
           <>
             <SkeletonCard lines={1} />

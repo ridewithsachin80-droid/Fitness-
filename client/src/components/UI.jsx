@@ -236,6 +236,9 @@ export function MemberBottomNav() {
   // Shared AI chat store — the chat itself is mounted once on the Today page,
   // so from anywhere else we navigate there first and it opens on arrival.
   const openAIChat = useAIChat(s => s.openChat);
+  // While the composer has focus the nav slides away so the keyboard, the
+  // composer and the thread share the screen (Sprint 5b.1).
+  const composing = useAIChat(s => s.composerFocused);
   const { pathname } = useLocation();
   const tabs = [
     { label: 'Today', path: '/', active: pathname === '/', icon: (
@@ -287,7 +290,9 @@ export function MemberBottomNav() {
           At 80 the orb sat on top of the last card on every screen: on Progress
           it covered the compliance chart. Measured, not guessed. */}
       <div style={{ height: 104 }} />
-      <div className="fixed bottom-0 left-0 right-0 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div data-testid="member-nav" data-composing={composing ? '1' : '0'}
+        className={`fixed bottom-0 left-0 right-0 z-40 transition-transform duration-200 ${composing ? 'translate-y-[120%] pointer-events-none' : ''}`}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-md mx-auto px-3 pb-3">
           <div className="glass rounded-2xl shadow-float flex items-center relative">
             {tabs.slice(0, 2).map(renderTab)}

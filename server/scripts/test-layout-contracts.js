@@ -611,6 +611,11 @@ ck('Today renders the thread inside the page, inside a Card, not as a trailing o
 ck('the viewport meta asks Android to resize the layout viewport for the keyboard',
    /interactive-widget=resizes-content/.test(fs.readFileSync(path.join(CLIENT, '../index.html'), 'utf8')));
 ck('the keyboard inset hook exists for iOS (visualViewport delta)', /visualViewport/.test(read('../src/hooks/useKeyboardInset.js')));
+// Sprint 5b.1: what you say must be readable while you say it.
+ck('the composer is an auto-growing textarea capped at 5 lines, with the tools on their own row',
+   /<textarea[\s\S]*data-testid="composer-input"/.test(chat) && /maxHeight: 5 \* 22 \+ 16/.test(chat) && /function autoGrow/.test(chat));
+ck('Enter sends, Shift+Enter is a new line', /e\.key === 'Enter' && !e\.shiftKey/.test(chat));
+ck('the bottom nav steps aside while composing', /composerFocused/.test(read('components/UI.jsx')) && /translate-y-\[120%\]/.test(read('components/UI.jsx')));
 
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
