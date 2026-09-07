@@ -125,9 +125,12 @@ ck('an empty list caused by a search says so instead of "none yet"',
 // ── 5. Brand and CSS hygiene ────────────────────────────────────────────────
 console.log('\n[5] brand and CSS hygiene');
 
+const listJsx = (dir) => fs.readdirSync(path.join(CLIENT, dir)).filter(f => f.endsWith('.jsx')).map(f => dir + '/' + f);
 const PAGES = ['pages/AdminDashboard.jsx', 'pages/AdminFoods.jsx', 'pages/Monitor.jsx',
                'pages/PatientList.jsx', 'pages/Settings.jsx', 'pages/Profile.jsx',
-               'pages/Progress.jsx', 'pages/DailyLog.jsx', 'pages/Login.jsx'];
+               'pages/Progress.jsx', 'pages/DailyLog.jsx', 'pages/Today.jsx', 'pages/Login.jsx',
+               // Sprint 3: the Today screen is spread over these folders now
+               ...listJsx('components/today'), ...listJsx('components/sheets'), ...listJsx('components/primitives')];
 
 const segmentsOf = (classList) => {
   const segs = [classList.replace(/\$\{[\s\S]*?\}/g, ' ')];
@@ -531,6 +534,55 @@ ck('every token the JSX uses is defined in the config (no silent typos)', unknow
   const r = spawnSync(process.execPath, [path.join(__dirname, 'lib/sweep-classes.js'), '--check'], { encoding: 'utf8' });
   ck('sweep-classes.js --check finds nothing left to rewrite', r.status === 0, (r.stdout || '').split('\n').slice(0, 6));
 }
+
+// ── 9. Today screen (Sprint 3) ──────────────────────────────────────────────
+console.log('\n[9] Today screen structure');
+
+/**
+ * The member home is a hook (useTodayModel) + a layout (Today.jsx) + sheets.
+ * These contracts keep that split honest, and pin the two layout rules a
+ * phone cares about: the day strip scrolls inside itself, and nothing
+ * interactive is hidden under a sheet.
+ */
+const todayPage = read('pages/Today.jsx');
+const model     = read('../src/hooks/useTodayModel.js');
+const dailyLog  = read('pages/DailyLog.jsx');
+
+ck('DailyLog.jsx is a wrapper that renders Today (the route did not move)',
+   /import Today from '\.\/Today'/.test(dailyLog) && /return <Today \/>/.test(dailyLog) && dailyLog.split('\n').length < 40, dailyLog.length);
+ck('Today.jsx has no fetches and no store writes of its own — that is the hook\'s job',
+   !/api\.(get|post)\(/.test(todayPage) && !/useEffect\(/.test(todayPage) && !/useState\(/.test(todayPage), 'Today.jsx has logic');
+ck('the model still handles the PWA shortcuts (?open=ai / ?open=weight)',
+   /get\('open'\)/.test(model) && /open === 'weight'/.test(model) && /open === 'ai'/.test(model));
+ck('the model still flushes the debounced save on tab hide / unload',
+   /visibilitychange/.test(model) && /beforeunload/.test(model));
+ck('auto-derived protocol ticks are still additive only (tick, never untick)',
+   /if \(derived\[id\] && !cur\[id\]\) patch\[id\] = true;/.test(model));
+
+const strip = read('components/today/DayStrip.jsx');
+ck('day strip scrolls horizontally inside its own box and chips never shrink',
+   /overflow-x-auto/.test(strip) && /flex-shrink-0/.test(strip), 'strip may widen the page');
+
+// z-order: sheet (80) must sit above the chat orb nav and below the milestone
+// celebration (85); the protocol popover must live INSIDE the sheet, not on a
+// fixed layer under it.
+const sheet = read('components/primitives/Sheet.jsx');
+const sheetZ = +(sheet.match(/z-\[(\d+)\]/) || [])[1];
+const milestoneZ = +(read('components/today/MilestoneModal.jsx').match(/z-\[(\d+)\]/) || [])[1];
+ck('sheet z-index is above the nav (50) and below the milestone modal', sheetZ > 50 && milestoneZ > sheetZ, [sheetZ, milestoneZ]);
+ck('the protocol chip popover renders inside the sheet (sticky), not on a fixed layer',
+   /sticky bottom-2/.test(read('components/sheets/ProtocolSheet.jsx')) && !/fixed left-4/.test(read('components/sheets/ProtocolSheet.jsx')));
+
+// Every sheet the page mounts is driven by the one `sheet` value and closes
+// through the one `closeSheet` — no sheet can be left open by a stale panel id.
+const sheetNames = ['weight', 'water', 'sleep', 'protocol', 'food', 'workout', 'nutrition'];
+ck('all seven sheets are mounted from the single sheet value',
+   sheetNames.every(n => new RegExp(`open=\\{sheet === '${n}'\\}\\s+onClose=\\{closeSheet\\}`).test(todayPage)),
+   sheetNames.filter(n => !new RegExp(`open=\\{sheet === '${n}'\\}`).test(todayPage)));
+ck('every sheet a chip / the dots / the hero can open is one of the seven',
+   ['food', 'water', 'sleep', 'workout', 'nutrition'].every(n => new RegExp(`onOpen\\('${n}'\\)`).test(strip)) &&
+   /openSheet\('protocol'\)/.test(todayPage) && /openSheet\('weight'\)/.test(todayPage),
+   ['food', 'water', 'sleep', 'workout', 'nutrition'].filter(n => !new RegExp(`onOpen\\('${n}'\\)`).test(strip)));
 
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.

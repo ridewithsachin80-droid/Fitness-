@@ -521,8 +521,296 @@ async function primitivesTest() {
   ck('no console-visible error from any primitive', errors.length === 0, errors.join('|'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. Today — the member home (Sprint 3)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Mounts the REAL pages/Today.jsx (via pages/DailyLog.jsx, the route App.jsx
+// uses) with the API stubbed at the axios boundary. Every request the page
+// tree makes is routed here; anything unexpected returns {} and is recorded so
+// a new fetch cannot silently pass as "worked".
+//
+// Dates: constants.today() is IST-anchored, so the stub computes the same
+// string with the same helper rather than assuming UTC.
+const TODAY_API_STUB = `
+    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    const T = today(), Y = istDaysAgo(1);
+    window.__calls = []; window.__posts = []; window.__todayStr = T;
+    const log = {
+      weight_kg: '82.4',
+      activities: { walk: false, sun: true },
+      acv: { acv1: true },
+      supplements: { b12: false, d3: true },
+      food_items: [
+        { id: 1, name: 'Idli', grams: 120, meal: 'Breakfast', per_100g: { calories: 130, protein: 3.5, total_carbs: 28, fat: 0.8, vit_b12: 0.1, calcium: 12, iron: 1.1, fiber: 1.2 } },
+        { id: 2, name: 'Sambar', grams: 200, meal: 'Breakfast', per_100g: { calories: 60, protein: 2.8, total_carbs: 9, fat: 1.5, vit_a: 120, vit_c: 8, calcium: 30 } },
+        { id: 3, name: 'Paneer bhurji', grams: 150, meal: 'Lunch', per_100g: { calories: 260, protein: 18, total_carbs: 5, fat: 20 } },
+      ],
+      water_ml: 1500,
+      sleep: { bedtime: '22:30', waketime: '06:15' },
+      notes: '',
+      protocol: {
+        activities: ['walk', 'sun'], acv: ['acv1'], supplements: ['b12', 'd3'],
+        item_overrides: { sun: { label: 'Morning sun', sub: '15 min before 9am' } },
+        macros: { kcal: 1800, pro: 120, carb: 150, fat: 60 },
+        water_target: 3000,
+        start_weight: 88,
+        meal_plan: [],
+      },
+    };
+    const routes = [
+      [new RegExp('^/logs/' + T + '$'),           () => log],
+      [new RegExp('^/logs/' + Y + '$'),           () => ({ weight_kg: '82.7' })],
+      [/^\\/logs\\/range\\//,                      () => [{ log_date: T }, { log_date: Y }, { log_date: istDaysAgo(2) }]],
+      [/^\\/members\\/me\\/today$/,                () => ({ meal_plan: { meals: [{ meal: 'Dinner', items: [{ name: 'Dal', grams: 200, per_100g: { calories: 110 } }, { name: 'Rice', grams: 150, per_100g: { calories: 130 } }] }] },
+                                                          program: { program: { name: 'Foundation' }, days: [{ day_label: 'Push · ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T12:00:00').getDay()], exercises: [{ exercise_name: 'Bench press' }, { exercise_name: 'Shoulder press' }] }] } })],
+      [/^\\/members\\/me$/,                        () => ({ height_cm: '172', gender: 'male', dob: '1985-03-10', coach_notes: [{ id: 41, note: 'Great week — add a walk after dinner.', note_date: T, monitor_name: 'Sachin', read_at: null, flagged: false }] })],
+      [/^\\/workouts$/,                            () => ({ exercises: [], session: null, cardio: [] })],
+      [/^\\/workouts\\/summary$/,                  () => ({ sessions: [] })],
+    ];
+    const get = async (url, opts) => {
+      window.__calls.push(url);
+      const hit = routes.find(([re]) => re.test(url));
+      return { data: hit ? hit[1](opts) : {} };
+    };
+    const post = async (url, body) => { window.__posts.push({ url, body }); return { data: { ok: true, ...(body || {}) } }; };
+    export default { get, post, put: post, patch: post, delete: async () => ({ data: {} }) };`;
+
+async function todayTest() {
+  console.log('\n[6] Today — member home (Sprint 3)');
+  const api = stub('api-today.js', TODAY_API_STUB);
+
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DailyLog from './pages/DailyLog.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    import { useLogStore } from './store/logStore.js';
+    import { useAIChat } from './components/AIChatLog.jsx';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    window.__logStore = useLogStore; window.__aiChat = useAIChat;
+    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
+
+  const { w, errors, html } = run(code);
+  await tick(900);
+  const d = w.document;
+  const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  let h = html();
+
+  ck('Today mounts through the DailyLog route without throwing', errors.length === 0, errors.join('|'));
+  ck('greeting names the member (first name only)', /Good (morning|afternoon|evening), Asha/.test(h) && !/Asha Rao/.test(h));
+  ck('the hero number is today\'s weight, in kg, with the delta vs yesterday',
+     q('hero-weight') && /82\.4/.test(q('hero-weight').textContent) && /↓ 0\.3/.test(q('hero-weight').textContent), q('hero-weight')?.textContent);
+  ck('Today\'s read is present and mentions the day (tap opens the AI chat)', !!q('ai-read') && q('ai-read').textContent.length > 30);
+  const dots = q('protocol-dots');
+  ck('protocol dots: one dot per item, "3 of 5 done"', !!dots && dots.querySelectorAll('span.block.w-3').length === 5 && /3 of 5 done/.test(dots.textContent), dots?.textContent);
+  ck('the balance chip shows a deficit for 666 kcal eaten against a 1699 BMR', q('balance-chip') && /deficit/.test(q('balance-chip').textContent) && /↓/.test(q('balance-chip').textContent), q('balance-chip')?.textContent);
+
+  const strip = q('day-strip');
+  ck('day strip renders five chips and scrolls horizontally instead of widening the page',
+     !!strip && strip.querySelectorAll('button').length === 5 && /overflow-x-auto/.test(strip.className));
+  ck('food chip: 666 / 1,800 kcal', /666/.test(q('chip-food').textContent) && /1,800/.test(q('chip-food').textContent), q('chip-food').textContent);
+  ck('water chip: 1.5 / 3.0 L', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent));
+  ck('sleep chip: 7h 45m', /7h 45m/.test(q('chip-sleep').textContent));
+  ck('workout chip shows the coach\'s program day when nothing is logged yet', /Push ·/.test(q('chip-workout').textContent) && /2 exercises/.test(q('chip-workout').textContent), q('chip-workout').textContent);
+  ck('nutrition chip: N / 31 targets met', /\/ 31/.test(q('chip-nutrition').textContent) && /targets met/.test(q('chip-nutrition').textContent));
+
+  const coach = q('coach-card');
+  ck('coach card: pending workout and pending Dinner plan; targets row gone because food is already logged',
+     !!coach && /Push ·/.test(coach.textContent) && /Dinner plan — 2 items/.test(coach.textContent) && !/Eat to today/.test(coach.textContent), coach?.textContent.slice(0, 200));
+  ck('coach card prescribed-meal kcal is computed from per_100g (220 + 195 = 415)', /~415 kcal/.test(coach.textContent), coach.textContent.match(/~\d+ kcal/g));
+
+  const tl = q('timeline');
+  ck('timeline lists weight, both meals, water and sleep in day order',
+     !!tl && ['row-weight', 'row-meal', 'row-water', 'row-sleep'].every(id => tl.querySelector(`[data-testid="${id}"]`)) && tl.querySelectorAll('[data-testid="row-meal"]').length === 2);
+  const mealTitles = [...tl.querySelectorAll('[data-testid="row-meal"]')].map(r => r.textContent);
+  ck('meals are grouped by slot with their own kcal (Breakfast 276, Lunch 390)', /Breakfast/.test(mealTitles[0]) && /276/.test(mealTitles[0]) && /Lunch/.test(mealTitles[1]) && /390/.test(mealTitles[1]), mealTitles);
+  ck('no workout row when nothing was logged (the coach plan is not a log)', !tl.querySelector('[data-testid="row-workout"]'));
+  ck('unread coach message shows with Reply and Got it', d.querySelectorAll('[data-testid="coach-note"]').length === 1 && /add a walk after dinner/.test(h) && /Reply/.test(h));
+  ck('no legacy inline drawer ids remain on the page', !d.getElementById('section-water') && !d.getElementById('section-protocol') && !d.getElementById('section-hero'));
+  ck('the streak badge shows 3 days', q('streak-badge') && /3 days/.test(q('streak-badge').textContent), q('streak-badge')?.textContent);
+
+  // ── Sheets open from their chips and save through the store ─────────────
+  q('chip-water').click(); await tick(300);
+  let dlg = d.querySelector('[role=dialog]');
+  ck('water chip opens the water sheet', !!dlg && /Target 3\.0 L/.test(dlg.textContent));
+  dlg.querySelector('[data-testid="water-add-500"]').click(); await tick(100);
+  ck('+500 updates the store (1500 → 2000) and the sheet total (2.00)',
+     w.__logStore.getState().log.water === 2000 && /2\.00/.test(d.querySelector('[data-testid="water-total"]').textContent));
+  ck('the chip behind the sheet updates too (2.0 L)', /2\.0/.test(q('chip-water').textContent));
+  w.__click('Done'); await tick(500);
+  ck('Done closes the sheet', !d.querySelector('[role=dialog]'));
+
+  q('hero-weight').click(); await tick(300);
+  dlg = d.querySelector('[role=dialog]');
+  ck('tapping the hero weight opens the weight sheet with the current value', !!dlg && dlg.querySelector('[data-testid="weight-input"]')?.value === '82.4');
+  const wi = dlg.querySelector('[data-testid="weight-input"]');
+  const setVal = (el, v) => { const setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set; setter.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  setVal(wi, '350'); await tick(100);
+  ck('an implausible weight shows the warning and is still stored (member decides)', /looks unusual/.test(dlg.textContent) && w.__logStore.getState().log.weight === '350');
+  setVal(wi, '82.1'); await tick(100);
+  ck('a plausible weight clears the warning', !/looks unusual/.test(dlg.textContent) && w.__logStore.getState().log.weight === '82.1');
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(500);
+  ck('hero shows the new weight after the sheet closes', /82\.1/.test(q('hero-weight').textContent), q('hero-weight').textContent);
+
+  q('protocol-dots').click(); await tick(300);
+  dlg = d.querySelector('[role=dialog]');
+  ck('protocol dots open the protocol sheet with all chips', !!dlg && dlg.querySelectorAll('[data-testid^="chip-"]').length === 5, dlg ? dlg.querySelectorAll('[data-testid^="chip-"]').length : 'no dialog: ' + h.slice(0, 0));
+  dlg.querySelector('[data-testid="chip-b12"]').click(); await tick(100);
+  ck('ticking B12 writes to the store and the title becomes 4 of 5', w.__logStore.getState().log.supplements.b12 === true && /4 of 5 done/.test(dlg.textContent), [w.__logStore.getState().log.supplements, dlg.textContent.slice(0, 80)]);
+  dlg.querySelector('[data-testid="chip-walk"]').click(); await tick(100);
+  ck('tapping an AUTO chip explains instead of ticking', w.__logStore.getState().log.activities.walk === false && /Ticks automatically/.test(dlg.textContent));
+  w.__click('Done'); await tick(500);
+  ck('dots now read 4 of 5', /4 of 5 done/.test(q('protocol-dots').textContent));
+
+  q('chip-sleep').click(); await tick(300);
+  dlg = d.querySelector('[role=dialog]');
+  setVal(dlg.querySelector('[data-testid="sleep-wake"]'), '05:00'); await tick(100);
+  ck('changing wake time recomputes duration (22:30→05:00 = 6h 30m) and stores it',
+     /6h 30m/.test(dlg.querySelector('[data-testid="sleep-duration"]').textContent) && w.__logStore.getState().log.sleep.waketime === '05:00');
+  w.__click('Done'); await tick(500);
+
+  q('chip-food').click(); await tick(400);
+  dlg = d.querySelector('[role=dialog]');
+  ck('food chip opens the food sheet with the real FoodLog and macro bars', !!dlg && !!dlg.querySelector('#section-food') && /Protein|protein/.test(dlg.textContent));
+  w.__click('Done'); await tick(500);
+
+  q('chip-nutrition').click(); await tick(300);
+  dlg = d.querySelector('[role=dialog]');
+  ck('nutrition sheet shows the 31-target panel when food has per_100g data', !!dlg && /of 31 targets met/.test(dlg.textContent) && /Vitamins|vitamins/i.test(dlg.textContent));
+  w.__click('Done'); await tick(500);
+
+  // ── save path: nothing has been POSTed yet — edits are debounced ────────
+  ck('no POST fired yet — edits are debounced, not saved per keystroke', w.__posts.filter(p => /^\/logs\//.test(p.url)).length === 0);
+
+  // ── AI read → chat; timeline empty state; date navigation ───────────────
+  q('ai-read').click(); await tick(50);
+  ck('tapping the read opens the AI chat', w.__aiChat.getState().open === true);
+  w.__aiChat.getState().closeChat(); await tick(50);
+
+  const beforeCalls = w.__calls.length;
+  q('date-nav').querySelector('[aria-label="Previous day"]').click(); await tick(700);
+  ck('‹ loads yesterday (label changes, "Editing past entry", a new /logs fetch)',
+     !/^Today$/.test(q('date-label').textContent) && /Editing past entry/.test(q('date-nav').textContent) && w.__calls.length > beforeCalls, q('date-label').textContent);
+  ck('yesterday has only a weight, so the timeline shows the weight row and nothing else',
+     q('timeline') && q('timeline').querySelectorAll('button').length === 1 && /82\.7/.test(q('timeline').textContent), q('timeline')?.textContent);
+  ck('no streak badge on a past day', !q('streak-badge'));
+  w.__click('Jump to today'); await tick(700);
+  ck('Jump to today returns to today', q('date-label').textContent === 'Today');
+
+
+  // The debounce itself: one more edit, then wait past 4s and the ONE save fires.
+  q('chip-water').click(); await tick(300);
+  d.querySelector('[data-testid="water-add-250"]').click(); await tick(100);
+  w.__click('Done'); await tick(4500);
+  const saves = w.__posts.filter(p => /^\/logs\/\d{4}-\d{2}-\d{2}$/.test(p.url));
+  // Two saves, and the ORDER matters:
+  //  1. pressing ‹ earlier flushed the pending edits (water 2000, B12, wake 05:00)
+  //     to TODAY before the store switched to yesterday — this is the fix for the
+  //     lost-tick bug; without it the first POST would carry yesterday's data.
+  //  2. jumping back to today reloaded the log from the server (1500 in the
+  //     fixture), then +250 → 1750, debounced 4s → one POST.
+  ck('pressing ‹ flushed the pending edits to TODAY first (water 2000, B12 ticked, wake 05:00)',
+     saves.length >= 1 && saves[0].url.endsWith(w.__todayStr) && saves[0].body.water_ml === 2000 && saves[0].body.supplements?.b12 === true && saves[0].body.sleep?.waketime === '05:00',
+     saves.map(p => [p.url, p.body && p.body.water_ml, p.body && p.body.supplements && p.body.supplements.b12, p.body && p.body.sleep && p.body.sleep.waketime]));
+  ck('after 4s of quiet exactly one more POST fires with the new edit (1500 + 250)',
+     saves.length === 2 && saves[1].body.water_ml === 1750, saves.map(p => [p.url, p.body && p.body.water_ml]));
+  ck('the header shows the auto-saved confirmation', /auto-saved/.test(html()), (q('save-status') || {}).textContent);
+
+  ck('nothing in the page tree hit an unrouted endpoint that matters', !w.__calls.some(u => /^\/logs\/undefined|NaN/.test(u)), w.__calls.filter(u => /undefined|NaN/.test(u)));
+  ck('no error escaped during the whole flow', errors.length === 0, errors.join(' | '));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. Today in a REAL browser — phone widths, sheets open, screenshots
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// jsdom proves the wiring; it cannot prove layout. Here the same Today page,
+// same API stub, renders in headless Chrome at 320/360/390px with the built
+// stylesheet: the page must not scroll sideways, and neither may it with the
+// food sheet (the widest content) open. Screenshots land in
+// /tmp/fitlife-shots/ so a human can look at what shipped.
+async function todayVisualTest() {
+  console.log('\n[8] Today at phone widths (headless Chrome) + screenshots');
+  let puppeteerCore, chromiumPkg;
+  try {
+    puppeteerCore = (await import('puppeteer-core')).default;
+    chromiumPkg   = (await import('@sparticuz/chromium')).default;
+  } catch {
+    console.log('  – browser not installed, visual check NOT RUN (cd server && npm run test:ui:install)');
+    return;
+  }
+  const chromium = chromiumPkg.default || chromiumPkg;
+  const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+  const cssFile = fs.existsSync(distDir) ? fs.readdirSync(distDir).find(f => f.endsWith('.css')) : null;
+  if (!cssFile) throw new Error('No built stylesheet — run: cd client && npm run build');
+  const css = fs.readFileSync(path.join(distDir, cssFile), 'utf8');
+  const api = stub('api-today-visual.js', TODAY_API_STUB);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DailyLog from './pages/DailyLog.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
+
+  const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+  const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const origin = `http://127.0.0.1:${server.address().port}/`;
+  const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+  const shotDir = '/tmp/fitlife-shots'; fs.mkdirSync(shotDir, { recursive: true });
+
+  const measure = (page, vw) => page.evaluate((vw) => {
+    const scrollW = document.documentElement.scrollWidth;
+    const offenders = [];
+    if (scrollW > vw + 1) for (const el of document.querySelectorAll('body *')) {
+      const r = el.getBoundingClientRect();
+      if ((r.width === 0 && r.height === 0) || r.right <= vw + 1) continue;
+      if ([...el.children].some(c => c.getBoundingClientRect().right > vw + 1)) continue;
+      offenders.push(`<${el.tagName.toLowerCase()} class="${String(el.className || '').slice(0, 80)}"> right=${Math.round(r.right)}`);
+    }
+    const dialog = document.querySelector('[role=dialog]');
+    const dialogW = dialog ? Math.round(dialog.getBoundingClientRect().width) : null;
+    return { scrollW, offenders: offenders.slice(0, 4), mounted: document.getElementById('root').innerHTML.length, dialogW };
+  }, vw);
+
+  try {
+    for (const width of [320, 360, 390]) {
+      const page = await browser.newPage();
+      await page.setViewport({ width, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+      await page.goto(origin, { waitUntil: 'domcontentloaded' });
+      await page.addScriptTag({ content: code });
+      await new Promise(r => setTimeout(r, 1200));
+      let m = await measure(page, width);
+      ck(`Today @${width}px mounts`, m.mounted > 50, m.mounted);
+      ck(`Today @${width}px does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
+      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360.png'), fullPage: true });
+
+      await page.tap('[data-testid="chip-food"]'); await new Promise(r => setTimeout(r, 900));
+      m = await measure(page, width);
+      ck(`Today @${width}px with the food sheet open still does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
+      ck(`the food sheet @${width}px fills the viewport width`, m.dialogW != null && m.dialogW >= width - 2 && m.dialogW <= width, m.dialogW);
+      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-food-sheet.png') });
+      await page.keyboard.press('Escape'); await new Promise(r => setTimeout(r, 600));
+
+      await page.tap('[data-testid="protocol-dots"]'); await new Promise(r => setTimeout(r, 900));
+      m = await measure(page, width);
+      ck(`protocol sheet @${width}px: no sideways scroll`, m.scrollW <= width + 1 && m.dialogW != null, `scrollWidth ${m.scrollW}`);
+      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-protocol-sheet.png') });
+      await page.keyboard.press('Escape'); await new Promise(r => setTimeout(r, 600));
+      ck(`Escape closes the sheet in a real browser @${width}px`, (await measure(page, width)).dialogW === null);
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+    await new Promise(r => server.close(r));
+  }
+}
+
 async function overflowTest() {
-  console.log('\n[6] horizontal overflow at phone widths (headless Chrome)');
+  console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
   let puppeteerCore, chromiumPkg;
   try {
@@ -646,6 +934,8 @@ async function overflowTest() {
     await foodsQueueTest();
     await nudgeCardTest();
     await primitivesTest();
+    await todayTest();
+    await todayVisualTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

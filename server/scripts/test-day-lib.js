@@ -154,13 +154,18 @@ console.log('\n[8] no mirrored copies');
 {
   const fs = require('fs'), path = require('path');
   const read = (p) => fs.readFileSync(path.join(__dirname, '../../client/src', p), 'utf8');
-  const daily = read('pages/DailyLog.jsx'), profile = read('pages/Profile.jsx');
-  ck('DailyLog imports from lib/day',   /from '\.\.\/lib\/day'/.test(daily));
-  ck('Profile imports from lib/day',    /from '\.\.\/lib\/day'/.test(profile));
-  ck('no local calcBMR left in either page', !/function calcBMR/.test(daily) && !/function calcBMR/.test(profile));
-  ck('no local calcMicros / countMicrosMet in DailyLog', !/function calcMicros|function countMicrosMet/.test(daily));
-  ck('no inline calorie reduce in DailyLog (foodKcal is the one definition)', !/per_100g\.calories \* \(it\.grams \|\| 0\) \/ 100\);\s*\n\s*const n = getNutrition/.test(daily));
-  ck('no inline midnight-wrap sleep maths in DailyLog', !/mins \+= 24 \* 60/.test(daily));
+  // Sprint 3 moved the page's logic into hooks/useTodayModel.js; DailyLog.jsx
+  // is a wrapper. The maths must be imported, never copied, wherever it lives.
+  const model = read('hooks/useTodayModel.js'), profile = read('pages/Profile.jsx');
+  const widgets = read('components/today/DayWidgets.jsx'), daily = read('pages/DailyLog.jsx');
+  ck('useTodayModel imports from lib/day',  /from '\.\.\/lib\/day'/.test(model));
+  ck('DayWidgets imports from lib/day',     /from '\.\.\/\.\.\/lib\/day'/.test(widgets));
+  ck('Profile imports from lib/day',        /from '\.\.\/lib\/day'/.test(profile));
+  ck('DailyLog.jsx carries no maths at all (it is a wrapper)', !/calc|kcal|reduce\(/.test(daily));
+  ck('no local calcBMR left anywhere on the member side', ![model, profile, widgets].some(src => /function calcBMR/.test(src)));
+  ck('no local calcMicros / countMicrosMet copies', ![model, widgets].some(src => /function calcMicros|function countMicrosMet/.test(src)));
+  ck('no inline calorie reduce (foodKcal is the one definition)', !/per_100g\.calories \* \(it\.grams \|\| 0\) \/ 100\);\s*\n\s*const n = getNutrition/.test(model));
+  ck('no inline midnight-wrap sleep maths', !/mins \+= 24 \* 60/.test(model) && !/mins \+= 24 \* 60/.test(read('components/sheets/SleepSheet.jsx')));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
