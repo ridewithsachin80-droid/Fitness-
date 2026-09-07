@@ -710,8 +710,25 @@ async function todayTest() {
   // ── Sprint 4: the AI is on the page ─────────────────────────────────────
   ck('the AI thread renders on the page (no full-screen overlay)', !!q('ai-thread') && !d.querySelector('.fixed.inset-0.z-\\[70\\]'));
   ck('suggestion chips show while the conversation is empty', !!q('ai-suggestions') && q('ai-suggestions').querySelectorAll('button').length >= 3);
-  const composer = q('composer');
-  ck('the composer is docked: portaled to <body>, position fixed, above the nav', !!composer && composer.parentElement === d.body && /fixed/.test(composer.className) && /bottom/.test(composer.getAttribute('style') || ''), composer && composer.getAttribute('style'));
+  // Sprint 5b.3: the bar is summoned, not permanent. (Earlier steps opened the
+  // chat via the read and openChat(); put it away to start from the resting state.)
+  w.__aiChat.getState().closeComposer(); await tick(200);
+  ck('the composer is NOT on the page until asked for', !q('composer') && w.__aiChat.getState().composerOpen === false);
+  ck('with the bar away the page bottom padding is small (no dead space above the nav)', /pb-6/.test(d.querySelector('main').className) && !/pb-32/.test(d.querySelector('main').className));
+  ck('the thread header offers a "Tell me" button while the bar is away', !!q('thread-open-composer'));
+  const orb = q('ai-orb');
+  orb.click(); await tick(300);
+  let composer = q('composer');
+  ck('tapping the ✨ orb summons the composer: portaled to <body>, position fixed, above the nav', !!composer && composer.parentElement === d.body && /fixed/.test(composer.className) && /bottom/.test(composer.getAttribute('style') || ''), composer && composer.getAttribute('style'));
+  ck('the "Tell me" button disappears while the bar is up; the orb reads as pressed', !q('thread-open-composer') && orb.getAttribute('aria-pressed') === 'true');
+  orb.click(); await tick(300);
+  ck('tapping the orb again puts the bar away', !q('composer') && w.__aiChat.getState().composerOpen === false);
+  q('thread-open-composer').click(); await tick(300);
+  ck('"Tell me" in the thread summons it too', !!q('composer'));
+  q('composer-close').click(); await tick(300);
+  ck('the ⌄ Close button on the bar puts it away', !q('composer'));
+  orb.click(); await tick(300);
+  composer = q('composer');
   const composerInput = composer && composer.querySelector('[data-testid="composer-input"]');
   ck('the composer has the text field, mic, camera and lab-report controls', !!composerInput && !!composer.querySelector('[aria-label="Log food from a photo"]') && !!composer.querySelector('[aria-label="Upload a lab report"]'), composer && composer.innerHTML.length);
 
@@ -748,8 +765,12 @@ async function todayTest() {
   ck('Escape blurs the composer but keeps the draft', composerInput.value === 'half typed thou' && w.__aiChat.getState().composerFocused === false && d.activeElement !== composerInput);
   q('composer-clear').click(); await tick(50);
   ck('× clears the draft, hides itself and sends nothing', composerInput.value === '' && !q('composer-clear') && !w.__posts.some(p => p.url === '/ai-chat/parse'));
-  setVal(composerInput, 'drank 500ml water, took b12, weight 82.0'); await tick(50);
-  composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
+  composerInput.focus(); composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(300);
+  ck('Escape on an EMPTY box puts the bar away', !q('composer'));
+  q('ai-orb').click(); await tick(300);
+  const composerInput2 = q('composer').querySelector('[data-testid="composer-input"]');
+  setVal(composerInput2, 'drank 500ml water, took b12, weight 82.0'); await tick(50);
+  composerInput2.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
   ck('Enter sends: the member bubble and the AI reply appear in the thread', /drank 500ml water/.test(q('ai-messages').textContent) && /Got it — water, B12/.test(q('ai-messages').textContent), q('ai-messages').textContent.slice(0, 160));
   ck('the request carried the message to /ai-chat/parse', w.__posts.some(p => p.url === '/ai-chat/parse' && /500ml/.test(p.body.message || JSON.stringify(p.body))));
   ck('the preview offers an Apply button for the 3 parsed items', /Apply 3 items/.test(q('ai-messages').textContent), q('ai-messages').textContent.match(/Apply[^<]{0,30}/));
@@ -859,6 +880,8 @@ async function todayVisualTest() {
       ck(`Today @${width}px does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
       if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360.png'), fullPage: true });
 
+      // Sprint 5b.3: the bar is summoned by the orb. Tap it first.
+      await page.tap('[data-testid="ai-orb"]'); await new Promise(r => setTimeout(r, 500));
       // Sprint 4: the composer is fixed above the nav. Scrolled to the very end,
       // the last card (notes) must still clear the composer — otherwise the
       // bottom of the page is permanently unreachable.

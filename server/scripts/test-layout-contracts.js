@@ -617,6 +617,12 @@ ck('the composer is an auto-growing textarea capped at 5 lines, with the tools o
 ck('Enter sends, Shift+Enter is a new line', /e\.key === 'Enter' && !e\.shiftKey/.test(chat));
 ck('the composer can be left without sending: × clears the draft, Escape steps away',
    /data-testid="composer-clear"/.test(chat) && /e\.key === 'Escape'/.test(chat) && /const clearDraft/.test(chat));
+// Sprint 5b.3: the bar is summoned by the orb, not permanent.
+ck('the composer renders only while composerOpen; the orb toggles it on Today',
+   /composerOpen && createPortal\(/.test(chat) && /toggleComposer/.test(read('components/UI.jsx')) && /data-testid="ai-orb"/.test(read('components/UI.jsx')));
+ck('the bar has its own Close, and the thread offers "Tell me" while the bar is away',
+   /data-testid="composer-close"/.test(chat) && /data-testid="thread-open-composer"/.test(chat));
+ck('Today reserves bottom space only while the bar is up', /composerOpen \? 'pb-32' : 'pb-6'/.test(todayPage));
 ck('the box re-measures on every text change (grows and shrinks)', /useEffect\(\(\) => \{ autoGrow\(inputRef\.current\); \}, \[input\]\)/.test(chat));
 ck('the bottom nav steps aside while composing', /composerFocused/.test(read('components/UI.jsx')) && /translate-y-\[120%\]/.test(read('components/UI.jsx')));
 

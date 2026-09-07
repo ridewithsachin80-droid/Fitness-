@@ -44,6 +44,7 @@ import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutS
 export default function Today() {
   const m = useTodayModel();
   const openChat = useAIChat(s => s.openChat);
+  const composerOpen = useAIChat(s => s.composerOpen);
   const { log, protocol, loading, isToday, sheet, openSheet, closeSheet, terms, ageMode } = m;
 
   return (
@@ -73,7 +74,7 @@ export default function Today() {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 space-y-3 pb-32">
+      <main className={`max-w-md mx-auto px-4 space-y-3 ${composerOpen ? 'pb-32' : 'pb-6'}`}>
         {loading ? (
           <>
             <SkeletonCard lines={1} />

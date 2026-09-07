@@ -236,6 +236,8 @@ export function MemberBottomNav() {
   // Shared AI chat store — the chat itself is mounted once on the Today page,
   // so from anywhere else we navigate there first and it opens on arrival.
   const openAIChat = useAIChat(s => s.openChat);
+  const toggleComposer = useAIChat(s => s.toggleComposer);
+  const composerOpen = useAIChat(s => s.composerOpen);
   // While the composer has focus the nav slides away so the keyboard, the
   // composer and the thread share the screen (Sprint 5b.1).
   const composing = useAIChat(s => s.composerFocused);
@@ -265,8 +267,10 @@ export function MemberBottomNav() {
   ];
   const openChatFromNav = () => {
     haptic(20);
-    // Opening the store flag first means the chat is already "open" by the time
-    // the Today page mounts it, so there's no visible delay on arrival.
+    // On Today the orb is a toggle: summon the composer, tap again to put it
+    // away. From any other tab it opens the chat and heads to Today, so the
+    // composer is already up on arrival.
+    if (pathname === '/') { toggleComposer(); return; }
     openAIChat();
     if (pathname !== '/') navigate('/');
   };
@@ -301,7 +305,9 @@ export function MemberBottomNav() {
             <div style={{ width: 68, flexShrink: 0 }} className="flex items-start justify-center">
               <button
                 onClick={openChatFromNav}
-                aria-label="Log with AI Chat"
+                aria-label={composerOpen ? 'Close AI Chat' : 'Log with AI Chat'}
+                aria-pressed={composerOpen}
+                data-testid="ai-orb"
                 style={{ width: 56, height: 56, marginTop: -22 }}
                 className="orb-breathe rounded-full bg-gradient-to-br from-gold-light via-gold to-gold-dark
                   flex items-center justify-center border-4 border-charcoal

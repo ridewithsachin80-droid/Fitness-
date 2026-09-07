@@ -53,7 +53,14 @@ export const useAIChat = create((set, get) => ({
   // "open" still brings the composer up.
   open: false,
   focusRequest: 0,
-  openChat:  () => set((s) => ({ open: true, focusRequest: s.focusRequest + 1 })),
+  // Sprint 5b.3: the composer is summoned, not permanent. openChat() shows it
+  // (and focuses it); closeComposer() hides it. The thread stays on the page.
+  composerOpen: false,
+  openChat:  () => set((s) => ({ open: true, composerOpen: true, focusRequest: s.focusRequest + 1 })),
+  closeComposer: () => set({ composerOpen: false, composerFocused: false }),
+  toggleComposer: () => set((s) => s.composerOpen
+    ? { composerOpen: false, composerFocused: false }
+    : { open: true, composerOpen: true, focusRequest: s.focusRequest + 1 }),
   closeChat: () => set({ open: false }),
 
   // Bumped after every successful Apply. useTodayModel refreshes the workout
@@ -208,6 +215,7 @@ export default function AIChatLog() {
 
   const focusRequest = useAIChat(s => s.focusRequest);
   const composerFocused = useAIChat(s => s.composerFocused);
+  const composerOpen    = useAIChat(s => s.composerOpen);
   const threadRef = useRef(null);
   const kbInset   = useKeyboardInset();
 
@@ -943,11 +951,19 @@ export default function AIChatLog() {
     <>
     <section ref={threadRef} id="ai-thread" data-testid="ai-thread" aria-label="FitLife AI" className="scroll-mt-4">
       <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
-        <div>
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)] flex-shrink-0">✨</div>
+        <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
           <p className="text-eyebrow text-lo leading-tight">Log your whole day in one message</p>
         </div>
+        <span className="flex-1" />
+        {!composerOpen && (
+          <button type="button" onClick={() => { haptic(10); useAIChat.getState().openChat(); }} data-testid="thread-open-composer"
+            style={{ minHeight: 36 }}
+            className="text-caption font-bold text-charcoal bg-gold rounded-full px-3 active:scale-95 transition-transform whitespace-nowrap">
+            Tell me
+          </button>
+        )}
       </div>
 
       {/* ── Messages ── */}
@@ -1431,8 +1447,8 @@ export default function AIChatLog() {
         break `position: fixed`. Rides above the soft keyboard: the viewport
         meta asks Chrome to resize the layout viewport, and useKeyboardInset
         covers iOS, which ignores that and needs the visualViewport delta. */}
-    {typeof document !== 'undefined' && createPortal(
-      <div data-testid="composer" className="fixed left-0 right-0 z-[45] pointer-events-none"
+    {typeof document !== 'undefined' && composerOpen && createPortal(
+      <div data-testid="composer" className="fixed left-0 right-0 z-[45] pointer-events-none fade-up"
         style={{ bottom: `calc(${(composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
       <div className="max-w-md mx-auto px-3 pointer-events-auto">
       <div className="glass rounded-2xl shadow-float px-3 pt-2 pb-2">
@@ -1452,7 +1468,11 @@ export default function AIChatLog() {
             onBlur={() => useAIChat.getState().setComposerFocused(false)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-              if (e.key === 'Escape') { e.preventDefault(); e.currentTarget.blur(); }   // step away, keep the draft
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                if (input.trim()) e.currentTarget.blur();                    // step away, keep the draft
+                else useAIChat.getState().closeComposer();                    // nothing typed → put the bar away
+              }
             }}
             placeholder="Tell me about your day…"
             aria-label="Tell FitLife about your day"
@@ -1469,6 +1489,12 @@ export default function AIChatLog() {
           )}
         </div>
         <div className="flex items-center gap-1 mt-1.5">
+          <button type="button" onClick={() => { haptic(8); useAIChat.getState().closeComposer(); }}
+            aria-label="Close" data-testid="composer-close"
+            style={{ minWidth: 40, minHeight: 40 }}
+            className="flex items-center justify-center rounded-full text-mid hover:text-white transition-colors flex-shrink-0 -ml-1">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 9l7 7 7-7" /></svg>
+          </button>
           <button onClick={() => labRef.current?.click()}
             disabled={labBusy}
             aria-label="Upload a lab report"
