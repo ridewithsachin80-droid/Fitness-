@@ -739,6 +739,15 @@ async function todayTest() {
   ck('focusing the composer slides the bottom nav away (keyboard + composer + thread share the screen)', w.__aiChat.getState().composerFocused === true && d.querySelector('[data-testid="member-nav"]').dataset.composing === '1');
   composerInput.blur(); await tick(50);
   ck('blur brings the nav back', w.__aiChat.getState().composerFocused === false && d.querySelector('[data-testid="member-nav"]').dataset.composing === '0');
+  // A way out without sending: × discards the draft; Escape steps away and keeps it.
+  ck('no clear button while the box is empty', !q('composer-clear'));
+  setVal(composerInput, 'half typed thou'); await tick(50);
+  ck('typing shows the × clear button', !!q('composer-clear'));
+  composerInput.focus(); await tick(30);
+  composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(50);
+  ck('Escape blurs the composer but keeps the draft', composerInput.value === 'half typed thou' && w.__aiChat.getState().composerFocused === false && d.activeElement !== composerInput);
+  q('composer-clear').click(); await tick(50);
+  ck('× clears the draft, hides itself and sends nothing', composerInput.value === '' && !q('composer-clear') && !w.__posts.some(p => p.url === '/ai-chat/parse'));
   setVal(composerInput, 'drank 500ml water, took b12, weight 82.0'); await tick(50);
   composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
   ck('Enter sends: the member bubble and the AI reply appear in the thread', /drank 500ml water/.test(q('ai-messages').textContent) && /Got it — water, B12/.test(q('ai-messages').textContent), q('ai-messages').textContent.slice(0, 160));

@@ -211,6 +211,19 @@ export default function AIChatLog() {
   const threadRef = useRef(null);
   const kbInset   = useKeyboardInset();
 
+  // The box follows its content in BOTH directions — grows when a dictation
+  // lands, shrinks when text is deleted or cleared — so it can never sit
+  // taller than what is in it.
+  useEffect(() => { autoGrow(inputRef.current); }, [input]);
+
+  // × on the box: discard the draft and drop the keyboard. The only way out
+  // used to be Send.
+  const clearDraft = () => {
+    setInput('');
+    haptic(8);
+    inputRef.current?.blur();
+  };
+
   // The thread is always on the page now, so a conversation carried over from
   // a previous day must be dropped on mount — before it can be applied to
   // today's log — not only when a panel opens.
@@ -1429,20 +1442,32 @@ export default function AIChatLog() {
             underneath — so "2 idli, sambar, 100g whey protein 1 scoop, walked
             30 min" is READABLE while you are still typing it. Enter sends;
             Shift+Enter is a new line. */}
-        <textarea
-          ref={inputRef}
-          value={input}
-          rows={1}
-          onChange={(e) => { setInput(e.target.value); autoGrow(e.target); }}
-          onFocus={() => useAIChat.getState().setComposerFocused(true)}
-          onBlur={() => useAIChat.getState().setComposerFocused(false)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Tell me about your day…"
-          aria-label="Tell FitLife about your day"
-          data-testid="composer-input"
-          style={{ maxHeight: 5 * 22 + 16 }}
-          className="block w-full bg-surface border border-white/[0.10] rounded-2xl px-3 py-2.5 text-body leading-[22px] text-white placeholder-lo outline-none resize-none focus:border-gold/40 transition-colors"
-        />
+        <div className="relative">
+          <textarea
+            ref={inputRef}
+            value={input}
+            rows={1}
+            onChange={(e) => setInput(e.target.value)}
+            onFocus={() => useAIChat.getState().setComposerFocused(true)}
+            onBlur={() => useAIChat.getState().setComposerFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+              if (e.key === 'Escape') { e.preventDefault(); e.currentTarget.blur(); }   // step away, keep the draft
+            }}
+            placeholder="Tell me about your day…"
+            aria-label="Tell FitLife about your day"
+            data-testid="composer-input"
+            style={{ maxHeight: 5 * 22 + 16 }}
+            className={`block w-full bg-surface border border-white/[0.10] rounded-2xl pl-3 py-2.5 text-body leading-[22px] text-white placeholder-lo outline-none resize-none focus:border-gold/40 transition-colors ${input ? 'pr-10' : 'pr-3'}`}
+          />
+          {input && (
+            <button type="button" onClick={clearDraft} aria-label="Clear message" data-testid="composer-clear"
+              style={{ minWidth: 36, minHeight: 36 }}
+              className="absolute top-1 right-1 flex items-center justify-center rounded-full text-lo hover:text-white active:scale-95 transition">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-1 mt-1.5">
           <button onClick={() => labRef.current?.click()}
             disabled={labBusy}

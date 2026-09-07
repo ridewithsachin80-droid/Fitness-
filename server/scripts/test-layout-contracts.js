@@ -615,6 +615,9 @@ ck('the keyboard inset hook exists for iOS (visualViewport delta)', /visualViewp
 ck('the composer is an auto-growing textarea capped at 5 lines, with the tools on their own row',
    /<textarea[\s\S]*data-testid="composer-input"/.test(chat) && /maxHeight: 5 \* 22 \+ 16/.test(chat) && /function autoGrow/.test(chat));
 ck('Enter sends, Shift+Enter is a new line', /e\.key === 'Enter' && !e\.shiftKey/.test(chat));
+ck('the composer can be left without sending: × clears the draft, Escape steps away',
+   /data-testid="composer-clear"/.test(chat) && /e\.key === 'Escape'/.test(chat) && /const clearDraft/.test(chat));
+ck('the box re-measures on every text change (grows and shrinks)', /useEffect\(\(\) => \{ autoGrow\(inputRef\.current\); \}, \[input\]\)/.test(chat));
 ck('the bottom nav steps aside while composing', /composerFocused/.test(read('components/UI.jsx')) && /translate-y-\[120%\]/.test(read('components/UI.jsx')));
 
 // ── Voice logging must not promise what is not set up ───────────────────────
