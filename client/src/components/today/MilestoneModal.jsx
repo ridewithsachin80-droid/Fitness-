@@ -9,7 +9,7 @@ import { Pressable } from '../primitives';
 export default function MilestoneModal({ milestone, onClose }) {
   if (!milestone) return null;
   return (
-    <div className="fixed inset-0 bg-black/60 z-[85] flex items-center justify-center p-6" onClick={onClose} role="dialog" aria-modal="true" data-testid="milestone">
+    <div className="fixed inset-0 bg-black/60 z-[85] flex items-center justify-center p-6" onClick={onClose} role="dialog" aria-modal="true" aria-label="Milestone" data-testid="milestone">
       <div className="bg-surface rounded-3xl border border-white/[0.08] p-8 max-w-xs w-full text-center shadow-float" onClick={e => e.stopPropagation()}>
         <div className="flex justify-center mb-4">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-gold"

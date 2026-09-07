@@ -23,6 +23,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { create } from 'zustand';
+import { createPortal } from 'react-dom';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import api from '../api/client';
 import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
@@ -42,9 +44,23 @@ import { rollbackCard } from '../utils/chatCard';
 // setMessages/setInput accept either a value or an updater function so every
 // existing call site (`setMessages(m => [...m, x])`) works unchanged.
 export const useAIChat = create((set, get) => ({
+  // Sprint 4: the chat is no longer a full-screen overlay — the thread lives on
+  // the Today page and the composer is docked above the nav. `open` now means
+  // "the member asked for the chat" (kept for callers that read it), and
+  // `focusRequest` is a counter: every openChat() bumps it, and the composer
+  // reacts by closing any sheet, scrolling the thread into view and focusing
+  // the input. A counter, not a boolean, so a second tap while already
+  // "open" still brings the composer up.
   open: false,
-  openChat:  () => set({ open: true }),
+  focusRequest: 0,
+  openChat:  () => set((s) => ({ open: true, focusRequest: s.focusRequest + 1 })),
   closeChat: () => set({ open: false }),
+
+  // Bumped after every successful Apply. useTodayModel refreshes the workout
+  // summary from it (it used to watch the overlay closing — there is no
+  // overlay to close any more).
+  lastAppliedAt: null,
+  markApplied: () => set({ lastAppliedAt: Date.now() }),
 
   messages: [],
   input: '',
@@ -87,6 +103,11 @@ const SpeechRecognition =
   typeof window !== 'undefined'
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null;
+
+// Bottom nav card (~64px) + its 12px pad + the orb lifted 22px above the card.
+// Measured in UI.jsx (the nav's own spacer is 104px); the composer sits just
+// above the orb's crown.
+const COMPOSER_BOTTOM_PX = 100;
 
 const SUGGESTION_CHIPS = [
   'weight 82.5, morning walk done',
@@ -145,9 +166,6 @@ function ToggleChip({ on, onToggle, children }) {
 }
 
 export default function AIChatLog() {
-  const open      = useAIChat(s => s.open);
-  const closeChat = useAIChat(s => s.closeChat);
-
   const mealSlots = useSettingsStore(s => s.mealSlots);
 
   // Conversation state comes from the store (see useAIChat above) so it
@@ -173,26 +191,29 @@ export default function AIChatLog() {
   const workoutUndoRef = workoutUndoSnap;  // module-level, see above
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [messages, busy]);
 
-  useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 250);
-  }, [open]);
+  const focusRequest = useAIChat(s => s.focusRequest);
+  const threadRef = useRef(null);
+  const kbInset   = useKeyboardInset();
 
-  // Drop a conversation carried over from a previous day before it can be
-  // applied to today's log.
-  useEffect(() => {
-    if (open) useAIChat.getState().ensureFreshDay(today());
-  }, [open]);
+  // The thread is always on the page now, so a conversation carried over from
+  // a previous day must be dropped on mount — before it can be applied to
+  // today's log — not only when a panel opens.
+  useEffect(() => { useAIChat.getState().ensureFreshDay(today()); }, []);
 
-  // Returning to Today with an existing conversation should land at the
-  // bottom, not at the top of a long scrollback.
+  // openChat() → bring the composer up: scroll the thread into view (the
+  // sheet, if any, is closed by useTodayModel on the same signal) and focus.
   useEffect(() => {
-    if (open && messages.length) {
-      setTimeout(() => bottomRef.current?.scrollIntoView({ block: 'end' }), 0);
-    }
-  }, [open]);
+    if (!focusRequest) return undefined;
+    useAIChat.getState().ensureFreshDay(today());
+    const t = setTimeout(() => {
+      (bottomRef.current || threadRef.current)?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
+      inputRef.current?.focus({ preventScroll: true });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [focusRequest]);
 
   // ── Voice input ────────────────────────────────────────────────────────────
   // Dictation lives in its own review card above the input (useVoiceComposer):
@@ -830,6 +851,7 @@ export default function AIChatLog() {
       next[mi] = { ...next[mi], applied: true, workoutSaveFailed: workoutsOn.length > 0 && !workoutResult.ok, pending: computePending(newLog) };
       return next;
     });
+    useAIChat.getState().markApplied();
   }, [messages, mealSlots, computePending, applyWorkouts]);
 
   // ── Undo / Edit last apply ─────────────────────────────────────────────────
@@ -877,8 +899,6 @@ export default function AIChatLog() {
   const undo = useCallback((mi) => rollback(mi, { reopen: false }), [rollback]);
   const editApplied = useCallback((mi) => rollback(mi, { reopen: true }), [rollback]);
 
-  if (!open) return null;
-
   // Count of included things across a parsed preview
   const countIncluded = (p) =>
     (p.weightOn && p.weight_kg != null ? 1 : 0) +
@@ -893,28 +913,18 @@ export default function AIChatLog() {
     p.workouts.filter(w => w.on).length;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-charcoal flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-
-      {/* ── Header ── */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#111116]">
-        <button onClick={closeChat}
-          style={{ minWidth: 44, minHeight: 44 }}
-          className="flex items-center justify-center rounded-full text-mid hover:text-white hover:bg-white/[0.06] transition-colors">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
-          <div>
-            <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
-            <p className="text-eyebrow text-lo leading-tight">Log your whole day in one message</p>
-          </div>
+    <>
+    <section ref={threadRef} id="ai-thread" data-testid="ai-thread" aria-label="FitLife AI" className="scroll-mt-4">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
+        <div>
+          <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
+          <p className="text-eyebrow text-lo leading-tight">Log your whole day in one message</p>
         </div>
       </div>
 
       {/* ── Messages ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="space-y-4" data-testid="ai-messages">
 
         {messages.length === 0 && (
           <div className="bg-surface border border-hair rounded-2xl p-4">
@@ -1376,7 +1386,7 @@ export default function AIChatLog() {
 
       {/* ── Suggestion chips ── */}
       {messages.length === 0 && (
-        <div className="px-4 pb-2 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="-mx-4 px-4 mt-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }} data-testid="ai-suggestions">
           {SUGGESTION_CHIPS.map((chip, i) => (
             <button key={i} onClick={() => send(chip)}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
@@ -1387,9 +1397,18 @@ export default function AIChatLog() {
         </div>
       )}
 
-      {/* ── Input bar ── */}
-      <div className="px-4 py-3 border-t border-white/[0.06] bg-[#111116]"
-        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+    </section>
+
+    {/* ── Composer — docked above the bottom nav, on every scroll position ──
+        Portaled to <body> so no transformed ancestor (Stagger, motion) can
+        break `position: fixed`. Rides above the soft keyboard: the viewport
+        meta asks Chrome to resize the layout viewport, and useKeyboardInset
+        covers iOS, which ignores that and needs the visualViewport delta. */}
+    {typeof document !== 'undefined' && createPortal(
+      <div data-testid="composer" className="fixed left-0 right-0 z-[45] pointer-events-none"
+        style={{ bottom: `calc(${COMPOSER_BOTTOM_PX + kbInset}px + env(safe-area-inset-bottom))` }}>
+      <div className="max-w-md mx-auto px-3 pointer-events-auto">
+      <div className="glass rounded-2xl shadow-float px-3 py-2">
         {vc.card}
         <div className="flex items-end gap-2">
           <div className="flex-1 flex items-center bg-surface border border-white/[0.10] rounded-2xl px-3">
@@ -1398,7 +1417,7 @@ export default function AIChatLog() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-              placeholder="Eg: weight 82.5, walk done, 2 chapati for lunch"
+              placeholder="Tell me about your day…"
               className="flex-1 bg-transparent text-sm text-white placeholder-lo py-3 outline-none min-w-0"
             />
             <button onClick={() => labRef.current?.click()}
@@ -1449,6 +1468,10 @@ export default function AIChatLog() {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+      </div>,
+      document.body,
+    )}
+    </>
   );
 }

@@ -584,6 +584,24 @@ ck('every sheet a chip / the dots / the hero can open is one of the seven',
    /openSheet\('protocol'\)/.test(todayPage) && /openSheet\('weight'\)/.test(todayPage),
    ['food', 'water', 'sleep', 'workout', 'nutrition'].filter(n => !new RegExp(`onOpen\\('${n}'\\)`).test(strip)));
 
+// ── 10. The AI is on the page (Sprint 4) ────────────────────────────────────
+console.log('\n[10] AI thread on the page, composer docked');
+
+const chat = read('components/AIChatLog.jsx');
+ck('AIChatLog no longer renders a full-screen overlay', !/fixed inset-0/.test(chat) && !/if \(!open\) return null/.test(chat), 'overlay code still present');
+ck('the composer is portaled to <body> and fixed above the nav',
+   /createPortal\(/.test(chat) && /data-testid="composer"[^>]*className="fixed/.test(chat) && /COMPOSER_BOTTOM_PX/.test(chat));
+ck('openChat() is a focus counter, not a boolean (a second tap still brings the composer up)',
+   /focusRequest: s\.focusRequest \+ 1/.test(chat));
+ck('Apply stamps lastAppliedAt; the model refreshes the workout summary from it, not from "overlay closed"',
+   /markApplied\(\)/.test(chat) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
+ck('openChat() closes any open sheet so the composer is reachable', /if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
+ck('Today renders the thread inside the page, inside a Card, not as a trailing overlay',
+   /<Card>\s*<AIChatLog \/>\s*<\/Card>/.test(todayPage) && !/<MemberBottomNav \/>\s*<AIChatLog \/>/.test(todayPage));
+ck('the viewport meta asks Android to resize the layout viewport for the keyboard',
+   /interactive-widget=resizes-content/.test(fs.readFileSync(path.join(CLIENT, '../index.html'), 'utf8')));
+ck('the keyboard inset hook exists for iOS (visualViewport delta)', /visualViewport/.test(read('../src/hooks/useKeyboardInset.js')));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

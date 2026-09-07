@@ -573,7 +573,15 @@ const TODAY_API_STUB = `
       const hit = routes.find(([re]) => re.test(url));
       return { data: hit ? hit[1](opts) : {} };
     };
-    const post = async (url, body) => { window.__posts.push({ url, body }); return { data: { ok: true, ...(body || {}) } }; };
+    const post = async (url, body) => {
+      window.__posts.push({ url, body });
+      if (url === '/ai-chat/parse') {
+        // What the server's parser returns for "drank 500ml water, took b12, weight 82.0"
+        return { data: { reply: 'Got it — water, B12 and your weight.', weight_kg: 82.0, water_ml_add: 500,
+          supplements: [{ id: 'b12', label: 'B12' }], activities: [], acv: [], foods: [], corrections: [], workouts: [] } };
+      }
+      return { data: { ok: true, ...(body || {}) } };
+    };
     export default { get, post, put: post, patch: post, delete: async () => ({ data: {} }) };`;
 
 async function todayTest() {
@@ -699,6 +707,46 @@ async function todayTest() {
   ck('Jump to today returns to today', q('date-label').textContent === 'Today');
 
 
+  // ── Sprint 4: the AI is on the page ─────────────────────────────────────
+  ck('the AI thread renders on the page (no full-screen overlay)', !!q('ai-thread') && !d.querySelector('.fixed.inset-0.z-\\[70\\]'));
+  ck('suggestion chips show while the conversation is empty', !!q('ai-suggestions') && q('ai-suggestions').querySelectorAll('button').length >= 3);
+  const composer = q('composer');
+  ck('the composer is docked: portaled to <body>, position fixed, above the nav', !!composer && composer.parentElement === d.body && /fixed/.test(composer.className) && /bottom/.test(composer.getAttribute('style') || ''), composer && composer.getAttribute('style'));
+  const composerInput = composer && composer.querySelector('input:not([type=file])');
+  ck('the composer has the text field, mic, camera and lab-report controls', !!composerInput && !!composer.querySelector('[aria-label="Log food from a photo"]') && !!composer.querySelector('[aria-label="Upload a lab report"]'), composer && composer.innerHTML.length);
+
+  // The flush on ‹ was this device's first save of the day, and the fixture
+  // member is 5.9 kg under her start weight — so the milestone celebration is
+  // up. Assert it, dismiss it, then carry on.
+  const milestone = q('milestone');
+  ck('the first save of the day raised the "5 kg lost" milestone', !!milestone && /5 kg lost/.test(milestone.textContent), milestone && milestone.textContent.slice(0, 60));
+  if (milestone) { w.__click("Let's keep going."); await tick(200); }
+  ck('dismissing the milestone removes it', !q('milestone'));
+  const sheetDlg = () => [...d.querySelectorAll('[role=dialog]')].find(x => x.getAttribute('aria-label') !== 'Milestone') || null;
+
+  // openChat() while a sheet is open: the sheet closes and the composer takes focus
+  q('chip-water').click(); await tick(300);
+  ck('(setup) water sheet is open', !!sheetDlg());
+  w.__aiChat.getState().openChat(); await tick(700);
+  ck('openChat() closes the sheet so the composer is reachable', !sheetDlg(), 'focusRequest=' + w.__aiChat.getState().focusRequest);
+  ck('openChat() focuses the composer input', d.activeElement === composerInput, d.activeElement && (d.activeElement.tagName + ' ' + (d.activeElement.getAttribute('data-testid') || d.activeElement.placeholder || '')));
+  ck('a second openChat() bumps the focus counter (a counter, not a boolean)', (() => { const before = w.__aiChat.getState().focusRequest; w.__aiChat.getState().openChat(); return w.__aiChat.getState().focusRequest === before + 1; })());
+
+  // Send → preview → Apply, through the stubbed parser
+  const beforeApplied = w.__aiChat.getState().lastAppliedAt;
+  setVal(composerInput, 'drank 500ml water, took b12, weight 82.0'); await tick(50);
+  composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
+  ck('Enter sends: the member bubble and the AI reply appear in the thread', /drank 500ml water/.test(q('ai-messages').textContent) && /Got it — water, B12/.test(q('ai-messages').textContent), q('ai-messages').textContent.slice(0, 160));
+  ck('the request carried the message to /ai-chat/parse', w.__posts.some(p => p.url === '/ai-chat/parse' && /500ml/.test(p.body.message || JSON.stringify(p.body))));
+  ck('the preview offers an Apply button for the 3 parsed items', /Apply 3 items/.test(q('ai-messages').textContent), q('ai-messages').textContent.match(/Apply[^<]{0,30}/));
+  const waterBefore = w.__logStore.getState().log.water;
+  w.__click('Apply 3 items to today'); await tick(700);
+  const st = w.__logStore.getState().log;
+  ck('Apply writes weight 82.0, +500 ml and the B12 tick into the store', st.weight === '82' && st.water === waterBefore + 500 && st.supplements.b12 === true, [st.weight, st.water, st.supplements]);
+  ck('the thread shows "Applied & saved" with Edit and Undo', /Applied/.test(q('ai-messages').textContent) && /Undo/.test(q('ai-messages').textContent) && /Edit/.test(q('ai-messages').textContent));
+  ck('Apply stamps lastAppliedAt (the workout-refresh signal replaces "overlay closed")', w.__aiChat.getState().lastAppliedAt != null && w.__aiChat.getState().lastAppliedAt !== beforeApplied);
+  ck('the hero, chips and dots reflect the applied day without a reload', /(^|\D)82(\D|$)/.test(q('hero-weight').textContent) && !/82\.1/.test(q('hero-weight').textContent) && /2\.0/.test(q('chip-water').textContent) && /4 of 5 done/.test(q('protocol-dots').textContent), [q('hero-weight').textContent, q('chip-water').textContent, q('protocol-dots').textContent]);
+
   // The debounce itself: one more edit, then wait past 4s and the ONE save fires.
   q('chip-water').click(); await tick(300);
   d.querySelector('[data-testid="water-add-250"]').click(); await tick(100);
@@ -713,8 +761,10 @@ async function todayTest() {
   ck('pressing ‹ flushed the pending edits to TODAY first (water 2000, B12 ticked, wake 05:00)',
      saves.length >= 1 && saves[0].url.endsWith(w.__todayStr) && saves[0].body.water_ml === 2000 && saves[0].body.supplements?.b12 === true && saves[0].body.sleep?.waketime === '05:00',
      saves.map(p => [p.url, p.body && p.body.water_ml, p.body && p.body.supplements && p.body.supplements.b12, p.body && p.body.sleep && p.body.sleep.waketime]));
-  ck('after 4s of quiet exactly one more POST fires with the new edit (1500 + 250)',
-     saves.length === 2 && saves[1].body.water_ml === 1750, saves.map(p => [p.url, p.body && p.body.water_ml]));
+  // Apply saved once (saveLog inside applyAll), then +250 debounced → the last POST carries 2250.
+  ck('after 4s of quiet the final POST carries the applied day plus the new edit (1500 + 500 + 250)',
+     saves.length >= 2 && saves[saves.length - 1].body.water_ml === 2250 && saves[saves.length - 1].body.weight_kg == 82,
+     saves.map(p => [p.url, p.body && p.body.water_ml, p.body && p.body.weight_kg]));
   ck('the header shows the auto-saved confirmation', /auto-saved/.test(html()), (q('save-status') || {}).textContent);
 
   ck('nothing in the page tree hit an unrouted endpoint that matters', !w.__calls.some(u => /^\/logs\/undefined|NaN/.test(u)), w.__calls.filter(u => /undefined|NaN/.test(u)));
@@ -761,6 +811,13 @@ async function todayVisualTest() {
   const origin = `http://127.0.0.1:${server.address().port}/`;
   const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
   const shotDir = '/tmp/fitlife-shots'; fs.mkdirSync(shotDir, { recursive: true });
+  // A docked composer covers whatever scrolls under it, exactly like a phone.
+  // Bring the target into the middle of the viewport before tapping, as a thumb would.
+  const tapVisible = async (page, sel) => {
+    await page.$eval(sel, el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    await new Promise(r => setTimeout(r, 250));
+    await page.tap(sel);
+  };
 
   const measure = (page, vw) => page.evaluate((vw) => {
     const scrollW = document.documentElement.scrollWidth;
@@ -788,14 +845,34 @@ async function todayVisualTest() {
       ck(`Today @${width}px does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
       if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360.png'), fullPage: true });
 
-      await page.tap('[data-testid="chip-food"]'); await new Promise(r => setTimeout(r, 900));
+      // Sprint 4: the composer is fixed above the nav. Scrolled to the very end,
+      // the last card (notes) must still clear the composer — otherwise the
+      // bottom of the page is permanently unreachable.
+      // html has scroll-behavior:smooth — scroll instantly, then let layout settle before measuring.
+      await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+      await new Promise(r => setTimeout(r, 400));
+      const dock = await page.evaluate(() => {
+        const c = document.querySelector('[data-testid="composer"]');
+        const n = document.querySelector('[data-testid="notes"]');
+        const nav = document.querySelector('nav') || document.querySelector('[class*="fixed bottom"]');
+        const cr = c && c.getBoundingClientRect(), nr = n && n.getBoundingClientRect(), vr = nav && nav.getBoundingClientRect();
+        return { composerTop: cr && Math.round(cr.top), composerBottom: cr && Math.round(cr.bottom), notesBottom: nr && Math.round(nr.bottom),
+                 navTop: vr && Math.round(vr.top), vh: window.innerHeight, composerVisible: !!cr && cr.height > 30 && cr.bottom <= window.innerHeight };
+      });
+      await new Promise(r => setTimeout(r, 300));
+      ck(`composer @${width}px is docked inside the viewport, above the bottom nav`, dock.composerVisible && (dock.navTop == null || dock.composerBottom <= dock.navTop + 2), dock);
+      ck(`scrolled to the end @${width}px, the notes card clears the composer (page bottom is reachable)`, dock.notesBottom != null && dock.notesBottom <= dock.composerTop, JSON.stringify(dock));
+      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-bottom.png') });
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' })); await new Promise(r => setTimeout(r, 300));
+
+      await tapVisible(page, '[data-testid="chip-food"]'); await new Promise(r => setTimeout(r, 900));
       m = await measure(page, width);
       ck(`Today @${width}px with the food sheet open still does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
-      ck(`the food sheet @${width}px fills the viewport width`, m.dialogW != null && m.dialogW >= width - 2 && m.dialogW <= width, m.dialogW);
+      ck(`the food sheet @${width}px fills the viewport width`, m.dialogW != null && m.dialogW >= width - 2 && m.dialogW <= width, JSON.stringify(m));
       if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-food-sheet.png') });
       await page.keyboard.press('Escape'); await new Promise(r => setTimeout(r, 600));
 
-      await page.tap('[data-testid="protocol-dots"]'); await new Promise(r => setTimeout(r, 900));
+      await tapVisible(page, '[data-testid="protocol-dots"]'); await new Promise(r => setTimeout(r, 900));
       m = await measure(page, width);
       ck(`protocol sheet @${width}px: no sideways scroll`, m.scrollW <= width + 1 && m.dialogW != null, `scrollWidth ${m.scrollW}`);
       if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-protocol-sheet.png') });

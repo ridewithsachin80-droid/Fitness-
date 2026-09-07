@@ -27,8 +27,14 @@ import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutS
  *   → day strip → from your coach → timeline → streak → coach messages
  *   → fasting → notes
  * Every logging action is a bottom sheet (components/sheets/), never an
- * inline drawer that pushes the page around. The ✨ orb still opens the AI
- * chat; Sprint 4 docks a composer here and moves the thread onto the page.
+ * inline drawer that pushes the page around.
+ *
+ * Sprint 4: the AI is on the page. <AIChatLog /> renders the conversation as
+ * the "Ask FitLife" card below the timeline and docks the composer (text, mic,
+ * camera, lab report) above the bottom nav on every scroll position. The ✨
+ * orb, Today's read, the timeline's empty state and the sheets' "Log with AI"
+ * banners all call openChat(), which closes any sheet, scrolls the thread into
+ * view and focuses the composer.
  *
  * All state and saving is in hooks/useTodayModel.js — this file only lays
  * things out. If a number looks wrong, the bug is in the hook or lib/day,
@@ -66,7 +72,7 @@ export default function Today() {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 space-y-3 pb-28">
+      <main className="max-w-md mx-auto px-4 space-y-3 pb-20">
         {loading ? (
           <>
             <SkeletonCard lines={1} />
@@ -113,6 +119,12 @@ export default function Today() {
               <Timeline m={m} onOpen={openSheet} onOpenChat={() => openChat()} />
             </Card>
 
+            {/* The conversation. Its composer is docked above the nav (portaled
+                from inside AIChatLog), so it is reachable from anywhere on the page. */}
+            <Card>
+              <AIChatLog />
+            </Card>
+
             <StreakCard />
             <CoachNotes m={m} />
 
@@ -152,7 +164,6 @@ export default function Today() {
       <NutritionSheet open={sheet === 'nutrition'} onClose={closeSheet} m={m} />
 
       <MemberBottomNav />
-      <AIChatLog />
       <InstallPrompt />
       <MilestoneModal milestone={m.milestone} onClose={() => { haptic(10); m.setMilestone(null); }} />
     </div>

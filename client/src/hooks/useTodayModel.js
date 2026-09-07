@@ -249,15 +249,24 @@ export default function useTodayModel() {
     window.history.replaceState({}, '', window.location.pathname);
   }, []);
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });
-  // Bumped whenever the AI chat closes, so WorkoutLog remounts and picks up
-  // anything the AI just wrote (otherwise an open panel shows stale data).
+  // Bumped whenever the AI applies a day, so WorkoutLog remounts and picks up
+  // anything the AI just wrote (otherwise an open sheet shows stale data).
   const [workoutRefreshKey, setWorkoutRefreshKey] = useState(0);
-  const chatOpen = useAIChat(s => s.open);
-  const prevChatOpen = useRef(chatOpen);
+  // Sprint 4: the chat has no overlay to close any more, so "AI just wrote
+  // something" is signalled directly — the store stamps lastAppliedAt after
+  // every successful Apply and the workout summary refetches from it.
+  const lastAppliedAt = useAIChat(s => s.lastAppliedAt);
   useEffect(() => {
-    if (prevChatOpen.current && !chatOpen) setWorkoutRefreshKey(k => k + 1);
-    prevChatOpen.current = chatOpen;
-  }, [chatOpen]);
+    if (lastAppliedAt) setWorkoutRefreshKey(k => k + 1);
+  }, [lastAppliedAt]);
+
+  // openChat() from anywhere (orb, Today's read, a sheet's "Log with AI"
+  // banner) must be able to reach the composer — which a sheet would cover.
+  // Close whatever sheet is open on the same signal.
+  const chatFocusRequest = useAIChat(s => s.focusRequest);
+  useEffect(() => {
+    if (chatFocusRequest) setHeroPanel(null);
+  }, [chatFocusRequest]);
 
   // Personal-best detection. Declared here, AFTER heroPanel and
   // workoutRefreshKey exist — its dependency array reads them on every
