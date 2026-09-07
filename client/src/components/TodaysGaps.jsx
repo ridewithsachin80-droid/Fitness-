@@ -27,7 +27,7 @@ const SEVERITY = {
   blocking: 'text-[#D98A80] font-medium',
   high:     'text-[#D9A66B] font-medium',
   medium:   'text-[#9AA0AE]',
-  low:      'text-[#7E8596]',
+  low:      'text-lo',
 };
 
 export default function TodaysGaps() {
@@ -49,7 +49,7 @@ export default function TodaysGaps() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <p className="text-xs text-[#7E8596] py-3 text-center">Checking today's logs…</p>;
+  if (loading) return <p className="text-xs text-lo py-3 text-center">Checking today's logs…</p>;
   if (data?.error) return <p className="text-xs text-red-400 py-3 text-center">Could not load today's gaps</p>;
 
   const members = data?.members || [];
@@ -60,11 +60,11 @@ export default function TodaysGaps() {
   if (!members.length) {
     return (
       <div className="py-3 text-center">
-        <p className="text-xs text-emerald-300">
+        <p className="text-xs text-gold-light">
           Everyone has logged what's due so far. Nothing to chase.
         </p>
         {next && (
-          <p className="text-[10px] text-[#7E8596] mt-1">
+          <p className="text-eyebrow text-lo mt-1">
             Next check at {next.label} — {next.covers.join(' and ')}.
           </p>
         )}
@@ -119,7 +119,7 @@ export default function TodaysGaps() {
                 is scrolling to find. No chips now means no second line. */}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold text-[#F2F1EE] truncate tracking-[-0.01em]">
+                <p className="text-body font-semibold text-[#F2F1EE] truncate tracking-[-0.01em]">
                   {m.name}
                 </p>
                 {(() => {
@@ -131,7 +131,7 @@ export default function TodaysGaps() {
                   return (
                     <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1.5">
                       {chips.map(g => (
-                        <span key={g.key} className={`text-[11.5px] ${SEVERITY[g.severity]}`}>
+                        <span key={g.key} className={`text-micro ${SEVERITY[g.severity]}`}>
                           {g.label || GAP_LABEL[g.key] || g.key}
                         </span>
                       ))}
@@ -146,7 +146,7 @@ export default function TodaysGaps() {
                     instead of a sentinel. */}
                 {m.days_since_log != null && (
                   m.days_since_log >= 9999 ? (
-                    <span className="text-[12px] text-[#D98A80]">Never logged</span>
+                    <span className="text-note text-[#D98A80]">Never logged</span>
                   ) : (
                     <span className="font-display text-[19px] leading-none text-[#E8CE7A] tabular-nums">
                       {m.days_since_log}
@@ -158,13 +158,13 @@ export default function TodaysGaps() {
                 )}
 
                 {done[String(m.member_id)] ? (
-                  <span className="text-[11.5px] text-[#6E8F6B]">Sent</span>
+                  <span className="text-micro text-[#6E8F6B]">Sent</span>
                 ) : (
                   <button onClick={() => open(m)}
                     style={{ minHeight: 32 }}
-                    className="text-[12px] font-semibold text-[#E8CE7A]
-                      border border-[rgba(212,175,55,0.34)] rounded-full px-3.5
-                      hover:bg-[rgba(212,175,55,0.09)] active:scale-95 transition-all">
+                    className="text-note font-semibold text-[#E8CE7A]
+                      border border-gold/[0.34] rounded-full px-3.5
+                      hover:bg-gold/[0.09] active:scale-95 transition-all">
                     Message
                   </button>
                 )}
@@ -176,16 +176,16 @@ export default function TodaysGaps() {
 
       {members.length > shown.length && (
         <button onClick={() => setExpanded(true)}
-          className="w-full mt-2 py-2 text-xs font-semibold text-[#D4AF37]
-            bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.20)]
-            rounded-xl hover:bg-[rgba(212,175,55,0.14)] transition-colors">
+          className="w-full mt-2 py-2 text-xs font-semibold text-gold
+            bg-gold/[0.08] border border-gold/20
+            rounded-xl hover:bg-gold/[0.14] transition-colors">
           Show all {members.length}
         </button>
       )}
       {expanded && members.length > 3 && (
         <button onClick={() => setExpanded(false)}
-          className="w-full mt-2 py-2 text-xs font-semibold text-[#7E8596]
-            hover:text-[#9EA3B0] transition-colors">
+          className="w-full mt-2 py-2 text-xs font-semibold text-lo
+            hover:text-mid transition-colors">
           Show fewer
         </button>
       )}
@@ -194,7 +194,7 @@ export default function TodaysGaps() {
           from this list looks like a bug rather than someone who has simply
           logged everything due so far. */}
       {(clear > 0 || next) && (
-        <p className="text-[10px] text-[#7E8596] mt-2.5 leading-relaxed">
+        <p className="text-eyebrow text-lo mt-2.5 leading-relaxed">
           {clear > 0 && (
             <>{clear} other member{clear > 1 ? 's have' : ' has'} logged everything due so far. </>
           )}
@@ -203,7 +203,7 @@ export default function TodaysGaps() {
       )}
 
       <button onClick={load}
-        className="text-[11px] font-bold text-[#D4AF37] mt-1.5">
+        className="text-caption font-bold text-gold mt-1.5">
         Refresh
       </button>
 

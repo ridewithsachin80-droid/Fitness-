@@ -21,8 +21,8 @@ const AGE_MODES = [
     sub: 'Ages 18–59',
     emoji: '💪',
     color: 'from-amber-500 to-amber-600',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
+    bg: 'bg-amber-400/[0.08]',
+    border: 'border-amber-400/25',
     desc: 'Full detail, macros, nutrition science',
   },
   {
@@ -30,9 +30,9 @@ const AGE_MODES = [
     label: 'Senior',
     sub: 'Ages 60+',
     emoji: '🌿',
-    color: 'from-emerald-400 to-teal-500',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
+    color: 'from-gold to-teal-500',
+    bg: 'bg-gold/[0.07]',
+    border: 'border-gold/[0.22]',
     desc: 'Large text, plain language, simplified view',
   },
 ];

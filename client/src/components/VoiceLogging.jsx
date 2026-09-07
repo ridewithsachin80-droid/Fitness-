@@ -160,18 +160,18 @@ export default function VoiceLogging() {
       )}
 
       {token && (
-        <div className="mt-4 p-3 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/30">
-          <p className="text-xs text-[#D4AF37] font-semibold mb-2">
+        <div className="mt-4 p-3 rounded-xl bg-gold/10 border border-gold/30">
+          <p className="text-xs text-gold font-semibold mb-2">
             Your setup code — copy it now, it won't be shown again
           </p>
-          <p className="text-[11px] text-[#9A968E] mb-2 leading-relaxed">
+          <p className="text-caption text-[#9A968E] mb-2 leading-relaxed">
             Paste this into the FitLife shortcut when it asks.
           </p>
-          <p className="text-[11px] text-[#E8E6E1] break-all font-mono leading-relaxed">
+          <p className="text-caption text-[#E8E6E1] break-all font-mono leading-relaxed">
             {token}
           </p>
           <button onClick={copy}
-            className="mt-3 px-4 py-2 rounded-lg text-xs font-semibold bg-[#D4AF37] text-[#121316]">
+            className="mt-3 px-4 py-2 rounded-lg text-xs font-semibold bg-gold text-charcoal">
             {copied ? 'Copied' : 'Copy code'}
           </button>
         </div>
@@ -180,13 +180,13 @@ export default function VoiceLogging() {
       <div className="mt-4 flex flex-wrap gap-2">
         {!status.enabled ? (
           <button onClick={setUp} disabled={busy}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#D4AF37] text-[#121316] disabled:opacity-40">
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-gold text-charcoal disabled:opacity-40">
             {busy ? 'Setting up…' : 'Set up voice logging'}
           </button>
         ) : (
           <>
             <button onClick={setUp} disabled={busy}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white/10 text-[#E8E6E1] border border-white/20 disabled:opacity-40">
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.06] text-[#E8E6E1] border border-white/20 disabled:opacity-40">
               {busy ? '…' : 'New code'}
             </button>
             <button onClick={turnOff} disabled={busy}
@@ -198,14 +198,14 @@ export default function VoiceLogging() {
       </div>
 
       {status.enabled && status.issued && !token && (
-        <p className="text-xs text-[#7E8596] mt-3">
+        <p className="text-xs text-lo mt-3">
           Set up on {new Date(status.issued).toLocaleDateString('en-IN', {
             day: 'numeric', month: 'short', year: 'numeric' })}.
           {' '}Lost the code? Tap New code — the old one stops working.
         </p>
       )}
 
-      <p className="text-xs text-[#7E8596] mt-3 leading-relaxed">
+      <p className="text-xs text-lo mt-3 leading-relaxed">
         Turning this off never signs you out of the app.
       </p>
 
@@ -235,19 +235,19 @@ function HandsFreeSetting() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-sm text-[#E8E6E1]">Hands-free while the app is open</p>
-          <p className="text-xs text-[#7E8596] mt-1 leading-relaxed">
+          <p className="text-xs text-lo mt-1 leading-relaxed">
             Say &ldquo;Hey FitLife&rdquo; and speak. It reads back what it heard
             before saving, so you never need to look at the screen.
           </p>
-          <p className="text-xs text-[#7E8596] mt-1 leading-relaxed">
+          <p className="text-xs text-lo mt-1 leading-relaxed">
             The microphone stays on while this is on, and only while FitLife is
             open on screen.
           </p>
         </div>
         <button onClick={() => toggle(!on)}
           className={`shrink-0 w-12 h-7 rounded-full transition-colors ${
-            on ? 'bg-[#D4AF37]' : 'bg-white/15'}`}>
-          <span className={`block w-5 h-5 rounded-full bg-[#121316] transition-transform ${
+            on ? 'bg-gold' : 'bg-white/15'}`}>
+          <span className={`block w-5 h-5 rounded-full bg-charcoal transition-transform ${
             on ? 'translate-x-6' : 'translate-x-1'}`} />
         </button>
       </div>

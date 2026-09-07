@@ -82,12 +82,12 @@ export default function MorningNudges() {
           <>
             <p className="text-sm text-[#E4572E] mt-1">Couldn't load today's messages.</p>
             <button onClick={load}
-              className="mt-3 px-4 py-2 rounded-lg text-xs font-semibold bg-[#D4AF37] text-[#121316]">
+              className="mt-3 px-4 py-2 rounded-lg text-xs font-semibold bg-gold text-charcoal">
               Try again
             </button>
           </>
         ) : (
-          <p className="text-sm text-[#7E8596]">Loading…</p>
+          <p className="text-sm text-lo">Loading…</p>
         )}
       </Card>
     );
@@ -109,13 +109,13 @@ export default function MorningNudges() {
       <div className="flex items-baseline justify-between mb-1">
         <SectionTitle>Morning messages</SectionTitle>
         {rows.length > 0 && (
-          <span className="text-sm text-[#7E8596]">
+          <span className="text-sm text-lo">
             {byCoach.length} of {rows.length} sent by you
           </span>
         )}
       </div>
 
-      <p className="text-xs text-[#7E8596] mb-4">
+      <p className="text-xs text-lo mb-4">
         Sent from your own WhatsApp until the automatic one is approved.
         Phone notifications can't be confirmed as read, so send again whenever
         you're not sure.
@@ -126,7 +126,7 @@ export default function MorningNudges() {
       )}
 
       {rows.length === 0 && (
-        <p className="text-sm text-[#7E8596]">
+        <p className="text-sm text-lo">
           Nothing to send this morning.
         </p>
       )}
@@ -137,7 +137,7 @@ export default function MorningNudges() {
           return (
             <div key={m.id} className="py-3 flex items-start gap-3">
               <div className="min-w-0 flex-1">
-                <p className={`text-sm ${m.status === 'coach_sent' ? 'text-[#7E8596]' : 'text-[#E8E6E1]'}`}>
+                <p className={`text-sm ${m.status === 'coach_sent' ? 'text-lo' : 'text-[#E8E6E1]'}`}>
                   {m.name}
                 </p>
                 {m.status === 'push_failed' && (
@@ -151,9 +151,9 @@ export default function MorningNudges() {
                   </p>
                 )}
                 {m.status === 'coach_sent' && (
-                  <p className="text-xs text-[#7E8596] mt-0.5">You sent this on WhatsApp.</p>
+                  <p className="text-xs text-lo mt-0.5">You sent this on WhatsApp.</p>
                 )}
-                <p className="text-xs text-[#7E8596] mt-0.5 leading-relaxed">
+                <p className="text-xs text-lo mt-0.5 leading-relaxed">
                   {m.message}
                 </p>
                 {!usable && (
@@ -170,8 +170,8 @@ export default function MorningNudges() {
                 className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold
                            disabled:opacity-40 ${
                              m.status === 'coach_sent'
-                               ? 'bg-white/10 text-[#E8E6E1] border border-white/20'
-                               : 'bg-[#D4AF37] text-[#121316]'}`}>
+                               ? 'bg-white/[0.06] text-[#E8E6E1] border border-white/20'
+                               : 'bg-gold text-charcoal'}`}>
                 {busyId === m.id ? '…' : (m.status === 'none' ? 'Send' : 'Send again')}
               </button>
             </div>

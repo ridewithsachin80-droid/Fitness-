@@ -2,7 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens ─────────────────────────────────────────────────────────── */
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   The theme lives in tailwind.config.js (colours, type scale, shadows). The
+   variables below exist for the few places that are not Tailwind classes:
+   element-level input styling, the boot screen, and inline styles in
+   long-lived components. Keep the two in sync — the JSX never writes a hex.
+
+   HISTORY: this file used to be a 346-line override layer that re-coloured
+   Tailwind's light-theme utilities (`bg-white`, `text-stone-600`,
+   `bg-emerald-500`) to dark and gold. It needed !important on every hover
+   variant and could not reach alpha variants at all (`bg-stone-50/60`
+   rendered near-white on the coach page). Sprint 0 replaced every such class
+   in the JSX with a named token; `test-layout-contracts` [8] keeps it that way. */
 :root {
   --bg-base:     #121316;
   --bg-surface:  #1A1C20;
@@ -34,176 +45,9 @@ body {
   color: var(--text-hi);
 }
 
-/* ── Stone → dark overrides (same specificity, later position wins) ──────── */
-.bg-stone-100 { background-color: var(--bg-base); }
-.bg-stone-50  { background-color: var(--bg-elevated); }
-.bg-white     { background-color: var(--bg-surface); }
-.bg-stone-800 { background-color: #121316; }
-.bg-stone-900 { background-color: #121316; }
-
-.border-stone-100, .border-stone-50 { border-color: var(--border); }
-.border-stone-200                   { border-color: var(--border-med); }
-.divide-stone-100 > * + *           { border-color: var(--border); }
-
-.text-stone-900 { color: var(--text-hi); }
-.text-stone-800 { color: var(--text-hi); }
-.text-stone-700 { color: #FFFFFF; }
-.text-stone-600 { color: var(--text-mid); }
-.text-stone-500 { color: #6a6a78; }
-.text-stone-400 { color: var(--text-lo); }
-.text-stone-300 { color: #4A4E5A; }
-
-/* Accent text — lighten for readability on dark surfaces */
-.text-emerald-700 { color: #F0E2B6; }
-.text-emerald-600 { color: #C5A059; }
-.text-emerald-800 { color: #F0E2B6; }
-.text-red-700, .text-red-600, .text-red-500 { color: #f87171; }
-/* Amber is the WARNING colour and must stay amber. It carries the middle band
-   of the compliance traffic-light (green / amber / red) on Progress and on the
-   coach's member cards.
-
-   There used to be a second .text-amber-700/600 rule below this one setting it
-   to #C5A059, and a .text-amber-500 setting it to #d8b4fe — both leftovers from
-   the purple → gold rebrand, where the old purple utility classes were
-   find-replaced to `amber` and landed on top of the genuine amber usages.
-   Same specificity, later position, so they won: mid compliance rendered gold
-   on purple and the sleep stars came out lavender. Removed. */
-.text-amber-700, .text-amber-600            { color: #fbbf24; }
-.text-amber-500                             { color: #fbbf24; }
-.text-orange-700, .text-orange-600          { color: #fb923c; }
-.text-orange-500                            { color: #fdba74; }
-.text-blue-700, .text-blue-600             { color: #60a5fa; }
-.text-blue-500                             { color: #93c5fd; }
-
-
-/* Remaining emerald shades → purple-tinted so all brand elements unify */
-.text-emerald-400 { color: #F0E2B6; }
-.text-emerald-300 { color: #F0E2B6; }
-.text-emerald-200 { color: #F0E2B6; }
-.text-emerald-100 { color: #ede9fe; }
-/* emerald-500 (used for chart dots / active elements) → vivid purple */
-.text-emerald-500 { color: #C5A059; }
-/* bg-emerald-500 (checkbox fill, meal tabs) → purple */
-.bg-emerald-500 { background-color: #D4AF37; }
-/* bg-emerald-400 (nutrition bar) — keep as accent purple */
-.bg-emerald-400 { background-color: #C5A059; }
-/* border-emerald-500 (checkbox border when checked) */
-.border-emerald-500 { border-color: #D4AF37; }
-
-/* ── The shades the rebrand missed ────────────────────────────────────────────
-   `.bg-emerald-500` was remapped to gold above; 600 and 700 never were. That
-   left seven PRIMARY buttons — Add Member, Add Coach, Save Weight, Add Note,
-   Send Push, and the two protocol Add buttons — rendering Tailwind's default
-   green while every other primary button in the app is gold, and one meal
-   button that was gold at rest and turned green under your thumb.
-
-   Hover and focus variants need their own rules. Tailwind emits
-   `.hover\:bg-emerald-700:hover`, which is a class PLUS a pseudo-class, so it
-   outranks a bare `.bg-emerald-700` no matter how late this file loads. Same
-   reason `.focus\:ring-emerald-*` is spelled out further down.
-
-   These are root fixes, not call-site ones: the JSX keeps its emerald class
-   names and gets the brand colour. `test-layout-contracts` [8] fails if a new
-   stone-* or emerald-* shade is used without a rule here, so this list cannot
-   silently fall behind again. */
-.bg-emerald-600 { background-color: #D4AF37; }
-.bg-emerald-700 { background-color: #C5A059; }
-/* The hover halves need !important for the ordering reason spelled out in the
-   hover-variants block below. */
-.hover\:bg-emerald-600:hover { background-color: #D4AF37 !important; }
-.hover\:bg-emerald-700:hover { background-color: #C5A059 !important; }
-.border-emerald-400 { border-color: rgba(212,175,55,0.55); }
-.accent-emerald-600 { accent-color: #D4AF37; }
-
-/* Progress-bar fill. The bar itself is gold; only the gradient stops were
-   still green. */
-.from-emerald-400 { --tw-gradient-from: #D4AF37 var(--tw-gradient-from-position); }
-.to-emerald-300   { --tw-gradient-to:   #F0E2B6 var(--tw-gradient-to-position); }
-
-/* Bar TRACKS and hairline dividers — light-theme greys sitting on charcoal.
-   `bg-stone-200` is the empty part of a progress bar and the 0%-compliance
-   bar, so it read as a bright band exactly where "nothing logged" should be
-   the quietest thing on screen. */
-.bg-stone-200      { background-color: rgba(255,255,255,0.08); }
-.divide-stone-50 > * + * { border-color: var(--border) !important; }
-
-/* ── Hover variants ───────────────────────────────────────────────────────────
-   Every rule above is a bare class, and a bare class does not reach a hover
-   variant: Tailwind emits `.hover\:text-stone-600:hover`, a class plus a
-   pseudo-class, which outranks `.text-stone-600` whatever the load order. So
-   these kept their light-theme values and only showed it under a finger or a
-   cursor — which is why they survived a colour sweep that read the file at
-   rest.
-
-   `!important` here, and it is not laziness. Vite emits Tailwind's variant
-   utilities in a LATER chunk than its base utilities, and this file lands
-   between the two — verified in dist: our `.hover\:bg-stone-50:hover` sits at
-   byte 54648 and Tailwind's at 63012, so ours loses on position at equal
-   specificity. Position cannot be fixed from inside the file, and doubling the
-   selector only buys one specificity point where `divide-*` needs three. These
-   are leaf colour utilities on a hover state; nothing overrides them inline.
-
-   The same trap already had `.focus\:ring-emerald-*` further down: written
-   months ago, never actually applied, so the focus ring has been emerald all
-   along. Fixed in the same way below.
-
-   `hover:text-stone-600` was the loud one: #57534e on charcoal is close to
-   invisible, so touching a member row on the coach list made the name fade
-   out rather than light up. `hover:bg-stone-50` flashed near-white. */
-.hover\:text-stone-600:hover       { color: var(--text-hi) !important; }
-.group:hover .group-hover\:text-stone-500,
-.group-hover\:text-stone-500       { color: var(--text-mid) !important; }
-.hover\:bg-stone-50:hover          { background-color: rgba(255,255,255,0.06) !important; }
-.hover\:bg-emerald-100:hover       { background-color: rgba(212,175,55,0.13) !important; }
-.hover\:text-emerald-300:hover,
-.hover\:text-emerald-700:hover,
-.hover\:text-emerald-800:hover     { color: #F0E2B6 !important; }
-
-/* Near-white text shades with no rule of their own. They already read as
-   white; these exist so the whole stone-* ramp is accounted for and [8] can
-   assert that with no allowlist. */
-.text-stone-200 { color: #FFFFFF; }
-.text-stone-100 { color: #FFFFFF; }
-
-/* Tinted accent backgrounds */
-.bg-emerald-50  { background-color: rgba(212,175,55,0.07); }
-.bg-emerald-100 { background-color: rgba(212,175,55,0.13); }
-.bg-red-50      { background-color: rgba(248,113,113,0.08); }
-.bg-red-100     { background-color: rgba(248,113,113,0.14); }
-/* Same story as the text rules above — the purple duplicates are gone so an
-   amber background is amber. */
-.bg-amber-50    { background-color: rgba(251,191,36,0.08); }
-.bg-amber-100   { background-color: rgba(251,191,36,0.14); }
-.bg-orange-50   { background-color: rgba(251,146,60,0.08); }
-.bg-blue-50     { background-color: rgba(96,165,250,0.08); }
-.bg-blue-100    { background-color: rgba(96,165,250,0.14); }
-
-/* Accent borders */
-.border-emerald-200 { border-color: rgba(212,175,55,0.22); }
-.border-emerald-100 { border-color: rgba(212,175,55,0.14); }
-.border-red-200     { border-color: rgba(248,113,113,0.25); }
-.border-amber-200   { border-color: rgba(251,191,36,0.25); }
-.border-amber-100   { border-color: rgba(251,191,36,0.15); }
-.border-orange-200  { border-color: rgba(251,146,60,0.25); }
-.border-blue-200    { border-color: rgba(96,165,250,0.25); }
-
-/* Header gradients */
-.from-emerald-700 { --tw-gradient-from: #1A1C20 var(--tw-gradient-from-position); }
-.to-emerald-900   { --tw-gradient-to:   #121316 var(--tw-gradient-to-position); }
-.from-stone-800   { --tw-gradient-from: #1A1C20 var(--tw-gradient-from-position); }
-.to-stone-900     { --tw-gradient-to:   #060609 var(--tw-gradient-to-position); }
-.from-blue-700    { --tw-gradient-from: #1A1C20 var(--tw-gradient-from-position); }
-.to-blue-900      { --tw-gradient-to:   #121316 var(--tw-gradient-to-position); }
-
-/* White overlay utilities (used in headers) */
-.bg-white\/10 { background-color: rgba(255,255,255,0.06) !important; }
-.bg-white\/20 { background-color: rgba(255,255,255,0.10) !important; }
-
-/* Shadows */
-.shadow-card  { box-shadow: 0 0 0 1px var(--border), 0 4px 24px rgba(0,0,0,0.55); }
-.shadow-float { box-shadow: 0 8px 40px rgba(0,0,0,0.75); }
-.shadow-sm    { box-shadow: 0 2px 8px rgba(0,0,0,0.45); }
-.shadow-lg    { box-shadow: 0 10px 40px rgba(0,0,0,0.65); }
+/* Every full-height page root is charcoal. Element-level intent, kept as one
+   rule rather than `bg-charcoal` on ~30 page wrappers. */
+.min-h-screen { background-color: var(--bg-base); }
 
 /* ── Inputs ────────────────────────────────────────────────────────────────── */
 input, textarea, select {
@@ -213,15 +57,8 @@ input, textarea, select {
 }
 input::placeholder, textarea::placeholder { color: var(--text-lo) !important; }
 input[type='date']::-webkit-calendar-picker-indicator { filter: invert(0.6); opacity: 0.5; }
-input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type='number'] { -moz-appearance: textfield; }
-
-/* Focus */
-.focus\:ring-emerald-300:focus,
-.focus\:ring-emerald-400:focus      { --tw-ring-color: rgba(212,175,55,0.28) !important; }
-.focus\:border-emerald-400:focus,
-.focus\:border-emerald-300:focus    { border-color: rgba(212,175,55,0.45) !important; }
 
 /* ── Flex children must be allowed to shrink ───────────────────────────────────
    A flex item's default `min-width: auto` means it refuses to shrink below its
@@ -299,8 +136,6 @@ input[type='number'] { -moz-appearance: textfield; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
-/* ── min-h-screen base ──────────────────────────────────────────────────────── */
-.min-h-screen { background-color: var(--bg-base); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ENHANCED UX — large text, accessibility

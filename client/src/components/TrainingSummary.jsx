@@ -44,7 +44,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
   }, [days, memberId, refreshTick]);
 
   if (loading && !data) {
-    return <p className="text-xs text-[#5a5a68] py-4 text-center">Loading training history…</p>;
+    return <p className="text-xs text-dim py-4 text-center">Loading training history…</p>;
   }
   if (error) {
     return <p className="text-xs text-red-400 py-4 text-center">{error}</p>;
@@ -73,10 +73,10 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
         {RANGES.map(r => (
           <button key={r.days} onClick={() => setDays(r.days)}
             style={{ minHeight: 32 }}
-            className={`flex-1 rounded-lg text-[11px] font-bold transition-colors ${
+            className={`flex-1 rounded-lg text-caption font-bold transition-colors ${
               days === r.days
-                ? 'bg-[#D4AF37] text-[#121316]'
-                : 'bg-white/[0.04] text-[#8e8e9a] hover:text-[#d8d8de]'
+                ? 'bg-gold text-charcoal'
+                : 'bg-white/[0.04] text-[#8e8e9a] hover:text-soft'
             }`}>
             {r.label}
           </button>
@@ -84,7 +84,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
       </div>
 
       {sessions.length === 0 ? (
-        <p className="text-xs text-[#5a5a68] py-6 text-center">
+        <p className="text-xs text-dim py-6 text-center">
           No training logged in this period.
         </p>
       ) : (
@@ -94,18 +94,18 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
             {[
               { v: totals.session_count,                        l: 'Sessions',   c: 'text-[#e0c98a]' },
               { v: `${(totals.volume_kg / 1000).toFixed(1)}t`,  l: 'Volume',     c: 'text-blue-300' },
-              { v: `${totals.cardio_min}m`,                     l: 'Cardio',     c: 'text-emerald-300' },
+              { v: `${totals.cardio_min}m`,                     l: 'Cardio',     c: 'text-gold-light' },
               { v: totalKcal.toLocaleString(),                  l: 'Kcal burned', c: 'text-orange-400' },
             ].map(s => (
-              <div key={s.l} className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2">
+              <div key={s.l} className="bg-white/[0.04] border border-hair rounded-xl px-3 py-2">
                 <p className={`text-base font-extrabold ${s.c}`}>{s.v}</p>
-                <p className="text-[9px] font-bold tracking-wider text-[#5a5a68] mt-0.5">{s.l}</p>
+                <p className="text-tiny font-bold tracking-wider text-dim mt-0.5">{s.l}</p>
               </div>
             ))}
           </div>
 
           {/* Volume trend — simple bars, no chart library needed */}
-          <p className="text-[9px] font-bold tracking-wider text-[#5a5a68] mb-1.5">
+          <p className="text-tiny font-bold tracking-wider text-dim mb-1.5">
             Volume per session
           </p>
           <div className="flex items-end gap-1 h-16 mb-3">
@@ -113,7 +113,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
               const pb = s.volume_kg > 0 && s.volume_kg === best.volume_kg;
               return (
                 <div key={i} className="flex-1 flex flex-col justify-end items-center gap-1" title={`${fmtDate(s.date)} · ${s.volume_kg} kg`}>
-                  <div className={`w-full rounded-t transition-all ${pb ? 'bg-amber-400' : 'bg-[#D4AF37]'}`}
+                  <div className={`w-full rounded-t transition-all ${pb ? 'bg-amber-400' : 'bg-gold'}`}
                     style={{ height: `${Math.max(4, (s.volume_kg / maxVolume) * 100)}%` }} />
                 </div>
               );
@@ -121,17 +121,17 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
           </div>
 
           {/* Recent sessions */}
-          <p className="text-[9px] font-bold tracking-wider text-[#5a5a68] mb-1.5">
+          <p className="text-tiny font-bold tracking-wider text-dim mb-1.5">
             Recent sessions
           </p>
           <div className="space-y-1.5">
             {withKcal.slice(-6).reverse().map((s, i) => (
               <div key={i} className="bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2">
                 <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[11px] font-bold text-[#ededf0]">{fmtDate(s.date)}</span>
-                  <span className="text-[11px] font-bold text-orange-400">{s.totalKcal} kcal</span>
+                  <span className="text-caption font-bold text-bright">{fmtDate(s.date)}</span>
+                  <span className="text-caption font-bold text-orange-400">{s.totalKcal} kcal</span>
                 </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-[#8e8e9a]">
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-eyebrow text-[#8e8e9a]">
                   {s.sets > 0 && (
                     <span>💪 {s.sets} sets · {s.volume_kg.toLocaleString()} kg
                       {s.volume_kg === best.volume_kg && s.volume_kg > 0 && (

@@ -97,21 +97,21 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
   const canSend = !!(draft || '').trim() && !voice.transcribing && !voice.listening;
 
   const card = !active ? null : (
-    <div className="mb-2 rounded-2xl border px-3 py-2.5 bg-[#1A1C20]"
+    <div className="mb-2 rounded-2xl border px-3 py-2.5 bg-surface"
       style={{ borderColor: `${accent}59` }}>
       {/* Header line: state + language toggle / discard */}
       <div className="flex items-center justify-between mb-1.5">
         {voice.listening ? (
-          <span className="text-[11px] text-red-400 font-medium flex items-center gap-1.5">
+          <span className="text-caption text-red-400 font-medium flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
             {autoSend ? 'Listening… pause when done, I\'ll send it' : 'Listening… pause to finish, or tap the mic'}
           </span>
         ) : voice.transcribing ? (
-          <span className="text-[11px] font-medium animate-pulse" style={{ color: accent }}>
+          <span className="text-caption font-medium animate-pulse" style={{ color: accent }}>
             ✨ Getting the exact words…
           </span>
         ) : (
-          <span className="text-[11px] font-medium" style={{ color: accent }}>
+          <span className="text-caption font-medium" style={{ color: accent }}>
             Heard this — check and send
           </span>
         )}
@@ -119,13 +119,13 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
           {voice.listening && setVoiceLang && (
             <button
               onClick={() => setVoiceLang(voiceLang === 'hi-IN' ? 'en-IN' : 'hi-IN')}
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/[0.18] text-[#9EA3B0]">
+              className="text-eyebrow font-bold px-2 py-0.5 rounded-full border border-hair-hi text-mid">
               {voiceLang === 'hi-IN' ? 'हिं' : 'EN'}
             </button>
           )}
           <button onClick={discard} aria-label="Discard voice note"
             style={{ minWidth: 28, minHeight: 28 }}
-            className="text-[#7E8596] hover:text-white text-sm leading-none">✕</button>
+            className="text-lo hover:text-white text-sm leading-none">✕</button>
         </div>
       </div>
 
@@ -143,23 +143,23 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
         onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
         placeholder={voice.listening ? 'Say it — 2 roti with ghee, ek katori dal…' : ''}
         rows={2}
-        className="w-full bg-transparent text-sm text-white placeholder-[#7E8596] leading-relaxed outline-none resize-none"
+        className="w-full bg-transparent text-sm text-white placeholder-lo leading-relaxed outline-none resize-none"
         style={{ minHeight: 44 }}
       />
 
       {voice.error && (
-        <p className="text-[11px] text-amber-400 font-medium mt-1">{voice.error}</p>
+        <p className="text-caption text-amber-400 font-medium mt-1">{voice.error}</p>
       )}
 
       {/* Review actions */}
       {!voice.listening && (
-        <div className="flex items-center gap-2 mt-1.5 pt-2 border-t border-white/[0.07]">
-          <span className="text-[10px] text-[#7E8596]">Tap the text to edit</span>
+        <div className="flex items-center gap-2 mt-1.5 pt-2 border-t border-hair">
+          <span className="text-eyebrow text-lo">Tap the text to edit</span>
           <span className="flex-1" />
           <button onClick={record} disabled={voice.transcribing}
             aria-label="Add more by voice"
             style={{ minWidth: 34, minHeight: 34 }}
-            className="rounded-full border border-white/[0.15] text-[#9EA3B0] hover:text-white flex items-center justify-center">
+            className="rounded-full border border-white/[0.15] text-mid hover:text-white flex items-center justify-center">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
               <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -169,7 +169,7 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
           <button onClick={sendDraft} disabled={!canSend}
             style={{ minHeight: 34, background: canSend ? accent : 'rgba(255,255,255,0.08)' }}
             className={`rounded-full px-4 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
-              canSend ? 'text-[#121316]' : 'text-[#7E8596]'
+              canSend ? 'text-charcoal' : 'text-lo'
             }`}>
             Send ➤
           </button>
@@ -185,7 +185,7 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
       className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
         voice.listening ? 'text-red-400 animate-pulse'
         : voice.transcribing ? 'animate-pulse'
-        : 'text-[#9EA3B0] hover:text-[#F0E2B6]'
+        : 'text-mid hover:text-gold-light'
       }`}
       {...(voice.transcribing ? { 'aria-label': 'Transcribing' } : {})}>
       {voice.transcribing ? (

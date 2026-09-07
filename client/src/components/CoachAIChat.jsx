@@ -99,19 +99,19 @@ function FoodEditCard({ food, onSaved }) {
   };
 
   if (done) {
-    return <p className="text-[12px] text-[#6E8F6B] mt-2">{done}</p>;
+    return <p className="text-note text-[#6E8F6B] mt-2">{done}</p>;
   }
 
   return (
     <div className="mt-2 rounded-2xl bg-[#17181C] px-3.5 py-3"
       style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
       <p className="text-[14px] font-semibold text-[#F2F1EE]">{food.name}</p>
-      <p className="text-[11px] text-[#7E8596] mt-0.5">
+      <p className="text-caption text-lo mt-0.5">
         Per 100g · {food.verified ? 'verified' : `from ${food.source}, unverified`} ·
         {' '}applies to every member
       </p>
       {food.warning && (
-        <p className="text-[11px] text-[#D9A66B] mt-1.5 leading-snug">⚠ {food.warning}</p>
+        <p className="text-caption text-[#D9A66B] mt-1.5 leading-snug">⚠ {food.warning}</p>
       )}
 
       {/* Arithmetic that cannot be true, listed in full rather than one at a
@@ -121,7 +121,7 @@ function FoodEditCard({ food, onSaved }) {
       {food.mass_balance?.problems?.length > 1 && (
         <ul className="mt-1.5 space-y-0.5">
           {food.mass_balance.problems.slice(1).map((x, i) => (
-            <li key={i} className="text-[11px] text-[#D98A80] leading-snug">⚠ {x}</li>
+            <li key={i} className="text-caption text-[#D98A80] leading-snug">⚠ {x}</li>
           ))}
         </ul>
       )}
@@ -130,7 +130,7 @@ function FoodEditCard({ food, onSaved }) {
           leaves 62g of water, which is right for a cooked dish and obviously
           wrong for a dry powder — but only if someone can see it. */}
       {food.mass_balance?.macro_mass > 0 && (
-        <p className="text-[10.5px] text-[#7E8596] mt-1.5">
+        <p className="text-[10.5px] text-lo mt-1.5">
           {food.mass_balance.macro_mass}g of protein, carbs and fat per 100g
           {' '}· {Math.round((100 - food.mass_balance.macro_mass) * 10) / 10}g water and ash
         </p>
@@ -144,11 +144,11 @@ function FoodEditCard({ food, onSaved }) {
       <label className="flex items-center gap-2 mt-3">
         <input type="number" inputMode="numeric" value={defG} placeholder="—"
           onChange={e => setDefG(e.target.value)} disabled={!food.editable || busy}
-          className="w-[74px] bg-[#121316] border border-[rgba(212,175,55,0.3)] rounded-lg
-            px-2 py-1.5 text-[13px] text-[#E8CE7A] tabular-nums disabled:opacity-50" />
-        <span className="text-[11.5px] text-[#9EA3B0]">
+          className="w-[74px] bg-charcoal border border-gold/30 rounded-lg
+            px-2 py-1.5 text-body-sm text-[#E8CE7A] tabular-nums disabled:opacity-50" />
+        <span className="text-micro text-mid">
           g — one typical serving
-          <span className="block text-[10.5px] text-[#7E8596]">
+          <span className="block text-[10.5px] text-lo">
             Used when a member logs this without saying how much.
           </span>
         </span>
@@ -160,9 +160,9 @@ function FoodEditCard({ food, onSaved }) {
             <input type="number" inputMode="decimal" value={vals[k] ?? 0}
               onChange={e => set(k, e.target.value)}
               disabled={!food.editable || busy}
-              className="w-[74px] bg-[#121316] border border-white/[0.09] rounded-lg
-                px-2 py-1.5 text-[13px] text-[#F2F1EE] tabular-nums disabled:opacity-50" />
-            <span className="text-[11px] text-[#8C93A3]">{label}</span>
+              className="w-[74px] bg-charcoal border border-white/[0.09] rounded-lg
+                px-2 py-1.5 text-body-sm text-[#F2F1EE] tabular-nums disabled:opacity-50" />
+            <span className="text-caption text-mute">{label}</span>
           </label>
         ))}
       </div>
@@ -181,27 +181,27 @@ function FoodEditCard({ food, onSaved }) {
                  || { label: 'Sunflower oil', sat: 0.11 };
         const suggested = Math.round(fat * src.sat * 10) / 10;
         return (
-          <div className="mt-3 rounded-xl bg-[rgba(212,175,55,0.06)] px-3 py-2.5">
-            <p className="text-[11.5px] text-[#D9A66B] leading-snug">
+          <div className="mt-3 rounded-xl bg-gold/[0.06] px-3 py-2.5">
+            <p className="text-micro text-[#D9A66B] leading-snug">
               ⚠ {fat}g fat with no saturated fat recorded — no fat is 0% saturated.
             </p>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <span className="text-[11.5px] text-[#9EA3B0]">Cooked in</span>
+              <span className="text-micro text-mid">Cooked in</span>
               <select value={fatSrc} onChange={e => setFatSrc(e.target.value)}
-                className="bg-[#121316] border border-white/[0.09] rounded-lg px-2 py-1
-                  text-[12px] text-[#F2F1EE]">
+                className="bg-charcoal border border-white/[0.09] rounded-lg px-2 py-1
+                  text-note text-[#F2F1EE]">
                 {(food.fat_sources || []).map(f => (
                   <option key={f.key} value={f.key}>{f.label}</option>
                 ))}
               </select>
-              <span className="text-[11.5px] text-[#9EA3B0]">
+              <span className="text-micro text-mid">
                 → <strong className="text-[#E8CE7A]">{suggested}g</strong> saturated
                 {' '}({Math.round(src.sat * 100)}% of the fat)
               </span>
               <button
                 onClick={() => setVals(o => ({ ...o, saturated_fat: suggested }))}
-                className="text-[11.5px] font-semibold text-[#E8CE7A] border
-                  border-[rgba(212,175,55,0.34)] rounded-full px-2.5 py-0.5">
+                className="text-micro font-semibold text-[#E8CE7A] border
+                  border-gold/[0.34] rounded-full px-2.5 py-0.5">
                 Use
               </button>
             </div>
@@ -210,7 +210,7 @@ function FoodEditCard({ food, onSaved }) {
       })()}
 
       <button onClick={() => setMore(v => !v)}
-        className="text-[11px] font-semibold text-[#8C7A46] mt-2.5">
+        className="text-caption font-semibold text-[#8C7A46] mt-2.5">
         {more ? 'Hide' : `Show ${micros.length} more nutrients`}
       </button>
 
@@ -221,9 +221,9 @@ function FoodEditCard({ food, onSaved }) {
               <input type="number" inputMode="decimal" value={vals[k] ?? 0}
                 onChange={e => set(k, e.target.value)}
                 disabled={!food.editable || busy}
-                className="w-[74px] bg-[#121316] border border-white/[0.09] rounded-lg
-                  px-2 py-1.5 text-[12px] text-[#F2F1EE] tabular-nums disabled:opacity-50" />
-              <span className="text-[11px] text-[#8C93A3]">{k.replace(/_/g, ' ')}</span>
+                className="w-[74px] bg-charcoal border border-white/[0.09] rounded-lg
+                  px-2 py-1.5 text-note text-[#F2F1EE] tabular-nums disabled:opacity-50" />
+              <span className="text-caption text-mute">{k.replace(/_/g, ' ')}</span>
             </label>
           ))}
         </div>
@@ -236,12 +236,12 @@ function FoodEditCard({ food, onSaved }) {
       {food.editable && food.impact?.entries > 0 && (
         <label className="flex items-start gap-2 mt-3 cursor-pointer">
           <input type="checkbox" checked={prop} onChange={e => setProp(e.target.checked)} className="mt-0.5" />
-          <span className="text-[11.5px] text-[#9EA3B0] leading-snug">
+          <span className="text-micro text-mid leading-snug">
             Also correct <strong className="text-[#E8CE7A]">{food.impact.entries}</strong> already
             logged by <strong className="text-[#E8CE7A]">{food.impact.members}</strong>
             {food.impact.members === 1 ? ' member' : ' members'}
             {food.impact.earliest ? ` since ${food.impact.earliest}` : ''}.
-            <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
+            <span className="block text-[10.5px] text-lo mt-0.5">
               Grams stay as they logged them — only what 100g contains changes.
             </span>
           </span>
@@ -262,11 +262,11 @@ function FoodEditCard({ food, onSaved }) {
         && food.impact?.guessed > 0 && (
         <label className="flex items-start gap-2 mt-2 cursor-pointer">
           <input type="checkbox" checked={propG} onChange={e => setPropG(e.target.checked)} className="mt-0.5" />
-          <span className="text-[11.5px] text-[#9EA3B0] leading-snug">
+          <span className="text-micro text-mid leading-snug">
             Also reset the portion to <strong className="text-[#E8CE7A]">{defG}g</strong> on
             {' '}<strong className="text-[#E8CE7A]">{food.impact.guessed}</strong>
             {food.impact.guessed === 1 ? ' entry' : ' entries'} where no quantity was given.
-            <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
+            <span className="block text-[10.5px] text-lo mt-0.5">
               Entries where the member said how much are left alone.
             </span>
           </span>
@@ -285,28 +285,28 @@ function FoodEditCard({ food, onSaved }) {
       {food.editable && food.impact?.unlinked > 0 && (
         <label className="flex items-start gap-2 mt-2 cursor-pointer">
           <input type="checkbox" checked={propU} onChange={e => setPropU(e.target.checked)} className="mt-0.5" />
-          <span className="text-[11.5px] text-[#9EA3B0] leading-snug">
+          <span className="text-micro text-mid leading-snug">
             Also correct <strong className="text-[#E8CE7A]">{food.impact.unlinked}</strong>
             {food.impact.unlinked === 1 ? ' entry' : ' entries'} named "{food.name}" that were
             never linked to this food.
-            <span className="block text-[10.5px] text-[#7E8596] mt-0.5">
+            <span className="block text-[10.5px] text-lo mt-0.5">
               Matched on the exact name. They get linked, so future corrections reach them automatically.
             </span>
           </span>
         </label>
       )}
 
-      {err && <p className="text-[11.5px] text-red-300 mt-2">{err}</p>}
+      {err && <p className="text-micro text-red-300 mt-2">{err}</p>}
 
       {food.editable ? (
         <button onClick={save} disabled={busy}
           style={{ minHeight: 38 }}
-          className="w-full mt-3 text-[13px] font-semibold text-[#121316] bg-[#D4AF37]
+          className="w-full mt-3 text-body-sm font-semibold text-charcoal bg-gold
             rounded-xl disabled:opacity-50 active:scale-95 transition-transform">
           {busy ? 'Saving…' : 'Save for all members'}
         </button>
       ) : (
-        <p className="text-[11.5px] text-[#7E8596] mt-3">
+        <p className="text-micro text-lo mt-3">
           Shared foods are corrected by an admin.
         </p>
       )}
@@ -327,7 +327,7 @@ export function CoachAIFab({ bottomOffset = 40 }) {
       // as an orb someone had cut in half, so it now presents as a deliberate
       // tab: flat gold, a hairline down the open edge, and a drawn glyph
       // instead of whatever spark the phone's emoji font supplies.
-      className="fixed z-40 flex items-center justify-center bg-[#D4AF37]
+      className="fixed z-40 flex items-center justify-center bg-gold
         shadow-[0_2px_14px_rgba(212,175,55,0.28)] active:scale-95 transition-transform"
       style={{
         right: 0,
@@ -574,10 +574,10 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8a6a1e] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-[#8a6a1e] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">Coach AI</p>
-            <p className="text-[10px] text-[#4e4e5c] leading-tight">Manage protocols & messages by chat</p>
+            <p className="text-eyebrow text-[#4e4e5c] leading-tight">Manage protocols & messages by chat</p>
           </div>
         </div>
 
@@ -591,7 +591,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         {messages.length > 0 && (
           <button onClick={() => { setMessages([]); setInput(''); }}
             style={{ minHeight: 36 }}
-            className="ml-auto px-3 rounded-full text-[11px] font-semibold text-[#8e8e9a]
+            className="ml-auto px-3 rounded-full text-caption font-semibold text-[#8e8e9a]
               hover:text-white hover:bg-white/[0.06] transition-colors">
             Clear
           </button>
@@ -602,7 +602,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 
         {messages.length === 0 && (
-          <div className="bg-[#16161c] border border-white/[0.07] rounded-2xl p-4">
+          <div className="bg-[#16161c] border border-hair rounded-2xl p-4">
             <p className="text-sm font-semibold text-white mb-1.5">What would you like to change? 🏋️</p>
             <p className="text-xs text-[#8e8e9a] leading-relaxed mb-3">
               Name a member and describe the change — protocols, targets, custom
@@ -621,7 +621,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-[#D4AF37] text-[#121316] text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="max-w-[85%] bg-gold text-charcoal text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
                 {m.text}
               </div>
             </div>
@@ -634,11 +634,11 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                     : m.isAnswer
                       // Answers are gold-tinted so a READ is visually distinct
                       // from a pending CHANGE. Nothing here needs applying.
-                      ? 'bg-[rgba(212,175,55,0.06)] border-[rgba(212,175,55,0.20)] text-[#F0E2B6]'
-                      : 'bg-[#16161c] border-white/[0.07] text-[#d8d8de]'
+                      ? 'bg-gold/[0.06] border-gold/20 text-gold-light'
+                      : 'bg-[#16161c] border-hair text-soft'
                 }`}>
                   {(m.isAnswer || m.summary) && m.answeredFor && (
-                    <p className="text-[10px] font-bold text-[#D4AF37] mb-1.5">
+                    <p className="text-eyebrow font-bold text-gold mb-1.5">
                       {m.answeredFor}
                     </p>
                   )}
@@ -661,38 +661,38 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                             !a.resolved
                               ? 'border-amber-500/30 opacity-80'
                               : a.on
-                              ? 'border-[#D4AF37]/40 active:scale-[0.99]'
+                              ? 'border-gold/40 active:scale-[0.99]'
                               : 'border-white/[0.05] opacity-40'
                           }`}>
                           <div className="flex items-center justify-between gap-2 mb-1.5">
                             <div className="flex items-center gap-2 min-w-0">
                               {a.resolved && (
-                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                  a.on ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'
+                                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
+                                  a.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
                                 }`}>✓</span>
                               )}
-                              <p className={`text-[13px] font-bold truncate ${a.on || !a.resolved ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
+                              <p className={`text-body-sm font-bold truncate ${a.on || !a.resolved ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
                                 {a.member_name}
                               </p>
                               {a.is_all && (
-                                <span className="text-[9px] font-bold text-[#e0c98a] bg-[#D4AF37]/[0.14] border border-[#D4AF37]/30 rounded-full px-2 py-0.5 flex-shrink-0">BROADCAST</span>
+                                <span className="text-tiny font-bold text-[#e0c98a] bg-gold/[0.14] border border-gold/30 rounded-full px-2 py-0.5 flex-shrink-0">BROADCAST</span>
                               )}
                             </div>
                             {!a.resolved && (
-                              <span className="text-[9px] font-bold text-amber-400 bg-amber-500/[0.10] border border-amber-500/30 rounded-full px-2 py-0.5 flex-shrink-0">
+                              <span className="text-tiny font-bold text-amber-400 bg-amber-500/[0.10] border border-amber-500/30 rounded-full px-2 py-0.5 flex-shrink-0">
                                 NOT FOUND
                               </span>
                             )}
                           </div>
                           <div className="space-y-1">
                             {a.changes.map((c, ci) => (
-                              <p key={ci} className="text-[12px] text-[#b6b6c2] leading-relaxed">
+                              <p key={ci} className="text-note text-[#b6b6c2] leading-relaxed">
                                 <span className="mr-1.5">{c.icon}</span>{c.text}
                               </p>
                             ))}
                           </div>
                           {!a.resolved && (
-                            <p className="text-[10px] text-amber-400/80 mt-1.5">
+                            <p className="text-eyebrow text-amber-400/80 mt-1.5">
                               No member by this name — check spelling and resend.
                             </p>
                           )}
@@ -704,7 +704,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                         <button onClick={() => applyAll(mi)}
                           disabled={applying}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#D4AF37] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#D4AF37] active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
                           {applying
                             ? 'Applying…'
                             : `Apply changes for ${m.actions.filter(a => a.on && a.resolved).length} ${plural(m.actions.filter(a => a.on && a.resolved).length, 'member')}`}
@@ -713,11 +713,11 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
 
                       {/* Results */}
                       {m.applied && (
-                        <div className="bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl px-3.5 py-3 space-y-1.5">
-                          <p className="text-[13px] font-bold text-emerald-400">✓ Applied</p>
+                        <div className="bg-ok-deep/[0.08] border border-ok-deep/25 rounded-xl px-3.5 py-3 space-y-1.5">
+                          <p className="text-body-sm font-bold text-gold-light">✓ Applied</p>
                           {(m.results || []).map((r, ri) => (
                             <div key={ri}>
-                              <p className={`text-[11px] leading-relaxed ${r.ok ? 'text-[#b6b6c2]' : 'text-red-300'}`}>
+                              <p className={`text-caption leading-relaxed ${r.ok ? 'text-[#b6b6c2]' : 'text-red-300'}`}>
                                 {r.ok ? '✓' : '✗'} <span className="font-semibold">{r.member_name}</span>
                                 {r.detail ? ` — ${r.detail}` : ''}
                               </p>
@@ -733,7 +733,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                                     markMorningNudgeSent(r.whatsapp.member_id, r.whatsapp.message)
                                       .catch(() => {});
                                   }}
-                                  className="mt-1.5 mb-0.5 text-[11px] font-semibold text-[#121316]
+                                  className="mt-1.5 mb-0.5 text-caption font-semibold text-charcoal
                                              bg-[#25D366] px-3 py-1.5 rounded-lg active:scale-95
                                              transition-transform">
                                   Send on WhatsApp
@@ -741,7 +741,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                               )}
                             </div>
                           ))}
-                          <p className="text-[10px] text-[#4e4e5c] pt-0.5">
+                          <p className="text-eyebrow text-[#4e4e5c] pt-0.5">
                             Members see protocol changes on next app open · logged in Audit
                           </p>
                         </div>
@@ -756,11 +756,11 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
 
         {busy && (
           <div className="flex justify-start">
-            <div className="bg-[#16161c] border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="bg-[#16161c] border border-hair rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -779,7 +779,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                 else send(chip);
               }}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
-              className="text-xs bg-[#1A1C20] border border-white/[0.10] hover:border-[rgba(212,175,55,0.4)] rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
+              className="text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
               {chip.trim()}{chip.endsWith(' ') ? '…' : ''}
             </button>
           ))}
@@ -791,7 +791,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {vc.card}
         <div className="flex items-end gap-2">
-          <div className="flex-1 flex items-center bg-[#1A1C20] border border-white/[0.10] rounded-2xl px-3">
+          <div className="flex-1 flex items-center bg-surface border border-white/[0.10] rounded-2xl px-3">
             <input
               ref={inputRef}
               value={input}
@@ -807,7 +807,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
               style={{ minWidth: 40, minHeight: 40 }}
               title="Attach a diet plan (PDF or photo)"
               className={`flex items-center justify-center rounded-full flex-shrink-0 cursor-pointer
-                transition-colors ${busy ? 'text-[#4e4e5c]' : 'text-[#9EA3B0] hover:text-[#E8CE7A]'}`}>
+                transition-colors ${busy ? 'text-[#4e4e5c]' : 'text-mid hover:text-[#E8CE7A]'}`}>
               <input type="file" accept="application/pdf,image/*" className="hidden" disabled={busy}
                 onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; sendDoc(f); }} />
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -822,7 +822,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
-                ? 'bg-[#D4AF37] text-[#121316] shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
+                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-[#4e4e5c]'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

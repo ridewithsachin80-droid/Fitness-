@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { calcBMR, foodKcal } from '../lib/day';
 import { useAuthStore } from '../store/authStore';
 import { getMyProfile, updateMyProfile }  from '../api/logs';
 import { Card, SectionTitle, PageLoader, BackButton, MemberBottomNav } from '../components/UI';
@@ -41,10 +42,10 @@ function bmi(weightKg, heightCm) {
 function bmiLabel(b) {
   if (!b) return null;
   const v = parseFloat(b);
-  if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-300 bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.20)]' };
-  if (v < 25)   return { label: 'Healthy',     cls: 'text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.20)]' };
-  if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-300 bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.20)]' };
-  return             { label: 'Obese',          cls: 'text-red-300 bg-[rgba(248,113,113,0.10)] border-[rgba(248,113,113,0.20)]' };
+  if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-300 bg-blue-400/10 border-blue-400/20' };
+  if (v < 25)   return { label: 'Healthy',     cls: 'text-gold-light bg-gold/10 border-gold/20' };
+  if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-300 bg-amber-400/10 border-amber-400/20' };
+  return             { label: 'Obese',          cls: 'text-red-300 bg-red-400/10 border-red-400/20' };
 }
 
 /**
@@ -71,24 +72,24 @@ function PortionMemory() {
     <Card>
       <SectionTitle icon="🥣">Your Portion Sizes</SectionTitle>
       {portions.length === 0 ? (
-        <p className="text-sm text-[#9EA3B0] mt-2 leading-relaxed">
+        <p className="text-sm text-mid mt-2 leading-relaxed">
           Nothing learned yet. When you correct a weight in the AI chat — changing
           "1 katori dal" from 150g to the amount your bowl actually holds — it's
           remembered and used next time.
         </p>
       ) : (
         <>
-          <p className="text-xs text-[#7E8596] mt-1 mb-3">
+          <p className="text-xs text-lo mt-1 mb-3">
             Measured from your own corrections, and used instead of the generic table.
           </p>
           <div className="space-y-1.5">
             {portions.map(p => (
-              <div key={p.phrase} className="flex items-center justify-between bg-[#121316]
+              <div key={p.phrase} className="flex items-center justify-between bg-charcoal
                 border border-white/[0.06] rounded-xl px-3 py-2">
-                <span className="text-[12px] text-[#FFFFFF] capitalize">{p.phrase}</span>
-                <span className="text-[12px] font-bold text-[#D4AF37]">
+                <span className="text-note text-white capitalize">{p.phrase}</span>
+                <span className="text-note font-bold text-gold">
                   {p.grams}g
-                  <span className="text-[10px] font-medium text-[#7E8596] ml-1.5">
+                  <span className="text-eyebrow font-medium text-lo ml-1.5">
                     {p.samples} {plural(p.samples, 'correction')}
                   </span>
                 </span>
@@ -103,34 +104,10 @@ function PortionMemory() {
 
 // ── TDEE (Total Daily Energy Expenditure) ─────────────────────────────────────
 //
-// BMR uses Mifflin-St Jeor (1990), the equation most widely recommended for
-// healthy adults — more accurate than Harris-Benedict for modern populations:
-//   Male:   BMR = 10×weight(kg) + 6.25×height(cm) − 5×age + 5
-//   Female: BMR = 10×weight(kg) + 6.25×height(cm) − 5×age − 161
-// When sex isn't recorded we average the two constants (−78) and flag it,
-// since guessing either way skews the result by ~166 kcal.
-//
-// TDEE = BMR × activity factor. We use 1.2 (sedentary baseline) and add the
-// day's ACTUAL measured burn from protocol activities and logged workouts on
-// top, rather than guessing a lifestyle multiplier — the member is already
-// logging what they did, so we use it.
-function calcBMR({ weightKg, heightCm, age, gender }) {
-  if (!weightKg || !heightCm || age == null) return null;
-  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
-  const g = String(gender || '').toLowerCase();
-  if (g === 'male')   return Math.round(base + 5);
-  if (g === 'female') return Math.round(base - 161);
-  return Math.round(base - 78); // sex unknown — midpoint
-}
-
-function calcFoodKcal(items = []) {
-  return items.reduce((sum, it) => {
-    const cal = it?.per_100g?.calories;
-    if (!cal) return sum;
-    return sum + Math.round(cal * ((it.grams || 0) / 100));
-  }, 0);
-}
-
+// BMR is Mifflin-St Jeor (1990); TDEE = BMR × 1.2 plus the day's ACTUAL logged
+// burn. The equations live in lib/day/energy.js — the same functions the Today
+// page uses, so the two screens cannot drift apart. (They used to be two
+// copies of the same code with a comment promising they matched.)
 const CONDITION_LABELS = {
   fatty_liver:    '🫀 Fatty Liver',
   pre_diabetic:   '🩸 Pre-Diabetic',
@@ -155,14 +132,14 @@ const CONDITION_LABELS = {
 function StatPill({ label, value, unit, accent = false }) {
   return (
     <div className={`rounded-2xl px-3 py-3 text-center ${
-      accent ? 'bg-[rgba(212,175,55,0.07)]' : 'bg-[#17181C]'}`}
+      accent ? 'bg-gold/[0.07]' : 'bg-[#17181C]'}`}
       style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
       <p className={`font-display text-[23px] leading-none font-medium tabular-nums ${
         accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>
         {value ?? '—'}
-        {unit && <span className="text-[13px] font-normal ml-1 text-[#7E8596]">{unit}</span>}
+        {unit && <span className="text-body-sm font-normal ml-1 text-lo">{unit}</span>}
       </p>
-      <p className="text-[11.5px] mt-1.5 text-[#8C93A3]">{label}</p>
+      <p className="text-micro mt-1.5 text-mute">{label}</p>
     </div>
   );
 }
@@ -187,10 +164,10 @@ export default function Profile() {
   if (loading) return <PageLoader />;
 
   if (error) return (
-    <div className="min-h-screen bg-[#121316] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-charcoal flex items-center justify-center px-4">
       <div className="text-center">
         <p className="text-red-400 font-semibold">{error}</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-[#D4AF37] font-medium text-sm">
+        <button onClick={() => navigate('/')} className="mt-4 text-gold font-medium text-sm">
           ← Back to log
         </button>
       </div>
@@ -212,10 +189,10 @@ export default function Profile() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#121316] font-sans">
+    <div className="min-h-screen bg-charcoal font-sans">
 
       {/* ── Header ── */}
-      <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-8">
+      <div className="bg-gradient-to-br from-surface to-charcoal text-white px-4 pt-10 pb-8">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-6">
             <BackButton onClick={() => navigate('/')} label="Back to log" />
@@ -224,11 +201,11 @@ export default function Profile() {
                   whose height was typed wrong at signup had to message the
                   coach to get a number changed they could see on their screen. */}
               <button onClick={() => setEditing(v => !v)}
-                className="text-xs font-semibold text-[#D4AF37] hover:text-[#F0E2B6] transition-colors">
+                className="text-xs font-semibold text-gold hover:text-gold-light transition-colors">
                 {editing ? 'Cancel' : 'Edit details'}
               </button>
               <button onClick={() => navigate('/settings')}
-                className="text-xs font-semibold text-[#F0E2B6] hover:text-white transition-colors">
+                className="text-xs font-semibold text-gold-light hover:text-white transition-colors">
                 Settings
               </button>
             </div>
@@ -241,13 +218,13 @@ export default function Profile() {
             </div>
             <div>
               <h1 className="font-display text-2xl font-medium">{p.name}</h1>
-              <p className="text-[#F0E2B6] text-sm mt-0.5">
+              <p className="text-gold-light text-sm mt-0.5">
                 {p.phone && `+91 ${p.phone}`}
                 {memberAge && ` · ${memberAge} yrs`}
                 {p.height_cm && ` · ${p.height_cm} cm`}
               </p>
               {p.monitor_name && (
-                <p className="text-xs text-[#F0E2B6] mt-1">🏋️ Coach: {p.monitor_name}</p>
+                <p className="text-xs text-gold-light mt-1">🏋️ Coach: {p.monitor_name}</p>
               )}
             </div>
           </div>
@@ -265,8 +242,8 @@ export default function Profile() {
 
           {/* Journey progress bar */}
           {journeyPct !== null && journeyPct >= 0 && (
-            <div className="bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="flex justify-between text-xs text-[#F0E2B6] mb-1.5">
+            <div className="bg-white/[0.05] rounded-2xl p-3 border border-hair shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <div className="flex justify-between text-xs text-gold-light mb-1.5">
                 <span>Journey progress</span>
                 <span className="font-bold text-white">{journeyPct}%</span>
               </div>
@@ -281,7 +258,7 @@ export default function Profile() {
                   }}
                 />
               </div>
-              <div className="flex justify-between text-xs text-[#F0E2B6] mt-1.5">
+              <div className="flex justify-between text-xs text-gold-light mt-1.5">
                 <span>Start: {p.start_weight} kg</span>
                 <span>Goal: {p.target_weight} kg</span>
               </div>
@@ -317,15 +294,15 @@ export default function Profile() {
           <Card>
             <SectionTitle icon="⚖️">Body Mass Index</SectionTitle>
             <div className="flex items-center justify-between mt-1">
-              <span className="font-display text-3xl font-semibold text-[#FFFFFF]">{currentBmi}</span>
+              <span className="font-display text-3xl font-semibold text-white">{currentBmi}</span>
               <span className={`text-sm font-bold px-3 py-1 rounded-full border ${bmiInfo.cls}`}>
                 {bmiInfo.label}
               </span>
             </div>
             <div className="mt-3 h-2 bg-white/[0.08] rounded-full overflow-hidden">
-              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-[#D4AF37] via-amber-400 to-red-500" />
+              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-gold via-amber-400 to-red-500" />
             </div>
-            <div className="flex justify-between text-xs text-[#7E8596] mt-1">
+            <div className="flex justify-between text-xs text-lo mt-1">
               <span>18.5</span><span>25</span><span>30</span><span>35+</span>
             </div>
           </Card>
@@ -348,8 +325,8 @@ export default function Profile() {
             return (
               <Card>
                 <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
-                <p className="text-sm text-[#9EA3B0] mt-2 leading-relaxed">
-                  Still needed: <span className="text-[#FFFFFF] font-semibold">{missing.join(', ')}</span>.
+                <p className="text-sm text-mid mt-2 leading-relaxed">
+                  Still needed: <span className="text-white font-semibold">{missing.join(', ')}</span>.
                   {missing.includes('a logged weight')
                     ? ' Log your morning weight on the Today page.'
                     : ' Ask your coach to add this to your profile.'}
@@ -370,32 +347,32 @@ export default function Profile() {
           });
           const workoutBurn = work.totalKcal;
           const totalOut     = restingTdee + workoutBurn;
-          const totalIn      = calcFoodKcal(e.food_items);
+          const totalIn      = foodKcal(e.food_items);
           const balance      = totalIn - totalOut;
           const logged       = totalIn > 0;
 
           return (
             <Card>
               <SectionTitle icon="🔥">Daily Energy (TDEE)</SectionTitle>
-              <p className="text-xs text-[#7E8596] mb-3">
+              <p className="text-xs text-lo mb-3">
                 Mifflin-St Jeor BMR × 1.2, plus today's logged activity
                 {!p.gender && ' · sex not set — add it under Edit details for an exact figure'}
               </p>
 
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
-                  <p className="text-lg font-extrabold text-[#FFFFFF]">{bmr}</p>
-                  <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mt-0.5">BMR at rest</p>
+                <div className="bg-white/[0.04] border border-hair rounded-xl px-3 py-2.5">
+                  <p className="text-lg font-extrabold text-white">{bmr}</p>
+                  <p className="text-eyebrow font-bold tracking-wider text-lo mt-0.5">BMR at rest</p>
                 </div>
-                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
-                  <p className="text-lg font-extrabold text-[#F0E2B6]">{totalOut}</p>
-                  <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mt-0.5">Burned today</p>
+                <div className="bg-white/[0.04] border border-hair rounded-xl px-3 py-2.5">
+                  <p className="text-lg font-extrabold text-gold-light">{totalOut}</p>
+                  <p className="text-eyebrow font-bold tracking-wider text-lo mt-0.5">Burned today</p>
                 </div>
               </div>
 
               <div className="space-y-1.5 mb-3">
                 {[
-                  ['Resting (BMR × 1.2)', restingTdee, 'text-[#9EA3B0]'],
+                  ['Resting (BMR × 1.2)', restingTdee, 'text-mid'],
                   [work.cardioMin > 0 && work.sets > 0
                     ? `Workout (${work.sets} ${plural(work.sets, 'set')} + ${work.cardioMin} min cardio)`
                     : work.sets > 0
@@ -403,15 +380,15 @@ export default function Profile() {
                     : work.cardioMin > 0
                     ? `Cardio (${work.cardioMin} min)`
                     : 'Workout session',
-                   workoutBurn,  'text-emerald-300'],
+                   workoutBurn,  'text-gold-light'],
                 ].map(([label, val, cls]) => (
                   <div key={label} className="flex items-center justify-between text-xs">
-                    <span className="text-[#9EA3B0]">{label}</span>
+                    <span className="text-mid">{label}</span>
                     <span className={`font-bold ${cls}`}>{val > 0 ? `+${val}` : val} kcal</span>
                   </div>
                 ))}
                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-white/[0.06]">
-                  <span className="text-[#9EA3B0]">Food eaten today</span>
+                  <span className="text-mid">Food eaten today</span>
                   <span className="font-bold text-orange-400">{totalIn} kcal</span>
                 </div>
               </div>
@@ -420,31 +397,31 @@ export default function Profile() {
                 <div className={`rounded-xl px-3.5 py-3 border ${
                   balance > 0
                     ? 'bg-amber-400/[0.08] border-amber-400/25'
-                    : 'bg-emerald-400/[0.08] border-emerald-400/25'
+                    : 'bg-ok/[0.08] border-ok/25'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className={`text-sm font-bold ${balance > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                    <span className={`text-sm font-bold ${balance > 0 ? 'text-amber-300' : 'text-gold-light'}`}>
                       {balance > 0 ? 'Surplus' : 'Deficit'}
                     </span>
-                    <span className={`font-display text-xl font-bold ${balance > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                    <span className={`font-display text-xl font-bold ${balance > 0 ? 'text-amber-300' : 'text-gold-light'}`}>
                       {balance > 0 ? '+' : ''}{balance} kcal
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#9EA3B0] mt-1 leading-relaxed">
+                  <p className="text-caption text-mid mt-1 leading-relaxed">
                     {balance > 0
                       ? `You've eaten ${balance} kcal more than you burned today. A sustained surplus adds weight (~7,700 kcal ≈ 1 kg).`
                       : `You've burned ${Math.abs(balance)} kcal more than you ate. A sustained deficit of this size is roughly ${(Math.abs(balance) * 7 / 7700).toFixed(2)} kg per week.`}
                   </p>
                 </div>
               ) : (
-                <div className="rounded-xl px-3.5 py-3 bg-white/[0.03] border border-white/[0.07]">
-                  <p className="text-xs text-[#9EA3B0] leading-relaxed">
+                <div className="rounded-xl px-3.5 py-3 bg-white/[0.03] border border-hair">
+                  <p className="text-xs text-mid leading-relaxed">
                     Log today's food to see whether you're in a surplus or deficit.
                   </p>
                 </div>
               )}
 
-              <p className="text-[10px] text-[#7E8596] mt-2.5 leading-relaxed">
+              <p className="text-eyebrow text-lo mt-2.5 leading-relaxed">
                 Estimates only — actual needs vary with body composition, medication and
                 health conditions. Follow your coach's plan over these numbers.
               </p>
@@ -459,16 +436,16 @@ export default function Profile() {
         <button
           onClick={() => navigate('/devices')}
           style={{ minHeight: 56 }}
-          className="w-full rounded-2xl p-4 border border-white/[0.07] bg-[#1A1C20]
+          className="w-full rounded-2xl p-4 border border-hair bg-surface
             flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
           <span className="text-xl">⌚</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white">Connected devices</p>
-            <p className="text-xs text-[#7E8596] mt-0.5">
+            <p className="text-xs text-lo mt-0.5">
               Smart scale, fitness tracker and health apps
             </p>
           </div>
-          <span className="text-[#7E8596]">›</span>
+          <span className="text-lo">›</span>
         </button>
 
         {/* Blood work — members enter their own and see what changed alongside */}
@@ -497,7 +474,7 @@ export default function Profile() {
             <div className="flex flex-wrap gap-2 mt-2">
               {p.conditions.map(c => (
                 <span key={c}
-                  className="text-sm bg-white/[0.05] text-[#FFFFFF] px-3 py-1.5 rounded-full border border-white/[0.08] font-medium">
+                  className="text-sm bg-white/[0.05] text-white px-3 py-1.5 rounded-full border border-white/[0.08] font-medium">
                   {CONDITION_LABELS[c] || c.replace(/_/g, ' ')}
                 </span>
               ))}
@@ -511,20 +488,20 @@ export default function Profile() {
             <SectionTitle icon="⏰">Fasting Protocol</SectionTitle>
             <div className="mt-2 space-y-2">
               {p.fasting.label && (
-                <p className="font-semibold text-[#FFFFFF]">{p.fasting.label}</p>
+                <p className="font-semibold text-white">{p.fasting.label}</p>
               )}
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-[rgba(96,165,250,0.08)] border border-[rgba(96,165,250,0.16)] rounded-xl px-3 py-2 text-center">
+                <div className="bg-blue-400/[0.08] border border-blue-400/[0.16] rounded-xl px-3 py-2 text-center">
                   <p className="text-xs text-blue-300 font-medium mb-0.5">Fasting ends</p>
                   <p className="font-display text-lg font-semibold text-blue-200">{fmt12(p.fasting.end)}</p>
                 </div>
-                <div className="bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.16)] rounded-xl px-3 py-2 text-center">
-                  <p className="text-xs text-[#F0E2B6] font-medium mb-0.5">Fasting starts</p>
-                  <p className="font-display text-lg font-semibold text-[#F0E2B6]">{fmt12(p.fasting.start)}</p>
+                <div className="bg-gold/[0.08] border border-gold/[0.16] rounded-xl px-3 py-2 text-center">
+                  <p className="text-xs text-gold-light font-medium mb-0.5">Fasting starts</p>
+                  <p className="font-display text-lg font-semibold text-gold-light">{fmt12(p.fasting.start)}</p>
                 </div>
               </div>
               {p.fasting.note && (
-                <p className="text-xs text-[#9EA3B0] bg-white/[0.04] px-3 py-2 rounded-xl border border-white/[0.07]">
+                <p className="text-xs text-mid bg-white/[0.04] px-3 py-2 rounded-xl border border-hair">
                   📌 {p.fasting.note}
                 </p>
               )}
@@ -537,14 +514,14 @@ export default function Profile() {
           <Card>
             <SectionTitle icon="🎯">Daily Macro Targets</SectionTitle>
             {p.macros.phase && (
-              <p className="text-xs text-[#7E8596] mb-3 mt-1 font-medium">Phase: {p.macros.phase}</p>
+              <p className="text-xs text-lo mb-3 mt-1 font-medium">Phase: {p.macros.phase}</p>
             )}
             <div className="grid grid-cols-2 gap-2 mt-2">
               {[
-                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-[rgba(251,146,60,0.08)] border-[rgba(251,146,60,0.16)] text-orange-300' },
-                { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-[rgba(96,165,250,0.08)] border-[rgba(96,165,250,0.16)] text-blue-300' },
-                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-[rgba(251,191,36,0.08)] border-[rgba(251,191,36,0.16)] text-amber-300' },
-                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-[rgba(212,175,55,0.08)] border-[rgba(212,175,55,0.16)] text-[#D4AF37]' },
+                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-orange-400/[0.08] border-orange-400/[0.16] text-orange-300' },
+                { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-blue-400/[0.08] border-blue-400/[0.16] text-blue-300' },
+                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-amber-400/[0.08] border-amber-400/[0.16] text-amber-300' },
+                { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-gold/[0.08] border-gold/[0.16] text-gold' },
               ].filter(m => m.value).map(m => (
                 <div key={m.label} className={`rounded-xl border px-3 py-2.5 text-center ${m.color}`}>
                   <p className="font-display text-xl font-semibold">{m.value}<span className="text-xs font-normal ml-1">{m.unit}</span></p>
@@ -560,23 +537,23 @@ export default function Profile() {
           <SectionTitle icon="💧">Daily Water Target</SectionTitle>
           <div className="flex items-center gap-3 mt-2">
             <span className="font-display text-3xl font-semibold text-blue-300">{(p.water_target / 1000).toFixed(1)}</span>
-            <span className="text-[#9EA3B0] font-medium">litres per day</span>
+            <span className="text-mid font-medium">litres per day</span>
           </div>
-          <p className="text-xs text-[#7E8596] mt-2">Stop 1 hour before sleep. Not during meals.</p>
+          <p className="text-xs text-lo mt-2">Stop 1 hour before sleep. Not during meals.</p>
         </Card>
 
         {/* Diet notes */}
         {p.diet_notes && (
           <Card>
             <SectionTitle icon="📋">Diet Instructions</SectionTitle>
-            <p className="text-sm text-[#FFFFFF] leading-relaxed mt-2 whitespace-pre-wrap">
+            <p className="text-sm text-white leading-relaxed mt-2 whitespace-pre-wrap">
               {p.diet_notes}
             </p>
           </Card>
         )}
 
         {/* Member since */}
-        <p className="text-center text-xs text-[#7E8596] pt-2 pb-6">
+        <p className="text-center text-xs text-lo pt-2 pb-6">
           Member since {new Date(p.member_since).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
         </p>
       </div>
@@ -625,13 +602,13 @@ function EditDetails({ profile, onCancel, onSaved }) {
     }
   };
 
-  const label = "block text-[10px] font-semibold text-[#7E8596] mb-1.5";
-  const input = `w-full bg-[#121316] border border-white/[0.10] rounded-xl px-3 py-2.5
-    text-sm text-white outline-none focus:border-[rgba(212,175,55,0.40)]
-    focus:ring-2 focus:ring-[rgba(212,175,55,0.12)]`;
+  const label = "block text-eyebrow font-semibold text-lo mb-1.5";
+  const input = `w-full bg-charcoal border border-white/[0.10] rounded-xl px-3 py-2.5
+    text-sm text-white outline-none focus:border-gold/40
+    focus:ring-2 focus:ring-gold/[0.12]`;
 
   return (
-    <div className="bg-white/[0.05] rounded-2xl p-4 border border-white/[0.07] mb-4 space-y-3">
+    <div className="bg-white/[0.05] rounded-2xl p-4 border border-hair mb-4 space-y-3">
       <div className="flex gap-3">
         <div className="flex-1">
           <label className={label}>Height (cm)</label>
@@ -651,16 +628,16 @@ function EditDetails({ profile, onCancel, onSaved }) {
         <div className="flex gap-2">
           {[['male', 'Male'], ['female', 'Female'], ['other', 'Prefer not to say']].map(([v, l]) => (
             <button key={v} onClick={() => setGender(v)} style={{ minHeight: 38 }}
-              className={`flex-1 text-[11px] font-semibold rounded-xl border transition-colors ${
+              className={`flex-1 text-caption font-semibold rounded-xl border transition-colors ${
                 gender === v
-                  ? 'bg-[rgba(212,175,55,0.12)] border-[rgba(212,175,55,0.35)] text-[#F0E2B6]'
-                  : 'bg-[#121316] border-white/[0.10] text-[#9EA3B0]'
+                  ? 'bg-gold/[0.12] border-gold/35 text-gold-light'
+                  : 'bg-charcoal border-white/[0.10] text-mid'
               }`}>
               {l}
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-[#4A4E5A] mt-1.5 leading-relaxed">
+        <p className="text-caption text-ghost mt-1.5 leading-relaxed">
           Used only for the calorie-burn calculation — the equation needs it.
         </p>
       </div>
@@ -669,18 +646,18 @@ function EditDetails({ profile, onCancel, onSaved }) {
 
       <div className="flex gap-2">
         <button onClick={save} disabled={busy} style={{ minHeight: 40 }}
-          className="flex-1 text-xs font-bold text-[#121316] rounded-xl
-            bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+          className="flex-1 text-xs font-bold text-charcoal rounded-xl
+            bg-gradient-to-r from-gold-light via-gold to-gold-dark
             active:scale-[0.98] disabled:opacity-40">
           {busy ? 'Saving…' : 'Save details'}
         </button>
         <button onClick={onCancel} style={{ minHeight: 40 }}
-          className="px-4 text-xs font-bold text-[#9EA3B0] border border-white/[0.10] rounded-xl">
+          className="px-4 text-xs font-bold text-mid border border-white/[0.10] rounded-xl">
           Cancel
         </button>
       </div>
 
-      <p className="text-[11px] text-[#4A4E5A] leading-relaxed">
+      <p className="text-caption text-ghost leading-relaxed">
         Your goal and starting weight are set by your coach — message them to change those.
       </p>
     </div>

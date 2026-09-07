@@ -58,14 +58,14 @@ export default function PendingSync() {
         <p className="text-xs font-semibold text-amber-300">
           {label} — {status.exhausted ? "couldn't send" : `stuck since ${formatDate(status.oldestDate)}`}
         </p>
-        <p className="text-[11px] text-[#9EA3B0] mt-0.5 leading-relaxed">
+        <p className="text-caption text-mid mt-0.5 leading-relaxed">
           Your entries are safe on this phone, but your coach can't see them yet.
         </p>
         <button
           onClick={retry}
           disabled={retrying}
           style={{ minHeight: 36 }}
-          className="mt-1.5 text-[11px] font-bold text-[#121316] bg-amber-300 hover:bg-amber-200
+          className="mt-1.5 text-caption font-bold text-charcoal bg-amber-300 hover:bg-amber-200
             disabled:opacity-50 rounded-lg px-3 transition-colors">
           {retrying ? 'Trying…' : 'Try again now'}
         </button>
@@ -76,9 +76,9 @@ export default function PendingSync() {
   return (
     <div className="flex items-center gap-2 rounded-xl px-3.5 py-2
       border border-white/[0.08] bg-white/[0.03]">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] flex-shrink-0
+      <span className="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0
         animate-pulse" />
-      <p className="text-[11px] text-[#9EA3B0] leading-tight">
+      <p className="text-caption text-mid leading-tight">
         {label} — saved on this phone, will send when you're back online.
       </p>
     </div>

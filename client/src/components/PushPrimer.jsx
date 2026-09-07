@@ -85,14 +85,14 @@ export default function PushPrimer({ hasLogged }) {
 
   if (denied) {
     return (
-      <div className="rounded-2xl p-4 border border-white/[0.08] bg-[#1A1C20]">
+      <div className="rounded-2xl p-4 border border-white/[0.08] bg-surface">
         <p className="text-sm font-semibold text-white">Notifications are off</p>
-        <p className="text-xs text-[#9EA3B0] mt-1 leading-relaxed">
+        <p className="text-xs text-mid mt-1 leading-relaxed">
           No problem — you'll still see everything here in the app. If you change
           your mind, turn them on for FitLife in your browser's site settings.
         </p>
         <button onClick={dismiss} style={{ minHeight: 36 }}
-          className="mt-2 text-[11px] font-bold text-[#D4AF37] px-2">
+          className="mt-2 text-caption font-bold text-gold px-2">
           Got it
         </button>
       </div>
@@ -100,22 +100,22 @@ export default function PushPrimer({ hasLogged }) {
   }
 
   return (
-    <div className="rounded-2xl p-4 border border-[rgba(212,175,55,0.20)]
-      bg-[rgba(212,175,55,0.06)]">
+    <div className="rounded-2xl p-4 border border-gold/20
+      bg-gold/[0.06]">
       <p className="text-sm font-semibold text-white">Want your evening recap?</p>
-      <p className="text-xs text-[#9EA3B0] mt-1 leading-relaxed">
+      <p className="text-xs text-mid mt-1 leading-relaxed">
         Your coach sends a short summary of your day at 8:30pm, plus a nudge if
         something's missing. Turn on notifications and we'll send it here.
       </p>
       <div className="flex gap-2 mt-3">
         <button onClick={enable} disabled={busy} style={{ minHeight: 38 }}
-          className="flex-1 text-[11px] font-bold text-[#121316] rounded-xl
-            bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+          className="flex-1 text-caption font-bold text-charcoal rounded-xl
+            bg-gradient-to-r from-gold-light via-gold to-gold-dark
             active:scale-[0.98] disabled:opacity-50">
           {busy ? 'Just a moment…' : 'Yes, notify me'}
         </button>
         <button onClick={dismiss} style={{ minHeight: 38 }}
-          className="px-3 text-[11px] font-bold text-[#9EA3B0]
+          className="px-3 text-caption font-bold text-mid
             border border-white/[0.10] rounded-xl">
           Not now
         </button>

@@ -103,20 +103,20 @@ export default function MessageMember({ member, summary = null, initialText = nu
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4"
       onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
-        className="w-full sm:max-w-md bg-[#1A1C20] border border-white/[0.10] rounded-t-2xl sm:rounded-2xl p-4 max-h-[90vh] overflow-y-auto">
+        className="w-full sm:max-w-md bg-surface border border-white/[0.10] rounded-t-2xl sm:rounded-2xl p-4 max-h-[90vh] overflow-y-auto">
 
         <div className="flex items-start justify-between mb-3">
           <div className="min-w-0">
             <p className="text-sm font-bold text-white truncate">Message {member?.name}</p>
-            <p className="text-[11px] text-[#7E8596]">
+            <p className="text-caption text-lo">
               Written from what they haven't logged · sends from your own number
             </p>
           </div>
-          <button onClick={onClose} className="text-[#7E8596] text-lg leading-none px-2">×</button>
+          <button onClick={onClose} className="text-lo text-lg leading-none px-2">×</button>
         </div>
 
         {!numberOk && (
-          <p className="text-[11px] text-amber-300 mb-3">
+          <p className="text-caption text-amber-300 mb-3">
             This member has no usable mobile number on file, so messaging won't open.
           </p>
         )}
@@ -128,38 +128,38 @@ export default function MessageMember({ member, summary = null, initialText = nu
           onChange={e => setText(e.target.value)}
           disabled={loadingGaps}
           rows={7}
-          className="w-full bg-[#121316] border border-white/[0.12] rounded-xl p-3 text-[13px]
+          className="w-full bg-charcoal border border-white/[0.12] rounded-xl p-3 text-body-sm
             text-white leading-relaxed resize-none focus:outline-none focus:ring-2
-            focus:ring-[rgba(212,175,55,0.30)]"
+            focus:ring-gold/30"
         />
         <div className="flex justify-between items-center mt-1 mb-3">
-          <label className="flex items-center gap-2 text-[11px] text-[#9EA3B0]">
+          <label className="flex items-center gap-2 text-caption text-mid">
             <input type="checkbox" checked={saveNote} onChange={e => setSaveNote(e.target.checked)}
-              className="accent-[#D4AF37]" />
+              className="accent-gold" />
             Keep a copy in their notes
           </label>
-          <span className="text-[10px] text-[#7E8596]">{text.length} characters</span>
+          <span className="text-eyebrow text-lo">{text.length} characters</span>
         </div>
 
-        {error && <p className="text-[11px] text-red-400 mb-2">{error}</p>}
+        {error && <p className="text-caption text-red-400 mb-2">{error}</p>}
 
         <div className="flex gap-2">
           <button onClick={() => send('whatsapp')} disabled={busy || !numberOk || loadingGaps}
             style={{ minHeight: 46 }}
-            className="flex-1 rounded-xl text-sm font-bold text-[#121316]
-              bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+            className="flex-1 rounded-xl text-sm font-bold text-charcoal
+              bg-gradient-to-r from-gold-light via-gold to-gold-dark
               active:scale-[0.98] disabled:opacity-50">
             WhatsApp
           </button>
           <button onClick={() => send('sms')} disabled={busy || !numberOk || loadingGaps}
             style={{ minHeight: 46 }}
-            className="flex-1 rounded-xl text-sm font-bold text-[#9EA3B0]
+            className="flex-1 rounded-xl text-sm font-bold text-mid
               border border-white/[0.14] active:scale-[0.98] disabled:opacity-50">
             SMS
           </button>
         </div>
 
-        <p className="text-[10px] text-[#7E8596] mt-2 leading-relaxed">
+        <p className="text-eyebrow text-lo mt-2 leading-relaxed">
           Opens your own WhatsApp or messages app with this text ready to send —
           nothing is sent until you tap send there.
         </p>

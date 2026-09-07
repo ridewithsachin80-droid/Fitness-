@@ -11,10 +11,10 @@ import NudgeEffectiveness from '../components/NudgeEffectiveness';
 import { useSync } from '../hooks/useSync';
 
 function complianceBadge(pct) {
-  if (pct === null || pct === undefined) return { bg: 'bg-white/[0.05]', text: 'text-[#5a5a68]', label: '—' };
-  if (pct >= 75) return { bg: 'bg-[rgba(52,211,153,0.10)]', text: 'text-emerald-300', label: `${pct}%` };
+  if (pct === null || pct === undefined) return { bg: 'bg-white/[0.05]', text: 'text-dim', label: '—' };
+  if (pct >= 75) return { bg: 'bg-ok/10', text: 'text-gold-light', label: `${pct}%` };
   if (pct >= 50) return { bg: 'bg-amber-400/10',             text: 'text-amber-300',   label: `${pct}%` };
-  return           { bg: 'bg-[rgba(248,113,113,0.10)]',      text: 'text-red-300',     label: `${pct}%` };
+  return           { bg: 'bg-red-400/10',      text: 'text-red-300',     label: `${pct}%` };
 }
 
 function weightDelta(current, start) {
@@ -104,7 +104,7 @@ export default function MemberList() {
   const loggedToday = filtered.filter(p => p.last_logged === todayStr).sort(byUnread);
 
   return (
-    <div className="min-h-screen bg-[#121316]">
+    <div className="min-h-screen bg-charcoal">
       <OfflineBanner />
 
       {/* Header */}
@@ -112,12 +112,12 @@ export default function MemberList() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11.5px] font-medium text-[#6E7480] mb-0.5">Coach</p>
+              <p className="text-micro font-medium text-[#6E7480] mb-0.5">Coach</p>
               <h1 className="font-display text-xl font-medium">{user?.name}</h1>
               <p className="text-[#4e4e5c] text-xs mt-0.5">{members.length} {plural(members.length, 'member')} assigned</p>
             </div>
             <button onClick={() => navigate('/settings')}
-              className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+              className="w-9 h-9 rounded-xl bg-white/[0.06] hover:bg-white/20 flex items-center justify-center transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -140,7 +140,7 @@ export default function MemberList() {
               <div key={stat.label} className="py-3.5 text-center">
                 <div className={`font-display text-[23px] leading-none font-medium tabular-nums ${
                   stat.accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{stat.value}</div>
-                <div className="text-[11.5px] text-[#7E8596] mt-1.5">{stat.label}</div>
+                <div className="text-micro text-lo mt-1.5">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -155,26 +155,26 @@ export default function MemberList() {
           needs an answer now. The message itself is the thing worth reading. */}
       {withMessages.length > 0 && (
         <div className="max-w-md mx-auto px-4 pt-4">
-          <div className="bg-[#1A1C20] rounded-2xl border border-[rgba(212,175,55,0.35)] p-4">
-            <p className="text-[12px] font-semibold text-[#8C7A46] mb-2.5">
+          <div className="bg-surface rounded-2xl border border-gold/35 p-4">
+            <p className="text-note font-semibold text-[#8C7A46] mb-2.5">
               ✉️ Messages from members{totalUnread > 0 ? ` · ${totalUnread} new` : ''}
             </p>
             <div className="space-y-2">
               {withMessages.map(m => (
                 <div key={m.id}
-                  className="flex items-start gap-2 bg-[#121316] border border-white/[0.07]
-                    rounded-xl px-3 py-2.5 hover:border-[rgba(212,175,55,0.30)] transition-colors">
+                  className="flex items-start gap-2 bg-charcoal border border-hair
+                    rounded-xl px-3 py-2.5 hover:border-gold/30 transition-colors">
                   <button onClick={() => navigate(`/coach/${m.id}`)} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-bold text-white truncate">{m.name}</p>
+                    <p className="text-body-sm font-bold text-white truncate">{m.name}</p>
                     {m.unread_messages > 0 && (
-                      <span className="text-[10px] font-bold text-[#121316] bg-[#D4AF37]
+                      <span className="text-eyebrow font-bold text-charcoal bg-gold
                         px-1.5 py-0.5 rounded-full flex-shrink-0">
                         {m.unread_messages > 1 ? `${m.unread_messages} new` : 'New'}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-[#9EA3B0] mt-1 line-clamp-2">{m.latest_message}</p>
+                  <p className="text-xs text-mid mt-1 line-clamp-2">{m.latest_message}</p>
                   </button>
                   {/* Clear it without opening them. Opening the member reads the
                       message anyway; this is for ones already dealt with
@@ -187,7 +187,7 @@ export default function MemberList() {
                         x.id === m.id ? { ...x, unread_messages: 0, latest_message: null } : x));
                     }}
                     title="Mark as read"
-                    className="flex-shrink-0 text-[#7E8596] hover:text-[#D4AF37] px-1.5 py-1
+                    className="flex-shrink-0 text-lo hover:text-gold px-1.5 py-1
                       text-sm transition-colors">
                     ✓
                   </button>
@@ -223,7 +223,7 @@ export default function MemberList() {
       {/* Member cards */}
       <div className="max-w-md mx-auto px-4 pt-4 pb-8 space-y-3">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+          <div className="bg-red-400/[0.08] border border-red-400/25 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>
         )}
 
         {/* Sprint 9: Search bar */}
@@ -237,12 +237,12 @@ export default function MemberList() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search by name or phone…"
-              className="w-full pl-10 pr-4 py-3 bg-[#1A1C20] border border-white/[0.1] rounded-2xl text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800"
+              className="w-full pl-10 pr-4 py-3 bg-surface border border-white/[0.1] rounded-2xl text-sm
+                focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white"
             />
             {search && (
               <button onClick={() => setSearch('')}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#4e4e5c] hover:text-stone-600 text-lg">
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#4e4e5c] hover:text-white text-lg">
                 ×
               </button>
             )}
@@ -262,12 +262,12 @@ export default function MemberList() {
               <button key={chip.id} onClick={() => setFilter(chip.id)}
                 className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-all whitespace-nowrap ${
                   filter === chip.id
-                    ? 'bg-white/[0.08] border border-white/[0.1] text-[#ededf0] shadow-sm'
-                    : 'bg-[#1A1C20] border border-white/[0.1] text-stone-600 hover:border-stone-400'
+                    ? 'bg-white/[0.08] border border-white/[0.1] text-bright shadow-sm'
+                    : 'bg-surface border border-white/[0.1] text-mid hover:border-hair-hi'
                 }`}>
                 {chip.label}
                 {chip.count > 0 && (
-                  <span className={`ml-1 ${filter === chip.id ? 'text-stone-300' : 'text-[#4e4e5c]'}`}>
+                  <span className={`ml-1 ${filter === chip.id ? 'text-ghost' : 'text-[#4e4e5c]'}`}>
                     ({chip.count})
                   </span>
                 )}
@@ -286,7 +286,7 @@ export default function MemberList() {
         {/* Pending logs first */}
         {noLogToday.length > 0 && (
           <div>
-            <p className="text-[10px] font-semibold text-red-400 mb-2 px-1">
+            <p className="text-eyebrow font-semibold text-red-400 mb-2 px-1">
               ⚠ No log today ({noLogToday.length})
             </p>
             {noLogToday.map(p => <MemberCard key={p.id} member={p} todayStr={todayStr} onClick={() => navigate(`/coach/${p.id}`)} />)}
@@ -296,7 +296,7 @@ export default function MemberList() {
         {loggedToday.length > 0 && (
           <div>
             {noLogToday.length > 0 && (
-              <p className="text-[10px] font-semibold text-[#D4AF37] mb-2 mt-4 px-1">
+              <p className="text-eyebrow font-semibold text-gold mb-2 mt-4 px-1">
                 ✓ Logged today ({loggedToday.length})
               </p>
             )}
@@ -328,22 +328,22 @@ function MemberCard({ member: p, todayStr, onClick }) {
     <div onClick={onClick}
       className={`bg-[#131317] rounded-2xl border p-4 shadow-card-raised cursor-pointer transition-all
         hover:shadow-md active:scale-98 ${unread > 0
-          ? 'border-[rgba(212,175,55,0.45)]'
-          : noLog ? 'border-red-500/25' : 'border-white/[0.07]'}`}>
+          ? 'border-gold/45'
+          : noLog ? 'border-red-500/25' : 'border-hair'}`}>
       <div className="flex items-start justify-between gap-3">
         {/* Left: name + info */}
         <div className="min-w-0 flex-1">
-          <h2 className="font-display font-semibold text-[#ededf0] text-base truncate">{p.name}</h2>
+          <h2 className="font-display font-semibold text-bright text-base truncate">{p.name}</h2>
           {/* Until now the only signal a member had written was a push
               notification, and a push that arrives while the phone is in a
               pocket is a message nobody ever sees. */}
           {unread > 0 && (
             <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold
-              text-[#D4AF37] bg-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-full">
+              text-gold bg-gold/[0.12] px-2 py-0.5 rounded-full">
               ✉️ {unread} {plural(unread, 'message')}
             </span>
           )}
-          <p className="text-xs text-[#5a5a68] mt-0.5">{p.phone}</p>
+          <p className="text-xs text-dim mt-0.5">{p.phone}</p>
 
           {conditions.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
@@ -360,9 +360,9 @@ function MemberCard({ member: p, todayStr, onClick }) {
         <div className="text-right flex-shrink-0">
           {p.latest_weight ? (
             <>
-              <div className="font-display font-semibold text-[#ededf0]">{p.latest_weight} kg</div>
+              <div className="font-display font-semibold text-bright">{p.latest_weight} kg</div>
               {delta !== null && (
-                <div className={`text-xs font-semibold mt-0.5 ${delta < 0 ? 'text-emerald-400' : delta > 0 ? 'text-red-400' : 'text-[#5a5a68]'}`}>
+                <div className={`text-xs font-semibold mt-0.5 ${delta < 0 ? 'text-gold-light' : delta > 0 ? 'text-red-400' : 'text-dim'}`}>
                   {delta < 0 ? '↓' : delta > 0 ? '↑' : '='} {Math.abs(delta).toFixed(1)} kg
                 </div>
               )}
@@ -381,7 +381,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
         {noLog ? (
           <span className="text-xs font-bold text-red-400">⚠ No log today</span>
         ) : (
-          <span className="text-xs text-[#5a5a68]">
+          <span className="text-xs text-dim">
             Logged {p.last_logged === todayStr ? 'today' : formatDate(p.last_logged)}
           </span>
         )}
@@ -391,7 +391,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
               Muscle Coverage's recency lens for consistency. */}
           {workoutDaysAgo !== null && (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-              workoutDaysAgo === 0 ? 'text-[#e0c98a] bg-[rgba(212,175,55,0.10)]'
+              workoutDaysAgo === 0 ? 'text-[#e0c98a] bg-gold/10'
               : workoutDaysAgo > 10 ? 'text-amber-400 bg-amber-400/10'
               : 'text-[#9a9aa6] bg-white/[0.05]'}`}>
               🏋️ {workoutDaysAgo === 0 ? 'Today' : `${workoutDaysAgo}d ago`}

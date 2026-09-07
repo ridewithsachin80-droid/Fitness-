@@ -118,8 +118,8 @@ export default function Settings() {
   const Toggle = ({ value, onChange, label, sub }) => (
     <div className="flex items-center justify-between py-2">
       <div>
-        <p className="text-sm text-[#FFFFFF] font-medium">{label}</p>
-        {sub && <p className="text-xs text-[#7E8596]">{sub}</p>}
+        <p className="text-sm text-white font-medium">{label}</p>
+        {sub && <p className="text-xs text-lo">{sub}</p>}
       </div>
       <button onClick={() => { onChange(!value); haptic(15); }}
         style={{ width: 48, height: 28, borderRadius: 14, background: value ? '#D4AF37' : 'rgba(255,255,255,0.1)', transition: 'all .2s', position: 'relative', border: 'none', cursor: 'pointer' }}>
@@ -129,11 +129,11 @@ export default function Settings() {
   );
 
   return (
-    <div className="min-h-screen bg-[#121316]">
-      <div className="bg-[#1A1C20] border-b border-white/[0.07] px-4 pt-10 pb-4">
+    <div className="min-h-screen bg-charcoal">
+      <div className="bg-surface border-b border-hair px-4 pt-10 pb-4">
         <div className="max-w-md mx-auto">
           <BackButton onClick={() => navigate(-1)} />
-          <h1 className="font-display text-xl font-medium text-[#FFFFFF] mt-2">Settings</h1>
+          <h1 className="font-display text-xl font-medium text-white mt-2">Settings</h1>
         </div>
       </div>
 
@@ -148,14 +148,14 @@ export default function Settings() {
 
             {notif.opted_out ? (
               <div className="mt-2">
-                <p className="text-sm text-[#9EA3B0] leading-relaxed mb-3">
+                <p className="text-sm text-mid leading-relaxed mb-3">
                   You have turned off all messages. Your coach can still see your logs,
                   but cannot send you reminders or your weekly summary.
                 </p>
                 <button onClick={() => { haptic(15); saveNotif({ opted_out: false }); }}
                   disabled={notifBusy} style={{ minHeight: 44 }}
-                  className="w-full rounded-xl text-sm font-bold text-[#121316]
-                    bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]">
+                  className="w-full rounded-xl text-sm font-bold text-charcoal
+                    bg-gradient-to-r from-gold-light via-gold to-gold-dark">
                   Turn messages back on
                 </button>
               </div>
@@ -170,8 +170,8 @@ export default function Settings() {
                     <label key={key}
                       className="flex items-center justify-between gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
                       <span className="min-w-0">
-                        <span className="block text-sm text-[#FFFFFF]">{label}</span>
-                        <span className="block text-[11px] text-[#7E8596]">{sub}</span>
+                        <span className="block text-sm text-white">{label}</span>
+                        <span className="block text-caption text-lo">{sub}</span>
                       </span>
                       <button
                         role="switch" aria-checked={!!notif[key]} aria-label={label}
@@ -179,8 +179,8 @@ export default function Settings() {
                         disabled={notifBusy}
                         style={{ width: 46, height: 28 }}
                         className={`rounded-full flex-shrink-0 transition-colors relative ${
-                          notif[key] ? 'bg-[#D4AF37]' : 'bg-white/[0.12]'}`}>
-                        <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${
+                          notif[key] ? 'bg-gold' : 'bg-white/[0.12]'}`}>
+                        <span className={`absolute top-1 w-5 h-5 rounded-full bg-surface transition-all ${
                           notif[key] ? 'left-[22px]' : 'left-1'}`} />
                       </button>
                     </label>
@@ -189,7 +189,7 @@ export default function Settings() {
 
                 <button onClick={() => { haptic(15); saveNotif({ opted_out: true }); }}
                   disabled={notifBusy}
-                  className="text-[11px] text-[#7E8596] underline mt-3">
+                  className="text-caption text-lo underline mt-3">
                   Stop all messages
                 </button>
               </>
@@ -205,15 +205,15 @@ export default function Settings() {
 
           {/* Font size */}
           <div className="mb-4">
-            <p className="text-xs text-[#6a6a78] mb-2 font-medium tracking-wider">Text size</p>
+            <p className="text-xs text-faint mb-2 font-medium tracking-wider">Text size</p>
             <div className="flex gap-2">
               {[['normal','Aa','Normal'],['large','AA','Large']].map(([id, sample, label]) => (
                 <button key={id} onClick={() => { setFontSize(id); haptic(15); }}
                   style={{ minHeight: 52, flex: 1 }}
                   className={`rounded-xl border flex items-center justify-center gap-2 py-2 transition-all ${
-                    fontSize === id ? 'border-[rgba(212,175,55,0.5)] bg-[rgba(212,175,55,0.1)]' : 'border-white/[0.07] bg-[#1A1C20]'}`}>
+                    fontSize === id ? 'border-gold/50 bg-gold/10' : 'border-hair bg-surface'}`}>
                   <span style={{ fontSize: id === 'large' ? 20 : 14, fontWeight: 700, color: '#FFFFFF' }}>{sample}</span>
-                  <span className="text-xs text-[#9EA3B0]">{label}</span>
+                  <span className="text-xs text-mid">{label}</span>
                 </button>
               ))}
             </div>
@@ -221,15 +221,15 @@ export default function Settings() {
 
           {/* Nutrition view */}
           <div>
-            <p className="text-xs text-[#6a6a78] mb-2 font-medium tracking-wider">Nutrition display</p>
+            <p className="text-xs text-faint mb-2 font-medium tracking-wider">Nutrition display</p>
             <div className="flex gap-2">
               {[['simple','🚦','Simple — traffic lights'],['detailed','🔬','Detailed — all numbers']].map(([id, emoji, label]) => (
                 <button key={id} onClick={() => { setNutritionView(id); haptic(15); }}
                   style={{ minHeight: 52, flex: 1 }}
                   className={`rounded-xl border flex items-center justify-center gap-2 py-2 px-2 transition-all ${
-                    nutritionView === id ? 'border-[rgba(212,175,55,0.5)] bg-[rgba(212,175,55,0.1)]' : 'border-white/[0.07] bg-[#1A1C20]'}`}>
+                    nutritionView === id ? 'border-gold/50 bg-gold/10' : 'border-hair bg-surface'}`}>
                   <span style={{ fontSize: 16 }}>{emoji}</span>
-                  <span className="text-xs text-[#FFFFFF] font-medium leading-tight">{label}</span>
+                  <span className="text-xs text-white font-medium leading-tight">{label}</span>
                 </button>
               ))}
             </div>
@@ -244,9 +244,9 @@ export default function Settings() {
               <button key={m.id} onClick={() => { setAgeMode(m.id); haptic(15); }}
                 style={{ minHeight: 64, flex: 1 }}
                 className={`rounded-xl border flex flex-col items-center justify-center gap-1 py-2 transition-all ${
-                  ageMode === m.id ? 'border-[rgba(212,175,55,0.5)] bg-[rgba(212,175,55,0.1)]' : 'border-white/[0.07] bg-[#1A1C20]'}`}>
+                  ageMode === m.id ? 'border-gold/50 bg-gold/10' : 'border-hair bg-surface'}`}>
                 <span style={{ fontSize: 22 }}>{m.emoji}</span>
-                <span className="text-xs font-semibold text-[#FFFFFF] text-center leading-tight">{m.label}</span>
+                <span className="text-xs font-semibold text-white text-center leading-tight">{m.label}</span>
               </button>
             ))}
           </div>
@@ -277,14 +277,14 @@ export default function Settings() {
                 style={{ minHeight: 44, width: '100%' }}
                 className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-left transition-all ${
                   localMeals.includes(m)
-                    ? 'border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.06)]'
-                    : 'border-white/[0.07] bg-[#1A1C20]'}`}>
+                    ? 'border-gold/30 bg-gold/[0.06]'
+                    : 'border-hair bg-surface'}`}>
                 <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderColor: localMeals.includes(m) ? '#D4AF37' : 'rgba(255,255,255,0.2)',
                   background: localMeals.includes(m) ? '#D4AF37' : 'transparent' }}>
                   {localMeals.includes(m) && <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span>}
                 </div>
-                <span className="text-sm text-[#FFFFFF] font-medium">{m}</span>
+                <span className="text-sm text-white font-medium">{m}</span>
               </button>
             ))}
           </div>
@@ -293,29 +293,29 @@ export default function Settings() {
         {/* ── Safety ─────────────────────────────────────────────── */}
         <Card>
           <SectionTitle icon="🛡️">Safety contacts</SectionTitle>
-          <p className="text-xs text-[#7E8596] mb-3">Stored on this device only. Not sent anywhere automatically.</p>
+          <p className="text-xs text-lo mb-3">Stored on this device only. Not sent anywhere automatically.</p>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs text-[#6a6a78] font-medium mb-1">Emergency contact name</label>
+              <label className="block text-xs text-faint font-medium mb-1">Emergency contact name</label>
               <input value={ecName} onChange={e => setEcName(e.target.value)} placeholder="e.g. Ravi Kumar"
-                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)]" />
+                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
             </div>
             <div>
-              <label className="block text-xs text-[#6a6a78] font-medium mb-1">Emergency contact phone</label>
+              <label className="block text-xs text-faint font-medium mb-1">Emergency contact phone</label>
               <input value={ecPhone} onChange={e => setEcPhone(e.target.value)} placeholder="+91 98765 43210" type="tel"
-                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)]" />
+                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
             </div>
             {ageMode === 'child' && (
               <div>
-                <label className="block text-xs text-[#6a6a78] font-medium mb-1">Parent / Guardian email</label>
+                <label className="block text-xs text-faint font-medium mb-1">Parent / Guardian email</label>
                 <input value={guarEmail} onChange={e => setGuarEmail(e.target.value)} placeholder="parent@example.com" type="email"
-                  className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)]" />
-                <p className="text-xs text-[#7E8596] mt-1">Used only to share your daily log with a parent. Not sent automatically by the app — you must share it manually.</p>
+                  className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
+                <p className="text-xs text-lo mt-1">Used only to share your daily log with a parent. Not sent automatically by the app — you must share it manually.</p>
               </div>
             )}
             <button onClick={saveEC}
               style={{ minHeight: 44 }}
-              className="w-full py-2.5 bg-[rgba(212,175,55,0.15)] hover:bg-[rgba(212,175,55,0.25)] text-[#F0E2B6] font-semibold rounded-xl text-sm transition-all border border-[rgba(212,175,55,0.2)]">
+              className="w-full py-2.5 bg-gold/15 hover:bg-gold/25 text-gold-light font-semibold rounded-xl text-sm transition-all border border-gold/20">
               Save safety contacts
             </button>
             {ecPhone && (
@@ -362,8 +362,8 @@ export default function Settings() {
           <div className="space-y-2">
             {[{ label: 'Name', value: user?.name }, { label: 'Role', value: roleLabel(user?.role) }, { label: 'ID', value: `#${user?.id}` }].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between py-1.5">
-                <span className="text-sm text-[#7E8596]">{label}</span>
-                <span className="text-sm font-semibold text-[#FFFFFF] capitalize">{value}</span>
+                <span className="text-sm text-lo">{label}</span>
+                <span className="text-sm font-semibold text-white capitalize">{value}</span>
               </div>
             ))}
           </div>
@@ -377,17 +377,17 @@ export default function Settings() {
               way back — so the evening recap just silently never came. */}
           <PushStatus />
 
-          {loading ? <p className="text-xs text-[#7E8596] py-2">Loading…</p> : subs.length === 0 ? (
+          {loading ? <p className="text-xs text-lo py-2">Loading…</p> : subs.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-[#7E8596]">No devices registered yet</p>
+              <p className="text-sm text-lo">No devices registered yet</p>
             </div>
           ) : (
             <div className="space-y-2">
               {subs.map(sub => (
                 <div key={sub.id} className="flex items-center justify-between py-2 border-b border-white/[0.05] last:border-0">
                   <div>
-                    <p className="text-sm font-medium text-[#FFFFFF]">{sub.device_name || 'Unknown device'}</p>
-                    <p className="text-xs text-[#7E8596]">Added {new Date(sub.created_at).toLocaleDateString('en-IN')}</p>
+                    <p className="text-sm font-medium text-white">{sub.device_name || 'Unknown device'}</p>
+                    <p className="text-xs text-lo">Added {new Date(sub.created_at).toLocaleDateString('en-IN')}</p>
                   </div>
                   <button onClick={() => removeSub(sub.endpoint)} style={{ minHeight: 36 }}
                     className="text-xs text-red-400 hover:text-red-300 font-medium px-2 py-1 hover:bg-red-400/10 rounded-lg transition-colors">
@@ -422,17 +422,17 @@ export default function Settings() {
             <div className="space-y-3">
               {[['current','Current password','Your current password'],['next','New password','Min. 8 characters'],['confirm','Confirm new','Repeat new password']].map(([key, label, placeholder]) => (
                 <div key={key}>
-                  <label className="block text-xs font-medium text-[#7E8596] mb-1">{label}</label>
+                  <label className="block text-xs font-medium text-lo mb-1">{label}</label>
                   <input type="password" value={pwForm[key]} onChange={e => setPw(key, e.target.value)}
                     placeholder={placeholder} onKeyDown={e => e.key === 'Enter' && submitPw()}
-                    className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.3)]" />
+                    className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
                 </div>
               ))}
               {pwError && <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2 rounded-xl">{pwError}</p>}
-              {pwOk && <p className="text-xs text-[#F0E2B6] bg-[rgba(212,175,55,0.1)] border border-[rgba(212,175,55,0.2)] px-3 py-2 rounded-xl font-medium">✓ Password changed successfully</p>}
+              {pwOk && <p className="text-xs text-gold-light bg-gold/10 border border-gold/20 px-3 py-2 rounded-xl font-medium">✓ Password changed successfully</p>}
               <button onClick={submitPw} disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
                 style={{ minHeight: 44 }}
-                className="w-full py-2.5 bg-[#121316] hover:bg-[#121316] text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40">
+                className="w-full py-2.5 bg-charcoal hover:bg-charcoal text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40">
                 {pwSaving ? 'Saving…' : 'Update Password'}
               </button>
             </div>
@@ -442,11 +442,11 @@ export default function Settings() {
         {/* Logout */}
         <button onClick={handleLogout}
           style={{ minHeight: 52 }}
-          className="w-full py-3.5 bg-[#1A1C20] border border-red-400/20 text-red-400 font-semibold rounded-2xl hover:bg-red-400/10 transition-colors text-sm">
+          className="w-full py-3.5 bg-surface border border-red-400/20 text-red-400 font-semibold rounded-2xl hover:bg-red-400/10 transition-colors text-sm">
           Sign Out
         </button>
 
-        <p className="text-center text-xs text-[#4A4E5A] pt-2">FitLife · Enhanced UX</p>
+        <p className="text-center text-xs text-ghost pt-2">FitLife · Enhanced UX</p>
       </div>
 
       {user?.role === 'patient' ? <MemberBottomNav /> : <BottomNav role={user?.role} />}
@@ -479,9 +479,9 @@ function PushStatus() {
   if (perm === 'granted') {
     return (
       <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2
-        border border-[rgba(212,175,55,0.20)] bg-[rgba(212,175,55,0.06)]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] flex-shrink-0" />
-        <p className="text-[11px] text-[#F0E2B6]">Notifications are on for this device.</p>
+        border border-gold/20 bg-gold/[0.06]">
+        <span className="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0" />
+        <p className="text-caption text-gold-light">Notifications are on for this device.</p>
       </div>
     );
   }
@@ -490,7 +490,7 @@ function PushStatus() {
     return (
       <div className="mb-3 rounded-xl px-3 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]">
         <p className="text-xs font-semibold text-amber-300">Notifications are blocked</p>
-        <p className="text-[11px] text-[#9EA3B0] mt-1 leading-relaxed">
+        <p className="text-caption text-mid mt-1 leading-relaxed">
           Your browser is blocking them, so your evening recap and coach messages
           won't arrive. To turn them back on: tap the lock icon in the address
           bar (or Site settings), find Notifications, and switch it to Allow.
@@ -501,7 +501,7 @@ function PushStatus() {
 
   if (perm === 'unsupported') {
     return (
-      <p className="text-[11px] text-[#7E8596] mb-3 leading-relaxed">
+      <p className="text-caption text-lo mb-3 leading-relaxed">
         This browser doesn't support notifications. Add FitLife to your home
         screen and open it from there to enable them.
       </p>
@@ -510,13 +510,13 @@ function PushStatus() {
 
   return (
     <div className="mb-3 rounded-xl px-3 py-2.5 border border-white/[0.08] bg-white/[0.03]">
-      <p className="text-xs text-[#FFFFFF]">Notifications are off</p>
-      <p className="text-[11px] text-[#9EA3B0] mt-0.5 leading-relaxed">
+      <p className="text-xs text-white">Notifications are off</p>
+      <p className="text-caption text-mid mt-0.5 leading-relaxed">
         Turn them on for your 8:30pm recap and messages from your coach.
       </p>
       <button onClick={enable} disabled={busy} style={{ minHeight: 36 }}
-        className="mt-2 text-[11px] font-bold text-[#121316] rounded-lg px-3
-          bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+        className="mt-2 text-caption font-bold text-charcoal rounded-lg px-3
+          bg-gradient-to-r from-gold-light via-gold to-gold-dark
           active:scale-[0.98] disabled:opacity-50">
         {busy ? 'Just a moment…' : 'Turn on notifications'}
       </button>
@@ -547,11 +547,11 @@ function ReminderSchedule() {
     return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
   };
 
-  if (failed) return <p className="text-xs text-[#7E8596] py-2">Couldn't load your reminder times.</p>;
-  if (items === null) return <p className="text-xs text-[#7E8596] py-2">Loading…</p>;
+  if (failed) return <p className="text-xs text-lo py-2">Couldn't load your reminder times.</p>;
+  if (items === null) return <p className="text-xs text-lo py-2">Loading…</p>;
   if (!items.length) {
     return (
-      <p className="text-xs text-[#7E8596] py-2 leading-relaxed">
+      <p className="text-xs text-lo py-2 leading-relaxed">
         No reminders set up yet. Your coach can add them for you.
       </p>
     );
@@ -561,11 +561,11 @@ function ReminderSchedule() {
     <div className="space-y-2">
       {items.map((it, i) => (
         <div key={`${it.time}-${i}`} className="flex items-center gap-3 py-1">
-          <span className="text-xs font-bold text-[#7E8596] w-16 flex-shrink-0">{pretty(it.time)}</span>
-          <span className="text-xs text-[#9EA3B0] flex-1">{it.label}</span>
+          <span className="text-xs font-bold text-lo w-16 flex-shrink-0">{pretty(it.time)}</span>
+          <span className="text-xs text-mid flex-1">{it.label}</span>
           {it.personal && (
-            <span className="text-[9px] font-bold text-[#D4AF37] bg-[rgba(212,175,55,0.10)]
-              border border-[rgba(212,175,55,0.25)] rounded-full px-2 py-0.5">
+            <span className="text-tiny font-bold text-gold bg-gold/10
+              border border-gold/25 rounded-full px-2 py-0.5">
               just for you
             </span>
           )}
@@ -606,12 +606,12 @@ function ChangePin() {
   if (done) {
     return (
       <div className="py-2">
-        <p className="text-sm text-[#F0E2B6] font-medium">PIN changed ✓</p>
-        <p className="text-xs text-[#9EA3B0] mt-1 leading-relaxed">
+        <p className="text-sm text-gold-light font-medium">PIN changed ✓</p>
+        <p className="text-xs text-mid mt-1 leading-relaxed">
           Use your new PIN next time you log in. You're still signed in here.
         </p>
         <button onClick={() => setDone(false)} style={{ minHeight: 36 }}
-          className="mt-2 text-[11px] font-bold text-[#D4AF37] px-1">
+          className="mt-2 text-caption font-bold text-gold px-1">
           Change it again
         </button>
       </div>
@@ -620,16 +620,16 @@ function ChangePin() {
 
   const field = (label, value, setter, placeholder) => (
     <div>
-      <label className="block text-[10px] font-semibold text-[#7E8596] mb-1.5">
+      <label className="block text-eyebrow font-semibold text-lo mb-1.5">
         {label}
       </label>
       <input
         type="password" inputMode="numeric" value={value}
         onChange={(e) => setter(digits(e.target.value))}
         placeholder={placeholder} maxLength={12}
-        className="w-full bg-[#121316] border border-white/[0.10] rounded-xl px-3 py-2.5
+        className="w-full bg-charcoal border border-white/[0.10] rounded-xl px-3 py-2.5
           text-sm text-white tracking-widest outline-none
-          focus:border-[rgba(212,175,55,0.40)] focus:ring-2 focus:ring-[rgba(212,175,55,0.12)]"
+          focus:border-gold/40 focus:ring-2 focus:ring-gold/[0.12]"
       />
     </div>
   );
@@ -641,12 +641,12 @@ function ChangePin() {
       {field('Confirm new PIN', confirm, setConfirm, 'Type it again')}
       {error && <p className="text-xs text-red-400 leading-relaxed">{error}</p>}
       <button onClick={submit} disabled={!ready || busy} style={{ minHeight: 40 }}
-        className="w-full text-xs font-bold text-[#121316] rounded-xl
-          bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+        className="w-full text-xs font-bold text-charcoal rounded-xl
+          bg-gradient-to-r from-gold-light via-gold to-gold-dark
           active:scale-[0.98] disabled:opacity-40">
         {busy ? 'Saving…' : 'Change PIN'}
       </button>
-      <p className="text-[11px] text-[#4A4E5A] leading-relaxed">
+      <p className="text-caption text-ghost leading-relaxed">
         Forgotten your current PIN? Your coach can reset it for you.
       </p>
     </div>

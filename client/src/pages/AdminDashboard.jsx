@@ -14,9 +14,9 @@ import EvalSamples from '../components/EvalSamples';
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ value, label, icon, color }) {
   const colors = {
-    emerald: 'bg-[rgba(52,211,153,0.10)] text-emerald-300',
-    blue:    'bg-[rgba(96,165,250,0.10)]    text-blue-300',
-    purple:  'bg-[rgba(212,175,55,0.10)]  text-amber-300',
+    emerald: 'bg-ok/10 text-gold-light',
+    blue:    'bg-blue-400/10    text-blue-300',
+    purple:  'bg-gold/10  text-amber-300',
   };
   return (
     <div className={`rounded-2xl p-4 ${colors[color]}`}>
@@ -31,10 +31,10 @@ function StatCard({ value, label, icon, color }) {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/[0.07]">
-          <h3 className="font-bold text-[#FFFFFF] text-base">{title}</h3>
-          <button onClick={onClose} className="text-[#9EA3B0] hover:text-[#9EA3B0] text-2xl leading-none">×</button>
+      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair">
+          <h3 className="font-bold text-white text-base">{title}</h3>
+          <button onClick={onClose} className="text-mid hover:text-mid text-2xl leading-none">×</button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -46,7 +46,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, type = 'text', value, onChange, placeholder, required }) {
   return (
     <div>
-      <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+      <label className="block text-note font-medium text-mute mb-1.5">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
@@ -55,7 +55,7 @@ function Field({ label, type = 'text', value, onChange, placeholder, required })
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-          focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]"
+          focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white"
       />
     </div>
   );
@@ -124,19 +124,19 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
 
         {/* Assign coach */}
         <div>
-          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+          <label className="block text-note font-medium text-mute mb-1.5">
             Assign to Coach
           </label>
           <select
             value={form.monitor_id}
             onChange={e => set('monitor_id', e.target.value)}
-            /* Was `text-[#FFFFFF] bg-white`. That reads as white on white and
+            /* Was `text-white bg-surface`. That reads as white on white and
                was not, only because index.css remaps `.bg-white` to #1A1C20 —
                a rule in another file, on a class named for the opposite
                colour. Now says what it means, matching the select styling in
                StrengthProgress and WorkoutLog. */
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]"
+              focus:outline-none focus:ring-2 focus:ring-gold/30 bg-surface text-white"
           >
             <option value="">— Unassigned —</option>
             {assignableCoaches(coaches).map(m => (
@@ -145,10 +145,10 @@ function AddMemberModal({ coaches, onClose, onAdded }) {
           </select>
         </div>
 
-        {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
+        {error && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
+          className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
             rounded-xl transition-colors disabled:opacity-50 mt-2">
           {saving ? 'Creating…' : 'Create Member'}
         </button>
@@ -272,20 +272,20 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
        iron:0, magnesium:0, zinc:0, folate:0, potassium:0 });
 
   const colorMap = {
-    emerald: 'bg-[rgba(52,211,153,0.14)] text-emerald-300 border-[rgba(52,211,153,0.25)]',
-    blue:    'bg-[rgba(96,165,250,0.14)] text-blue-300 border-[rgba(96,165,250,0.25)]',
-    orange:  'bg-[rgba(251,146,60,0.14)] text-orange-300 border-[rgba(251,146,60,0.25)]',
-    purple:  'bg-[rgba(212,175,55,0.14)] text-amber-300 border-[rgba(212,175,55,0.25)]',
-    rose:    'bg-[rgba(251,113,133,0.14)] text-rose-300 border-[rgba(251,113,133,0.25)]',
+    emerald: 'bg-ok/[0.14] text-gold-light border-ok/25',
+    blue:    'bg-blue-400/[0.14] text-blue-300 border-blue-400/25',
+    orange:  'bg-orange-400/[0.14] text-orange-300 border-orange-400/25',
+    purple:  'bg-gold/[0.14] text-amber-300 border-gold/25',
+    rose:    'bg-rose-400/[0.14] text-rose-300 border-rose-400/25',
   };
   const dotMap = {
-    emerald: 'bg-emerald-500', blue: 'bg-blue-500',
+    emerald: 'bg-gold', blue: 'bg-blue-500',
     orange:  'bg-orange-500',  purple: 'bg-amber-500', rose: 'bg-rose-500',
   };
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-[#9EA3B0]">
+      <p className="text-xs text-mid">
         Build the prescribed meal plan. Member sees cards above the food log — tap to pre-fill.
       </p>
 
@@ -300,10 +300,10 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotMap[meal.color] || dotMap.emerald}`} />
               <input value={meal.name} onChange={e => updateMeal(meal.id, 'name', e.target.value)}
-                className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-[#FFFFFF]" />
+                className="flex-1 text-sm font-bold bg-transparent border-none outline-none text-white" />
               <input type="time" value={meal.time} onChange={e => updateMeal(meal.id, 'time', e.target.value)}
                 className="text-xs border border-white/[0.15] rounded-lg px-2 py-1 w-28" />
-              <button onClick={() => removeMeal(meal.id)} className="text-[#9EA3B0] hover:text-red-400 text-sm ml-1">🗑</button>
+              <button onClick={() => removeMeal(meal.id)} className="text-mid hover:text-red-400 text-sm ml-1">🗑</button>
             </div>
 
             {(meal.items || []).map((item, iIdx) => (
@@ -322,7 +322,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
             {(meal.items || []).length > 0 && (
               <div className="flex gap-3 text-xs px-1 pt-1 border-t border-white/[0.12]">
-                <span className="font-bold text-orange-600">{mealTotal.kcal} kcal</span>
+                <span className="font-bold text-orange-400">{mealTotal.kcal} kcal</span>
                 <span className="text-blue-300">P {mealTotal.pro.toFixed(1)}g</span>
                 <span className="text-amber-300">C {mealTotal.carb.toFixed(1)}g</span>
                 <span className="text-amber-300">F {mealTotal.fat.toFixed(1)}g</span>
@@ -333,23 +333,23 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
               <div ref={containerRef} className="relative">
                 <input autoFocus value={foodQuery} onChange={e => handleFoodQuery(e.target.value)}
                   placeholder="Search food…"
-                  /* Third of four controls that paired `bg-white` with white
+                  /* Third of four controls that paired `bg-surface` with white
                      text and relied on the index.css remap to stay legible —
                      see test-layout-contracts [7]. */
-                  className="w-full text-xs px-3 py-2 rounded-xl border border-white/[0.1] bg-[#121316]
-                    focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF]
-                    placeholder-[#7E8596]" />
-                {searchingFood && <span className="absolute right-3 top-2 text-xs text-[#9EA3B0]">…</span>}
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-white/[0.1] bg-charcoal
+                    focus:outline-none focus:ring-2 focus:ring-gold/30 text-white
+                    placeholder-lo" />
+                {searchingFood && <span className="absolute right-3 top-2 text-xs text-mid">…</span>}
                 {foodSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1A1C20] rounded-xl border border-white/[0.07] shadow-lg
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-surface rounded-xl border border-hair shadow-lg
                     z-30 max-h-52 overflow-y-auto" style={{overscrollBehavior:'contain'}}>
                     {foodSuggestions.map(food => (
                       <button key={food.id}
                         onMouseDown={e => e.preventDefault()}
                         onClick={() => addFoodToMeal(meal.id, food, 100)}
-                        className="w-full text-left px-3 py-2 hover:bg-[rgba(52,211,153,0.10)] border-b border-white/[0.06] last:border-0">
+                        className="w-full text-left px-3 py-2 hover:bg-ok/10 border-b border-white/[0.06] last:border-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-[#FFFFFF] font-medium truncate">{food.name}</span>
+                          <span className="text-xs text-white font-medium truncate">{food.name}</span>
                           <span className="text-xs font-bold text-orange-300 flex-shrink-0 ml-2">
                             {food.per_100g?.calories || 0} kcal/100g
                           </span>
@@ -359,13 +359,13 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                   </div>
                 )}
                 <button onClick={() => { setActiveMealId(null); setFoodQuery(''); setFoodSugg([]); }}
-                  className="text-xs text-[#9EA3B0] mt-1 hover:text-[#9EA3B0]">Cancel</button>
+                  className="text-xs text-mid mt-1 hover:text-mid">Cancel</button>
               </div>
             ) : (
               <button onClick={() => { setActiveMealId(meal.id); setFoodQuery(''); setFoodSugg([]); }}
-                className="w-full py-1.5 text-xs font-semibold text-[#9EA3B0] hover:text-emerald-300
-                  bg-white/60 hover:bg-white/90 rounded-xl border border-dashed border-white/[0.1]
-                  hover:border-[rgba(52,211,153,0.35)] transition-all">
+                className="w-full py-1.5 text-xs font-semibold text-mid hover:text-gold-light
+                  bg-white/[0.04] hover:bg-white/[0.08] rounded-xl border border-dashed border-white/[0.1]
+                  hover:border-ok/35 transition-all">
                 + Add food item
               </button>
             )}
@@ -374,21 +374,21 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
       })}
 
       <button onClick={addMeal}
-        className="w-full py-2.5 text-sm font-bold text-emerald-300 bg-[rgba(52,211,153,0.10)]
-          hover:bg-[rgba(52,211,153,0.14)] border-2 border-dashed border-[rgba(52,211,153,0.30)]
-          hover:border-[rgba(52,211,153,0.40)] rounded-2xl transition-all">
+        className="w-full py-2.5 text-sm font-bold text-gold-light bg-ok/10
+          hover:bg-ok/[0.14] border-2 border-dashed border-ok/30
+          hover:border-ok/40 rounded-2xl transition-all">
         + Add meal
       </button>
 
       {mealPlan.length > 0 && (
-        <div className="bg-white/[0.08] border border-white/[0.1] text-[#FFFFFF] rounded-2xl px-4 py-3 space-y-2">
-          <p className="text-[12px] font-semibold text-[#A9B0BF]">Day Total</p>
+        <div className="bg-white/[0.08] border border-white/[0.1] text-white rounded-2xl px-4 py-3 space-y-2">
+          <p className="text-note font-semibold text-[#A9B0BF]">Day Total</p>
           <div className="flex gap-4 flex-wrap">
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
             <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
             <span className="text-sm text-amber-300">C {dayTotal.carb.toFixed(1)}g</span>
             <span className="text-sm text-amber-300">F {dayTotal.fat.toFixed(1)}g</span>
-            <span className="text-sm text-emerald-300">Fiber {dayTotal.fiber.toFixed(1)}g</span>
+            <span className="text-sm text-gold-light">Fiber {dayTotal.fiber.toFixed(1)}g</span>
           </div>
           {/* Micronutrients */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-white/[0.15]">
@@ -406,22 +406,22 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             ].map(([label, val, target, unit, dec]) => {
               const v   = +val.toFixed(dec);
               const pct = Math.min(100, (val / target) * 100);
-              const cls = pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-300' : 'text-red-400';
+              const cls = pct >= 80 ? 'text-gold-light' : pct >= 50 ? 'text-amber-300' : 'text-red-400';
               return (
                 <div key={label} className="flex items-center justify-between">
-                  <span className="text-xs text-[#9EA3B0]">{label}</span>
+                  <span className="text-xs text-mid">{label}</span>
                   <span className={`text-xs font-bold ${cls}`}>
-                    {v} <span className="text-[#9EA3B0] font-normal">{unit}</span>
-                    <span className="text-[#9EA3B0] ml-1">({Math.round(pct)}%)</span>
+                    {v} <span className="text-mid font-normal">{unit}</span>
+                    <span className="text-mid ml-1">({Math.round(pct)}%)</span>
                   </span>
                 </div>
               );
             })}
           </div>
           {macrosKcal && (
-            <div className="text-xs text-[#9EA3B0] pt-1 border-t border-white/[0.15]">
+            <div className="text-xs text-mid pt-1 border-t border-white/[0.15]">
               Target: {macrosKcal} kcal · Difference:{' '}
-              <span className={Math.abs(dayTotal.kcal - parseInt(macrosKcal)) <= 100 ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}>
+              <span className={Math.abs(dayTotal.kcal - parseInt(macrosKcal)) <= 100 ? 'text-gold-light font-bold' : 'text-amber-300 font-bold'}>
                 {dayTotal.kcal - parseInt(macrosKcal) > 0 ? '+' : ''}{dayTotal.kcal - parseInt(macrosKcal)} kcal
               </span>
             </div>
@@ -699,69 +699,69 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="space-y-4">
-        <p className="text-xs text-[#9EA3B0]">
+        <p className="text-xs text-mid">
           Set the fasting window. Member sees a live bar showing exactly where they are right now.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+            <label className="block text-note font-medium text-mute mb-1.5">
               Fast Begins ⏸
             </label>
             <input type="time" value={fasting.start} onChange={e => setF('start', e.target.value)}
               className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+                focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
           </div>
           <div>
-            <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+            <label className="block text-note font-medium text-mute mb-1.5">
               Eating Window Opens ▶
             </label>
             <input type="time" value={fasting.end} onChange={e => setF('end', e.target.value)}
               className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+                focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
           </div>
         </div>
 
         {/* Live preview bar */}
         {hasValues && (
           <div className="bg-white/[0.04] rounded-2xl p-3">
-            <div className="flex justify-between text-xs text-[#9EA3B0] mb-1.5">
-              <span className="font-semibold text-blue-600">🔵 Fasting {fastHrs.toFixed(1)}h</span>
-              <span className="font-semibold text-emerald-300">🟢 Eating {eatHrs.toFixed(1)}h</span>
+            <div className="flex justify-between text-xs text-mid mb-1.5">
+              <span className="font-semibold text-blue-400">🔵 Fasting {fastHrs.toFixed(1)}h</span>
+              <span className="font-semibold text-gold-light">🟢 Eating {eatHrs.toFixed(1)}h</span>
             </div>
             <div className="h-5 rounded-full overflow-hidden flex">
               {segments.map((s, i) => (
                 <div key={i} style={{ width: `${s.pct}%` }}
-                  className={s.type === 'eat' ? 'bg-emerald-400' : 'bg-blue-400'} />
+                  className={s.type === 'eat' ? 'bg-gold-deep' : 'bg-blue-400'} />
               ))}
             </div>
-            <div className="flex justify-between mt-1 text-xs text-[#9EA3B0]">
+            <div className="flex justify-between mt-1 text-xs text-mid">
               <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span><span>12AM</span>
             </div>
-            <p className="text-xs text-[#9EA3B0] mt-2 text-center font-medium">
+            <p className="text-xs text-mid mt-2 text-center font-medium">
               Eating: {fasting.end} – {fasting.start} · Fasting: {fasting.start} – {fasting.end}
             </p>
           </div>
         )}
 
         <div>
-          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+          <label className="block text-note font-medium text-mute mb-1.5">
             Protocol Label (shown to member)
           </label>
           <input value={fasting.label} onChange={e => setF('label', e.target.value)}
             placeholder="e.g. 16:8 Intermittent Fasting"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+              focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
         </div>
 
         <div>
-          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+          <label className="block text-note font-medium text-mute mb-1.5">
             Member-Facing Note
           </label>
           <textarea value={fasting.note} onChange={e => setF('note', e.target.value)} rows={2}
             placeholder="e.g. Water and black coffee allowed during fasting window"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF] resize-none" />
+              focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white resize-none" />
         </div>
 
         {(fasting.start || fasting.end) && (
@@ -787,41 +787,41 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="space-y-3">
-        <p className="text-xs text-[#9EA3B0]">
+        <p className="text-xs text-mid">
           Set daily targets. Member sees live progress bars that fill as food is logged.
         </p>
 
         <div>
-          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+          <label className="block text-note font-medium text-mute mb-1.5">
             Daily Calorie Target (kcal)
           </label>
           <input type="number" value={macros.kcal} onChange={e => setM('kcal', e.target.value)}
             placeholder="e.g. 1450"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+              focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           {[['pro','Protein (g)','66'],['carb','Net Carbs (g)','144'],['fat','Fat (g)','57']].map(([k,lbl,ph]) => (
             <div key={k}>
-              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">{lbl}</label>
+              <label className="block text-note font-medium text-mute mb-1.5">{lbl}</label>
               <input type="number" value={macros[k]} onChange={e => setM(k, e.target.value)}
                 placeholder={ph}
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+                  focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
             </div>
           ))}
         </div>
 
         {/* Live macro → kcal calculator */}
         {(p > 0 || c > 0 || f > 0) && (
-          <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-[rgba(52,211,153,0.10)]' : 'bg-[rgba(251,191,36,0.10)]'}`}>
+          <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-ok/10' : 'bg-amber-400/10'}`}>
             <div className="flex justify-between items-center">
-              <span className="text-[#9EA3B0]">
-                {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-[#FFFFFF]">{fromMacros} kcal from macros</span>
+              <span className="text-mid">
+                {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-white">{fromMacros} kcal from macros</span>
               </span>
               {target > 0 && (
-                <span className={`font-bold ml-2 ${diffOk ? 'text-emerald-300' : 'text-amber-300'}`}>
+                <span className={`font-bold ml-2 ${diffOk ? 'text-gold-light' : 'text-amber-300'}`}>
                   {diffOk ? '✓ Balanced' : `${diff > 0 ? '+' : ''}${diff} kcal off`}
                 </span>
               )}
@@ -833,13 +833,13 @@ function EditMemberModal({ member, onClose, onSaved }) {
         )}
 
         <div>
-          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+          <label className="block text-note font-medium text-mute mb-1.5">
             Phase / Label (shown to member)
           </label>
           <input value={macros.phase} onChange={e => setM('phase', e.target.value)}
             placeholder="e.g. Phase 1 — Fat Loss"
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+              focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
         </div>
 
         {(macros.kcal || macros.pro) && (
@@ -850,12 +850,12 @@ function EditMemberModal({ member, onClose, onSaved }) {
         )}
 
         {/* Sprint 5: Clinical RDA Overrides */}
-        <div className="border-t border-white/[0.07] pt-3">
+        <div className="border-t border-hair pt-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-[#9EA3B0] tracking-wider">★ Clinical RDA Overrides</p>
-            <span className="text-xs text-[#9EA3B0]">Leave blank = use defaults</span>
+            <p className="text-xs font-bold text-mid tracking-wider">★ Clinical RDA Overrides</p>
+            <span className="text-xs text-mid">Leave blank = use defaults</span>
           </div>
-          <p className="text-xs text-[#9EA3B0] mb-3">
+          <p className="text-xs text-mid mb-3">
             Override default nutrient targets for this member's specific needs (e.g. B12 deficiency, osteoporosis).
           </p>
           <div className="space-y-2">
@@ -865,18 +865,18 @@ function EditMemberModal({ member, onClose, onSaved }) {
               const current = rdaOverrides[key] || '';
               return (
                 <div key={key} className="flex items-center gap-2">
-                  <span className="text-xs text-[#9EA3B0] w-28 flex-shrink-0">{meta.icon} {meta.label}</span>
+                  <span className="text-xs text-mid w-28 flex-shrink-0">{meta.icon} {meta.label}</span>
                   <input
                     type="number"
                     value={current}
                     onChange={e => setRda(key, e.target.value)}
                     placeholder={`${meta.rda} ${meta.unit}`}
                     className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-300 ${
-                      current ? 'border-[rgba(212,175,55,0.40)] bg-[rgba(212,175,55,0.10)] text-amber-300 font-semibold' : 'border-white/[0.08]'}`}
+                      current ? 'border-gold/40 bg-gold/10 text-amber-300 font-semibold' : 'border-white/[0.08]'}`}
                   />
-                  <span className="text-xs text-[#9EA3B0] w-10">{meta.unit}</span>
+                  <span className="text-xs text-mid w-10">{meta.unit}</span>
                   {current && (
-                    <button onClick={() => setRda(key, '')} className="text-[#FFFFFF] hover:text-red-400 text-sm flex-shrink-0">×</button>
+                    <button onClick={() => setRda(key, '')} className="text-white hover:text-red-400 text-sm flex-shrink-0">×</button>
                   )}
                 </div>
               );
@@ -898,43 +898,43 @@ function EditMemberModal({ member, onClose, onSaved }) {
     <div className="mt-2 ml-7 space-y-2 p-2.5 bg-white/[0.04] rounded-xl border border-white/[0.08]">
       <div className="flex gap-2">
         <div className="flex-1">
-          <p className="text-xs text-[#9EA3B0] mb-1">Label</p>
+          <p className="text-xs text-mid mb-1">Label</p>
           <input value={draft.label} onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
             placeholder="Item name"
-            className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
+            className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-ok/35" />
         </div>
       </div>
       <div>
-        <p className="text-xs text-[#9EA3B0] mb-1">Description (optional)</p>
+        <p className="text-xs text-mid mb-1">Description (optional)</p>
         <input value={draft.sub} onChange={e => setDraft(d => ({ ...d, sub: e.target.value }))}
           placeholder="e.g. 30 min · 6:30–7:00 AM"
-          className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
+          className="w-full text-sm border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-ok/35" />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <p className="text-xs text-[#9EA3B0] mb-1">From</p>
+          <p className="text-xs text-mid mb-1">From</p>
           <input type="time" value={draft.fromTime} onChange={e => setDraft(d => ({ ...d, fromTime: e.target.value }))}
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-ok/35" />
         </div>
         <div>
-          <p className="text-xs text-[#9EA3B0] mb-1">To</p>
+          <p className="text-xs text-mid mb-1">To</p>
           <input type="time" value={draft.toTime} onChange={e => setDraft(d => ({ ...d, toTime: e.target.value }))}
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-ok/35" />
         </div>
         <div>
-          <p className="text-xs text-[#9EA3B0] mb-1">Duration</p>
+          <p className="text-xs text-mid mb-1">Duration</p>
           <input value={draft.totalTime} onChange={e => setDraft(d => ({ ...d, totalTime: e.target.value }))}
             placeholder="30 min"
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(52,211,153,0.35)]" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-ok/35" />
         </div>
       </div>
       <div className="flex gap-2 pt-1">
         <button onClick={onSave}
-          className="flex-1 py-1.5 text-xs bg-emerald-600 text-[#121316] rounded-lg font-semibold hover:bg-emerald-700">
+          className="flex-1 py-1.5 text-xs bg-gold text-charcoal rounded-lg font-semibold hover:bg-gold-deep">
           ✓ Save
         </button>
         <button onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-[#9EA3B0] hover:text-[#FFFFFF] rounded-lg border border-white/[0.08]">
+          className="px-3 py-1.5 text-xs text-mid hover:text-white rounded-lg border border-white/[0.08]">
           Cancel
         </button>
       </div>
@@ -943,45 +943,45 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
   // ── Add new custom item form ───────────────────────────────────────────────
   const AddForm = ({ protoKey }) => (
-    <div className="mt-2 p-2.5 bg-[rgba(52,211,153,0.10)] rounded-xl border border-[rgba(52,211,153,0.25)] space-y-2">
-      <p className="text-xs font-semibold text-emerald-300">New item</p>
+    <div className="mt-2 p-2.5 bg-ok/10 rounded-xl border border-ok/25 space-y-2">
+      <p className="text-xs font-semibold text-gold-light">New item</p>
       <input autoFocus value={newItem.label}
         onChange={e => setNewItem(n => ({ ...n, label: e.target.value }))}
         onKeyDown={e => e.key === 'Enter' && confirmAddCustom(protoKey)}
         placeholder="Item name (required)"
-        className="w-full text-sm border border-[rgba(52,211,153,0.30)] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(212,175,55,0.40)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
+        className="w-full text-sm border border-ok/30 rounded-lg px-2.5 py-1.5 outline-none focus:border-gold/40 bg-charcoal text-white placeholder-lo" />
       <input value={newItem.sub}
         onChange={e => setNewItem(n => ({ ...n, sub: e.target.value }))}
         placeholder="Description (optional)"
-        className="w-full text-sm border border-white/[0.08] rounded-lg px-2.5 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
+        className="w-full text-sm border border-white/[0.08] rounded-lg px-2.5 py-1.5 outline-none focus:border-gold/35 bg-charcoal text-white placeholder-lo" />
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <p className="text-xs text-[#9EA3B0] mb-1">From</p>
+          <p className="text-xs text-mid mb-1">From</p>
           <input type="time" value={newItem.fromTime}
             onChange={e => setNewItem(n => ({ ...n, fromTime: e.target.value }))}
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-gold/35 bg-charcoal text-white placeholder-lo" />
         </div>
         <div>
-          <p className="text-xs text-[#9EA3B0] mb-1">To</p>
+          <p className="text-xs text-mid mb-1">To</p>
           <input type="time" value={newItem.toTime}
             onChange={e => setNewItem(n => ({ ...n, toTime: e.target.value }))}
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-gold/35 bg-charcoal text-white placeholder-lo" />
         </div>
         <div>
-          <p className="text-xs text-[#9EA3B0] mb-1">Duration</p>
+          <p className="text-xs text-mid mb-1">Duration</p>
           <input value={newItem.totalTime}
             onChange={e => setNewItem(n => ({ ...n, totalTime: e.target.value }))}
             placeholder="30 min"
-            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-[rgba(212,175,55,0.35)] bg-[#121316] text-[#FFFFFF] placeholder-[#7E8596]" />
+            className="w-full text-xs border border-white/[0.08] rounded-lg px-2 py-1.5 outline-none focus:border-gold/35 bg-charcoal text-white placeholder-lo" />
         </div>
       </div>
       <div className="flex gap-2">
         <button onClick={() => confirmAddCustom(protoKey)}
-          className="flex-1 py-1.5 text-xs bg-emerald-600 text-[#121316] rounded-lg font-semibold hover:bg-emerald-700">
+          className="flex-1 py-1.5 text-xs bg-gold text-charcoal rounded-lg font-semibold hover:bg-gold-deep">
           + Add
         </button>
         <button onClick={() => { setAddingKey(null); setNewItem({ label:'',sub:'',fromTime:'',toTime:'',totalTime:'' }); }}
-          className="px-3 py-1.5 text-xs text-[#9EA3B0] hover:text-[#FFFFFF] rounded-lg border border-white/[0.08]">
+          className="px-3 py-1.5 text-xs text-mid hover:text-white rounded-lg border border-white/[0.08]">
           Cancel
         </button>
       </div>
@@ -994,8 +994,8 @@ function EditMemberModal({ member, onClose, onSaved }) {
     const assigned = proto[protoKey] || items.map(i => i.id);
 
     return (
-      <div className="border border-white/[0.07] rounded-2xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[#A9B0BF] mb-2">{icon} {label}</p>
+      <div className="border border-hair rounded-2xl p-3 space-y-1">
+        <p className="text-note font-semibold text-[#A9B0BF] mb-2">{icon} {label}</p>
 
         {allItems.map(item => {
           const ov       = overrides[item.id] || {};
@@ -1013,24 +1013,24 @@ function EditMemberModal({ member, onClose, onSaved }) {
                 {/* Checkbox */}
                 <input type="checkbox" checked={enabled}
                   onChange={() => toggleProto(protoKey, item.id, items)}
-                  className="w-4 h-4 accent-emerald-600 flex-shrink-0 cursor-pointer" />
+                  className="w-4 h-4 accent-gold flex-shrink-0 cursor-pointer" />
 
                 {/* Label + sub */}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[#FFFFFF] leading-tight">{dispLabel}</div>
-                  {subLine && <div className="text-xs text-[#9EA3B0] mt-0.5">{subLine}</div>}
+                  <div className="text-sm font-medium text-white leading-tight">{dispLabel}</div>
+                  {subLine && <div className="text-xs text-mid mt-0.5">{subLine}</div>}
                 </div>
 
                 {/* Edit button */}
                 <button onClick={() => isEditing ? setEditingId(null) : startEdit(item)}
                   className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors flex-shrink-0 ${
-                    isEditing ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' : 'text-[#9EA3B0] hover:text-emerald-300 hover:bg-[rgba(52,211,153,0.10)]'}`}>
+                    isEditing ? 'bg-ok/[0.14] text-gold-light' : 'text-mid hover:text-gold-light hover:bg-ok/10'}`}>
                   ✏️
                 </button>
 
                 {/* Delete button */}
                 <button onClick={() => deleteItem(protoKey, item.id, !!item.custom)}
-                  className="text-xs px-2 py-1 rounded-lg text-[#FFFFFF] hover:text-red-400 hover:bg-[rgba(248,113,113,0.10)] transition-colors flex-shrink-0">
+                  className="text-xs px-2 py-1 rounded-lg text-white hover:text-red-400 hover:bg-red-400/10 transition-colors flex-shrink-0">
                   🗑
                 </button>
               </div>
@@ -1046,7 +1046,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
           ? <AddForm protoKey={protoKey} />
           : (
             <button onClick={() => setAddingKey(protoKey)}
-              className="flex items-center gap-1.5 text-xs text-emerald-300 hover:text-emerald-800 font-semibold mt-2 px-1">
+              className="flex items-center gap-1.5 text-xs text-gold-light hover:text-gold-light font-semibold mt-2 px-1">
               <span className="text-base leading-none">+</span> Add custom item
             </button>
           )
@@ -1062,7 +1062,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
         {[['identity','👤 Identity'],['protocol','📋 Protocol']].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-              tab === id ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6] shadow-sm' : 'text-[#9EA3B0]'}`}>
+              tab === id ? 'bg-gold/[0.14] text-gold-light shadow-sm' : 'text-mid'}`}>
             {label}
           </button>
         ))}
@@ -1070,16 +1070,16 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
       {tab === 'identity' && (
         <div className="space-y-3">
-          <p className="text-[12px] font-semibold text-[#A9B0BF]">Identity</p>
+          <p className="text-note font-semibold text-[#A9B0BF]">Identity</p>
           <Field label="Full Name"        value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
           <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
 
-          <div className="border border-white/[0.07] rounded-2xl p-3 space-y-3">
+          <div className="border border-hair rounded-2xl p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-[12px] font-semibold text-[#A9B0BF]">PIN / Password</p>
+              <p className="text-note font-semibold text-[#A9B0BF]">PIN / Password</p>
               <button onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
                 className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                  showPin ? 'bg-[rgba(248,113,113,0.10)] text-red-400' : 'bg-[rgba(52,211,153,0.10)] text-emerald-300'}`}>
+                  showPin ? 'bg-red-400/10 text-red-400' : 'bg-ok/10 text-gold-light'}`}>
                 {showPin ? 'Cancel' : '🔑 Change PIN'}
               </button>
             </div>
@@ -1089,27 +1089,27 @@ function EditMemberModal({ member, onClose, onSaved }) {
                 <Field label="Confirm PIN" type="password" value={form.confirmPin} onChange={v=>set('confirmPin',v)} placeholder="Repeat PIN" />
               </>
             ) : (
-              <p className="text-xs text-[#9EA3B0]">Leave unchanged — member uses existing PIN.</p>
+              <p className="text-xs text-mid">Leave unchanged — member uses existing PIN.</p>
             )}
           </div>
 
-          <p className="text-[12px] font-semibold text-[#A9B0BF] mt-1">Profile</p>
+          <p className="text-note font-semibold text-[#A9B0BF] mt-1">Profile</p>
           <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
           <Field label="Date of birth"      type="date"   value={form.dob}           onChange={v=>set('dob',v)} />
           <div>
-            <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Sex</label>
+            <label className="block text-note font-medium text-mute mb-1.5">Sex</label>
             <div className="flex gap-2">
               {[['male','Male'],['female','Female']].map(([val,label]) => (
                 <button key={val} type="button"
                   onClick={() => set('gender', form.gender === val ? '' : val)}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
                     form.gender === val
-                      ? 'bg-[rgba(212,175,55,0.16)] border-[rgba(212,175,55,0.5)] text-white'
-                      : 'border-white/[0.08] text-[#9EA3B0] hover:border-white/[0.15]'
+                      ? 'bg-gold/[0.16] border-gold/50 text-white'
+                      : 'border-white/[0.08] text-mid hover:border-white/[0.15]'
                   }`}>{label}</button>
               ))}
             </div>
-            <p className="text-[10px] text-[#7E8596] mt-1.5">
+            <p className="text-eyebrow text-lo mt-1.5">
               Date of birth and sex are required for the member's TDEE calculation.
             </p>
           </div>
@@ -1125,7 +1125,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
             {[['items','📋 Items'],['fasting','⏰ Fasting'],['macros','🎯 Macros'],['meals','🍽 Meal Plan']].map(([id, label]) => (
               <button key={id} onClick={() => setProtoTab(id)}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                  protoTab === id ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6] shadow-sm' : 'text-[#9EA3B0] hover:text-[#FFFFFF]'}`}>
+                  protoTab === id ? 'bg-gold/[0.14] text-gold-light shadow-sm' : 'text-mid hover:text-white'}`}>
                 {label}
               </button>
             ))}
@@ -1133,7 +1133,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
           {protoTab === 'items' && (
             <>
-              <p className="text-xs text-[#9EA3B0] bg-[rgba(251,191,36,0.10)] px-3 py-2 rounded-xl">
+              <p className="text-xs text-mid bg-amber-400/10 px-3 py-2 rounded-xl">
                 ✅ Check/uncheck to assign. ✏️ Edit label & timing. 🗑 Delete item.
               </p>
               <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />
@@ -1154,10 +1154,10 @@ function EditMemberModal({ member, onClose, onSaved }) {
         </div>
       )}
 
-      {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl mt-3">{error}</p>}
+      {error && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded-xl mt-3">{error}</p>}
 
       <button onClick={submit} disabled={saving}
-        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
+        className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
           rounded-xl transition-colors disabled:opacity-50 mt-4">
         {saving ? 'Saving…' : 'Save Changes'}
       </button>
@@ -1193,21 +1193,21 @@ function PushModal({ members, onClose }) {
         {result ? (
           <div className="text-center py-4 space-y-2">
             <div className="text-4xl">📨</div>
-            <p className="font-bold text-[#FFFFFF]">Notification sent!</p>
-            <p className="text-sm text-[#9EA3B0]">
-              Delivered to <span className="font-semibold text-emerald-300">{result.sent}</span> {plural(result.sent, 'device')}
+            <p className="font-bold text-white">Notification sent!</p>
+            <p className="text-sm text-mid">
+              Delivered to <span className="font-semibold text-gold-light">{result.sent}</span> {plural(result.sent, 'device')}
               {result.failed > 0 && `, ${result.failed} failed`}
             </p>
-            <button onClick={onClose} className="mt-2 text-sm font-semibold text-[#9EA3B0] hover:text-[#FFFFFF]">Close</button>
+            <button onClick={onClose} className="mt-2 text-sm font-semibold text-mid hover:text-white">Close</button>
           </div>
         ) : (
           <>
             <div>
-              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Recipient</label>
+              <label className="block text-note font-medium text-mute mb-1.5">Recipient</label>
               <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)}
                 /* Fourth of the same four. */
-                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-[#1A1C20]
-                  focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF]">
+                className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm bg-surface
+                  focus:outline-none focus:ring-2 focus:ring-gold/30 text-white">
                 <option value="">📢 All active members ({members.filter(m => m.active).length})</option>
                 {members.filter(m => m.active).map(m => (
                   <option key={m.id} value={m.id}>{m.name} · {m.phone}</option>
@@ -1216,32 +1216,32 @@ function PushModal({ members, onClose }) {
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Title</label>
+              <label className="block text-note font-medium text-mute mb-1.5">Title</label>
               <input value={form.title} onChange={e => set('title', e.target.value)}
                 placeholder="e.g. Reminder: Log your weight today"
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
+                  focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Message</label>
+              <label className="block text-note font-medium text-mute mb-1.5">Message</label>
               <textarea value={form.body} onChange={e => set('body', e.target.value)} rows={3}
                 placeholder="e.g. Great work this week! Don't forget to log your morning weight."
                 className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm resize-none
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300 text-[#FFFFFF]" />
-              <p className="text-xs text-[#9EA3B0] mt-1">{form.body.length}/140 characters</p>
+                  focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
+              <p className="text-xs text-mid mt-1">{form.body.length}/140 characters</p>
             </div>
 
-            <div className="bg-[rgba(251,191,36,0.10)] border border-[rgba(251,191,36,0.25)] rounded-xl px-3 py-2">
+            <div className="bg-amber-400/10 border border-amber-400/25 rounded-xl px-3 py-2">
               <p className="text-xs text-amber-300 font-medium">
                 ⚠ Only members with push notifications enabled will receive this.
               </p>
             </div>
 
-            {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded-xl">{error}</p>}
 
             <button onClick={send} disabled={sending || !form.title.trim() || !form.body.trim()}
-              className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-bold
+              className="w-full py-3 bg-charcoal hover:bg-charcoal text-white font-bold
                 rounded-xl transition-colors disabled:opacity-40">
               {sending ? 'Sending…' : `Send Notification`}
             </button>
@@ -1282,38 +1282,38 @@ function AddCoachModal({ onClose, onAdded }) {
         <Field label="Password" type="password" value={form.password} onChange={v=>set('password',v)} placeholder="Min 8 characters" required />
 
         <div>
-          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">Role</label>
+          <label className="block text-note font-medium text-mute mb-1.5">Role</label>
           <div className="flex gap-2">
             {['monitor','admin'].map(r => (
               <button key={r} onClick={() => set('role', r)}
                 /* The selected state used to carry `border` a second time and
                    TWO border colours — `border-white/[0.1]` and
-                   `border-stone-800`. Tailwind emits one class per utility, so
+                   `border-charcoal`. Tailwind emits one class per utility, so
                    which one won came down to stylesheet order rather than
-                   intent. The unselected state was `bg-white`: a solid white
+                   intent. The unselected state was `bg-surface`: a solid white
                    pill on a charcoal modal. Selected is now the same gold wash
                    the admin tab strip uses, so "selected" reads the same way in
                    both places. */
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all capitalize ${
                   form.role === r
-                    ? 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.30)] text-[#F0E2B6]'
-                    : 'bg-[#1A1C20] text-[#9EA3B0] border-white/[0.08] hover:border-white/[0.1]'
+                    ? 'bg-gold/[0.14] border-gold/30 text-gold-light'
+                    : 'bg-surface text-mid border-white/[0.08] hover:border-white/[0.1]'
                 }`}>
                 {r === 'admin' ? 'Admin' : 'Coach'}
               </button>
             ))}
           </div>
           {form.role === 'admin' && (
-            <p className="text-xs text-amber-300 mt-1.5 bg-[rgba(251,191,36,0.10)] px-3 py-1.5 rounded-lg">
+            <p className="text-xs text-amber-300 mt-1.5 bg-amber-400/10 px-3 py-1.5 rounded-lg">
               Admin has full access including creating/managing all users.
             </p>
           )}
         </div>
 
-        {error && <p className="text-xs text-red-400 bg-[rgba(248,113,113,0.10)] px-3 py-2 rounded-xl">{error}</p>}
+        {error && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-bold
+          className="w-full py-3 bg-charcoal hover:bg-charcoal text-white font-bold
             rounded-xl transition-colors disabled:opacity-50 mt-2">
           {saving ? 'Creating…' : 'Create Account'}
         </button>
@@ -1345,14 +1345,14 @@ function AssignModal({ member, coaches, onClose, onAssigned }) {
         <select value={coachId} onChange={e => setCoachId(e.target.value)}
           /* Same borrowed `.bg-white` remap as the select above. */
           className="w-full border border-white/[0.08] rounded-xl px-3 py-3 text-sm
-            focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] bg-[#1A1C20] text-[#FFFFFF]">
+            focus:outline-none focus:ring-2 focus:ring-gold/30 bg-surface text-white">
           <option value="">— Unassigned —</option>
           {assignableCoaches(coaches).map(m => (
             <option key={m.id} value={m.id}>{m.display} · {roleLabel(m.role)} · {m.patient_count} members</option>
           ))}
         </select>
         <button onClick={submit} disabled={saving || !coachId}
-          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
+          className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
             rounded-xl disabled:opacity-50 transition-colors">
           {saving ? 'Saving…' : 'Confirm Assignment'}
         </button>
@@ -1392,23 +1392,23 @@ function DeleteMemberModal({ member, onClose, onDeleted }) {
   return (
     <Modal title="Delete member" onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-sm text-[#FFFFFF]">
+        <p className="text-sm text-white">
           This permanently deletes <span className="font-bold">{member.name}</span> and every
           log, weight, lab result, workout and message belonging to them.
         </p>
-        <p className="text-xs text-[#9EA3B0]">
+        <p className="text-xs text-mid">
           There is no undo. If you only want to stop them using the app, close this and
           choose “Disable” instead — that keeps their history and can be reversed.
         </p>
         <div>
-          <label className="block text-[12px] font-medium text-[#8C93A3] mb-1.5">
+          <label className="block text-note font-medium text-mute mb-1.5">
             Type “{member.name}” to confirm
           </label>
           <input value={typed} onChange={e => setTyped(e.target.value)}
             placeholder={member.name}
             className="w-full border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm
-              bg-[#1A1C20] text-[#FFFFFF] placeholder-[#7E8596]
-              focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)]" />
+              bg-surface text-white placeholder-lo
+              focus:outline-none focus:ring-2 focus:ring-gold/30" />
         </div>
         {err && (
           <p className="text-xs text-red-300 bg-red-400/10 border border-red-400/25
@@ -1416,12 +1416,12 @@ function DeleteMemberModal({ member, onClose, onDeleted }) {
         )}
         <div className="flex gap-2 pt-1">
           <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#1A1C20]
-              border border-white/[0.08] text-[#9EA3B0]">
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-surface
+              border border-white/[0.08] text-mid">
             Cancel
           </button>
           <button onClick={go} disabled={!matches || busy}
-            className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-500/90 text-[#121316]
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-500/90 text-charcoal
               disabled:opacity-40 disabled:cursor-not-allowed">
             {busy ? 'Deleting…' : 'Delete permanently'}
           </button>
@@ -1530,10 +1530,10 @@ export default function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="min-h-screen bg-[#121316]">
+    <div className="min-h-screen bg-charcoal">
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-5">
+      <div className="bg-gradient-to-br from-surface to-charcoal text-white px-4 pt-10 pb-5">
         <div className="max-w-2xl mx-auto">
           {/* `min-w-0` on the name block and `flex-shrink-0` on the button.
               Without them the two children fight over a 360px row: the name
@@ -1546,18 +1546,18 @@ export default function AdminDashboard() {
               {/* Sentence case, and no crown. Tracked capitals plus an emoji is
                   the chrome that made this read as a template; the product name
                   is a quiet label, and the person's name is the headline. */}
-              <p className="text-[11.5px] font-medium text-[#8C7A46] mb-1">FitLife admin</p>
-              <h1 className="font-display text-[26px] leading-tight font-medium tracking-[-0.015em]">
+              <p className="text-micro font-medium text-[#8C7A46] mb-1">FitLife admin</p>
+              <h1 className="font-display text-num leading-tight font-medium tracking-[-0.015em]">
                 Welcome, {user?.name}
               </h1>
               {stats && (
-                <p className="text-[#9EA3B0] text-xs mt-0.5">
+                <p className="text-mid text-xs mt-0.5">
                   {stats.members} members · {stats.coaches} coaches · {stats.logsToday} logged today
                 </p>
               )}
             </div>
             <button onClick={() => { logout(); }}
-              className="flex-shrink-0 whitespace-nowrap text-xs text-[#9EA3B0] hover:text-white px-3 py-1.5
+              className="flex-shrink-0 whitespace-nowrap text-xs text-mid hover:text-white px-3 py-1.5
                 border border-white/[0.1] hover:border-white/[0.2] rounded-xl transition-colors">
               Sign out
             </button>
@@ -1566,10 +1566,10 @@ export default function AdminDashboard() {
           {/* AI command bar — the coach's fastest path to any change */}
           <button onClick={() => openCoachAI()}
             style={{ minHeight: 52 }}
-            className="w-full flex items-center gap-3 bg-gradient-to-r from-[#D4AF37]/[0.16] to-[#8C6D37]/[0.08] border border-[#D4AF37]/40 hover:border-[#D4AF37]/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(212,175,55,0.10)]">
-            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8C6D37] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.5)]">✨</span>
-            <span className="text-sm text-[#9EA3B0] font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
-            <span className="text-[#F0E2B6]">🎤</span>
+            className="w-full flex items-center gap-3 bg-gradient-to-r from-gold/[0.16] to-gold-dark/[0.08] border border-gold/40 hover:border-gold/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(212,175,55,0.10)]">
+            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.5)]">✨</span>
+            <span className="text-sm text-mid font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
+            <span className="text-gold-light">🎤</span>
           </button>
         </div>
       </div>
@@ -1601,8 +1601,8 @@ export default function AdminDashboard() {
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
               className={`flex-1 min-w-max whitespace-nowrap px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 tab === t.id
-                  ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6] border border-[rgba(212,175,55,0.25)]'
-                  : 'text-[#7E8596] hover:text-[#9EA3B0]'
+                  ? 'bg-gold/[0.14] text-gold-light border border-gold/25'
+                  : 'text-lo hover:text-mid'
               }`}>
               {t.label}
             </button>
@@ -1616,12 +1616,12 @@ export default function AdminDashboard() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${tab}…`}
-            className="flex-1 px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm
-              focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] text-[#FFFFFF] placeholder-[#7E8596]"
+            className="flex-1 px-3 py-2.5 bg-surface border border-white/[0.1] rounded-xl text-sm
+              focus:outline-none focus:ring-2 focus:ring-gold/30 text-white placeholder-lo"
           />
           <button
             onClick={() => tab === 'members' ? setShowAddMember(true) : setShowAddCoach(true)}
-            className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] text-sm font-bold
+            className="px-4 py-2.5 bg-gold hover:bg-gold-light text-charcoal text-sm font-bold
               rounded-xl transition-colors whitespace-nowrap">
             + Add {tab === 'members' ? 'Member' : 'Coach'}
           </button>
@@ -1652,7 +1652,7 @@ export default function AdminDashboard() {
                 <div key={s.label} className="px-2 py-3.5 text-center">
                   <div className={`font-display text-[21px] leading-none font-medium tabular-nums ${
                     s.accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{s.value}</div>
-                  <div className="text-[11px] text-[#7E8596] mt-1.5">{s.label}</div>
+                  <div className="text-caption text-lo mt-1.5">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -1675,28 +1675,28 @@ export default function AdminDashboard() {
               if (!withMsgs.length) return null;
               const newCount = withMsgs.reduce((n, m) => n + (m.unread_messages || 0), 0);
               return (
-                <div className="bg-[#1A1C20] border border-[rgba(212,175,55,0.35)] rounded-2xl p-3.5 mb-3">
-                  <p className="text-sm font-bold text-[#D4AF37] mb-2">
+                <div className="bg-surface border border-gold/35 rounded-2xl p-3.5 mb-3">
+                  <p className="text-sm font-bold text-gold mb-2">
                     ✉️ Messages from members
                     {newCount > 0 && <span className="ml-2">· {newCount} new</span>}
                   </p>
                   <div className="space-y-2">
                     {withMsgs.map(m => (
                       <div key={m.id}
-                        className={`flex items-start gap-2 bg-[#121316] rounded-xl px-3 py-2.5 border
-                          hover:border-[rgba(212,175,55,0.30)] transition-colors ${
-                          m.unread_messages > 0 ? 'border-[rgba(212,175,55,0.30)]' : 'border-white/[0.07]'}`}>
+                        className={`flex items-start gap-2 bg-charcoal rounded-xl px-3 py-2.5 border
+                          hover:border-gold/30 transition-colors ${
+                          m.unread_messages > 0 ? 'border-gold/30' : 'border-hair'}`}>
                         <button onClick={() => navigate(`/coach/${m.id}`)} className="flex-1 min-w-0 text-left">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[13px] font-bold text-[#FFFFFF] truncate">{m.name}</p>
+                          <p className="text-body-sm font-bold text-white truncate">{m.name}</p>
                           {m.unread_messages > 0 && (
-                            <span className="text-[10px] font-bold text-[#121316] bg-[#D4AF37]
+                            <span className="text-eyebrow font-bold text-charcoal bg-gold
                               px-1.5 py-0.5 rounded-full flex-shrink-0">
                               {m.unread_messages > 1 ? `${m.unread_messages} new` : 'New'}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-[#9EA3B0] mt-1 line-clamp-2">{m.latest_message}</p>
+                        <p className="text-xs text-mid mt-1 line-clamp-2">{m.latest_message}</p>
                         </button>
                         {/* Same control as the coach list: clear it here when it
                             has already been dealt with, without opening them. */}
@@ -1707,7 +1707,7 @@ export default function AdminDashboard() {
                               x.id === m.id ? { ...x, unread_messages: 0, latest_message: null } : x));
                           }}
                           title="Mark as read"
-                          className="flex-shrink-0 text-[#7E8596] hover:text-[#D4AF37] px-1.5 py-1
+                          className="flex-shrink-0 text-lo hover:text-gold px-1.5 py-1
                             text-sm transition-colors">
                           ✓
                         </button>
@@ -1720,8 +1720,8 @@ export default function AdminDashboard() {
 
             {/* Today's gaps — what to chase right now. Needs Attention below is
                 the longer-term list of members drifting away. */}
-            <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl p-3.5 mb-3">
-              <p className="text-[15px] font-semibold text-[#F2F1EE] mb-1 tracking-[-0.01em]">Today's gaps</p>
+            <div className="bg-surface border border-hair rounded-2xl p-3.5 mb-3">
+              <p className="text-body font-semibold text-[#F2F1EE] mb-1 tracking-[-0.01em]">Today's gaps</p>
               <TodaysGaps />
             </div>
 
@@ -1730,17 +1730,17 @@ export default function AdminDashboard() {
                 Only the bulk in-app reminder remains, since that is the one
                 action the gaps card deliberately does not automate. */}
             {overview.alerts?.length > 0 && (
-              <div className="bg-[#1A1C20] rounded-2xl p-3.5 border border-white/[0.07] mb-3">
+              <div className="bg-surface rounded-2xl p-3.5 border border-hair mb-3">
                 <button
                   onClick={() => sendRemind(overview.alerts, 'all')}
                   disabled={remindBusy['all']}
                   style={{ minHeight: 42 }}
-                  className="w-full rounded-xl text-xs font-extrabold text-[#F0E2B6]
-                    bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.35)]
+                  className="w-full rounded-xl text-xs font-extrabold text-gold-light
+                    bg-gold/10 border border-gold/35
                     active:scale-[0.99] transition-transform disabled:opacity-50">
                   {remindBusy['all'] ? 'Sending…' : `Send an in-app reminder to all ${overview.alerts.length}`}
                 </button>
-                <p className="text-[9px] text-[#7E8596] mt-2 text-center">
+                <p className="text-tiny text-lo mt-2 text-center">
                   Push notification and a coach message inside the app, logged in Audit.
                   For members who have stopped opening the app, use 💬 above instead.
                 </p>
@@ -1748,27 +1748,27 @@ export default function AdminDashboard() {
             )}
 
             {/* Compliance — one list, two lenses */}
-            <div className="bg-[#1A1C20] rounded-2xl border border-white/[0.07] overflow-hidden">
-              <div className="flex bg-white/[0.03] border-b border-white/[0.07] p-1.5 gap-1">
+            <div className="bg-surface rounded-2xl border border-hair overflow-hidden">
+              <div className="flex bg-white/[0.03] border-b border-hair p-1.5 gap-1">
                 {[['today', 'Today'], ['7d', '7-Day Average']].map(([k, l]) => (
                   <button key={k} onClick={() => setComplianceLens(k)}
                     className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                      complianceLens === k ? 'bg-[#D4AF37] text-[#121316]' : 'text-[#7E8596] hover:text-[#9EA3B0]'
+                      complianceLens === k ? 'bg-gold text-charcoal' : 'text-lo hover:text-mid'
                     }`}>{l}</button>
                 ))}
               </div>
 
               {complianceLens === 'today' && (overview.today_detail || []).map(m => {
                 const pct = m.compliance_pct || 0;
-                const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-stone-200';
-                const textColor = pct >= 75 ? 'text-emerald-300' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-[#9EA3B0]';
+                const color = pct >= 75 ? 'bg-gold' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-white/[0.08]';
+                const textColor = pct >= 75 ? 'text-gold-light' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-mid';
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] last:border-0">
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-[#FFFFFF]">{m.name}</span>
-                      {m.monitor_name && <span className="text-xs text-[#9EA3B0] ml-2">· {m.monitor_name}</span>}
+                      <span className="text-sm font-medium text-white">{m.name}</span>
+                      {m.monitor_name && <span className="text-xs text-mid ml-2">· {m.monitor_name}</span>}
                     </div>
-                    {m.weight_kg && <span className="text-xs font-semibold text-emerald-300">{m.weight_kg} kg</span>}
+                    {m.weight_kg && <span className="text-xs font-semibold text-gold-light">{m.weight_kg} kg</span>}
                     <div className="flex items-center gap-2">
                       <div className="w-20 h-2 bg-white/[0.06] rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
@@ -1785,11 +1785,11 @@ export default function AdminDashboard() {
                 const pct = parseFloat(m.avg_7d) || 0;
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.06] last:border-0">
-                    <span className="text-sm text-[#FFFFFF] flex-1">{m.name}</span>
-                    <span className="text-xs text-[#9EA3B0]">{m.days_logged} days</span>
+                    <span className="text-sm text-white flex-1">{m.name}</span>
+                    <span className="text-xs text-mid">{m.days_logged} days</span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      pct >= 75 ? 'bg-[rgba(52,211,153,0.14)] text-emerald-300' :
-                      pct >= 50 ? 'bg-[rgba(251,191,36,0.14)] text-amber-300' : 'bg-[rgba(248,113,113,0.10)] text-red-400'
+                      pct >= 75 ? 'bg-ok/[0.14] text-gold-light' :
+                      pct >= 50 ? 'bg-amber-400/[0.14] text-amber-300' : 'bg-red-400/10 text-red-400'
                     }`}>{Math.round(pct)}%</span>
                   </div>
                 );
@@ -1798,15 +1798,15 @@ export default function AdminDashboard() {
 
             {/* Food manager shortcut */}
             <button onClick={() => navigate('/admin/foods')}
-              className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
+              className="w-full py-3 bg-charcoal hover:bg-charcoal text-white font-semibold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2">
               🥗 Food Database Manager
-              <span className="text-[#9EA3B0] text-xs">→</span>
+              <span className="text-mid text-xs">→</span>
             </button>
           </div>
         )}
 
         {tab === 'overview' && !overview && !loading && (
-          <p className="text-center text-[#9EA3B0] py-8">Overview data loading…</p>
+          <p className="text-center text-mid py-8">Overview data loading…</p>
         )}
 
         {/* ── Members tab ── */}
@@ -1822,13 +1822,13 @@ export default function AdminDashboard() {
                  An empty list also has two very different causes. "No members
                  yet" under a search for "prya" is simply wrong, and it sent
                  people off to add a member who was already there. */
-              <div className="text-center py-16 text-[#9EA3B0]">
+              <div className="text-center py-16 text-mid">
                 <div className="text-4xl mb-3">👥</div>
                 {search.trim() ? (
                   <>
                     <p className="font-medium">No member matches “{search.trim()}”</p>
                     <button onClick={() => setSearch('')}
-                      className="mt-3 text-[#D4AF37] font-semibold text-sm">Clear search</button>
+                      className="mt-3 text-gold font-semibold text-sm">Clear search</button>
                   </>
                 ) : (
                   <>
@@ -1852,25 +1852,25 @@ export default function AdminDashboard() {
                 const lost = hasJourney && Number.isFinite(latest) ? +(start - latest).toFixed(1) : null;
                 return (
                   <div key={m.id}
-                    className={`relative bg-[#1A1C20] rounded-2xl border p-4 shadow-card
-                      ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-[rgba(251,191,36,0.35)]' : 'border-white/[0.07]'}`}>
+                    className={`relative bg-surface rounded-2xl border p-4 shadow-card
+                      ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-amber-400/35' : 'border-hair'}`}>
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/coach/${m.id}`)}>
-                      <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-[#F0E2B6]"
+                      <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-gold-light"
                         style={{ background: 'linear-gradient(135deg,#2A2620,#1A1C20)',
                           border: '1px solid rgba(212,175,55,0.18)' }}>
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-[#FFFFFF] truncate">{m.name}</h3>
-                          {!m.active && <span className="text-[9px] font-bold bg-white/[0.06] text-[#9EA3B0] px-2 py-0.5 rounded-full">INACTIVE</span>}
-                          {noLog && m.active && <span className="text-[9px] font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">NO LOG</span>}
-                          {m.has_pin === false && m.active && <span className="text-[9px] font-bold text-amber-300">🔑 NO PIN</span>}
+                          <h3 className="font-bold text-white truncate">{m.name}</h3>
+                          {!m.active && <span className="text-tiny font-bold bg-white/[0.06] text-mid px-2 py-0.5 rounded-full">INACTIVE</span>}
+                          {noLog && m.active && <span className="text-tiny font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">NO LOG</span>}
+                          {m.has_pin === false && m.active && <span className="text-tiny font-bold text-amber-300">🔑 NO PIN</span>}
                         </div>
-                        <p className="text-[10px] text-[#9EA3B0] mt-0.5 truncate">
+                        <p className="text-eyebrow text-mid mt-0.5 truncate">
                           📱 {m.phone}
                           {m.monitor_name
-                            ? <span className="text-emerald-300"> · 🏋️ {m.monitor_name}</span>
+                            ? <span className="text-gold-light"> · 🏋️ {m.monitor_name}</span>
                             : <span className="text-amber-300"> · ⚠ Unassigned</span>}
                         </p>
                       </div>
@@ -1879,7 +1879,7 @@ export default function AdminDashboard() {
                         style={{ background: pct != null
                           ? `conic-gradient(${ringColor} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`
                           : 'rgba(255,255,255,0.06)' }}>
-                        <span className="w-7 h-7 rounded-full bg-[#1A1C20] flex items-center justify-center text-[8px] font-extrabold"
+                        <span className="w-7 h-7 rounded-full bg-surface flex items-center justify-center text-[8px] font-extrabold"
                           style={{ color: ringColor }}>
                           {pct != null ? `${pct}%` : '—'}
                         </span>
@@ -1887,15 +1887,15 @@ export default function AdminDashboard() {
                       {/* ⋮ menu */}
                       <button onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === m.id ? null : m.id); }}
                         style={{ minWidth: 36, minHeight: 36 }}
-                        className="flex-shrink-0 flex items-center justify-center rounded-full text-[#7E8596] hover:text-white hover:bg-white/[0.06] text-lg font-bold transition-colors">⋮</button>
+                        className="flex-shrink-0 flex items-center justify-center rounded-full text-lo hover:text-white hover:bg-white/[0.06] text-lg font-bold transition-colors">⋮</button>
                     </div>
 
                     {/* Weight journey */}
                     {hasJourney && (
                       <div className="mt-3 pt-3 border-t border-white/[0.06]">
-                        <div className="flex items-center justify-between text-[10px] text-[#9EA3B0] mb-1.5">
-                          <span>{start} → <b className="text-[#FFFFFF]">{Number.isFinite(latest) ? latest : '—'}</b> → {goal} kg</span>
-                          {lost != null && lost > 0 && <span className="font-extrabold text-emerald-300">−{lost} kg</span>}
+                        <div className="flex items-center justify-between text-eyebrow text-mid mb-1.5">
+                          <span>{start} → <b className="text-white">{Number.isFinite(latest) ? latest : '—'}</b> → {goal} kg</span>
+                          {lost != null && lost > 0 && <span className="font-extrabold text-gold-light">−{lost} kg</span>}
                           {lost != null && lost < 0 && <span className="font-extrabold text-amber-300">+{Math.abs(lost)} kg</span>}
                         </div>
                         <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
@@ -1909,23 +1909,23 @@ export default function AdminDashboard() {
                     {menuFor === m.id && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setMenuFor(null)} />
-                        <div className="absolute right-3 top-14 z-50 bg-[#1A1C20] border border-white/[0.12] rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.7)] min-w-[150px]">
+                        <div className="absolute right-3 top-14 z-50 bg-surface border border-white/[0.12] rounded-2xl overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.7)] min-w-[150px]">
                           <button onClick={() => { setMenuFor(null); setAssignTarget(m); }}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-emerald-300 hover:bg-white/[0.04]">🔗 Assign coach</button>
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-gold-light hover:bg-white/[0.04]">🔗 Assign coach</button>
                           <button onClick={() => { setMenuFor(null); setEditTarget(m); }}
                             className="w-full text-left px-4 py-3 text-xs font-bold text-blue-300 hover:bg-white/[0.04] border-t border-white/[0.06]">✏️ Edit & protocol</button>
                           <button onClick={() => { setMenuFor(null); setMsgMember(m); }}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#D4AF37] hover:bg-white/[0.04] border-t border-white/[0.06]">
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-gold hover:bg-white/[0.04] border-t border-white/[0.06]">
                             💬 Message on WhatsApp
                           </button>
                           <button onClick={() => { setMenuFor(null); sendWeekly(m); }}
                             disabled={weeklyBusy === m.id}
-                            className="w-full text-left px-4 py-3 text-xs font-bold text-[#F0E2B6] hover:bg-white/[0.04] border-t border-white/[0.06] disabled:opacity-50">
+                            className="w-full text-left px-4 py-3 text-xs font-bold text-gold-light hover:bg-white/[0.04] border-t border-white/[0.06] disabled:opacity-50">
                             {weeklyBusy === m.id ? '📊 Sending…' : weeklySent[m.id] ? '✓ Summary sent' : '📊 Send weekly summary'}
                           </button>
                           <button onClick={() => { setMenuFor(null); toggleUser(m.id, 'member'); }}
                             className={`w-full text-left px-4 py-3 text-xs font-bold hover:bg-white/[0.04] border-t border-white/[0.06] ${
-                              m.active ? 'text-red-400' : 'text-emerald-300'}`}>
+                              m.active ? 'text-red-400' : 'text-gold-light'}`}>
                             {m.active ? '🚫 Disable' : '✓ Enable'}
                           </button>
                           {/* Disable is the reversible action and stays directly
@@ -1953,9 +1953,9 @@ export default function AdminDashboard() {
         {tab === 'coaches' && (
           <>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-[#9EA3B0]">{coaches.length} {plural(coaches.length, 'coach')} registered</p>
+              <p className="text-xs text-mid">{coaches.length} {plural(coaches.length, 'coach')} registered</p>
               <button onClick={() => setShowPush(true)}
-                className="flex items-center gap-1.5 text-xs font-bold text-[#9EA3B0] bg-white/[0.06]
+                className="flex items-center gap-1.5 text-xs font-bold text-mid bg-white/[0.06]
                   hover:bg-white/[0.08] px-3 py-2 rounded-xl transition-colors">
                 📨 Send Push
               </button>
@@ -1964,13 +1964,13 @@ export default function AdminDashboard() {
               /* See the members tab above — the gold "+ Add Coach" button in the
                  search row is always present, so a second one here was the
                  duplicate. */
-              <div className="text-center py-16 text-[#9EA3B0]">
+              <div className="text-center py-16 text-mid">
                 <div className="text-4xl mb-3">🏋️</div>
                 {search.trim() ? (
                   <>
                     <p className="font-medium">No coach matches “{search.trim()}”</p>
                     <button onClick={() => setSearch('')}
-                      className="mt-3 text-[#D4AF37] font-semibold text-sm">Clear search</button>
+                      className="mt-3 text-gold font-semibold text-sm">Clear search</button>
                   </>
                 ) : (
                   <>
@@ -1987,29 +1987,29 @@ export default function AdminDashboard() {
                     emits one class per utility, so the winner was whichever
                     landed later in the stylesheet, not whichever was intended.
                     One base border, one conditional colour. */
-                <div key={m.id} className={`bg-[#1A1C20] rounded-2xl p-4 shadow-card border
-                  ${!m.active ? 'opacity-50 border-white/[0.08]' : 'border-white/[0.07]'}`}>
+                <div key={m.id} className={`bg-surface rounded-2xl p-4 shadow-card border
+                  ${!m.active ? 'opacity-50 border-white/[0.08]' : 'border-hair'}`}>
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-[#FFFFFF]">{m.name}</h3>
+                        <h3 className="font-bold text-white">{m.name}</h3>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${
                           m.role === 'admin'
-                            ? 'bg-[rgba(251,191,36,0.14)] text-amber-300'
-                            : 'bg-[rgba(96,165,250,0.14)] text-blue-300'
+                            ? 'bg-amber-400/[0.14] text-amber-300'
+                            : 'bg-blue-400/[0.14] text-blue-300'
                         }`}>
                           {m.role === 'admin' ? 'admin' : 'coach'}
                         </span>
-                        {!m.active && <span className="text-xs bg-white/[0.06] text-[#9EA3B0] px-2 py-0.5 rounded-full">Inactive</span>}
+                        {!m.active && <span className="text-xs bg-white/[0.06] text-mid px-2 py-0.5 rounded-full">Inactive</span>}
                       </div>
-                      <p className="text-xs text-[#9EA3B0] mt-0.5">✉ {m.email}</p>
-                      <p className="text-xs text-emerald-300 mt-0.5 font-medium">
+                      <p className="text-xs text-mid mt-0.5">✉ {m.email}</p>
+                      <p className="text-xs text-gold-light mt-0.5 font-medium">
                         {m.patient_count} {plural(m.patient_count, 'member')} assigned
                       </p>
                     </div>
                     <div className="flex gap-1.5">
                       <button onClick={() => navigate('/coach')}
-                        className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-[#9EA3B0] font-semibold
+                        className="text-xs px-2.5 py-1.5 bg-white/[0.04] text-mid font-semibold
                           rounded-lg hover:bg-white/[0.05] transition-colors">
                         View
                       </button>
@@ -2017,8 +2017,8 @@ export default function AdminDashboard() {
                         <button onClick={() => toggleUser(m.id, 'monitor')}
                           className={`text-xs px-2.5 py-1.5 font-semibold rounded-lg transition-colors ${
                             m.active
-                              ? 'bg-[rgba(248,113,113,0.10)] text-red-400 hover:bg-[rgba(248,113,113,0.14)]'
-                              : 'bg-[rgba(52,211,153,0.10)] text-emerald-300 hover:bg-[rgba(52,211,153,0.14)]'
+                              ? 'bg-red-400/10 text-red-400 hover:bg-red-400/[0.14]'
+                              : 'bg-ok/10 text-gold-light hover:bg-ok/[0.14]'
                           }`}>
                           {m.active ? 'Disable' : 'Enable'}
                         </button>
@@ -2041,16 +2041,16 @@ export default function AdminDashboard() {
         {tab === 'audit' && (
           <>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-[#9EA3B0]">{auditLog.length} recent actions</p>
+              <p className="text-xs text-mid">{auditLog.length} recent actions</p>
               <button onClick={() => getAuditLog(100).then(r => setAuditLog(r.data || []))}
-                className="text-xs font-semibold text-[#9EA3B0] hover:text-[#FFFFFF] px-3 py-1.5
-                  bg-[#1A1C20] rounded-xl border border-white/[0.08] transition-colors">
+                className="text-xs font-semibold text-mid hover:text-white px-3 py-1.5
+                  bg-surface rounded-xl border border-white/[0.08] transition-colors">
                 ↻ Refresh
               </button>
             </div>
 
             {auditLog.length === 0 ? (
-              <div className="text-center py-16 text-[#9EA3B0]">
+              <div className="text-center py-16 text-mid">
                 <div className="text-4xl mb-3">🔍</div>
                 <p className="font-medium">No audit events yet</p>
                 <p className="text-sm mt-1">Actions like creating members, resetting PINs, and toggling accounts will appear here.</p>
@@ -2063,24 +2063,24 @@ export default function AdminDashboard() {
                   // the rename use the older spelling. Both are mapped so nothing
                   // silently falls back to the generic icon. See RENAME.md.
                   const actionConfig = {
-                    member_created:    { icon: '➕', color: 'bg-[rgba(52,211,153,0.10)] border-[rgba(52,211,153,0.25)] text-emerald-300' },
-                    monitor_created:   { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    coach_created:     { icon: '➕', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    monitor_assigned:  { icon: '🔗', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
-                    coach_assigned:    { icon: '🔗', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
-                    member_deleted:    { icon: '🗑', color: 'bg-[rgba(248,113,113,0.10)] border-[rgba(248,113,113,0.30)] text-red-300' },
-                    member_toggled:    { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
-                    monitor_toggled:   { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
-                    coach_toggled:     { icon: '⚡', color: 'bg-[rgba(251,191,36,0.10)] border-[rgba(251,191,36,0.25)] text-amber-300' },
-                    pin_reset:         { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
-                    pin_set:           { icon: '🔑', color: 'bg-[rgba(251,146,60,0.10)] border-[rgba(251,146,60,0.25)] text-orange-300' },
-                    member_updated:      { icon: '✏️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' },
-                    coach_remind:        { icon: '🔔', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
-                    coach_weekly_summary:{ icon: '📊', color: 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.25)] text-[#D4AF37]' },
-                    coach_ai_update:     { icon: '🤖', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    coach_ai_broadcast:  { icon: '📢', color: 'bg-[rgba(96,165,250,0.10)] border-[rgba(96,165,250,0.25)] text-blue-300' },
-                    weight_logged:     { icon: '⚖️', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' },
-                  }[entry.action] || { icon: '📝', color: 'bg-white/[0.04] border-white/[0.07] text-[#9EA3B0]' };
+                    member_created:    { icon: '➕', color: 'bg-ok/10 border-ok/25 text-gold-light' },
+                    monitor_created:   { icon: '➕', color: 'bg-blue-400/10 border-blue-400/25 text-blue-300' },
+                    coach_created:     { icon: '➕', color: 'bg-blue-400/10 border-blue-400/25 text-blue-300' },
+                    monitor_assigned:  { icon: '🔗', color: 'bg-gold/10 border-gold/25 text-gold' },
+                    coach_assigned:    { icon: '🔗', color: 'bg-gold/10 border-gold/25 text-gold' },
+                    member_deleted:    { icon: '🗑', color: 'bg-red-400/10 border-red-400/30 text-red-300' },
+                    member_toggled:    { icon: '⚡', color: 'bg-amber-400/10 border-amber-400/25 text-amber-300' },
+                    monitor_toggled:   { icon: '⚡', color: 'bg-amber-400/10 border-amber-400/25 text-amber-300' },
+                    coach_toggled:     { icon: '⚡', color: 'bg-amber-400/10 border-amber-400/25 text-amber-300' },
+                    pin_reset:         { icon: '🔑', color: 'bg-orange-400/10 border-orange-400/25 text-orange-300' },
+                    pin_set:           { icon: '🔑', color: 'bg-orange-400/10 border-orange-400/25 text-orange-300' },
+                    member_updated:      { icon: '✏️', color: 'bg-white/[0.04] border-hair text-mid' },
+                    coach_remind:        { icon: '🔔', color: 'bg-gold/10 border-gold/25 text-gold' },
+                    coach_weekly_summary:{ icon: '📊', color: 'bg-gold/10 border-gold/25 text-gold' },
+                    coach_ai_update:     { icon: '🤖', color: 'bg-blue-400/10 border-blue-400/25 text-blue-300' },
+                    coach_ai_broadcast:  { icon: '📢', color: 'bg-blue-400/10 border-blue-400/25 text-blue-300' },
+                    weight_logged:     { icon: '⚖️', color: 'bg-white/[0.04] border-hair text-mid' },
+                  }[entry.action] || { icon: '📝', color: 'bg-white/[0.04] border-hair text-mid' };
 
                   const timeAgo = (() => {
                     const diff = Date.now() - new Date(entry.created_at).getTime();

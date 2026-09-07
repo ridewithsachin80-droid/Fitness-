@@ -52,12 +52,12 @@ function statusColor(group, tab) {
 }
 
 const STATUS_STYLES = {
-  good:  'border-[rgba(212,175,55,0.30)] bg-[rgba(212,175,55,0.08)]',
+  good:  'border-gold/30 bg-gold/[0.08]',
   ok:    'border-amber-400/25 bg-amber-400/[0.06]',
-  stale: 'border-white/[0.07] bg-white/[0.02]',
+  stale: 'border-hair bg-white/[0.02]',
 };
 const STATUS_DOT = {
-  good:  'bg-[#D4AF37]',
+  good:  'bg-gold',
   ok:    'bg-amber-400',
   stale: 'bg-[#3a3a46]',
 };
@@ -103,7 +103,7 @@ export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              tab === t.id ? 'bg-[#D4AF37] text-[#121316]' : 'text-[#9a9aa6] hover:text-[#d8d8de]'}`}>
+              tab === t.id ? 'bg-gold text-charcoal' : 'text-[#9a9aa6] hover:text-soft'}`}>
             {t.label}
           </button>
         ))}
@@ -125,16 +125,16 @@ export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
             <div key={g} className={`rounded-xl border px-3 py-2.5 ${STATUS_STYLES[status]}`}>
               <div className="flex items-center gap-1.5 mb-1">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[status]}`} />
-                <span className="text-xs font-semibold text-[#d8d8de]">{meta.icon} {meta.label}</span>
+                <span className="text-xs font-semibold text-soft">{meta.icon} {meta.label}</span>
               </div>
-              <p className="font-display text-lg font-semibold text-[#ededf0] leading-tight">{primary}</p>
-              <p className="text-[10px] text-[#5a5a68] mt-0.5">{secondary}</p>
+              <p className="font-display text-lg font-semibold text-bright leading-tight">{primary}</p>
+              <p className="text-eyebrow text-dim mt-0.5">{secondary}</p>
             </div>
           );
         })}
       </div>
 
-      <p className="text-[10px] text-[#5a5a68] mt-3 italic">
+      <p className="text-eyebrow text-dim mt-3 italic">
         "Sessions" and "Volume" cover the last 7 days. "Recency" looks back up to 60 days.
       </p>
     </Card>

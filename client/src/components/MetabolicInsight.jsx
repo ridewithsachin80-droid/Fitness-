@@ -16,10 +16,10 @@ import { useState, useEffect } from 'react';
 import api from '../api/client';
 
 const CONF = {
-  high:         { label: 'High confidence',   cls: 'text-emerald-300 bg-emerald-400/10 border-emerald-400/30' },
-  moderate:     { label: 'Moderate',          cls: 'text-[#D4AF37] bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.30)]' },
+  high:         { label: 'High confidence',   cls: 'text-gold-light bg-ok/10 border-ok/30' },
+  moderate:     { label: 'Moderate',          cls: 'text-gold bg-gold/10 border-gold/30' },
   low:          { label: 'Low confidence',    cls: 'text-amber-300 bg-amber-400/10 border-amber-400/30' },
-  insufficient: { label: 'Not enough data',   cls: 'text-[#9EA3B0] bg-white/[0.04] border-white/[0.10]' },
+  insufficient: { label: 'Not enough data',   cls: 'text-mid bg-white/[0.04] border-white/[0.10]' },
 };
 
 const NUTRIENT_LABEL = {
@@ -79,7 +79,7 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
     }
   };
 
-  if (loading) return <p className="text-xs text-[#7E8596] py-4 text-center">Analysing…</p>;
+  if (loading) return <p className="text-xs text-lo py-4 text-center">Analysing…</p>;
   if (error)   return <p className="text-xs text-red-400 py-4 text-center">{error}</p>;
   if (!data)   return null;
 
@@ -88,18 +88,18 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
 
   return (
     <div>
-      <div className={`inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wider
+      <div className={`inline-flex items-center gap-1.5 text-eyebrow font-bold tracking-wider
         rounded-full px-2.5 py-1 border mb-3 ${conf.cls}`}>
         {conf.label}
       </div>
 
       {!hasResult ? (
-        <div className="bg-white/[0.03] border border-white/[0.07] rounded-xl px-3.5 py-3">
-          <p className="text-xs text-[#9EA3B0] leading-relaxed">
+        <div className="bg-white/[0.03] border border-hair rounded-xl px-3.5 py-3">
+          <p className="text-xs text-mid leading-relaxed">
             Not enough data yet — {data.reason}. The estimate needs about two weeks
             of weight readings with food logged on most of those days.
           </p>
-          <div className="flex gap-3 mt-2 text-[10px] text-[#7E8596]">
+          <div className="flex gap-3 mt-2 text-eyebrow text-lo">
             <span>weight: {data.weight_days}d</span>
             <span>food: {data.food_days}d</span>
             <span>coverage: {data.food_coverage_pct}%</span>
@@ -109,20 +109,20 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
         <>
           {/* Predicted vs observed — the whole point of the card */}
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
-              <p className="text-lg font-extrabold text-[#9EA3B0]">{data.predicted_tdee ?? '—'}</p>
-              <p className="text-[9px] font-bold tracking-wider text-[#7E8596] mt-0.5">Formula predicts</p>
+            <div className="bg-white/[0.04] border border-hair rounded-xl px-3 py-2.5">
+              <p className="text-lg font-extrabold text-mid">{data.predicted_tdee ?? '—'}</p>
+              <p className="text-tiny font-bold tracking-wider text-lo mt-0.5">Formula predicts</p>
             </div>
-            <div className="bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.28)] rounded-xl px-3 py-2.5">
-              <p className="text-lg font-extrabold text-[#D4AF37]">{data.observed_tdee}</p>
-              <p className="text-[9px] font-bold tracking-wider text-[#7E8596] mt-0.5">Their body says</p>
+            <div className="bg-gold/[0.08] border border-gold/[0.28] rounded-xl px-3 py-2.5">
+              <p className="text-lg font-extrabold text-gold">{data.observed_tdee}</p>
+              <p className="text-tiny font-bold tracking-wider text-lo mt-0.5">Their body says</p>
             </div>
           </div>
 
           {data.tdee_delta_pct != null && Math.abs(data.tdee_delta_pct) >= 5 && (
-            <p className="text-xs text-[#FFFFFF] leading-relaxed mb-3">
+            <p className="text-xs text-white leading-relaxed mb-3">
               Their actual metabolism runs{' '}
-              <span className="font-bold text-[#D4AF37]">
+              <span className="font-bold text-gold">
                 {Math.abs(data.tdee_delta_pct)}% {data.tdee_delta_pct > 0 ? 'faster' : 'slower'}
               </span>{' '}
               than the standard formula assumes — a difference of{' '}
@@ -130,7 +130,7 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
             </p>
           )}
 
-          <div className="space-y-1 mb-3 text-[11px]">
+          <div className="space-y-1 mb-3 text-caption">
             {[
               ['Average intake',      `${data.mean_intake.toLocaleString()} kcal`],
               ['Weight trend',        data.weekly_change_kg != null
@@ -140,16 +140,16 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
               ['Data window',         `${data.weight_days} weight · ${data.food_days} food days`],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between">
-                <span className="text-[#7E8596]">{k}</span>
-                <span className="text-[#FFFFFF] font-semibold">{v}</span>
+                <span className="text-lo">{k}</span>
+                <span className="text-white font-semibold">{v}</span>
               </div>
             ))}
           </div>
 
           {/* Proposed targets */}
           {data.targets && (
-            <div className="bg-[#121316] border border-white/[0.08] rounded-xl px-3.5 py-3 mb-3">
-              <p className="text-[10px] font-bold tracking-wider text-[#D4AF37] mb-2">
+            <div className="bg-charcoal border border-white/[0.08] rounded-xl px-3.5 py-3 mb-3">
+              <p className="text-eyebrow font-bold tracking-wider text-gold mb-2">
                 Suggested targets
               </p>
               {(() => {
@@ -166,31 +166,31 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
                 return (
                   <>
                     <div className="flex h-2 rounded-full overflow-hidden mb-2">
-                      <div style={{ width: `${pP}%` }} className="bg-[#D4AF37]" />
-                      <div style={{ width: `${pC}%` }} className="bg-[#8C6D37]" />
-                      <div style={{ width: `${pF}%` }} className="bg-[#F0E2B6]" />
+                      <div style={{ width: `${pP}%` }} className="bg-gold" />
+                      <div style={{ width: `${pC}%` }} className="bg-gold-dark" />
+                      <div style={{ width: `${pF}%` }} className="bg-gold-light" />
                     </div>
                     <div className="grid grid-cols-4 gap-2 text-center">
                       <div>
-                        <p className="text-sm font-extrabold text-[#FFFFFF]">{t.kcal}</p>
-                        <p className="text-[9px] text-[#7E8596]">kcal</p>
+                        <p className="text-sm font-extrabold text-white">{t.kcal}</p>
+                        <p className="text-tiny text-lo">kcal</p>
                       </div>
                       {[
-                        ['Protein', t.protein_g, pP, 'text-[#D4AF37]'],
-                        ['Carbs',   t.carbs_g,   pC, 'text-[#C5A059]'],
-                        ['Fat',     t.fat_g,     pF, 'text-[#F0E2B6]'],
+                        ['Protein', t.protein_g, pP, 'text-gold'],
+                        ['Carbs',   t.carbs_g,   pC, 'text-gold-deep'],
+                        ['Fat',     t.fat_g,     pF, 'text-gold-light'],
                       ].map(([label, g, pctv, cls]) => (
                         <div key={label}>
                           <p className={`text-sm font-extrabold ${cls}`}>{pctv}%</p>
-                          <p className="text-[10px] text-[#FFFFFF]">{g}g</p>
-                          <p className="text-[9px] text-[#7E8596]">{label}</p>
+                          <p className="text-eyebrow text-white">{g}g</p>
+                          <p className="text-tiny text-lo">{label}</p>
                         </div>
                       ))}
                     </div>
                   </>
                 );
               })()}
-              <p className="text-[10px] text-[#7E8596] mt-2 leading-relaxed">
+              <p className="text-eyebrow text-lo mt-2 leading-relaxed">
                 Aimed at {Math.abs(data.targets.weekly_change_kg)} kg/week
                 {data.targets.weekly_change_kg < 0 ? ' loss' : ' gain'}, from {data.targets.basis}.
                 Protein is set high to protect lean mass in a deficit; fat is floored
@@ -199,12 +199,12 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
 
               {canApply && (
                 applied ? (
-                  <p className="text-[11px] font-bold text-emerald-300 mt-2.5">✓ Applied to their protocol</p>
+                  <p className="text-caption font-bold text-gold-light mt-2.5">✓ Applied to their protocol</p>
                 ) : (
                   <button onClick={applyTargets} disabled={applying}
                     style={{ minHeight: 40 }}
-                    className="w-full mt-2.5 rounded-xl text-xs font-bold text-[#121316]
-                      bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                    className="w-full mt-2.5 rounded-xl text-xs font-bold text-charcoal
+                      bg-gradient-to-r from-gold-light via-gold to-gold-dark
                       active:scale-[0.98] transition-transform disabled:opacity-60">
                     {applying ? 'Applying…' : 'Apply these targets'}
                   </button>
@@ -218,24 +218,24 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
       {/* Micronutrient gaps — plain arithmetic, always worth showing */}
       {data.micro_gaps?.length > 0 && (
         <div className="border-t border-white/[0.06] pt-3">
-          <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-2">
+          <p className="text-eyebrow font-bold tracking-wider text-lo mb-2">
             Consistently under target
           </p>
           <div className="space-y-1.5">
             {data.micro_gaps.map(g => (
               <div key={g.nutrient} className="flex items-center gap-2">
-                <span className="text-[11px] text-[#FFFFFF] flex-1">
+                <span className="text-caption text-white flex-1">
                   {NUTRIENT_LABEL[g.nutrient] || g.nutrient}
                 </span>
                 <div className="w-20 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
                   <div className="h-full rounded-full bg-amber-400"
                     style={{ width: `${Math.min(100, g.pct)}%` }} />
                 </div>
-                <span className="text-[11px] font-bold text-amber-300 w-10 text-right">{g.pct}%</span>
+                <span className="text-caption font-bold text-amber-300 w-10 text-right">{g.pct}%</span>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-[#7E8596] mt-2">
+          <p className="text-eyebrow text-lo mt-2">
             Averages across {data.food_days} logged days, against adult reference intakes.
           </p>
         </div>
@@ -245,39 +245,39 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
           variables constant. Coach-only. */}
       {memberId && model && (
         <div className="border-t border-white/[0.06] pt-3 mt-3">
-          <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-2">
+          <p className="text-eyebrow font-bold tracking-wider text-lo mb-2">
             What their history shows
           </p>
 
           {!model.ok ? (
-            <p className="text-xs text-[#9EA3B0] leading-relaxed">{model.reason}</p>
+            <p className="text-xs text-mid leading-relaxed">{model.reason}</p>
           ) : (
             <>
               <div className="space-y-1.5 mb-2">
                 {model.findings.map(f => (
-                  <div key={f.variable} className="bg-[#121316] border border-white/[0.07] rounded-xl px-3 py-2">
+                  <div key={f.variable} className="bg-charcoal border border-hair rounded-xl px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-[#FFFFFF]">{f.variable}</span>
-                      <span className={`text-[9px] font-bold tracking-wider rounded-full px-2 py-0.5 border ${
+                      <span className="text-caption font-bold text-white">{f.variable}</span>
+                      <span className={`text-tiny font-bold tracking-wider rounded-full px-2 py-0.5 border ${
                         f.confidence === 'established'
-                          ? 'text-[#D4AF37] border-[rgba(212,175,55,0.4)] bg-[rgba(212,175,55,0.08)]'
+                          ? 'text-gold border-gold/40 bg-gold/[0.08]'
                           : f.confidence === 'untested'
-                          ? 'text-[#7E8596] border-white/[0.12]'
-                          : 'text-[#9EA3B0] border-white/[0.12]'}`}>
+                          ? 'text-lo border-white/[0.12]'
+                          : 'text-mid border-white/[0.12]'}`}>
                         {f.confidence}
                       </span>
                     </div>
-                    <p className="text-[11px] text-[#9EA3B0] mt-0.5">{f.direction}</p>
-                    <p className="text-[10px] text-[#7E8596] mt-0.5">{f.per_unit}</p>
+                    <p className="text-caption text-mid mt-0.5">{f.direction}</p>
+                    <p className="text-eyebrow text-lo mt-0.5">{f.per_unit}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="flex justify-between text-[10px] text-[#7E8596]">
+              <div className="flex justify-between text-eyebrow text-lo">
                 <span>{model.weeks_usable} usable weeks · R² {model.model.r2}</span>
                 <span>intake ranged {model.ranges.kcal[0]}–{model.ranges.kcal[1]} kcal</span>
               </div>
-              <p className="text-[10px] text-[#7E8596] mt-1.5 leading-relaxed">
+              <p className="text-eyebrow text-lo mt-1.5 leading-relaxed">
                 Each effect is measured holding the others constant. "Unproven" means the
                 effect is too small to separate from this member's own week-to-week
                 variation — not that it is zero.
@@ -290,32 +290,32 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
       {/* Clinic-calibrated fallback before a member has their own history */}
       {data.clinic_adjusted_tdee && (
         <div className="border-t border-white/[0.06] pt-3 mt-3">
-          <p className="text-[11px] text-[#FFFFFF] leading-relaxed">
+          <p className="text-caption text-white leading-relaxed">
             Until they have enough data, the estimate is{' '}
-            <span className="font-bold text-[#D4AF37]">{data.clinic_adjusted_tdee} kcal</span>{' '}
+            <span className="font-bold text-gold">{data.clinic_adjusted_tdee} kcal</span>{' '}
             — the textbook figure adjusted by how the formula has actually fitted your
             other members.
           </p>
-          <p className="text-[10px] text-[#7E8596] mt-1">{data.prior?.basis}</p>
+          <p className="text-eyebrow text-lo mt-1">{data.prior?.basis}</p>
         </div>
       )}
 
       {/* Clinic-wide calibration, visible to the coach */}
       {memberId && prior && (
         <div className="border-t border-white/[0.06] pt-3 mt-3">
-          <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-1.5">
+          <p className="text-eyebrow font-bold tracking-wider text-lo mb-1.5">
             Across your members
           </p>
           {prior.n < 3 ? (
-            <p className="text-[11px] text-[#9EA3B0] leading-relaxed">
+            <p className="text-caption text-mid leading-relaxed">
               {prior.basis}. Once three members have a well-measured metabolism, new
               members will start from a figure calibrated to your clinic instead of
               the textbook formula.
             </p>
           ) : (
-            <p className="text-[11px] text-[#FFFFFF] leading-relaxed">
+            <p className="text-caption text-white leading-relaxed">
               The standard formula runs{' '}
-              <span className="font-bold text-[#D4AF37]">
+              <span className="font-bold text-gold">
                 {Math.abs(Math.round((prior.factor - 1) * 100))}%{' '}
                 {prior.factor > 1 ? 'low' : 'high'}
               </span>{' '}
@@ -326,7 +326,7 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
         </div>
       )}
 
-      <p className="text-[10px] text-[#7E8596] mt-3 leading-relaxed">
+      <p className="text-eyebrow text-lo mt-3 leading-relaxed">
         Derived from this member's own logs, not a population formula. It improves
         as they log. Estimates only — clinical judgement stays with the coach.
       </p>

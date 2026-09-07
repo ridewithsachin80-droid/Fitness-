@@ -458,58 +458,79 @@ ck('a count is never interpolated straight in front of a plural noun',
    hardcoded.length === 0, hardcoded.slice(0, 6));
 
 // ── 8. No light-theme class without a dark-theme rule ───────────────────────
-console.log('\n[8] palette coverage');
+console.log('\n[8] design tokens — no legacy palette, no brand hex, no override layer');
 
 /**
- * The app is dark, but ~390 Tailwind `stone-*` and `emerald-*` classes are
- * still written in the JSX. That is fine — `index.css` remaps them, which is
- * one rule instead of 390 edits. It only works while the map is COMPLETE.
+ * Until Sprint 0 the app was dark by ACCIDENT of a 346-line override layer in
+ * index.css that re-coloured Tailwind's light-theme classes. It only worked
+ * while the map was complete; hover variants needed !important; alpha variants
+ * (`bg-stone-50/60`) slipped through and rendered near-white on charcoal.
  *
- * Nine of them had no rule and rendered Tailwind's light-theme default:
- * `bg-emerald-600` made seven primary buttons green, `hover:text-stone-600`
- * turned a member's name #57534e on charcoal — near-invisible — the moment you
- * touched the row, and `hover:bg-stone-50` flashed near-white.
- *
- * They survived a colour sweep because none of them is visible at rest. So the
- * check is not "look at the colours", it is: every stone/emerald class the JSX
- * uses must have a rule in index.css. There is no allowlist — a gap is either
- * fixed or it is red.
- *
- * Alpha variants (`bg-emerald-400/10`) are skipped: Tailwind emits those as
- * their own classes, a bare rule would not reach them, and they are the
- * semantic status greens on lab values and confidence badges, which should
- * stay green.
+ * Now the theme is tokens in tailwind.config.js (`bg-surface`, `text-lo`,
+ * `text-gold`, `text-eyebrow`…) and the JSX names them. This block is the
+ * contract:
+ *   · no `stone-*` or `emerald-*` utility anywhere in the client source
+ *   · no brand colour written as a hex inside a class (`text-[#D4AF37]`)
+ *   · the override layer stays deleted from index.css
+ *   · every token the JSX names is one the config actually defines
+ * The sweep tool that did the migration is server/scripts/lib/sweep-classes.js;
+ * `--check` mode is asserted here too so it cannot silently drift from the map.
  */
-const jsxFiles = [];
-for (const dir of ['pages', 'components']) {
-  for (const f of fs.readdirSync(path.join(CLIENT, dir))) {
-    if (f.endsWith('.jsx')) jsxFiles.push(dir + '/' + f);
+const srcFiles = [];
+(function walk(dir) {
+  for (const f of fs.readdirSync(dir)) {
+    const p = path.join(dir, f);
+    if (fs.statSync(p).isDirectory()) walk(p);
+    else if (/\.(jsx|js)$/.test(f)) srcFiles.push(path.relative(CLIENT, p));
   }
-}
-ck('the client source tree was found', jsxFiles.length > 10, jsxFiles.length);
+})(CLIENT);
+ck('the client source tree was found', srcFiles.length > 40, srcFiles.length);
 
-const cssSrc  = read('index.css');
-const hasRule = (tok) => {
-  const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:/g, '\\\\:');
-  return new RegExp('\\.' + esc + '(?=[\\s,{:>])').test(cssSrc);
-};
-const PALETTE = /^(?:hover:|focus:|active:|disabled:|group-hover:)?(?:bg|text|border|divide|from|to|ring|placeholder|accent|fill|stroke)-(?:stone|emerald)-\d{2,3}$/;
+const LEGACY_PALETTE = /(?<![\w-])(?:hover:|focus:|active:|disabled:|group-hover:)?(?:bg|text|border|divide|from|to|via|ring|placeholder|accent|fill|stroke)-(?:stone|emerald)-\d{2,3}(?:\/[\w.\[\]]+)?(?![\w-])/g;
+const BRAND_HEX = /(?<![\w-])(?:hover:|focus:|active:|group-hover:)?[a-z-]+-\[#(?:121316|1A1C20|D4AF37|F0E2B6|C5A059|8C6D37|7E8596|9EA3B0|8C93A3|FFFFFF)\](?:\/[\w.\[\]]+)?(?![\w-])/gi;
 
-const unmapped = new Map();
-for (const f of jsxFiles) {
-  const src = read(f);
-  const re = /className=\{?[`"']([\s\S]*?)[`"']/g;
+const legacyHits = [], hexHits = [];
+for (const f of srcFiles) {
+  const src = stripComments(read(f)).replace(/^\s*\/\/.*$/gm, '');
   let m;
-  while ((m = re.exec(src))) {
-    for (const tok of m[1].split(/[\s`"'{}$?]+/)) {
-      if (!tok || tok.includes('/') || !PALETTE.test(tok) || hasRule(tok)) continue;
-      if (!unmapped.has(tok)) unmapped.set(tok, f);
-    }
-  }
+  while ((m = LEGACY_PALETTE.exec(src))) legacyHits.push(m[0] + ' (' + f + ')');
+  while ((m = BRAND_HEX.exec(src)))      hexHits.push(m[0] + ' (' + f + ')');
 }
-ck('every stone/emerald class the JSX uses has a rule in index.css',
-   unmapped.size === 0, [...unmapped].map(([t, f]) => t + ' (' + f + ')'));
+ck('no stone-* or emerald-* palette class in any client file', legacyHits.length === 0, legacyHits.slice(0, 8));
+ck('no brand colour written as a hex inside a class', hexHits.length === 0, hexHits.slice(0, 8));
 
+const cssNow = read('index.css');
+ck('the override layer is gone from index.css (no .bg-stone / .text-emerald rules)',
+   !/^\s*\.(?:bg|text|border|divide)-(?:stone|emerald)-\d+/m.test(cssNow), 'override rule found');
+ck('index.css no longer re-declares Tailwind utilities with !important on hover',
+   !/\.hover\\:[a-z-]+:hover\s*\{[^}]*!important/.test(cssNow), 'hover !important override found');
+
+// Every token the JSX names must exist in tailwind.config.js. A typo like
+// `text-gold-lite` renders as nothing at all — no error, just missing colour.
+const twConfig = fs.readFileSync(path.join(CLIENT, '../tailwind.config.js'), 'utf8');
+const colorBlock = twConfig.slice(twConfig.indexOf('colors: {'), twConfig.indexOf('borderRadius:'));
+const sizeBlock  = twConfig.slice(twConfig.indexOf('fontSize: {'), twConfig.indexOf('colors: {'));
+const defined = new Set();
+for (const m of colorBlock.matchAll(/^\s*'?([a-z][a-z-]*)'?\s*:/gm)) defined.add(m[1]);
+for (const m of sizeBlock.matchAll(/^\s*'?([a-z][a-z-]*)'?\s*:/gm))  defined.add(m[1]);
+ck('tailwind.config.js defines the token set', defined.has('charcoal') && defined.has('gold') && defined.has('eyebrow') && defined.size > 25, [...defined]);
+
+const TOKEN_USE = /(?<![\w-])(?:hover:|focus:|active:|disabled:|group-hover:)?(?:bg|text|border|border-t|border-b|divide|from|to|via|ring|accent|placeholder|fill|stroke)-((?:charcoal|surface|input|bright|soft|mid|mute|lo|faint|dim|ghost|gold|ok|warn|danger|info|hair|tiny|eyebrow|caption|micro|note|body|num)(?:-[a-z]+)*)(?:\/[\w.\[\]]+)?(?![\w-])/g;
+const unknown = new Set();
+for (const f of srcFiles) {
+  const src = read(f);
+  let m;
+  while ((m = TOKEN_USE.exec(src))) if (!defined.has(m[1])) unknown.add(m[1] + ' (' + f + ')');
+}
+ck('every token the JSX uses is defined in the config (no silent typos)', unknown.size === 0, [...unknown].slice(0, 8));
+
+// The sweep must be a no-op on the current tree. If someone reintroduces a
+// mapped class, this tells them exactly which one, and that a tool exists.
+{
+  const { spawnSync } = require('child_process');
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'lib/sweep-classes.js'), '--check'], { encoding: 'utf8' });
+  ck('sweep-classes.js --check finds nothing left to rewrite', r.status === 0, (r.stdout || '').split('\n').slice(0, 6));
+}
 
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.

@@ -30,17 +30,17 @@ export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }
   if (!data?.exercises?.length) return null; // nothing logged that day — say nothing rather than an empty box
 
   return (
-    <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-      <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06] flex justify-between items-center">
-        <span className="text-[10px] font-bold text-[#4e4e5c]">🏋️ Workout Log</span>
+    <div className="rounded-xl border border-hair overflow-hidden">
+      <div className="px-3 py-2 bg-surface border-b border-white/[0.06] flex justify-between items-center">
+        <span className="text-eyebrow font-bold text-[#4e4e5c]">🏋️ Workout Log</span>
         {data.session?.duration_min && (
-          <span className="text-xs text-[#6a6a78]">{data.session.duration_min} min</span>
+          <span className="text-xs text-faint">{data.session.duration_min} min</span>
         )}
       </div>
       <div className="divide-y divide-white/[0.05]">
         {data.exercises.map(ex => (
           <div key={ex.exercise_id} className="px-3 py-2.5">
-            <p className="text-sm font-semibold text-[#d8d8de] mb-1.5">{ex.exercise_name}</p>
+            <p className="text-sm font-semibold text-soft mb-1.5">{ex.exercise_name}</p>
             <div className="flex flex-wrap gap-1.5">
               {ex.sets.map((s, i) => (
                 <span key={i} className="text-xs font-medium text-[#9a9aa6] bg-white/[0.04] px-2 py-1 rounded-lg">

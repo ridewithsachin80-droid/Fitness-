@@ -105,7 +105,7 @@ export default function EvalSamples() {
   return (
     <>
       <div className="flex items-center justify-between mb-3 gap-2">
-        <p className="text-xs text-[#9EA3B0]">
+        <p className="text-xs text-mid">
           {counts
             ? `${counts.active} live · ${counts.replayable} replayable · ${counts.controls ?? 0} ${plural(counts.controls ?? 0, 'control')}`
             : `${samples.length} ${plural(samples.length, 'sample')}`}
@@ -114,23 +114,23 @@ export default function EvalSamples() {
           <button onClick={() => setShowDismissed(v => !v)}
             className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors ${
               showDismissed
-                ? 'bg-[rgba(212,175,55,0.14)] border-[rgba(212,175,55,0.25)] text-[#F0E2B6]'
-                : 'bg-[#1A1C20] border-white/[0.08] text-[#9EA3B0] hover:text-[#FFFFFF]'
+                ? 'bg-gold/[0.14] border-gold/25 text-gold-light'
+                : 'bg-surface border-white/[0.08] text-mid hover:text-white'
             }`}>
             {showDismissed ? 'Showing dismissed' : 'Show dismissed'}
           </button>
           <button onClick={load}
-            className="text-xs font-semibold text-[#9EA3B0] hover:text-[#FFFFFF] px-3 py-1.5
-              bg-[#1A1C20] rounded-xl border border-white/[0.08] transition-colors">
+            className="text-xs font-semibold text-mid hover:text-white px-3 py-1.5
+              bg-surface rounded-xl border border-white/[0.08] transition-colors">
             Refresh
           </button>
         </div>
       </div>
 
-      <div className="bg-[rgba(212,175,55,0.05)] border border-[rgba(212,175,55,0.18)] rounded-2xl px-4 py-3 mb-3">
-        <p className="text-[11px] text-[#C9B37E] leading-relaxed">
+      <div className="bg-gold/5 border border-gold/[0.18] rounded-2xl px-4 py-3 mb-3">
+        <p className="text-caption text-[#C9B37E] leading-relaxed">
           Every correction a member or coach makes lands here as a test case.
-          Run <span className="font-mono text-[10px] text-[#F0E2B6]">node scripts/replay-evals.js</span> after
+          Run <span className="font-mono text-eyebrow text-gold-light">node scripts/replay-evals.js</span> after
           a prompt change to score it against these. Dismiss anything that was
           not actually a parsing mistake — those rows make every future run look
           worse than it is.
@@ -138,7 +138,7 @@ export default function EvalSamples() {
       </div>
 
       {loading && (
-        <p className="text-sm text-[#7E8596] text-center py-8">Loading…</p>
+        <p className="text-sm text-lo text-center py-8">Loading…</p>
       )}
 
       {!loading && failed && (
@@ -150,9 +150,9 @@ export default function EvalSamples() {
       )}
 
       {!loading && !failed && samples.length === 0 && (
-        <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl px-4 py-8 text-center">
-          <p className="text-sm text-[#9EA3B0] font-semibold">Nothing collected yet</p>
-          <p className="text-xs text-[#7E8596] mt-1.5 leading-relaxed">
+        <div className="bg-surface border border-hair rounded-2xl px-4 py-8 text-center">
+          <p className="text-sm text-mid font-semibold">Nothing collected yet</p>
+          <p className="text-xs text-lo mt-1.5 leading-relaxed">
             Samples appear when a member fixes a portion the AI guessed, unticks
             something it invented, or a coach switches off an action before
             applying it.
@@ -167,27 +167,27 @@ export default function EvalSamples() {
               className={`rounded-2xl border px-4 py-3 ${
                 s.dismissed
                   ? 'bg-white/[0.02] border-white/[0.06] opacity-60'
-                  : 'bg-[#1A1C20] border-white/[0.07]'
+                  : 'bg-surface border-hair'
               }`}>
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <span className="text-[10px] font-bold tracking-wider text-[#7E8596]">
+                  <span className="text-eyebrow font-bold tracking-wider text-lo">
                     {SOURCE_LABEL[s.source] || s.source}
                   </span>
                   {s.field && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md
-                      bg-[rgba(212,175,55,0.12)] text-[#D4AF37]">
+                    <span className="text-eyebrow font-bold px-1.5 py-0.5 rounded-md
+                      bg-gold/[0.12] text-gold">
                       {FIELD_LABEL[s.field] || s.field}
                     </span>
                   )}
                   {s.member_name && (
-                    <span className="text-[10px] text-[#7E8596] truncate">{s.member_name}</span>
+                    <span className="text-eyebrow text-lo truncate">{s.member_name}</span>
                   )}
                 </div>
-                <span className="text-[10px] text-[#7E8596] flex-shrink-0">{timeAgo(s.created_at)}</span>
+                <span className="text-eyebrow text-lo flex-shrink-0">{timeAgo(s.created_at)}</span>
               </div>
 
-              <p className="text-[13px] text-white leading-snug mb-2 break-words">
+              <p className="text-body-sm text-white leading-snug mb-2 break-words">
                 "{s.message}"
               </p>
 
@@ -196,19 +196,19 @@ export default function EvalSamples() {
                   green one would read as an error that was fixed, which is the
                   opposite of what it records. */}
               {s.field === 'control' ? (
-                <div className="flex items-center gap-2 text-[11px] flex-wrap">
-                  <span className="px-2 py-1 rounded-lg bg-emerald-500/[0.10] border border-emerald-500/20 text-emerald-300">
+                <div className="flex items-center gap-2 text-caption flex-wrap">
+                  <span className="px-2 py-1 rounded-lg bg-ok-deep/[0.10] border border-ok-deep/20 text-gold-light">
                     ✓ {describe(s.corrected)}
                   </span>
-                  <span className="text-[#7E8596]">already correct — kept so a prompt change can be scored on it</span>
+                  <span className="text-lo">already correct — kept so a prompt change can be scored on it</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                <div className="flex items-center gap-2 text-caption flex-wrap">
                   <span className="px-2 py-1 rounded-lg bg-red-500/[0.10] border border-red-500/20 text-red-300 line-through">
                     {describe(s.ai_output)}
                   </span>
-                  <span className="text-[#7E8596]">→</span>
-                  <span className="px-2 py-1 rounded-lg bg-emerald-500/[0.10] border border-emerald-500/20 text-emerald-300">
+                  <span className="text-lo">→</span>
+                  <span className="px-2 py-1 rounded-lg bg-ok-deep/[0.10] border border-ok-deep/20 text-gold-light">
                     {describe(s.corrected)}
                   </span>
                 </div>
@@ -218,8 +218,8 @@ export default function EvalSamples() {
                 onClick={() => setDismissed(s.id, !s.dismissed)}
                 disabled={busyId === s.id}
                 style={{ minHeight: 32 }}
-                className="mt-2.5 text-[11px] font-semibold px-3 rounded-lg border transition-colors
-                  bg-white/[0.03] border-white/[0.08] text-[#9EA3B0]
+                className="mt-2.5 text-caption font-semibold px-3 rounded-lg border transition-colors
+                  bg-white/[0.03] border-white/[0.08] text-mid
                   hover:text-white hover:border-white/[0.16] disabled:opacity-50">
                 {busyId === s.id
                   ? 'Saving…'

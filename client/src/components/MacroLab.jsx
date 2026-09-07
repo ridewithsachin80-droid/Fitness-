@@ -17,10 +17,10 @@ import api from '../api/client';
 import { plural } from '../constants';
 
 const STATUS_STYLE = {
-  difference:    'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.35)] text-[#FFFFFF]',
-  no_difference: 'bg-white/[0.04] border-white/[0.12] text-[#9EA3B0]',
+  difference:    'bg-gold/10 border-gold/35 text-white',
+  no_difference: 'bg-white/[0.04] border-white/[0.12] text-mid',
   confounded:    'bg-amber-400/[0.08] border-amber-400/30 text-amber-200',
-  incomplete:    'bg-white/[0.03] border-white/[0.10] text-[#9EA3B0]',
+  incomplete:    'bg-white/[0.03] border-white/[0.10] text-mid',
 };
 
 export default function MacroLab({ memberId, onChanged }) {
@@ -92,7 +92,7 @@ export default function MacroLab({ memberId, onChanged }) {
     } finally { setBusy(false); }
   };
 
-  if (loading) return <p className="text-xs text-[#7E8596] py-4 text-center">Analysing…</p>;
+  if (loading) return <p className="text-xs text-lo py-4 text-center">Analysing…</p>;
 
   const t = trial?.trial;
   const running = t && t.status === 'running';
@@ -105,80 +105,80 @@ export default function MacroLab({ memberId, onChanged }) {
       {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
 
       {/* ── Adherence — needs no trial, works on existing logs ── */}
-      <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-2">
+      <p className="text-eyebrow font-bold tracking-wider text-lo mb-2">
         What they actually sustain
       </p>
 
       {!adh?.enough ? (
-        <p className="text-xs text-[#9EA3B0] leading-relaxed mb-4">
+        <p className="text-xs text-mid leading-relaxed mb-4">
           {adh?.reason || 'Not enough logged days yet.'}
         </p>
       ) : (
         <div className="mb-4">
           <div className="grid grid-cols-2 gap-2 mb-2">
             {adh.groups.map(g => (
-              <div key={g.label} className="bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5">
-                <p className="text-[11px] font-bold text-[#FFFFFF]">{g.label}</p>
-                <p className="text-[10px] text-[#7E8596] mt-0.5">{g.mean_carb_pct}% of calories from carbs</p>
-                <div className="mt-2 space-y-0.5 text-[10px]">
+              <div key={g.label} className="bg-white/[0.04] border border-hair rounded-xl px-3 py-2.5">
+                <p className="text-caption font-bold text-white">{g.label}</p>
+                <p className="text-eyebrow text-lo mt-0.5">{g.mean_carb_pct}% of calories from carbs</p>
+                <div className="mt-2 space-y-0.5 text-eyebrow">
                   <div className="flex justify-between">
-                    <span className="text-[#7E8596]">Days logged</span>
-                    <span className="text-[#FFFFFF] font-semibold">{g.days}</span>
+                    <span className="text-lo">Days logged</span>
+                    <span className="text-white font-semibold">{g.days}</span>
                   </div>
                   {g.on_target_pct != null && (
                     <div className="flex justify-between">
-                      <span className="text-[#7E8596]">On target</span>
-                      <span className="text-[#D4AF37] font-semibold">{g.on_target_pct}%</span>
+                      <span className="text-lo">On target</span>
+                      <span className="text-gold font-semibold">{g.on_target_pct}%</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-[#7E8596]">Avg intake</span>
-                    <span className="text-[#FFFFFF] font-semibold">{g.mean_kcal}</span>
+                    <span className="text-lo">Avg intake</span>
+                    <span className="text-white font-semibold">{g.mean_kcal}</span>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <div className={`rounded-xl px-3 py-2.5 border text-[11px] leading-relaxed ${
+          <div className={`rounded-xl px-3 py-2.5 border text-caption leading-relaxed ${
             adh.verdict ? STATUS_STYLE.difference : STATUS_STYLE.no_difference}`}>
             {adh.verdict || 'No meaningful difference in how well they sustain either split.'}
-            <p className="text-[10px] text-[#7E8596] mt-1.5">{adh.note}</p>
+            <p className="text-eyebrow text-lo mt-1.5">{adh.note}</p>
           </div>
         </div>
       )}
 
       {/* ── Trial ── */}
       <div className="border-t border-white/[0.06] pt-3">
-        <p className="text-[10px] font-bold tracking-wider text-[#7E8596] mb-2">
+        <p className="text-eyebrow font-bold tracking-wider text-lo mb-2">
           Controlled trial
         </p>
 
         {/* composing */}
         {setup && (
-          <div className="bg-[#121316] border border-white/[0.08] rounded-xl p-3 mb-3">
-            <p className="text-[11px] text-[#9EA3B0] mb-2 leading-relaxed">
-              Both arms hold <b className="text-[#FFFFFF]">{setup.kcal} kcal</b> and{' '}
-              <b className="text-[#FFFFFF]">{setup.protein}g protein</b> constant. Only the
+          <div className="bg-charcoal border border-white/[0.08] rounded-xl p-3 mb-3">
+            <p className="text-caption text-mid mb-2 leading-relaxed">
+              Both arms hold <b className="text-white">{setup.kcal} kcal</b> and{' '}
+              <b className="text-white">{setup.protein}g protein</b> constant. Only the
               carb/fat split changes — that is what makes any difference attributable.
             </p>
             {[setup.a, setup.b].map((arm, i) => (
-              <div key={i} className="flex items-center justify-between bg-[#1A1C20] border border-white/[0.07] rounded-lg px-3 py-2 mb-1.5">
-                <span className="text-[11px] font-bold text-[#FFFFFF]">Arm {i === 0 ? 'A' : 'B'} · {arm.label}</span>
-                <span className="text-[10px] text-[#9EA3B0]">C {arm.carbs_g}g · F {arm.fat_g}g</span>
+              <div key={i} className="flex items-center justify-between bg-surface border border-hair rounded-lg px-3 py-2 mb-1.5">
+                <span className="text-caption font-bold text-white">Arm {i === 0 ? 'A' : 'B'} · {arm.label}</span>
+                <span className="text-eyebrow text-mid">C {arm.carbs_g}g · F {arm.fat_g}g</span>
               </div>
             ))}
-            <p className="text-[10px] text-[#7E8596] mb-2.5">
+            <p className="text-eyebrow text-lo mb-2.5">
               {setup.arm_days} days each, first {setup.washout_days} discarded as glycogen washout.
               About {setup.arm_days * 2} days in total.
             </p>
             <div className="flex gap-2">
               <button onClick={start} disabled={busy} style={{ minHeight: 38 }}
-                className="flex-1 rounded-xl text-xs font-bold text-[#121316]
-                  bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37] active:scale-[0.98] disabled:opacity-60">
+                className="flex-1 rounded-xl text-xs font-bold text-charcoal
+                  bg-gradient-to-r from-gold-light via-gold to-gold-dark active:scale-[0.98] disabled:opacity-60">
                 {busy ? 'Starting…' : 'Start trial'}
               </button>
               <button onClick={() => setSetup(null)} style={{ minHeight: 38 }}
-                className="px-4 rounded-xl text-xs font-bold text-[#9EA3B0] border border-white/[0.10]">
+                className="px-4 rounded-xl text-xs font-bold text-mid border border-white/[0.10]">
                 Cancel
               </button>
             </div>
@@ -187,29 +187,29 @@ export default function MacroLab({ memberId, onChanged }) {
 
         {/* running */}
         {running && !setup && (
-          <div className="bg-[#121316] border border-white/[0.08] rounded-xl p-3 mb-3">
+          <div className="bg-charcoal border border-white/[0.08] rounded-xl p-3 mb-3">
             {['A', 'B'].map(k => {
               const arm = k === 'A' ? t.arm_a : t.arm_b;
               const active = t.current_arm === k;
               const done = k === 'A' && t.current_arm === 'B';
               return (
                 <div key={k} className={`flex items-center justify-between rounded-lg px-3 py-2 mb-1.5 border ${
-                  active ? 'bg-[rgba(212,175,55,0.08)] border-[rgba(212,175,55,0.35)]'
-                         : 'bg-[#1A1C20] border-white/[0.07]'}`}>
+                  active ? 'bg-gold/[0.08] border-gold/35'
+                         : 'bg-surface border-hair'}`}>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-[#FFFFFF]">Arm {k} · {arm.label}</p>
-                    <p className="text-[10px] text-[#7E8596]">C {arm.carbs_g}g · F {arm.fat_g}g</p>
+                    <p className="text-caption font-bold text-white">Arm {k} · {arm.label}</p>
+                    <p className="text-eyebrow text-lo">C {arm.carbs_g}g · F {arm.fat_g}g</p>
                   </div>
-                  <span className={`text-[9px] font-bold tracking-wider rounded-full px-2 py-0.5 border ${
-                    active ? 'text-[#D4AF37] border-[rgba(212,175,55,0.4)]'
-                    : done ? 'text-emerald-300 border-emerald-400/40'
-                           : 'text-[#7E8596] border-white/[0.12]'}`}>
+                  <span className={`text-tiny font-bold tracking-wider rounded-full px-2 py-0.5 border ${
+                    active ? 'text-gold border-gold/40'
+                    : done ? 'text-gold-light border-ok/40'
+                           : 'text-lo border-white/[0.12]'}`}>
                     {active ? `Day ${daysIn}` : done ? 'Done' : 'Queued'}
                   </span>
                 </div>
               );
             })}
-            <p className="text-[10px] text-[#7E8596] mt-2">
+            <p className="text-eyebrow text-lo mt-2">
               {readyToSwitch
                 ? `Arm ${t.current_arm} has run its ${t.arm_days} ${plural(t.arm_days, 'day')}.`
                 : `${Math.max(0, (t.arm_days || 28) - daysIn)} ${plural(Math.max(0, (t.arm_days || 28) - daysIn), 'day')} left in arm ${t.current_arm}.`}
@@ -217,8 +217,8 @@ export default function MacroLab({ memberId, onChanged }) {
             <button onClick={advance} disabled={busy} style={{ minHeight: 38 }}
               className={`w-full mt-2 rounded-xl text-xs font-bold active:scale-[0.98] disabled:opacity-60 ${
                 readyToSwitch
-                  ? 'text-[#121316] bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]'
-                  : 'text-[#9EA3B0] border border-white/[0.12]'}`}>
+                  ? 'text-charcoal bg-gradient-to-r from-gold-light via-gold to-gold-dark'
+                  : 'text-mid border border-white/[0.12]'}`}>
               {busy ? 'Working…' : t.current_arm === 'A' ? 'Switch to arm B' : 'Finish and compare'}
             </button>
           </div>
@@ -226,18 +226,18 @@ export default function MacroLab({ memberId, onChanged }) {
 
         {/* result */}
         {comparison && (
-          <div className={`rounded-xl px-3.5 py-3 border text-[11px] leading-relaxed mb-3 ${
+          <div className={`rounded-xl px-3.5 py-3 border text-caption leading-relaxed mb-3 ${
             STATUS_STYLE[comparison.status] || STATUS_STYLE.incomplete}`}>
-            <p className="font-bold text-[#FFFFFF] text-[12px] mb-1">{comparison.headline}</p>
+            <p className="font-bold text-white text-note mb-1">{comparison.headline}</p>
             <p>{comparison.detail}</p>
             {comparison.recommendation && (
-              <p className="mt-1.5 text-[#D4AF37]">{comparison.recommendation}</p>
+              <p className="mt-1.5 text-gold">{comparison.recommendation}</p>
             )}
             {comparison.caveat && (
-              <p className="mt-1.5 text-[10px] text-[#7E8596]">{comparison.caveat}</p>
+              <p className="mt-1.5 text-eyebrow text-lo">{comparison.caveat}</p>
             )}
             {comparison.noise_floor_kg != null && (
-              <p className="mt-1.5 text-[10px] text-[#7E8596]">
+              <p className="mt-1.5 text-eyebrow text-lo">
                 Their week-to-week weight variation: ±{comparison.noise_floor_kg} kg.
               </p>
             )}
@@ -246,13 +246,13 @@ export default function MacroLab({ memberId, onChanged }) {
 
         {!running && !setup && (
           <button onClick={draftArms} style={{ minHeight: 40 }}
-            className="w-full rounded-xl text-xs font-bold text-[#D4AF37]
-              bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.28)] active:scale-[0.98]">
+            className="w-full rounded-xl text-xs font-bold text-gold
+              bg-gold/[0.08] border border-gold/[0.28] active:scale-[0.98]">
             {t ? 'Run another trial' : 'Set up a macro trial'}
           </button>
         )}
 
-        <p className="text-[10px] text-[#7E8596] mt-2.5 leading-relaxed">
+        <p className="text-eyebrow text-lo mt-2.5 leading-relaxed">
           Members never see this. They see only their targets changing — telling
           someone mid-trial how they're doing would change their behaviour and
           destroy the measurement.

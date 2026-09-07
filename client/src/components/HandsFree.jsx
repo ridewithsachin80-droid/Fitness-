@@ -79,9 +79,9 @@ export default function HandsFree() {
 
   return (
     <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2
-                    px-4 py-2 rounded-full bg-[#1a1b1f] border border-[#D4AF37]/40 shadow-lg">
+                    px-4 py-2 rounded-full bg-[#1a1b1f] border border-gold/40 shadow-lg">
       <span className={`w-2.5 h-2.5 rounded-full ${
-        state === 'confirming' ? 'bg-[#E4572E]' : 'bg-[#D4AF37]'
+        state === 'confirming' ? 'bg-[#E4572E]' : 'bg-gold'
       } ${state === 'idle' ? 'animate-pulse' : ''}`} />
       <span className="text-xs text-[#E8E6E1] max-w-[55vw] truncate">
         {error || label}

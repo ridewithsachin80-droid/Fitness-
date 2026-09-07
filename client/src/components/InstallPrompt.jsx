@@ -74,7 +74,7 @@ export default function InstallPrompt() {
       rounded-2xl p-4 shadow-card-raised z-50 flex items-center gap-3 fade-up">
 
       {/* Icon */}
-      <div className="w-10 h-10 bg-[#D4AF37] rounded-xl flex-shrink-0 flex items-center justify-center">
+      <div className="w-10 h-10 bg-gold rounded-xl flex-shrink-0 flex items-center justify-center">
         <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round"
             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -86,8 +86,8 @@ export default function InstallPrompt() {
         <div className="font-display font-semibold text-sm">Add to Home Screen</div>
         {isIOS ? (
           <div className="text-xs text-[#9a9aa6] mt-0.5">
-            Tap <strong className="text-[#d8d8de]">Share</strong> then{' '}
-            <strong className="text-[#d8d8de]">Add to Home Screen</strong>
+            Tap <strong className="text-soft">Share</strong> then{' '}
+            <strong className="text-soft">Add to Home Screen</strong>
           </div>
         ) : (
           <div className="text-xs text-[#9a9aa6] mt-0.5">
@@ -100,7 +100,7 @@ export default function InstallPrompt() {
       {!isIOS && (
         <button
           onClick={install}
-          className="px-3 py-2 bg-[#D4AF37] hover:bg-[#e0c98a] text-[#121316] text-xs
+          className="px-3 py-2 bg-gold hover:bg-[#e0c98a] text-charcoal text-xs
             font-bold rounded-xl flex-shrink-0 transition-colors"
         >
           Install
@@ -109,7 +109,7 @@ export default function InstallPrompt() {
 
       <button
         onClick={dismiss}
-        className="text-[#5a5a68] hover:text-[#9a9aa6] text-xl leading-none flex-shrink-0 ml-1"
+        className="text-dim hover:text-[#9a9aa6] text-xl leading-none flex-shrink-0 ml-1"
         aria-label="Dismiss"
       >
         ×

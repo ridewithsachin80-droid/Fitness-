@@ -428,8 +428,101 @@ const OVERFLOW_PAGES = [
   ['DailyLog',       "import P from './pages/DailyLog.jsx';"],
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. The primitive kit (Sprint 0) — every building block mounts and behaves
+// ═══════════════════════════════════════════════════════════════════════════
+async function primitivesTest() {
+  console.log('\n[5] primitive kit — components/primitives');
+  const code = await bundle(`
+    import { useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { Icon, ICON_NAMES, Eyebrow, Pressable, HeroNumber, Segmented, Sheet, Stagger, EmptyState, Skeleton, SkeletonText, SkeletonCard } from './components/primitives/index.js';
+    // The same names must also be reachable through the legacy barrel.
+    import { Sheet as SheetViaUI, HeroNumber as HeroViaUI } from './components/UI.jsx';
+    window.__sameExports = SheetViaUI === Sheet && HeroViaUI === HeroNumber;
+    window.__iconCount = ICON_NAMES.length;
+
+    function Kit() {
+      const [tab, setTab] = useState('7');
+      const [open, setOpen] = useState(false);
+      const [w, setW] = useState(82.4);
+      window.__setWeight = setW;
+      return (
+        <div>
+          <Eyebrow tone="gold">Eyebrow text</Eyebrow>
+          <HeroNumber value={w} unit="kg" delta={-0.3} label="vs yesterday" />
+          <HeroNumber value={1240} of={1800} unit="kcal" size="md" />
+          <HeroNumber value="—" unit="kg" placeholder />
+          <Segmented value={tab} onChange={setTab} options={[{ id: '7', label: 'Seven' }, { id: '30', label: 'Thirty' }, { id: '90', label: 'Ninety', count: 3 }]} />
+          <span id="tab">{tab}</span>
+          <Pressable variant="primary" onPress={() => setOpen(true)}>Open sheet</Pressable>
+          <Pressable variant="primary" disabled onPress={() => { window.__disabledFired = true; }}>Disabled one</Pressable>
+          <Sheet open={open} onClose={() => setOpen(false)} eyebrow="Morning" title="Weight sheet" footer={<Pressable variant="gold-text" onPress={() => setOpen(false)}>Done</Pressable>}>
+            <input id="sheet-input" placeholder="kg" />
+          </Sheet>
+          <Stagger className="rows">{['a','b','c'].map(k => <div key={k} className="row">{k}</div>)}</Stagger>
+          <EmptyState icon="food" title="Nothing logged yet" body="Tell me about breakfast." action={{ label: 'Log with AI', onPress: () => { window.__emptyAction = true; } }} />
+          <SkeletonText lines={4} /><SkeletonCard /><Skeleton className="h-4" />
+          <div id="icons">{ICON_NAMES.map(n => <Icon key={n} name={n} />)}</div>
+          <div id="badicon"><Icon name="no-such-icon" /></div>
+        </div>
+      );
+    }
+    createRoot(document.getElementById('root')).render(<Kit />);`);
+
+  const { w, errors, html } = run(code);
+  await tick();
+  const d = w.document;
+  let h = html();
+  ck('the kit mounts without throwing', errors.length === 0, errors.join('|'));
+  ck('components/UI.jsx re-exports the same components (one implementation)', w.__sameExports === true);
+  ck('Eyebrow renders uppercase-tracked label text', /Eyebrow text/.test(h) && /uppercase/.test(h));
+  ck('HeroNumber shows the value, unit and delta', /82\.4/.test(h) && />kg</.test(h) && /↓ 0\.3/.test(h) && /vs yesterday/.test(h));
+  ck('HeroNumber "of" renders 1,240 / 1,800', /1,240/.test(h) && /\/ 1,800/.test(h));
+  ck('HeroNumber placeholder renders the dash in the quiet colour', /text-lo[^"]*text-\[44px\]|text-\[44px\][^"]*text-lo/.test(h) && /—/.test(h));
+
+  // count-up: after a value change the number ends on the new value
+  w.__setWeight(81.9);
+  await tick(900);
+  h = html();
+  ck('HeroNumber settles on the new value after a change (count-up finished)', /81\.9/.test(h) && !/82\.4/.test(h), h.match(/8[12]\.\d/g));
+
+  const tabs = [...d.querySelectorAll('[role=tab]')];
+  ck('Segmented renders one tab per option with aria-selected on the active one',
+     tabs.length === 3 && tabs[0].getAttribute('aria-selected') === 'true');
+  ck('Segmented shows an option count badge', /Ninety/.test(h) && />3</.test(h));
+  tabs[1].click(); await tick(100);
+  ck('tapping a tab changes the value and moves aria-selected',
+     d.getElementById('tab').textContent === '30' && tabs[1].getAttribute('aria-selected') === 'true');
+  tabs[1].dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await tick(100);
+  ck('arrow keys move the selection', d.getElementById('tab').textContent === '90');
+
+  ck('sheet is not in the DOM while closed', !d.querySelector('[role=dialog]'));
+  w.__click('Open sheet'); await tick(200);
+  const dialog = d.querySelector('[role=dialog]');
+  ck('opening the sheet portals a dialog to body with its title and eyebrow',
+     !!dialog && dialog.parentElement.parentElement === d.body && /Weight sheet/.test(dialog.innerHTML) && /Morning/.test(dialog.innerHTML));
+  ck('sheet locks page scroll while open', d.body.style.overflow === 'hidden');
+  ck('sheet moves focus inside itself (first input)', d.activeElement && d.activeElement.id === 'sheet-input', d.activeElement && d.activeElement.id);
+  ck('sheet has a footer', /Done/.test(dialog.innerHTML));
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(500);
+  ck('Escape closes the sheet and unlocks scroll', !d.querySelector('[role=dialog]') && d.body.style.overflow === '');
+  w.__click('Open sheet'); await tick(200);
+  d.querySelector('[data-sheet-close]').click(); await tick(500);
+  ck('the close button closes it too', !d.querySelector('[role=dialog]'));
+
+  ck('Stagger wraps each child (3 rows → 3 wrappers)', d.querySelectorAll('.rows > div').length === 3 && d.querySelectorAll('.row').length === 3);
+  ck('EmptyState renders title, body and the action', /Nothing logged yet/.test(h) && /Tell me about breakfast/.test(h) && /Log with AI/.test(h));
+  w.__click('Log with AI'); ck('EmptyState action fires', w.__emptyAction === true);
+  w.__click('Disabled one'); ck('a disabled Pressable does not fire', w.__disabledFired !== true);
+  ck('SkeletonText draws the requested number of lines', d.querySelectorAll('.animate-pulse').length >= 4 + 4 + 1);
+  ck('every icon in ICON_NAMES renders an svg', d.querySelectorAll('#icons svg').length === w.__iconCount && w.__iconCount >= 40, [d.querySelectorAll('#icons svg').length, w.__iconCount]);
+  ck('an unknown icon name renders nothing (no empty square)', d.getElementById('badicon').children.length === 0);
+  ck('no console-visible error from any primitive', errors.length === 0, errors.join('|'));
+}
+
 async function overflowTest() {
-  console.log('\n[5] horizontal overflow at phone widths (headless Chrome)');
+  console.log('\n[6] horizontal overflow at phone widths (headless Chrome)');
 
   let puppeteerCore, chromiumPkg;
   try {
@@ -552,6 +645,7 @@ async function overflowTest() {
     await evalSamplesTest();
     await foodsQueueTest();
     await nudgeCardTest();
+    await primitivesTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

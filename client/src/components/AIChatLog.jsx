@@ -120,8 +120,8 @@ function GroupHeader({ icon, title, count }) {
   return (
     <div className="flex items-center gap-1.5 mb-1.5">
       <span className="text-xs">{icon}</span>
-      <span className="text-[10px] font-bold text-[#9EA3B0] tracking-widest">{title}</span>
-      {count != null && <span className="text-[10px] text-[#7E8596]">· {count}</span>}
+      <span className="text-eyebrow font-bold text-mid tracking-widest">{title}</span>
+      {count != null && <span className="text-eyebrow text-lo">· {count}</span>}
     </div>
   );
 }
@@ -133,11 +133,11 @@ function ToggleChip({ on, onToggle, children }) {
       style={{ minHeight: 36 }}
       className={`flex items-center gap-1.5 text-xs rounded-full px-3 py-1.5 border transition-all active:scale-95 ${
         on
-          ? 'bg-[#D4AF37]/[0.16] border-[#D4AF37]/45 text-white font-semibold'
-          : 'bg-white/[0.03] border-white/[0.08] text-[#7E8596] line-through'
+          ? 'bg-gold/[0.16] border-gold/45 text-white font-semibold'
+          : 'bg-white/[0.03] border-white/[0.08] text-lo line-through'
       }`}>
-      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-        on ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'
+      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
+        on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
       }`}>✓</span>
       {children}
     </button>
@@ -893,22 +893,22 @@ export default function AIChatLog() {
     p.workouts.filter(w => w.on).length;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-[#121316] flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className="fixed inset-0 z-[70] bg-charcoal flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
 
       {/* ── Header ── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#111116]">
         <button onClick={closeChat}
           style={{ minWidth: 44, minHeight: 44 }}
-          className="flex items-center justify-center rounded-full text-[#9EA3B0] hover:text-white hover:bg-white/[0.06] transition-colors">
+          className="flex items-center justify-center rounded-full text-mid hover:text-white hover:bg-white/[0.06] transition-colors">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#8C6D37] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
-            <p className="text-[10px] text-[#7E8596] leading-tight">Log your whole day in one message</p>
+            <p className="text-eyebrow text-lo leading-tight">Log your whole day in one message</p>
           </div>
         </div>
       </div>
@@ -917,15 +917,15 @@ export default function AIChatLog() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 
         {messages.length === 0 && (
-          <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl p-4">
+          <div className="bg-surface border border-hair rounded-2xl p-4">
             <p className="text-sm font-semibold text-white mb-1.5">Hi! Tell me about your day 🌤</p>
-            <p className="text-xs text-[#9EA3B0] leading-relaxed mb-3">
+            <p className="text-xs text-mid leading-relaxed mb-3">
               Weight, walks, meals, ACV, water, supplements, sleep — say it all in
               one message and I'll fill your entire log. Review, then tap Apply.
               Tap 📷 to log a meal from a photo, or 📄 to upload a lab report.
             </p>
-            <div className="bg-[#121316] border border-white/[0.06] rounded-xl px-3 py-2.5">
-              <p className="text-[11px] text-[#9EA3B0] leading-relaxed italic">
+            <div className="bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2.5">
+              <p className="text-caption text-mid leading-relaxed italic">
                 "weight 82.5, morning walk done, 2 chapati and dal for lunch,
                 acv before meal 2, drank 1 litre water, took my supplements,
                 slept 10:30 to 6:30"
@@ -937,7 +937,7 @@ export default function AIChatLog() {
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-[#D4AF37] text-[#121316] text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="max-w-[85%] bg-gold text-charcoal text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
                 {m.text}
               </div>
             </div>
@@ -948,8 +948,8 @@ export default function AIChatLog() {
                   m.error
                     ? 'bg-red-500/[0.08] border-red-500/25 text-red-300'
                     : m.summary
-                      ? 'bg-[rgba(212,175,55,0.06)] border-[rgba(212,175,55,0.20)] text-[#F0E2B6]'
-                      : 'bg-[#1A1C20] border-white/[0.07] text-[#FFFFFF]'
+                      ? 'bg-gold/[0.06] border-gold/20 text-gold-light'
+                      : 'bg-surface border-hair text-white'
                 }`}>
                   {m.summary
                     ? <DaySummary s={m.summary} />
@@ -966,7 +966,7 @@ export default function AIChatLog() {
                           setMessages(prev => prev.map(x => x === m ? { ...x, imageChoice: null } : x));
                           sendPhoto(f, { silent: true }); }}
                         style={{ minHeight: 40 }}
-                        className="px-3 rounded-full text-xs font-semibold bg-[#D4AF37] text-[#121316]">
+                        className="px-3 rounded-full text-xs font-semibold bg-gold text-charcoal">
                         It's a meal or my scale
                       </button>
                       <button
@@ -974,7 +974,7 @@ export default function AIChatLog() {
                           setMessages(prev => prev.map(x => x === m ? { ...x, imageChoice: null } : x));
                           sendLabReportRef.current?.(f, { silent: true, force: true }); }}
                         style={{ minHeight: 40 }}
-                        className="px-3 rounded-full text-xs font-semibold border border-white/[0.18] text-[#9EA3B0]">
+                        className="px-3 rounded-full text-xs font-semibold border border-hair-hi text-mid">
                         It's a lab report
                       </button>
                     </div>
@@ -988,23 +988,23 @@ export default function AIChatLog() {
                           disabled={m.applied}
                           onChange={e => patchLab(mi, l => ({ ...l, test_date: e.target.value }))}
                           style={{ minHeight: 32 }}
-                          className="bg-[#121316] border border-white/[0.12] rounded-lg px-2 text-[11px] text-white" />
+                          className="bg-charcoal border border-white/[0.12] rounded-lg px-2 text-caption text-white" />
                         <input value={m.lab.lab_name} placeholder="Lab name"
                           disabled={m.applied}
                           onChange={e => patchLab(mi, l => ({ ...l, lab_name: e.target.value }))}
                           style={{ minHeight: 32 }}
-                          className="flex-1 min-w-0 bg-[#121316] border border-white/[0.12] rounded-lg px-2 text-[11px] text-white placeholder-[#7E8596]" />
+                          className="flex-1 min-w-0 bg-charcoal border border-white/[0.12] rounded-lg px-2 text-caption text-white placeholder-lo" />
                       </div>
                       {!m.applied
                         && m.lab.test_date === new Date().toISOString().slice(0, 10)
                         && m.lab.results.some(r => r.on && isScaleWeightRow(r)) && (
-                        <p className="text-[11px] text-[#D4AF37] mb-2 px-1">
+                        <p className="text-caption text-gold mb-2 px-1">
                           ⚖ Weight found — it will go into today's daily log, the rest into body history.
                         </p>
                       )}
 
                       {m.lab.needs_review > 0 && !m.applied && (
-                        <p className="text-[10px] text-amber-300 mb-2 leading-relaxed">
+                        <p className="text-eyebrow text-amber-300 mb-2 leading-relaxed">
                           ⚠ {m.lab.needs_review} {plural(m.lab.needs_review, 'row')} came out unclear —
                           check the highlighted ones against your report before saving.
                         </p>
@@ -1013,7 +1013,7 @@ export default function AIChatLog() {
                       <div className="space-y-1.5">
                         {m.lab.results.map((r, ri) => (
                           <div key={ri}
-                            className={`bg-[#121316] border rounded-xl px-3 py-2 ${
+                            className={`bg-charcoal border rounded-xl px-3 py-2 ${
                               r.confidence === 'low' || r.value === null
                                 ? 'border-amber-400/35' : 'border-white/[0.06]'
                             } ${r.on ? '' : 'opacity-40'}`}>
@@ -1022,9 +1022,9 @@ export default function AIChatLog() {
                                 onClick={() => patchLab(mi, l => ({
                                   ...l, results: l.results.map((x, j) => j === ri ? { ...x, on: !x.on } : x) }))}
                                 disabled={m.applied}
-                                className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                  r.on ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'}`}>✓</button>
-                              <span className="text-[11px] font-semibold text-white flex-1 min-w-0 truncate">
+                                className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
+                                  r.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'}`}>✓</button>
+                              <span className="text-caption font-semibold text-white flex-1 min-w-0 truncate">
                                 {r.test_name}
                               </span>
                               <input
@@ -1035,12 +1035,12 @@ export default function AIChatLog() {
                                   ...l, results: l.results.map((x, j) => j === ri
                                     ? { ...x, value: e.target.value === '' ? null : parseFloat(e.target.value), on: e.target.value !== '' } : x) }))}
                                 style={{ width: 62, minHeight: 28 }}
-                                className={`rounded-md px-1 text-center text-[11px] border bg-[#1A1C20] text-white
+                                className={`rounded-md px-1 text-center text-caption border bg-surface text-white
                                   ${r.value === null ? 'border-amber-400/50' : 'border-white/[0.12]'}`} />
-                              <span className="text-[10px] text-[#7E8596] w-12 truncate">{r.unit || ''}</span>
+                              <span className="text-eyebrow text-lo w-12 truncate">{r.unit || ''}</span>
                             </div>
                             {(r.ref_min != null || r.ref_max != null) && (
-                              <p className="text-[9px] text-[#7E8596] ml-6 mt-0.5">
+                              <p className="text-tiny text-lo ml-6 mt-0.5">
                                 ref {r.ref_min ?? '−'}–{r.ref_max ?? '−'}
                               </p>
                             )}
@@ -1049,25 +1049,25 @@ export default function AIChatLog() {
                       </div>
 
                       {m.applied ? (
-                        <div className="mt-2 bg-emerald-500/[0.08] border border-emerald-500/25 rounded-xl px-3.5 py-3">
-                          <p className="text-[13px] font-bold text-emerald-400">
+                        <div className="mt-2 bg-ok-deep/[0.08] border border-ok-deep/25 rounded-xl px-3.5 py-3">
+                          <p className="text-body-sm font-bold text-gold-light">
                             ✓ {m.labSaved > 0 ? `${m.labSaved} results saved` : 'Saved'}
                             {m.weightLogged != null && ` · ⚖ ${m.weightLogged} kg logged for today`}
                           </p>
                           {m.labNotice && (
-                            <p className="text-[11px] text-amber-200 mt-1 leading-relaxed">{m.labNotice}</p>
+                            <p className="text-caption text-amber-200 mt-1 leading-relaxed">{m.labNotice}</p>
                           )}
                         </div>
                       ) : (
                         <>
                           <button onClick={() => saveLabs(mi)} disabled={labBusy}
                             style={{ minHeight: 44 }}
-                            className="w-full mt-2 rounded-xl text-sm font-bold text-[#121316]
-                              bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
+                            className="w-full mt-2 rounded-xl text-sm font-bold text-charcoal
+                              bg-gradient-to-r from-gold-light via-gold to-gold-dark
                               active:scale-[0.98] transition-transform disabled:opacity-60">
                             {labBusy ? 'Saving…' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
                           </button>
-                          <p className="text-[10px] text-[#7E8596] mt-1.5 leading-relaxed">
+                          <p className="text-eyebrow text-lo mt-1.5 leading-relaxed">
                             Read from your report by AI — check the numbers before saving.
                             Nothing is stored until you do.
                           </p>
@@ -1098,7 +1098,7 @@ export default function AIChatLog() {
                             onToggle={() => patchParsed(mi, p => ({ ...p, bodyMetricsOn: !p.bodyMetricsOn }))}>
                             Save {m.parsed.bodyMetrics.length} metrics to body history
                           </ToggleChip>
-                          <p className="text-[10px] text-[#7E8596] mt-1 px-1">
+                          <p className="text-eyebrow text-lo mt-1 px-1">
                             {m.parsed.bodyMetrics.slice(0, 4).map(bm => `${bm.name} ${bm.value}${bm.unit || ''}`).join(' · ')}
                             {m.parsed.bodyMetrics.length > 4 && ` · +${m.parsed.bodyMetrics.length - 4} more`}
                           </p>
@@ -1196,19 +1196,19 @@ export default function AIChatLog() {
                           <div className="space-y-1.5">
                             {m.parsed.foods.map((f, fi) => (
                               <button key={fi} onClick={() => toggleListItem(mi, 'foods', fi)}
-                                className={`w-full text-left bg-[#121316] border rounded-xl px-3 py-2.5 transition-all active:scale-[0.99] ${
+                                className={`w-full text-left bg-charcoal border rounded-xl px-3 py-2.5 transition-all active:scale-[0.99] ${
                                   f.on ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-40'
                                 }`}>
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2 min-w-0">
-                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                      f.on ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'
+                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
+                                      f.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
                                     }`}>✓</span>
                                     <div className="min-w-0">
-                                      <p className={`text-[13px] font-semibold truncate ${f.on ? 'text-white' : 'text-[#9EA3B0] line-through'}`}>
+                                      <p className={`text-body-sm font-semibold truncate ${f.on ? 'text-white' : 'text-mid line-through'}`}>
                                         {f.name}
                                       </p>
-                                      <div className="flex items-center gap-1.5 text-[11px] text-[#7E8596] flex-wrap">
+                                      <div className="flex items-center gap-1.5 text-caption text-lo flex-wrap">
                                         {f.qty_text ? <span>{f.qty_text} ·</span> : null}
                                         {/* Editable: the portion guess is the biggest source of
                                             error in the whole chain, and every correction teaches
@@ -1219,23 +1219,23 @@ export default function AIChatLog() {
                                           onChange={e => setGrams(mi, fi, e.target.value)}
                                           disabled={m.applied}
                                           style={{ width: 54, minHeight: 26 }}
-                                          className="bg-[#121316] border border-white/[0.14] rounded-md px-1 text-center
-                                            text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-[rgba(212,175,55,0.5)]"
+                                          className="bg-charcoal border border-white/[0.14] rounded-md px-1 text-center
+                                            text-caption text-white focus:outline-none focus:ring-1 focus:ring-gold/50"
                                         />
                                         <span>g · {f.meal || 'Meal 1'}</span>
-                                        {f.source === 'db-verified' && <span className="text-emerald-400">· verified</span>}
+                                        {f.source === 'db-verified' && <span className="text-gold-light">· verified</span>}
                                         {Number(f.grams) !== Number(f.ai_grams) && (
-                                          <span className="text-[#D4AF37]">· I'll remember this</span>
+                                          <span className="text-gold">· I'll remember this</span>
                                         )}
                                       </div>
                                       {f.warning && (
-                                        <p className="text-[10px] text-amber-300 leading-snug mt-0.5">⚠ {f.warning}</p>
+                                        <p className="text-eyebrow text-amber-300 leading-snug mt-0.5">⚠ {f.warning}</p>
                                       )}
                                     </div>
                                   </div>
                                   <div className="text-right flex-shrink-0">
-                                    <p className="text-[13px] font-bold text-orange-400">{f.macros?.cal ?? 0} kcal</p>
-                                    <p className="text-[10px] text-[#9EA3B0]">
+                                    <p className="text-body-sm font-bold text-orange-400">{f.macros?.cal ?? 0} kcal</p>
+                                    <p className="text-eyebrow text-mid">
                                       P {f.macros?.pro ?? 0} · C {f.macros?.carb ?? 0} · F {f.macros?.fat ?? 0}
                                     </p>
                                   </div>
@@ -1243,9 +1243,9 @@ export default function AIChatLog() {
                               </button>
                             ))}
                             {m.parsed.totals && m.parsed.foods.filter(f => f.on).length > 1 && (
-                              <div className="flex items-center justify-between px-3 py-2 bg-[#D4AF37]/[0.10] border border-[#D4AF37]/25 rounded-xl">
-                                <span className="text-[11px] font-bold text-[#F0E2B6] tracking-wider">Food total</span>
-                                <span className="text-[13px] font-bold text-white">
+                              <div className="flex items-center justify-between px-3 py-2 bg-gold/[0.10] border border-gold/25 rounded-xl">
+                                <span className="text-caption font-bold text-gold-light tracking-wider">Food total</span>
+                                <span className="text-body-sm font-bold text-white">
                                   {m.parsed.foods.filter(f => f.on).reduce((s, f) => s + (f.macros?.cal || 0), 0)} kcal
                                 </span>
                               </div>
@@ -1262,30 +1262,30 @@ export default function AIChatLog() {
                             {m.parsed.workouts.map((w, wi) => (
                               <button key={wi} onClick={() => toggleListItem(mi, 'workouts', wi)}
                                 disabled={m.applied}
-                                className={`w-full flex items-center justify-between bg-[#121316] border rounded-xl px-3 py-2.5 transition-all ${
+                                className={`w-full flex items-center justify-between bg-charcoal border rounded-xl px-3 py-2.5 transition-all ${
                                   w.on ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-40'
                                 }`}>
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] flex-shrink-0 ${
-                                    w.on ? 'bg-[#D4AF37] text-[#121316]' : 'bg-white/[0.08] text-transparent'
+                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
+                                    w.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
                                   }`}>✓</span>
                                   <div className="min-w-0">
-                                    <p className={`text-[12px] font-semibold truncate ${w.on ? 'text-white' : 'text-[#9EA3B0] line-through'}`}>
+                                    <p className={`text-note font-semibold truncate ${w.on ? 'text-white' : 'text-mid line-through'}`}>
                                       {w.name}{w.qty_text ? ` — ${w.qty_text}` : ''}
                                     </p>
                                     {w.sets?.length > 0 && (
-                                      <p className="text-[10px] text-[#9EA3B0] truncate">
+                                      <p className="text-eyebrow text-mid truncate">
                                         {w.sets.map((st, si) => `${st.reps}×${st.weight_kg || 'BW'}${st.weight_kg ? 'kg' : ''}`).join(' · ')}
                                       </p>
                                     )}
                                   </div>
                                 </div>
                                 {w.calories_burned != null && (
-                                  <p className="text-[11px] font-semibold text-emerald-400 flex-shrink-0">~{w.calories_burned} kcal</p>
+                                  <p className="text-caption font-semibold text-gold-light flex-shrink-0">~{w.calories_burned} kcal</p>
                                 )}
                               </button>
                             ))}
-                            <p className="text-[10px] text-[#7E8596] px-1">
+                            <p className="text-eyebrow text-lo px-1">
                               {m.parsed.workouts.some(w => w.on && w.sets?.length)
                                 ? 'Sets and reps go straight into your Workout log.'
                                 : "Saved to today's session · add exact sets & reps in the Workout section anytime."}
@@ -1296,7 +1296,7 @@ export default function AIChatLog() {
 
                       {/* ── Apply / Applied / Undo ── */}
                       {m.editing && !m.applied && (
-                        <p className="text-[11px] text-[#D4AF37] font-medium">
+                        <p className="text-caption text-gold font-medium">
                           ✏️ Editing — that entry has been rolled back. Adjust below and apply again.
                         </p>
                       )}
@@ -1304,52 +1304,52 @@ export default function AIChatLog() {
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
                         <button onClick={() => applyAll(mi)}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-[#D4AF37] to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-[#D4AF37] active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
                           Apply {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
                         </button>
                       )}
 
                       {m.applied && (
                         <div className={`border rounded-xl px-3.5 py-3 space-y-2 ${
-                          m.workoutSaveFailed ? 'bg-amber-500/[0.08] border-amber-500/25' : 'bg-emerald-500/[0.08] border-emerald-500/25'
+                          m.workoutSaveFailed ? 'bg-amber-500/[0.08] border-amber-500/25' : 'bg-ok-deep/[0.08] border-ok-deep/25'
                         }`}>
                           <div className="flex items-center justify-between">
-                            <p className={`text-[13px] font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-emerald-400'}`}>
+                            <p className={`text-body-sm font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-gold-light'}`}>
                               {m.workoutSaveFailed ? '⚠ Applied — workout not saved' : '✓ Applied & saved'}
                             </p>
                             <div className="flex items-center gap-3">
                               <button onClick={() => editApplied(mi)}
                                 style={{ minHeight: 32 }}
-                                className="text-[11px] font-semibold text-[#D4AF37] hover:text-[#F0E2B6] transition-colors">
+                                className="text-caption font-semibold text-gold hover:text-gold-light transition-colors">
                                 ✏️ Edit
                               </button>
                               <button onClick={() => undo(mi)}
                                 style={{ minHeight: 32 }}
-                                className="text-[11px] font-semibold text-[#9EA3B0] hover:text-white underline underline-offset-2 transition-colors">
+                                className="text-caption font-semibold text-mid hover:text-white underline underline-offset-2 transition-colors">
                                 Undo
                               </button>
                             </div>
                           </div>
                           {m.workoutSaveFailed && (
-                            <p className="text-[11px] text-amber-300 leading-relaxed">
+                            <p className="text-caption text-amber-300 leading-relaxed">
                               Everything else saved, but the workout note couldn't be saved — check your connection and log it in the Workout section.
                             </p>
                           )}
                           {m.pending?.length > 0 ? (
-                            <p className="text-[11px] text-[#9EA3B0] leading-relaxed">
+                            <p className="text-caption text-mid leading-relaxed">
                               Still pending today: {m.pending.join(' · ')}
                             </p>
                           ) : (
-                            <p className="text-[11px] text-[#9EA3B0]">Everything's logged for today — great job! 🎉</p>
+                            <p className="text-caption text-mid">Everything's logged for today — great job! 🎉</p>
                           )}
-                          <p className="text-[10px] text-[#7E8596] leading-relaxed">
+                          <p className="text-eyebrow text-lo leading-relaxed">
                             Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.
                           </p>
                         </div>
                       )}
 
                       {m.undone && (
-                        <p className="text-[11px] text-[#9EA3B0] text-center">Changes reverted.</p>
+                        <p className="text-caption text-mid text-center">Changes reverted.</p>
                       )}
                     </div>
                   )}
@@ -1361,11 +1361,11 @@ export default function AIChatLog() {
 
         {busy && (
           <div className="flex justify-start">
-            <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="bg-surface border border-hair rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -1380,7 +1380,7 @@ export default function AIChatLog() {
           {SUGGESTION_CHIPS.map((chip, i) => (
             <button key={i} onClick={() => send(chip)}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
-              className="text-xs bg-[#1A1C20] border border-white/[0.10] hover:border-[rgba(212,175,55,0.4)] rounded-full px-3.5 py-1.5 text-[#9EA3B0] transition-colors">
+              className="text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-full px-3.5 py-1.5 text-mid transition-colors">
               {chip}
             </button>
           ))}
@@ -1392,21 +1392,21 @@ export default function AIChatLog() {
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {vc.card}
         <div className="flex items-end gap-2">
-          <div className="flex-1 flex items-center bg-[#1A1C20] border border-white/[0.10] rounded-2xl px-3">
+          <div className="flex-1 flex items-center bg-surface border border-white/[0.10] rounded-2xl px-3">
             <input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
               placeholder="Eg: weight 82.5, walk done, 2 chapati for lunch"
-              className="flex-1 bg-transparent text-sm text-white placeholder-[#7E8596] py-3 outline-none min-w-0"
+              className="flex-1 bg-transparent text-sm text-white placeholder-lo py-3 outline-none min-w-0"
             />
             <button onClick={() => labRef.current?.click()}
               disabled={labBusy}
               aria-label="Upload a lab report"
               style={{ minWidth: 40, minHeight: 40 }}
               className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                labBusy ? 'text-[#7E8596] animate-pulse' : 'text-[#9EA3B0] hover:text-[#D4AF37]'
+                labBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold'
               }`}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -1422,7 +1422,7 @@ export default function AIChatLog() {
               aria-label="Log food from a photo"
               style={{ minWidth: 40, minHeight: 40 }}
               className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-                photoBusy ? 'text-[#7E8596] animate-pulse' : 'text-[#9EA3B0] hover:text-[#F0E2B6]'
+                photoBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold-light'
               }`}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -1440,8 +1440,8 @@ export default function AIChatLog() {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
-                ? 'bg-[#D4AF37] text-[#121316] shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
-                : 'bg-white/[0.05] text-[#7E8596]'
+                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
+                : 'bg-white/[0.05] text-lo'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />

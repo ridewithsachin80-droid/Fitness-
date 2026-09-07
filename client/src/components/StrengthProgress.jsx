@@ -77,9 +77,9 @@ function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const s = payload[0].payload;
   return (
-    <div className="bg-[#1A1C20] border border-white/[0.1] rounded-xl px-3 py-2 shadow-card-raised text-xs">
-      <p className="text-[#5a5a68] mb-1">{formatDateShort(s.date)}</p>
-      <p className="font-display font-semibold text-[#ededf0]">e1RM: {s.bestE1rm} kg</p>
+    <div className="bg-surface border border-white/[0.1] rounded-xl px-3 py-2 shadow-card-raised text-xs">
+      <p className="text-dim mb-1">{formatDateShort(s.date)}</p>
+      <p className="font-display font-semibold text-bright">e1RM: {s.bestE1rm} kg</p>
       <p className="text-[#9a9aa6]">Best set: {s.bestWeight} kg × {s.bestReps}</p>
       <p className="text-[#9a9aa6]">Volume: {s.volume} kg</p>
       {s.isPR && <p className="text-[#d4af6a] font-semibold mt-1">🏆 New PR</p>}
@@ -129,7 +129,7 @@ export default function StrengthProgress() {
     return (
       <Card>
         <SectionTitle icon="💪">Strength Progress</SectionTitle>
-        <p className="text-xs text-[#5a5a68] text-center py-4">
+        <p className="text-xs text-dim text-center py-4">
           Log a workout in the Workout Log to see your strength trends here.
         </p>
       </Card>
@@ -148,20 +148,20 @@ export default function StrengthProgress() {
       </div>
 
       <select value={selectedId || ''} onChange={e => setSelectedId(parseInt(e.target.value))}
-        className="w-full px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm text-[#ededf0]
-          focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.30)] mb-3">
+        className="w-full px-3 py-2.5 bg-surface border border-white/[0.1] rounded-xl text-sm text-bright
+          focus:outline-none focus:ring-2 focus:ring-gold/30 mb-3">
         {exercises.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
       </select>
 
       {loadingHistory ? (
-        <p className="text-xs text-[#5a5a68] text-center py-8">Loading…</p>
+        <p className="text-xs text-dim text-center py-8">Loading…</p>
       ) : sessions.length === 0 ? (
-        <p className="text-xs text-[#5a5a68] text-center py-8">No sets logged for this exercise yet.</p>
+        <p className="text-xs text-dim text-center py-8">No sets logged for this exercise yet.</p>
       ) : sessions.length === 1 ? (
         <div className="text-center py-4">
-          <p className="font-display text-2xl font-semibold text-[#ededf0]">{sessions[0].bestE1rm} kg</p>
-          <p className="text-xs text-[#5a5a68] mt-1">Estimated 1RM · {sessions[0].bestWeight} kg × {sessions[0].bestReps} reps</p>
-          <p className="text-[10px] text-[#5a5a68] mt-2 italic">Log this exercise again to start seeing a trend.</p>
+          <p className="font-display text-2xl font-semibold text-bright">{sessions[0].bestE1rm} kg</p>
+          <p className="text-xs text-dim mt-1">Estimated 1RM · {sessions[0].bestWeight} kg × {sessions[0].bestReps} reps</p>
+          <p className="text-eyebrow text-dim mt-2 italic">Log this exercise again to start seeing a trend.</p>
         </div>
       ) : (
         <>
@@ -175,7 +175,7 @@ export default function StrengthProgress() {
                 dot={<PRDot />} activeDot={{ r: 5, fill: '#D4AF37' }} />
             </LineChart>
           </ResponsiveContainer>
-          <div className="flex justify-between text-xs text-[#5a5a68] mt-1 px-1">
+          <div className="flex justify-between text-xs text-dim mt-1 px-1">
             <span>Estimated 1RM (Epley formula)</span>
             <span>{sessions.length} sessions</span>
           </div>

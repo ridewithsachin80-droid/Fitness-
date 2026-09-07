@@ -86,48 +86,48 @@ function FoodForm({ initial, onSave, onCancel, saving,
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2">
-          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Name *</label>
+          <label className="block text-xs font-semibold text-faint tracking-wider mb-1">Name *</label>
           <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Brown Rice (Cooked)"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Hindi Name</label>
+          <label className="block text-xs font-semibold text-faint tracking-wider mb-1">Hindi Name</label>
           <input value={form.name_hindi} onChange={e => set('name_hindi', e.target.value)} placeholder="ब्राउन राइस"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Local / Brand Name</label>
+          <label className="block text-xs font-semibold text-faint tracking-wider mb-1">Local / Brand Name</label>
           <input value={form.name_local} onChange={e => set('name_local', e.target.value)} placeholder="Aashirvaad Brown Rice"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Category</label>
+          <label className="block text-xs font-semibold text-faint tracking-wider mb-1">Category</label>
           <select value={form.category} onChange={e => set('category', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] bg-white">
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35 bg-surface">
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-500 tracking-wider mb-1">Source</label>
+          <label className="block text-xs font-semibold text-faint tracking-wider mb-1">Source</label>
           <select value={form.source} onChange={e => set('source', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] bg-white">
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35 bg-surface">
             {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="col-span-2 flex items-center gap-2">
           <input type="checkbox" id="verified" checked={form.verified} onChange={e => set('verified', e.target.checked)}
-            className="w-4 h-4 accent-[#D4AF37]" />
-          <label htmlFor="verified" className="text-sm font-medium text-stone-700">Verified (trusted data source)</label>
+            className="w-4 h-4 accent-gold" />
+          <label htmlFor="verified" className="text-sm font-medium text-white">Verified (trusted data source)</label>
         </div>
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-stone-500 tracking-wider mb-2">Nutrients per 100g</p>
-        <div className="flex gap-1 bg-stone-100 p-1 rounded-xl mb-3">
+        <p className="text-xs font-semibold text-faint tracking-wider mb-2">Nutrients per 100g</p>
+        <div className="flex gap-1 bg-charcoal p-1 rounded-xl mb-3">
           {NUTRIENT_GROUPS.map(g => (
             <button key={g.label} onClick={() => setNutrientTab(g.label)}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                nutrientTab === g.label ? 'bg-white text-[#D4AF37] shadow-sm' : 'text-stone-500'}`}>
+                nutrientTab === g.label ? 'bg-surface text-gold shadow-sm' : 'text-faint'}`}>
               {g.label}
             </button>
           ))}
@@ -135,12 +135,12 @@ function FoodForm({ initial, onSave, onCancel, saving,
         <div className="grid grid-cols-2 gap-2">
           {NUTRIENT_GROUPS.find(g => g.label === nutrientTab)?.keys.map(k => (
             <div key={k}>
-              <label className="block text-xs text-stone-500 mb-1 capitalize">
+              <label className="block text-xs text-faint mb-1 capitalize">
                 {k.replace(/_/g,' ')} {NUTRIENT_UNITS[k] ? `(${NUTRIENT_UNITS[k]})` : ''}
               </label>
               <input type="number" step="0.001" value={form.per_100g[k] || ''}
                 onChange={e => setN(k, e.target.value)}
-                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)]" />
+                className="w-full border border-hair-med rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35" />
             </div>
           ))}
         </div>
@@ -160,11 +160,11 @@ function FoodForm({ initial, onSave, onCancel, saving,
           <label className="flex items-start gap-2.5 mt-4 mb-1 cursor-pointer">
             <input type="checkbox" checked={propagate} className="mt-0.5"
               onChange={e => onPropagateChange?.(e.target.checked)} />
-            <span className="text-[12px] text-stone-600 leading-snug">
+            <span className="text-note text-mid leading-snug">
               Also correct <strong>{impact.entries}</strong> {impact.entries === 1 ? 'entry' : 'entries'} already
               logged by <strong>{impact.members}</strong> {impact.members === 1 ? 'member' : 'members'}
               {impact.earliest ? <> since {impact.earliest}</> : null}.
-              <span className="block text-[11px] text-stone-400 mt-0.5">
+              <span className="block text-caption text-lo mt-0.5">
                 Their totals for those days will change. Grams stay as they logged them —
                 only what 100g contains is corrected.
               </span>
@@ -173,11 +173,11 @@ function FoodForm({ initial, onSave, onCancel, saving,
         )}
 
         <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()}
-          className="flex-1 py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 text-[#121316] font-bold rounded-xl transition-colors">
+          className="flex-1 py-3 bg-gold hover:bg-gold-light disabled:opacity-50 text-charcoal font-bold rounded-xl transition-colors">
           {saving ? 'Saving…' : 'Save Food'}
         </button>
         <button onClick={onCancel}
-          className="px-4 py-3 text-stone-600 border border-stone-200 rounded-xl hover:bg-stone-50 transition-colors">
+          className="px-4 py-3 text-mid border border-hair-med rounded-xl hover:bg-white/[0.06] transition-colors">
           Cancel
         </button>
       </div>
@@ -367,18 +367,18 @@ export default function AdminFoods() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121316]">
+    <div className="min-h-screen bg-charcoal">
       {/* Header */}
-      <div className="bg-[#121316] text-white px-4 pt-10 pb-5">
+      <div className="bg-charcoal text-white px-4 pt-10 pb-5">
         <div className="max-w-2xl mx-auto">
           <BackButton onClick={() => navigate('/admin')} light />
           <div className="flex items-center justify-between mt-3">
             <div>
               <h1 className="font-display text-xl font-medium">Food Database</h1>
-              <p className="text-[#9EA3B0] text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
+              <p className="text-mid text-sm mt-0.5">{total.toLocaleString()} foods · Indian + USDA</p>
             </div>
             <button onClick={() => { setEditing(null); setAiPrefill(null); setMode('add'); }}
-              className="px-4 py-2 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] font-bold rounded-xl text-sm transition-colors">
+              className="px-4 py-2 bg-gold hover:bg-gold-light text-charcoal font-bold rounded-xl text-sm transition-colors">
               + Add Food
             </button>
           </div>
@@ -387,7 +387,7 @@ export default function AdminFoods() {
 
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-10 space-y-3">
 
-        {error && <p className="text-red-600 text-xs bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+        {error && <p className="text-red-400 text-xs bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
 
         {/* Review queue — the AI's own guesses, ordered by real usage. Verifying
             the food forty members eat is worth far more than the one logged once. */}
@@ -397,21 +397,21 @@ export default function AdminFoods() {
               <SectionTitle icon="🔍">Needs review</SectionTitle>
               <button
                 onClick={() => { const next = !reviewMode; setReviewMode(next); if (next && !review) loadReview(); }}
-                className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition-colors">
+                className="text-xs font-semibold text-gold-deep bg-gold/[0.07] px-3 py-1.5 rounded-xl hover:bg-gold/[0.13] transition-colors">
                 {reviewMode ? 'Hide' : 'Show queue'}
               </button>
             </div>
 
             {reviewMode && (
               review === null ? (
-                <p className="text-xs text-stone-400 py-3 text-center">Loading…</p>
+                <p className="text-xs text-lo py-3 text-center">Loading…</p>
               ) : review.foods.length === 0 ? (
-                <p className="text-xs text-emerald-600 py-3 text-center">
+                <p className="text-xs text-gold-deep py-3 text-center">
                   Nothing waiting. Every food in the database has been checked.
                 </p>
               ) : (
                 <>
-                  <p className="text-xs text-stone-500 mt-1 mb-2">
+                  <p className="text-xs text-faint mt-1 mb-2">
                     {review.unverified_total} unverified {review.unverified_total === 1 ? 'food' : 'foods'}.
                     Ones whose calories disagree with their own macros come first,
                     then the ones most members eat. Confirming one fixes it for everybody.
@@ -424,22 +424,22 @@ export default function AdminFoods() {
                     <button
                       onClick={() => { const next = !flaggedOnly; setFlaggedOnly(next); loadReview({ flagged: next }); }}
                       style={{ minHeight: 30 }}
-                      className={`text-[11px] font-bold px-3 rounded-lg border transition-colors ${
+                      className={`text-caption font-bold px-3 rounded-lg border transition-colors ${
                         flaggedOnly
-                          ? 'bg-amber-50 border-amber-300 text-amber-700'
-                          : 'bg-white border-stone-200 text-stone-500'
+                          ? 'bg-amber-400/[0.08] border-amber-300 text-amber-400'
+                          : 'bg-surface border-hair-med text-faint'
                       }`}>
                       {flaggedOnly ? '⚠ Showing only mismatched' : '⚠ Only mismatched macros'}
                     </button>
                     {!flaggedOnly && review.flagged_in_page > 0 && (
-                      <span className="text-[11px] text-amber-600 font-semibold">
+                      <span className="text-caption text-amber-400 font-semibold">
                         {review.flagged_in_page} of these {review.page_size} look wrong
                       </span>
                     )}
                   </div>
 
                   {queueError && (
-                    <p className="text-[11px] text-red-600 font-semibold mb-2">{queueError}</p>
+                    <p className="text-caption text-red-400 font-semibold mb-2">{queueError}</p>
                   )}
 
                   {/* ── One card at a time ── */}
@@ -450,15 +450,15 @@ export default function AdminFoods() {
                     const busy = !!verifying[f.id];
                     const idx = Math.min(queueIdx, review.foods.length - 1);
                     return (
-                      <div className="border border-stone-200 rounded-2xl p-4">
+                      <div className="border border-hair-med rounded-2xl p-4">
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <p className="text-base font-bold text-stone-800 leading-snug">{f.name}</p>
-                          <span className="text-[11px] text-stone-400 flex-shrink-0 mt-1">
+                          <p className="text-base font-bold text-white leading-snug">{f.name}</p>
+                          <span className="text-caption text-lo flex-shrink-0 mt-1">
                             {idx + 1} of {review.foods.length}
                           </span>
                         </div>
 
-                        <p className="text-[11px] text-stone-400 mb-2">
+                        <p className="text-caption text-lo mb-2">
                           {f.category || 'uncategorised'} · from {f.source === 'ai' ? 'AI estimate' : f.source}
                         </p>
 
@@ -469,9 +469,9 @@ export default function AdminFoods() {
                             ['C',    f.per_100g?.total_carbs ?? 0],
                             ['F',    f.per_100g?.fat ?? 0],
                           ].map(([k, v]) => (
-                            <div key={k} className="bg-stone-50 rounded-xl px-2 py-2 text-center">
-                              <div className="text-sm font-extrabold text-stone-700">{v}</div>
-                              <div className="text-[9px] font-bold tracking-wider text-stone-400">{k}</div>
+                            <div key={k} className="bg-surface rounded-xl px-2 py-2 text-center">
+                              <div className="text-sm font-extrabold text-white">{v}</div>
+                              <div className="text-tiny font-bold tracking-wider text-lo">{k}</div>
                             </div>
                           ))}
                         </div>
@@ -480,19 +480,19 @@ export default function AdminFoods() {
                             reading before tapping Verify: it is arithmetic, not
                             an opinion, and it is usually right. */}
                         {mc.status === 'suspect' && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
+                          <div className="bg-amber-400/[0.08] border border-amber-400/25 rounded-xl px-3 py-2 mb-3">
                             {/* The heading follows the reason. "These numbers
                                 disagree with each other" is wrong for a masala
                                 dosa whose numbers agree perfectly and are simply
                                 too low — the coach would look for a mismatch
                                 that isn't there. */}
-                            <p className="text-[11px] font-bold text-amber-800">
+                            <p className="text-caption font-bold text-amber-800">
                               {f.checks?.lighter_than_base ? '⚠ Lighter than the plain version of itself'
                                : f.checks?.cooking === 'suspect' && f.checks?.macro === 'ok'
                                  ? '⚠ Cooked dish with no cooking fat'
                                  : '⚠ These numbers disagree with each other'}
                             </p>
-                            <p className="text-[11px] text-amber-700 leading-snug mt-0.5">
+                            <p className="text-caption text-amber-400 leading-snug mt-0.5">
                               {mc.reason}
                               {mc.delta_pct != null ? ` — off by ${mc.delta_pct}%.` : '.'}
                               {' '}Fix it before verifying, or it skews every member who logs this.
@@ -500,19 +500,19 @@ export default function AdminFoods() {
                           </div>
                         )}
                         {mc.status === 'unknown' && (
-                          <p className="text-[11px] text-stone-400 mb-3">
+                          <p className="text-caption text-lo mb-3">
                             Can't cross-check this one — {mc.reason}.
                           </p>
                         )}
                         {mc.status === 'ok' && (
-                          <p className="text-[11px] text-emerald-600 font-semibold mb-3">
+                          <p className="text-caption text-gold-deep font-semibold mb-3">
                             ✓ Calories match its macros
                           </p>
                         )}
 
-                        <p className="text-[11px] text-stone-500 mb-3">
+                        <p className="text-caption text-faint mb-3">
                           {f.members > 0
-                            ? <>Logged by <span className="font-bold text-amber-600">{f.members} {plural(f.members, 'member')}</span>, {f.times_logged}× in total.</>
+                            ? <>Logged by <span className="font-bold text-amber-400">{f.members} {plural(f.members, 'member')}</span>, {f.times_logged}× in total.</>
                             : <>Nobody has logged this yet.</>}
                         </p>
 
@@ -521,7 +521,7 @@ export default function AdminFoods() {
                             onClick={() => verify(f)}
                             disabled={busy}
                             style={{ minHeight: 40 }}
-                            className="flex-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200
+                            className="flex-1 text-xs font-bold text-gold-light bg-gold/[0.07] border border-gold/[0.22]
                               rounded-xl px-3 disabled:opacity-50">
                             {busy ? '…' : '✓ Verify'}
                           </button>
@@ -529,7 +529,7 @@ export default function AdminFoods() {
                             onClick={() => { setEditing(f); setMode('edit'); }}
                             disabled={busy}
                             style={{ minHeight: 40 }}
-                            className="flex-1 text-xs font-bold text-stone-600 bg-white border border-stone-200
+                            className="flex-1 text-xs font-bold text-mid bg-surface border border-hair-med
                               rounded-xl px-3 disabled:opacity-50">
                             Fix
                           </button>
@@ -537,7 +537,7 @@ export default function AdminFoods() {
                             onClick={() => deleteFromQueue(f)}
                             disabled={busy}
                             style={{ minHeight: 40 }}
-                            className="text-xs font-bold text-red-600 bg-white border border-red-200
+                            className="text-xs font-bold text-red-400 bg-surface border border-red-400/25
                               rounded-xl px-3 disabled:opacity-50">
                             Delete
                           </button>
@@ -549,7 +549,7 @@ export default function AdminFoods() {
                         <button
                           onClick={() => setQueueIdx(i => Math.min(i + 1, review.foods.length - 1))}
                           disabled={idx >= review.foods.length - 1}
-                          className="w-full text-[11px] font-semibold text-stone-400 mt-2.5 py-1 disabled:opacity-40">
+                          className="w-full text-caption font-semibold text-lo mt-2.5 py-1 disabled:opacity-40">
                           {idx >= review.foods.length - 1 ? 'Last one in the queue' : 'Skip for now →'}
                         </button>
                       </div>
@@ -558,7 +558,7 @@ export default function AdminFoods() {
 
                   <button
                     onClick={() => loadReview({ flagged: flaggedOnly })}
-                    className="text-[11px] font-bold text-emerald-600 mt-3">
+                    className="text-caption font-bold text-gold-deep mt-3">
                     Refresh
                   </button>
                 </>
@@ -570,10 +570,10 @@ export default function AdminFoods() {
         {/* AI search — only shown in list mode, lets admin identify a food via AI
             before reviewing/editing it in the same form used for manual adds. */}
         {mode === 'list' && (
-          <div className="bg-[#1A1C20] rounded-2xl border border-white/[0.08] px-4 py-3">
+          <div className="bg-surface rounded-2xl border border-white/[0.08] px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-bold text-stone-200">✨ Search with AI</span>
-              <span className="text-xs text-stone-500">Identify a food not yet in the database</span>
+              <span className="text-sm font-bold text-white">✨ Search with AI</span>
+              <span className="text-xs text-faint">Identify a food not yet in the database</span>
             </div>
             <div className="flex gap-2">
               <input
@@ -582,13 +582,13 @@ export default function AdminFoods() {
                 onKeyDown={e => { if (e.key === 'Enter') runAiSearch(); }}
                 placeholder="e.g. Ragi mudde, Brazil nut, Paneer tikka…"
                 disabled={aiLoading}
-                className="flex-1 px-3 py-2.5 bg-[#1A1C20] border border-white/[0.1] rounded-xl text-sm text-stone-100
-                  focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] disabled:opacity-50" />
+                className="flex-1 px-3 py-2.5 bg-surface border border-white/[0.1] rounded-xl text-sm text-white
+                  focus:outline-none focus:ring-2 focus:ring-gold/35 disabled:opacity-50" />
               <button onClick={runAiSearch} disabled={aiLoading || aiQuery.trim().length < 2}
                 /* White on #D4AF37 is about 1.9:1 — below any legibility bar,
                    and the only gold button in the app that wasn't charcoal.
                    Every other one ("+ Add Member", the AI bar) uses #121316. */
-                className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F0E2B6] disabled:opacity-50 disabled:cursor-not-allowed text-[#121316] font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
+                className="px-4 py-2.5 bg-gold hover:bg-gold-light disabled:opacity-50 disabled:cursor-not-allowed text-charcoal font-bold rounded-xl text-sm transition-colors whitespace-nowrap">
                 {aiLoading ? 'Identifying…' : 'Identify'}
               </button>
             </div>
@@ -605,7 +605,7 @@ export default function AdminFoods() {
                 : `Edit: ${editing?.name}`}
             </SectionTitle>
             {mode === 'add' && aiPrefill && (
-              <p className="text-xs text-stone-400 mb-3">
+              <p className="text-xs text-lo mb-3">
                 ✨ AI-identified — review the fields below, adjust anything that looks off, then save.
               </p>
             )}
@@ -629,39 +629,39 @@ export default function AdminFoods() {
           <>
             <input value={query} onChange={e => handleSearch(e.target.value)}
               placeholder="Search foods by name…"
-              className="w-full px-4 py-3 bg-[#1A1C20] border border-white/[0.1] rounded-2xl text-sm
-                focus:outline-none focus:ring-2 focus:ring-[rgba(212,175,55,0.35)] text-stone-800" />
+              className="w-full px-4 py-3 bg-surface border border-white/[0.1] rounded-2xl text-sm
+                focus:outline-none focus:ring-2 focus:ring-gold/35 text-white" />
 
             {loading ? (
               <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                <div className="w-8 h-8 border-4 border-gold/55 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
               <>
                 <div className="space-y-2">
                   {foods.length === 0 ? (
-                    <p className="text-center text-stone-400 py-12">No foods found. Try a different search or add one.</p>
+                    <p className="text-center text-lo py-12">No foods found. Try a different search or add one.</p>
                   ) : foods.map(food => (
-                    <div key={food.id} className="bg-[#1A1C20] rounded-2xl border border-white/[0.08] px-4 py-3 flex items-center gap-3 group shadow-sm">
+                    <div key={food.id} className="bg-surface rounded-2xl border border-white/[0.08] px-4 py-3 flex items-center gap-3 group shadow-sm">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-stone-800 text-sm truncate">{food.name}</span>
-                          {food.verified && <span className="text-xs bg-[rgba(212,175,55,0.15)] text-[#D4AF37] px-1.5 py-0.5 rounded font-semibold">✓</span>}
-                          <span className="text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">{food.category}</span>
-                          <span className="text-xs text-stone-400">{food.source}</span>
+                          <span className="font-semibold text-white text-sm truncate">{food.name}</span>
+                          {food.verified && <span className="text-xs bg-gold/15 text-gold px-1.5 py-0.5 rounded font-semibold">✓</span>}
+                          <span className="text-xs bg-charcoal text-faint px-1.5 py-0.5 rounded">{food.category}</span>
+                          <span className="text-xs text-lo">{food.source}</span>
                         </div>
-                        {food.name_local && <p className="text-xs text-stone-400 mt-0.5">{food.name_local}</p>}
+                        {food.name_local && <p className="text-xs text-lo mt-0.5">{food.name_local}</p>}
                         {food.kcal_per_100g && (
-                          <p className="text-xs font-semibold text-orange-500 mt-0.5">{Math.round(food.kcal_per_100g)} kcal/100g</p>
+                          <p className="text-xs font-semibold text-orange-300 mt-0.5">{Math.round(food.kcal_per_100g)} kcal/100g</p>
                         )}
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => { setEditing(food); setMode('edit'); }}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-[#D4AF37] hover:bg-[rgba(212,175,55,0.08)] transition-colors text-sm">
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-lo hover:text-gold hover:bg-gold/[0.08] transition-colors text-sm">
                           ✏️
                         </button>
                         <button onClick={() => handleDelete(food)}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors text-sm">
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-lo hover:text-red-400 hover:bg-red-400/[0.08] transition-colors text-sm">
                           🗑
                         </button>
                       </div>
@@ -673,12 +673,12 @@ export default function AdminFoods() {
                 {pages > 1 && (
                   <div className="flex items-center justify-between pt-2">
                     <button onClick={() => load(query, page - 1)} disabled={page <= 1}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-mid bg-surface rounded-xl border border-hair disabled:opacity-40 hover:bg-white/[0.06] transition-colors">
                       ← Prev
                     </button>
-                    <span className="text-xs text-stone-500 font-medium">Page {page} of {pages}</span>
+                    <span className="text-xs text-faint font-medium">Page {page} of {pages}</span>
                     <button onClick={() => load(query, page + 1)} disabled={page >= pages}
-                      className="px-4 py-2 text-sm font-semibold text-stone-600 bg-[#1A1C20] rounded-xl border border-white/[0.07] disabled:opacity-40 hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2 text-sm font-semibold text-mid bg-surface rounded-xl border border-hair disabled:opacity-40 hover:bg-white/[0.06] transition-colors">
                       Next →
                     </button>
                   </div>

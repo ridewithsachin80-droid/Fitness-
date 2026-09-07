@@ -39,9 +39,9 @@ function shortDate(str) {
 function WeightTip({ active, payload }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
-      <p className="font-bold text-emerald-600">{payload[0].value} kg</p>
-      <p className="text-stone-400">{payload[0].payload.date}</p>
+    <div className="bg-surface border border-hair rounded-xl px-3 py-2 shadow-sm text-xs">
+      <p className="font-bold text-gold-deep">{payload[0].value} kg</p>
+      <p className="text-lo">{payload[0].payload.date}</p>
     </div>
   );
 }
@@ -50,9 +50,9 @@ function ComplianceTip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const v = payload[0].value;
   return (
-    <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-3 py-2 shadow-sm text-xs">
-      <p className={`font-bold ${v >= 75 ? 'text-emerald-600' : v >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{v}%</p>
-      <p className="text-stone-400">{payload[0].payload.date}</p>
+    <div className="bg-surface border border-hair rounded-xl px-3 py-2 shadow-sm text-xs">
+      <p className={`font-bold ${v >= 75 ? 'text-gold-deep' : v >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{v}%</p>
+      <p className="text-lo">{payload[0].payload.date}</p>
     </div>
   );
 }
@@ -85,24 +85,24 @@ function PastLogModal({ log, onClose }) {
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2">
       <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[88vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair flex-shrink-0">
           <div>
-            <h3 className="font-bold text-stone-800 text-base">{dateStr}</h3>
+            <h3 className="font-bold text-white text-base">{dateStr}</h3>
             <div className="flex items-center gap-3 mt-1">
               {log.weight_kg && (
-                <span className="text-xs font-semibold text-emerald-600">⚖ {log.weight_kg} kg</span>
+                <span className="text-xs font-semibold text-gold-deep">⚖ {log.weight_kg} kg</span>
               )}
               {log.compliance_pct != null && (
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  log.compliance_pct >= 75 ? 'bg-emerald-100 text-emerald-700' :
-                  log.compliance_pct >= 50 ? 'bg-amber-100 text-amber-700' :
-                  'bg-red-100 text-red-600'}`}>
+                  log.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
+                  log.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' :
+                  'bg-red-400/[0.14] text-red-400'}`}>
                   {log.compliance_pct}% compliance
                 </span>
               )}
             </div>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-lo hover:text-white text-2xl leading-none">×</button>
         </div>
 
         {/* Scrollable body */}
@@ -111,10 +111,10 @@ function PastLogModal({ log, onClose }) {
           {/* Activities */}
           {checkedActs.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">🏃 Activities</p>
+              <p className="text-xs font-bold text-lo tracking-wider mb-2">🏃 Activities</p>
               <div className="flex flex-wrap gap-1.5">
                 {checkedActs.map(a => (
-                  <span key={a.id} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-full font-medium">
+                  <span key={a.id} className="text-xs bg-gold/[0.07] text-gold-light border border-gold/[0.14] px-2.5 py-1 rounded-full font-medium">
                     {a.icon} {a.label}
                   </span>
                 ))}
@@ -125,10 +125,10 @@ function PastLogModal({ log, onClose }) {
           {/* ACV */}
           {checkedAcv.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">🍶 ACV</p>
+              <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 ACV</p>
               <div className="flex flex-wrap gap-1.5">
                 {checkedAcv.map(a => (
-                  <span key={a.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full font-medium">
+                  <span key={a.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
                     {a.label}
                   </span>
                 ))}
@@ -139,15 +139,15 @@ function PastLogModal({ log, onClose }) {
           {/* Food */}
           {foodItems.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">
-                🥗 Food {kcal > 0 && <span className="font-normal text-orange-500 normal-case">· {kcal} kcal</span>}
+              <p className="text-xs font-bold text-lo tracking-wider mb-2">
+                🥗 Food {kcal > 0 && <span className="font-normal text-orange-300 normal-case">· {kcal} kcal</span>}
               </p>
               <div className="space-y-1">
                 {foodItems.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-stone-50 last:border-0">
-                    <span className="text-stone-700">{item.name || item.food_name}</span>
-                    <span className="text-stone-400 text-xs">{item.grams}g
-                      {item.meal && <span className="ml-1 text-stone-300">· {item.meal}</span>}
+                  <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-hair last:border-0">
+                    <span className="text-white">{item.name || item.food_name}</span>
+                    <span className="text-lo text-xs">{item.grams}g
+                      {item.meal && <span className="ml-1 text-ghost">· {item.meal}</span>}
                     </span>
                   </div>
                 ))}
@@ -158,18 +158,18 @@ function PastLogModal({ log, onClose }) {
           {/* Water */}
           {log.water_ml > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">💧 Water</p>
-              <p className="text-sm text-blue-600 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
+              <p className="text-xs font-bold text-lo tracking-wider mb-1">💧 Water</p>
+              <p className="text-sm text-blue-400 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
             </div>
           )}
 
           {/* Supplements */}
           {checkedSupps.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">💊 Supplements</p>
+              <p className="text-xs font-bold text-lo tracking-wider mb-2">💊 Supplements</p>
               <div className="flex flex-wrap gap-1.5">
                 {checkedSupps.map(s => (
-                  <span key={s.id} className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full font-medium">
+                  <span key={s.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
                     {s.label}
                   </span>
                 ))}
@@ -180,12 +180,12 @@ function PastLogModal({ log, onClose }) {
           {/* Sleep */}
           {(sleep.bedtime || sleep.waketime) && (
             <div>
-              <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">🌙 Sleep</p>
-              <p className="text-sm text-stone-600">
+              <p className="text-xs font-bold text-lo tracking-wider mb-1">🌙 Sleep</p>
+              <p className="text-sm text-mid">
                 {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
                 {sleep.bedtime && sleep.waketime && ' → '}
                 {sleep.waketime && `Wake ${sleep.waketime?.slice(0,5)}`}
-                {sleep.quality && <span className="ml-2 text-amber-500">{'★'.repeat(sleep.quality)}</span>}
+                {sleep.quality && <span className="ml-2 text-amber-400">{'★'.repeat(sleep.quality)}</span>}
               </p>
             </div>
           )}
@@ -193,13 +193,13 @@ function PastLogModal({ log, onClose }) {
           {/* Notes */}
           {log.notes && (
             <div>
-              <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">📝 Notes</p>
-              <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{log.notes}</p>
+              <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
+              <p className="text-sm text-mid whitespace-pre-wrap leading-relaxed">{log.notes}</p>
             </div>
           )}
 
           {!checkedActs.length && !foodItems.length && !log.weight_kg && (
-            <p className="text-sm text-stone-400 italic text-center py-4">No data recorded this day.</p>
+            <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>
           )}
         </div>
       </div>
@@ -232,18 +232,18 @@ function StatBox({ value, label, sub, accent = false, tone = null }) {
   return (
     <div className={`rounded-2xl px-4 py-3 border ${
       accent
-        ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.22)]'
-        : 'bg-[#16171A] border-white/[0.07]'
+        ? 'bg-gold/[0.07] border-gold/[0.22]'
+        : 'bg-[#16171A] border-hair'
     }`}>
-      <div className={`font-display text-[26px] leading-none font-semibold ${
+      <div className={`font-display text-num leading-none font-semibold ${
         accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>
         {value}
       </div>
-      <div className="text-[12px] font-medium mt-1.5 text-[#A9B0BF]">{label}</div>
+      <div className="text-note font-medium mt-1.5 text-[#A9B0BF]">{label}</div>
       {sub && (
         <div className="flex items-center gap-1.5 mt-1">
           {dot && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />}
-          <span className="text-[11.5px] text-[#7E8596]">{sub}</span>
+          <span className="text-micro text-lo">{sub}</span>
         </div>
       )}
     </div>
@@ -261,8 +261,8 @@ function ChartEmpty({ icon, title, need }) {
     <Card>
       <SectionTitle icon={icon}>{title}</SectionTitle>
       <div className="text-center py-6">
-        <p className="text-sm text-[#7E8596]">{need}</p>
-        <p className="text-xs text-[#4A4E5A] mt-1">Your chart appears here automatically.</p>
+        <p className="text-sm text-lo">{need}</p>
+        <p className="text-xs text-ghost mt-1">Your chart appears here automatically.</p>
       </div>
     </Card>
   );
@@ -391,7 +391,7 @@ export default function Progress() {
   const complianceColor = avg30 >= 75 ? 'emerald' : avg30 >= 50 ? 'amber' : 'orange';
 
   return (
-    <div className="min-h-screen bg-[#121316] font-sans">
+    <div className="min-h-screen bg-charcoal font-sans">
 
       {/* Header */}
       <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
@@ -412,9 +412,9 @@ export default function Progress() {
               render nothing at all, so a new member had no idea a goal even
               existed — let alone that their coach sets it. */}
           {journeyPct === null && (
-            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07]">
+            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-hair">
               <p className="text-sm text-white font-medium">No goal set yet</p>
-              <p className="text-xs text-[#9EA3B0] mt-1 leading-relaxed">
+              <p className="text-xs text-mid mt-1 leading-relaxed">
                 {!latestW
                   ? 'Log your weight and ask your coach to set your target — your progress bar appears here.'
                   : 'Ask your coach to set your target weight and you\'ll see how far along you are.'}
@@ -422,20 +422,20 @@ export default function Progress() {
             </div>
           )}
           {journeyPct !== null && (
-            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-white/[0.07]">
+            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-hair">
               <div className="flex justify-between text-xs text-blue-200 mb-2">
                 <span>Start: {startW} kg</span>
                 <span className="font-bold text-white">{journeyPct}% to goal</span>
                 <span>Goal: {targetW} kg</span>
               </div>
-              <div className="h-3 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-3 bg-white/[0.10] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-300 rounded-full transition-all duration-700"
+                  className="h-full bg-gradient-to-r from-gold to-gold-light rounded-full transition-all duration-700"
                   style={{ width: `${journeyPct}%` }}
                 />
               </div>
               {lostKg !== null && lostKg > 0 && (
-                <p className="text-center text-xs text-[#D4AF37] mt-2 font-semibold">
+                <p className="text-center text-xs text-gold mt-2 font-semibold">
                   🎉 {lostKg} kg lost · {toGoKg} kg to go
                 </p>
               )}
@@ -500,8 +500,8 @@ export default function Progress() {
             </ResponsiveContainer>
             {lostKg !== null && (
               <div className="mt-2 flex justify-between text-xs px-1">
-                <span className="text-stone-400">Started {startW} kg</span>
-                <span className={`font-bold ${lostKg > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                <span className="text-lo">Started {startW} kg</span>
+                <span className={`font-bold ${lostKg > 0 ? 'text-gold-deep' : 'text-red-400'}`}>
                   {lostKg > 0 ? `↓ ${lostKg} kg lost` : `↑ ${Math.abs(lostKg)} kg gained`}
                 </span>
               </div>
@@ -531,7 +531,7 @@ export default function Progress() {
                 />
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex justify-between text-xs text-stone-400 mt-1 px-1">
+            <div className="flex justify-between text-xs text-lo mt-1 px-1">
               <span>Each bar = 1 day</span>
               <span>Dashed line = 75% target</span>
             </div>
@@ -553,7 +553,7 @@ export default function Progress() {
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"/>Fat</span>
             </div>
             {/* Calories bar */}
-            <p className="text-xs text-stone-400 font-medium mb-1">Calories (kcal)</p>
+            <p className="text-xs text-lo font-medium mb-1">Calories (kcal)</p>
             <ResponsiveContainer width="100%" height={90}>
               <BarChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -569,7 +569,7 @@ export default function Progress() {
             </ResponsiveContainer>
 
             {/* Macros line chart */}
-            <p className="text-xs text-stone-400 font-medium mt-3 mb-1">Protein · Carbs · Fat (g)</p>
+            <p className="text-xs text-lo font-medium mt-3 mb-1">Protein · Carbs · Fat (g)</p>
             <ResponsiveContainer width="100%" height={110}>
               <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -590,12 +590,12 @@ export default function Progress() {
               }), { kcal: 0, pro: 0, carb: 0, fat: 0 });
               const n = nutritionTrend.length;
               return (
-                <div className="flex gap-3 text-xs mt-2 px-1 pt-2 border-t border-stone-100 flex-wrap">
-                  <span className="text-stone-400">Avg/day:</span>
-                  <span className="font-bold text-orange-500">{Math.round(avg.kcal/n)} kcal</span>
-                  <span className="text-blue-500">P {(avg.pro/n).toFixed(1)}g</span>
-                  <span className="text-amber-500">C {(avg.carb/n).toFixed(1)}g</span>
-                  <span className="text-amber-500">F {(avg.fat/n).toFixed(1)}g</span>
+                <div className="flex gap-3 text-xs mt-2 px-1 pt-2 border-t border-hair flex-wrap">
+                  <span className="text-lo">Avg/day:</span>
+                  <span className="font-bold text-orange-300">{Math.round(avg.kcal/n)} kcal</span>
+                  <span className="text-blue-300">P {(avg.pro/n).toFixed(1)}g</span>
+                  <span className="text-amber-400">C {(avg.carb/n).toFixed(1)}g</span>
+                  <span className="text-amber-400">F {(avg.fat/n).toFixed(1)}g</span>
                 </div>
               );
             })()}
@@ -608,14 +608,14 @@ export default function Progress() {
             <SectionTitle icon="🧪">Latest Lab Values</SectionTitle>
             <div className="space-y-2 mt-1">
               {labHighlights.map((l, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-stone-50 last:border-0">
+                <div key={i} className="flex items-center justify-between py-2 border-b border-hair last:border-0">
                   <div>
-                    <span className="text-sm font-medium text-stone-700">{l.test_name}</span>
-                    {l.unit && <span className="text-xs text-stone-400 ml-1">{l.unit}</span>}
+                    <span className="text-sm font-medium text-white">{l.test_name}</span>
+                    {l.unit && <span className="text-xs text-lo ml-1">{l.unit}</span>}
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-bold text-blue-600">{l.value}</span>
-                    <div className="text-xs text-stone-400">{new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</div>
+                    <span className="text-sm font-bold text-blue-400">{l.value}</span>
+                    <div className="text-xs text-lo">{new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</div>
                   </div>
                 </div>
               ))}
@@ -628,7 +628,7 @@ export default function Progress() {
         {sorted.length > 0 && (
           <Card>
             <SectionTitle icon="📅">Log History</SectionTitle>
-            <p className="text-xs text-stone-400 mb-3">Tap any day to see the full log</p>
+            <p className="text-xs text-lo mb-3">Tap any day to see the full log</p>
             <div className="space-y-1.5">
               {[...sorted].reverse().slice(0, 30).map(log => {
                 const d = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00');
@@ -637,24 +637,24 @@ export default function Progress() {
                 return (
                   <button key={log.log_date} onClick={() => setSelectedLog(log)}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl
-                      bg-stone-50 hover:bg-white/[0.05] transition-colors text-left group">
+                      bg-surface hover:bg-white/[0.05] transition-colors text-left group">
                     <div className="w-14 flex-shrink-0">
-                      <p className="text-xs font-bold text-stone-700">{label.split(', ')[1] || label}</p>
-                      <p className="text-xs text-stone-400">{label.split(', ')[0]}</p>
+                      <p className="text-xs font-bold text-white">{label.split(', ')[1] || label}</p>
+                      <p className="text-xs text-lo">{label.split(', ')[0]}</p>
                     </div>
-                    <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${
-                        pct >= 75 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'
+                        pct >= 75 ? 'bg-gold-deep' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'
                       }`} style={{ width: `${pct || 0}%` }} />
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {log.weight_kg && (
-                        <span className="text-xs font-semibold text-stone-500">{log.weight_kg}kg</span>
+                        <span className="text-xs font-semibold text-faint">{log.weight_kg}kg</span>
                       )}
                       <span className={`text-xs font-bold w-10 text-right ${
-                        pct >= 75 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'
+                        pct >= 75 ? 'text-gold-deep' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
                       }`}>{pct != null ? `${pct}%` : '—'}</span>
-                      <svg className="w-3.5 h-3.5 text-stone-300 group-hover:text-stone-500 transition-colors"
+                      <svg className="w-3.5 h-3.5 text-ghost group-hover:text-mid transition-colors"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
@@ -669,33 +669,33 @@ export default function Progress() {
         {/* Motivational summary */}
         <Card>
           <SectionTitle icon="🌟">Your Journey</SectionTitle>
-          <div className="space-y-2 text-sm text-stone-600">
+          <div className="space-y-2 text-sm text-mid">
             {streak >= 7 && (
-              <div className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-orange-400/[0.08] px-3 py-2 rounded-xl">
                 <span className="text-lg">🔥</span>
                 <span><strong>{streak}-day streak!</strong> You're building an unstoppable habit.</span>
               </div>
             )}
             {lostKg !== null && lostKg >= 1 && (
-              <div className="flex items-center gap-2 bg-emerald-50 px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl">
                 <span className="text-lg">🏆</span>
                 <span><strong>{lostKg} kg lost</strong> since you started. Keep going!</span>
               </div>
             )}
             {avg30 >= 80 && (
-              <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-blue-400/[0.08] px-3 py-2 rounded-xl">
                 <span className="text-lg">⭐</span>
                 <span><strong>{avg30}% compliance</strong> over 30 days — outstanding consistency.</span>
               </div>
             )}
             {journeyPct !== null && journeyPct >= 25 && (
-              <div className="flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
                 <span className="text-lg">🎯</span>
                 <span><strong>{journeyPct}%</strong> of the way to your {targetW} kg goal!</span>
               </div>
             )}
             {streak < 3 && avg30 < 50 && (
-              <div className="flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
                 <span className="text-lg">💪</span>
                 <span>Every day counts. Log today and start your streak!</span>
               </div>

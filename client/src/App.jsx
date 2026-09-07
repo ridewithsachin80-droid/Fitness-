@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useOfflineSync } from './hooks/useOfflineQueue';
@@ -21,6 +21,11 @@ import { onboardingDecision } from './utils/onboardingGate';
 import HandsFree from './components/HandsFree';
 import { refreshRequestBody, sessionLossReport } from './utils/session';
 
+// The primitive kit demo page. `import.meta.env.DEV` is a compile-time
+// constant, so in a production build this is `null` and Vite drops the page
+// (and everything only it imports) from the bundle.
+const DevKit = import.meta.env.DEV ? lazy(() => import('./pages/DevKit')) : null;
+
 // Preserves the member id when redirecting an old /monitor/:id link to /coach/:id.
 function LegacyMonitorRedirect() {
   const { memberId } = useParams();
@@ -31,8 +36,8 @@ function PrivateRoute({ children, roles }) {
   const { user, isRestoring } = useAuthStore();
   if (isRestoring) {
     return (
-      <div className="min-h-screen bg-[#121316] flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-charcoal flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -155,9 +160,9 @@ export default function App() {
     // the server, or the ask failed and the member gets a retry.
     if (decision === 'wait') {
       return (
-        <div className="min-h-screen bg-[#121316] flex flex-col items-center justify-center gap-5 px-8 text-center">
+        <div className="min-h-screen bg-charcoal flex flex-col items-center justify-center gap-5 px-8 text-center">
           {!checkFailed ? (
-            <div className="w-8 h-8 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
               <p className="text-[#E8E6E1] text-base">
@@ -168,7 +173,7 @@ export default function App() {
               </p>
               <button
                 onClick={() => setCheckAttempt((n) => n + 1)}
-                className="mt-1 px-6 py-3 rounded-xl bg-[#D4AF37] text-[#121316] font-semibold"
+                className="mt-1 px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold"
               >
                 Try again
               </button>
@@ -208,6 +213,7 @@ export default function App() {
         <Route path="/admin/foods" element={<PrivateRoute roles={['admin']}><AdminFoods /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
         <Route path="/devices" element={<PrivateRoute><DeviceConnect /></PrivateRoute>} />
+        {DevKit && <Route path="/dev/kit" element={<Suspense fallback={null}><DevKit /></Suspense>} />}
         <Route path="*" element={
           <Navigate to={!user ? '/login' : user.role === 'patient' ? '/' : user.role === 'admin' ? '/admin' : '/coach'} replace />
         } />

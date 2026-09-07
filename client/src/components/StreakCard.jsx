@@ -70,12 +70,12 @@ export default function StreakCard() {
   if (!data || (data.streak === 0 && data.cells.every(c => !c.logged))) return null;
 
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#1A1C20] px-4 py-3 mb-3">
+    <div className="rounded-2xl border border-hair bg-surface px-4 py-3 mb-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold text-[#9EA3B0]">
+        <span className="text-xs font-bold text-mid">
           🔥 {data.streak > 0 ? `${data.streak}-day streak` : 'Logging streak'}
         </span>
-        <span className="text-[10px] text-[#7E8596]">last 14 days</span>
+        <span className="text-eyebrow text-lo">last 14 days</span>
       </div>
       <div className="flex gap-[3px]">
         {data.cells.map(c => (
@@ -85,7 +85,7 @@ export default function StreakCard() {
         ))}
       </div>
       {milestone && (
-        <p className="text-[11px] text-[#D4AF37] font-semibold mt-2">
+        <p className="text-caption text-gold font-semibold mt-2">
           {milestone} days straight — that consistency is what moves the scale. Keep it rolling.
         </p>
       )}

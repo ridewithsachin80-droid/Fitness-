@@ -26,15 +26,15 @@ import { plural } from '../constants';
 function Row({ b }) {
   return (
     <div className="flex items-center gap-2.5 py-1.5">
-      <span className="text-[11px] text-[#9EA3B0] w-[104px] flex-shrink-0 truncate">{b.label}</span>
+      <span className="text-caption text-mid w-[104px] flex-shrink-0 truncate">{b.label}</span>
 
       {b.enough_data ? (
         <>
           <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-            <div className="h-full bg-[#D4AF37] rounded-full"
+            <div className="h-full bg-gold rounded-full"
               style={{ width: `${Math.max(2, b.rate_pct)}%` }} />
           </div>
-          <span className="text-[11px] font-bold text-[#F0E2B6] w-[62px] text-right flex-shrink-0">
+          <span className="text-caption font-bold text-gold-light w-[62px] text-right flex-shrink-0">
             {b.rate_pct}% of {b.sent}
           </span>
         </>
@@ -42,10 +42,10 @@ function Row({ b }) {
         <>
           {/* No bar at all. A 5%-wide bar for "3 sent" still reads as a
               measurement, and the point is that there isn't one yet. */}
-          <span className="flex-1 text-[11px] text-[#7E8596] italic truncate">
+          <span className="flex-1 text-caption text-lo italic truncate">
             {b.sent} sent — too few to say
           </span>
-          <span className="text-[11px] text-[#7E8596] w-[62px] text-right flex-shrink-0">
+          <span className="text-caption text-lo w-[62px] text-right flex-shrink-0">
             {b.responded}/{b.sent}
           </span>
         </>
@@ -58,7 +58,7 @@ function Group({ title, buckets }) {
   if (!buckets?.length) return null;
   return (
     <div className="mt-3">
-      <p className="text-[10px] font-bold text-[#7E8596] mb-0.5">{title}</p>
+      <p className="text-eyebrow font-bold text-lo mb-0.5">{title}</p>
       {buckets.map(b => <Row key={b.label} b={b} />)}
     </div>
   );
@@ -88,35 +88,35 @@ export default function NudgeEffectiveness() {
   useEffect(() => { if (open && !data && !failed) load(); }, [open, data, failed, load]);
 
   return (
-    <div className="bg-[#1A1C20] border border-white/[0.07] rounded-2xl px-4 py-3">
+    <div className="bg-surface border border-hair rounded-2xl px-4 py-3">
       <div className="flex items-center justify-between">
         <div className="min-w-0">
           <p className="text-sm font-bold text-white">Did the nudges work?</p>
-          <p className="text-[10px] text-[#7E8596]">
+          <p className="text-eyebrow text-lo">
             How often a member logged in the 48h after you messaged them
           </p>
         </div>
         <button onClick={() => setOpen(v => !v)}
           style={{ minHeight: 32 }}
-          className="text-[11px] font-bold text-[#D4AF37] px-3 rounded-xl
-            bg-[rgba(212,175,55,0.10)] border border-[rgba(212,175,55,0.22)] flex-shrink-0">
+          className="text-caption font-bold text-gold px-3 rounded-xl
+            bg-gold/10 border border-gold/[0.22] flex-shrink-0">
           {open ? 'Hide' : 'Show'}
         </button>
       </div>
 
       {open && (
         <div className="mt-3">
-          {loading && <p className="text-[11px] text-[#7E8596] text-center py-3">Loading…</p>}
+          {loading && <p className="text-caption text-lo text-center py-3">Loading…</p>}
 
           {!loading && failed && (
             <div className="text-center py-3">
-              <p className="text-[11px] text-red-300">Couldn't load this just now.</p>
-              <button onClick={load} className="text-[11px] font-bold text-[#D4AF37] mt-1">Try again</button>
+              <p className="text-caption text-red-300">Couldn't load this just now.</p>
+              <button onClick={load} className="text-caption font-bold text-gold mt-1">Try again</button>
             </div>
           )}
 
           {!loading && !failed && data && data.overall.sent === 0 && (
-            <p className="text-[11px] text-[#9EA3B0] leading-relaxed py-2">
+            <p className="text-caption text-mid leading-relaxed py-2">
               Nothing recorded yet. Every nudge you send from Today's gaps gets
               counted here from now on — it takes a few weeks of sends before
               there is enough to read anything into.
@@ -125,16 +125,16 @@ export default function NudgeEffectiveness() {
 
           {!loading && !failed && data && data.overall.sent > 0 && (
             <>
-              <div className="bg-[#121316] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                <p className="text-[11px] text-[#9EA3B0]">
+              <div className="bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2.5">
+                <p className="text-caption text-mid">
                   {data.overall.enough_data ? (
                     <>
-                      <span className="text-lg font-extrabold text-[#F0E2B6]">{data.overall.rate_pct}%</span>
+                      <span className="text-lg font-extrabold text-gold-light">{data.overall.rate_pct}%</span>
                       {' '}of your {data.overall.sent} nudges were followed by a log.
                     </>
                   ) : (
                     <>
-                      <span className="text-lg font-extrabold text-[#F0E2B6]">{data.overall.sent}</span>
+                      <span className="text-lg font-extrabold text-gold-light">{data.overall.sent}</span>
                       {' '}{plural(data.overall.sent, 'nudge')} sent so far,
                       {' '}{data.overall.responded} followed by a log. That's not enough
                       to work out a rate yet — {data.min_bucket} is where a percentage
@@ -148,14 +148,14 @@ export default function NudgeEffectiveness() {
               <Group title="By hour sent (IST)"  buckets={data.by_hour} />
               <Group title="By channel"          buckets={data.by_channel} />
 
-              <p className="text-[10px] text-[#7E8596] leading-relaxed mt-3">
+              <p className="text-eyebrow text-lo leading-relaxed mt-3">
                 "Followed by a log" means they saved something within
                 {' '}{data.response_window_hours}h of your message. It doesn't prove the
                 message caused it — someone about to log anyway counts, and someone
                 who reads it and goes for a walk without logging doesn't.
               </p>
 
-              <button onClick={load} className="text-[11px] font-bold text-[#D4AF37] mt-2">
+              <button onClick={load} className="text-caption font-bold text-gold mt-2">
                 Refresh
               </button>
             </>

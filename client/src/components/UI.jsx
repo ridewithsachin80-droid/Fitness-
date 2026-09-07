@@ -89,9 +89,9 @@ function SectionGlyph({ name }) {
 export function SectionTitle({ children, icon, tooltip }) {
   const [show, setShow] = useState(false);
   return (
-    <div className="flex items-center gap-2 mb-3 text-[#8C93A3]">
+    <div className="flex items-center gap-2 mb-3 text-mute">
       {icon && <SectionGlyph name={icon} />}
-      <h3 className="font-semibold text-[13px] tracking-[0.005em] text-[#A9B0BF] flex-1">
+      <h3 className="font-semibold text-body-sm tracking-[0.005em] text-[#A9B0BF] flex-1">
         {children}
       </h3>
       {tooltip && (
@@ -135,12 +135,12 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
       className={`flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer select-none
         transition-all duration-150 border ${
           checked
-            ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.20)]'
-            : 'bg-[#1A1C20] border-white/[0.07] hover:border-white/[0.14]'
+            ? 'bg-gold/[0.07] border-gold/20'
+            : 'bg-surface border-hair hover:border-white/[0.14]'
         }`}>
       <div style={{ width: 24, height: 24, minWidth: 24 }}
         className={`rounded-full border-2 flex-shrink-0 flex items-center justify-center
-          transition-all duration-150 ${checked ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-white/[0.2]'}`}>
+          transition-all duration-150 ${checked ? 'bg-gold border-gold' : 'border-white/[0.2]'}`}>
         {checked && (
           <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 12 12" fill="none">
             <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.2"
@@ -149,10 +149,10 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-medium leading-tight ${checked ? 'text-[#FFFFFF]' : 'text-[#FFFFFF]'}`}>
+        <div className={`text-sm font-medium leading-tight ${checked ? 'text-white' : 'text-white'}`}>
           {icon && <span className="mr-1">{icon}</span>}{label}
         </div>
-        {sub && <div className="text-xs text-[#7E8596] mt-0.5 leading-tight">{sub}</div>}
+        {sub && <div className="text-xs text-lo mt-0.5 leading-tight">{sub}</div>}
       </div>
       {checked && burnKcal > 0 && (
         <span className="flex-shrink-0 text-xs font-semibold text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">
@@ -173,23 +173,23 @@ export function OfflineBanner() {
     window.addEventListener('offline', goOffline);
     return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
   }, []);
-  if (justOnline) return <div className="bg-[#D4AF37] text-[#121316] text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
+  if (justOnline) return <div className="bg-gold text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
   if (!offline) return null;
-  return <div className="bg-amber-500/90 text-[#121316] text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
+  return <div className="bg-amber-500/90 text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
 }
 
 export function Spinner({ size = 'md', color = 'emerald' }) {
   const sizes  = { sm: 'w-4 h-4 border-2', md: 'w-6 h-6 border-2', lg: 'w-8 h-8 border-[3px]' };
-  const colors = { emerald: 'border-[#D4AF37]/30 border-t-[#D4AF37]', white: 'border-white/30 border-t-white', stone: 'border-white/10 border-t-white/40' };
+  const colors = { emerald: 'border-gold/30 border-t-gold', white: 'border-white/30 border-t-white', stone: 'border-white/10 border-t-white/40' };
   return <div className={`rounded-full animate-spin ${sizes[size]} ${colors[color]}`} />;
 }
 
 export function PageLoader() {
   return (
-    <div className="min-h-screen bg-[#121316] flex items-center justify-center">
+    <div className="min-h-screen bg-charcoal flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <Spinner size="lg" />
-        <p className="text-[#7E8596] text-sm font-medium tracking-wide">Loading…</p>
+        <p className="text-lo text-sm font-medium tracking-wide">Loading…</p>
       </div>
     </div>
   );
@@ -222,10 +222,10 @@ export function StatPill({ value, label, color = 'stone', accent = false }) {
   const isAccent = accent || color === 'emerald';
   return (
     <div className={`text-center rounded-xl py-2 px-2 ${
-      isAccent ? 'bg-[rgba(212,175,55,0.08)]' : 'bg-white/[0.045]'}`}>
-      <div className={`font-display text-[15px] leading-tight font-medium tabular-nums ${
+      isAccent ? 'bg-gold/[0.08]' : 'bg-white/[0.045]'}`}>
+      <div className={`font-display text-body leading-tight font-medium tabular-nums ${
         isAccent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{value}</div>
-      <div className="text-[11px] text-[#8C93A3] mt-1">{label}</div>
+      <div className="text-caption text-mute mt-1">{label}</div>
     </div>
   );
 }
@@ -272,10 +272,10 @@ export function MemberBottomNav() {
     <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
       style={{ minHeight: 56, flex: 1 }}
       className={`flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${
-        tab.active ? 'text-[#D4AF37]' : 'text-[#7E8596] hover:text-[#9EA3B0]'}`}>
+        tab.active ? 'text-gold' : 'text-lo hover:text-mid'}`}>
       {tab.icon}
-      <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-      {tab.active && <div className="w-1 h-1 bg-[#D4AF37] rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
+      <span className="text-eyebrow font-semibold tracking-wide">{tab.label}</span>
+      {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
     </button>
   );
 
@@ -298,8 +298,8 @@ export function MemberBottomNav() {
                 onClick={openChatFromNav}
                 aria-label="Log with AI Chat"
                 style={{ width: 56, height: 56, marginTop: -22 }}
-                className="orb-breathe rounded-full bg-gradient-to-br from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37]
-                  flex items-center justify-center border-4 border-[#121316]
+                className="orb-breathe rounded-full bg-gradient-to-br from-gold-light via-gold to-gold-dark
+                  flex items-center justify-center border-4 border-charcoal
                   active:scale-90 transition-transform">
                 {/* Drawn, not an emoji. This is the most-tapped control in the
                     app and it was rendering as whatever spark the phone's font
@@ -344,10 +344,10 @@ export function BottomNav({ role }) {
             {tabs.map(tab => (
               <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
                 style={{ minHeight: 56, flex: 1 }}
-                className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-[#D4AF37]' : 'text-[#7E8596] hover:text-[#9EA3B0]'}`}>
+                className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-gold' : 'text-lo hover:text-mid'}`}>
                 {tab.icon}
-                <span className="text-[10px] font-semibold tracking-wide">{tab.label}</span>
-                {tab.active && <div className="w-1 h-1 bg-[#D4AF37] rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
+                <span className="text-eyebrow font-semibold tracking-wide">{tab.label}</span>
+                {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
               </button>
             ))}
           </div>
@@ -361,7 +361,7 @@ export function BackButton({ onClick, label = 'Back' }) {
   return (
     <button onClick={onClick}
       style={{ minHeight: 44 }}
-      className="flex items-center gap-1.5 text-[#7E8596] hover:text-[#9EA3B0] transition-colors text-sm font-medium py-1">
+      className="flex items-center gap-1.5 text-lo hover:text-mid transition-colors text-sm font-medium py-1">
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
       </svg>
@@ -398,3 +398,8 @@ export function QuickJump({ sections }) {
     </div>
   );
 }
+
+// ── Primitive kit (Sprint 0) ────────────────────────────────────────────────
+// The new building blocks live in components/primitives/. Re-exported here so a page
+// that already imports from UI.jsx can pick them up without a second import.
+export { Icon, ICON_NAMES, Eyebrow, Pressable, HeroNumber, Segmented, Sheet, Stagger, EmptyState, Skeleton, SkeletonText, SkeletonCard } from './primitives';

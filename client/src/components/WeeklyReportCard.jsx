@@ -67,53 +67,53 @@ export default function WeeklyReportCard() {
   ];
 
   return (
-    <div className="rounded-2xl border border-[rgba(212,175,55,0.3)] bg-[#1A1C20] p-4 mb-4">
+    <div className="rounded-2xl border border-gold/30 bg-surface p-4 mb-4">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-[10px] font-bold text-[#D4AF37]">
+        <p className="text-eyebrow font-bold text-gold">
           Your week · {fmtDate(report.week_start)}–{fmtDate(report.week_end)}
         </p>
-        {isNew && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#D4AF37] text-[#121316]">NEW</span>}
+        {isNew && <span className="text-tiny font-bold px-2 py-0.5 rounded-full bg-gold text-charcoal">NEW</span>}
       </div>
 
       {d.latestWeight != null && (
         <div className="flex items-baseline gap-2.5 mt-2">
-          <span className="text-[30px] font-bold text-white" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
+          <span className="text-num-lg font-bold text-white" style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
             {d.latestWeight} kg
           </span>
           {d.weekDelta != null && (
-            <span className={`text-sm font-semibold ${d.weekDelta < 0 ? 'text-emerald-400' : d.weekDelta > 0 ? 'text-amber-400' : 'text-[#9EA3B0]'}`}>
+            <span className={`text-sm font-semibold ${d.weekDelta < 0 ? 'text-gold-light' : d.weekDelta > 0 ? 'text-amber-400' : 'text-mid'}`}>
               {d.weekDelta < 0 ? '▼' : d.weekDelta > 0 ? '▲' : '—'} {Math.abs(d.weekDelta)} this week
             </span>
           )}
         </div>
       )}
       {(d.totalDelta != null || d.projectedDate) && (
-        <p className="text-[11.5px] text-[#9EA3B0] mt-0.5 mb-3">
+        <p className="text-micro text-mid mt-0.5 mb-3">
           {d.totalDelta != null && `${Math.abs(d.totalDelta)} kg ${d.totalDelta >= 0 ? 'down' : 'up'} since starting`}
           {d.totalDelta != null && d.projectedDate && ' · '}
-          {d.projectedDate && <>on current pace, {d.targetWeight} kg lands around <span className="text-[#D4AF37]">{fmtAround(d.projectedDate)}</span></>}
+          {d.projectedDate && <>on current pace, {d.targetWeight} kg lands around <span className="text-gold">{fmtAround(d.projectedDate)}</span></>}
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-2 mb-3">
         {tiles.map(([v, l]) => (
-          <div key={l} className="bg-[#121316] rounded-xl px-3 py-2.5">
+          <div key={l} className="bg-charcoal rounded-xl px-3 py-2.5">
             <p className="text-[16px] font-bold text-white leading-tight">{v}</p>
-            <p className="text-[9px] font-bold tracking-wider text-[#7E8596] mt-0.5">{l}</p>
+            <p className="text-tiny font-bold tracking-wider text-lo mt-0.5">{l}</p>
           </div>
         ))}
       </div>
 
       {d.win && (
-        <div className="rounded-xl border border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.08)] px-3 py-2 mb-3">
-          <p className="text-[12px] text-[#D4AF37]">🎉 Win of the week: {d.win}</p>
+        <div className="rounded-xl border border-gold/30 bg-gold/[0.08] px-3 py-2 mb-3">
+          <p className="text-note text-gold">🎉 Win of the week: {d.win}</p>
         </div>
       )}
 
       {report.coach_note && (
         <div className="mb-3">
-          <p className="text-[9px] font-bold text-[#7E8596] mb-1">From your coach</p>
-          <p className="text-[13px] text-[#EDEDF0] leading-relaxed italic"
+          <p className="text-tiny font-bold text-lo mb-1">From your coach</p>
+          <p className="text-body-sm text-bright leading-relaxed italic"
              style={{ fontFamily: 'Fraunces, Georgia, serif' }}>
             "{report.coach_note}"
           </p>
@@ -122,17 +122,17 @@ export default function WeeklyReportCard() {
 
       <button onClick={share} disabled={sharing}
         style={{ minHeight: 42 }}
-        className="w-full rounded-full border border-[rgba(212,175,55,0.4)] text-[#D4AF37] text-xs font-bold active:scale-[0.98] transition-transform">
+        className="w-full rounded-full border border-gold/40 text-gold text-xs font-bold active:scale-[0.98] transition-transform">
         {sharing ? 'Preparing…' : '↗ Share your week'}
       </button>
 
       {history.length > 0 && (
         <div className="mt-3 pt-2.5 border-t border-white/[0.06]">
-          <p className="text-[9px] font-bold tracking-wider text-[#7E8596] mb-1.5">Previous weeks</p>
+          <p className="text-tiny font-bold tracking-wider text-lo mb-1.5">Previous weeks</p>
           {history.slice(0, 4).map(h => (
             <div key={h.week_start} className="flex justify-between py-0.5">
-              <span className="text-[11px] text-[#9EA3B0]">{fmtDate(h.week_start)}–{fmtDate(h.week_end)}</span>
-              <span className="text-[11px] text-[#9EA3B0]">
+              <span className="text-caption text-mid">{fmtDate(h.week_start)}–{fmtDate(h.week_end)}</span>
+              <span className="text-caption text-mid">
                 {h.weekDelta != null ? `${h.weekDelta > 0 ? '+' : ''}${h.weekDelta} kg · ` : ''}{h.daysLogged ?? 0}/7 logged
               </span>
             </div>

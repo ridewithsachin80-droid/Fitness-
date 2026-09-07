@@ -95,9 +95,9 @@ function rowCompliance(log) {
 function WeightTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1A1C20] border border-white/[0.1] rounded-xl px-3 py-2 shadow-float text-xs">
-      <p className="text-stone-400 mb-0.5">{label}</p>
-      <p className="font-bold text-emerald-700">{payload[0].value} kg</p>
+    <div className="bg-surface border border-white/[0.1] rounded-xl px-3 py-2 shadow-float text-xs">
+      <p className="text-lo mb-0.5">{label}</p>
+      <p className="font-bold text-gold-light">{payload[0].value} kg</p>
     </div>
   );
 }
@@ -130,10 +130,10 @@ function AddLabModal({ memberId, onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="font-bold text-stone-800">Add Lab Value</h3>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
+          <h3 className="font-bold text-white">Add Lab Value</h3>
+          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
         </div>
         {[
           { key: 'test_date', label: 'Date',      type: 'date' },
@@ -144,15 +144,15 @@ function AddLabModal({ memberId, onClose, onAdded }) {
           { key: 'ref_max',   label: 'Ref max',   type: 'number', placeholder: '5.6' },
         ].map(({ key, label, type, placeholder }) => (
           <div key={key}>
-            <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">{label}</label>
+            <label className="block text-eyebrow text-lo font-semibold mb-1.5">{label}</label>
             <input type={type} value={form[key]} placeholder={placeholder}
               onChange={e => set(key, e.target.value)}
-              className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+              className="w-full border border-hair-med rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/[0.28]" />
           </div>
         ))}
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-red-400">{error}</p>}
         <button onClick={submit} disabled={saving}
-          className="w-full py-3 bg-[#D4AF37] hover:bg-[#F0E2B6] text-[#121316] font-bold rounded-xl transition-colors disabled:opacity-50">
+          className="w-full py-3 bg-gold hover:bg-gold-light text-charcoal font-bold rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Add Lab Value'}
         </button>
       </div>
@@ -185,23 +185,23 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between mb-1">
           <div>
-            <h3 className="font-bold text-stone-800">Set Login PIN</h3>
-            <p className="text-xs text-stone-400 mt-0.5">{memberName}</p>
+            <h3 className="font-bold text-white">Set Login PIN</h3>
+            <p className="text-xs text-lo mt-0.5">{memberName}</p>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
+          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
         </div>
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-[#D4AF37]">PIN set successfully!</p>
-            <p className="text-xs text-stone-400 mt-1">Member can now log in with this PIN</p>
+            <p className="font-semibold text-gold">PIN set successfully!</p>
+            <p className="text-xs text-lo mt-1">Member can now log in with this PIN</p>
           </div>
         ) : (
           <>
-            <p className="text-xs text-stone-500 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+            <p className="text-xs text-faint bg-amber-400/[0.08] border border-amber-400/15 rounded-xl px-3 py-2">
               Share this PIN with the member in person. They use it with their phone number to log in.
             </p>
             {[
@@ -209,25 +209,25 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
               { label: 'Confirm PIN', value: confirm, onChange: setConfirm },
             ].map(({ label, value, onChange }) => (
               <div key={label}>
-                <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">{label}</label>
+                <label className="block text-eyebrow text-lo font-semibold mb-1.5">{label}</label>
                 <div className="relative">
                   <input type={show ? 'text' : 'password'} inputMode="numeric" value={value}
                     onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
                     placeholder="Min. 4 characters"
-                    className="w-full border border-stone-200 rounded-xl px-3 py-2.5 pr-14 text-sm
-                      focus:outline-none focus:ring-2 focus:ring-emerald-300 tracking-widest" />
+                    className="w-full border border-hair-med rounded-xl px-3 py-2.5 pr-14 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-gold/[0.28] tracking-widest" />
                   {label === 'New PIN' && (
                     <button type="button" onClick={() => setShow(s => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400 font-medium">
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-lo font-medium">
                       {show ? 'Hide' : 'Show'}
                     </button>
                   )}
                 </div>
               </div>
             ))}
-            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !pin || !confirm}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
+              className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
                 rounded-xl transition-colors disabled:opacity-50">
               {saving ? 'Saving…' : 'Set PIN'}
             </button>
@@ -262,41 +262,41 @@ function AddNoteModal({ memberId, onClose, onAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-stone-800">Add Coach Note</h3>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
+          <h3 className="font-bold text-white">Add Coach Note</h3>
+          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
         </div>
 
         <div>
-          <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Date</label>
+          <label className="block text-eyebrow text-lo font-semibold mb-1.5">Date</label>
           <input type="date" value={form.note_date} max={today}
             onChange={e => set('note_date', e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-gold/[0.28]" />
         </div>
 
         <div>
-          <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Note</label>
+          <label className="block text-eyebrow text-lo font-semibold mb-1.5">Note</label>
           <textarea value={form.note} onChange={e => set('note', e.target.value)}
             rows={4} placeholder="Observations, progress notes, instructions…"
-            className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-              focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none" />
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-gold/[0.28] resize-none" />
         </div>
 
         <label className="flex items-center gap-3 cursor-pointer select-none">
           <input type="checkbox" checked={form.flagged} onChange={e => set('flagged', e.target.checked)}
             className="w-4 h-4 accent-red-500 rounded" />
           <div>
-            <span className="text-sm font-semibold text-stone-700">🚩 Flag for follow-up</span>
-            <p className="text-xs text-stone-400">Highlights this note for urgent attention</p>
+            <span className="text-sm font-semibold text-white">🚩 Flag for follow-up</span>
+            <p className="text-xs text-lo">Highlights this note for urgent attention</p>
           </div>
         </label>
 
-        {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+        {error && <p className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
 
         <button onClick={submit} disabled={saving || !form.note.trim()}
-          className="w-full py-3 bg-[#121316] hover:bg-[#121316] text-white font-bold
+          className="w-full py-3 bg-charcoal hover:bg-charcoal text-white font-bold
             rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Save Note'}
         </button>
@@ -333,47 +333,47 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
+      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-stone-800">Log Weight</h3>
-            <p className="text-xs text-stone-400 mt-0.5">{memberName}</p>
+            <h3 className="font-bold text-white">Log Weight</h3>
+            <p className="text-xs text-lo mt-0.5">{memberName}</p>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl">×</button>
+          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
         </div>
 
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold text-[#D4AF37]">Weight saved!</p>
+            <p className="font-semibold text-gold">Weight saved!</p>
           </div>
         ) : (
           <>
-            <p className="text-xs text-stone-500 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+            <p className="text-xs text-faint bg-blue-400/[0.08] border border-blue-400/15 rounded-xl px-3 py-2">
               Creates or updates the weight entry for the selected date. Other log data is preserved.
             </p>
             <div>
-              <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Date</label>
+              <label className="block text-eyebrow text-lo font-semibold mb-1.5">Date</label>
               <input type="date" value={date} max={todayStr}
                 onChange={e => setDate(e.target.value)}
-                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-gold/[0.28]" />
             </div>
             <div>
-              <label className="block text-[10px] text-[#7E8596] font-semibold mb-1.5">Weight (kg)</label>
+              <label className="block text-eyebrow text-lo font-semibold mb-1.5">Weight (kg)</label>
               <div className="flex items-center gap-2">
                 <input type="number" step="0.1" inputMode="decimal" value={weight}
                   onChange={e => setWeight(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && submit()}
                   placeholder="e.g. 84.5"
-                  className="flex-1 text-2xl font-bold text-center border-2 border-stone-200
-                    rounded-2xl py-3 focus:outline-none focus:ring-2 focus:ring-emerald-300 text-stone-800" />
-                <span className="text-stone-400 font-bold text-lg">kg</span>
+                  className="flex-1 text-2xl font-bold text-center border-2 border-hair-med
+                    rounded-2xl py-3 focus:outline-none focus:ring-2 focus:ring-gold/[0.28] text-white" />
+                <span className="text-lo font-bold text-lg">kg</span>
               </div>
             </div>
-            {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !weight}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#121316] font-bold
+              className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
                 rounded-xl transition-colors disabled:opacity-50">
               {saving ? 'Saving…' : 'Save Weight'}
             </button>
@@ -664,10 +664,10 @@ export default function Coach() {
 
   if (loading) return <PageLoader />;
   if (!data)   return (
-    <div className="min-h-screen bg-[#121316] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-charcoal flex items-center justify-center p-4">
       <div className="text-center">
-        <p className="text-[#9EA3B0] mb-4">Member not found or not assigned to you.</p>
-        <button onClick={() => navigate('/coach')} className="text-[#D4AF37] font-semibold">← Back</button>
+        <p className="text-mid mb-4">Member not found or not assigned to you.</p>
+        <button onClick={() => navigate('/coach')} className="text-gold font-semibold">← Back</button>
       </div>
     </div>
   );
@@ -739,15 +739,15 @@ export default function Coach() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#121316]">
+    <div className="min-h-screen bg-charcoal">
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#1A1C20] to-[#121316] text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-surface to-charcoal text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between gap-2">
             <BackButton onClick={() => navigate('/coach')} label="All members" />
             {rosterIdx > -1 && roster.length > 1 && (
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#7E8596] font-medium tabular-nums">
+                <span className="text-eyebrow text-lo font-medium tabular-nums">
                   {rosterIdx + 1} of {roster.length}
                 </span>
                 <button
@@ -755,7 +755,7 @@ export default function Coach() {
                   disabled={!prevMember}
                   title={prevMember ? prevMember.name : 'First member'}
                   style={{ minWidth: 40, minHeight: 36 }}
-                  className="rounded-xl text-sm font-bold text-[#D4AF37] bg-white/[0.05]
+                  className="rounded-xl text-sm font-bold text-gold bg-white/[0.05]
                     border border-white/[0.08] disabled:opacity-25 active:scale-95 transition-all">
                   ‹
                 </button>
@@ -764,7 +764,7 @@ export default function Coach() {
                   disabled={!nextMember}
                   title={nextMember ? nextMember.name : 'Last member'}
                   style={{ minWidth: 40, minHeight: 36 }}
-                  className="rounded-xl text-sm font-bold text-[#D4AF37] bg-white/[0.05]
+                  className="rounded-xl text-sm font-bold text-gold bg-white/[0.05]
                     border border-white/[0.08] disabled:opacity-25 active:scale-95 transition-all">
                   ›
                 </button>
@@ -772,20 +772,20 @@ export default function Coach() {
             )}
           </div>
           {nextMember && (
-            <p className="text-[10px] text-[#7E8596] mt-1.5 text-right">
+            <p className="text-eyebrow text-lo mt-1.5 text-right">
               Next: {nextMember.name}
             </p>
           )}
           <div className="mt-3 flex items-start justify-between">
             <div>
               <h1 className="font-display text-xl font-medium">{profile.name}</h1>
-              <p className="text-emerald-300 text-xs mt-0.5">
+              <p className="text-gold-light text-xs mt-0.5">
                 {profile.height_cm}cm · Start: {profile.start_weight}kg · Goal: {profile.target_weight}kg
               </p>
               {profile.conditions?.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {profile.conditions.map(c => (
-                    <span key={c} className="text-xs bg-white/15 text-emerald-100 px-2 py-0.5 rounded-full">
+                    <span key={c} className="text-xs bg-white/15 text-white px-2 py-0.5 rounded-full">
                       {c.replace(/_/g, ' ')}
                     </span>
                   ))}
@@ -794,10 +794,10 @@ export default function Coach() {
             </div>
             {delta !== null && (
               <div className="text-right flex-shrink-0">
-                <div className={`font-display text-2xl font-semibold ${parseFloat(delta) > 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                <div className={`font-display text-2xl font-semibold ${parseFloat(delta) > 0 ? 'text-gold-light' : 'text-amber-300'}`}>
                   {parseFloat(delta) > 0 ? '↓' : '↑'} {Math.abs(parseFloat(delta))} kg
                 </div>
-                <div className="text-xs text-emerald-400">lost so far</div>
+                <div className="text-xs text-gold-light">lost so far</div>
               </div>
             )}
           </div>
@@ -807,33 +807,33 @@ export default function Coach() {
             <button onClick={() => setShowPin(true)}
               className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl
                 transition-colors border ${profile.has_pin
-                  ? 'text-emerald-100 bg-white/10 hover:bg-white/20 border-white/20'
+                  ? 'text-white bg-white/[0.06] hover:bg-white/20 border-white/20'
                   : 'text-amber-900 bg-amber-400 hover:bg-amber-300 border-amber-300'}`}>
               🔑 {profile.has_pin ? 'Reset PIN' : '⚠ Set PIN (required to login)'}
             </button>
                         <button onClick={() => setMsgOpen(true)}
-              className="text-xs font-semibold text-[#121316] bg-gradient-to-r from-[#F0E2B6] via-[#D4AF37] to-[#8C6D37] px-3 py-1.5 rounded-xl active:scale-95 transition-transform">
+              className="text-xs font-semibold text-charcoal bg-gradient-to-r from-gold-light via-gold to-gold-dark px-3 py-1.5 rounded-xl active:scale-95 transition-transform">
               💬 Message
             </button>
             <button onClick={sendMorningWhatsApp} disabled={morningBusy}
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
-                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20
+              className="flex items-center gap-1.5 text-xs font-semibold text-white
+                bg-white/[0.06] hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20
                 disabled:opacity-40">
               🌅 {morningBusy ? 'Opening…' : 'Morning msg'}
             </button>
 <button onClick={() => setShowNote(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
-                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
+              className="flex items-center gap-1.5 text-xs font-semibold text-white
+                bg-white/[0.06] hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
               📝 Add Note
             </button>
             <button onClick={() => setShowWeight(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
-                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
+              className="flex items-center gap-1.5 text-xs font-semibold text-white
+                bg-white/[0.06] hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
               ⚖️ Log Weight
             </button>
             <button onClick={printReport}
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100
-                bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
+              className="flex items-center gap-1.5 text-xs font-semibold text-white
+                bg-white/[0.06] hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
               🖨️ Print Report
             </button>
           </div>
@@ -842,7 +842,7 @@ export default function Coach() {
 
       {/* Tab bar. Sticky so a coach deep in a long card can switch group
           without scrolling back up — the whole point of the split. */}
-      <div className="sticky top-0 z-20 bg-[#121316]/95 backdrop-blur border-b border-white/[0.06]">
+      <div className="sticky top-0 z-20 bg-charcoal/95 backdrop-blur border-b border-white/[0.06]">
         <div className="max-w-md mx-auto px-3 flex">
           {TABS.map(t => (
             <button
@@ -850,10 +850,10 @@ export default function Coach() {
               onClick={() => switchTab(t.id)}
               style={{ minHeight: 46 }}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5
-                text-[11px] font-semibold transition-colors border-b-2 ${
+                text-caption font-semibold transition-colors border-b-2 ${
                 tab === t.id
-                  ? 'text-[#D4AF37] border-[#D4AF37]'
-                  : 'text-[#7E8596] border-transparent hover:text-[#9EA3B0]'
+                  ? 'text-gold border-gold'
+                  : 'text-lo border-transparent hover:text-mid'
               }`}>
               <span className="text-base leading-none">{t.icon}</span>
               {t.label}
@@ -872,7 +872,7 @@ export default function Coach() {
             <SectionTitle icon="📋">Daily Log</SectionTitle>
             {activeLog && (
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                (activeLog.compliance_pct||0) >= 75 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
+                (activeLog.compliance_pct||0) >= 75 ? 'bg-gold/[0.12] text-gold' :
                 (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
                                                       'bg-red-400/10 text-red-400'
               }`}>{activeLog.compliance_pct||0}%</span>
@@ -880,7 +880,7 @@ export default function Coach() {
           </div>
 
           {logs.length === 0 ? (
-            <p className="text-xs text-[#7E8596] italic text-center py-4">No logs yet</p>
+            <p className="text-xs text-lo italic text-center py-4">No logs yet</p>
           ) : (
             <>
               {/* Date chip navigator — horizontal scroll, newest first */}
@@ -899,8 +899,8 @@ export default function Coach() {
                       className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl
                         border transition-all text-xs font-semibold ${
                         isActive
-                          ? 'bg-[rgba(212,175,55,0.10)] border-[rgba(212,175,55,0.30)] text-[#D4AF37]'
-                          : 'bg-[#1A1C20] border-white/[0.07] text-[#6a6a78] hover:border-white/[0.18] hover:text-[#FFFFFF]'
+                          ? 'bg-gold/10 border-gold/30 text-gold'
+                          : 'bg-surface border-hair text-faint hover:border-hair-hi hover:text-white'
                       }`}>
                       <span>{dayLabel}</span>
                       <div className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
@@ -938,7 +938,7 @@ export default function Coach() {
                     {/* Net calorie row */}
                     {burnedKcal > 0 && (
                       <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
-                        netKcal <= 0 ? 'bg-[rgba(212,175,55,0.07)] border-[rgba(212,175,55,0.20)] text-[#D4AF37]'
+                        netKcal <= 0 ? 'bg-gold/[0.07] border-gold/20 text-gold'
                         : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
                         : 'bg-red-400/10 border-red-400/20 text-red-400'
                       }`}>
@@ -952,9 +952,9 @@ export default function Coach() {
 
                     {/* Meal plan adherence */}
                     {data?.profile?.meal_plan?.length > 0 && (
-                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06]">
-                          <span className="text-[10px] font-bold text-[#7E8596]">🍽 Meal Plan Adherence</span>
+                      <div className="rounded-xl border border-hair overflow-hidden">
+                        <div className="px-3 py-2 bg-surface border-b border-white/[0.06]">
+                          <span className="text-eyebrow font-bold text-lo">🍽 Meal Plan Adherence</span>
                         </div>
                         <div className="px-3 py-2.5 flex flex-wrap gap-2">
                           {data.profile.meal_plan.map(meal => {
@@ -962,7 +962,7 @@ export default function Coach() {
                             const total   = (meal.items || []).length;
                             const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
                             const pct     = total > 0 ? matched / total : 0;
-                            const color   = pct >= 0.8 ? 'bg-[rgba(212,175,55,0.10)] text-[#D4AF37] border-[rgba(212,175,55,0.22)]'
+                            const color   = pct >= 0.8 ? 'bg-gold/10 text-gold border-gold/[0.22]'
                                           : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
                                           :              'bg-red-400/10 text-red-400 border-red-400/25';
                             const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
@@ -978,10 +978,10 @@ export default function Coach() {
 
                     {/* Food log */}
                     {log.food_items?.length > 0 && (
-                      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-                        <div className="px-3 py-2 bg-[#1A1C20] border-b border-white/[0.06] flex justify-between">
-                          <span className="text-[10px] font-bold text-[#7E8596]">🥗 Food Log</span>
-                          <span className="text-xs font-bold text-[#D4AF37]">{eatenKcal} kcal total</span>
+                      <div className="rounded-xl border border-hair overflow-hidden">
+                        <div className="px-3 py-2 bg-surface border-b border-white/[0.06] flex justify-between">
+                          <span className="text-eyebrow font-bold text-lo">🥗 Food Log</span>
+                          <span className="text-xs font-bold text-gold">{eatenKcal} kcal total</span>
                         </div>
                         {(() => {
                           // Slot names are member-configurable and the AI logger can persist
@@ -996,38 +996,38 @@ export default function Coach() {
                           return (
                             <div key={meal} className="border-b border-white/[0.05] last:border-0">
                               <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
-                                <span className={`text-[10px] font-semibold tracking-wide ${
-                                  meal === UNSORTED_MEAL ? 'text-amber-400' : 'text-[#6a6a78]'
+                                <span className={`text-eyebrow font-semibold tracking-wide ${
+                                  meal === UNSORTED_MEAL ? 'text-amber-400' : 'text-faint'
                                 }`}>
                                   {meal}{meal === UNSORTED_MEAL && ' · no meal slot'}
                                 </span>
-                                <span className="text-xs text-[#7E8596]">{mealCal} kcal</span>
+                                <span className="text-xs text-lo">{mealCal} kcal</span>
                               </div>
                               {mealItems.map((f, i) => {
                                 const n = calcN(f);
                                 return (
                                   <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-white/[0.04]">
                                     <div className="min-w-0">
-                                      <div className="text-sm font-medium text-[#FFFFFF] truncate">{f.name}</div>
-                                      <div className="text-xs text-[#7E8596]">{f.grams}g</div>
+                                      <div className="text-sm font-medium text-white truncate">{f.name}</div>
+                                      <div className="text-xs text-lo">{f.grams}g</div>
                                     </div>
                                     {n && (
                                       <div className="flex gap-2.5 text-right flex-shrink-0">
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-orange-400">{n.cal}</div>
-                                          <div className="text-[10px] text-[#7E8596]">kcal</div>
+                                          <div className="text-eyebrow text-lo">kcal</div>
                                         </div>
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-blue-400">{n.pro}g</div>
-                                          <div className="text-[10px] text-[#7E8596]">pro</div>
+                                          <div className="text-eyebrow text-lo">pro</div>
                                         </div>
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-amber-400">{n.carb}g</div>
-                                          <div className="text-[10px] text-[#7E8596]">carb</div>
+                                          <div className="text-eyebrow text-lo">carb</div>
                                         </div>
                                         <div className="text-center">
                                           <div className="text-xs font-bold text-amber-400">{n.fat}g</div>
-                                          <div className="text-[10px] text-[#7E8596]">fat</div>
+                                          <div className="text-eyebrow text-lo">fat</div>
                                         </div>
                                       </div>
                                     )}
@@ -1046,8 +1046,8 @@ export default function Coach() {
                             return { cal: acc.cal+n.cal, pro: acc.pro+n.pro, carb: acc.carb+n.carb, fat: acc.fat+n.fat };
                           }, { cal:0, pro:0, carb:0, fat:0 });
                           return (
-                            <div className="px-3 py-2.5 bg-[rgba(212,175,55,0.05)] flex items-center justify-between border-t border-[rgba(212,175,55,0.12)]">
-                              <span className="text-xs font-bold text-[#D4AF37]">Day Total</span>
+                            <div className="px-3 py-2.5 bg-gold/5 flex items-center justify-between border-t border-gold/[0.12]">
+                              <span className="text-xs font-bold text-gold">Day Total</span>
                               <div className="flex gap-3 text-xs">
                                 <span className="font-bold text-orange-400">{t.cal} kcal</span>
                                 <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
@@ -1073,12 +1073,12 @@ export default function Coach() {
                         return (
                           <div key={group.title}>
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-xs font-bold text-[#6a6a78] tracking-wide">{group.title}</span>
+                              <span className="text-xs font-bold text-faint tracking-wide">{group.title}</span>
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                 doneCount === group.items.length
-                                  ? 'bg-[rgba(212,175,55,0.14)] text-[#F0E2B6]'
+                                  ? 'bg-gold/[0.14] text-gold-light'
                                   : doneCount === 0
-                                  ? 'bg-white/[0.05] text-[#7E8596]'
+                                  ? 'bg-white/[0.05] text-lo'
                                   : 'bg-amber-400/10 text-amber-300'
                               }`}>{doneCount}/{group.items.length}</span>
                             </div>
@@ -1087,10 +1087,10 @@ export default function Coach() {
                                 const isDone = !!group.done?.[it.id];
                                 return (
                                   <div key={it.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${
-                                    isDone ? 'bg-[rgba(212,175,55,0.06)]' : 'bg-white/[0.02]'
+                                    isDone ? 'bg-gold/[0.06]' : 'bg-white/[0.02]'
                                   }`}>
                                     <span className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${
-                                      isDone ? 'bg-[#D4AF37]' : 'bg-white/[0.08]'
+                                      isDone ? 'bg-gold' : 'bg-white/[0.08]'
                                     }`}>
                                       {isDone && (
                                         <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
@@ -1098,7 +1098,7 @@ export default function Coach() {
                                         </svg>
                                       )}
                                     </span>
-                                    <span className={`text-xs font-medium leading-tight ${isDone ? 'text-[#FFFFFF]' : 'text-[#7E8596]'}`}>
+                                    <span className={`text-xs font-medium leading-tight ${isDone ? 'text-white' : 'text-lo'}`}>
                                       {it.icon && <span className="mr-1">{it.icon}</span>}{it.label}
                                     </span>
                                   </div>
@@ -1124,16 +1124,16 @@ export default function Coach() {
                         return (micros[k]||0) / rda >= 0.8;
                       }).length;
                       return (
-                        <details className="border border-white/[0.07] rounded-xl overflow-hidden">
-                          <summary className="px-3 py-2.5 text-xs font-semibold text-[#6a6a78] cursor-pointer
-                            hover:text-[#D4AF37] list-none flex justify-between items-center bg-[#1A1C20]">
+                        <details className="border border-hair rounded-xl overflow-hidden">
+                          <summary className="px-3 py-2.5 text-xs font-semibold text-faint cursor-pointer
+                            hover:text-gold list-none flex justify-between items-center bg-surface">
                             <span>🔬 Key Nutrients</span>
                             <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
-                              met >= KEYS.length*0.8 ? 'bg-[rgba(212,175,55,0.12)] text-[#D4AF37]' :
+                              met >= KEYS.length*0.8 ? 'bg-gold/[0.12] text-gold' :
                               met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
                             }`}>{met}/{KEYS.length} ▼</span>
                           </summary>
-                          <div className="px-3 py-3 space-y-2 bg-[#1A1C20]">
+                          <div className="px-3 py-3 space-y-2 bg-surface">
                             {KEYS.map(k => {
                               const meta = RDA_TARGETS[k];
                               if (!meta) return null;
@@ -1142,12 +1142,12 @@ export default function Coach() {
                               const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
                               const val  = +raw.toFixed(dec);
                               const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-[#D4AF37]' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-[#D4AF37]' : pct>=50 ? 'text-amber-400' : 'text-red-400';
+                              const cls  = pct>=80 ? 'bg-gold' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
+                              const tcls = pct>=80 ? 'text-gold' : pct>=50 ? 'text-amber-400' : 'text-red-400';
                               return (
                                 <div key={k}>
                                   <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-[#6a6a78]">{meta.icon} {meta.label}</span>
+                                    <span className="text-faint">{meta.icon} {meta.label}</span>
                                     <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit}</span>
                                   </div>
                                   <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
@@ -1163,14 +1163,14 @@ export default function Coach() {
 
                     {/* Notes */}
                     {log.notes && (
-                      <p className="text-xs text-[#6a6a78] italic border-t border-white/[0.06] pt-2.5 leading-relaxed">
+                      <p className="text-xs text-faint italic border-t border-white/[0.06] pt-2.5 leading-relaxed">
                         📝 {log.notes}
                       </p>
                     )}
                   </div>
                 );
               })() : (
-                <p className="text-xs text-[#7E8596] italic text-center py-4">No log for this date</p>
+                <p className="text-xs text-lo italic text-center py-4">No log for this date</p>
               )}
             </>
           )}
@@ -1181,7 +1181,7 @@ export default function Coach() {
         <Card>
           <div className="flex items-center justify-between mb-2">
             <SectionTitle icon="🔥">Logging Streak</SectionTitle>
-            <span className="text-xs font-bold text-[#7E8596]">
+            <span className="text-xs font-bold text-lo">
               {streak14.filter(d => d.logged).length}/14 days
             </span>
           </div>
@@ -1195,7 +1195,7 @@ export default function Coach() {
                   :               'rgba(248,113,113,0.35)' }} />
             ))}
           </div>
-          <p className="text-[10px] text-[#7E8596] mt-1.5 text-center">Oldest left · today right</p>
+          <p className="text-eyebrow text-lo mt-1.5 text-center">Oldest left · today right</p>
         </Card>
         </>)}
 
@@ -1233,8 +1233,8 @@ export default function Coach() {
             <div className="flex items-center justify-between mb-2">
               <SectionTitle icon="📊">30-Day Compliance</SectionTitle>
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                avg30 >= 75 ? 'bg-emerald-100 text-emerald-700' :
-                avg30 >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-500'
+                avg30 >= 75 ? 'bg-gold/[0.13] text-gold-light' :
+                avg30 >= 50 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400'
               }`}>avg {avg30}%</span>
             </div>
             <ResponsiveContainer width="100%" height={100}>
@@ -1245,10 +1245,10 @@ export default function Coach() {
                 <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   content={({ active, payload }) => active && payload?.length
-                    ? <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
-                        <span className="font-bold text-emerald-600">{payload[0].value}%</span>
-                        <span className="text-stone-400 ml-1">{payload[0].payload.date}</span>
-                        <span className="text-stone-300 ml-1">· tap to view</span>
+                    ? <div className="bg-surface border border-hair rounded-xl px-2 py-1 shadow-sm text-xs">
+                        <span className="font-bold text-gold-deep">{payload[0].value}%</span>
+                        <span className="text-lo ml-1">{payload[0].payload.date}</span>
+                        <span className="text-ghost ml-1">· tap to view</span>
                       </div>
                     : null}
                 />
@@ -1256,7 +1256,7 @@ export default function Coach() {
                   onClick={(data) => data?.log && setSelectedLog(data.log)} />
               </BarChart>
             </ResponsiveContainer>
-            <p className="text-[10px] text-[#7E8596] mt-1.5 text-center">Tap any bar to see what they logged that day</p>
+            <p className="text-eyebrow text-lo mt-1.5 text-center">Tap any bar to see what they logged that day</p>
           </Card>
         )}
 
@@ -1271,28 +1271,28 @@ export default function Coach() {
           return (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2"
               onClick={() => setSelectedLog(null)}>
-              <div className="bg-[#1A1C20] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[82vh] flex flex-col"
+              <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[82vh] flex flex-col"
                 onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 flex-shrink-0">
+                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair flex-shrink-0">
                   <div>
-                    <h3 className="font-bold text-stone-800">{dateLabel}</h3>
+                    <h3 className="font-bold text-white">{dateLabel}</h3>
                     <div className="flex gap-3 mt-1">
-                      {fl.weight_kg && <span className="text-xs font-semibold text-emerald-600">⚖ {fl.weight_kg} kg</span>}
+                      {fl.weight_kg && <span className="text-xs font-semibold text-gold-deep">⚖ {fl.weight_kg} kg</span>}
                       {fl.compliance_pct != null && (
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                          fl.compliance_pct >= 75 ? 'bg-emerald-100 text-emerald-700' :
-                          fl.compliance_pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'
+                          fl.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
+                          fl.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.14] text-red-400'
                         }`}>{fl.compliance_pct}%</span>
                       )}
                     </div>
                   </div>
-                  <button onClick={() => setSelectedLog(null)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+                  <button onClick={() => setSelectedLog(null)} className="text-lo hover:text-white text-2xl leading-none">×</button>
                 </div>
                 <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
                   {foodItems.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-stone-400 tracking-wider mb-2">
-                        🥗 Food {totalKcal > 0 && <span className="font-normal text-orange-500 normal-case">· {totalKcal} kcal</span>}
+                      <p className="text-xs font-bold text-lo tracking-wider mb-2">
+                        🥗 Food {totalKcal > 0 && <span className="font-normal text-orange-300 normal-case">· {totalKcal} kcal</span>}
                       </p>
                       <div className="space-y-1">
                         {foodItems.map((item, i) => {
@@ -1300,10 +1300,10 @@ export default function Coach() {
                           return (
                             <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-white/[0.05] last:border-0">
                               <div>
-                                <span className="text-stone-700 font-medium">{item.name}</span>
-                                <span className="text-xs text-stone-400 ml-1">{item.grams}g{item.meal ? ` · ${item.meal}` : ''}</span>
+                                <span className="text-white font-medium">{item.name}</span>
+                                <span className="text-xs text-lo ml-1">{item.grams}g{item.meal ? ` · ${item.meal}` : ''}</span>
                               </div>
-                              {n && <span className="text-xs font-bold text-orange-500">{n.cal} kcal</span>}
+                              {n && <span className="text-xs font-bold text-orange-300">{n.cal} kcal</span>}
                             </div>
                           );
                         })}
@@ -1311,15 +1311,15 @@ export default function Coach() {
                     </div>
                   )}
                   {fl.water_ml > 0 && (
-                    <p className="text-sm text-blue-600 font-semibold">💧 {(fl.water_ml / 1000).toFixed(1)} L water</p>
+                    <p className="text-sm text-blue-400 font-semibold">💧 {(fl.water_ml / 1000).toFixed(1)} L water</p>
                   )}
                   {fl.notes && (
                     <div>
-                      <p className="text-xs font-bold text-stone-400 tracking-wider mb-1">📝 Notes</p>
-                      <p className="text-sm text-stone-600 whitespace-pre-wrap leading-relaxed">{fl.notes}</p>
+                      <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
+                      <p className="text-sm text-mid whitespace-pre-wrap leading-relaxed">{fl.notes}</p>
                     </div>
                   )}
-                  {!foodItems.length && !fl.weight_kg && <p className="text-sm text-stone-400 italic text-center py-4">No data recorded this day.</p>}
+                  {!foodItems.length && !fl.weight_kg && <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>}
                 </div>
               </div>
             </div>
@@ -1380,24 +1380,24 @@ export default function Coach() {
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="🏋️">Workout Program</SectionTitle>
             <button onClick={() => setShowProgramBuilder(true)}
-              className="text-xs font-semibold text-[#F0E2B6] bg-[rgba(212,175,55,0.10)] px-3 py-1.5 rounded-xl
-                hover:bg-[rgba(212,175,55,0.18)] transition-colors">
+              className="text-xs font-semibold text-gold-light bg-gold/10 px-3 py-1.5 rounded-xl
+                hover:bg-gold/[0.18] transition-colors">
               {activeProgram?.program ? 'Edit' : '+ Create'}
             </button>
           </div>
           {activeProgram === undefined ? (
-            <p className="text-xs text-[#7E8596] text-center py-3">Loading…</p>
+            <p className="text-xs text-lo text-center py-3">Loading…</p>
           ) : !activeProgram?.program ? (
-            <p className="text-xs text-[#7E8596] italic text-center py-3">
+            <p className="text-xs text-lo italic text-center py-3">
               No program assigned — {profile.name} is logging freeform only.
             </p>
           ) : (
             <div>
-              <p className="text-sm font-semibold text-[#FFFFFF] mb-2">{activeProgram.program.name}</p>
+              <p className="text-sm font-semibold text-white mb-2">{activeProgram.program.name}</p>
               <div className="flex flex-wrap gap-1.5">
                 {activeProgram.days.map(d => (
-                  <span key={d.day_number} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.05] text-[#9EA3B0]">
-                    {d.day_label} <span className="text-[#7E8596]">· {d.exercises.length} exercises</span>
+                  <span key={d.day_number} className="text-xs px-2.5 py-1 rounded-full bg-white/[0.05] text-mid">
+                    {d.day_label} <span className="text-lo">· {d.exercises.length} exercises</span>
                   </span>
                 ))}
               </div>
@@ -1422,19 +1422,19 @@ export default function Coach() {
                 const allOpen = openPanels ? openPanels.size === dates.length : false;
                 return (
                   <button onClick={() => setOpenPanels(allOpen ? new Set() : new Set(dates))}
-                    className="text-[11px] font-semibold text-stone-400 hover:text-stone-600 transition-colors">
+                    className="text-caption font-semibold text-lo hover:text-white transition-colors">
                     {allOpen ? 'Collapse all' : 'Expand all'}
                   </button>
                 );
               })()}
               <button onClick={() => setShowLab(true)}
-                className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition-colors">
+                className="text-xs font-semibold text-gold-deep bg-gold/[0.07] px-3 py-1.5 rounded-xl hover:bg-gold/[0.13] transition-colors">
                 + Add
               </button>
             </div>
           </div>
           {labs.length === 0 ? (
-            <p className="text-xs text-stone-300 italic text-center py-4">No lab values recorded yet</p>
+            <p className="text-xs text-ghost italic text-center py-4">No lab values recorded yet</p>
           ) : (() => {
             // One panel per report date, newest first
             const byDate = new Map();
@@ -1459,40 +1459,40 @@ export default function Coach() {
               const flagged = rows.filter(r => r.status && r.status !== 'normal').length;
               const isOpen = open.has(d);
               return (
-                <div key={d} className="border border-stone-100 rounded-xl mb-2 overflow-hidden">
+                <div key={d} className="border border-hair rounded-xl mb-2 overflow-hidden">
                   <button onClick={() => toggle(d)}
                     style={{ minHeight: 48 }}
-                    className="w-full flex items-center justify-between px-3 py-2.5 bg-stone-50/60 hover:bg-stone-50 transition-colors">
+                    className="w-full flex items-center justify-between px-3 py-2.5 bg-white/[0.03] hover:bg-white/[0.06] transition-colors">
                     <div className="text-left">
-                      <div className="text-sm font-bold text-stone-700">{formatDate(d)}</div>
-                      <div className="text-[11px] text-stone-400">
+                      <div className="text-sm font-bold text-white">{formatDate(d)}</div>
+                      <div className="text-caption text-lo">
                         {rows.length} {plural(rows.length, 'result')}
-                        {flagged > 0 && <span className="text-amber-600"> · {flagged} outside range</span>}
+                        {flagged > 0 && <span className="text-amber-400"> · {flagged} outside range</span>}
                         {rows[0]?.lab_name && ` · ${rows[0].lab_name}`}
                       </div>
                     </div>
-                    <span className={`text-stone-400 text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+                    <span className={`text-lo text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
                   </button>
 
                   {isOpen && (
-                    <div className="px-3 divide-y divide-stone-50">
+                    <div className="px-3 divide-y divide-hair">
                       {rows.map(l => (
                 <div key={l.id} className="py-2.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-stone-700">{l.test_name}</div>
-                      <div className="text-xs text-stone-400">{formatDate(l.test_date)}</div>
+                      <div className="text-sm font-semibold text-white">{l.test_name}</div>
+                      <div className="text-xs text-lo">{formatDate(l.test_date)}</div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <span className={`font-bold text-sm ${
-                        l.status === 'high' ? 'text-red-600' :
-                        l.status === 'low'  ? 'text-blue-600' : 'text-emerald-600'
+                        l.status === 'high' ? 'text-red-400' :
+                        l.status === 'low'  ? 'text-blue-400' : 'text-gold-deep'
                       }`}>
                         {l.value} {l.unit}
                       </span>
                       <div className={`text-xs mt-0.5 font-medium px-1.5 py-0.5 rounded-full inline-block ml-1 ${
-                        l.status === 'high' ? 'bg-red-50 text-red-600' :
-                        l.status === 'low'  ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
+                        l.status === 'high' ? 'bg-red-400/[0.08] text-red-400' :
+                        l.status === 'low'  ? 'bg-blue-400/[0.08] text-blue-400' : 'bg-gold/[0.07] text-gold-deep'
                       }`}>
                         {l.status}
                       </div>
@@ -1507,7 +1507,7 @@ export default function Coach() {
                         const hi = Number.isFinite(parseFloat(l.ref_max)) ? parseFloat(l.ref_max) : null;
                         if (lo == null && hi == null) return null;
                         return (
-                          <div className="text-[11px] text-stone-400 mt-0.5">
+                          <div className="text-caption text-lo mt-0.5">
                             ref{' '}
                             {lo != null && hi != null ? `${lo}–${hi}`
                               : hi != null ? `< ${hi}` : `> ${lo}`}
@@ -1536,15 +1536,15 @@ export default function Coach() {
 
                     return (
                       <div className="mt-2 ml-0.5">
-                        <div className="relative h-1.5 rounded-full bg-stone-100">
-                          <div className="absolute h-full rounded-full bg-emerald-100"
+                        <div className="relative h-1.5 rounded-full bg-charcoal">
+                          <div className="absolute h-full rounded-full bg-gold/[0.13]"
                             style={{ left: `${pct(lo)}%`, width: `${pct(hi) - pct(lo)}%` }} />
                           <div className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full ring-2 ring-white ${
                             l.status === 'high' ? 'bg-red-500' :
-                            l.status === 'low'  ? 'bg-blue-500' : 'bg-emerald-500'
+                            l.status === 'low'  ? 'bg-blue-500' : 'bg-gold'
                           }`} style={{ left: `${pct(v)}%` }} />
                         </div>
-                        <div className="flex justify-between text-[10px] text-stone-300 mt-0.5">
+                        <div className="flex justify-between text-eyebrow text-ghost mt-0.5">
                           <span>{lo}</span><span>{hi}</span>
                         </div>
                       </div>
@@ -1567,7 +1567,7 @@ export default function Coach() {
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="📝">Notes & Messages</SectionTitle>
             <button onClick={() => setShowNote(true)}
-              className="text-xs font-semibold text-stone-600 bg-stone-100 px-3 py-1.5 rounded-xl
+              className="text-xs font-semibold text-mid bg-charcoal px-3 py-1.5 rounded-xl
                 hover:bg-white/[0.08] transition-colors">
               + Add
             </button>
@@ -1577,7 +1577,7 @@ export default function Coach() {
               rounded-xl px-3 py-2 mb-2">{deleteError}</p>
           )}
           {notes.length === 0 ? (
-            <p className="text-xs text-stone-300 italic text-center py-4">Nothing here yet</p>
+            <p className="text-xs text-ghost italic text-center py-4">Nothing here yet</p>
           ) : (
             <div className="space-y-2">
               {/* Messages the MEMBER sent sit above the coach's own notes,
@@ -1594,10 +1594,10 @@ export default function Coach() {
                 .map(n => (
                 <div key={n.id}
                   className={`rounded-2xl px-4 py-3 border ${n.flagged
-                    ? 'bg-red-50 border-red-200'
+                    ? 'bg-red-400/[0.08] border-red-400/25'
                     : n.from_member
-                      ? 'bg-[rgba(212,175,55,0.08)] border-[rgba(212,175,55,0.25)]'
-                      : 'bg-stone-50 border-stone-100'}`}>
+                      ? 'bg-gold/[0.08] border-gold/25'
+                      : 'bg-surface border-hair'}`}>
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       {n.flagged && (
@@ -1605,21 +1605,21 @@ export default function Coach() {
                           🚩 Follow-up
                         </span>
                       )}
-                      <span className="text-xs font-semibold text-stone-500">
+                      <span className="text-xs font-semibold text-faint">
                         {formatDate(n.note_date)}
                       </span>
                       {n.from_member && (
-                        <span className="text-xs font-semibold text-[#D4AF37] bg-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-semibold text-gold bg-gold/[0.12] px-2 py-0.5 rounded-full">
                           ✉️ From {firstName(data.profile?.name, 'them')}
                         </span>
                       )}
-                      <span className="text-xs text-stone-400">
+                      <span className="text-xs text-lo">
                         · {n.from_member ? (data.profile?.name || 'Member') : n.monitor_name}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap flex-1">{n.note}</p>
+                    <p className="text-sm text-white leading-relaxed whitespace-pre-wrap flex-1">{n.note}</p>
                     {/* Deleting is irreversible — there is no soft-delete column and
                         no undo — so it asks first. Confirmed inline rather than with
                         window.confirm, which iOS Safari renders as browser chrome
@@ -1637,19 +1637,19 @@ export default function Coach() {
                               setDeleteError('Could not delete that — try again.');
                             }
                           }}
-                          className="text-[11px] font-bold text-red-300 bg-red-400/10 border
+                          className="text-caption font-bold text-red-300 bg-red-400/10 border
                             border-red-400/30 px-2 py-1 rounded-lg">
                           Delete
                         </button>
                         <button onClick={() => setConfirmDelete(null)}
-                          className="text-[11px] font-semibold text-[#9EA3B0] px-1.5 py-1">
+                          className="text-caption font-semibold text-mid px-1.5 py-1">
                           Cancel
                         </button>
                       </span>
                     ) : (
                       <button onClick={() => { setDeleteError(null); setConfirmDelete(n.id); }}
                         title="Delete"
-                        className="text-[13px] text-[#7E8596] hover:text-red-300 px-1.5 flex-shrink-0
+                        className="text-body-sm text-lo hover:text-red-300 px-1.5 flex-shrink-0
                           transition-colors">
                         🗑
                       </button>
@@ -1669,27 +1669,27 @@ export default function Coach() {
             reading and we show it as a reading. */}
         {tab === 'labs' && (<>   {/* Body composition */}
         {bodyComp.markers.length > 0 && (
-          <details className="rounded-2xl border border-white/[0.07] bg-[#1A1C20] overflow-hidden">
+          <details className="rounded-2xl border border-hair bg-surface overflow-hidden">
             <summary className="px-4 py-3.5 cursor-pointer list-none flex items-center justify-between">
               <div>
-                <span className="text-xs font-bold text-[#9EA3B0]">📉 Body Composition</span>
-                <p className="text-[11px] text-[#7E8596] mt-0.5">
+                <span className="text-xs font-bold text-mid">📉 Body Composition</span>
+                <p className="text-caption text-lo mt-0.5">
                   {bodyComp.scanDates.length} scan{bodyComp.scanDates.length === 1 ? '' : 's'}
                   {bodyComp.latestDate ? ` · latest ${formatDate(bodyComp.latestDate)}` : ''}
                   {' · '}{bodyComp.markers.length} markers
                 </p>
               </div>
-              <span className="text-xs text-[#7E8596]">▾</span>
+              <span className="text-xs text-lo">▾</span>
             </summary>
 
             <div className="px-4 pb-4 space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 {bodyComp.markers.map(m => (
                   <div key={m.name} className="rounded-xl bg-white/[0.03] px-2.5 py-2">
-                    <p className="text-[10px] text-[#7E8596] leading-tight truncate" title={m.name}>{m.name}</p>
-                    <p className="text-sm font-bold text-[#FFFFFF] leading-tight mt-0.5">{m.latest}</p>
+                    <p className="text-eyebrow text-lo leading-tight truncate" title={m.name}>{m.name}</p>
+                    <p className="text-sm font-bold text-white leading-tight mt-0.5">{m.latest}</p>
                     {m.change != null && (
-                      <p className={`text-[10px] leading-tight ${m.change > 0 ? 'text-amber-400' : 'text-[#D4AF37]'}`}>
+                      <p className={`text-eyebrow leading-tight ${m.change > 0 ? 'text-amber-400' : 'text-gold'}`}>
                         {m.change > 0 ? '↑' : '↓'} {Math.abs(m.change)}
                       </p>
                     )}
@@ -1698,14 +1698,14 @@ export default function Coach() {
               </div>
 
               {bodyComp.trendable.length === 0 ? (
-                <p className="text-[11px] text-[#7E8596] italic leading-relaxed">
+                <p className="text-caption text-lo italic leading-relaxed">
                   Trend lines need two scans on different dates. Repeated rows from the same
                   panel are one reading, not a trend.
                 </p>
               ) : (
                 bodyComp.trendable.map(m => (
                   <div key={m.name}>
-                    <p className="text-[11px] font-semibold text-[#9EA3B0] mb-1">{m.name}</p>
+                    <p className="text-caption font-semibold text-mid mb-1">{m.name}</p>
                     <ResponsiveContainer width="100%" height={80}>
                       <LineChart data={m.series} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -1713,9 +1713,9 @@ export default function Coach() {
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                         <Tooltip
                           content={({ active, payload }) => active && payload?.length
-                            ? <div className="bg-[#1A1C20] border border-white/[0.07] rounded-xl px-2 py-1 shadow-sm text-xs">
-                                <span className="font-bold text-[#D4AF37]">{payload[0].value}</span>
-                                <span className="text-[#7E8596] ml-1">{payload[0].payload.date}</span>
+                            ? <div className="bg-surface border border-hair rounded-xl px-2 py-1 shadow-sm text-xs">
+                                <span className="font-bold text-gold">{payload[0].value}</span>
+                                <span className="text-lo ml-1">{payload[0].payload.date}</span>
                               </div>
                             : null}
                         />

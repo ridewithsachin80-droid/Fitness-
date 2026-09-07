@@ -17,7 +17,7 @@
 export default function DaySummary({ s }) {
   const Row = ({ label, children }) => (
     <div className="py-2 border-t border-white/[0.06] first:border-t-0 first:pt-0">
-      <p className="text-[10px] font-bold text-[#7E8596] mb-1">{label}</p>
+      <p className="text-eyebrow font-bold text-lo mb-1">{label}</p>
       {children}
     </div>
   );
@@ -28,9 +28,9 @@ export default function DaySummary({ s }) {
     if (!p.assigned) return null;
     return (
       <Row label={label}>
-        <p className="text-sm text-[#FFFFFF] leading-relaxed">
+        <p className="text-sm text-white leading-relaxed">
           {p.done.length ? p.done.join(', ') : 'nothing yet'}
-          <span className="text-[#7E8596]"> · {p.done.length}/{p.total}</span>
+          <span className="text-lo"> · {p.done.length}/{p.total}</span>
         </p>
         {p.left.length > 0 && (
           <p className="text-sm text-amber-300 leading-relaxed mt-0.5">
@@ -46,9 +46,9 @@ export default function DaySummary({ s }) {
   return (
     <div className="mt-0.5">
       <Row label="Food">
-        <p className="text-sm text-[#FFFFFF]">
+        <p className="text-sm text-white">
           <span className="font-display text-base font-semibold">{f.kcal}</span> kcal
-          <span className="text-[#7E8596]"> · P {f.protein}g · C {f.carbs}g · F {f.fat}g</span>
+          <span className="text-lo"> · P {f.protein}g · C {f.carbs}g · F {f.fat}g</span>
         </p>
         {f.target != null && (
           <p className={`text-sm mt-0.5 ${f.over ? 'text-red-400' : 'text-amber-300'}`}>
@@ -57,7 +57,7 @@ export default function DaySummary({ s }) {
               : `${f.remaining} kcal left of ${f.target}`}
           </p>
         )}
-        <p className="text-sm text-[#9EA3B0] mt-0.5 leading-relaxed">
+        <p className="text-sm text-mid mt-0.5 leading-relaxed">
           {f.items.length
             ? f.items.map(i => `${i.name} ${i.grams}g`).join(', ')
             : 'nothing logged'}
@@ -65,15 +65,15 @@ export default function DaySummary({ s }) {
       </Row>
 
       <Row label="Water">
-        <p className="text-sm text-[#FFFFFF]">
+        <p className="text-sm text-white">
           <span className="font-display text-base font-semibold">{w.drunk}</span> ml
-          {w.target != null && <span className="text-[#7E8596]"> of {w.target} ml</span>}
+          {w.target != null && <span className="text-lo"> of {w.target} ml</span>}
         </p>
         {w.remaining != null && w.remaining > 0 && (
           <p className="text-sm text-amber-300 mt-0.5">{w.remaining} ml to go</p>
         )}
         {w.remaining === 0 && w.target != null && (
-          <p className="text-sm text-emerald-400 mt-0.5">target met</p>
+          <p className="text-sm text-gold-light mt-0.5">target met</p>
         )}
       </Row>
 
@@ -83,9 +83,9 @@ export default function DaySummary({ s }) {
 
       {(s.weight != null || s.sleep) && (
         <Row label="Body">
-          <p className="text-sm text-[#FFFFFF]">
+          <p className="text-sm text-white">
             {s.weight != null ? `${s.weight} kg` : 'weight not logged'}
-            {s.sleep && <span className="text-[#7E8596]"> · slept {s.sleep}</span>}
+            {s.sleep && <span className="text-lo"> · slept {s.sleep}</span>}
           </p>
         </Row>
       )}
