@@ -1,303 +1,224 @@
 import { useState } from 'react';
-import { useSettingsStore } from '../store/settingsStore';
 import { saveMyOnboarding } from '../api/logs';
+import { useSettingsStore, haptic } from '../store/settingsStore';
+import { useAIChat } from './AIChatLog';
+import { Icon, Eyebrow, Pressable } from './primitives';
 
+/**
+ * Onboarding — four screens, one question each (Sprint 7).
+ *
+ *   1. Who's using FitLife?        child / adult / senior  → app mode
+ *   2. What are you working toward?  several goals, in the order they matter
+ *   3. Your numbers                start weight · target (both optional)
+ *   4. You're set                  avatar, and the AI's first message ready to send
+ *
+ * Goals are a LIST, not a choice: "lose weight" and "sleep better" are both
+ * true for most members. The order tapped is the order of importance —
+ * the first becomes the primary goal the coach views show. Saved through
+ * PUT /members/me/onboarding as { goals: [...] }; the server derives `goal`.
+ *
+ * Progress is a hairline at the top; each question is set in Fraunces.
+ */
 const AVATARS = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
 
-const AGE_MODES = [
-  {
-    id: 'child',
-    label: 'Child',
-    sub: 'Ages 5–17',
-    emoji: '🌟',
-    color: 'from-yellow-400 to-orange-400',
-    bg: 'bg-yellow-50',
-    border: 'border-yellow-200',
-    desc: 'Fun icons, simple words, parent-friendly',
-  },
-  {
-    id: 'adult',
-    label: 'Adult',
-    sub: 'Ages 18–59',
-    emoji: '💪',
-    color: 'from-amber-500 to-amber-600',
-    bg: 'bg-amber-400/[0.08]',
-    border: 'border-amber-400/25',
-    desc: 'Full detail, macros, nutrition science',
-  },
-  {
-    id: 'senior',
-    label: 'Senior',
-    sub: 'Ages 60+',
-    emoji: '🌿',
-    color: 'from-gold to-teal-500',
-    bg: 'bg-gold/[0.07]',
-    border: 'border-gold/[0.22]',
-    desc: 'Large text, plain language, simplified view',
-  },
+export const AGE_MODES = [
+  { id: 'child',  label: 'Child',  sub: 'Under 18', icon: 'sun',  desc: 'Simple words, friendly view, no calorie pressure' },
+  { id: 'adult',  label: 'Adult',  sub: '18–59',    icon: 'user', desc: 'Full detail — macros, nutrients, training' },
+  { id: 'senior', label: 'Senior', sub: '60+',      icon: 'moon', desc: 'Large text, plain language, simplified view' },
 ];
 
-const GOALS = [
-  { id: 'lose',     label: 'Lose weight',   emoji: '\u2696\ufe0f' },
-  { id: 'maintain', label: 'Stay healthy',  emoji: '\ud83c\udf3f' },
-  { id: 'gain',     label: 'Build muscle',  emoji: '\ud83d\udcaa' },
-  { id: 'strength', label: 'Get stronger',  emoji: '\ud83c\udfcb\ufe0f' },
+// ids must match GOALS in server/routes/patients.js
+export const GOAL_OPTIONS = [
+  { id: 'lose',      label: 'Lose weight',        icon: 'scale',    sub: 'Steady fat loss without losing strength' },
+  { id: 'gain',      label: 'Build muscle',       icon: 'dumbbell', sub: 'Add lean mass with a plan you can follow' },
+  { id: 'strength',  label: 'Get stronger',       icon: 'flame',    sub: 'Lift more, move better' },
+  { id: 'energy',    label: 'More energy',        icon: 'sun',      sub: 'Fewer afternoon crashes' },
+  { id: 'sleep',     label: 'Sleep better',       icon: 'moon',     sub: 'Fall asleep faster, wake up rested' },
+  { id: 'condition', label: 'Manage a condition', icon: 'pill',     sub: 'Diabetes, thyroid, BP — with your doctor' },
+  { id: 'maintain',  label: 'Stay healthy',       icon: 'check',    sub: 'Keep what\u2019s working, build the habit' },
 ];
+
+const SAMPLE_MESSAGE = 'weight 82.5, morning walk done, 2 idli and sambar for breakfast, drank 1 litre water, slept 10:30 to 6:30';
+
+function Screen({ step, total, children }) {
+  return (
+    <div className="min-h-screen bg-charcoal text-white flex flex-col">
+      <div className="h-0.5 bg-white/[0.06]" aria-hidden="true">
+        <div className="h-full bg-gold transition-all duration-500" style={{ width: `${((step + 1) / total) * 100}%` }} />
+      </div>
+      <div className="flex-1 max-w-md w-full mx-auto px-5 pt-8 pb-8 flex flex-col">{children}</div>
+    </div>
+  );
+}
+
+function Question({ eyebrow, title, sub }) {
+  return (
+    <div className="mb-6">
+      <Eyebrow tone="gold">{eyebrow}</Eyebrow>
+      <h1 className="font-display text-num-lg leading-tight font-medium text-white mt-1">{title}</h1>
+      {sub && <p className="text-sm text-mid mt-2 leading-relaxed">{sub}</p>}
+    </div>
+  );
+}
+
+function Footer({ onBack, onNext, nextLabel = 'Next', disabled, busy }) {
+  return (
+    <div className="mt-auto pt-6 flex items-center gap-3">
+      {onBack && (
+        <Pressable variant="ghost" onPress={onBack} aria-label="Back" className="text-mid"><Icon name="chevron-left" size={18} /> Back</Pressable>
+      )}
+      <Pressable variant="primary" onPress={onNext} disabled={disabled || busy} className="flex-1" data-testid="onb-next">
+        {busy ? 'Saving…' : nextLabel} {!busy && <Icon name="arrow-right" size={16} />}
+      </Pressable>
+    </div>
+  );
+}
 
 export default function Onboarding({ onDone } = {}) {
-  const [step, setStep]         = useState(0); // 0=who, 1=goal+weights, 2=avatar, 3=finish
+  const TOTAL = 4;
+  const [step, setStep]         = useState(0);
   const [ageMode, setAgeMode]   = useState(null);
+  const [goals, setGoals]       = useState([]);          // ordered as tapped
   const [avatarIdx, setAvatarI] = useState(0);
-  const [goal, setGoal]         = useState(null);
   const [startW, setStartW]     = useState('');
   const [targetW, setTargetW]   = useState('');
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveErr] = useState('');
   const { finishOnboarding, setAvatarIdx } = useSettingsStore();
 
-  // Same plausibility gate the server applies, so the member is told here
-  // rather than bounced by a 400 after tapping through to the end.
-  const wOk = (v) => {
-    if (!v) return true;                       // optional
-    const n = parseFloat(v);
-    return Number.isFinite(n) && n >= 20 && n <= 300;
-  };
+  const wOk = (v) => { if (!v) return true; const n = parseFloat(v); return Number.isFinite(n) && n >= 20 && n <= 300; };
   const weightsValid = wOk(startW) && wOk(targetW);
 
-  const done = async () => {
-    setSaving(true);
-    setSaveErr('');
+  const toggleGoal = (id) => {
+    haptic(10);
+    setGoals(g => g.includes(id) ? g.filter(x => x !== id) : [...g, id]);
+  };
+
+  const done = async (thenSend) => {
+    setSaving(true); setSaveErr('');
     try {
       await saveMyOnboarding({
-        age_mode:      ageMode,
-        avatar_idx:    avatarIdx,
-        goal,
-        start_weight:  startW  ? parseFloat(startW)  : null,
+        age_mode: ageMode, avatar_idx: avatarIdx, goals,
+        start_weight: startW ? parseFloat(startW) : null,
         target_weight: targetW ? parseFloat(targetW) : null,
       });
-      // Only mirror locally once the server has it. Flipping the local flag
-      // first would strand a member whose save failed: the gate in App.jsx
-      // would let them through with nothing actually recorded.
       setAvatarIdx(avatarIdx);
       finishOnboarding(ageMode);
+      if (thenSend) useAIChat.getState().prefill(SAMPLE_MESSAGE);
       onDone?.();
-      // Never leave the button reading "Saving…". If the gate above somehow
-      // does not swap this screen out, the member gets a tappable button back
-      // instead of a spinner they cannot escape — the PUT is idempotent, so a
-      // second tap costs nothing.
       setSaving(false);
     } catch (err) {
-      setSaveErr(
-        err.response?.data?.error ||
-        "Couldn't save your setup \u2014 check your connection and tap again."
-      );
+      setSaveErr(err.response?.data?.error || "Couldn't save your setup \u2014 check your connection and tap again.");
       setSaving(false);
     }
   };
 
-  // ── Step 0: Who is using the app ───────────────────────────────────────────
+  // ── 1. Who ──────────────────────────────────────────────────────────────
   if (step === 0) return (
-    <Screen>
-      <Logo />
-      <h1 style={s.h1}>Who's using FitLife?</h1>
-      <p style={s.sub}>We'll adjust the app to suit you</p>
-      <div style={s.modeGrid}>
-        {AGE_MODES.map(m => (
-          <button key={m.id} style={{
-            ...s.modeCard,
-            border: ageMode === m.id ? '2px solid #D4AF37' : '2px solid transparent',
-            background: ageMode === m.id ? 'rgba(212,175,55,0.08)' : 'rgba(255,255,255,0.04)',
-          }} onClick={() => setAgeMode(m.id)}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>{m.emoji}</div>
-            <div style={s.modeLabel}>{m.label}</div>
-            <div style={s.modeSub}>{m.sub}</div>
-            <div style={s.modeDesc}>{m.desc}</div>
-          </button>
-        ))}
+    <Screen step={0} total={TOTAL}>
+      <Question eyebrow="Welcome to FitLife" title="Who\u2019s using FitLife?" sub="We adjust the words, the detail and the text size to suit you." />
+      <div className="space-y-2" data-testid="onb-modes">
+        {AGE_MODES.map(m => {
+          const on = ageMode === m.id;
+          return (
+            <button key={m.id} type="button" onClick={() => { haptic(10); setAgeMode(m.id); }} aria-pressed={on}
+              className={`w-full text-left flex items-center gap-3 rounded-2xl px-4 py-3.5 border transition-all active:scale-[0.99] ${on ? 'bg-gold/[0.12] border-gold/50' : 'bg-white/[0.04] border-hair'}`}>
+              <span className={`w-10 h-10 rounded-full flex items-center justify-center ${on ? 'bg-gold text-charcoal' : 'bg-white/[0.06] text-mid'}`}><Icon name={m.icon} size={18} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-white">{m.label} <span className="text-lo font-medium">· {m.sub}</span></span>
+                <span className="block text-caption text-mid">{m.desc}</span>
+              </span>
+              {on && <Icon name="check" size={18} className="text-gold" />}
+            </button>
+          );
+        })}
       </div>
-      <Btn disabled={!ageMode} onClick={() => setStep(1)}>Next →</Btn>
+      <Footer onNext={() => setStep(1)} disabled={!ageMode} />
     </Screen>
   );
 
-  // ── Step 1: Goal + starting numbers ────────────────────────────
-  // Onboarding used to ask only for an emoji and an age band, so a new member
-  // landed on a dashboard with no target at all — and the journey bar on
-  // Progress silently refused to render, making the page look broken.
+  // ── 2. Goals (many) ──────────────────────────────────────────────────────
   if (step === 1) return (
-    <Screen>
-      <Logo />
-      <h1 style={s.h1}>What are you here for?</h1>
-      <p style={s.sub}>Your coach can fine-tune this later</p>
-      <div style={s.goalGrid}>
-        {GOALS.map(g => (
-          <button key={g.id} style={{
-            ...s.goalCard,
-            border: goal === g.id ? '2px solid #D4AF37' : '2px solid transparent',
-            background: goal === g.id ? 'rgba(212,175,55,0.08)' : 'rgba(255,255,255,0.04)',
-          }} onClick={() => setGoal(g.id)}>
-            <div style={{ fontSize: 26, marginBottom: 6 }}>{g.emoji}</div>
-            <div style={s.goalLabel}>{g.label}</div>
-          </button>
-        ))}
+    <Screen step={1} total={TOTAL}>
+      <Question eyebrow="Your goals" title="What are you working toward?"
+        sub="Pick everything that applies. Tap the one that matters most first — that order is how your coach will see it." />
+      <div className="space-y-2" data-testid="onb-goals">
+        {GOAL_OPTIONS.map(g => {
+          const pos = goals.indexOf(g.id);
+          const on = pos !== -1;
+          return (
+            <button key={g.id} type="button" onClick={() => toggleGoal(g.id)} aria-pressed={on} data-testid={`goal-${g.id}`}
+              className={`w-full text-left flex items-center gap-3 rounded-2xl px-4 py-3 border transition-all active:scale-[0.99] ${on ? 'bg-gold/[0.12] border-gold/50' : 'bg-white/[0.04] border-hair'}`}>
+              <span className={`w-9 h-9 rounded-full flex items-center justify-center ${on ? 'bg-gold text-charcoal' : 'bg-white/[0.06] text-mid'}`}><Icon name={g.icon} size={17} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-white">{g.label}</span>
+                <span className="block text-caption text-mid">{g.sub}</span>
+              </span>
+              {on && (
+                <span className="w-6 h-6 rounded-full bg-gold text-charcoal text-caption font-extrabold flex items-center justify-center tabular-nums" data-testid="goal-order">{pos + 1}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
-
-      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-        <div style={{ flex: 1 }}>
-          <label style={s.fieldLabel}>Weight today (kg)</label>
-          <input value={startW} onChange={e => setStartW(e.target.value.replace(/[^0-9.]/g, ''))}
-            inputMode="decimal" placeholder="e.g. 82.5" style={s.input} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <label style={s.fieldLabel}>Goal weight (kg)</label>
-          <input value={targetW} onChange={e => setTargetW(e.target.value.replace(/[^0-9.]/g, ''))}
-            inputMode="decimal" placeholder="optional" style={s.input} />
-        </div>
-      </div>
-      {!weightsValid && (
-        <p style={s.warn}>That doesn't look right — please enter a weight between 20 and 300 kg.</p>
-      )}
-      <p style={s.hint}>You can skip the numbers and add them later from your daily log.</p>
-
-      <div style={s.btnRow}>
-        <BackBtn onClick={() => setStep(0)} />
-        <Btn disabled={!goal || !weightsValid} onClick={() => setStep(2)}>Next →</Btn>
-      </div>
+      {goals.length > 1 && <p className="text-caption text-lo mt-3" data-testid="onb-primary">Main goal: <span className="text-gold-light font-semibold">{GOAL_OPTIONS.find(g => g.id === goals[0])?.label}</span> · tap to reorder</p>}
+      <Footer onBack={() => setStep(0)} onNext={() => setStep(2)} disabled={goals.length === 0} />
     </Screen>
   );
 
-  // ── Step 2: Pick avatar ────────────────────────────────────────────────────
+  // ── 3. Numbers ───────────────────────────────────────────────────────────
   if (step === 2) return (
-    <Screen>
-      <Logo />
-      <h1 style={s.h1}>Pick your avatar</h1>
-      <p style={s.sub}>This will appear on your profile</p>
-      <div style={s.avatarGrid}>
-        {AVATARS.map((a, i) => (
-          <button key={i} style={{
-            ...s.avatarBtn,
-            border: avatarIdx === i ? '2px solid #D4AF37' : '2px solid transparent',
-            background: avatarIdx === i ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
-            transform: avatarIdx === i ? 'scale(1.1)' : 'scale(1)',
-          }} onClick={() => setAvatarI(i)}>
-            <span style={{ fontSize: 32 }}>{a}</span>
-          </button>
+    <Screen step={2} total={TOTAL}>
+      <Question eyebrow="Your numbers" title="Where are you starting from?" sub="Both optional — your coach can set these too. Everything on Progress is measured from here." />
+      <div className="grid grid-cols-2 gap-3" data-testid="onb-weights">
+        {[['Weight now', startW, setStartW, 'e.g. 82.5', 'onb-start'], ['Target', targetW, setTargetW, 'e.g. 75', 'onb-target']].map(([label, val, set, ph, id]) => (
+          <label key={id} className="block">
+            <Eyebrow className="mb-1.5">{label}</Eyebrow>
+            <div className="flex items-center gap-2">
+              <input type="number" inputMode="decimal" step="0.1" value={val} onChange={e => set(e.target.value)} placeholder={ph} data-testid={id}
+                style={{ minHeight: 56, fontSize: 24 }}
+                className={`w-full font-display font-semibold text-center rounded-2xl border-2 focus:outline-none focus:ring-2 focus:ring-gold/30 tabular-nums ${wOk(val) ? 'border-white/[0.12]' : 'border-red-400/60'}`} />
+              <span className="text-lo font-semibold">kg</span>
+            </div>
+          </label>
         ))}
       </div>
-      <div style={s.btnRow}>
-        <BackBtn onClick={() => setStep(1)} />
-        <Btn onClick={() => setStep(3)}>Next →</Btn>
-      </div>
+      {!weightsValid && <p className="text-caption text-red-400 mt-2" role="alert">Weights should be between 20 and 300 kg.</p>}
+      <Footer onBack={() => setStep(1)} onNext={() => setStep(3)} disabled={!weightsValid} />
     </Screen>
   );
 
-  // ── Step 3: Finish ────────────────────────────────────────────────────────
-  if (step === 3) return (
-    <Screen>
-      <Logo />
-      <h1 style={s.h1}>You're all set!</h1>
-      <p style={s.sub}>Let's start building healthy habits</p>
+  // ── 4. Ready ─────────────────────────────────────────────────────────────
+  const primary = GOAL_OPTIONS.find(g => g.id === goals[0]);
+  return (
+    <Screen step={3} total={TOTAL}>
+      <Question eyebrow="You\u2019re set" title={`Let\u2019s ${primary ? primary.label.toLowerCase() : 'get going'}, together.`}
+        sub={goals.length > 1 ? `Also: ${goals.slice(1).map(id => GOAL_OPTIONS.find(g => g.id === id)?.label.toLowerCase()).join(', ')}.` : null} />
 
-      <div style={{ ...s.summaryCard, marginTop: 8 }}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>{AVATARS[avatarIdx]}</div>
-        <div style={s.summaryName}>You're all set!</div>
-        <div style={s.summarySub}>
-          {AGE_MODES.find(m => m.id === ageMode)?.label} mode ·{' '}
-          {AGE_MODES.find(m => m.id === ageMode)?.desc}
+      <Eyebrow className="mb-2">Pick an avatar</Eyebrow>
+      <div className="grid grid-cols-6 gap-2 mb-6" data-testid="onb-avatars">
+        {AVATARS.map((a, i) => (
+          <button key={i} type="button" onClick={() => { haptic(8); setAvatarI(i); }} aria-pressed={avatarIdx === i} aria-label={`Avatar ${i + 1}`}
+            style={{ minHeight: 44 }}
+            className={`rounded-xl text-2xl flex items-center justify-center border transition-all ${avatarIdx === i ? 'bg-gold/[0.15] border-gold/50 scale-105' : 'bg-white/[0.04] border-hair'}`}>{a}</button>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-gold/25 bg-gold/5 px-4 py-3.5" data-testid="onb-ai">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="w-7 h-7 rounded-full bg-gold/[0.14] text-gold flex items-center justify-center"><Icon name="spark" size={14} /></span>
+          <span className="text-sm font-bold text-white">This is how you log — one message a day</span>
         </div>
+        <p className="text-body-sm text-mid leading-relaxed">Say it the way you\u2019d tell a friend. I\u2019ll fill weight, food, water, walks and sleep from it and you tap Apply.</p>
+        <button type="button" onClick={() => done(true)} disabled={saving} data-testid="onb-send-sample"
+          className="mt-3 w-full text-left rounded-xl bg-surface border border-hair px-3 py-2.5 text-body-sm text-white italic active:scale-[0.99] transition-transform disabled:opacity-50">
+          \u201C{SAMPLE_MESSAGE}\u201D
+          <span className="block not-italic text-caption font-bold text-gold mt-1">Try this message \u203A</span>
+        </button>
       </div>
 
-      <div style={s.btnRow}>
-        <BackBtn onClick={() => setStep(2)} />
-        <Btn disabled={saving} onClick={done}>
-          {saving ? 'Saving…' : 'Start tracking 🎉'}
-        </Btn>
-      </div>
-      {saveError && <p style={s.saveErr}>{saveError}</p>}
+      {saveError && <p className="text-caption text-red-400 mt-3" role="alert">{saveError}</p>}
+      <Footer onBack={() => setStep(2)} onNext={() => done(false)} nextLabel="Open FitLife" busy={saving} />
     </Screen>
   );
 }
-
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function Screen({ children }) {
-  return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'var(--bg-base)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      padding: '48px 20px 40px',
-      overflowY: 'auto',
-    }}>
-      <div style={{ width: '100%', maxWidth: 420 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Logo() {
-  return (
-    <div style={{ textAlign: 'center', marginBottom: 32 }}>
-      <div style={{ fontSize: 48, marginBottom: 8 }}>🏃</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#D4AF37', fontFamily: 'Outfit, sans-serif' }}>
-        FitLife
-      </div>
-    </div>
-  );
-}
-
-function Btn({ children, onClick, disabled }) {
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      width: '100%', padding: '16px', borderRadius: 16,
-      background: disabled ? 'rgba(212,175,55,0.3)' : '#D4AF37',
-      color: '#fff', fontWeight: 700, fontSize: 16,
-      border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-      marginTop: 24, transition: 'all .15s',
-    }}>
-      {children}
-    </button>
-  );
-}
-
-function BackBtn({ onClick }) {
-  return (
-    <button onClick={onClick} style={{
-      flex: 1, padding: '16px', borderRadius: 16,
-      background: 'rgba(255,255,255,0.06)',
-      color: '#8e8e9a', fontWeight: 600, fontSize: 14,
-      border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
-      marginTop: 24, marginRight: 8,
-    }}>
-      ← Back
-    </button>
-  );
-}
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-const s = {
-  h1:        { fontSize: 24, fontWeight: 600, fontFamily: 'Fraunces, serif', color: '#ededf0', textAlign: 'center', marginBottom: 8 },
-  sub:       { fontSize: 14, color: '#6a6a78', textAlign: 'center', marginBottom: 28 },
-  modeGrid:  { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 8 },
-  modeCard:  { borderRadius: 16, padding: '16px 10px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center', minHeight: 140 },
-  modeLabel: { fontSize: 15, fontWeight: 700, color: '#ededf0', marginBottom: 2 },
-  modeSub:   { fontSize: 11, color: '#8e8e9a', marginBottom: 6 },
-  modeDesc:  { fontSize: 10, color: '#6a6a78', lineHeight: 1.4 },
-  goalGrid:  { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 },
-  goalCard:  { borderRadius: 16, padding: '16px 10px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
-  goalLabel: { fontSize: 14, fontWeight: 600, color: '#ededf0' },
-  fieldLabel:{ display: 'block', fontSize: 10, fontWeight: 700, color: '#7E8596', marginBottom: 6 },
-  input:     { width: '100%', boxSizing: 'border-box', background: '#1A1C20', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: '12px 14px', color: '#FFFFFF', fontSize: 15, fontWeight: 600, outline: 'none' },
-  warn:      { fontSize: 12, color: '#f87171', marginTop: 10, textAlign: 'center' },
-  hint:      { fontSize: 11, color: '#6a6a78', marginTop: 10, textAlign: 'center', lineHeight: 1.5 },
-  saveErr:   { fontSize: 12, color: '#f87171', marginTop: 12, textAlign: 'center', lineHeight: 1.5 },
-  avatarGrid:{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 8 },
-  avatarBtn: { borderRadius: 14, padding: '12px 8px', cursor: 'pointer', transition: 'all .15s', textAlign: 'center' },
-  btnRow:    { display: 'flex', gap: 8 },
-  summaryCard:{ background: 'linear-gradient(135deg, rgba(212,175,55,0.10), rgba(212,175,106,0.08))', borderRadius: 20, padding: '20px', textAlign: 'center', border: '1px solid rgba(212,175,106,0.20)' },
-  summaryName:{ fontSize: 18, fontWeight: 600, fontFamily: 'Fraunces, serif', color: '#ededf0', marginBottom: 6 },
-  summarySub: { fontSize: 13, color: '#8e8e9a', lineHeight: 1.5 },
-};

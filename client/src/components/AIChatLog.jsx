@@ -72,6 +72,10 @@ export const useAIChat = create((set, get) => ({
   // the composer and the thread share the screen (MemberBottomNav reads this).
   composerFocused: false,
   setComposerFocused: (v) => set({ composerFocused: !!v }),
+  // Text to drop into the composer the next time it mounts (onboarding's
+  // sample message). Consumed once.
+  prefillText: '',
+  prefill: (text) => set((s) => ({ prefillText: text || '', open: true, composerOpen: true, focusRequest: s.focusRequest + 1 })),
 
   messages: [],
   input: '',
@@ -223,6 +227,14 @@ export default function AIChatLog() {
   // lands, shrinks when text is deleted or cleared — so it can never sit
   // taller than what is in it.
   useEffect(() => { autoGrow(inputRef.current); }, [input]);
+
+  // Onboarding hands over a sample message; it lands in the box, not sent.
+  const prefillText = useAIChat(s => s.prefillText);
+  useEffect(() => {
+    if (!prefillText) return;
+    setInput(prefillText);
+    useAIChat.setState({ prefillText: '' });
+  }, [prefillText]);
 
   // × on the box: discard the draft and drop the keyboard. The only way out
   // used to be Send.

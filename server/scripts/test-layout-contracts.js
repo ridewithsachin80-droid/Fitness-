@@ -641,6 +641,17 @@ ck('Plan reads ONE payload (/members/me/today) and the same protocol derivation 
 ck('Plan deep-links into Today\'s sheets rather than re-implementing them', /navigate\(sheet \? `\/\?open=\$\{sheet\}` : '\/'\)/.test(planPage));
 ck('Plan does not mount the AI thread (the orb navigates to Today; the thread\'s -mx-4 row would overflow here)', !/AIChatLog/.test(planPage));
 
+// ── 12. Onboarding by goal (Sprint 7) ───────────────────────────────────────
+console.log('\n[12] Onboarding');
+const onb = read('components/Onboarding.jsx');
+const goalIds = [...onb.matchAll(/\{ id: '([a-z]+)',\s+label:/g)].map(m => m[1]).filter(id => !['child', 'adult', 'senior'].includes(id));
+const serverGoals = (fs.readFileSync(path.join(__dirname, '../routes/patients.js'), 'utf8').match(/const GOALS = \[([^\]]+)\]/) || [])[1] || '';
+ck('the goal ids the client offers are exactly the ids the server accepts',
+   goalIds.length === 7 && goalIds.every(id => new RegExp(`'${id}'`).test(serverGoals)), [goalIds, serverGoals]);
+ck('goals are sent as an ordered list, never a single goal', /age_mode: ageMode, avatar_idx: avatarIdx, goals,/.test(onb) && !/\n\s+goal,\n/.test(onb));
+ck('the sample message is prefilled into the composer, not sent', /prefill\(SAMPLE_MESSAGE\)/.test(onb) && /prefillText/.test(chat));
+ck('onboarding uses the icon set and tokens, not emoji in chrome (avatars excepted)', !/emoji:/.test(onb) && !/style=\{\{[^}]*color: '#/.test(onb));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

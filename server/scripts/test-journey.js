@@ -26,7 +26,8 @@ app.use(cookieParser());   // mirror production middleware order
 app.use((req, _res, next) => { req.io = { to: () => ({ emit: () => {} }) }; next(); });
 app.use('/api/auth',     require('../routes/auth'));
 app.use('/api/logs',     require('../routes/logs'));
-app.use('/api/patients', require('../routes/patients'));
+app.use('/api/members',  require('../routes/patients'));   // production mount (RENAME.md)
+app.use('/api/patients', require('../routes/patients'));   // legacy alias, still mounted in index.js
 app.use('/api/workouts', require('../routes/workouts'));
 app.use('/api/ai-chat',  require('../routes/aiChat'));
 app.use('/api/admin',    require('../routes/admin'));
@@ -317,6 +318,27 @@ const IST = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0
 
   r = await call('GET', '/api/logs/2020-01-01', mTok);
   ck('empty past date returns cleanly (no 500)', r.status === 200, r.status);
+
+  step('17. ONBOARDING GOALS (Sprint 7) — several goals, one primary');
+  r = await call('PUT', '/api/members/me/onboarding', mTok, { age_mode: 'adult', goals: ['sleep', 'lose', 'sleep', 'energy'] });
+  ck('saving a goal list returns it deduped, in the order picked', r.status === 200 && JSON.stringify(r.data.goals) === JSON.stringify(['sleep', 'lose', 'energy']), r.data);
+  ck('the legacy single `goal` is the FIRST of the list (coach views keep working)', r.data.goal === 'sleep', r.data.goal);
+  r = await call('GET', '/api/members/me/onboarding', mTok);
+  ck('the read returns both the list and the primary', JSON.stringify(r.data.goals) === JSON.stringify(['sleep', 'lose', 'energy']) && r.data.goal === 'sleep', r.data);
+  r = await call('PUT', '/api/members/me/onboarding', mTok, { goals: ['lose', 'fly'] });
+  ck('an unknown goal in the list is rejected with 400', r.status === 400, r.status);
+  r = await call('PUT', '/api/members/me/onboarding', mTok, { goals: [] });
+  ck('an empty list is rejected (pick at least one)', r.status === 400, r.status);
+  r = await call('PUT', '/api/members/me/onboarding', mTok, { goal: 'gain' });
+  ck('an old client sending only `goal` still works and becomes a one-item list', r.status === 200 && r.data.goal === 'gain' && JSON.stringify(r.data.goals) === JSON.stringify(['gain']), r.data);
+  r = await call('PUT', '/api/members/me/onboarding', mTok, { avatar_idx: 3 });
+  ck('a save that does not mention goals leaves them untouched', r.status === 200 && r.data.goal === 'gain' && r.data.goals.length === 1, r.data);
+  {
+    const { rows } = await pool.query('SELECT goal, goals FROM patient_profiles WHERE user_id = $1', [member.id]);
+    ck('stored in Postgres as goal + goals JSONB', rows[0].goal === 'gain' && Array.isArray(rows[0].goals) && rows[0].goals[0] === 'gain', rows[0]);
+  }
+  r = await call('GET', '/api/members/me', mTok);
+  ck('/members/me exposes goal and goals for the Profile screen', r.data.goal === 'gain' && Array.isArray(r.data.goals), [r.data.goal, r.data.goals]);
 
   srv.close();
   console.log('\n' + '═'.repeat(58));

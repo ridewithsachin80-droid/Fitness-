@@ -181,7 +181,9 @@ export default function useTodayModel() {
 
   useEffect(() => {
     getMyProfile().then(({ data }) => {
-      if (data?.created_at) setJoinedAt(String(data.created_at).slice(0, 10));
+      // /members/me calls it member_since (older payloads: created_at)
+      const joined = data?.member_since || data?.created_at;
+      if (joined) setJoinedAt(String(joined).slice(0, 10));
       if (data?.coach_notes?.length) setCoachNotes(data.coach_notes);
       if (data?.dob) {
         const diff = Date.now() - new Date(data.dob).getTime();

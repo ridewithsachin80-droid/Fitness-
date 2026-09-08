@@ -163,7 +163,7 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       pool.query(
         `SELECT
            u.id, u.name, u.phone, u.created_at,
-           pp.dob, pp.gender, pp.height_cm, pp.start_weight, pp.target_weight,
+           pp.dob, pp.gender, pp.height_cm, pp.start_weight, pp.target_weight, pp.goal, pp.goals,
            pp.conditions, pp.diet_notes, pp.water_target,
            pp.fasting_start, pp.fasting_end, pp.fasting_label, pp.fasting_note,
            pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
@@ -236,6 +236,10 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       start_weight:    p.start_weight,
       target_weight:   p.target_weight,
       current_weight:  p.current_weight,
+      // Sprint 7: goals is the ordered list the member picked; goal is its first
+      // entry (kept for the coach views and older clients).
+      goal:            p.goal || null,
+      goals:           Array.isArray(p.goals) ? p.goals : (p.goal ? [p.goal] : []),
       conditions:      p.conditions || [],
       diet_notes:      p.diet_notes || null,
       water_target:    p.water_target || 3000,
@@ -894,7 +898,7 @@ router.patch('/me/profile', authMW, roleCheck('patient'), async (req, res) => {
 router.get('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT onboarding_done, age_mode, avatar_idx, goal,
+      `SELECT onboarding_done, age_mode, avatar_idx, goal, goals,
               start_weight, target_weight
          FROM patient_profiles WHERE user_id = $1`,
       [req.user.id]);
@@ -904,6 +908,7 @@ router.get('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
       age_mode:        r.age_mode || null,
       avatar_idx:      r.avatar_idx ?? 0,
       goal:            r.goal || null,
+      goals:           Array.isArray(r.goals) ? r.goals : (r.goal ? [r.goal] : []),
       start_weight:    r.start_weight != null ? parseFloat(r.start_weight) : null,
       target_weight:   r.target_weight != null ? parseFloat(r.target_weight) : null,
     });
@@ -922,16 +927,31 @@ router.get('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
 // decision, so it is accepted here as a starting intention only — the coach
 // can change it afterwards and this endpoint will not clobber that either.
 router.put('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
-  const { age_mode, avatar_idx, goal, start_weight, target_weight } = req.body || {};
+  const { age_mode, avatar_idx, goal, goals, start_weight, target_weight } = req.body || {};
 
   const MODES = ['child', 'adult', 'senior'];
-  const GOALS = ['lose', 'maintain', 'gain', 'strength'];
+  // Sprint 7: the goal set grew (energy, sleep, condition) and a member may
+  // pick several. `goals` is the ordered list; `goal` is derived as its first
+  // entry unless the caller sent one explicitly. Old clients that send only
+  // `goal` still work — it becomes a one-item list.
+  const GOALS = ['lose', 'gain', 'strength', 'maintain', 'energy', 'sleep', 'condition'];
   if (age_mode && !MODES.includes(age_mode)) {
     return res.status(400).json({ error: 'Unknown age mode' });
   }
   if (goal && !GOALS.includes(goal)) {
     return res.status(400).json({ error: 'Unknown goal' });
   }
+  let goalList = null;
+  if (goals !== undefined) {
+    if (!Array.isArray(goals) || goals.some(g => !GOALS.includes(g))) {
+      return res.status(400).json({ error: 'Unknown goal' });
+    }
+    goalList = [...new Set(goals)].slice(0, GOALS.length);
+    if (!goalList.length) return res.status(400).json({ error: 'Pick at least one goal' });
+  } else if (goal) {
+    goalList = [goal];
+  }
+  const primaryGoal = goal || (goalList ? goalList[0] : null);
 
   // Same plausibility gate the scale-import path uses, so a typo cannot
   // poison the start weight that every later figure is measured against.
@@ -951,13 +971,14 @@ router.put('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
          age_mode        = COALESCE($2, age_mode),
          avatar_idx      = COALESCE($3, avatar_idx),
          goal            = COALESCE($4, goal),
+         goals           = COALESCE($7::jsonb, goals),
          start_weight    = COALESCE(start_weight, $5),
          target_weight   = COALESCE(target_weight, $6),
          updated_at      = NOW()
        WHERE user_id = $1
-       RETURNING onboarding_done, age_mode, avatar_idx, goal,
+       RETURNING onboarding_done, age_mode, avatar_idx, goal, goals,
                  start_weight, target_weight`,
-      [req.user.id, age_mode || null, idx, goal || null, sw, tw]);
+      [req.user.id, age_mode || null, idx, primaryGoal, sw, tw, goalList ? JSON.stringify(goalList) : null]);
 
     if (!rows.length) return res.status(404).json({ error: 'Profile not found' });
     const r = rows[0];
@@ -966,6 +987,7 @@ router.put('/me/onboarding', authMW, roleCheck('patient'), async (req, res) => {
       age_mode:        r.age_mode || null,
       avatar_idx:      r.avatar_idx ?? 0,
       goal:            r.goal || null,
+      goals:           Array.isArray(r.goals) ? r.goals : (r.goal ? [r.goal] : []),
       start_weight:    r.start_weight  != null ? parseFloat(r.start_weight)  : null,
       target_weight:   r.target_weight != null ? parseFloat(r.target_weight) : null,
     });

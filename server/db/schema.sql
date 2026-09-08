@@ -132,6 +132,10 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS onboarding_done  BOOLEAN  
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS age_mode         VARCHAR(10);
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS avatar_idx       INT         DEFAULT 0;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS goal             VARCHAR(20);
+-- Sprint 7: a member can have more than one goal ("lose weight" AND "sleep
+-- better"). `goals` is the full ordered list; `goal` stays as the FIRST one so
+-- every existing reader (coach views, digests) keeps working unchanged.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS goals            JSONB;
 
 -- Sprint 0 columns (may be missing on older deployments)
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS dob                 DATE;

@@ -565,7 +565,7 @@ const TODAY_API_STUB = `
       [/^\\/logs\\/range\\//,                      () => [{ log_date: T }, { log_date: Y }, { log_date: istDaysAgo(2) }]],
       [/^\\/members\\/me\\/today$/,                () => ({ meal_plan: { meals: [{ meal: 'Dinner', items: [{ name: 'Dal', grams: 200, per_100g: { calories: 110 } }, { name: 'Rice', grams: 150, per_100g: { calories: 130 } }] }] },
                                                           program: { program: { name: 'Foundation' }, days: [{ day_label: 'Push · ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T12:00:00').getDay()], exercises: [{ exercise_name: 'Bench press' }, { exercise_name: 'Shoulder press' }] }] } })],
-      [/^\\/members\\/me$/,                        () => ({ height_cm: '172', gender: 'male', dob: '1985-03-10', created_at: istDaysAgo(37) + 'T09:00:00.000Z', coach_notes: [{ id: 41, note: 'Great week — add a walk after dinner.', note_date: T, monitor_name: 'Sachin', read_at: null, flagged: false }] })],
+      [/^\\/members\\/me$/,                        () => ({ height_cm: '172', gender: 'male', dob: '1985-03-10', member_since: istDaysAgo(37) + 'T09:00:00.000Z', coach_notes: [{ id: 41, note: 'Great week — add a walk after dinner.', note_date: T, monitor_name: 'Sachin', read_at: null, flagged: false }] })],
       [/^\\/workouts$/,                            () => ({ exercises: [], session: null, cardio: [] })],
       [/^\\/workouts\\/summary$/,                  () => ({ sessions: [] })],
     ];
@@ -1150,6 +1150,59 @@ async function planTest() {
   } catch (e) { console.log('  – browser not installed, Plan screenshots NOT taken'); }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 12. Onboarding (Sprint 7) — several goals, in order
+// ═══════════════════════════════════════════════════════════════════════════
+async function onboardingTest() {
+  console.log('\n[12] Onboarding — mode, goals (many, ordered), numbers, ready');
+  const api = stub('api-onb.js', `
+    window.__puts = [];
+    const put = async (url, body) => { window.__puts.push({ url, body }); return { data: { onboarding_done: true, goal: body.goals?.[0] || null, goals: body.goals || [] } }; };
+    export default { get: async () => ({ data: {} }), post: put, put, patch: put, delete: put };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Onboarding from './components/Onboarding.jsx';
+    import { useSettingsStore } from './store/settingsStore.js';
+    import { useAIChat } from './components/AIChatLog.jsx';
+    window.__settings = useSettingsStore; window.__aiChat = useAIChat; window.__done = 0;
+    createRoot(document.getElementById('root')).render(<MemoryRouter><Onboarding onDone={() => { window.__done++; }} /></MemoryRouter>);`, api);
+  const { w, errors, html } = run(code);
+  await tick(200);
+  const d = w.document;
+  const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('onboarding mounts', errors.length === 0, errors.join('|'));
+  ck('step 1 asks who is using FitLife with three modes; Next is disabled until one is picked', q('onb-modes').querySelectorAll('button').length === 3 && q('onb-next').disabled);
+  q('onb-modes').querySelectorAll('button')[1].click(); await tick(50);
+  ck('picking Adult enables Next', !q('onb-next').disabled);
+  q('onb-next').click(); await tick(100);
+  ck('step 2 lists the seven goals; Next disabled with none picked', q('onb-goals') && q('onb-goals').querySelectorAll('button').length === 7 && q('onb-next').disabled);
+  q('goal-sleep').click(); q('goal-lose').click(); q('goal-energy').click(); await tick(50);
+  const num = (id) => q(id).querySelector('[data-testid="goal-order"]')?.textContent;
+  ck('goals are MULTI-select and numbered in the order tapped (sleep 1, lose 2, energy 3)', num('goal-sleep') === '1' && num('goal-lose') === '2' && num('goal-energy') === '3' && !num('goal-gain'), [num('goal-sleep'), num('goal-lose'), num('goal-energy')]);
+  ck('the main goal is called out as the first picked', /Main goal:/.test(q('onb-primary').textContent) && /Sleep better/.test(q('onb-primary').textContent));
+  q('goal-sleep').click(); await tick(50);
+  ck('tapping a picked goal removes it and the numbers close up (lose 1, energy 2)', num('goal-lose') === '1' && num('goal-energy') === '2' && !num('goal-sleep') && /Lose weight/.test(q('onb-primary').textContent));
+  q('goal-sleep').click(); await tick(50);
+  q('onb-next').click(); await tick(100);
+  ck('step 3: weights, both optional, Next enabled empty', q('onb-weights') && !q('onb-next').disabled);
+  const setVal = (el, v) => { const setter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set; setter.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  setVal(q('onb-start'), '500'); await tick(50);
+  ck('an implausible weight blocks Next with a message', q('onb-next').disabled && /between 20 and 300/.test(html()));
+  setVal(q('onb-start'), '82.5'); setVal(q('onb-target'), '75'); await tick(50);
+  q('onb-next').click(); await tick(100);
+  ck('step 4 names the main goal in the headline and the others after', /Let\u2019s lose weight/.test(html()) && /Also: more energy, sleep better/.test(html()), html().match(/Let.{0,40}/)?.[0]);
+  ck('avatar picker is on the last screen (not a step of its own)', q('onb-avatars') && q('onb-avatars').querySelectorAll('button').length === 12);
+  q('onb-avatars').querySelectorAll('button')[4].click(); await tick(30);
+  q('onb-send-sample').click(); await tick(200);
+  const put = w.__puts.find(p => /onboarding/.test(p.url));
+  ck('finishing saves { age_mode, goals in order, weights, avatar } through PUT /members/me/onboarding', put && put.body.age_mode === 'adult' && JSON.stringify(put.body.goals) === JSON.stringify(['lose', 'energy', 'sleep']) && put.body.start_weight === 82.5 && put.body.target_weight === 75 && put.body.avatar_idx === 4, put && put.body);
+  ck('the store is marked onboarded with the mode and the avatar', w.__settings.getState().ageMode === 'adult' && w.__settings.getState().avatarIdx === 4 && w.__done === 1, [w.__settings.getState().ageMode, w.__settings.getState().avatarIdx, w.__done]);
+  ck('"Try this message" opens the composer with the sample message waiting (not sent)', w.__aiChat.getState().composerOpen === true && /weight 82\.5, morning walk done/.test(w.__aiChat.getState().prefillText));
+  ck('no legacy single-goal field is sent (the server derives it)', put && put.body.goal === undefined);
+  ck('no error escaped', errors.length === 0, errors.join('|'));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1279,6 +1332,7 @@ async function overflowTest() {
     await todayVisualTest();
     await progressTest();
     await planTest();
+    await onboardingTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
