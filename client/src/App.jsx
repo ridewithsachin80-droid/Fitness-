@@ -9,6 +9,7 @@ import { getMyOnboarding } from './api/logs';
 import Login          from './pages/Login';
 import DailyLog       from './pages/DailyLog';
 import Progress       from './pages/Progress';
+import Plan           from './pages/Plan';
 import Profile        from './pages/Profile';
 import Coach        from './pages/Monitor';
 import MemberList    from './pages/PatientList';
@@ -200,6 +201,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<PrivateRoute roles={['patient']}><DailyLog /></PrivateRoute>} />
+        <Route path="/plan"     element={<PrivateRoute roles={['patient']}><Plan /></PrivateRoute>} />
         <Route path="/progress" element={<PrivateRoute roles={['patient']}><Progress /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute roles={['patient']}><Profile /></PrivateRoute>} />
         <Route path="/coach" element={<PrivateRoute roles={['monitor','admin']}><MemberList /></PrivateRoute>} />

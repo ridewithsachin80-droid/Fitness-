@@ -425,6 +425,7 @@ const OVERFLOW_PAGES = [
   ['Monitor',        "import P from './pages/Monitor.jsx';"],
   ['Settings',       "import P from './pages/Settings.jsx';"],
   ['Progress',       "import P from './pages/Progress.jsx';"],
+  ['Plan',           "import P from './pages/Plan.jsx';"],
   ['DailyLog',       "import P from './pages/DailyLog.jsx';"],
 ];
 
@@ -622,7 +623,9 @@ async function todayTest() {
   ck('Recover: 1.5 / 3.0 L and 7h 45m inline', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent) && /7h 45m/.test(q('chip-sleep').textContent));
   const dots = q('protocol-dots');
   ck('Recover: the protocol dots — one per item, "3 of 5" — live inside the row', !!dots && dots.querySelectorAll('span.block.w-2\\.5').length === 5 && /3 of 5/.test(dots.textContent), dots?.textContent);
-  ck('the read carries ONE action, derived from the day (food is logged, workout planned → Start today\'s workout)', q('read-action') && /Start today/.test(q('read-action').textContent), q('read-action')?.textContent);
+  // Time-gated in IST: the workout is the action from 06:00 IST; before that the protocol count is.
+  const istH = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
+  ck('the read carries ONE action, derived from the day (food logged, workout planned → Start today\'s workout from 06:00 IST)', q('read-action') && (istH >= 6 ? /Start today/.test(q('read-action').textContent) : /Tick the protocol/.test(q('read-action').textContent)), [istH, q('read-action')?.textContent]);
   ck('the header shows the date and Week N (joined 6 weeks ago in the fixture)', /Week 6/.test(q('date-line').textContent), q('date-line').textContent);
 
   const tl = q('timeline');
@@ -1046,6 +1049,107 @@ async function progressTest() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 11. Plan (Sprint 6) — the four views, and the new nav
+// ═══════════════════════════════════════════════════════════════════════════
+async function planTest() {
+  console.log('\n[11] Plan — Today / Week / Nutrition / Recovery + nav');
+  const api = stub('api-plan.js', `
+    window.__calls = [];
+    const wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
+    const payload = {
+      profile: { name: 'Asha Rao', monitor_name: 'Sachin', macros: { kcal: 1800, pro: 120, carb: 150, fat: 60 }, water_target: 3000,
+                 activities: ['walk', 'sun'], acv: ['acv1'], supplements: ['b12', 'd3'], fasting_start: '20:00', fasting_end: '12:00',
+                 item_overrides: { sun: { label: 'Morning sun', sub: '15 min before 9am' } } },
+      meal_plan: { date: 'x', meals: [
+        { meal: 'Lunch',  items: [{ name: 'Dal', grams: 200, per_100g: { calories: 110 } }, { name: 'Rice', grams: 150, per_100g: { calories: 130 } }] },
+        { meal: 'Dinner', items: [{ name: 'Paneer', grams: 150, per_100g: { calories: 260 } }] },
+      ] },
+      program: { program: { id: 7, name: 'Foundation' }, days: [
+        { id: 1, day_label: 'Push · ' + todayWd, exercises: [{ id: 11, exercise_name: 'Bench press', muscle_group: 'chest', target_sets: 3, target_reps: 10 }, { id: 12, exercise_name: 'Shoulder press', muscle_group: 'shoulders', target_sets: 3, target_reps: 12 }] },
+        { id: 2, day_label: 'Pull · ' + wd[(wd.indexOf(todayWd) + 2) % 7], exercises: [{ id: 21, exercise_name: 'Row' }] },
+        { id: 3, day_label: 'Legs · ' + wd[(wd.indexOf(todayWd) + 4) % 7], exercises: [{ id: 31, exercise_name: 'Squat' }, { id: 32, exercise_name: 'Lunge' }, { id: 33, exercise_name: 'Calf raise' }] },
+      ] },
+    };
+    const get = async (url) => { window.__calls.push(url); return { data: /\\/members\\/me\\/today$/.test(url) ? payload : {} }; };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+    import Plan from './pages/Plan.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    function Where() { const l = useLocation(); return <div data-testid="elsewhere">{l.pathname + l.search}</div>; }
+    createRoot(document.getElementById('root')).render(
+      <MemoryRouter initialEntries={['/plan']}>
+        <Routes>
+          <Route path="/plan" element={<Plan />} />
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </MemoryRouter>);`, api);
+
+  const { w, errors, html } = run(code);
+  await tick(600);
+  const d = w.document;
+  const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('Plan mounts from one request to /members/me/today', errors.length === 0 && w.__calls.filter(u => /me\/today/.test(u)).length === 1, [errors.join('|'), w.__calls]);
+  ck('header: program name and "Set by Sachin · weekday schedule"', /Foundation/.test(html()) && /Set by Sachin/.test(html()) && /weekday schedule/.test(html()));
+
+  // nav
+  const navLabels = [...d.querySelectorAll('[data-testid="member-nav"] button')].map(b => b.textContent.trim()).filter(Boolean);
+  ck('nav is Today · Plan · Progress · Profile — Settings is no longer a tab', navLabels.join(',') === 'Today,Plan,Progress,Profile', navLabels);
+  ck('Plan is the active tab', /text-gold/.test([...d.querySelectorAll('[data-testid="member-nav"] button')].find(b => /Plan/.test(b.textContent)).className));
+
+  // Today view
+  ck('Today view: this weekday\'s program day with sets × reps', q('plan-today-workout') && /Bench press/.test(q('plan-today-workout').textContent) && /3 × 10/.test(q('plan-today-workout').textContent), q('plan-today-workout')?.textContent);
+  ck('Today view: meal plan lines with per-meal kcal (Lunch ~415, Dinner ~390)', q('plan-today-meals') && /Lunch/.test(q('plan-today-meals').textContent) && /~415/.test(q('plan-today-meals').textContent) && /~390/.test(q('plan-today-meals').textContent), q('plan-today-meals')?.textContent);
+  ck('Today view: water 3.0 L, sleep target, supplements (B12 · D3) from the same protocol list Today uses', q('plan-today-recover') && /3\.0 L/.test(q('plan-today-recover').textContent) && /10:00 PM/.test(q('plan-today-recover').textContent) && /B12/.test(q('plan-today-recover').textContent));
+  q('plan-today-recover').querySelector('button').click(); await tick(100);
+  ck('a Recover line deep-links to Today with the sheet to open (/?open=water)', !!q('elsewhere') && q('elsewhere').textContent === '/?open=water', q('elsewhere')?.textContent);
+
+  // Re-mount for the other views (the deep link navigated away)
+  const { w: w2 } = run(code); await tick(600);
+  const d2 = w2.document; const q2 = (id) => d2.querySelector(`[data-testid="${id}"]`);
+  const tabs = [...d2.querySelectorAll('[role=tab]')];
+  tabs[1].click(); await tick(150);
+  const dayRows = [...d2.querySelectorAll('[data-testid="plan-week-day"]')];
+  ck('Week view: seven rows Mon…Sun, three program days, four Rest', dayRows.length === 7 && dayRows.filter(r => /Rest/.test(r.textContent)).length === 4, dayRows.map(r => r.textContent.slice(0, 20)));
+  ck('Week view: today is highlighted and shows its exercises', dayRows.some(r => r.dataset.today === '1' && /Push/.test(r.textContent) && /Bench press/.test(r.textContent)));
+  tabs[2].click(); await tick(150);
+  ck('Nutrition view: 1,800 kcal, protein/carbs/fat tiles, eating window 12:00 PM → 8:00 PM', /1,800/.test(q2('plan-main').textContent) && q2('plan-macros') && /120/.test(q2('plan-macros').textContent) && /12:00 PM → 8:00 PM/.test(q2('plan-main').textContent), q2('plan-main')?.textContent.slice(0, 200));
+  ck('Nutrition view: both prescribed meals with grams', d2.querySelectorAll('[data-testid="plan-meal"]').length === 2 && /200 g/.test(q2('plan-main').textContent));
+  tabs[3].click(); await tick(150);
+  ck('Recovery view: sleep, water, rest days, and the 5 protocol items with the coach\'s override label', q2('plan-recovery') && /Rest days/.test(q2('plan-recovery').textContent) && q2('plan-protocol') && q2('plan-protocol').querySelectorAll('div.flex').length === 5 && /Morning sun/.test(q2('plan-protocol').textContent), q2('plan-protocol')?.textContent.slice(0, 120));
+  ck('no error escaped', errors.length === 0, errors.join('|'));
+
+  // Screenshot at 360 for a human.
+  try {
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+    const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+      await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+      await page.addScriptTag({ content: code });
+      await new Promise(r => setTimeout(r, 1200));
+      fs.mkdirSync('/tmp/fitlife-shots', { recursive: true });
+      await page.screenshot({ path: '/tmp/fitlife-shots/plan-360-today.png', fullPage: true });
+      await page.tap('[role=tab]:nth-of-type(2)'); await new Promise(r => setTimeout(r, 500));
+      await page.screenshot({ path: '/tmp/fitlife-shots/plan-360-week.png', fullPage: true });
+      const m = await page.evaluate(() => document.documentElement.scrollWidth);
+      ck('Plan @360px in real Chrome: no sideways scroll on the Week view', m <= 361, m);
+    } finally { await browser.close(); await new Promise(r => server.close(r)); }
+  } catch (e) { console.log('  – browser not installed, Plan screenshots NOT taken'); }
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1174,6 +1278,7 @@ async function overflowTest() {
     await todayTest();
     await todayVisualTest();
     await progressTest();
+    await planTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

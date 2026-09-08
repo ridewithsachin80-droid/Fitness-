@@ -5,3 +5,4 @@ export * from './sleep';
 export * from './ticks';
 export * from './pending';
 export * from './nextAction';
+export * from './protocol';

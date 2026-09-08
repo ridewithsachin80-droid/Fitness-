@@ -24,7 +24,6 @@ import api from '../api/client';
 import { getMyProfile, getMyToday } from '../api/logs';
 import {
   today, istDate, istDaysAgo,
-  ACTIVITIES, ACV_ITEMS, SUPPLEMENTS,
   calcCompliance, plural,
 } from '../constants';
 import { useAIChat } from '../components/AIChatLog';
@@ -37,7 +36,7 @@ import { deriveTodayDay } from '../utils/programDay';
 import { coachCardRows } from '../utils/coachCard';
 import {
   countMicrosMet, calcBMR, foodKcal, calcFoodMacros, sleepMinutes, formatSleep,
-  AUTO_TICK_IDS, deriveActivityTicks, pendingLabels,
+  AUTO_TICK_IDS, deriveActivityTicks, pendingLabels, resolveProtocolItems,
 } from '../lib/day';
 
 export const AVATARS_LIST = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
@@ -47,22 +46,8 @@ export default function useTodayModel() {
   const { user } = useAuthStore();
   const { date, log, protocol, loading, saving, saved, queued, error, setDate, updateLog, saveLog } = useLogStore();
 
-  const overrides    = protocol?.item_overrides || {};
-  const applyOverride = (item) => {
-    const ov = overrides[item.id];
-    if (!ov) return item;
-    const timing = [ov.fromTime, ov.toTime].filter(Boolean).join('–');
-    const sub    = [ov.totalTime, timing].filter(Boolean).join(' · ') || ov.sub || item.sub || '';
-    return { ...item, label: ov.label || item.label, sub };
-  };
-
-  const allActivities  = [...ACTIVITIES,  ...(protocol?.custom_activities  || [])].map(applyOverride);
-  const allACV         = [...ACV_ITEMS,   ...(protocol?.custom_acv         || [])].map(applyOverride);
-  const allSupplements = [...SUPPLEMENTS, ...(protocol?.custom_supplements || [])].map(applyOverride);
-
-  const activeActivities  = allActivities.filter(a  => !protocol?.activities  || protocol.activities.includes(a.id));
-  const activeACV         = allACV.filter(a         => !protocol?.acv         || protocol.acv.includes(a.id));
-  const activeSupplements = allSupplements.filter(s => !protocol?.supplements || protocol.supplements.includes(s.id));
+  // One derivation of the protocol list, shared with the Plan screen (lib/day/protocol.js).
+  const { activeActivities, activeACV, activeSupplements } = resolveProtocolItems(protocol);
 
   usePush();
   useOfflineSync();
@@ -247,7 +232,8 @@ export default function useTodayModel() {
     const open = new URLSearchParams(window.location.search).get('open');
     if (!open) return;
     if (open === 'ai') useAIChat.getState().openChat();
-    if (open === 'weight') setHeroPanel('weight');
+    // Sprint 6: the Plan screen deep-links to any sheet (/?open=workout …)
+    if (['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition'].includes(open)) setHeroPanel(open);
     window.history.replaceState({}, '', window.location.pathname);
   }, []);
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });

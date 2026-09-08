@@ -8,6 +8,13 @@
  *
  * Returns { sheet, label } or null when there is nothing obvious to do.
  */
+/** Hour of the day in IST — the app's clock is IST-anchored everywhere else
+ *  (dates, crons, "today"), so the read's time gates use it too rather than
+ *  whatever zone the device happens to be in. */
+export function istHour(now = new Date()) {
+  return parseInt(now.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
+}
+
 export function nextAction({
   isToday = true, hour = 12,
   weight, foodCount = 0, waterMl = 0, waterTarget = 3000,

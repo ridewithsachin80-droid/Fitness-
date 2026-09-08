@@ -15,7 +15,7 @@ import Timeline      from '../components/today/Timeline';
 import CoachNotes    from '../components/today/CoachNotes';
 import MilestoneModal from '../components/today/MilestoneModal';
 import { FastingBar } from '../components/today/DayWidgets';
-import { nextAction } from '../lib/day';
+import { nextAction, istHour } from '../lib/day';
 import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet } from '../components/sheets';
 
 /**
@@ -86,7 +86,7 @@ export default function Today() {
           <>
             <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
               action={nextAction({
-                isToday, hour: new Date().getHours(),
+                isToday, hour: istHour(),
                 weight: log.weight, foodCount: (log.food || []).length,
                 waterMl: log.water || 0, waterTarget: protocol?.water_target || 3000,
                 protocolDone: m.protocolDone, protocolTotal: m.protocolTotal,

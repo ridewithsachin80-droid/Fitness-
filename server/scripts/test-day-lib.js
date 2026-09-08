@@ -165,6 +165,7 @@ console.log('\n[7b] nextAction');
   ck('sleep unset in the evening → sleep',            a({ sleepSet: false, hour: 20 })?.sheet === 'sleep');
   ck('complete day → nothing',                        a({ hour: 21 }) === null);
   ck('priority order: food beats protocol',           a({ foodCount: 0, protocolDone: 0, hour: 12 })?.sheet === 'food');
+  ck('istHour reads the clock in IST (05:30 UTC → 11)', day.istHour(new Date('2026-09-08T05:30:00Z')) === 11 && day.istHour(new Date('2026-09-08T20:00:00Z')) === 1);
 }
 
 // ── 8. The page and Profile import from lib/day — no private copies left ────

@@ -553,7 +553,7 @@ ck('DailyLog.jsx is a wrapper that renders Today (the route did not move)',
 ck('Today.jsx has no fetches and no store writes of its own — that is the hook\'s job',
    !/api\.(get|post)\(/.test(todayPage) && !/useEffect\(/.test(todayPage) && !/useState\(/.test(todayPage), 'Today.jsx has logic');
 ck('the model still handles the PWA shortcuts (?open=ai / ?open=weight)',
-   /get\('open'\)/.test(model) && /open === 'weight'/.test(model) && /open === 'ai'/.test(model));
+   /get\('open'\)/.test(model) && /\['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition'\]\.includes\(open\)/.test(model) && /open === 'ai'/.test(model));
 ck('the model still flushes the debounced save on tab hide / unload',
    /visibilitychange/.test(model) && /beforeunload/.test(model));
 ck('auto-derived protocol ticks are still additive only (tick, never untick)',
@@ -625,6 +625,21 @@ ck('the bar has its own Close, and the thread offers "Tell me" while the bar is 
 ck('Today reserves bottom space only while the bar is up', /composerOpen \? 'pb-32' : 'pb-6'/.test(todayPage));
 ck('the box re-measures on every text change (grows and shrinks)', /useEffect\(\(\) => \{ autoGrow\(inputRef\.current\); \}, \[input\]\)/.test(chat));
 ck('the bottom nav steps aside while composing', /composerFocused/.test(read('components/UI.jsx')) && /translate-y-\[120%\]/.test(read('components/UI.jsx')));
+
+// ── 11. Plan screen + navigation (Sprint 6) ─────────────────────────────────
+console.log('\n[11] Plan + nav');
+const ui = read('components/UI.jsx');
+const planPage = read('pages/Plan.jsx');
+ck('member nav tabs are Today · Plan · Progress · Profile, in that order, and Settings is not one of them (coach nav keeps its own)',
+   (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0, 4).join(',') === 'Today:/,Plan:/plan,Progress:/progress,Profile:/profile' && !/^Settings/.test(labels[4] || ''); })(),
+   [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1]));
+ck('/settings still resolves and Profile links to it (the screen moved, it did not vanish)',
+   /path="\/settings"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')) && /navigate\('\/settings'\)/.test(read('pages/Profile.jsx')));
+ck('/plan is routed for members', /path="\/plan"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')));
+ck('Plan reads ONE payload (/members/me/today) and the same protocol derivation Today uses',
+   /getMyToday\(\)/.test(planPage) && /resolveProtocolItems\(protocol\)/.test(planPage) && /resolveProtocolItems\(protocol\)/.test(model) && !/api\.get\(/.test(planPage));
+ck('Plan deep-links into Today\'s sheets rather than re-implementing them', /navigate\(sheet \? `\/\?open=\$\{sheet\}` : '\/'\)/.test(planPage));
+ck('Plan does not mount the AI thread (the orb navigates to Today; the thread\'s -mx-4 row would overflow here)', !/AIChatLog/.test(planPage));
 
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
