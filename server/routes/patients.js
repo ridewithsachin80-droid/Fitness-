@@ -10,6 +10,7 @@ const roleCheck = require('../middleware/roleCheck');
 const { loadProgramDays } = require('./programs');
 const { composeMember, summarise, composeBrief } = require('../services/triage');
 const { computeDayTotals } = require('../services/digests');
+const aiReads = require('../services/aiReads');
 const triageHour = () => parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
 const bcrypt = require('bcryptjs');
 
@@ -887,6 +888,28 @@ router.put('/me/notifications', authMW, roleCheck('patient'), async (req, res) =
 // it just goes back to being slower.
 //
 // Declared before '/:id' so "me" is never parsed as a member id.
+// ── GET /members/me/read ─────────────────────────────────────────────────────
+// Sprint 10: today's cached read — the same sentence the member got by
+// WhatsApp or push this morning (or this evening, once the recap has run).
+// Returns { read: null } when no cron has written one yet; the client then
+// falls back to its own local read, so Today is never blank.
+// Declared with the other /me routes, before any '/:id'.
+router.get('/me/read', authMW, roleCheck('patient'), async (req, res) => {
+  try {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
+      ? req.query.date
+      : aiReads.istDateStr();
+    const row = await aiReads.current({ memberId: req.user.id, date });
+    res.json({
+      date,
+      read: row ? { kind: row.kind, text: row.text, facts: row.facts || {}, created_at: row.created_at } : null,
+    });
+  } catch (err) {
+    console.error('GET /members/me/read error:', err);
+    res.status(500).json({ error: 'Could not load your read' });
+  }
+});
+
 router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
   const uid = req.user.id;
   try {

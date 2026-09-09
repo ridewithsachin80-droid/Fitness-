@@ -107,6 +107,7 @@ const CASES = [
   ['GET',  '/api/members/gaps',           'gaps must not be shadowed by /:id'],
   ['GET',  '/api/members/triage',         'Sprint 8 triage must not be shadowed by /:id'],
   ['GET',  '/api/members/1/brief',        'Sprint 9 member brief route exists'],
+  ['GET',  '/api/members/me/read',        'Sprint 10 cached read must not be shadowed by /:id'],
   ['GET',  '/api/members/morning-nudges',  'morning-nudges must not be shadowed by /:id'],
   ['GET',  '/api/members/1/morning-message', 'per-member morning message route exists'],
   // Voice logging. Mounted OUTSIDE /api/ai-chat because that router applies
@@ -199,6 +200,7 @@ const CASES = [
     ['/my-notifications','get',    '/my-schedule'],
     ['/gaps',            'get',    '/me/today'],
     ['/gaps',            'get',    '/triage'],
+    ['/gaps',            'get',    '/me/read'],
     ['/gaps',            'get',    '/me/onboarding'],
     ['/gaps',            'put',    '/me/onboarding'],
     ['/gaps',            'patch',  '/me/profile'],

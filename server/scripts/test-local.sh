@@ -199,7 +199,7 @@ LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-que
 test-coach-program test-coach-questions test-workout-merge test-image-routing \
 test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib"
 
-DB_SUITES="test-weekly-report test-journey test-gaps test-coach-triage test-labs test-macrolab test-lab-insight \
+DB_SUITES="test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
 test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log"

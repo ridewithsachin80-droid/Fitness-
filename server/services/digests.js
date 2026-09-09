@@ -18,6 +18,8 @@ const pool = require('../db/pool');
 
 // Mirrors client calcN: per_100g × grams/100. Rows without nutrition data are
 // counted, not silently priced at zero.
+const aiReads = require('./aiReads');
+
 function computeDayTotals(foodItems) {
   let cal = 0, pro = 0, carb = 0, fat = 0, unknown = 0;
   for (const f of (Array.isArray(foodItems) ? foodItems : [])) {
@@ -435,6 +437,16 @@ async function sendMorningNudges(istDate) {
     // Silence beats "Good morning" on its own.
     if (!body) continue;
 
+    // Sprint 10: cache the read BEFORE sending. Today, WhatsApp and push then
+    // all show these exact words; if the send fails, the member still opens
+    // the app to the same line rather than to a different local guess.
+    try {
+      await aiReads.save({
+        memberId: m.id, date: istDate, kind: 'morning', text: body, source: 'cron',
+        facts: { yesterday: yesterdayFacts, todayDay: todayDay ? todayDay.day_label : null, weighedToday: m.weighed_today === true },
+      });
+    } catch (err) { console.error('ai_reads morning save failed:', err.message); }
+
     const title = `Good morning, ${firstNameOr(m.name, 'there')}`;
 
     // WhatsApp first, push as the fallback.
@@ -495,7 +507,10 @@ async function sendEveningRecaps(istDate) {
     if (!hasAnything) continue;                                   // silence → gap system's job
     if (await alreadySentToday(m.id, 'evening_recap', istDate)) continue;
     const prefs = await preferences(m.id);
-    if (prefs.optedOut || !prefs.push) continue;
+    // A member who turned notifications off still gets the read on Today —
+    // only the push is skipped. (Opting out of everything skips both.)
+    const pushAllowed = !prefs.optedOut && prefs.push;
+    if (prefs.optedOut) continue;
 
     const body = buildRecapBody({
       totals,
@@ -504,6 +519,15 @@ async function sendEveningRecaps(istDate) {
       waterTarget:  m.water_target || null,
       weightLogged: m.weight_kg != null,
     });
+    // Sprint 10: same words on Today as in the notification.
+    try {
+      await aiReads.save({
+        memberId: m.id, date: istDate, kind: 'evening', text: body, source: 'cron',
+        facts: { kcal: totals.cal, kcalTarget: m.macro_kcal || null, waterMl: m.water_ml || 0, weightLogged: m.weight_kg != null },
+      });
+    } catch (err) { console.error('ai_reads evening save failed:', err.message); }
+
+    if (!pushAllowed) continue;              // cached above; no notification
     const title = 'Today so far';
     let ok = true;
     try { await push.sendToUser(m.id, title, body, 'evening_recap'); }

@@ -565,6 +565,7 @@ const TODAY_API_STUB = `
       [/^\\/logs\\/range\\//,                      () => [{ log_date: T }, { log_date: Y }, { log_date: istDaysAgo(2) }]],
       [/^\\/members\\/me\\/today$/,                () => ({ meal_plan: { meals: [{ meal: 'Dinner', items: [{ name: 'Dal', grams: 200, per_100g: { calories: 110 } }, { name: 'Rice', grams: 150, per_100g: { calories: 130 } }] }] },
                                                           program: { program: { name: 'Foundation' }, days: [{ day_label: 'Push · ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T12:00:00').getDay()], exercises: [{ exercise_name: 'Bench press' }, { exercise_name: 'Shoulder press' }] }] } })],
+      [/^\\/members\\/me\\/read$/,                   () => (window.__readPayload ?? { date: T, read: null })],
       [/^\\/members\\/me$/,                        () => ({ height_cm: '172', gender: 'male', dob: '1985-03-10', member_since: istDaysAgo(37) + 'T09:00:00.000Z', coach_notes: [{ id: 41, note: 'Great week — add a walk after dinner.', note_date: T, monitor_name: 'Sachin', read_at: null, flagged: false }] })],
       [/^\\/workouts$/,                            () => ({ exercises: [], session: null, cardio: [] })],
       [/^\\/workouts\\/summary$/,                  () => ({ sessions: [] })],
@@ -611,6 +612,8 @@ async function todayTest() {
   ck('the hero number is today\'s weight, in kg, with the delta vs yesterday',
      q('hero-weight') && /82\.4/.test(q('hero-weight').textContent) && /↓ 0\.3/.test(q('hero-weight').textContent), q('hero-weight')?.textContent);
   ck('Today\'s read is present and mentions the day (tap opens the AI chat)', !!q('ai-read') && q('ai-read').textContent.length > 30);
+  // Sprint 10: with no cached read the LOCAL read stands in, so Today is never blank.
+  ck('with /members/me/read empty, the locally computed read is shown', w.__calls.some(u => /me\/read/.test(u)) && !/Good morning, Asha\. Yesterday/.test(q('ai-read').textContent), q('ai-read').textContent.slice(0, 80));
   // ── Sprint 5b: Today's Plan replaces coach card + tiles + deficit chip + dots card
   const plan = q('todays-plan');
   ck('Today\'s Plan renders one section with Move, Eat and Recover rows', !!plan && ['plan-move', 'plan-eat', 'plan-recover'].every(id => plan.querySelector(`[data-testid="${id}"]`)));
@@ -1444,6 +1447,48 @@ async function memberPage9bTest() {
   ck('no error escaped', errors.length === 0 && R.errors.length === 0, [errors.join('|'), R.errors.join('|')]);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 17. The cached read (Sprint 10) — same words as WhatsApp/push
+// ═══════════════════════════════════════════════════════════════════════════
+async function cachedReadTest() {
+  console.log('\n[17] Cached read on Today');
+  const api = stub('api-read.js', `
+    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    const T = today();
+    window.__calls = [];
+    const log = { weight_kg: '82.4', activities: {}, acv: {}, supplements: {}, food_items: [], water_ml: 0, sleep: {}, notes: '',
+      protocol: { activities: [], acv: [], supplements: [], macros: { kcal: 1800 }, water_target: 3000 } };
+    const CACHED = 'Yesterday: 1,650 kcal · 82.7 kg. Push · Mon today — weigh in when you are up.';
+    const get = async (url) => {
+      window.__calls.push(url);
+      if (new RegExp('^/logs/' + T + '$').test(url)) return { data: log };
+      if (/^\\/members\\/me\\/read$/.test(url)) return { data: { date: T, read: { kind: 'morning', text: CACHED, facts: {} } } };
+      if (/^\\/members\\/me$/.test(url)) return { data: {} };
+      if (/^\\/logs\\/range/.test(url)) return { data: [] };
+      if (/^\\/members\\/me\\/today$/.test(url)) return { data: {} };
+      if (/^\\/workouts/.test(url)) return { data: { exercises: [], cardio: [], session: null } };
+      return { data: {} };
+    };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DailyLog from './pages/DailyLog.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
+  const { w, errors } = run(code); await tick(900);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('Today asks for the cached read once', errors.length === 0 && w.__calls.filter(u => /me\/read/.test(u)).length === 1, [errors.join('|'), w.__calls.filter(u => /me\/read/.test(u))]);
+  ck('the cached sentence is what Today shows — the same words the member got by WhatsApp', /Yesterday: 1,650 kcal · 82\.7 kg/.test(q('ai-read').textContent), q('ai-read').textContent.slice(0, 120));
+  ck('the read still carries its one action', !!q('read-action'));
+  ck('the local read did not also render', !/Fresh day|Nothing logged today/.test(q('ai-read').textContent));
+  // going back a day re-asks for that day's read
+  const before = w.__calls.filter(u => /me\/read/.test(u)).length;
+  q('date-nav').querySelector('[aria-label="Previous day"]').click(); await tick(800);
+  ck('changing the day re-reads for that date', w.__calls.filter(u => /me\/read/.test(u)).length === before + 1, w.__calls.filter(u => /me\/read/.test(u)));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1578,6 +1623,7 @@ async function overflowTest() {
     await triageTest();
     await memberBriefTest();
     await memberPage9bTest();
+    await cachedReadTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

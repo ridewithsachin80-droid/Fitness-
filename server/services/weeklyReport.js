@@ -227,6 +227,17 @@ async function generateForMember(member, runDate, { ai } = {}) {
      DO UPDATE SET data = EXCLUDED.data, coach_note = EXCLUDED.coach_note, created_at = NOW()
      RETURNING id`,
     [member.id, member.monitor_id || null, win.start, win.end, JSON.stringify(data), coachNote]);
+  // Sprint 10: the weekly line lands in ai_reads too, so Sunday's message and
+  // the Progress card quote the same sentence.
+  try {
+    const aiReads = require('./aiReads');
+    await aiReads.save({
+      memberId: member.id, date: win.end, kind: 'weekly',
+      text: coachNote || winText || '', source: 'cron',
+      facts: { weekStart: win.start, weekEnd: win.end, win: winText },
+    });
+  } catch (err) { console.error('ai_reads weekly save failed:', err.message); }
+
   return { id: saved.id, data, coachNote };
 }
 

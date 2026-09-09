@@ -798,6 +798,27 @@ CREATE TABLE IF NOT EXISTS quick_log_turns (
 CREATE INDEX IF NOT EXISTS idx_quick_log_turns_patient
   ON quick_log_turns(patient_id, created_at DESC);
 
+-- ── AI reads (Sprint 10) ─────────────────────────────────────────────────────
+-- One cached line per member per day per kind. The morning cron writes it at
+-- 06:30 IST, the evening recap at 20:30, the weekly report on Sunday; Today's
+-- read, the WhatsApp message and the push notification all read this ONE row,
+-- so a member cannot be told three slightly different things about the same
+-- day. `source` records who wrote it ('cron' | 'request') for debugging; the
+-- UNIQUE key makes a re-run an update, never a duplicate.
+CREATE TABLE IF NOT EXISTS ai_reads (
+  id         SERIAL PRIMARY KEY,
+  patient_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_date  DATE NOT NULL,
+  kind       VARCHAR(16) NOT NULL CHECK (kind IN ('morning','evening','weekly')),
+  text       TEXT NOT NULL,
+  facts      JSONB DEFAULT '{}',
+  source     VARCHAR(16) DEFAULT 'cron',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_reads_unique
+  ON ai_reads(patient_id, read_date, kind);
+CREATE INDEX IF NOT EXISTS idx_ai_reads_member ON ai_reads(patient_id, read_date DESC);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

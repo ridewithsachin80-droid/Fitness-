@@ -701,6 +701,28 @@ ck('Admin header has the Coach view shortcut and Today\'s gaps names open the me
 ck('the reminders admin renders Test/Del through the tokened button map (no saturated fills reach the screen)',
    /const BTN = \{/.test(read('components/AdminReminders.jsx')) && /'#b91c1c': \{ background: 'rgba\(248,113,113,0\.08\)'/.test(read('components/AdminReminders.jsx')) && !/💧 Test|🏃 Test/.test(read('components/AdminReminders.jsx')));
 
+// ── 17. The cached read (Sprint 10) ─────────────────────────────────────────
+console.log('\n[17] Cached read');
+const digestsSrc = fs.readFileSync(path.join(__dirname, '../services/digests.js'), 'utf8');
+const readsSrc   = fs.readFileSync(path.join(__dirname, '../services/aiReads.js'), 'utf8');
+const schemaSrc  = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf8');
+ck('ai_reads is additive and unique per member/day/kind',
+   /CREATE TABLE IF NOT EXISTS ai_reads/.test(schemaSrc) && /CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_reads_unique/.test(schemaSrc) && /CHECK \(kind IN \('morning','evening','weekly'\)\)/.test(schemaSrc));
+ck('the new table is declared ABOVE the deferred backfills (it must exist before any UPDATE runs)',
+   schemaSrc.indexOf('CREATE TABLE IF NOT EXISTS ai_reads') < schemaSrc.indexOf('DEFERRED BACKFILLS'));
+ck('both crons cache the SAME `body` they send — not a second computation',
+   /kind: 'morning', text: body,/.test(digestsSrc) && /kind: 'evening', text: body,/.test(digestsSrc));
+ck('a read is cached before the send, so a failed WhatsApp/push still leaves Today right',
+   digestsSrc.indexOf("kind: 'morning', text: body,") < digestsSrc.indexOf('const wa = await sendWhatsApp'));
+ck('a member with notifications off still gets the read, only the push is skipped',
+   /const pushAllowed = !prefs\.optedOut && prefs\.push;/.test(digestsSrc) && /if \(!pushAllowed\) continue;/.test(digestsSrc));
+ck('a cron failure never breaks the send (the save is wrapped)', (digestsSrc.match(/ai_reads \w+ save failed/g) || []).length === 2);
+ck('save refuses an unknown kind and never stores an empty line', /KINDS\.includes\(kind\)/.test(readsSrc) && /if \(!clean\) return null;/.test(readsSrc));
+ck('GET /members/me/read is member-only and declared before /:id',
+   /router\.get\('\/me\/read', authMW, roleCheck\('patient'\)/.test(patientsRoute) && patientsRoute.indexOf("router.get('/me/read'") < patientsRoute.indexOf("router.get('/:id'"));
+ck('Today prefers the cached read but keeps the local one as a fallback',
+   /const read = serverRead\?\.text/.test(model) && /: localRead;/.test(model) && /getMyRead\(date\)/.test(model));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

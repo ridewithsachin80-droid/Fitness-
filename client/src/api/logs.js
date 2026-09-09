@@ -55,6 +55,7 @@ export const getYesterdayFood = (meal)  =>
   api.get('/foods/yesterday', { params: meal ? { meal } : {} });
 
 // Sprint 5 — one request for the dashboard's cold open instead of six.
+export const getMyRead       = (date)           => api.get('/members/me/read', { params: date ? { date } : {} });
 export const getMyToday = ()            => api.get('/members/me/today');
 // Sprint 11: coach logs/corrects a member's weight for a specific date
 export const logWeightForMember = (id, date, weight_kg) =>

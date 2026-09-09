@@ -21,7 +21,7 @@ import { useEffect, useCallback, useState, useRef } from 'react';
 import { useLogStore }  from '../store/logStore';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
-import { getMyProfile, getMyToday } from '../api/logs';
+import { getMyProfile, getMyToday, getMyRead } from '../api/logs';
 import {
   today, istDate, istDaysAgo,
   calcCompliance, plural,
@@ -75,6 +75,7 @@ export default function useTodayModel() {
   const [replied, setReplied]     = useState({});
   const [profileAge, setProfileAge] = useState(null);
   const [joinedAt, setJoinedAt] = useState(null);       // Sprint 5b: 'Week N' in the header
+  const [serverRead, setServerRead] = useState(null);   // Sprint 10: the cached read (same words as WhatsApp/push)
 
   // Only unread messages appear on Today; read ones live in the bell.
   const unreadNotes = coachNotes.filter(n => !n.read_at);
@@ -151,6 +152,19 @@ export default function useTodayModel() {
       .catch(() => { if (!cancelled) setAggregate(null); });   // null = fall back
     return () => { cancelled = true; };
   }, []);
+
+  // Sprint 10: the cached read — the same sentence the member got by WhatsApp
+  // or push. Re-fetched when the date changes; a past day has its own read.
+  // A failure or an empty result leaves serverRead null and the local
+  // dailyRead() stands in, so Today is never blank.
+  useEffect(() => {
+    let cancelled = false;
+    setServerRead(null);
+    getMyRead(date)
+      .then(({ data }) => { if (!cancelled) setServerRead(data?.read || null); })
+      .catch(() => { if (!cancelled) setServerRead(null); });
+    return () => { cancelled = true; };
+  }, [date]);
 
   useEffect(() => {
     if (aggregate === undefined) return;                 // still waiting
@@ -548,7 +562,7 @@ export default function useTodayModel() {
     activitiesLabel: terms.activities,
   });
 
-  const read = dailyRead({
+  const localRead = dailyRead({
     isToday,
     weight: log.weight || null,
     kcalIn,
@@ -565,6 +579,13 @@ export default function useTodayModel() {
     streak, streakIsBest,
     pendingLabels: pending,
   });
+
+  // The cached read wins when there is one: it is what the member was already
+  // told today. The local read covers a missed cron, a brand-new member, and
+  // any day the member edits after the cron ran.
+  const read = serverRead?.text
+    ? { text: serverRead.text, tone: serverRead.kind === 'evening' ? 'progress' : 'prompt', cached: true, kind: serverRead.kind }
+    : localRead;
 
   const coachRows = coachCardRows({
     coachPlan,
