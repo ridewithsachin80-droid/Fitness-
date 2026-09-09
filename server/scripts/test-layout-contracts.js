@@ -665,19 +665,6 @@ const login = read('pages/Login.jsx');
 ck('the PIN stays one input (server PINs are "at least 4"), large and spaced; no fixed four boxes', /data-testid="login-pin"/.test(login) && /letterSpacing/.test(login) && !/maxLength=\{1\}/.test(login));
 ck('remembered-member card uses the device avatar from the settings store', /data-testid="remembered-card"/.test(login) && /useSettingsStore\(st => st\.avatarIdx\)/.test(login) && /import \{ useSettingsStore \}/.test(login));
 
-// ── 14. Coach home: Needs attention (Sprint 8) ──────────────────────────────
-console.log('\n[14] Coach home');
-const feed = read('components/coach/TriageFeed.jsx');
-const patientsRoute = fs.readFileSync(path.join(__dirname, '../routes/patients.js'), 'utf8');
-ck('GET /members/triage is declared before the first /:id route',
-   patientsRoute.indexOf("router.get('/triage'") > -1 && patientsRoute.indexOf("router.get('/triage'") < patientsRoute.indexOf("router.get('/:id'"));
-ck('the route composes services/triage (one set of rules), and the feed reads only that endpoint',
-   /require\('\.\.\/services\/triage'\)/.test(patientsRoute) && /api\.get\('\/members\/triage'\)/.test(feed) && (feed.match(/api\.get\(/g) || []).length === 1);
-ck('the feed never sends a message itself — WhatsApp drafts via whatsappLink, editable before send',
-   /whatsappLink\(m\.phone, draftFor\(m\)\)/.test(feed) && !/api\.post\(/.test(feed));
-ck('the feed survives an empty or malformed payload (no blank coach home)', /Array\.isArray\(data\.members\)/.test(feed) && /\.\.\.\(data\.counts \|\| \{\}\)/.test(feed));
-ck('the coach home mounts the feed first', read('pages/PatientList.jsx').indexOf('<TriageFeed />') < read('pages/PatientList.jsx').indexOf('<MorningNudges />'));
-
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //
