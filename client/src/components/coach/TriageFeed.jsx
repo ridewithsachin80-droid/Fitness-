@@ -49,21 +49,23 @@ function Row({ m, onOpen, onMessage }) {
   const line = m.reasons.length ? m.reasons.join(' + ') : (m.wins.length ? m.wins.join(' · ') : 'All quiet');
   const messageAction = ['nudge', 'praise', 'onboard', 'checkin'].includes(m.action?.key);
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-hair last:border-b-0" data-testid="triage-row" data-priority={m.priority}>
-      <span className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${tone.dot}`} aria-hidden="true" />
-      <button type="button" onClick={() => { haptic(8); onOpen(m); }} className="min-w-0 flex-1 text-left">
-        <span className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-white truncate">{m.name}</span>
-          <span className="flex gap-0.5 flex-shrink-0" aria-label={`${m.logged_days} of 7 days logged`}>
-            {m.week.map((on, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full ${on ? 'bg-gold' : 'bg-white/[0.12]'}`} />)}
-          </span>
+    <div className="py-3 border-b border-hair last:border-b-0" data-testid="triage-row" data-priority={m.priority}>
+      <div className="flex items-center gap-3">
+        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${tone.dot}`} aria-hidden="true" />
+        <button type="button" onClick={() => { haptic(8); onOpen(m); }} className="min-w-0 flex-1 text-left">
+          <span className="block text-sm font-semibold text-white truncate">{m.name}</span>
+        </button>
+        <button type="button" onClick={() => { haptic(10); messageAction ? onMessage(m) : onOpen(m); }} data-testid="triage-action"
+          style={{ minHeight: 36 }}
+          className={`flex-shrink-0 text-caption font-bold whitespace-nowrap px-2 -mr-2 rounded-lg active:scale-95 transition-transform ${m.priority === 'ok' ? 'text-gold-deep' : 'text-gold'}`}>
+          {m.action?.label} ›
+        </button>
+      </div>
+      <button type="button" onClick={() => { haptic(8); onOpen(m); }} className="w-full text-left flex items-center gap-2 pl-[22px] mt-0.5">
+        <span className="flex gap-0.5 flex-shrink-0" aria-label={`${m.logged_days} of 7 days logged`}>
+          {m.week.map((on, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full ${on ? 'bg-gold' : 'bg-white/[0.12]'}`} />)}
         </span>
-        <span className={`block text-caption leading-snug ${m.reasons.length ? 'text-mid' : 'text-lo'}`} data-testid="triage-line">{line}</span>
-      </button>
-      <button type="button" onClick={() => { haptic(10); messageAction ? onMessage(m) : onOpen(m); }} data-testid="triage-action"
-        style={{ minHeight: 36 }}
-        className={`flex-shrink-0 text-caption font-bold whitespace-nowrap px-2 -mr-2 rounded-lg active:scale-95 transition-transform ${m.priority === 'ok' ? 'text-gold-deep' : 'text-gold'}`}>
-        {m.action?.label} ›
+        <span className={`text-caption leading-snug truncate ${m.reasons.length ? 'text-mid' : 'text-lo'}`} data-testid="triage-line">{line}</span>
       </button>
     </div>
   );
@@ -98,15 +100,13 @@ export default function TriageFeed({ onLoaded }) {
 
   return (
     <section data-testid="triage" className="rounded-3xl border border-hair bg-surface px-4 pt-3 pb-1">
-      <div className="flex items-baseline justify-between">
-        <Eyebrow tone="gold">Needs attention</Eyebrow>
-        <span className="text-caption text-mid" data-testid="triage-counts">
+      <Eyebrow tone="gold">Needs attention</Eyebrow>
+      <p className="text-caption text-mid mt-0.5" data-testid="triage-counts">
           <span className="text-white font-semibold tabular-nums">{counts.total}</span> members ·{' '}
           <span className="text-ok font-semibold tabular-nums">{counts.on_track}</span> on track ·{' '}
           <span className="text-amber-300 font-semibold tabular-nums">{counts.attention + counts.watch}</span> need attention
           {counts.high > 0 && <> · <span className="text-red-400 font-semibold tabular-nums">{counts.high}</span> high</>}
-        </span>
-      </div>
+      </p>
 
       {needs.length === 0 ? (
         <EmptyState compact icon="check" title="Everyone is on track" body="No gaps, no silences, nothing slipping. Enjoy it." />
