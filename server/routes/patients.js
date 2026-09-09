@@ -8,6 +8,8 @@ const { getISTDate } = require('../utils/istDate');
 const authMW = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 const { loadProgramDays } = require('./programs');
+const { composeMember, summarise } = require('../services/triage');
+const triageHour = () => parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
 const bcrypt = require('bcryptjs');
 
 // Lightweight audit helper — logs monitor/admin actions on patient records
@@ -408,6 +410,88 @@ router.post('/:id/morning-nudges/sent', authMW, roleCheck('monitor', 'admin'),
   } catch (err) {
     console.error('morning-nudges/sent error:', err);
     res.status(500).json({ message: 'Could not record the send' });
+  }
+});
+
+// ── GET /members/triage ──────────────────────────────────────────────────────
+// Sprint 8: the coach home. One line and one action per member, worst first,
+// with header counts. Read-only. Declared BEFORE any '/:id' route so 'triage'
+// can never be read as a member id (smoke-routes asserts the order).
+router.get('/triage', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const { rows: members } = await pool.query(
+      isAdmin
+        ? `SELECT u.id, u.name, u.phone FROM users u
+           WHERE u.role = 'patient' AND u.active = true ORDER BY u.name`
+        : `SELECT u.id, u.name, u.phone FROM users u
+           JOIN monitor_patients mp ON mp.patient_id = u.id
+           WHERE mp.monitor_id = $1 AND mp.active = true AND u.active = true
+           ORDER BY u.name`,
+      isAdmin ? [] : [req.user.id]
+    );
+    const todayStr = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+    const hour = triageHour();
+    if (!members.length) return res.json({ ...summarise([]), today: todayStr, generated_at: new Date().toISOString() });
+
+    const ids = members.map(m => m.id);
+    const [logsRes, profRes, lastRes, unreadRes, workoutRes, progRes] = await Promise.all([
+      pool.query(
+        `SELECT patient_id, log_date, weight_kg, food_items, water_ml, activities, acv, supplements, sleep, compliance_pct
+         FROM daily_logs
+         WHERE patient_id = ANY($1) AND log_date >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 13
+         ORDER BY log_date`, [ids]),
+      pool.query(
+        `SELECT user_id, water_target, protocol_activities, protocol_acv, protocol_supplements, meal_plan
+         FROM patient_profiles WHERE user_id = ANY($1)`, [ids]),
+      pool.query(
+        `SELECT patient_id, ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - MAX(log_date)) AS days_since
+         FROM daily_logs WHERE patient_id = ANY($1) GROUP BY patient_id`, [ids]),
+      pool.query(
+        `SELECT patient_id, COUNT(*)::int AS n FROM monitor_notes
+         WHERE patient_id = ANY($1) AND from_member = true AND coach_read_at IS NULL
+         GROUP BY patient_id`, [ids]),
+      pool.query(
+        `SELECT DISTINCT patient_id FROM workout_sessions
+         WHERE patient_id = ANY($1) AND session_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`, [ids]),
+      pool.query(
+        `SELECT DISTINCT ON (patient_id) patient_id, id FROM workout_programs
+         WHERE patient_id = ANY($1) AND active = true ORDER BY patient_id, id DESC`, [ids]),
+    ]);
+
+    const logsBy   = new Map(); for (const l of logsRes.rows) { if (!logsBy.has(l.patient_id)) logsBy.set(l.patient_id, []); logsBy.get(l.patient_id).push(l); }
+    const profBy   = new Map(profRes.rows.map(p => [p.user_id, p]));
+    const lastBy   = new Map(lastRes.rows.map(r => [r.patient_id, parseInt(r.days_since)]));
+    const unreadBy = new Map(unreadRes.rows.map(r => [r.patient_id, r.n]));
+    const workedBy = new Set(workoutRes.rows.map(r => r.patient_id));
+    const wd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
+    const todayDayBy = new Map();
+    await Promise.all(progRes.rows.map(async (r) => {
+      const days = await loadProgramDays(r.id);
+      const scheduled = days.some(d => /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i.test(String(d.day_label || '')));
+      const day = scheduled ? days.find(d => new RegExp('\\b' + wd + '\\b', 'i').test(String(d.day_label || ''))) || null : (days[0] || null);
+      if (day) todayDayBy.set(r.patient_id, { day_label: day.day_label });
+    }));
+
+    const rows = members.map(m => {
+      const logs = logsBy.get(m.id) || [];
+      // streak: consecutive logged days ending today or yesterday
+      const dates = new Set(logs.map(l => String(l.log_date).slice(0, 10)));
+      let streak = 0; let cursor = new Date(todayStr + 'T12:00:00Z');
+      if (!dates.has(todayStr)) cursor = new Date(cursor.getTime() - 86400000);
+      while (dates.has(cursor.toISOString().slice(0, 10))) { streak++; cursor = new Date(cursor.getTime() - 86400000); }
+      return composeMember(m, {
+        logs, protocol: profBy.get(m.id) || {},
+        daysSince: lastBy.has(m.id) ? lastBy.get(m.id) : NEVER_LOGGED,
+        todayDay: todayDayBy.get(m.id) || null,
+        workoutLoggedToday: workedBy.has(m.id),
+        streak, unread: unreadBy.get(m.id) || 0, todayStr, hour,
+      });
+    });
+    res.json({ ...summarise(rows), today: todayStr, generated_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('GET /members/triage error:', err);
+    res.status(500).json({ error: 'Could not work out who needs attention' });
   }
 });
 

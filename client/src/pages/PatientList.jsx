@@ -6,6 +6,7 @@ import { today, formatDate, plural } from '../constants';
 import { Card, SectionTitle, OfflineBanner, PageLoader, BottomNav } from '../components/UI';
 import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
 import TodaysGaps from '../components/TodaysGaps';
+import TriageFeed from '../components/coach/TriageFeed';
 import MorningNudges from '../components/MorningNudges';
 import NudgeEffectiveness from '../components/NudgeEffectiveness';
 import { useSync } from '../hooks/useSync';
@@ -204,6 +205,11 @@ export default function MemberList() {
           one at a time to act on it. The API behind it
           (GET /members/gaps) has always allowed roleCheck('monitor','admin') —
           only the UI was admin-only. */}
+      {/* Sprint 8: who needs me, one line and one action each — first thing on the screen. */}
+      <div className="max-w-md mx-auto px-4 pt-4">
+        <TriageFeed />
+      </div>
+
       <div className="max-w-md mx-auto px-4 pt-4">
         <Card>
           <SectionTitle icon="🎯" tooltip="Members with something missing today, most urgent first. Nothing sends automatically — each message is yours to review.">
