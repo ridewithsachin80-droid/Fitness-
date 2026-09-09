@@ -687,6 +687,20 @@ ck('the brief re-reads after every reload (briefKey bumped in load\'s finally)',
 ck('GET /members/:id/brief exists, uses the same collection as triage, and is access-checked',
    /router\.get\('\/:id\/brief', authMW, roleCheck\('monitor', 'admin'\), requirePatientAccess/.test(patientsRoute) && (patientsRoute.match(/await collectTriage\(/g) || []).length === 2 && /composeBrief\(row, todayLog, totals\)/.test(patientsRoute));
 
+// ── 16. Member page 9b + admin shortcut ─────────────────────────────────────
+console.log('\n[16] Member page 9b');
+const mon2 = read('pages/Monitor.jsx');
+ck('Note and Message both open the ONE action sheet; the old modal and overlay are no longer rendered',
+   /setActionTab\('note'\)/.test(mon2) && /setActionTab\('message'\)/.test(mon2) && /<MemberActionSheet/.test(mon2) && !/<AddNoteModal/.test(mon2) && !/<MessageMember\n/.test(mon2));
+ck('the coach page renders the member\'s Timeline read-only with the member\'s meal slots, above a collapsed Full log',
+   /<Timeline readOnly mealSlots=\{data\?\.profile\?\.meal_slots/.test(mon2) && /timelineModelFromServerLog\(activeLog/.test(mon2) && /<Collapsible title="Full log"/.test(mon2));
+ck('push in the sheet is admin-only, matching the server (router.use(role(\'admin\')) in admin.js)',
+   /if \(role === 'admin'\) options\.push\(\{ id: 'push'/.test(read('components/coach/MemberActionSheet.jsx')));
+ck('Admin header has the Coach view shortcut and Today\'s gaps names open the member page',
+   /data-testid="admin-coach-view"/.test(read('pages/AdminDashboard.jsx')) && /navigate\(`\/coach\/\$\{m\.member_id\}`\)/.test(read('components/TodaysGaps.jsx')));
+ck('the reminders admin renders Test/Del through the tokened button map (no saturated fills reach the screen)',
+   /const BTN = \{/.test(read('components/AdminReminders.jsx')) && /'#b91c1c': \{ background: 'rgba\(248,113,113,0\.08\)'/.test(read('components/AdminReminders.jsx')) && !/💧 Test|🏃 Test/.test(read('components/AdminReminders.jsx')));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

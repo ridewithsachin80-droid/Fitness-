@@ -10,8 +10,11 @@ import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
 import { getMemberMorningMessage, markMorningNudgeSent } from '../api/logs';
 import { openWhatsApp } from '../utils/personalMessage';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
-import { Segmented } from '../components/primitives';
+import { Segmented, Collapsible } from '../components/primitives';
+import Timeline from '../components/today/Timeline';
+import { timelineModelFromServerLog } from '../lib/day';
 import MemberBrief from '../components/coach/MemberBrief';
+import MemberActionSheet from '../components/coach/MemberActionSheet';
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
 import TrainingSummary from '../components/TrainingSummary';
@@ -440,7 +443,8 @@ export default function Coach() {
     }
   };
   const [showPinForm,   setShowPin]   = useState(false);
-  const [showNoteForm,  setShowNote]  = useState(false);
+  const [showNoteForm,  setShowNote]  = useState(false);   // kept for the legacy modal path (unused after 9b)
+  const [actionTab, setActionTab] = useState(null);         // 'note' | 'message' | 'push' | null → the action sheet
   const [showWeightForm,setShowWeight]= useState(false);
   const [showProgramBuilder, setShowProgramBuilder] = useState(false);
 
@@ -817,7 +821,7 @@ export default function Coach() {
                   : 'text-amber-900 bg-amber-400 hover:bg-amber-300 border-amber-300'}`}>
               🔑 {profile.has_pin ? 'Reset PIN' : '⚠ Set PIN (required to login)'}
             </button>
-                        <button onClick={() => setMsgOpen(true)}
+                        <button onClick={() => setActionTab('message')} data-testid="open-message"
               className="text-xs font-semibold text-charcoal bg-gradient-to-r from-gold-light via-gold to-gold-dark px-3 py-1.5 rounded-xl active:scale-95 transition-transform">
               💬 Message
             </button>
@@ -827,7 +831,7 @@ export default function Coach() {
                 disabled:opacity-40">
               🌅 {morningBusy ? 'Opening…' : 'Morning msg'}
             </button>
-<button onClick={() => setShowNote(true)}
+<button onClick={() => setActionTab('note')} data-testid="open-note"
               className="flex items-center gap-1.5 text-xs font-semibold text-white
                 bg-white/[0.06] hover:bg-white/20 px-3 py-1.5 rounded-xl transition-colors border border-white/20">
               📝 Add Note
@@ -908,6 +912,19 @@ export default function Coach() {
                 })}
               </div>
 
+              {/* Sprint 9b: the member's own timeline, read-only — the same component
+                  they see on Today, grouped by THEIR meal slots. The full coach detail
+                  (every tick, macro, note) sits behind "Full log" below it. */}
+              {activeLog && (
+                <div className="mb-3" data-testid="coach-timeline">
+                  <Timeline readOnly mealSlots={data?.profile?.meal_slots || null}
+                    m={timelineModelFromServerLog(activeLog, {
+                      isToday: activeLog.log_date === todayIST,
+                      yesterdayWeight: (() => { const i = sortedLogs.findIndex(l => l.log_date === activeDate); const prev = sortedLogs[i + 1]; return prev?.weight_kg != null ? parseFloat(prev.weight_kg) : null; })(),
+                    })} />
+                </div>
+              )}
+              <Collapsible title="Full log" summary={activeLog ? `${(activeLog.compliance_pct || 0)}% · every tick, macro and note for this day` : 'No log for this date'} icon="note" testId="full-log">
               {/* Selected day full detail */}
               {activeLog ? (() => {
                 const log = activeLog;
@@ -1171,6 +1188,7 @@ export default function Coach() {
               })() : (
                 <p className="text-xs text-lo italic text-center py-4">No log for this date</p>
               )}
+              </Collapsible>
             </>
           )}
         </Card>
@@ -1565,7 +1583,7 @@ export default function Coach() {
         <Card>
           <div className="flex items-center justify-between mb-3">
             <SectionTitle icon="📝">Notes & Messages</SectionTitle>
-            <button onClick={() => setShowNote(true)}
+            <button onClick={() => setActionTab('note')} data-testid="open-note"
               className="text-xs font-semibold text-mid bg-charcoal px-3 py-1.5 rounded-xl
                 hover:bg-white/[0.08] transition-colors">
               + Add
@@ -1752,46 +1770,13 @@ export default function Coach() {
       )}
 
       {/* Sprint 9: Add note modal */}
-      {showNoteForm && (
-        <AddNoteModal
-          memberId={memberId}
-          onClose={() => setShowNote(false)}
-          onAdded={(newNote) => setData(d => ({ ...d, notes: [newNote, ...(d.notes || [])] }))}
-        />
-      )}
-
-      {/* Phase 2: Workout program builder */}
-      {showProgramBuilder && (
-        <ProgramBuilderModal
-          memberId={parseInt(memberId)}
-          memberName={profile.name}
-          onClose={() => setShowProgramBuilder(false)}
-          onSaved={() => {}}
-        />
-      )}
-
-      {/* Sprint 11: Weight entry modal */}
-      {showWeightForm && (
-        <WeightEntryModal
-          memberId={memberId}
-          memberName={profile.name}
-          onClose={() => setShowWeight(false)}
-          onSaved={(log) => {
-            setData(d => ({
-              ...d,
-              logs: d.logs.some(l => l.log_date === log.log_date)
-                ? d.logs.map(l => l.log_date === log.log_date ? { ...l, weight_kg: log.weight_kg } : l)
-                : [log, ...d.logs],
-            }));
-          }}
-        />
-      )}
-
-      {/* Compose sheet — reloads on close so a saved copy appears in notes */}
-      <MessageMember
+      {/* Sprint 9b: Note · Message · Push in one sheet. */}
+      <MemberActionSheet
+        open={actionTab !== null}
+        initialTab={actionTab || 'note'}
+        onClose={() => { const was = actionTab; setActionTab(null); if (was === 'message') load({ quiet: true }); }}
         member={{ id: parseInt(memberId), name: data?.profile?.name, phone: data?.profile?.phone }}
-        open={msgOpen}
-        onClose={() => { setMsgOpen(false); load({ quiet: true }); }}
+        onNoteAdded={(newNote) => setData(d => ({ ...d, notes: [newNote, ...(d.notes || [])] }))}
       />
 
       <BottomNav role={user?.role} />

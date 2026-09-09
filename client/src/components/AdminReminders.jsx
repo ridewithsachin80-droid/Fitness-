@@ -140,10 +140,17 @@ export default function AdminReminders({ members = [] }) {
     borderRadius: 12, padding: 16, marginBottom: 12,
   };
 
+  // Sprint 9b: one button language. Gold = primary, quiet = secondary, red text
+  // (not a red fill) = destructive. The blue/green "Test" fills were the only
+  // saturated colours left on the coach's screens.
+  const BTN = {
+    '#D4AF37': { background: '#D4AF37', color: '#121316', border: 'none' },
+    '#b91c1c': { background: 'rgba(248,113,113,0.08)', color: '#f87171', border: '1px solid rgba(248,113,113,0.25)' },
+  };
   const btnStyle = (color = '#D4AF37') => ({
-    background: color, color: '#121316', border: 'none',
+    ...(BTN[color] || { background: 'rgba(255,255,255,0.05)', color: '#9EA3B0', border: '1px solid rgba(255,255,255,0.11)' }),
     borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
-    fontSize: 13, fontWeight: 700,
+    fontSize: 13, fontWeight: 700, minHeight: 36,
   });
 
   if (loading) return <div style={{ color: '#5a5a68', padding: 24, fontSize: 14 }}>Loading…</div>;
@@ -291,11 +298,11 @@ export default function AdminReminders({ members = [] }) {
                 </button>
                 <button onClick={() => sendTest(member.id, 'water')}
                   style={{ ...btnStyle('#0369a1'), fontSize: 11 }}>
-                  💧 Test
+                  Test water
                 </button>
                 <button onClick={() => sendTest(member.id, 'activity')}
                   style={{ ...btnStyle('#065f46'), fontSize: 11 }}>
-                  🏃 Test
+                  Test activity
                 </button>
               </div>
             </div>

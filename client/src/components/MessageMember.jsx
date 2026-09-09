@@ -21,7 +21,9 @@ import { TEMPLATES, combinedGapMessage, openWhatsApp, openSMS, waNumber } from '
  *   that only want the compose sheet are unchanged — TodaysGaps uses it to
  *   record which gap the nudge was about (Sprint L2).
  */
-export default function MessageMember({ member, summary = null, initialText = null, open, onClose, onSent = null }) {
+// `embedded`: render only the body (no overlay) — the member action sheet
+// (Sprint 9b) hosts it inside its own Sheet next to Note and Push.
+export default function MessageMember({ member, summary = null, initialText = null, open, onClose, onSent = null, embedded = false }) {
   // initialText lets a caller open the sheet already talking about a specific
   // thing — a missing water log, say — rather than the generic nudge.
   const [text, setText]   = useState(() => initialText || TEMPLATES.nudge(member || {}));
@@ -99,11 +101,9 @@ export default function MessageMember({ member, summary = null, initialText = nu
     onClose?.();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4"
-      onClick={onClose}>
+  const body = (
       <div onClick={e => e.stopPropagation()}
-        className="w-full sm:max-w-md bg-surface border border-white/[0.10] rounded-t-2xl sm:rounded-2xl p-4 max-h-[90vh] overflow-y-auto">
+        className={embedded ? '' : 'w-full sm:max-w-md bg-surface border border-white/[0.10] rounded-t-2xl sm:rounded-2xl p-4 max-h-[90vh] overflow-y-auto'}>
 
         <div className="flex items-start justify-between mb-3">
           <div className="min-w-0">
@@ -164,6 +164,11 @@ export default function MessageMember({ member, summary = null, initialText = nu
           nothing is sent until you tap send there.
         </p>
       </div>
+  );
+  if (embedded) return body;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4" onClick={onClose}>
+      {body}
     </div>
   );
 }

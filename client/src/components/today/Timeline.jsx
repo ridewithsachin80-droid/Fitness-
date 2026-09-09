@@ -17,9 +17,10 @@ import { plural } from '../../constants';
  * Empty day → an invitation, not a dash.
  */
 function Row({ icon, title, sub, value, onPress, testId, tone = 'default' }) {
+  const Tag = onPress ? 'button' : 'div';
   return (
-    <button type="button" onClick={() => { haptic(10); onPress?.(); }} data-testid={testId}
-      className="w-full text-left flex items-center gap-3 py-2.5 border-b border-hair last:border-b-0 active:bg-white/[0.03] transition-colors -mx-1 px-1 rounded-lg">
+    <Tag type={onPress ? 'button' : undefined} onClick={onPress ? () => { haptic(10); onPress(); } : undefined} data-testid={testId}
+      className={`w-full text-left flex items-center gap-3 py-2.5 border-b border-hair last:border-b-0 -mx-1 px-1 rounded-lg ${onPress ? 'active:bg-white/[0.03] transition-colors' : ''}`}>
       <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
         tone === 'gold' ? 'bg-gold/[0.12] text-gold' : 'bg-white/[0.05] text-mid'}`}>
         <Icon name={icon} size={15} />
@@ -29,15 +30,17 @@ function Row({ icon, title, sub, value, onPress, testId, tone = 'default' }) {
         {sub && <span className="block text-caption text-mid truncate">{sub}</span>}
       </span>
       {value != null && <span className="text-sm font-display font-semibold tabular-nums text-white flex-shrink-0">{value}</span>}
-      <Icon name="chevron-right" size={14} className="text-ghost flex-shrink-0" />
-    </button>
+      {onPress && <Icon name="chevron-right" size={14} className="text-ghost flex-shrink-0" />}
+    </Tag>
   );
 }
 
-export default function Timeline({ m, onOpen, onOpenChat }) {
+export default function Timeline({ m, onOpen, onOpenChat, readOnly = false, mealSlots: mealSlotsProp = null }) {
   const { log, workoutSummary, workoutKcal, sleepText, sleepMins, terms, isToday } = m;
   // The same slot list FoodLog and the AI logger use, so grouping agrees everywhere.
-  const mealSlots = useSettingsStore(s => s.mealSlots);
+  const deviceSlots = useSettingsStore(s => s.mealSlots);
+  // The coach view passes the MEMBER's slots; on the member's own phone the device settings are theirs.
+  const mealSlots = mealSlotsProp || deviceSlots;
   const rows = [];
 
   if (log.weight) {
@@ -82,8 +85,8 @@ export default function Timeline({ m, onOpen, onOpenChat }) {
     return (
       <EmptyState compact icon="spark"
         title={isToday ? 'Nothing logged yet' : 'Nothing was logged this day'}
-        body={isToday ? "Tell me about your morning — weight, breakfast, a walk — and I'll fill this in." : 'Tap a chip above to add something.'}
-        action={isToday ? { label: 'Log with AI', onPress: onOpenChat } : undefined} />
+        body={readOnly ? 'No weight, food, water or sleep on this day.' : isToday ? "Tell me about your morning — weight, breakfast, a walk — and I'll fill this in." : 'Tap a chip above to add something.'}
+        action={isToday && !readOnly ? { label: 'Log with AI', onPress: onOpenChat } : undefined} />
     );
   }
 
@@ -91,7 +94,7 @@ export default function Timeline({ m, onOpen, onOpenChat }) {
     <Stagger data-testid="timeline">
       {rows.map(r => (
         <Row key={r.key} icon={r.icon} tone={r.tone} title={r.title} sub={r.sub} value={r.value}
-          testId={`row-${r.key.split(':')[0]}`} onPress={() => onOpen(r.sheet)} />
+          testId={`row-${r.key.split(':')[0]}`} onPress={readOnly ? null : () => onOpen(r.sheet)} />
       ))}
     </Stagger>
   );

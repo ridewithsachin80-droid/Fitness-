@@ -17,6 +17,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import MessageMember from './MessageMember';
 import { combinedGapMessage, GAP_LABEL } from '../utils/personalMessage';
@@ -31,6 +32,7 @@ const SEVERITY = {
 };
 
 export default function TodaysGaps() {
+  const navigate = useNavigate();
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [target, setTarget]   = useState(null);   // { member, gapKey }
@@ -119,9 +121,11 @@ export default function TodaysGaps() {
                 is scrolling to find. No chips now means no second line. */}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-body font-semibold text-[#F2F1EE] truncate tracking-[-0.01em]">
+                {/* Sprint 9b: the name opens the member page (brief, timeline, actions). */}
+                <button type="button" onClick={() => navigate(`/coach/${m.member_id}`)} data-testid="gap-open"
+                  className="block w-full text-left text-body font-semibold text-[#F2F1EE] truncate tracking-[-0.01em] active:text-gold transition-colors">
                   {m.name}
-                </p>
+                </button>
                 {(() => {
                   // Dormancy is shown on the right, as a count or as words.
                   // Keeping the chip too printed "Never logged" twice on the

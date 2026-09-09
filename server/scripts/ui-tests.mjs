@@ -1375,6 +1375,75 @@ async function memberBriefTest() {
   ck('the coach tabs are a segmented control (Today · Nutrition · Training · Labs), no emoji', tabs.length === 4 && tabs.map(t => t.textContent.trim()).join(',') === 'Today,Nutrition,Training,Labs' && d.getElementById('tab').textContent === 'training');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 16. Member page 9b — action sheet, read-only timeline, admin shortcut
+// ═══════════════════════════════════════════════════════════════════════════
+async function memberPage9bTest() {
+  console.log('\n[16] Member page — action sheet, timeline, Full log; admin Coach view');
+  const api = stub('api-9b.js', `
+    import { istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    window.__calls = []; window.__posts = [];
+    const T = istDaysAgo(0), Y = istDaysAgo(1);
+    const member = { profile: { id: 12, name: 'Daya Kumar', phone: '9000000012', height_cm: 168, start_weight: 86, target_weight: 76, current_weight: 81.2, meal_slots: ['Breakfast', 'Lunch', 'Dinner'], macros: { kcal: 1700, pro: 115 }, water_target: 3000, activities: [], acv: [], supplements: [], conditions: [], has_pin: true },
+      logs: [ { log_date: T, weight_kg: '81.2', food_items: [{ name: 'Idli', grams: 120, meal: 'Breakfast', per_100g: { calories: 130, protein: 3.5 } }, { name: 'Dal', grams: 200, meal: 'Lunch', per_100g: { calories: 110 } }], water_ml: 1250, activities: {}, acv: {}, supplements: {}, sleep: { bedtime: '23:00', waketime: '06:30' }, compliance_pct: 40, notes: 'felt tired' },
+              { log_date: Y, weight_kg: '81.6', food_items: [], water_ml: 2600, activities: {}, acv: {}, supplements: {}, sleep: {}, compliance_pct: 85, notes: '' } ],
+      labs: [], notes: [] };
+    const get = async (url) => { window.__calls.push(url); if (/\\/members\\/12$/.test(url)) return { data: member }; if (/\\/members\\/12\\/brief$/.test(url)) return { data: { priority: 'ok', brief: ['a', 'b', 'c'] } }; if (/\\/workouts\\/summary/.test(url)) return { data: { sessions: [] } }; if (/\\/workouts/.test(url)) return { data: { exercises: [], cardio: [], session: null } }; if (/\\/logs\\/range/.test(url)) return { data: member.logs }; return { data: {} }; };
+    const post = async (url, body) => { window.__posts.push({ url, body }); return { data: { id: 77, ...body, monitor_name: 'Sachin' } }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, Routes, Route } from 'react-router-dom';
+    import Monitor from './pages/Monitor.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: 'admin' }, isRestoring: false });
+    window.open = (url) => { (window.__opened ||= []).push(url); return null; };
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/coach/12']}><Routes><Route path="/coach/:memberId" element={<Monitor />} /></Routes></MemoryRouter>);`, api);
+  const { w, errors, html } = run(code); await tick(900);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('member page mounts', errors.length === 0, errors.join('|'));
+  const tl = q('coach-timeline');
+  ck('the member\'s timeline shows on the coach page, read-only: weight, Breakfast, Lunch, water, sleep — no chevrons, no buttons',
+     !!tl && ['row-weight', 'row-meal', 'row-water', 'row-sleep'].every(id => tl.querySelector(`[data-testid="${id}"]`)) && tl.querySelectorAll('[data-testid="row-meal"]').length === 2 && tl.querySelectorAll('button').length === 0, tl && tl.textContent.slice(0, 160));
+  ck('timeline uses the MEMBER\'s meal slots (Breakfast before Lunch) and the weight delta vs the previous log (↓ 0.4)', /Breakfast[\s\S]*Lunch/.test(tl.textContent) && /↓ 0\.4/.test(tl.textContent), tl.textContent.slice(0, 120));
+  ck('the full coach detail is collapsed under "Full log" with the compliance summary', q('full-log') && q('full-log').dataset.open === '0' && /40%/.test(q('full-log').textContent));
+  q('full-log').querySelector('button').click(); await tick(100);
+  ck('opening Full log reveals the detail (the member\'s note appears)', q('full-log').dataset.open === '1' && /felt tired/.test(q('full-log').textContent));
+
+  // action sheet
+  ck('no sheet at rest', !d.querySelector('[role=dialog]'));
+  q('open-note').click(); await tick(300);
+  let dlg = d.querySelector('[role=dialog]');
+  ck('"Add Note" opens the action sheet on the Note tab, with Note · Message · Push tabs for an admin', !!dlg && /Add a note/.test(dlg.textContent) && [...dlg.querySelectorAll('[role=tab]')].map(t => t.textContent.trim()).join(',') === 'Note,Message,Push', dlg && [...dlg.querySelectorAll('[role=tab]')].map(t => t.textContent.trim()));
+  const setV = (el, v) => { const proto = el.tagName === 'TEXTAREA' ? w.HTMLTextAreaElement.prototype : w.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  ck('Save is disabled until there is text', q('note-save').disabled);
+  setV(q('note-text'), 'Asked her to add a walk after dinner'); q('note-flagged').click(); await tick(50);
+  q('note-save').click(); await tick(700);
+  const notePost = w.__posts.find(p => /\/members\/12\/notes$/.test(p.url));
+  ck('saving POSTs the note with the flag, closes the sheet, and the note appears on the page', notePost && notePost.body.flagged === true && /walk after dinner/.test(notePost.body.note) && !d.querySelector('[role=dialog]') && /walk after dinner/.test(html()), [notePost && JSON.stringify(notePost.body), !!d.querySelector('[role=dialog]'), /walk after dinner/.test(html())]);
+  q('open-message').click(); await tick(300);
+  dlg = d.querySelector('[role=dialog]');
+  ck('"Message" opens the same sheet on the Message tab with WhatsApp/SMS from the coach\'s own phone', !!dlg && /Send a message/.test(dlg.textContent) && /WhatsApp/.test(dlg.textContent));
+  dlg.querySelectorAll('[role=tab]')[2].click(); await tick(100);
+  ck('Push tab: title and body, sends via POST /admin/push for this member', !!q('push-title') && !!q('push-body'));
+  setV(q('push-body'), 'Please log lunch'); q('push-send').click(); await tick(200);
+  const push = w.__posts.find(p => /\/admin\/push$/.test(p.url));
+  ck('push POST carries patient_id 12 and the text', push && push.body.patient_id === 12 && /log lunch/.test(push.body.body) && !!q('push-done'), push && push.body);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(700);
+  ck('Escape closes the sheet', !d.querySelector('[role=dialog]'));
+
+  // a coach (not admin) gets no Push tab
+  const code2 = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import MemberActionSheet from './components/coach/MemberActionSheet.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 301, name: 'Veeru', role: 'monitor' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemberActionSheet open onClose={() => {}} member={{ id: 12, name: 'Daya Kumar', phone: '9000000012' }} initialTab="message" />);`, api);
+  const R = run(code2); await tick(300);
+  ck('a coach sees Note · Message only (push is admin-only on the server too)', [...R.w.document.querySelectorAll('[role=tab]')].map(t => t.textContent.trim()).join(',') === 'Note,Message');
+  ck('no error escaped', errors.length === 0 && R.errors.length === 0, [errors.join('|'), R.errors.join('|')]);
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1508,6 +1577,7 @@ async function overflowTest() {
     await profileTest();
     await triageTest();
     await memberBriefTest();
+    await memberPage9bTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

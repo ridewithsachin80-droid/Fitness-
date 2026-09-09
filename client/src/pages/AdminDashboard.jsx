@@ -1556,11 +1556,20 @@ export default function AdminDashboard() {
                 </p>
               )}
             </div>
-            <button onClick={() => { logout(); }}
-              className="flex-shrink-0 whitespace-nowrap text-xs text-mid hover:text-white px-3 py-1.5
-                border border-white/[0.1] hover:border-white/[0.2] rounded-xl transition-colors">
-              Sign out
-            </button>
+            <div className="flex-shrink-0 flex items-center gap-1.5">
+              {/* Sprint 9b: the day-to-day coaching screens (Needs attention, member
+                  pages) live at /coach; an admin used to reach them only via a
+                  "View" button three taps away. */}
+              <button onClick={() => navigate('/coach')} data-testid="admin-coach-view"
+                className="whitespace-nowrap text-xs font-bold text-charcoal bg-gold px-3 py-1.5 rounded-xl active:scale-95 transition-transform">
+                Coach view ›
+              </button>
+              <button onClick={() => { logout(); }}
+                className="flex-shrink-0 whitespace-nowrap text-xs text-mid hover:text-white px-3 py-1.5
+                  border border-white/[0.1] hover:border-white/[0.2] rounded-xl transition-colors">
+                Sign out
+              </button>
+            </div>
           </div>
 
           {/* AI command bar — the coach's fastest path to any change */}
