@@ -14,4 +14,5 @@ export { default as Segmented }        from './Segmented';
 export { default as Sheet }            from './Sheet';
 export { default as Stagger }          from './Stagger';
 export { default as EmptyState }       from './EmptyState';
+export { default as Collapsible }      from './Collapsible';
 export { Skeleton, SkeletonText, SkeletonCard } from './Skeleton';

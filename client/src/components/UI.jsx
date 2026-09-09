@@ -399,4 +399,4 @@ export function QuickJump({ sections }) {
 // ── Primitive kit (Sprint 0) ────────────────────────────────────────────────
 // The new building blocks live in components/primitives/. Re-exported here so a page
 // that already imports from UI.jsx can pick them up without a second import.
-export { Icon, ICON_NAMES, Eyebrow, Pressable, HeroNumber, Segmented, Sheet, Stagger, EmptyState, Skeleton, SkeletonText, SkeletonCard } from './primitives';
+export { Icon, ICON_NAMES, Eyebrow, Pressable, HeroNumber, Segmented, Sheet, Stagger, EmptyState, Collapsible, Skeleton, SkeletonText, SkeletonCard } from './primitives';

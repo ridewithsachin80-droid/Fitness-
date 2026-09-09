@@ -652,6 +652,19 @@ ck('goals are sent as an ordered list, never a single goal', /age_mode: ageMode,
 ck('the sample message is prefilled into the composer, not sent', /prefill\(SAMPLE_MESSAGE\)/.test(onb) && /prefillText/.test(chat));
 ck('onboarding uses the icon set and tokens, not emoji in chrome (avatars excepted)', !/emoji:/.test(onb) && !/style=\{\{[^}]*color: '#/.test(onb));
 
+// ── 13. My Health + Login (Sprint 7b) ───────────────────────────────────────
+console.log('\n[13] My Health + Login');
+const prof = read('pages/Profile.jsx');
+ck('Profile is My Health: identity → Goal → My plan → Health insights → Devices → Account, in that order',
+   ['data-testid="profile-goal"', 'data-testid="section-plan"', 'data-testid="section-insights"', 'data-testid="section-devices"', 'data-testid="section-account"']
+     .map(t => prof.indexOf(t)).every((i, k, arr) => i > -1 && (k === 0 || i > arr[k - 1])));
+ck('goals on Profile come from the same GOAL_OPTIONS the onboarding offers', /import \{ GOAL_OPTIONS \} from '\.\.\/components\/Onboarding'/.test(prof));
+ck('logout is wired from the auth store (it was referenced without being destructured once)', /const \{ user, logout \} = useAuthStore\(\);/.test(prof) && /onClick=\{\(\) => \{ haptic\(8\); logout\(\); \}\}/.test(prof));
+ck('detail-heavy cards sit behind Collapsible with a summary line', (prof.match(/<Collapsible /g) || []).length >= 6);
+const login = read('pages/Login.jsx');
+ck('the PIN stays one input (server PINs are "at least 4"), large and spaced; no fixed four boxes', /data-testid="login-pin"/.test(login) && /letterSpacing/.test(login) && !/maxLength=\{1\}/.test(login));
+ck('remembered-member card uses the device avatar from the settings store', /data-testid="remembered-card"/.test(login) && /useSettingsStore\(st => st\.avatarIdx\)/.test(login) && /import \{ useSettingsStore \}/.test(login));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

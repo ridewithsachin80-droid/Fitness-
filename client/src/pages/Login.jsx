@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuthStore, takeLogoutReason } from '../store/authStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { getRememberedMember, forgetMember } from '../utils/session';
 import { useNavigate } from 'react-router-dom';
 
@@ -32,6 +33,8 @@ const inputCls = `w-full bg-surface border border-white/[0.1] rounded-xl px-4 py
   transition-all duration-200`;
 
 // ── Member PIN form ───────────────────────────────────────────────────────────
+const AVATARS = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
+
 function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onTogglePin, onLogin, onForgot }) {
   return (
     <div className="space-y-4 fade-up">
@@ -39,12 +42,13 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
         <div className="flex items-center gap-0 border border-white/[0.1] rounded-xl bg-surface
           focus-within:border-gold/40 focus-within:ring-2 focus-within:ring-gold/[0.12]
           transition-all duration-200 overflow-hidden">
-          <span className="pl-4 pr-3 text-lo text-sm font-medium border-r border-white/[0.08] py-3">+91</span>
+          <span className="pl-4 pr-3 text-mid text-base font-semibold border-r border-white/[0.08] py-3.5">+91</span>
           <input
-            type="tel" inputMode="numeric" maxLength={10} value={phone}
+            type="tel" inputMode="numeric" maxLength={10} value={phone} autoComplete="tel-national"
             onChange={e => onPhone(e.target.value.replace(/\D/g, ''))}
-            placeholder="10-digit number"
-            className="flex-1 px-3 py-3 bg-transparent text-white text-sm font-medium placeholder-[#4A4E5A] outline-none"
+            placeholder="10-digit number" data-testid="login-phone"
+            style={{ minHeight: 56, fontSize: 18, letterSpacing: '0.08em' }}
+            className="flex-1 px-3 bg-transparent text-white font-semibold placeholder-ghost outline-none tabular-nums"
             onKeyDown={e => e.key === 'Enter' && onLogin()}
           />
         </div>
@@ -52,10 +56,14 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
 
       <Field label="PIN">
         <div className="relative">
+          {/* PINs are "at least 4 characters" (coach-set), so this is one
+              spaced field rather than fixed boxes — boxes would lock out a
+              member whose coach gave them six digits. */}
           <input
             type={showPin ? 'text' : 'password'} inputMode="numeric" value={pin}
-            onChange={e => onPin(e.target.value)} placeholder="Your PIN"
-            className={`${inputCls} pr-16 tracking-widest`}
+            onChange={e => onPin(e.target.value)} placeholder="Your PIN" data-testid="login-pin"
+            style={{ minHeight: 56, fontSize: 22, letterSpacing: '0.35em' }}
+            className={`${inputCls} pr-16 text-center font-semibold`}
             onKeyDown={e => e.key === 'Enter' && onLogin()}
             autoComplete="current-password"
           />
@@ -79,7 +87,8 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
         <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>
       )}
 
-      <button onClick={onLogin} disabled={phone.length !== 10 || !pin || loading}
+      <button onClick={onLogin} disabled={phone.length !== 10 || !pin || loading} data-testid="login-submit"
+        style={{ minHeight: 52 }}
         className="w-full py-3.5 bg-gold hover:bg-gold-light disabled:opacity-40
           disabled:cursor-not-allowed text-charcoal font-bold rounded-xl
           transition-all duration-200 text-sm tracking-wide active:scale-[0.98]
@@ -144,6 +153,8 @@ export default function Login() {
   // back" instead of what looks like a registration form to a member who has
   // been using FitLife for months.
   const remembered = useState(() => getRememberedMember())[0];
+  // The avatar persists in the settings store on this device — same member.
+  const rememberedAvatar = useSettingsStore(st => st.avatarIdx) || 0;
 
   const [mode, setMode]         = useState('patient');
   const [phone, setPhone]       = useState(remembered?.phone || '');
@@ -299,11 +310,15 @@ export default function Login() {
                 makes it obviously the same account, and the number is already
                 filled in, so it is one PIN away rather than a fresh start. */}
             {mode === 'patient' && remembered?.name && (
-              <div className="mb-5 text-center">
-                <div className="text-[#E8E6E1] text-base">
-                  Welcome back, <span className="text-gold font-semibold">{remembered.name.split(' ')[0]}</span>
+              <div className="mb-5 flex items-center gap-3 rounded-2xl bg-gold/[0.07] border border-gold/[0.22] px-4 py-3" data-testid="remembered-card">
+                <div className="w-11 h-11 rounded-xl bg-white/[0.06] border border-hair flex items-center justify-center text-2xl flex-shrink-0" aria-hidden="true">
+                  {AVATARS[rememberedAvatar] || AVATARS[0]}
                 </div>
-                <button onClick={notMe}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-mid">Welcome back</p>
+                  <p className="font-display text-lg font-medium text-white leading-tight truncate">{remembered.name.split(' ')[0]}</p>
+                </div>
+                <button onClick={notMe} style={{ minHeight: 36 }}
                   className="mt-1 text-xs text-lo underline underline-offset-2">
                   Not you?
                 </button>

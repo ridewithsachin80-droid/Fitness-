@@ -1203,6 +1203,86 @@ async function onboardingTest() {
   ck('no error escaped', errors.length === 0, errors.join('|'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 13. My Health (Profile) + Login (Sprint 7b)
+// ═══════════════════════════════════════════════════════════════════════════
+async function profileTest() {
+  console.log('\n[13] My Health — goal, plan, insights, account; Login — remembered member');
+  const api = stub('api-profile.js', `
+    import { istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    window.__calls = [];
+    const me = { id: 214, name: 'Asha Rao', phone: '9876543210', member_since: istDaysAgo(44) + 'T09:00:00.000Z',
+      dob: '1985-03-10', gender: 'female', height_cm: '160', start_weight: '88', target_weight: '78', current_weight: '82.4',
+      goal: 'lose', goals: ['lose', 'sleep', 'energy'], conditions: ['hypothyroid'], diet_notes: 'No fried food on weekdays.',
+      water_target: 3000, monitor_name: 'Sachin', total_logs: 41, avg_compliance: 71, labs: [], coach_notes: [],
+      macros: { kcal: 1600, pro: 110, carb: 140, fat: 55 }, fasting: null,
+      today_energy: { date: istDaysAgo(0), is_today: true, food_items: [], activities: {}, workout_kcal: 0 } };
+    const routes = [
+      [/^\\/members\\/me$/, () => me],
+      [/^\\/members\\/me\\/labs$/, () => ({ labs: [] })],
+      [/^\\/members\\/me\\/lab-analysis$/, () => ({ intervals: [], flags: [] })],
+      [/^\\/members\\/me\\/adaptive$/, () => ({ ready: false })],
+      [/^\\/members\\/population\\/prior$/, () => ({})],
+      [/^\\/ai-chat\\/portions$/, () => ({ portions: [] })],
+    ];
+    const get = async (url) => { window.__calls.push(url); const hit = routes.find(([re]) => re.test(url)); return { data: hit ? hit[1]() : {} }; };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async (url, body) => ({ data: body }), delete: async () => ({ data: {} }) };`);
+
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+    import Profile from './pages/Profile.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    import { useSettingsStore } from './store/settingsStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false, logout: () => { window.__loggedOut = true; } });
+    useSettingsStore.setState({ avatarIdx: 4 });
+    function Where() { const l = useLocation(); return <div data-testid="elsewhere">{l.pathname}</div>; }
+    createRoot(document.getElementById('root')).render(
+      <MemoryRouter initialEntries={['/profile']}><Routes><Route path="/profile" element={<Profile />} /><Route path="*" element={<Where />} /></Routes></MemoryRouter>);`, api);
+  const { w, errors, html } = run(code);
+  await tick(700);
+  const d = w.document;
+  const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('Profile mounts', errors.length === 0, errors.join('|'));
+  ck('identity: avatar from the device, name, Week 7, coach', /🦁/.test(html()) && /Asha Rao/.test(html()) && /Week 7/.test(q('profile-meta').textContent) && /Coach Sachin/.test(q('profile-meta').textContent), q('profile-meta')?.textContent);
+  ck('goal headline from the primary goal and the weights: "Lose 10 kg · 4.4 kg to go"', q('profile-goal') && /Lose 10 kg · 4\.4 kg to go/.test(q('profile-goal').textContent), q('profile-goal')?.textContent.slice(0, 80));
+  ck('secondary goals shown as chips (Sleep better, More energy)', q('profile-goals') && /Sleep better/.test(q('profile-goals').textContent) && /More energy/.test(q('profile-goals').textContent) && !/Lose weight/.test(q('profile-goals').textContent));
+  ck('journey line: start 88 → goal 78, 56% there', /56% there/.test(q('profile-goal').textContent) && /88 kg/.test(q('profile-goal').textContent) && /78 kg/.test(q('profile-goal').textContent));
+  ck('sections in order: My plan → Health insights → Devices → Account', ['section-plan', 'section-insights', 'section-devices', 'section-account'].map(id => q(id)).every(Boolean) &&
+     q('section-plan').compareDocumentPosition(q('section-insights')) & 4 && q('section-insights').compareDocumentPosition(q('section-devices')) & 4 && q('section-devices').compareDocumentPosition(q('section-account')) & 4);
+  ck('My plan shows the macro targets, water target and diet notes', /1600|1,600/.test(q('section-plan').textContent) && /3\.0|3000/.test(q('section-plan').textContent) && /No fried food/.test(q('section-plan').textContent));
+  ck('Health insights: BMI, TDEE, conditions, labs, metabolism, portions — one line each, closed', ['ins-tdee', 'ins-bmi', 'ins-conditions', 'ins-labs', 'ins-metabolism', 'ins-portions'].every(id => q(id) && q(id).dataset.open === '0'));
+  ck('BMI summary line is right for 82.4 kg / 160 cm (32.2)', /32\.2/.test(q('ins-bmi').textContent), q('ins-bmi').textContent);
+  ck('conditions summary counts them', /1 noted/.test(q('ins-conditions').textContent));
+  q('ins-bmi').querySelector('button').click(); await tick(100);
+  ck('opening BMI reveals the full card', q('ins-bmi').dataset.open === '1' && /Body Mass Index/.test(q('ins-bmi').textContent) && /Obese/.test(q('ins-bmi').textContent) && /18.5/.test(q('ins-bmi').textContent), [q('ins-bmi').dataset.open, q('ins-bmi').textContent.length, q('ins-bmi').textContent.slice(0, 100)]);
+  ck('the gear at the top and the Account row both go to Settings', q('profile-settings') && q('account-settings'));
+  q('account-signout').click(); await tick(50);
+  ck('Sign out calls the auth store logout', w.__loggedOut === true);
+  q('profile-settings').click(); await tick(100);
+  ck('the gear navigates to /settings', q('elsewhere') && q('elsewhere').textContent === '/settings');
+  ck('no error escaped', errors.length === 0, errors.join('|'));
+
+  // ── Login with a remembered member ─────────────────────────────────────
+  const loginCode = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    localStorage.setItem('fl-last-member', JSON.stringify({ name: 'Asha Rao', phone: '9876543210' }));
+    import Login from './pages/Login.jsx';
+    import { useSettingsStore } from './store/settingsStore.js';
+    useSettingsStore.setState({ avatarIdx: 4 });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><Login /></MemoryRouter>);`, api);
+  const L = run(loginCode); await tick(300);
+  const ld = L.w.document; const lq = (id) => ld.querySelector(`[data-testid="${id}"]`);
+  ck('Login mounts', L.errors.length === 0, L.errors.join('|'));
+  ck('remembered member card: avatar, "Welcome back", first name, phone prefilled', lq('remembered-card') && /🦁/.test(lq('remembered-card').textContent) && /Welcome back/.test(lq('remembered-card').textContent) && /Asha/.test(lq('remembered-card').textContent) && lq('login-phone').value === '9876543210', lq('remembered-card')?.textContent);
+  ck('phone and PIN fields are large (56px) and the PIN is spaced, one field (PINs can be longer than 4)', /min-height: 56px/.test(lq('login-phone').getAttribute('style')) && /min-height: 56px/.test(lq('login-pin').getAttribute('style')) && /letter-spacing/.test(lq('login-pin').getAttribute('style')) && lq('login-pin').tagName === 'INPUT');
+  ck('Log In is disabled until a PIN is typed', lq('login-submit').disabled);
+  const setV = (el, v) => { const setter = Object.getOwnPropertyDescriptor(L.w.HTMLInputElement.prototype, 'value').set; setter.call(el, v); el.dispatchEvent(new L.w.Event('input', { bubbles: true })); };
+  setV(lq('login-pin'), '123456'); await tick(50);
+  ck('a six-digit PIN is accepted by the form (no four-box limit)', !lq('login-submit').disabled && lq('login-pin').value === '123456');
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1333,6 +1413,7 @@ async function overflowTest() {
     await progressTest();
     await planTest();
     await onboardingTest();
+    await profileTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
