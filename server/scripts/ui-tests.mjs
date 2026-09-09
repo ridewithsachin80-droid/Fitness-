@@ -1283,6 +1283,55 @@ async function profileTest() {
   ck('a six-digit PIN is accepted by the form (no four-box limit)', !lq('login-submit').disabled && lq('login-pin').value === '123456');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 14. Coach home — Needs attention (Sprint 8)
+// ═══════════════════════════════════════════════════════════════════════════
+async function triageTest() {
+  console.log('\n[14] Coach home — Needs attention feed');
+  const api = stub('api-triage.js', `
+    window.__calls = []; window.__opened = [];
+    const triage = { today: '2026-09-08', counts: { total: 4, on_track: 1, watch: 0, attention: 2, high: 1 }, members: [
+      { id: 1, name: 'Quiet Five', phone: '9000009002', priority: 'high', reasons: ['Quiet 5 days'], wins: [], action: { key: 'nudge', label: 'Send a nudge' }, week: [1,1,0,0,0,0,0], logged_days: 2, streak: 0, days_since_log: 5, unread: 0 },
+      { id: 2, name: 'Daya Sleepy', phone: '9000009005', priority: 'attention', reasons: ['Sleep down 3 h', '1 unread message'], wins: [], action: { key: 'reply', label: 'Reply' }, week: [1,1,1,1,1,1,1], logged_days: 7, streak: 8, days_since_log: 0, unread: 1 },
+      { id: 3, name: 'Vishwas Gain', phone: '9000009004', priority: 'attention', reasons: ['Weight up 1.8 kg / 2 wk'], wins: [], action: { key: 'review', label: 'Review meals' }, week: [1,0,1,0,1,0,1], logged_days: 4, streak: 1, days_since_log: 0, unread: 0 },
+      { id: 4, name: 'Asha Star', phone: '9000009003', priority: 'ok', reasons: [], wins: ['8-day streak', 'Down 1.1 kg / 2 wk'], action: { key: 'praise', label: 'Send praise' }, week: [1,1,1,1,1,1,1], logged_days: 7, streak: 8, days_since_log: 0, unread: 0 },
+    ] };
+    const get = async (url) => { window.__calls.push(url); if (/\\/members\\/triage$/.test(url)) return { data: triage }; if (/\\/members\\/gaps$/.test(url)) return { data: { members: [], clear: 0 } }; if (/\\/members\\/morning-nudges/.test(url)) return { data: { members: [] } }; if (/^\\/members$/.test(url)) return { data: [] }; return { data: {} }; };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+    import MemberList from './pages/PatientList.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: 'monitor' }, isRestoring: false });
+    window.open = (url) => { window.__opened.push(url); return null; };
+    function Where() { const l = useLocation(); return <div data-testid="elsewhere">{l.pathname}</div>; }
+    createRoot(document.getElementById('root')).render(
+      <MemoryRouter initialEntries={['/coach']}><Routes><Route path="/coach" element={<MemberList />} /><Route path="*" element={<Where />} /></Routes></MemoryRouter>);`, api);
+  const { w, errors, html } = run(code);
+  await tick(700);
+  const d = w.document;
+  const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('coach home mounts and asks for /members/triage once', errors.length === 0 && w.__calls.filter(u => /triage/.test(u)).length === 1, [errors.join('|'), w.__calls]);
+  ck('the feed is the first thing on the screen (above "Needs a nudge")', q('triage') && html().indexOf('data-testid="triage"') < html().indexOf('Needs a nudge'));
+  ck('header counts: 4 members · 1 on track · 2 need attention · 1 high', /4/.test(q('triage-counts').textContent) && /1.*on track/.test(q('triage-counts').textContent) && /2.*need attention/.test(q('triage-counts').textContent) && /1.*high/.test(q('triage-counts').textContent), q('triage-counts').textContent);
+  const rows = [...d.querySelectorAll('[data-testid="triage-row"]')];
+  ck('three rows need attention, worst first; the on-track member is folded away', rows.length === 3 && rows[0].dataset.priority === 'high' && !/Asha Star/.test(q('triage').textContent), rows.map(r => r.dataset.priority));
+  ck('a combined reason line: "Sleep down 3 h + 1 unread message"', rows.some(r => /Sleep down 3 h \+ 1 unread message/.test(r.querySelector('[data-testid="triage-line"]').textContent)));
+  ck('each row has a 7-dot week strip', rows.every(r => r.querySelectorAll('span.w-1\\.5').length === 7));
+  rows[0].querySelector('[data-testid="triage-action"]').click(); await tick(50);
+  ck('"Send a nudge" opens WhatsApp with a draft naming the member and the quiet days (nothing sent by the app)', w.__opened.length === 1 && /wa\.me\/919000009002/.test(w.__opened[0]) && /Quiet/.test(decodeURIComponent(w.__opened[0])) && /5 days/.test(decodeURIComponent(w.__opened[0])), w.__opened);
+  q('triage-toggle-ok').click(); await tick(50);
+  const okRow = [...d.querySelectorAll('[data-testid="triage-row"]')].find(r => /Asha Star/.test(r.textContent));
+  ck('"1 on track · tap to see" reveals the star with her wins', okRow && /8-day streak · Down 1.1 kg/.test(okRow.textContent) && /Send praise/.test(okRow.textContent));
+  okRow.querySelector('[data-testid="triage-action"]').click(); await tick(50);
+  ck('"Send praise" drafts a WhatsApp with the win', w.__opened.length === 2 && /streak/.test(decodeURIComponent(w.__opened[1])));
+  const daya = [...d.querySelectorAll('[data-testid="triage-row"]')].find(r => /Daya/.test(r.textContent));
+  daya.querySelector('[data-testid="triage-action"]').click(); await tick(100);
+  ck('"Reply" opens the member page', q('elsewhere') && q('elsewhere').textContent === '/coach/2', q('elsewhere')?.textContent);
+  ck('no error escaped', errors.length === 0, errors.join('|'));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1414,6 +1463,7 @@ async function overflowTest() {
     await planTest();
     await onboardingTest();
     await profileTest();
+    await triageTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
