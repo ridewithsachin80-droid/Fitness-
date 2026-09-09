@@ -76,8 +76,24 @@ const IST = (offsetDays = 0) => new Date(Date.now() + 5.5 * 3600000 - offsetDays
   const b = by['Bujju Blank'];
   const hour = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
   ck('nothing today (after the gap detector\'s hour gate) → attention · Check in; before it → ok', hour >= 11 ? (b.priority === 'attention' && b.reasons[0] === 'Nothing logged today' && b.action.key === 'checkin') : (b.priority === 'ok'), [hour, b]);
-  ck('sorted worst first: the two high members lead, the star is last', body.members[0].priority === 'high' && body.members[1].priority === 'high' && body.members[body.members.length - 1].name === 'Asha Star', body.members.map(m => m.name + ':' + m.priority));
+  const rankOf = { high: 0, attention: 1, watch: 2, ok: 3 };
+  ck('sorted worst first: the two high members lead and priorities never go back up', body.members[0].priority === 'high' && body.members[1].priority === 'high' && body.members.every((m, i, a) => i === 0 || rankOf[m.priority] >= rankOf[a[i - 1].priority]), body.members.map(m => m.name + ':' + m.priority));
   ck('per-member: last_logged, latest_weight, streak, days_since_log', star8.last_logged === IST(0) && star8.latest_weight === 84 && star8.streak === 8 && by['Quiet Five'].days_since_log === 5 && by['Never Logged'].days_since_log === null, [star8.last_logged, star8.latest_weight, star8.streak]);
+
+  console.log('\n[2b] GET /members/:id/brief');
+  const brief = async (id) => { const r = await fetch(`http://127.0.0.1:${port}/api/members/${id}/brief`, { headers: { Authorization: 'Bearer ' + tok } }); return { status: r.status, data: await r.json() }; };
+  const bs = await brief(star);
+  ck('brief for the star: 200, three lines, same row fields as triage', bs.status === 200 && Array.isArray(bs.data.brief) && bs.data.brief.length === 3 && bs.data.priority === 'ok' && bs.data.streak === 8, bs.data);
+  ck('line 1 describes today: weight, meals, kcal, water, protocol', /^Today: weight 84 kg · 2 meals · \d+ kcal · [\d.]+ g protein · water 2\.8 L · protocol 3 ticked\.$/.test(bs.data.brief[0]), bs.data.brief[0]);
+  ck('line 2 is the trend: weight down over 2 weeks and the streak', /^Weight down 1\.\d kg over 2 weeks/.test(bs.data.brief[1]) && /8-day logging streak\.$/.test(bs.data.brief[1]), bs.data.brief[1]);
+  ck('line 3 is the call: going well', /^Going well: 8-day streak/.test(bs.data.brief[2]), bs.data.brief[2]);
+  const bq = await brief(quiet);
+  ck('brief for the quiet member: silence with the last log date, then needs attention', /^Nothing logged for 5 days — last log \d+ \w+\.$/.test(bq.data.brief[0]) && /^Needs attention: quiet 5 days\.$/.test(bq.data.brief[2]), bq.data.brief);
+  const bd = await brief(sleepy);
+  ck('brief for Daya: sleep drop in the trend line, both reasons in the call', /slept 3(\.\d)? h less than usual last night/.test(bd.data.brief[1]) && /sleep down/.test(bd.data.brief[2]) && /unread message/.test(bd.data.brief[2]), bd.data.brief);
+  const other = jwt.sign({ id: coach.id + 9999, role: 'monitor', name: 'Other' }, SECRET);
+  const r403 = await fetch(`http://127.0.0.1:${port}/api/members/${star}/brief`, { headers: { Authorization: 'Bearer ' + other } });
+  ck('another coach cannot read the brief', r403.status === 403 || r403.status === 404, r403.status);
 
   console.log('\n[3] pure composer');
   const base = { logs: [], protocol: {}, daysSince: NEVER_LOGGED, todayDay: null, workoutLoggedToday: false, streak: 0, unread: 0, todayStr: IST(0), hour: 20 };

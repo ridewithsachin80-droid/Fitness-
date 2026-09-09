@@ -1332,6 +1332,49 @@ async function triageTest() {
   ck('no error escaped', errors.length === 0, errors.join('|'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 15. Coach member page — brief + segmented tabs (Sprint 9)
+// ═══════════════════════════════════════════════════════════════════════════
+async function memberBriefTest() {
+  console.log('\n[15] Coach member page — brief and tabs');
+  const api = stub('api-brief.js', `
+    window.__calls = [];
+    const brief = { id: 214, name: 'Asha Rao', priority: 'attention', streak: 8, brief: [
+      'Today: weight 82.4 kg · 2 meals · 666 kcal · 37 g protein · water 1.5 L · protocol 3 ticked.',
+      'Weight down 1.1 kg over 2 weeks · 8-day logging streak.',
+      'Needs attention: sleep down 1.4 h.' ] };
+    const get = async (url) => { window.__calls.push(url); if (/\\/members\\/214\\/brief$/.test(url)) return { data: brief }; if (/\\/members\\/999\\/brief$/.test(url)) throw new Error('500'); return { data: {} }; };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+  const code = await bundle(`
+    import { useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import MemberBrief from './components/coach/MemberBrief.jsx';
+    import { Segmented } from './components/primitives/index.js';
+    function Harness() {
+      const [k, setK] = useState(0); const [tab, setTab] = useState('today');
+      window.__bump = () => setK(x => x + 1);
+      return (<div>
+        <MemberBrief memberId={214} refreshKey={k} />
+        <MemberBrief memberId={999} />
+        <Segmented name="coach-tabs" value={tab} onChange={setTab} options={[{ id: 'today', label: 'Today' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'training', label: 'Training' }, { id: 'labs', label: 'Labs' }]} />
+        <span id="tab">{tab}</span>
+      </div>);
+    }
+    createRoot(document.getElementById('root')).render(<Harness />);`, api);
+  const { w, errors } = run(code); await tick(300);
+  const d = w.document;
+  const briefs = [...d.querySelectorAll('[data-testid="member-brief"]')];
+  ck('the brief mounts from GET /members/:id/brief with three lines and the priority', errors.length === 0 && briefs.length === 1 && briefs[0].querySelectorAll('[data-testid="brief-lines"] li').length === 3 && /Needs attention/.test(briefs[0].querySelector('[data-testid="brief-priority"]').textContent), [errors.join('|'), briefs.length]);
+  ck('lines read today → trend → call', /^Today: weight 82\.4 kg/.test(briefs[0].querySelectorAll('li')[0].textContent) && /Weight down 1\.1 kg/.test(briefs[0].querySelectorAll('li')[1].textContent) && /sleep down 1\.4 h/.test(briefs[0].querySelectorAll('li')[2].textContent));
+  ck('a failed brief renders nothing — the member page still works without it', briefs.length === 1 && w.__calls.filter(u => /999/.test(u)).length === 1);
+  const before = w.__calls.filter(u => /214\/brief/.test(u)).length;
+  w.__bump(); await tick(200);
+  ck('a refreshKey bump re-reads the brief', w.__calls.filter(u => /214\/brief/.test(u)).length === before + 1);
+  const tabs = [...d.querySelectorAll('[role=tab]')];
+  tabs[2].click(); await tick(50);
+  ck('the coach tabs are a segmented control (Today · Nutrition · Training · Labs), no emoji', tabs.length === 4 && tabs.map(t => t.textContent.trim()).join(',') === 'Today,Nutrition,Training,Labs' && d.getElementById('tab').textContent === 'training');
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1464,6 +1507,7 @@ async function overflowTest() {
     await onboardingTest();
     await profileTest();
     await triageTest();
+    await memberBriefTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

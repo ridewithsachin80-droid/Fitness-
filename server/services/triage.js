@@ -159,4 +159,49 @@ function summarise(rows) {
   };
 }
 
-module.exports = { composeMember, summarise, sleepMinutes };
+/**
+ * Three lines a coach reads before anything else on the member page.
+ *   1. Today   — what has been logged so far (or how long the silence is)
+ *   2. Trend   — weight over two weeks, last night's sleep vs the week
+ *   3. Call    — the reasons, or the wins, or "All on track"
+ * `row` is composeMember()'s output; `todayLog` the raw daily_logs row (or null);
+ * `totals` from digests.computeDayTotals(todayLog.food_items).
+ */
+function composeBrief(row, todayLog, totals, opts = {}) {
+  const fmtDate = (d) => d ? new Date(d + 'T12:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : null;
+  const lines = [];
+
+  // 1 — today
+  if (row.days_since_log == null)      lines.push('Has never logged.');
+  else if (row.days_since_log >= 1)    lines.push(`Nothing logged for ${row.days_since_log} ${row.days_since_log === 1 ? 'day' : 'days'} — last log ${fmtDate(row.last_logged)}.`);
+  else {
+    const bits = [];
+    if (todayLog?.weight_kg != null) bits.push(`weight ${parseFloat(todayLog.weight_kg)} kg`);
+    const foods = Array.isArray(todayLog?.food_items) ? todayLog.food_items : [];
+    if (foods.length) {
+      const meals = new Set(foods.map(f => f.meal).filter(Boolean)).size;
+      bits.push(`${meals || 1} ${meals === 1 ? 'meal' : 'meals'} · ${totals?.cal ?? 0} kcal · ${totals?.pro ?? 0} g protein`);
+    }
+    if ((todayLog?.water_ml || 0) > 0) bits.push(`water ${((todayLog.water_ml) / 1000).toFixed(1)} L`);
+    const prot = ['activities', 'acv', 'supplements'].reduce((n, k) => n + Object.values(todayLog?.[k] || {}).filter(Boolean).length, 0);
+    if (prot) bits.push(`protocol ${prot} ticked`);
+    if (row.workout_today) bits.push(row.workout_today.logged ? `${row.workout_today.label} logged` : `${row.workout_today.label} not yet`);
+    lines.push(bits.length ? `Today: ${bits.join(' · ')}.` : 'Logged today, but nothing in it yet.');
+  }
+
+  // 2 — trend
+  const t = [];
+  if (row.weight_delta_2wk != null) t.push(row.weight_delta_2wk === 0 ? 'weight flat over 2 weeks'
+    : `weight ${row.weight_delta_2wk < 0 ? 'down' : 'up'} ${Math.abs(row.weight_delta_2wk)} kg over 2 weeks`);
+  if (row.sleep_drop_h != null) t.push(row.sleep_drop_h >= 1 ? `slept ${row.sleep_drop_h} h less than usual last night` : row.sleep_drop_h <= -1 ? `slept ${Math.abs(row.sleep_drop_h)} h more than usual` : 'sleep steady');
+  if (row.streak >= 3) t.push(`${row.streak}-day logging streak`);
+  lines.push(t.length ? t.map((x, i) => i === 0 ? x[0].toUpperCase() + x.slice(1) : x).join(' · ') + '.' : 'Not enough history for a trend yet.');
+
+  // 3 — the call
+  if (row.reasons.length) lines.push(`Needs attention: ${row.reasons.join(', ').toLowerCase()}.`);
+  else if (row.wins.length) lines.push(`Going well: ${row.wins.join(', ').toLowerCase()}.`);
+  else lines.push('All on track.');
+  return lines;
+}
+
+module.exports = { composeMember, summarise, sleepMinutes, composeBrief };

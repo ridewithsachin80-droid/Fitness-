@@ -678,6 +678,15 @@ ck('the feed never sends a message itself — WhatsApp drafts via whatsappLink, 
 ck('the feed survives an empty or malformed payload (no blank coach home)', /Array\.isArray\(data\.members\)/.test(feed) && /\.\.\.\(data\.counts \|\| \{\}\)/.test(feed));
 ck('the coach home mounts the feed first', read('pages/PatientList.jsx').indexOf('<TriageFeed />') < read('pages/PatientList.jsx').indexOf('<MorningNudges />'));
 
+// ── 15. Coach member page (Sprint 9) ────────────────────────────────────────
+console.log('\n[15] Coach member page');
+const mon = read('pages/Monitor.jsx');
+ck('the member page mounts the brief above the tabs and the tabs are a Segmented control',
+   mon.indexOf('<MemberBrief memberId={memberId}') > -1 && mon.indexOf('<MemberBrief') < mon.indexOf('<Segmented name="coach-tabs"') && !/icon: '📋'/.test(mon));
+ck('the brief re-reads after every reload (briefKey bumped in load\'s finally)', /setBriefKey\(k => k \+ 1\)/.test(mon));
+ck('GET /members/:id/brief exists, uses the same collection as triage, and is access-checked',
+   /router\.get\('\/:id\/brief', authMW, roleCheck\('monitor', 'admin'\), requirePatientAccess/.test(patientsRoute) && (patientsRoute.match(/await collectTriage\(/g) || []).length === 2 && /composeBrief\(row, todayLog, totals\)/.test(patientsRoute));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

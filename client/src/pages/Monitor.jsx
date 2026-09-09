@@ -10,6 +10,8 @@ import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
 import { getMemberMorningMessage, markMorningNudgeSent } from '../api/logs';
 import { openWhatsApp } from '../utils/personalMessage';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
+import { Segmented } from '../components/primitives';
+import MemberBrief from '../components/coach/MemberBrief';
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
 import TrainingSummary from '../components/TrainingSummary';
@@ -461,11 +463,13 @@ export default function Coach() {
   const [deleteError,   setDeleteError]   = useState(null);
 
   const TABS = [
-    { id: 'today',     label: 'Today',     icon: '📋' },
-    { id: 'nutrition', label: 'Nutrition', icon: '🥗' },
-    { id: 'training',  label: 'Training',  icon: '🏋️' },
-    { id: 'labs',      label: 'Labs',      icon: '🩸' },
+    { id: 'today',     label: 'Today' },
+    { id: 'nutrition', label: 'Nutrition' },
+    { id: 'training',  label: 'Training' },
+    { id: 'labs',      label: 'Labs' },
   ];
+  // Bumped whenever the coach saves something on this page, so the brief re-reads.
+  const [briefKey, setBriefKey] = useState(0);
 
   // ── Roster, for prev/next ───────────────────────────────────────────────────
   // Reviewing seven members meant: open one, scroll a very long page, go back,
@@ -639,6 +643,8 @@ export default function Coach() {
       console.error('Failed to load member', e);
     } finally {
       setLoading(false);
+      // Every reload (member switch, save, apply) re-reads the brief too.
+      setBriefKey(k => k + 1);
     }
   }, [memberId]);
 
@@ -840,25 +846,18 @@ export default function Coach() {
         </div>
       </div>
 
+      {/* Sprint 9: the brief — three lines before anything else. */}
+      <div className="max-w-md mx-auto px-4 pt-3">
+        <MemberBrief memberId={memberId} refreshKey={briefKey} />
+      </div>
+
       {/* Tab bar. Sticky so a coach deep in a long card can switch group
-          without scrolling back up — the whole point of the split. */}
-      <div className="sticky top-0 z-20 bg-charcoal/95 backdrop-blur border-b border-white/[0.06]">
-        <div className="max-w-md mx-auto px-3 flex">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => switchTab(t.id)}
-              style={{ minHeight: 46 }}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5
-                text-caption font-semibold transition-colors border-b-2 ${
-                tab === t.id
-                  ? 'text-gold border-gold'
-                  : 'text-lo border-transparent hover:text-mid'
-              }`}>
-              <span className="text-base leading-none">{t.icon}</span>
-              {t.label}
-            </button>
-          ))}
+          without scrolling back up — the whole point of the split.
+          Sprint 9: a segmented control (sliding gold pill), no emoji. */}
+      <div className="sticky top-0 z-20 bg-charcoal/95 backdrop-blur pt-2 pb-2">
+        <div className="max-w-md mx-auto px-4">
+          <Segmented name="coach-tabs" value={tab} onChange={switchTab}
+            options={TABS.map(t => ({ id: t.id, label: t.label }))} />
         </div>
       </div>
 

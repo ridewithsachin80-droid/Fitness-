@@ -106,6 +106,7 @@ const CASES = [
   ['GET',  '/api/members/1',              'member detail'],
   ['GET',  '/api/members/gaps',           'gaps must not be shadowed by /:id'],
   ['GET',  '/api/members/triage',         'Sprint 8 triage must not be shadowed by /:id'],
+  ['GET',  '/api/members/1/brief',        'Sprint 9 member brief route exists'],
   ['GET',  '/api/members/morning-nudges',  'morning-nudges must not be shadowed by /:id'],
   ['GET',  '/api/members/1/morning-message', 'per-member morning message route exists'],
   // Voice logging. Mounted OUTSIDE /api/ai-chat because that router applies

@@ -8,7 +8,8 @@ const { getISTDate } = require('../utils/istDate');
 const authMW = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 const { loadProgramDays } = require('./programs');
-const { composeMember, summarise } = require('../services/triage');
+const { composeMember, summarise, composeBrief } = require('../services/triage');
+const { computeDayTotals } = require('../services/digests');
 const triageHour = () => parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
 const bcrypt = require('bcryptjs');
 
@@ -417,23 +418,13 @@ router.post('/:id/morning-nudges/sent', authMW, roleCheck('monitor', 'admin'),
 // Sprint 8: the coach home. One line and one action per member, worst first,
 // with header counts. Read-only. Declared BEFORE any '/:id' route so 'triage'
 // can never be read as a member id (smoke-routes asserts the order).
-router.get('/triage', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
-  try {
-    const isAdmin = req.user.role === 'admin';
-    const { rows: members } = await pool.query(
-      isAdmin
-        ? `SELECT u.id, u.name, u.phone FROM users u
-           WHERE u.role = 'patient' AND u.active = true ORDER BY u.name`
-        : `SELECT u.id, u.name, u.phone FROM users u
-           JOIN monitor_patients mp ON mp.patient_id = u.id
-           WHERE mp.monitor_id = $1 AND mp.active = true AND u.active = true
-           ORDER BY u.name`,
-      isAdmin ? [] : [req.user.id]
-    );
-    const todayStr = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-    const hour = triageHour();
-    if (!members.length) return res.json({ ...summarise([]), today: todayStr, generated_at: new Date().toISOString() });
-
+// Sprint 8/9: one collection routine feeds both the triage feed (all members)
+// and the member brief (one member). Returns composeMember rows plus the raw
+// today-log per member so the brief can describe the day.
+async function collectTriage(members) {
+  const todayStr = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const hour = triageHour();
+  if (!members.length) return { rows: [], todayLogBy: new Map(), todayStr };
     const ids = members.map(m => m.id);
     const [logsRes, profRes, lastRes, unreadRes, workoutRes, progRes] = await Promise.all([
       pool.query(
@@ -473,6 +464,7 @@ router.get('/triage', authMW, roleCheck('monitor', 'admin'), async (req, res) =>
       if (day) todayDayBy.set(r.patient_id, { day_label: day.day_label });
     }));
 
+    const todayLogBy = new Map(logsRes.rows.filter(l => String(l.log_date).slice(0, 10) === todayStr).map(l => [l.patient_id, l]));
     const rows = members.map(m => {
       const logs = logsBy.get(m.id) || [];
       // streak: consecutive logged days ending today or yesterday
@@ -488,10 +480,46 @@ router.get('/triage', authMW, roleCheck('monitor', 'admin'), async (req, res) =>
         streak, unread: unreadBy.get(m.id) || 0, todayStr, hour,
       });
     });
+  return { rows, todayLogBy, todayStr };
+}
+
+router.get('/triage', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'admin';
+    const { rows: members } = await pool.query(
+      isAdmin
+        ? `SELECT u.id, u.name, u.phone FROM users u
+           WHERE u.role = 'patient' AND u.active = true ORDER BY u.name`
+        : `SELECT u.id, u.name, u.phone FROM users u
+           JOIN monitor_patients mp ON mp.patient_id = u.id
+           WHERE mp.monitor_id = $1 AND mp.active = true AND u.active = true
+           ORDER BY u.name`,
+      isAdmin ? [] : [req.user.id]
+    );
+    const { rows, todayStr } = await collectTriage(members);
     res.json({ ...summarise(rows), today: todayStr, generated_at: new Date().toISOString() });
   } catch (err) {
     console.error('GET /members/triage error:', err);
     res.status(500).json({ error: 'Could not work out who needs attention' });
+  }
+});
+
+// ── GET /members/:id/brief ───────────────────────────────────────────────────
+// Sprint 9: three lines at the top of the member page. Same rows as triage,
+// for one member, plus a description of today. Read-only.
+router.get('/:id/brief', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { rows: members } = await pool.query(`SELECT id, name, phone FROM users WHERE id = $1 AND role = 'patient'`, [id]);
+    if (!members.length) return res.status(404).json({ error: 'Member not found' });
+    const { rows, todayLogBy, todayStr } = await collectTriage(members);
+    const row = rows[0];
+    const todayLog = todayLogBy.get(id) || null;
+    const totals = todayLog ? computeDayTotals(Array.isArray(todayLog.food_items) ? todayLog.food_items : []) : null;
+    res.json({ ...row, brief: composeBrief(row, todayLog, totals), today: todayStr, generated_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('GET /members/:id/brief error:', err);
+    res.status(500).json({ error: 'Could not build the brief' });
   }
 });
 
