@@ -1493,6 +1493,81 @@ async function cachedReadTest() {
   ck('changing the day re-reads for that date', w.__calls.filter(u => /me\/read/.test(u)).length === before + 1, w.__calls.filter(u => /me\/read/.test(u)));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 18. Meal idea + weekly review sections (Sprint 11)
+// ═══════════════════════════════════════════════════════════════════════════
+async function sprint11Test() {
+  console.log('\n[18] Meal idea sheet + weekly review sections');
+  const api = stub('api-s11.js', `
+    import { today } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    const T = today();
+    window.__calls = [];
+    const log = { weight_kg: '82.4', activities: {}, acv: {}, supplements: {},
+      food_items: [{ name: 'Idli', grams: 240, meal: 'Breakfast', per_100g: { calories: 130, protein: 3.5, total_carbs: 28, fat: 0.8 } }],
+      water_ml: 1000, sleep: {}, notes: '',
+      protocol: { activities: [], acv: [], supplements: [], macros: { kcal: 1800, pro: 120 }, water_target: 3000 } };
+    const recent = [
+      { food_id: 1, name: 'Idli',             per_100g: { calories: 130, protein: 3.5 }, last_g: 120, count: 9 },
+      { food_id: 2, name: 'Paneer (Low Fat)', per_100g: { calories: 204, protein: 18  }, last_g: 150, count: 5 },
+    ];
+    const weekly = { latest: { week_start: '2026-08-31', week_end: '2026-09-06', created_at: new Date().toISOString(), coach_note: 'Strong week.',
+        data: { daysLogged: 7, prevDaysLogged: 4, weekDelta: -0.6, workoutDays: 3, avgKcal: 1650, kcalTarget: 1800, avgPro: 105, proTarget: 120, weighInCount: 7, latestWeight: 82.4 } },
+      sections: { wins: ['Logged every day this week.', 'Down 0.6 kg this week.'], opportunities: ['Protein averaged 105 g against 120 g.'],
+        pattern: 'Weight moved in the weeks you trained. That is the lever.', next: ['Train 4× next week.'] }, history: [] };
+    const get = async (url) => {
+      window.__calls.push(url);
+      if (new RegExp('^/logs/' + T + '$').test(url)) return { data: log };
+      if (/^\\/logs\\/recent-foods$/.test(url)) return { data: recent };
+      if (/^\\/members\\/me\\/weekly-report$/.test(url)) return { data: weekly };
+      if (/^\\/logs\\/range/.test(url)) return { data: [] };
+      return { data: {} };
+    };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DailyLog from './pages/DailyLog.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    import { useLogStore } from './store/logStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    window.__logStore = useLogStore;
+    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
+  const { w, errors, html } = run(code); await tick(900);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('Today mounts', errors.length === 0, errors.join('|'));
+  ck('the Eat row offers "What to eat"', !!q('chip-mealidea') && /What to eat/.test(q('chip-mealidea').textContent));
+  q('chip-mealidea').click(); await tick(500);
+  const dlg = d.querySelector('[role=dialog]');
+  ck('it opens the meal-idea sheet and asks for the member\'s usual foods', !!dlg && w.__calls.some(u => /recent-foods/.test(u)));
+  // 312 kcal in, 8.4 g protein → 1,488 kcal and ~112 g protein left
+  ck('the headline names the protein gap', /g protein left/.test(dlg.textContent), dlg.textContent.slice(0, 100));
+  const items = [...dlg.querySelectorAll('[data-testid="idea-item"]')];
+  ck('it suggests the protein-dense food first, at the member\'s usual grams', items.length >= 1 && /Paneer/.test(items[0].textContent) && /150 g/.test(items[0].textContent), items.map(i => i.textContent));
+  const before = (w.__logStore.getState().log.food || []).length;
+  q('idea-add').click(); await tick(200);
+  const after = w.__logStore.getState().log.food || [];
+  ck('"Add to today" writes the items into the day\'s food log with their per-100g data',
+     after.length === before + items.length && after[after.length - 1].per_100g?.calories > 0, after.map(f => f.name + ' ' + f.grams));
+  ck('the button confirms rather than adding twice', /Added/.test(q('idea-add').textContent));
+  q('idea-add').click(); await tick(300);
+  ck('a second tap closes instead of duplicating', (w.__logStore.getState().log.food || []).length === after.length);
+
+  // ── weekly review sections on Progress ────────────────────────────────
+  const progressCode = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import WeeklyReportCard from './components/WeeklyReportCard.jsx';
+    createRoot(document.getElementById('root')).render(<MemoryRouter><WeeklyReportCard /></MemoryRouter>);`, api);
+  const P = run(progressCode); await tick(400);
+  const pd = P.w.document; const pq = (id) => pd.querySelector(`[data-testid="${id}"]`);
+  ck('the weekly card renders Wins · Opportunities · Pattern · Next week', !!pq('week-sections') && !!pq('week-wins') && !!pq('week-opportunities') && !!pq('week-pattern') && !!pq('week-next'));
+  ck('wins carry the numbers that prove them', /Logged every day this week/.test(pq('week-wins').textContent) && /Down 0\.6 kg/.test(pq('week-wins').textContent));
+  ck('the coach\'s note still sits above the sections', pd.body.innerHTML.indexOf('Strong week.') < pd.body.innerHTML.indexOf('data-testid="week-sections"'));
+  ck('next week is one concrete ask', /Train 4× next week/.test(pq('week-next').textContent));
+  ck('no error escaped', errors.length === 0 && P.errors.length === 0, [errors.join('|'), P.errors.join('|')]);
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1628,6 +1703,7 @@ async function overflowTest() {
     await memberBriefTest();
     await memberPage9bTest();
     await cachedReadTest();
+    await sprint11Test();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
