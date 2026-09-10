@@ -723,6 +723,19 @@ ck('GET /members/me/read is member-only and declared before /:id',
 ck('Today prefers the cached read but keeps the local one as a fallback',
    /const read = serverRead\?\.text/.test(model) && /: localRead;/.test(model) && /getMyRead\(date\)/.test(model));
 
+// ── 18. Coach charts and the outlier rule (Sprint 9b.1) ─────────────────────
+console.log('\n[18] Coach charts + outlier rule');
+const mon3 = read('pages/Monitor.jsx');
+ck('the coach\'s weight chart is gold, not the old green/red', /stroke="#D4AF37" strokeWidth=\{2\.5\}/.test(mon3) && !/stroke="#10b981"/.test(mon3) && !/stroke="#f87171"\n\s+strokeDasharray/.test(mon3));
+ck('compliance bars are tinted gold by value, and each still opens that day', /<Cell key=\{i\} fill=\{\(d\.score \|\| 0\) >= 75 \? '#D4AF37'/.test(mon3) && /setSelectedLog\(data\.log\)/.test(mon3));
+ck('the member page\'s "vs yesterday" uses the shared outlier rule, not the raw previous row',
+   /previousWeight\(sortedLogs, sortedLogs\.findIndex/.test(mon3) && !/const prev = sortedLogs\[i \+ 1\]/.test(mon3));
+const triageSrc = fs.readFileSync(path.join(__dirname, '../services/triage.js'), 'utf8');
+ck('triage ignores a weigh-in that disagrees with its two nearest neighbours (including the latest row)',
+   /const others = weighed\.filter/.test(triageSrc) && /!others\.every\(o => Math\.abs\(kg\(r\) - kg\(o\)\) > 3\)/.test(triageSrc));
+ck('low protocol compliance in the evening is a reason, and only in the evening',
+   /hour >= 18 && pct < 50 && daysSince === 0/.test(triageSrc) && /Protocol \$\{pct\}% by evening/.test(triageSrc));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

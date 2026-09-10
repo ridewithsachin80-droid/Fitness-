@@ -74,9 +74,29 @@ function composeMember(member, ctx) {
   const loggedDays = week.reduce((a, b) => a + b, 0);
 
   // ── weight over two weeks: first weigh-in in the window → latest ─────────
-  const weighed = logs.filter(l => l.weight_kg != null).sort((a, b) => String(a.log_date).localeCompare(String(b.log_date)));
-  const weightDelta = weighed.length >= 2
-    ? +(parseFloat(weighed[weighed.length - 1].weight_kg) - parseFloat(weighed[0].weight_kg)).toFixed(1) : null;
+  //
+  // Outliers are dropped first. A member reading 84.7 every day for a month
+  // and 89.8 once has mistyped, not gained 5 kg overnight — and that single
+  // row used to drive both "weight up 5.1 kg / 2 wk" on the coach's feed and
+  // "↓ 5.1 vs yesterday" on the member page. A weigh-in more than 3 kg from
+  // BOTH neighbours is ignored (both, so a genuine steady climb survives).
+  const weighed = logs.filter(l => l.weight_kg != null)
+    .sort((a, b) => String(a.log_date).localeCompare(String(b.log_date)));
+  const kg = (r) => parseFloat(r.weight_kg);
+  const clean = weighed.filter((r, i) => {
+    // Compare against the two nearest OTHER readings, whichever side they are
+    // on. Using only immediate neighbours exempted the first and last rows —
+    // and the latest row is exactly where a typo does the most damage, since
+    // it drives the whole two-week delta.
+    const others = weighed.filter((_, j) => j !== i)
+      .map(o => ({ o, gap: Math.abs(i - weighed.indexOf(o)) }))
+      .sort((a, b) => a.gap - b.gap).slice(0, 2).map(x => x.o);
+    if (others.length < 2) return true;
+    return !others.every(o => Math.abs(kg(r) - kg(o)) > 3);
+  });
+  const series = clean.length >= 2 ? clean : weighed;
+  const weightDelta = series.length >= 2
+    ? +(kg(series[series.length - 1]) - kg(series[0])).toFixed(1) : null;
 
   // ── sleep: last night vs the 7-day average of the nights before ──────────
   const nights = logs.map(l => ({ d: String(l.log_date).slice(0, 10), m: sleepMinutes(l.sleep) })).filter(n => n.m != null)
@@ -106,6 +126,15 @@ function composeMember(member, ctx) {
   if (sleepDrop != null && sleepDrop >= 1) { reasons.push(`Sleep down ${sleepDrop} h`); bump('attention'); }
   if (todayDay && !workoutLoggedToday && hour >= 18) { reasons.push('Missed workout'); bump('attention'); }
   if (weightDelta != null && weightDelta >= 1) { reasons.push(`Weight up ${weightDelta} kg / 2 wk`); bump('attention'); }
+  // Logging something is not the same as doing the protocol. A member who
+  // logged food and water but has 3 of 17 items ticked at 6pm is not "on
+  // track", and the gap rules alone never said so — every gap they check was
+  // technically satisfied.
+  const pct = today && today.compliance_pct != null ? Number(today.compliance_pct) : null;
+  if (pct != null && hour >= 18 && pct < 50 && daysSince === 0) {
+    reasons.push(`Protocol ${pct}% by evening`);
+    bump(pct < 25 ? 'attention' : 'watch');
+  }
   if (unread > 0) { reasons.push(`${unread} unread ${unread === 1 ? 'message' : 'messages'}`); bump('attention'); }
 
   // ── the good news, only when nothing is wrong ────────────────────────────
@@ -125,6 +154,7 @@ function composeMember(member, ctx) {
   else if (weightDelta != null && weightDelta >= 1)       action = { key: 'review',  label: 'Review meals' };
   else if (sleepDrop != null && sleepDrop >= 1)           action = { key: 'checkin', label: 'Ask about sleep' };
   else if (todayDay && !workoutLoggedToday && hour >= 18) action = { key: 'nudge',   label: 'Nudge workout' };
+  else if (pct != null && hour >= 18 && pct < 50 && daysSince === 0) action = { key: 'checkin', label: 'Check in' };
   else if (wins.length)                     action = { key: 'praise',   label: 'Send praise' };
   else                                      action = { key: 'open',     label: 'Open' };
 
@@ -136,6 +166,7 @@ function composeMember(member, ctx) {
     last_logged: weighed.length || logs.length ? logs.map(l => String(l.log_date).slice(0, 10)).sort().pop() : null,
     latest_weight: weighed.length ? parseFloat(weighed[weighed.length - 1].weight_kg) : null,
     weight_delta_2wk: weightDelta,
+    compliance_today: pct,
     sleep_drop_h: sleepDrop,
     workout_today: todayDay ? { label: todayDay.day_label, logged: !!workoutLoggedToday } : null,
     unread,

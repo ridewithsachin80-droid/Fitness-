@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  LineChart, BarChart, Bar, Line, XAxis, YAxis, Tooltip,
+  LineChart, BarChart, Bar, Cell, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts';
 import { getMember, getMembers, deleteNote } from '../api/logs';
@@ -12,7 +12,7 @@ import { openWhatsApp } from '../utils/personalMessage';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
 import { Segmented, Collapsible } from '../components/primitives';
 import Timeline from '../components/today/Timeline';
-import { timelineModelFromServerLog } from '../lib/day';
+import { timelineModelFromServerLog, previousWeight } from '../lib/day';
 import MemberBrief from '../components/coach/MemberBrief';
 import MemberActionSheet from '../components/coach/MemberActionSheet';
 import ProgramBuilderModal from '../components/ProgramBuilderModal';
@@ -920,7 +920,7 @@ export default function Coach() {
                   <Timeline readOnly mealSlots={data?.profile?.meal_slots || null}
                     m={timelineModelFromServerLog(activeLog, {
                       isToday: activeLog.log_date === todayIST,
-                      yesterdayWeight: (() => { const i = sortedLogs.findIndex(l => l.log_date === activeDate); const prev = sortedLogs[i + 1]; return prev?.weight_kg != null ? parseFloat(prev.weight_kg) : null; })(),
+                      yesterdayWeight: previousWeight(sortedLogs, sortedLogs.findIndex(l => l.log_date === activeDate)),
                     })} />
                 </div>
               )}
@@ -1228,15 +1228,19 @@ export default function Coach() {
                 <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTooltip />} />
                 {profile.start_weight && (
-                  <ReferenceLine y={parseFloat(profile.start_weight)} stroke="#f87171"
-                    strokeDasharray="4 4" label={{ value: 'Start', position: 'right', fontSize: 9, fill: '#f87171' }} />
+                  <ReferenceLine y={parseFloat(profile.start_weight)} stroke="#8C6D37"
+                    strokeDasharray="4 4" label={{ value: 'Start', position: 'right', fontSize: 9, fill: '#C5A059' }} />
                 )}
                 {profile.target_weight && (
                   <ReferenceLine y={parseFloat(profile.target_weight)} stroke="#F0E2B6"
                     strokeDasharray="4 4" label={{ value: 'Goal', position: 'right', fontSize: 9, fill: '#F0E2B6' }} />
                 )}
-                <Line type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={2.5}
-                  dot={{ fill: '#10b981', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                {/* Sprint 9b.1: the coach's charts speak the app's language —
+                    gold for the member's own line, gold-deep for the goal,
+                    tinted bars for compliance. Green/red belong to status
+                    (good/bad), not to "this is your weight". */}
+                <Line type="monotone" dataKey="weight" stroke="#D4AF37" strokeWidth={2.5}
+                  dot={{ fill: '#D4AF37', r: 3, strokeWidth: 0 }} activeDot={{ r: 5, fill: '#F0E2B6' }} />
               </LineChart>
             </ResponsiveContainer>
           </Card>
@@ -1269,8 +1273,12 @@ export default function Coach() {
                       </div>
                     : null}
                 />
-                <Bar dataKey="score" fill="#10b981" radius={[2, 2, 0, 0]}
-                  onClick={(data) => data?.log && setSelectedLog(data.log)} />
+                <Bar dataKey="score" radius={[2, 2, 0, 0]}
+                  onClick={(data) => data?.log && setSelectedLog(data.log)}>
+                  {complianceData.map((d, i) => (
+                    <Cell key={i} fill={(d.score || 0) >= 75 ? '#D4AF37' : (d.score || 0) >= 50 ? 'rgba(212,175,55,0.55)' : 'rgba(212,175,55,0.28)'} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
             <p className="text-eyebrow text-lo mt-1.5 text-center">Tap any bar to see what they logged that day</p>

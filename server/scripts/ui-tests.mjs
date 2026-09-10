@@ -1481,7 +1481,11 @@ async function cachedReadTest() {
   const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
   ck('Today asks for the cached read once', errors.length === 0 && w.__calls.filter(u => /me\/read/.test(u)).length === 1, [errors.join('|'), w.__calls.filter(u => /me\/read/.test(u))]);
   ck('the cached sentence is what Today shows — the same words the member got by WhatsApp', /Yesterday: 1,650 kcal · 82\.7 kg/.test(q('ai-read').textContent), q('ai-read').textContent.slice(0, 120));
-  ck('the read still carries its one action', !!q('read-action'));
+  // The action is time-gated in IST: before 09:00 a member who already logged
+  // their weight has nothing outstanding, so no button is the right answer.
+  const istH2 = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
+  ck('the read carries its one action once the day is under way (none before 09:00 for a member who already weighed in)',
+     istH2 >= 9 ? !!q('read-action') : !q('read-action'), [istH2, q('read-action')?.textContent]);
   ck('the local read did not also render', !/Fresh day|Nothing logged today/.test(q('ai-read').textContent));
   // going back a day re-asks for that day's read
   const before = w.__calls.filter(u => /me\/read/.test(u)).length;

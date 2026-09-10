@@ -168,6 +168,20 @@ console.log('\n[7b] nextAction');
   ck('istHour reads the clock in IST (05:30 UTC → 11)', day.istHour(new Date('2026-09-08T05:30:00Z')) === 11 && day.istHour(new Date('2026-09-08T20:00:00Z')) === 1);
 }
 
+// ── 7c. previousWeight — a mistyped weigh-in must not become a 5 kg drop ──
+console.log('\n[7c] previousWeight');
+{
+  const row = (d, w) => ({ log_date: d, weight_kg: w });
+  // newest first, as the coach page holds them
+  const steady = [row('2026-09-09', 84.7), row('2026-09-08', 89.8), row('2026-09-07', 84.6), row('2026-09-06', 84.8)];
+  ck('a mistyped previous day is skipped in favour of the last believable one', day.previousWeight(steady, 0) === 84.6, day.previousWeight(steady, 0));
+  const normal = [row('2026-09-09', 84.7), row('2026-09-08', 85.1), row('2026-09-07', 85.3)];
+  ck('an ordinary previous day is used as-is', day.previousWeight(normal, 0) === 85.1);
+  ck('a real 4 kg change with agreeing history is kept', day.previousWeight([row('a', 80), row('b', 84), row('c', 84.2), row('d', 84.1)], 0) === 84);
+  ck('no previous weigh-in → null', day.previousWeight([row('a', 80)], 0) === null && day.previousWeight([], 0) === null);
+  ck('only one previous reading is trusted without cross-checks', day.previousWeight([row('a', 80), row('b', 95)], 0) === 95);
+}
+
 // ── 8. The page and Profile import from lib/day — no private copies left ────
 console.log('\n[8] no mirrored copies');
 {

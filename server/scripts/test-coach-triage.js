@@ -107,6 +107,26 @@ const IST = (offsetDays = 0) => new Date(Date.now() + 5.5 * 3600000 - offsetDays
   ck('same day with the workout logged → no reason, Open', done.reasons.length === 0 && done.action.key === 'open', done);
   const morning = composeMember(m, { ...base, daysSince: 0, todayDay: { day_label: 'Push · Mon' }, hour: 9, logs: [{ log_date: IST(0), weight_kg: 80, food_items: [], water_ml: 0, sleep: {} }] });
   ck('at 09:00 nothing is nagged: no "Missed workout", no food gap', !morning.reasons.includes('Missed workout') && !morning.reasons.includes('No food log'), morning.reasons);
+  // ── Sprint 9b.1: low compliance late in the day, and mistyped weigh-ins ──
+  const dayRow = (d, w, pct) => ({ log_date: d, weight_kg: w, food_items: [{ name: 'x', meal: 'Meal 1' }], water_ml: 2800, activities: { walk: true }, acv: { acv1: true }, supplements: { b12: true }, sleep: {}, compliance_pct: pct });
+  const fortnight = (weights, pct = 90) => weights.map((w, i) => dayRow(IST(weights.length - 1 - i), w, pct));
+  const lowPm = composeMember(m, { ...base, daysSince: 0, hour: 20, streak: 14, logs: fortnight(new Array(14).fill(84.7), 19) });
+  ck('19% protocol at 8pm is NOT "on track" — it reads as a reason with Check in', lowPm.priority !== 'ok' && lowPm.reasons.some(r => /Protocol 19% by evening/.test(r)) && lowPm.action.key === 'checkin', lowPm);
+  const lowAm = composeMember(m, { ...base, daysSince: 0, hour: 10, streak: 14, logs: fortnight(new Array(14).fill(84.7), 19) });
+  ck('the same 19% at 10am is not nagged — the day is not over', !lowAm.reasons.some(r => /by evening/.test(r)), lowAm.reasons);
+  const good = composeMember(m, { ...base, daysSince: 0, hour: 20, streak: 14, logs: fortnight(new Array(14).fill(84.7), 80) });
+  ck('80% at 8pm stays on track', good.priority === 'ok' && !good.reasons.length, good.reasons);
+  const typo = new Array(14).fill(84.7); typo[7] = 89.8;    // one mistyped day, mid-window (neighbours on both sides)
+  const withTypo = composeMember(m, { ...base, daysSince: 0, hour: 20, streak: 14, logs: fortnight(typo, 90) });
+  ck('a single mistyped weigh-in (89.8 among 84.7s) is ignored, not read as a 5 kg swing', withTypo.weight_delta_2wk === 0 && !withTypo.reasons.some(r => /Weight up/.test(r)), [withTypo.weight_delta_2wk, withTypo.reasons]);
+  // The end of the window is where a typo would otherwise drive the whole delta.
+  const typoLatest = new Array(14).fill(84.7); typoLatest[13] = 89.8;
+  const withLatestTypo = composeMember(m, { ...base, daysSince: 0, hour: 20, streak: 14, logs: fortnight(typoLatest, 90) });
+  ck('a mistyped LATEST weigh-in does not drive the two-week delta either', withLatestTypo.weight_delta_2wk === 0, withLatestTypo.weight_delta_2wk);
+  const realGain = composeMember(m, { ...base, daysSince: 0, hour: 20, streak: 14, logs: fortnight([84, 84.2, 84.5, 84.8, 85, 85.3, 85.5, 85.8, 86, 86.2, 86.4, 86.6, 86.8, 87], 90) });
+  ck('a genuine steady climb is still reported (+3 kg / 2 wk)', realGain.weight_delta_2wk === 3 && realGain.reasons.some(r => /Weight up 3 kg/.test(r)), [realGain.weight_delta_2wk, realGain.reasons]);
+  ck('the day\'s compliance is exposed for the coach view', lowPm.compliance_today === 19);
+
   const s2 = summarise([{ priority: 'ok', name: 'b' }, { priority: 'high', name: 'a' }, { priority: 'watch', name: 'c' }]);
   ck('summarise sorts high → attention → watch → ok and counts', s2.members.map(x => x.name).join('') === 'acb' && s2.counts.high === 1 && s2.counts.on_track === 1 && s2.counts.watch === 1);
 
