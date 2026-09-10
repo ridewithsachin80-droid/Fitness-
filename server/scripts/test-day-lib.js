@@ -233,6 +233,34 @@ console.log('\n[7e] suggestLoad');
   ck('every suggestion carries a plain-English reason', /kg/.test(S({ weight_kg: 40, reps: 12 }).reason) && /last time/.test(S({ weight_kg: 0, reps: 15 }).reason));
 }
 
+// ── 7f. recovery — one shape for every tracker, never guessed ───────────────
+console.log('\n[7f] recovery');
+{
+  const T = '2026-09-10', Y = '2026-09-09';
+  const fitbit = { date: T, sources: [{ provider: 'fitbit' }], heart_rate: { resting: 58 }, sleep: { total_minutes: 402, efficiency: 91 }, activity: { steps: 6200 } };
+  const whoop  = { date: T, sources: [{ provider: 'whoop' }], recovery: { score: 41, hrv_rmssd_milli: 38.2, resting_heart_rate: 61 }, sleep: { minutes: 350 } };
+  const n1 = day.normaliseTrackerDay(fitbit), n2 = day.normaliseTrackerDay(whoop);
+  ck('Fitbit shape → resting 58, sleep 402 min, score 91, steps 6200, hrv null', n1.restingHr === 58 && n1.sleepMinutes === 402 && n1.sleepScore === 91 && n1.steps === 6200 && n1.hrv === null && n1.recovery === null, n1);
+  ck('Whoop shape → recovery 41, hrv 38.2, resting 61, sleep 350, steps null', n2.recovery === 41 && n2.hrv === 38.2 && n2.restingHr === 61 && n2.sleepMinutes === 350 && n2.steps === null, n2);
+  ck('a day with no known metric is empty, not zero', Object.values(day.normaliseTrackerDay({ date: T, foo: 1 })).filter(v => v != null && !Array.isArray(v)).length === 1);
+
+  const week = (over) => [0, 1, 2, 3, 4, 5, 6].map(i => ({ date: `2026-09-${String(10 - i).padStart(2, '0')}`, sources: [{ provider: 'whoop' }],
+    recovery: { score: 70, hrv_rmssd_milli: 60, resting_heart_rate: 55 }, sleep: { minutes: 440 }, activity: { steps: 8000 }, ...(i === 0 ? over : {}) }));
+  ck('no tracker data → null (no card)', day.recoverySummary([], { today: T }) === null);
+  ck('stale data (latest 3 days old) → null', day.recoverySummary([{ date: '2026-09-07', sources: [], recovery: { score: 70 } }], { today: T }) === null);
+  const s1 = day.recoverySummary(week({ recovery: { score: 28, hrv_rmssd_milli: 60, resting_heart_rate: 55 } }), { today: T });
+  ck('low recovery → the insight says go easy', s1 && /Recovery is low \(28\)/.test(s1.insight), s1 && s1.insight);
+  const s2 = day.recoverySummary(week({ recovery: { score: 70, hrv_rmssd_milli: 60, resting_heart_rate: 61 } }), { today: T });
+  ck('resting HR 6 above the week → the insight names it', s2 && /6 above your week/.test(s2.insight), s2 && s2.insight);
+  const s3 = day.recoverySummary(week({ sleep: { minutes: 300 } }), { today: T });
+  ck('under six hours of sleep → protect tonight', s3 && /5h 00m of sleep is under six hours/.test(s3.insight), s3 && s3.insight);
+  const s4 = day.recoverySummary(week({}), { today: T });
+  ck('a normal day on a high-recovery baseline → green light', s4 && /green light/i.test(s4.insight), s4 && s4.insight);
+  ck('averages come from the prior days, not today', s4.avgs.restingHr === 55 && s4.avgs.steps === 8000);
+  const yOnly = day.recoverySummary(week({}).slice(1), { today: T });
+  ck('yesterday counts as current and is flagged as such', yOnly && yOnly.isToday === false && yOnly.latest.date === Y);
+}
+
 // ── 8. The page and Profile import from lib/day — no private copies left ────
 console.log('\n[8] no mirrored copies');
 {

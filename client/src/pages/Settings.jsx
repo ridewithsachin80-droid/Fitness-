@@ -86,7 +86,7 @@ export default function Settings() {
     Promise.all([
       getSubscriptions().catch(() => ({ data: [] })),
       getNotifLog().catch(() => ({ data: [] })),
-    ]).then(([s, n]) => { setSubs(s.data || []); setNotifLog(n.data || []); }).finally(() => setLoading(false));
+    ]).then(([s, n]) => { setSubs(Array.isArray(s.data) ? s.data : []); setNotifLog(Array.isArray(n.data) ? n.data : []); }).finally(() => setLoading(false));
   }, []);
 
   const removeSub = async (endpoint) => {
@@ -139,66 +139,56 @@ export default function Settings() {
 
       <div className="max-w-md mx-auto px-4 pt-4 pb-32 space-y-3">
 
-        {/* ── Appearance ─────────────────────────────────────────── */}
-        {notif && (
-          <Card>
-            <SectionTitle icon="🔔" tooltip="How your coach can reach you when you are not in the app">
-              How we reach you
-            </SectionTitle>
-
-            {notif.opted_out ? (
-              <div className="mt-2">
-                <p className="text-sm text-mid leading-relaxed mb-3">
-                  You have turned off all messages. Your coach can still see your logs,
-                  but cannot send you reminders or your weekly summary.
-                </p>
-                <button onClick={() => { haptic(15); saveNotif({ opted_out: false }); }}
-                  disabled={notifBusy} style={{ minHeight: 44 }}
-                  className="w-full rounded-xl text-sm font-bold text-charcoal
-                    bg-gradient-to-r from-gold-light via-gold to-gold-dark">
-                  Turn messages back on
-                </button>
+        {/* Sprint 11c: five groups in a fixed order — Account · Preferences ·
+            Integrations · Notifications · Safety. Every card that existed still
+            exists; only the order and the headings changed. */}
+        <p className="text-eyebrow font-semibold uppercase tracking-widest text-lo pt-3" data-testid="settings-group">Account</p>
+        {/* ── Account ────────────────────────────────────────────── */}
+        <Card>
+          <SectionTitle icon="👤">Account</SectionTitle>
+          <div className="space-y-2">
+            {[{ label: 'Name', value: user?.name }, { label: 'Role', value: roleLabel(user?.role) }, { label: 'ID', value: `#${user?.id}` }].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between py-1.5">
+                <span className="text-sm text-lo">{label}</span>
+                <span className="text-sm font-semibold text-white capitalize">{value}</span>
               </div>
-            ) : (
-              <>
-                <div className="mt-2 space-y-1">
-                  {[
-                    ['push', 'App notifications', 'Free, and only on this device'],
-                    ['whatsapp', 'WhatsApp', 'Reminders and your weekly summary'],
-                    ['sms', 'SMS', 'For when you have no internet'],
-                  ].map(([key, label, sub]) => (
-                    <label key={key}
-                      className="flex items-center justify-between gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
-                      <span className="min-w-0">
-                        <span className="block text-sm text-white">{label}</span>
-                        <span className="block text-caption text-lo">{sub}</span>
-                      </span>
-                      <button
-                        role="switch" aria-checked={!!notif[key]} aria-label={label}
-                        onClick={() => { haptic(12); saveNotif({ [key]: !notif[key] }); }}
-                        disabled={notifBusy}
-                        style={{ width: 46, height: 28 }}
-                        className={`rounded-full flex-shrink-0 transition-colors relative ${
-                          notif[key] ? 'bg-gold' : 'bg-white/[0.12]'}`}>
-                        <span className={`absolute top-1 w-5 h-5 rounded-full bg-surface transition-all ${
-                          notif[key] ? 'left-[22px]' : 'left-1'}`} />
-                      </button>
-                    </label>
-                  ))}
-                </div>
+            ))}
+          </div>
+        </Card>
 
-                <button onClick={() => { haptic(15); saveNotif({ opted_out: true }); }}
-                  disabled={notifBusy}
-                  className="text-caption text-lo underline mt-3">
-                  Stop all messages
-                </button>
-              </>
-            )}
+        {/* Member: change your own PIN */}
+        {user?.role === 'patient' && (
+          <Card>
+            <SectionTitle icon="🔑">Change PIN</SectionTitle>
+            <ChangePin />
           </Card>
         )}
 
-        {/* Members only — a coach has no day to log by voice. */}
-        {user?.role === 'patient' && <VoiceLogging />}
+        {/* Change password */}
+        {(user?.role === 'monitor' || user?.role === 'admin') && (
+          <Card>
+            <SectionTitle icon="🔐">Change Password</SectionTitle>
+            <div className="space-y-3">
+              {[['current','Current password','Your current password'],['next','New password','Min. 8 characters'],['confirm','Confirm new','Repeat new password']].map(([key, label, placeholder]) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-lo mb-1">{label}</label>
+                  <input type="password" value={pwForm[key]} onChange={e => setPw(key, e.target.value)}
+                    placeholder={placeholder} onKeyDown={e => e.key === 'Enter' && submitPw()}
+                    className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
+                </div>
+              ))}
+              {pwError && <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2 rounded-xl">{pwError}</p>}
+              {pwOk && <p className="text-xs text-gold-light bg-gold/10 border border-gold/20 px-3 py-2 rounded-xl font-medium">✓ Password changed successfully</p>}
+              <button onClick={submitPw} disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
+                style={{ minHeight: 44 }}
+                className="w-full py-2.5 bg-charcoal hover:bg-charcoal text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40">
+                {pwSaving ? 'Saving…' : 'Update Password'}
+              </button>
+            </div>
+          </Card>
+        )}
+
+        <p className="text-eyebrow font-semibold uppercase tracking-widest text-lo pt-3" data-testid="settings-group">Preferences</p>
 
         <Card>
           <SectionTitle icon="🎨">Appearance</SectionTitle>
@@ -290,44 +280,10 @@ export default function Settings() {
           </div>
         </Card>
 
-        {/* ── Safety ─────────────────────────────────────────────── */}
-        <Card>
-          <SectionTitle icon="🛡️">Safety contacts</SectionTitle>
-          <p className="text-xs text-lo mb-3">Stored on this device only. Not sent anywhere automatically.</p>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-faint font-medium mb-1">Emergency contact name</label>
-              <input value={ecName} onChange={e => setEcName(e.target.value)} placeholder="e.g. Ravi Kumar"
-                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
-            </div>
-            <div>
-              <label className="block text-xs text-faint font-medium mb-1">Emergency contact phone</label>
-              <input value={ecPhone} onChange={e => setEcPhone(e.target.value)} placeholder="+91 98765 43210" type="tel"
-                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
-            </div>
-            {ageMode === 'child' && (
-              <div>
-                <label className="block text-xs text-faint font-medium mb-1">Parent / Guardian email</label>
-                <input value={guarEmail} onChange={e => setGuarEmail(e.target.value)} placeholder="parent@example.com" type="email"
-                  className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
-                <p className="text-xs text-lo mt-1">Used only to share your daily log with a parent. Not sent automatically by the app — you must share it manually.</p>
-              </div>
-            )}
-            <button onClick={saveEC}
-              style={{ minHeight: 44 }}
-              className="w-full py-2.5 bg-gold/15 hover:bg-gold/25 text-gold-light font-semibold rounded-xl text-sm transition-all border border-gold/20">
-              Save safety contacts
-            </button>
-            {ecPhone && (
-              <a href={`tel:${ecPhone}`}
-                style={{ minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold rounded-xl text-sm transition-all border border-red-500/20 text-center no-underline">
-                📞 Call {ecName || 'Emergency Contact'}
-              </a>
-            )}
-          </div>
-        </Card>
 
+        {/* Members only — a coach has no day to log by voice. */}
+        {user?.role === 'patient' && <VoiceLogging />}
+        <p className="text-eyebrow font-semibold uppercase tracking-widest text-lo pt-3" data-testid="settings-group">Integrations</p>
         {/* ── Connected Devices ──────────────────────────────────── */}
         <button
           onClick={() => { navigate('/devices'); haptic(15); }}
@@ -356,19 +312,64 @@ export default function Settings() {
           </Card>
         </button>
 
-        {/* ── Account ────────────────────────────────────────────── */}
-        <Card>
-          <SectionTitle icon="👤">Account</SectionTitle>
-          <div className="space-y-2">
-            {[{ label: 'Name', value: user?.name }, { label: 'Role', value: roleLabel(user?.role) }, { label: 'ID', value: `#${user?.id}` }].map(({ label, value }) => (
-              <div key={label} className="flex items-center justify-between py-1.5">
-                <span className="text-sm text-lo">{label}</span>
-                <span className="text-sm font-semibold text-white capitalize">{value}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <p className="text-eyebrow font-semibold uppercase tracking-widest text-lo pt-3" data-testid="settings-group">Notifications</p>
+        {/* ── How your coach reaches you ──────────────────────────── */}
+        {notif && (
+          <Card>
+            <SectionTitle icon="🔔" tooltip="How your coach can reach you when you are not in the app">
+              How we reach you
+            </SectionTitle>
 
+            {notif.opted_out ? (
+              <div className="mt-2">
+                <p className="text-sm text-mid leading-relaxed mb-3">
+                  You have turned off all messages. Your coach can still see your logs,
+                  but cannot send you reminders or your weekly summary.
+                </p>
+                <button onClick={() => { haptic(15); saveNotif({ opted_out: false }); }}
+                  disabled={notifBusy} style={{ minHeight: 44 }}
+                  className="w-full rounded-xl text-sm font-bold text-charcoal
+                    bg-gradient-to-r from-gold-light via-gold to-gold-dark">
+                  Turn messages back on
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mt-2 space-y-1">
+                  {[
+                    ['push', 'App notifications', 'Free, and only on this device'],
+                    ['whatsapp', 'WhatsApp', 'Reminders and your weekly summary'],
+                    ['sms', 'SMS', 'For when you have no internet'],
+                  ].map(([key, label, sub]) => (
+                    <label key={key}
+                      className="flex items-center justify-between gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
+                      <span className="min-w-0">
+                        <span className="block text-sm text-white">{label}</span>
+                        <span className="block text-caption text-lo">{sub}</span>
+                      </span>
+                      <button
+                        role="switch" aria-checked={!!notif[key]} aria-label={label}
+                        onClick={() => { haptic(12); saveNotif({ [key]: !notif[key] }); }}
+                        disabled={notifBusy}
+                        style={{ width: 46, height: 28 }}
+                        className={`rounded-full flex-shrink-0 transition-colors relative ${
+                          notif[key] ? 'bg-gold' : 'bg-white/[0.12]'}`}>
+                        <span className={`absolute top-1 w-5 h-5 rounded-full bg-surface transition-all ${
+                          notif[key] ? 'left-[22px]' : 'left-1'}`} />
+                      </button>
+                    </label>
+                  ))}
+                </div>
+
+                <button onClick={() => { haptic(15); saveNotif({ opted_out: true }); }}
+                  disabled={notifBusy}
+                  className="text-caption text-lo underline mt-3">
+                  Stop all messages
+                </button>
+              </>
+            )}
+          </Card>
+        )}
         {/* Push notifications */}
         <Card>
           <SectionTitle icon="🔔">Push Notifications</SectionTitle>
@@ -407,37 +408,44 @@ export default function Settings() {
           </Card>
         )}
 
-        {/* Member: change your own PIN */}
-        {user?.role === 'patient' && (
-          <Card>
-            <SectionTitle icon="🔑">Change PIN</SectionTitle>
-            <ChangePin />
-          </Card>
-        )}
-
-        {/* Change password */}
-        {(user?.role === 'monitor' || user?.role === 'admin') && (
-          <Card>
-            <SectionTitle icon="🔐">Change Password</SectionTitle>
-            <div className="space-y-3">
-              {[['current','Current password','Your current password'],['next','New password','Min. 8 characters'],['confirm','Confirm new','Repeat new password']].map(([key, label, placeholder]) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium text-lo mb-1">{label}</label>
-                  <input type="password" value={pwForm[key]} onChange={e => setPw(key, e.target.value)}
-                    placeholder={placeholder} onKeyDown={e => e.key === 'Enter' && submitPw()}
-                    className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
-                </div>
-              ))}
-              {pwError && <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2 rounded-xl">{pwError}</p>}
-              {pwOk && <p className="text-xs text-gold-light bg-gold/10 border border-gold/20 px-3 py-2 rounded-xl font-medium">✓ Password changed successfully</p>}
-              <button onClick={submitPw} disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
-                style={{ minHeight: 44 }}
-                className="w-full py-2.5 bg-charcoal hover:bg-charcoal text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-40">
-                {pwSaving ? 'Saving…' : 'Update Password'}
-              </button>
+        <p className="text-eyebrow font-semibold uppercase tracking-widest text-lo pt-3" data-testid="settings-group">Safety</p>
+        {/* ── Safety ─────────────────────────────────────────────── */}
+        <Card>
+          <SectionTitle icon="🛡️">Safety contacts</SectionTitle>
+          <p className="text-xs text-lo mb-3">Stored on this device only. Not sent anywhere automatically.</p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-faint font-medium mb-1">Emergency contact name</label>
+              <input value={ecName} onChange={e => setEcName(e.target.value)} placeholder="e.g. Ravi Kumar"
+                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
             </div>
-          </Card>
-        )}
+            <div>
+              <label className="block text-xs text-faint font-medium mb-1">Emergency contact phone</label>
+              <input value={ecPhone} onChange={e => setEcPhone(e.target.value)} placeholder="+91 98765 43210" type="tel"
+                className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
+            </div>
+            {ageMode === 'child' && (
+              <div>
+                <label className="block text-xs text-faint font-medium mb-1">Parent / Guardian email</label>
+                <input value={guarEmail} onChange={e => setGuarEmail(e.target.value)} placeholder="parent@example.com" type="email"
+                  className="w-full border border-white/[0.12] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30" />
+                <p className="text-xs text-lo mt-1">Used only to share your daily log with a parent. Not sent automatically by the app — you must share it manually.</p>
+              </div>
+            )}
+            <button onClick={saveEC}
+              style={{ minHeight: 44 }}
+              className="w-full py-2.5 bg-gold/15 hover:bg-gold/25 text-gold-light font-semibold rounded-xl text-sm transition-all border border-gold/20">
+              Save safety contacts
+            </button>
+            {ecPhone && (
+              <a href={`tel:${ecPhone}`}
+                style={{ minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold rounded-xl text-sm transition-all border border-red-500/20 text-center no-underline">
+                📞 Call {ecName || 'Emergency Contact'}
+              </a>
+            )}
+          </div>
+        </Card>
 
         {/* Logout */}
         <button onClick={handleLogout}
@@ -448,7 +456,6 @@ export default function Settings() {
 
         <p className="text-center text-xs text-ghost pt-2">FitLife · Enhanced UX</p>
       </div>
-
       {user?.role === 'patient' ? <MemberBottomNav /> : <BottomNav role={user?.role} />}
     </div>
   );

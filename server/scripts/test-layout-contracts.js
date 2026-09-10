@@ -766,6 +766,19 @@ ck('labs: a summary line, each marker as latest ↓/↑ from previous, full card
 ck('the lab detail card no longer assumes the context object exists (a sparse row must not blank the page)',
    !/c\.context\./.test(labs) && /const ctx = c\.context \|\| \{\};/.test(labs) && /\(ctx\.supplements \|\| \[\]\)\.length/.test(labs));
 
+// ── 21. Settings groups + recovery (Sprint 11c) ─────────────────────────────
+console.log('\n[21] Settings + recovery');
+const settingsSrc = read('pages/Settings.jsx');
+const groupOrder = [...settingsSrc.matchAll(/data-testid="settings-group">([A-Za-z]+)</g)].map(m => m[1]);
+ck('Settings has five groups in a fixed order', groupOrder.join(',') === 'Account,Preferences,Integrations,Notifications,Safety', groupOrder);
+ck('the subscriptions list is guarded against a non-array response', /Array\.isArray\(s\.data\) \? s\.data : \[\]/.test(settingsSrc));
+const rec = read('../src/lib/day/recovery.js');
+const recCard = read('components/today/RecoveryCard.jsx');
+ck('recovery never estimates: every metric is null unless a provider reported it', /const num = \(v\) => \(v == null/.test(rec) && !/\?\? 0/.test(rec));
+ck('the card renders nothing without data for today or yesterday', /if \(!s\) return null;/.test(recCard) && /if \(latest\.date !== today && latest\.date !== yStr\) return null;/.test(rec));
+ck('the provider is named on the card', /s\.providers\.join/.test(recCard));
+ck('Today mounts it after the plan and only for today; the hero does not read it', /\{isToday && <RecoveryCard today=\{m\.date\} \/>\}/.test(todayPage) && !/RecoveryCard/.test(model));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

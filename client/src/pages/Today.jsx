@@ -14,6 +14,7 @@ import NotesRow      from '../components/today/NotesRow';
 import Timeline      from '../components/today/Timeline';
 import CoachNotes    from '../components/today/CoachNotes';
 import MilestoneModal from '../components/today/MilestoneModal';
+import RecoveryCard  from '../components/today/RecoveryCard';
 import { FastingBar } from '../components/today/DayWidgets';
 import { nextAction, istHour } from '../lib/day';
 import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet, MealIdeaSheet } from '../components/sheets';
@@ -96,6 +97,9 @@ export default function Today() {
               })} />
 
             <TodaysPlan m={m} onOpen={openSheet} />
+
+            {/* Sprint 11c: only for members whose tracker has synced — otherwise renders nothing. */}
+            {isToday && <RecoveryCard today={m.date} />}
 
             {!protocol && (
               <Card>

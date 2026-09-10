@@ -104,7 +104,7 @@ async function bundle(contents, apiStub = null) {
 }
 
 /** Run bundled code in a fresh jsdom and hand back the document plus any errors. */
-function run(code) {
+function run(code, before = null) {
   const errors = [];
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     runScripts: 'outside-only', pretendToBeVisual: true, url: 'https://fitness.upscale-app.com/',
@@ -122,6 +122,7 @@ function run(code) {
     if (!b) throw new Error('no button starting with: ' + label);
     b.click();
   };
+  if (before) before(w);               // set window state before the bundle runs
   try { w.eval(code); } catch (e) { errors.push(e.message); }
   return { w, errors, html: () => w.document.getElementById('root').innerHTML };
 }
@@ -1624,6 +1625,76 @@ async function sprint11bTest() {
   ck('no error escaped', errors.length === 0, errors.join('|'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 20. Settings groups + recovery card (Sprint 11c)
+// ═══════════════════════════════════════════════════════════════════════════
+async function sprint11cTest() {
+  console.log('\n[20] Settings groups + recovery card');
+  const api = stub('api-s11c.js', `
+    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    const T = today();
+    window.__calls = []; window.__trackerDays ||= [];
+    const log = { weight_kg: '82.4', activities: {}, acv: {}, supplements: {}, food_items: [], water_ml: 0, sleep: {}, notes: '',
+      protocol: { activities: [], acv: [], supplements: [], macros: { kcal: 1800 }, water_target: 3000 } };
+    const get = async (url) => {
+      window.__calls.push(url);
+      if (new RegExp('^/logs/' + T + '$').test(url)) return { data: log };
+      if (/^\\/trackers\\/data/.test(url)) return { data: { data: window.__trackerDays } };
+      if (/^\\/notifications\\/subscriptions/.test(url)) return { data: [] };
+      if (/^\\/notifications\\/log/.test(url)) return { data: [] };
+      if (/^\\/trackers\\/status/.test(url)) return { data: { connections: [] } };
+      if (/^\\/push\\/subscriptions/.test(url)) return { data: [] };
+      if (/^\\/reminders\\/my-schedule/.test(url)) return { data: { schedules: [] } };
+      if (/^\\/members\\/me\\/notification-preferences/.test(url)) return { data: {} };
+      if (/^\\/logs\\/range/.test(url)) return { data: [] };
+      return { data: {} };
+    };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+
+  // Settings: five groups in order, every card still present
+  const settingsCode = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Settings from './pages/Settings.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><Settings /></MemoryRouter>);`, api);
+  const S = run(settingsCode); await tick(500);
+  const sd = S.w.document;
+  const groups = [...sd.querySelectorAll('[data-testid="settings-group"]')].map(g => g.textContent.trim());
+  ck('Settings mounts', S.errors.length === 0, S.errors.join('|'));
+  ck('five groups in a fixed order: Account · Preferences · Integrations · Notifications · Safety', groups.join(',') === 'Account,Preferences,Integrations,Notifications,Safety', groups);
+  const sh = sd.body.innerHTML;
+  const order = ['Account', 'Change PIN', 'Preferences', 'Appearance', 'My avatar', 'Meal slots', 'Integrations', 'Connected Device', 'Notifications', 'Push Notifications', 'Safety', 'Safety contacts', 'Sign Out'];
+  const idx = order.map(t => sh.indexOf(t));
+  ck('every card is still there, under its group, in order', idx.every(i => i > -1) && idx.every((v, i, a) => i === 0 || v > a[i - 1]), order.map((t, i) => t + ':' + idx[i]));
+
+  // Recovery: nothing without a tracker; the card with one
+  const todayCode = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DailyLog from './pages/DailyLog.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
+  const A = run(todayCode); await tick(900);
+  ck('a member with no tracker sees no recovery card (nothing estimated)', A.errors.length === 0 && !A.w.document.querySelector('[data-testid="recovery-card"]') && A.w.__calls.some(u => /trackers\/data/.test(u)), A.errors.join('|'));
+
+  const B = run(todayCode, (w) => {
+    const T = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+    const d = (i) => new Date(Date.now() + 5.5 * 3600000 - i * 86400000).toISOString().slice(0, 10);
+    w.__trackerDays = [0, 1, 2, 3, 4, 5, 6].map(i => ({ date: d(i), sources: [{ provider: 'whoop' }],
+      recovery: { score: i === 0 ? 30 : 72, hrv_rmssd_milli: 58, resting_heart_rate: i === 0 ? 62 : 55 }, sleep: { minutes: i === 0 ? 330 : 450 }, activity: { steps: 4200 } }));
+  });
+  await tick(900);
+  const bd = B.w.document; const bq = (id) => bd.querySelector(`[data-testid="${id}"]`);
+  ck('with a synced tracker the recovery card renders: sleep, HRV, resting HR, steps, score', !!bq('recovery-card') && ['rec-sleep', 'rec-hrv', 'rec-rhr', 'rec-steps', 'rec-score'].every(id => bq(id)), B.errors.join('|'));
+  ck('numbers are the device\'s (5h 30m, 58 ms, 62 bpm, 4,200, 30/100) with the provider named', /5h 30m/.test(bq('rec-sleep').textContent) && /62/.test(bq('rec-rhr').textContent) && /4,200/.test(bq('rec-steps').textContent) && /30/.test(bq('rec-score').textContent) && /whoop/.test(bq('recovery-card').textContent), bq('recovery-card').textContent.slice(0, 160));
+  ck('deltas compare to the week (resting HR ↑ 7 vs week)', /↑ 7bpm vs week|↑ 7 vs week/.test(bq('rec-rhr').textContent.replace('bpm vs', 'bpm vs')) || /↑ 7/.test(bq('rec-rhr').textContent), bq('rec-rhr').textContent);
+  ck('one insight, the most important: low recovery → go easy', bq('rec-insight') && /Recovery is low \(30\)/.test(bq('rec-insight').textContent), bq('rec-insight')?.textContent);
+  ck('the hero and Today\'s plan do not depend on it', !!bq('hero-weight') && !!bq('todays-plan'));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1761,6 +1832,7 @@ async function overflowTest() {
     await cachedReadTest();
     await sprint11Test();
     await sprint11bTest();
+    await sprint11cTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

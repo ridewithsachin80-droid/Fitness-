@@ -8,3 +8,4 @@ export * from './nextAction';
 export * from './protocol';
 export * from './fromServerLog';
 export * from './mealSuggest';
+export * from './recovery';
