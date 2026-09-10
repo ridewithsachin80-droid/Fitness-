@@ -7,3 +7,4 @@ export * from './pending';
 export * from './nextAction';
 export * from './protocol';
 export * from './fromServerLog';
+export * from './mealSuggest';

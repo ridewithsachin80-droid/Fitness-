@@ -120,6 +120,10 @@ export default function TodaysPlan({ m, onOpen }) {
               {balance > 0 ? `${balance.toLocaleString('en-IN')} kcal over target` : `${Math.abs(balance).toLocaleString('en-IN')} kcal under target`}
             </span>
           )}
+          {/* Sprint 11: the day's remaining macros, turned into a meal. */}
+          <Tap onPress={() => onOpen('mealidea')} testId="chip-mealidea" className="text-gold-deep font-semibold">
+            <Icon name="spark" size={12} />What to eat
+          </Tap>
           <Tap onPress={() => onOpen('nutrition')} testId="chip-nutrition">
             <Icon name="pill" size={12} />{micro.hasData ? `${micro.met}/${micro.total} nutrients` : 'Nutrients'}
           </Tap>

@@ -74,6 +74,14 @@ function aggregateWeek({ logs = [], sessions = [], win }) {
     .reduce((a, s) => a + (Array.isArray(s.cardio) ? s.cardio.length
       : (() => { try { return JSON.parse(s.cardio || '[]').length; } catch { return 0; } })()), 0);
 
+  // Sprint 11: the same three numbers for LAST week, so the review can say
+  // "up from 4" instead of just "5". Additive — nothing reads these yet
+  // except reviewSections().
+  const prevFoodDays = prevLogs.map(l => computeDayTotals(l.food_items)).filter(t => t.cal > 0);
+  const prevDaysLogged = prevLogs.filter(loggedDay).length;
+  const prevAvgKcal = avg(prevFoodDays.map(t => t.cal));
+  const prevWorkoutDays = sessions.filter(s => inPrev(s.session_date) && (Number(s.set_count) > 0)).length;
+
   return {
     daysLogged,
     avgKcal: avgKcal === null ? null : Math.round(avgKcal),
@@ -81,7 +89,74 @@ function aggregateWeek({ logs = [], sessions = [], win }) {
     latestWeight: latest, latestWeightDate: latestDate,
     weekDelta, workoutDays, cardioCount,
     weighInCount: weighIns.length,
+    prevDaysLogged,
+    prevAvgKcal: prevAvgKcal === null ? null : Math.round(prevAvgKcal),
+    prevWorkoutDays,
   };
+}
+
+/**
+ * reviewSections — the week as four short lists (Sprint 11).
+ *
+ *   Wins          what went well, with the number that proves it
+ *   Opportunities what slipped, phrased as the thing to do
+ *   Pattern       one observation across the week, not a single day
+ *   Next week     one or two concrete asks
+ *
+ * Pure: takes the stored `data` blob from weekly_reports and returns the
+ * lists. No AI call — these are facts the member can check against their own
+ * log. The coach's AI note stays where it is, above them.
+ *
+ * Nothing is invented: a section with nothing true to say comes back empty
+ * and the card omits it.
+ */
+function reviewSections(d = {}) {
+  const wins = [], opportunities = [], next = [];
+  let pattern = null;
+
+  const days = d.daysLogged ?? 0;
+  const prevDays = d.prevDaysLogged ?? null;
+  const target = d.kcalTarget || null;
+
+  // ── Wins ────────────────────────────────────────────────────────────────
+  if (days === 7) wins.push('Logged every day this week.');
+  else if (prevDays !== null && days > prevDays) wins.push(`Logged ${days} days, up from ${prevDays}.`);
+  else if (days >= 5) wins.push(`Logged ${days} of 7 days.`);
+
+  if (d.weekDelta != null && d.weekDelta <= -0.3) wins.push(`Down ${Math.abs(d.weekDelta)} kg this week.`);
+  if (d.workoutDays >= 3) wins.push(`${d.workoutDays} training ${d.workoutDays === 1 ? 'day' : 'days'}.`);
+  else if (d.prevWorkoutDays != null && d.workoutDays > d.prevWorkoutDays) wins.push(`Trained ${d.workoutDays}× — more than last week.`);
+  if (target && d.avgKcal != null && d.avgKcal <= target && d.avgKcal >= target * 0.8) {
+    wins.push(`Averaged ${d.avgKcal.toLocaleString('en-IN')} kcal against a ${target.toLocaleString('en-IN')} target.`);
+  }
+  if (d.proTarget && d.avgPro != null && d.avgPro >= d.proTarget * 0.9) wins.push(`Protein averaged ${d.avgPro} g.`);
+
+  // ── Opportunities ───────────────────────────────────────────────────────
+  if (days <= 4) opportunities.push(`Only ${days} of 7 days logged — the week's numbers are a guess without them.`);
+  if (d.weighInCount != null && d.weighInCount <= 2 && days >= 3) opportunities.push(`${d.weighInCount === 0 ? 'No' : d.weighInCount} morning ${d.weighInCount === 1 ? 'weigh-in' : 'weigh-ins'} — one a day keeps the trend honest.`);
+  if (target && d.avgKcal != null && d.avgKcal > target * 1.1) opportunities.push(`Averaged ${d.avgKcal.toLocaleString('en-IN')} kcal against ${target.toLocaleString('en-IN')} — about ${Math.round(d.avgKcal - target)} over a day.`);
+  if (target && d.avgKcal != null && d.avgKcal < target * 0.7) opportunities.push(`Averaged only ${d.avgKcal.toLocaleString('en-IN')} kcal — eating too little stalls this as surely as eating too much.`);
+  if (d.proTarget && d.avgPro != null && d.avgPro < d.proTarget * 0.75) opportunities.push(`Protein averaged ${d.avgPro} g against ${d.proTarget} g.`);
+  if (d.workoutDays === 0) opportunities.push('No training logged this week.');
+  if (d.weekDelta != null && d.weekDelta >= 0.5) opportunities.push(`Up ${d.weekDelta} kg — worth looking at the week's meals together.`);
+
+  // ── Pattern: one observation, only when the week supports it ────────────
+  if (days >= 3) {
+    if (prevDays !== null && days >= 6 && prevDays >= 6) pattern = 'Two steady weeks in a row — this is the habit doing the work now.';
+    else if (d.weekDelta != null && d.weekDelta <= -0.3 && d.workoutDays >= 2) pattern = 'Weight moved in the weeks you trained. That is the lever.';
+    else if (d.avgKcal != null && target && d.avgKcal > target && d.weekDelta != null && d.weekDelta > 0) pattern = 'Intake ran above target and the scale followed. The two are connected.';
+    else if (days < 7 && d.weighInCount != null && d.weighInCount < days) pattern = 'The days that get logged are the days that go well — the gaps are where it slips.';
+  }
+
+  // ── Next week: one or two concrete asks ────────────────────────────────
+  if (days < 7) next.push(`Log all 7 days${days ? ` (${7 - days} more than this week)` : ''}.`);
+  if (d.weighInCount != null && d.weighInCount < 5) next.push('Weigh in every morning, before food.');
+  if (d.workoutDays === 0) next.push('Get one training session in.');
+  else if (d.workoutDays < 3) next.push(`Train ${d.workoutDays + 1}× next week.`);
+  if (target && d.avgKcal != null && d.avgKcal > target * 1.1) next.push(`Aim for ${target.toLocaleString('en-IN')} kcal a day.`);
+  if (d.proTarget && d.avgPro != null && d.avgPro < d.proTarget * 0.75) next.push(`Add a protein source to one meal a day.`);
+
+  return { wins, opportunities, pattern, next: next.slice(0, 2) };
 }
 
 // ── Projection: on current pace, when does the goal land? ────────────────────
@@ -277,5 +352,5 @@ function buildPushLine(d) {
   return bits.join(' · ') + ' — open Progress to see it.';
 }
 
-module.exports = { weekWindow, aggregateWeek, projectGoalDate, winOfWeek,
+module.exports = { weekWindow, aggregateWeek, reviewSections, projectGoalDate, winOfWeek,
                    buildNotePrompt, buildPushLine, generateForMember, sendWeeklyReports };

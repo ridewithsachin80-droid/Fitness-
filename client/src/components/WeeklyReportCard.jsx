@@ -29,11 +29,13 @@ const fmtAround = (iso) => {
 export default function WeeklyReportCard() {
   const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
+  const [sections, setSections] = useState(null);   // Sprint 11: wins / opportunities / pattern / next
   const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     api.get('/members/me/weekly-report').then(({ data }) => {
       setReport(data.latest || null);
+      setSections(data.sections || null);
       setHistory(data.history || []);
     }).catch(() => {});
   }, []);
@@ -119,6 +121,57 @@ export default function WeeklyReportCard() {
           </p>
         </div>
       )}
+
+      {/* Sprint 11: the week as four short lists. Derived server-side from the
+          stored week (services/weeklyReport.reviewSections) — facts the member
+          can check against their own log, not a second AI opinion. A section
+          with nothing true to say is omitted rather than padded. */}
+      {sections && (sections.wins?.length || sections.opportunities?.length || sections.pattern || sections.next?.length) ? (
+        <div className="mb-3 space-y-3" data-testid="week-sections">
+          {sections.wins?.length > 0 && (
+            <div data-testid="week-wins">
+              <p className="text-eyebrow font-bold uppercase tracking-widest text-gold-deep mb-1">Wins</p>
+              <ul className="space-y-1">
+                {sections.wins.map((t, i) => (
+                  <li key={i} className="flex items-start gap-2 text-body-sm text-white leading-snug">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0" aria-hidden="true" />{t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {sections.opportunities?.length > 0 && (
+            <div data-testid="week-opportunities">
+              <p className="text-eyebrow font-bold uppercase tracking-widest text-mute mb-1">Opportunities</p>
+              <ul className="space-y-1">
+                {sections.opportunities.map((t, i) => (
+                  <li key={i} className="flex items-start gap-2 text-body-sm text-mid leading-snug">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-white/25 flex-shrink-0" aria-hidden="true" />{t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {sections.pattern && (
+            <div data-testid="week-pattern" className="rounded-xl bg-white/[0.04] border border-hair px-3 py-2.5">
+              <p className="text-eyebrow font-bold uppercase tracking-widest text-lo mb-0.5">Pattern</p>
+              <p className="text-body-sm text-white leading-snug">{sections.pattern}</p>
+            </div>
+          )}
+          {sections.next?.length > 0 && (
+            <div data-testid="week-next">
+              <p className="text-eyebrow font-bold uppercase tracking-widest text-gold-deep mb-1">Next week</p>
+              <ul className="space-y-1">
+                {sections.next.map((t, i) => (
+                  <li key={i} className="flex items-start gap-2 text-body-sm text-white leading-snug">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0" aria-hidden="true" />{t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <button onClick={share} disabled={sharing}
         style={{ minHeight: 42 }}

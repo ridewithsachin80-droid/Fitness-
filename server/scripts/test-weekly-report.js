@@ -231,6 +231,41 @@ async function seed() {
     assert.strictEqual(r.body.history[0].data, undefined, 'history is a strip, not a payload');
   });
 
+  await test('the endpoint also returns the four review sections, derived at read time', async () => {
+    const r = await get('/api/members/me/weekly-report');
+    assert.ok(r.body.sections, 'expected sections alongside latest');
+    assert.ok(Array.isArray(r.body.sections.wins), 'wins is a list');
+    assert.ok(Array.isArray(r.body.sections.opportunities), 'opportunities is a list');
+    assert.ok('pattern' in r.body.sections, 'pattern is present (may be null)');
+    assert.ok(Array.isArray(r.body.sections.next), 'next is a list');
+    assert.ok(r.body.sections.next.length <= 2, 'next week is at most two asks');
+  });
+
+  await test('a report written before Sprint 11 still gets sections (they are derived, not stored)', async () => {
+    const r = await get('/api/members/me/weekly-report');
+    // The seeded report has no `sections` key in its stored data …
+    assert.strictEqual(r.body.latest.data.sections, undefined, 'sections are not stored on the row');
+    // … yet the response carries them.
+    assert.ok(r.body.sections, 'derived for an older row too');
+  });
+
+  await test('reviewSections never invents: an empty week yields empty lists', async () => {
+    const { reviewSections } = require('../services/weeklyReport');
+    const s0 = reviewSections({ daysLogged: 0, weighInCount: 0, workoutDays: 0 });
+    assert.strictEqual(s0.wins.length, 0, 'nothing to celebrate in an empty week');
+    assert.ok(s0.opportunities.length > 0, 'but there is something to say');
+    assert.strictEqual(s0.pattern, null, 'no pattern from no data');
+  });
+
+  await test('a perfect week yields wins and no scolding', async () => {
+    const { reviewSections } = require('../services/weeklyReport');
+    const s1 = reviewSections({ daysLogged: 7, prevDaysLogged: 7, weekDelta: -0.5, workoutDays: 4,
+      avgKcal: 1700, kcalTarget: 1800, avgPro: 118, proTarget: 120, weighInCount: 7 });
+    assert.ok(s1.wins.length >= 3, 'several wins');
+    assert.strictEqual(s1.opportunities.length, 0, 'nothing to nag about');
+    assert.ok(s1.pattern, 'two steady weeks is a pattern');
+  });
+
   server.close();
   console.log(`\n${passed} assertions passed${process.exitCode ? ' (with failures)' : ''}\n`);
   // Loading index.js starts socket.io and the cron schedules, which keep the

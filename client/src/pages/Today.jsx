@@ -16,7 +16,7 @@ import CoachNotes    from '../components/today/CoachNotes';
 import MilestoneModal from '../components/today/MilestoneModal';
 import { FastingBar } from '../components/today/DayWidgets';
 import { nextAction, istHour } from '../lib/day';
-import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet } from '../components/sheets';
+import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet, MealIdeaSheet } from '../components/sheets';
 
 /**
  * Today — the member's home screen (Sprint 3 → 5b).
@@ -153,6 +153,7 @@ export default function Today() {
       <FoodSheet      open={sheet === 'food'}      onClose={closeSheet} m={m} />
       <WorkoutSheet   open={sheet === 'workout'}   onClose={closeSheet} m={m} />
       <NutritionSheet open={sheet === 'nutrition'} onClose={closeSheet} m={m} />
+      <MealIdeaSheet   open={sheet === 'mealidea'}  onClose={closeSheet} m={m} />
 
       <MemberBottomNav />
       <InstallPrompt />

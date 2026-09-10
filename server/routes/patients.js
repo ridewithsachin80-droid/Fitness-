@@ -11,6 +11,7 @@ const { loadProgramDays } = require('./programs');
 const { composeMember, summarise, composeBrief } = require('../services/triage');
 const { computeDayTotals } = require('../services/digests');
 const aiReads = require('../services/aiReads');
+const { reviewSections } = require('../services/weeklyReport');
 const triageHour = () => parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
 const bcrypt = require('bcryptjs');
 
@@ -797,8 +798,13 @@ router.get('/me/weekly-report', authMW, roleCheck('patient'), async (req, res) =
       `SELECT week_start, week_end, data, coach_note, created_at
        FROM weekly_reports WHERE patient_id = $1
        ORDER BY week_start DESC LIMIT 8`, [req.user.id]);
+    // Sprint 11: the four sections are DERIVED at read time, not stored, so
+    // improving the wording lifts every past week too — and older reports
+    // written before this sprint get them as well.
+    const latest = rows[0] || null;
     res.json({
-      latest: rows[0] || null,
+      latest,
+      sections: latest ? reviewSections(latest.data || {}) : null,
       history: rows.slice(1).map(r => ({
         week_start: r.week_start, week_end: r.week_end,
         weekDelta: r.data?.weekDelta ?? null,
