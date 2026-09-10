@@ -166,10 +166,10 @@ export default function App() {
             <div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
-              <p className="text-[#E8E6E1] text-base">
+              <p className="text-bright text-base">
                 Couldn't reach FitLife just now.
               </p>
-              <p className="text-[#9A968E] text-sm">
+              <p className="text-mute text-sm">
                 Check your connection — your log is safe.
               </p>
               <button

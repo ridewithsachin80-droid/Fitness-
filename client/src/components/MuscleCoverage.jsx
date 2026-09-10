@@ -59,7 +59,7 @@ const STATUS_STYLES = {
 const STATUS_DOT = {
   good:  'bg-gold',
   ok:    'bg-amber-400',
-  stale: 'bg-[#3a3a46]',
+  stale: 'bg-ghost',
 };
 
 export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
@@ -103,7 +103,7 @@ export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              tab === t.id ? 'bg-gold text-charcoal' : 'text-[#9a9aa6] hover:text-soft'}`}>
+              tab === t.id ? 'bg-gold text-charcoal' : 'text-mid hover:text-soft'}`}>
             {t.label}
           </button>
         ))}

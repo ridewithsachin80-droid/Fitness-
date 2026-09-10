@@ -382,7 +382,7 @@ function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
       {mealPlan.length > 0 && (
         <div className="bg-white/[0.08] border border-white/[0.1] text-white rounded-2xl px-4 py-3 space-y-2">
-          <p className="text-note font-semibold text-[#A9B0BF]">Day Total</p>
+          <p className="text-note font-semibold text-mid">Day Total</p>
           <div className="flex gap-4 flex-wrap">
             <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
             <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
@@ -995,7 +995,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
     return (
       <div className="border border-hair rounded-2xl p-3 space-y-1">
-        <p className="text-note font-semibold text-[#A9B0BF] mb-2">{icon} {label}</p>
+        <p className="text-note font-semibold text-mid mb-2">{icon} {label}</p>
 
         {allItems.map(item => {
           const ov       = overrides[item.id] || {};
@@ -1070,13 +1070,13 @@ function EditMemberModal({ member, onClose, onSaved }) {
 
       {tab === 'identity' && (
         <div className="space-y-3">
-          <p className="text-note font-semibold text-[#A9B0BF]">Identity</p>
+          <p className="text-note font-semibold text-mid">Identity</p>
           <Field label="Full Name"        value={form.name}  onChange={v=>set('name',v)}  placeholder="Mrs. Padmini" required />
           <Field label="Phone (Login ID)" type="tel" value={form.phone} onChange={v=>set('phone',v)} placeholder="9876543210" required />
 
           <div className="border border-hair rounded-2xl p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-note font-semibold text-[#A9B0BF]">PIN / Password</p>
+              <p className="text-note font-semibold text-mid">PIN / Password</p>
               <button onClick={() => { setShowPin(s => !s); set('pin',''); set('confirmPin',''); }}
                 className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
                   showPin ? 'bg-red-400/10 text-red-400' : 'bg-ok/10 text-gold-light'}`}>
@@ -1093,7 +1093,7 @@ function EditMemberModal({ member, onClose, onSaved }) {
             )}
           </div>
 
-          <p className="text-note font-semibold text-[#A9B0BF] mt-1">Profile</p>
+          <p className="text-note font-semibold text-mid mt-1">Profile</p>
           <Field label="Height (cm)"        type="number" value={form.height_cm}     onChange={v=>set('height_cm',v)}     placeholder="165" />
           <Field label="Date of birth"      type="date"   value={form.dob}           onChange={v=>set('dob',v)} />
           <div>
@@ -1546,7 +1546,7 @@ export default function AdminDashboard() {
               {/* Sentence case, and no crown. Tracked capitals plus an emoji is
                   the chrome that made this read as a template; the product name
                   is a quiet label, and the person's name is the headline. */}
-              <p className="text-micro font-medium text-[#8C7A46] mb-1">FitLife admin</p>
+              <p className="text-micro font-medium text-gold-dark mb-1">FitLife admin</p>
               <h1 className="font-display text-num leading-tight font-medium tracking-[-0.015em]">
                 Welcome, {user?.name}
               </h1>
@@ -1650,7 +1650,7 @@ export default function AdminDashboard() {
                 Sachin opens this page for, so it is the one in gold; the rest
                 are ink. Set in the display face at a size worth reading —
                 previously 15px bold with an 8px capitalised caption. */}
-            <div className="grid grid-cols-4 rounded-[20px] bg-[#17181C] divide-x divide-white/[0.055]"
+            <div className="grid grid-cols-4 rounded-[20px] bg-surface divide-x divide-white/[0.055]"
               style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
               {[
                 { label: 'Members',   value: overview.stats.total_members },
@@ -1660,7 +1660,7 @@ export default function AdminDashboard() {
               ].map(s => (
                 <div key={s.label} className="px-2 py-3.5 text-center">
                   <div className={`font-display text-[21px] leading-none font-medium tabular-nums ${
-                    s.accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{s.value}</div>
+                    s.accent ? 'text-gold-light' : 'text-white'}`}>{s.value}</div>
                   <div className="text-caption text-lo mt-1.5">{s.label}</div>
                 </div>
               ))}
@@ -1730,7 +1730,7 @@ export default function AdminDashboard() {
             {/* Today's gaps — what to chase right now. Needs Attention below is
                 the longer-term list of members drifting away. */}
             <div className="bg-surface border border-hair rounded-2xl p-3.5 mb-3">
-              <p className="text-body font-semibold text-[#F2F1EE] mb-1 tracking-[-0.01em]">Today's gaps</p>
+              <p className="text-body font-semibold text-white mb-1 tracking-[-0.01em]">Today's gaps</p>
               <TodaysGaps />
             </div>
 

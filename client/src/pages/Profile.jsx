@@ -137,10 +137,10 @@ const CONDITION_LABELS = {
 function StatPill({ label, value, unit, accent = false }) {
   return (
     <div className={`rounded-2xl px-3 py-3 text-center ${
-      accent ? 'bg-gold/[0.07]' : 'bg-[#17181C]'}`}
+      accent ? 'bg-gold/[0.07]' : 'bg-surface'}`}
       style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
       <p className={`font-display text-[23px] leading-none font-medium tabular-nums ${
-        accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>
+        accent ? 'text-gold-light' : 'text-white'}`}>
         {value ?? '—'}
         {unit && <span className="text-body-sm font-normal ml-1 text-lo">{unit}</span>}
       </p>

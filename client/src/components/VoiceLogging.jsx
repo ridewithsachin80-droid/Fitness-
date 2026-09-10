@@ -129,19 +129,19 @@ export default function VoiceLogging() {
           screen issues a code; something else — a phone shortcut — has to use
           it. Saying "speak to your phone without opening FitLife" before that
           exists sends members off to try a phrase that does nothing. */}
-      <p className="text-sm text-[#9A968E] leading-relaxed mt-1">
+      <p className="text-sm text-mute leading-relaxed mt-1">
         Get a code here, then set up the FitLife shortcut on your phone.
         After that you can log by speaking, without opening the app.
         Ask your coach for the shortcut link.
       </p>
 
-      {error && <p className="text-sm text-[#E4572E] mt-3">{error}</p>}
+      {error && <p className="text-sm text-danger mt-3">{error}</p>}
 
       {/* Platform-specific instructions. Shown only once it is set up —
           telling someone how to use a thing they have not enabled is noise. */}
       {status.enabled && !token && platformName() === 'ios' && (
-        <div className="mt-4 text-xs text-[#9A968E] leading-relaxed">
-          <p className="text-[#E8E6E1] font-semibold mb-1">On iPhone</p>
+        <div className="mt-4 text-xs text-mute leading-relaxed">
+          <p className="text-bright font-semibold mb-1">On iPhone</p>
           <p>
             Open the Shortcuts app, add the FitLife shortcut your coach sent you,
             and paste this code when it asks. Then just say
@@ -150,8 +150,8 @@ export default function VoiceLogging() {
         </div>
       )}
       {status.enabled && !token && platformName() === 'android' && !mightBeAndroidApp() && (
-        <div className="mt-4 text-xs text-[#9A968E] leading-relaxed">
-          <p className="text-[#E8E6E1] font-semibold mb-1">On Android</p>
+        <div className="mt-4 text-xs text-mute leading-relaxed">
+          <p className="text-bright font-semibold mb-1">On Android</p>
           <p>
             Install FitLife from the Play Store, then open this screen inside
             the app and tap New code — it sets itself up.
@@ -164,10 +164,10 @@ export default function VoiceLogging() {
           <p className="text-xs text-gold font-semibold mb-2">
             Your setup code — copy it now, it won't be shown again
           </p>
-          <p className="text-caption text-[#9A968E] mb-2 leading-relaxed">
+          <p className="text-caption text-mute mb-2 leading-relaxed">
             Paste this into the FitLife shortcut when it asks.
           </p>
-          <p className="text-caption text-[#E8E6E1] break-all font-mono leading-relaxed">
+          <p className="text-caption text-bright break-all font-mono leading-relaxed">
             {token}
           </p>
           <button onClick={copy}
@@ -186,11 +186,11 @@ export default function VoiceLogging() {
         ) : (
           <>
             <button onClick={setUp} disabled={busy}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.06] text-[#E8E6E1] border border-white/20 disabled:opacity-40">
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.06] text-bright border border-white/20 disabled:opacity-40">
               {busy ? '…' : 'New code'}
             </button>
             <button onClick={turnOff} disabled={busy}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-[#9A968E] disabled:opacity-40">
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-mute disabled:opacity-40">
               Turn off
             </button>
           </>
@@ -234,7 +234,7 @@ function HandsFreeSetting() {
     <div className="mt-5 pt-4 border-t border-white/[0.06]">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm text-[#E8E6E1]">Hands-free while the app is open</p>
+          <p className="text-sm text-bright">Hands-free while the app is open</p>
           <p className="text-xs text-lo mt-1 leading-relaxed">
             Say &ldquo;Hey FitLife&rdquo; and speak. It reads back what it heard
             before saving, so you never need to look at the screen.

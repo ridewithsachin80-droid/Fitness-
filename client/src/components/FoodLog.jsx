@@ -16,7 +16,7 @@ import { getMealPresets, saveMealPreset, deleteMealPreset, getYesterdayFood } fr
 import { getRecentFoods } from '../api/logs';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import AIFoodSearch from './AIFoodSearch';
-import { useAIChat } from './AIChatLog';
+import { useAIChat } from '../store/aiChatStore';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 
 // ── Extended portion map ──────────────────────────────────────────────────────
@@ -105,9 +105,9 @@ function PortionPicker({ baseGrams, onSelect }) {
                 ? 'border-gold/50 bg-gold/10'
                 : 'border-white/[0.1] bg-surface hover:border-white/[0.2]'}`}>
             <span style={{ fontSize: 20 }}>{p.emoji}</span>
-            <span className="text-eyebrow text-[#8e8e9a] font-medium">{p.label}</span>
+            <span className="text-eyebrow text-mute font-medium">{p.label}</span>
             {p.multiplier !== null && (
-              <span className="text-eyebrow text-[#4e4e5c]">{Math.round(baseGrams * p.multiplier)}g</span>
+              <span className="text-eyebrow text-ghost">{Math.round(baseGrams * p.multiplier)}g</span>
             )}
           </button>
         ))}
@@ -277,10 +277,10 @@ function PrescribedMeals({ items, onChange }) {
                       : 'border-gold/30 bg-gold/5'}`}>
             <button className="w-full flex items-center justify-between"
               onClick={() => setCollapsed(c => ({ ...c, [plan.meal]: !isCollapsed }))}>
-              <span className="text-xs font-bold text-[#e0c98a]">
+              <span className="text-xs font-bold text-gold-light">
                 🍽️ Coach's {plan.meal} plan {allDone && '· done ✓'}
               </span>
-              <span className="text-eyebrow text-[#8e8e9a]">~{planKcal} kcal {isCollapsed ? '▾' : '▴'}</span>
+              <span className="text-eyebrow text-mute">~{planKcal} kcal {isCollapsed ? '▾' : '▴'}</span>
             </button>
 
             {!isCollapsed && (
@@ -293,7 +293,7 @@ function PrescribedMeals({ items, onChange }) {
                       <div key={it.name} className="flex items-center gap-2">
                         <span className={`flex-1 text-xs truncate ${done ? 'text-faint line-through' : 'text-white'}`}>
                           {it.name}
-                          <span className="text-[#8e8e9a]"> · plan {it.qty_text}</span>
+                          <span className="text-mute"> · plan {it.qty_text}</span>
                         </span>
                         {done ? (
                           <span className="text-eyebrow text-gold-light font-bold">logged ✓</span>
@@ -303,7 +303,7 @@ function PrescribedMeals({ items, onChange }) {
                               value={consumed[key] ?? ''}
                               onChange={e => setConsumed(c => ({ ...c, [key]: e.target.value }))}
                               className="w-16 text-right text-xs bg-charcoal border border-white/[0.12] rounded-lg px-2 py-1 text-white" />
-                            <span className="text-eyebrow text-[#8e8e9a] w-4">g</span>
+                            <span className="text-eyebrow text-mute w-4">g</span>
                           </>
                         )}
                       </div>
@@ -636,18 +636,18 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       <button
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
-        className="w-full flex items-center gap-3 bg-gradient-to-r from-gold/[0.14] to-[#8a6a1e]/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
+        className="w-full flex items-center gap-3 bg-gradient-to-r from-gold/[0.14] to-gold-dark/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
-          <span className="block text-caption text-[#8e8e9a] leading-tight truncate">Say your whole day — I'll fill the entire log</span>
+          <span className="block text-caption text-mute leading-tight truncate">Say your whole day — I'll fill the entire log</span>
         </span>
       </button>
 
       {/* Quick re-add strip — always visible when we have recent foods */}
       {recentFoods.length > 0 && !showForm && (
         <div>
-          <p className="text-xs text-[#4e4e5c] font-semibold mb-2 tracking-wider">Quick re-add</p>
+          <p className="text-xs text-ghost font-semibold mb-2 tracking-wider">Quick re-add</p>
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
             {recentFoods.slice(0,6).map((food, i) => {
               const kcal = food.per_100g?.calories ? Math.round(food.per_100g.calories * (food.last_g || 100) / 100) : null;
@@ -670,7 +670,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
           something new. */}
       {!showForm && (yesterdayCount > 0 || presets.length > 0) && (
         <div className="mb-3">
-          <p className="text-xs font-bold text-[#4e4e5c] tracking-wider mb-1.5">
+          <p className="text-xs font-bold text-ghost tracking-wider mb-1.5">
             Repeat into {meal}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -753,10 +753,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         return (
           <div key={m}>
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-xs font-bold text-[#4e4e5c] tracking-wider">{m}</span>
+              <span className="text-xs font-bold text-ghost tracking-wider">{m}</span>
               {mealItems.length > 0 && (
                 <>
-                  <span className="text-xs text-[#3a3a46]">{mealItems.reduce((s,i)=>s+i.grams,0).toFixed(0)}g</span>
+                  <span className="text-xs text-ghost">{mealItems.reduce((s,i)=>s+i.grams,0).toFixed(0)}g</span>
                   <span className="text-xs font-semibold text-orange-400">{totals.cal} kcal</span>
                   {nutritionView === 'detailed' && (
                     <>
@@ -769,7 +769,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               )}
             </div>
             {mealItems.length === 0 ? (
-              <p className="text-xs text-[#3a3a46] italic px-2 py-1">Nothing logged yet</p>
+              <p className="text-xs text-ghost italic px-2 py-1">Nothing logged yet</p>
             ) : (
               <div className="space-y-1">
                 {mealItems.map((item) => {
@@ -779,12 +779,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-sm font-medium text-soft truncate">{item.name}</span>
-                          <span className="text-xs font-semibold text-[#bf9a2e] flex-shrink-0">{item.grams}g</span>
+                          <span className="text-xs font-semibold text-gold-deep flex-shrink-0">{item.grams}g</span>
                         </div>
                         {/* Always-visible remove button */}
                         <button onClick={() => remove(item.id)}
                           style={{ minWidth: 32, minHeight: 32 }}
-                          className="flex items-center justify-center rounded-full text-[#4e4e5c] hover:text-red-400 hover:bg-red-400/10 transition-all ml-2 flex-shrink-0"
+                          className="flex items-center justify-center rounded-full text-ghost hover:text-red-400 hover:bg-red-400/10 transition-all ml-2 flex-shrink-0"
                           aria-label="Remove item">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -821,7 +821,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         }, { cal:0, pro:0, carb:0, fat:0 });
         return (
           <div className="flex items-center justify-between bg-white/[0.04] rounded-2xl px-4 py-2.5 border border-white/[0.06]">
-            <span className="text-xs font-bold text-[#4e4e5c] tracking-wider">Day total</span>
+            <span className="text-xs font-bold text-ghost tracking-wider">Day total</span>
             <div className="flex gap-3">
               <span className="text-xs font-bold text-orange-400">{dayTotal.cal} kcal</span>
               <span className="text-xs text-blue-400">P {dayTotal.pro.toFixed(1)}g</span>
@@ -836,7 +836,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       {!showForm ? (
         <button onClick={() => setShowForm(true)}
           style={{ minHeight: 52 }}
-          className="w-full py-3 rounded-2xl border-2 border-dashed border-gold/30 text-[#bf9a2e] text-sm font-semibold hover:bg-gold/5 hover:border-gold/50 active:scale-98 transition-all">
+          className="w-full py-3 rounded-2xl border-2 border-dashed border-gold/30 text-gold-deep text-sm font-semibold hover:bg-gold/5 hover:border-gold/50 active:scale-98 transition-all">
           + Add food item
         </button>
       ) : (
@@ -848,7 +848,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               <button key={m} onClick={() => setMeal(m)}
                 style={{ minHeight: 36 }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  meal === m ? 'bg-gold text-charcoal shadow-sm' : 'bg-white/[0.05] text-[#8e8e9a] hover:bg-white/[0.10]'
+                  meal === m ? 'bg-gold text-charcoal shadow-sm' : 'bg-white/[0.05] text-mute hover:bg-white/[0.10]'
                 }`}>{m}</button>
             ))}
           </div>
@@ -856,7 +856,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
           {/* Recent foods inside form */}
           {recentFoods.length > 0 && !query && (
             <div>
-              <p className="text-xs text-[#4e4e5c] font-medium mb-1.5">Recently used</p>
+              <p className="text-xs text-ghost font-medium mb-1.5">Recently used</p>
               <div className="flex flex-wrap gap-1.5">
                 {recentFoods.slice(0,5).map((food, i) => {
                   const kcal = food.per_100g?.calories ? Math.round(food.per_100g.calories * (food.last_g || 100) / 100) : null;
@@ -881,12 +881,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onFocus={() => { if (suggestions.length > 0 && !selected) setShowSuggestions(true); }}
                 placeholder="Food name…"
-                className="flex-1 px-3 py-2.5 rounded-xl border border-white/[0.12] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-gold/30 text-bright font-medium"
+                className="flex-1 px-3 py-2.5 rounded-xl border border-white/[0.12] text-sm bg-charcoal focus:outline-none focus:ring-2 focus:ring-gold/30 text-bright font-medium"
                 autoFocus />
               {hasBarcodeDetector && (
                 <button onClick={() => { haptic(15); setScanning(true); }}
                   style={{ width: 44, height: 44, minWidth: 44 }}
-                  className="rounded-xl flex items-center justify-center border bg-white/[0.06] border-white/[0.1] text-faint hover:text-[#8e8e9a]"
+                  className="rounded-xl flex items-center justify-center border bg-white/[0.06] border-white/[0.1] text-faint hover:text-mute"
                   title="Scan a barcode">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" />
@@ -902,7 +902,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 className={`rounded-xl flex items-center justify-center border transition-all ${
                   listening
                     ? 'bg-red-500/20 border-red-500/50 text-red-400 animate-pulse'
-                    : 'bg-white/[0.06] border-white/[0.1] text-faint hover:text-[#8e8e9a]'
+                    : 'bg-white/[0.06] border-white/[0.1] text-faint hover:text-mute'
                 }`}
                 title="Voice input">
                 🎤
@@ -913,7 +913,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 </div>
               )}
               {selected && !searching && (
-                <span className="absolute right-14 top-1/2 -translate-y-1/2 text-[#bf9a2e] text-sm font-bold">✓</span>
+                <span className="absolute right-14 top-1/2 -translate-y-1/2 text-gold-deep text-sm font-bold">✓</span>
               )}
             </div>
             {listening && (
@@ -970,7 +970,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
             {!searching && query.length >= 2 && suggestions.length === 0 && !showSuggestions && !selected && !showAI && (
               <div className="mt-1.5 space-y-1">
                 {lookupStatus === 'loading'  && <p className="text-xs text-faint px-1">Searching Open Food Facts…</p>}
-                {lookupStatus === 'found'    && <p className="text-xs text-[#bf9a2e] px-1 font-semibold">✓ Found on Open Food Facts</p>}
+                {lookupStatus === 'found'    && <p className="text-xs text-gold-deep px-1 font-semibold">✓ Found on Open Food Facts</p>}
                 {lookupStatus === 'notfound' && <p className="text-xs text-faint px-1">Not found — searching AI…</p>}
                 {lookupStatus === '' && (
                   <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold px-1 hover:underline">
@@ -983,7 +983,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
             {showAI && (
               <div className="mt-2">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-[#00D49F]">✨ AI Food Identifier</span>
+                  <span className="text-xs font-semibold text-ok">✨ AI Food Identifier</span>
                   <button onClick={() => setShowAI(false)}
                     className="text-xs text-faint hover:text-soft">✕ close</button>
                 </div>
@@ -1002,7 +1002,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
 
           {/* Per-100g preview */}
           {selected?.per_100g && (
-            <div className="bg-[#131317] rounded-xl border border-gold/20 px-3 py-2">
+            <div className="bg-charcoal rounded-xl border border-gold/20 px-3 py-2">
               <p className="text-xs text-faint mb-1">Per 100g — {selected.name}</p>
               <div className="flex gap-3 flex-wrap">
                 <span className="text-xs font-bold text-orange-400">{selected.per_100g.calories || 0} kcal</span>
@@ -1021,17 +1021,17 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 onChange={(e) => setGrams(e.target.value)}
                 placeholder="Weight in grams"
                 onKeyDown={(e) => e.key === 'Enter' && add()}
-                className="w-full px-3 py-2.5 pr-8 rounded-xl border border-white/[0.12] text-sm bg-[#131317] focus:outline-none focus:ring-2 focus:ring-gold/30 text-bright" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#4e4e5c]">g</span>
+                className="w-full px-3 py-2.5 pr-8 rounded-xl border border-white/[0.12] text-sm bg-charcoal focus:outline-none focus:ring-2 focus:ring-gold/30 text-bright" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ghost">g</span>
             </div>
             <button onClick={add} disabled={!query.trim() || !grams}
               style={{ minHeight: 44 }}
-              className="px-4 py-2.5 bg-gold hover:bg-[#9775fa] disabled:opacity-40 text-charcoal text-sm font-bold rounded-xl transition-all active:scale-95">
+              className="px-4 py-2.5 bg-gold hover:bg-gold disabled:opacity-40 text-charcoal text-sm font-bold rounded-xl transition-all active:scale-95">
               Add
             </button>
             <button onClick={closeForm}
               style={{ minWidth: 44, minHeight: 44 }}
-              className="px-3 py-2.5 text-[#4e4e5c] hover:text-[#8e8e9a] text-lg leading-none"
+              className="px-3 py-2.5 text-ghost hover:text-mute text-lg leading-none"
               aria-label="Close">×</button>
           </div>
         </div>

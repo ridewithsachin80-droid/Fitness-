@@ -57,7 +57,21 @@ const RGBA = new RegExp(LEAD_ANY + '(bg|text|border|divide|from|to|via|ring)-\\[
 // `border-[#D4AF37]/30`, `border-t-[#D4AF37]`, `bg-[#121316]/90` → named token,
 // alpha preserved verbatim. Any utility prefix (border-t, ring-offset…).
 const HEX = { D4AF37: 'gold', '121316': 'charcoal', '8C6D37': 'gold-dark', '1A1C20': 'surface',
-              F0E2B6: 'gold-light', C5A059: 'gold-deep', '7E8596': 'lo', '9EA3B0': 'mid', FFFFFF: 'white' };
+              F0E2B6: 'gold-light', C5A059: 'gold-deep', '7E8596': 'lo', '9EA3B0': 'mid', FFFFFF: 'white',
+              // Sprint 12: the long tail of one-off greys, golds and backgrounds, each to
+              // its nearest token BY ROLE. This is a deliberate visual consolidation, not
+              // pixel-identical: fourteen greys become six.
+              '4E4E5C': 'ghost', '9A9AA6': 'mid', '8E8E9A': 'mute', F2F1EE: 'white', E8E6E1: 'bright',
+              A9B0BF: 'mid', '9A968E': 'mute', B6B6C2: 'mid', '3A3A46': 'ghost', '6E7480': 'lo', '9AA0AE': 'mid',
+              '5A5A68': 'dim', '4A4E5A': 'ghost', '6A6A78': 'faint', D8D8DE: 'soft', EDEDF0: 'bright', '8C93A3': 'mute',
+              E8CE7A: 'gold-light', E0C98A: 'gold-light', D4AF6A: 'gold', BF9A2E: 'gold-deep', B08D2F: 'gold-deep',
+              C9B37E: 'gold-light', '8C7A46': 'gold-dark', '8A6A1E': 'gold-dark', C4924B: 'gold-deep', D9A66B: 'gold-deep',
+              '131317': 'charcoal', '111116': 'charcoal', '0D0D11': 'charcoal', '17181C': 'surface', '16161C': 'surface',
+              '1A1B1F': 'surface', '16171A': 'surface', '0D0B18': 'surface', '07060F': 'charcoal',
+              E4572E: 'danger', D98A80: 'danger', '6E8F6B': 'ok', '00D49F': 'ok',
+              '8B6DFF': 'gold-light', '6344E8': 'gold-dark', '9775FA': 'gold' };
+// Brand colours that are NOT ours and stay as written (a WhatsApp button is WhatsApp green).
+const HEX_KEEP = new Set(['25D366']);
 const HEXA = new RegExp(LEAD_ANY + '([a-z]+(?:-[a-z]+)*)-\\[#([0-9A-Fa-f]{6})\\](/\\[?[0-9.]+\\]?)?' + TRAIL, 'g');
 
 const alphaSuffix = (a) => {
@@ -89,6 +103,7 @@ for (const f of files) {
     return `${util}-${tok}${alphaSuffix(a)}`;
   });
   after = after.replace(HEXA, (m, util, hex, alpha) => {
+    if (HEX_KEEP.has(hex.toUpperCase())) return m;
     const tok = HEX[hex.toUpperCase()] || HEX[hex];
     if (!tok) return m;
     tally.set('hex→' + tok, (tally.get('hex→' + tok) || 0) + 1);

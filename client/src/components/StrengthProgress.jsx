@@ -80,9 +80,9 @@ function ChartTooltip({ active, payload }) {
     <div className="bg-surface border border-white/[0.1] rounded-xl px-3 py-2 shadow-card-raised text-xs">
       <p className="text-dim mb-1">{formatDateShort(s.date)}</p>
       <p className="font-display font-semibold text-bright">e1RM: {s.bestE1rm} kg</p>
-      <p className="text-[#9a9aa6]">Best set: {s.bestWeight} kg × {s.bestReps}</p>
-      <p className="text-[#9a9aa6]">Volume: {s.volume} kg</p>
-      {s.isPR && <p className="text-[#d4af6a] font-semibold mt-1">🏆 New PR</p>}
+      <p className="text-mid">Best set: {s.bestWeight} kg × {s.bestReps}</p>
+      <p className="text-mid">Volume: {s.volume} kg</p>
+      {s.isPR && <p className="text-gold font-semibold mt-1">🏆 New PR</p>}
     </div>
   );
 }
@@ -141,7 +141,7 @@ export default function StrengthProgress() {
       <div className="flex items-center justify-between mb-3">
         <SectionTitle icon="💪">Strength Progress</SectionTitle>
         {prCount > 0 && (
-          <span className="text-xs font-bold text-[#d4af6a] bg-[rgba(212,175,106,0.10)] px-2 py-0.5 rounded-full">
+          <span className="text-xs font-bold text-gold bg-[rgba(212,175,106,0.10)] px-2 py-0.5 rounded-full">
             🏆 {prCount} {plural(prCount, 'PR')}
           </span>
         )}

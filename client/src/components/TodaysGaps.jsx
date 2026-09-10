@@ -25,9 +25,9 @@ import { combinedGapMessage, GAP_LABEL } from '../utils/personalMessage';
 const SEVERITY = {
   // Text colour only. These were bordered pills, which made a label look like a
   // control and put another outline on a screen already full of them.
-  blocking: 'text-[#D98A80] font-medium',
-  high:     'text-[#D9A66B] font-medium',
-  medium:   'text-[#9AA0AE]',
+  blocking: 'text-danger font-medium',
+  high:     'text-gold-deep font-medium',
+  medium:   'text-mid',
   low:      'text-lo',
 };
 
@@ -123,7 +123,7 @@ export default function TodaysGaps() {
               <div className="min-w-0 flex-1">
                 {/* Sprint 9b: the name opens the member page (brief, timeline, actions). */}
                 <button type="button" onClick={() => navigate(`/coach/${m.member_id}`)} data-testid="gap-open"
-                  className="block w-full text-left text-body font-semibold text-[#F2F1EE] truncate tracking-[-0.01em] active:text-gold transition-colors">
+                  className="block w-full text-left text-body font-semibold text-white truncate tracking-[-0.01em] active:text-gold transition-colors">
                   {m.name}
                 </button>
                 {(() => {
@@ -150,11 +150,11 @@ export default function TodaysGaps() {
                     instead of a sentinel. */}
                 {m.days_since_log != null && (
                   m.days_since_log >= 9999 ? (
-                    <span className="text-note text-[#D98A80]">Never logged</span>
+                    <span className="text-note text-danger">Never logged</span>
                   ) : (
-                    <span className="font-display text-[19px] leading-none text-[#E8CE7A] tabular-nums">
+                    <span className="font-display text-[19px] leading-none text-gold-light tabular-nums">
                       {m.days_since_log}
-                      <span className="font-sans text-[10.5px] text-[#6E7480] ml-1 font-medium">
+                      <span className="font-sans text-[10.5px] text-lo ml-1 font-medium">
                         {m.days_since_log === 1 ? 'day' : 'days'}
                       </span>
                     </span>
@@ -162,11 +162,11 @@ export default function TodaysGaps() {
                 )}
 
                 {done[String(m.member_id)] ? (
-                  <span className="text-micro text-[#6E8F6B]">Sent</span>
+                  <span className="text-micro text-ok">Sent</span>
                 ) : (
                   <button onClick={() => open(m)}
                     style={{ minHeight: 32 }}
-                    className="text-note font-semibold text-[#E8CE7A]
+                    className="text-note font-semibold text-gold-light
                       border border-gold/[0.34] rounded-full px-3.5
                       hover:bg-gold/[0.09] active:scale-95 transition-all">
                     Message

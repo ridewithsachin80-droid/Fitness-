@@ -20,7 +20,7 @@ import { getActiveProgram } from '../api/programs';
 import { parseVoiceSet } from '../utils/voiceSetParser';
 import { CARDIO_TYPES, cardioTypeById, sessionEnergy, distanceFrom } from '../utils/exerciseCalories';
 import { useLogStore } from '../store/logStore';
-import { useAIChat } from './AIChatLog';
+import { useAIChat } from '../store/aiChatStore';
 import { plural } from '../constants';
 import { useVoiceComposer } from './VoiceComposer';
 import { applyProgramDay, switchCounts } from '../utils/workoutSession';
@@ -400,11 +400,11 @@ export default function WorkoutLog({ date }) {
       <button
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
-        className="w-full flex items-center gap-3 mb-3 bg-gradient-to-r from-gold/[0.14] to-[#8a6a1e]/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-[#8a6a1e] flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
+        className="w-full flex items-center gap-3 mb-3 bg-gradient-to-r from-gold/[0.14] to-gold-dark/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
-          <span className="block text-caption text-[#8e8e9a] leading-tight truncate">"Bench press 3 sets of 20kg" or "5 km walk in 1 hour"</span>
+          <span className="block text-caption text-mute leading-tight truncate">"Bench press 3 sets of 20kg" or "5 km walk in 1 hour"</span>
         </span>
       </button>
 
@@ -414,17 +414,17 @@ export default function WorkoutLog({ date }) {
           restSeconds <= 0 ? 'bg-[rgba(212,175,106,0.12)] border-[rgba(212,175,106,0.30)]' : 'bg-gold/10 border-gold/20'}`}>
           <div className="flex items-center gap-2">
             <span className="text-lg">⏱</span>
-            <span className={`font-display text-lg font-semibold ${restSeconds <= 0 ? 'text-[#d4af6a]' : 'text-bright'}`}>
+            <span className={`font-display text-lg font-semibold ${restSeconds <= 0 ? 'text-gold' : 'text-bright'}`}>
               {restSeconds <= 0 ? "Time's up!" : `${restSeconds}s`}
             </span>
             {restSeconds > 0 && <span className="text-xs text-dim">resting…</span>}
           </div>
           <div className="flex gap-1.5">
             {restSeconds <= 0 ? (
-              <button onClick={cancelRest} className="text-xs font-semibold text-[#e0c98a] px-2.5 py-1">Dismiss</button>
+              <button onClick={cancelRest} className="text-xs font-semibold text-gold-light px-2.5 py-1">Dismiss</button>
             ) : (
               <>
-                <button onClick={() => setRestSeconds(s => (s || 0) + 30)} className="text-xs font-semibold text-[#9a9aa6] hover:text-soft px-2">+30s</button>
+                <button onClick={() => setRestSeconds(s => (s || 0) + 30)} className="text-xs font-semibold text-mid hover:text-soft px-2">+30s</button>
                 <button onClick={cancelRest} className="text-xs font-semibold text-dim hover:text-red-400 px-2">Cancel</button>
               </>
             )}
@@ -435,8 +435,8 @@ export default function WorkoutLog({ date }) {
       {/* Program day picker — only adds exercises, never replaces anything already logged */}
       {program && programDays.length > 0 && (
         <div className="mb-3">
-          <p className="text-xs text-[#9a9aa6] mb-1.5">
-            <span className="font-semibold text-[#e0c98a]">{program.name}</span> — tap a day to pull in today's exercises:
+          <p className="text-xs text-mid mb-1.5">
+            <span className="font-semibold text-gold-light">{program.name}</span> — tap a day to pull in today's exercises:
           </p>
           <div className="flex gap-1.5 flex-wrap">
             {(() => {
@@ -462,7 +462,7 @@ export default function WorkoutLog({ date }) {
                     className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
                       isActive
                         ? 'bg-gold border-gold text-charcoal'
-                        : 'bg-gold/10 border-gold/20 text-[#e0c98a] hover:bg-gold/[0.18]'
+                        : 'bg-gold/10 border-gold/20 text-gold-light hover:bg-gold/[0.18]'
                     }`}>
                     {(isActive || (activeProgramDay == null && isToday)) && '▸ '}{day.day_label}
                   </button>
@@ -489,7 +489,7 @@ export default function WorkoutLog({ date }) {
             onChange={e => handleSearchChange(e.target.value)}
             placeholder="Search exercises… e.g. Bench Press"
             className="w-full px-3 py-2.5 bg-surface border border-white/[0.1] rounded-xl text-sm
-              text-bright placeholder-[#5a5a68] focus:outline-none focus:ring-2 focus:ring-gold/30"
+              text-bright placeholder-dim focus:outline-none focus:ring-2 focus:ring-gold/30"
           />
           {(results.length > 0 || (search.length >= 2 && !searching)) && (
             <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-white/[0.1]
@@ -503,7 +503,7 @@ export default function WorkoutLog({ date }) {
               ))}
               {results.length === 0 && search.length >= 2 && !searching && (
                 <button onClick={addCustomAndUse}
-                  className="w-full text-left px-3 py-2.5 text-sm text-[#e0c98a] hover:bg-white/[0.05]">
+                  className="w-full text-left px-3 py-2.5 text-sm text-gold-light hover:bg-white/[0.05]">
                   + Add "{search}" as a new exercise
                 </button>
               )}
@@ -534,7 +534,7 @@ export default function WorkoutLog({ date }) {
                 <div>
                   <span className="text-sm font-semibold text-bright">{ex.exercise_name}</span>
                   {target && (
-                    <span className="ml-2 text-eyebrow font-semibold text-[#e0c98a] bg-gold/10 px-1.5 py-0.5 rounded-full">
+                    <span className="ml-2 text-eyebrow font-semibold text-gold-light bg-gold/10 px-1.5 py-0.5 rounded-full">
                       Target: {formatTarget(target)}
                     </span>
                   )}
@@ -588,7 +588,7 @@ export default function WorkoutLog({ date }) {
                   </div>
                   {ex.sets.map((set, i) => (
                     <div key={i} className="flex gap-2 items-center">
-                      <span className="w-8 text-xs text-[#9a9aa6] text-center">{i + 1}</span>
+                      <span className="w-8 text-xs text-mid text-center">{i + 1}</span>
                       <input type="number" inputMode="decimal" value={set.weight_kg}
                         onChange={e => updateSet(ex.exercise_id, i, 'weight_kg', e.target.value)}
                         placeholder="0"
@@ -605,7 +605,7 @@ export default function WorkoutLog({ date }) {
 
               <div className="flex gap-2 mt-2">
                 <button onClick={() => addSetRow(ex.exercise_id)}
-                  className="flex-1 py-2 text-xs font-semibold text-[#e0c98a] bg-gold/[0.08] border border-gold/[0.18] rounded-lg hover:bg-gold/[0.14] transition-colors">
+                  className="flex-1 py-2 text-xs font-semibold text-gold-light bg-gold/[0.08] border border-gold/[0.18] rounded-lg hover:bg-gold/[0.14] transition-colors">
                   + Add Set
                 </button>
                 <div
@@ -635,7 +635,7 @@ export default function WorkoutLog({ date }) {
           mistyped value can no longer distort the estimate. */}
       {exercisesInSession.length > 0 && (
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/[0.06]">
-          <span className="text-xs text-[#9a9aa6]">Time in gym:</span>
+          <span className="text-xs text-mid">Time in gym:</span>
           <input type="number" inputMode="numeric" value={durationMin}
             onChange={e => handleDurationChange(e.target.value)}
             placeholder="30" className="w-16 px-2 py-1 bg-surface border border-white/[0.1] rounded-lg text-sm text-center text-bright focus:outline-none focus:ring-2 focus:ring-gold/30" />
@@ -650,7 +650,7 @@ export default function WorkoutLog({ date }) {
           <span className="text-eyebrow font-bold text-dim tracking-wider">Cardio</span>
           <button onClick={() => setCardio(c => [...c, { type: 'walking', duration_min: 30, speed_kmh: 5 }])}
             style={{ minHeight: 32 }}
-            className="text-caption font-bold text-[#e0c98a] bg-gold/10 border border-gold/25 rounded-lg px-3 active:scale-95 transition-transform">
+            className="text-caption font-bold text-gold-light bg-gold/10 border border-gold/25 rounded-lg px-3 active:scale-95 transition-transform">
             + Add cardio
           </button>
         </div>
@@ -666,7 +666,7 @@ export default function WorkoutLog({ date }) {
                 list.map((row, idx) => (idx === i ? { ...row, [field]: val } : row))
               );
               return (
-                <div key={i} className="bg-[#0d0d11] border border-white/[0.06] rounded-xl p-2.5">
+                <div key={i} className="bg-charcoal border border-white/[0.06] rounded-xl p-2.5">
                   <div className="flex items-center gap-2 mb-2">
                     <select value={c.type}
                       onChange={e => patch('type', e.target.value)}
@@ -718,13 +718,13 @@ export default function WorkoutLog({ date }) {
           <div className="mt-3 pt-3 border-t border-white/[0.06]">
             <div className="bg-gold/[0.08] border border-gold/[0.22] rounded-xl px-3.5 py-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-caption font-bold text-[#e0c98a] tracking-wider">Calories burned</span>
+                <span className="text-caption font-bold text-gold-light tracking-wider">Calories burned</span>
                 <span className="font-display text-xl font-bold text-orange-400">{e.totalKcal} kcal</span>
               </div>
               <div className="space-y-0.5">
                 {e.sets > 0 && (
                   <div className="flex items-center justify-between text-caption">
-                    <span className="text-[#8e8e9a]">
+                    <span className="text-mute">
                       Strength · {e.sets} {plural(e.sets, 'set')} · {e.volumeKg.toLocaleString()} kg lifted
                     </span>
                     <span className="font-bold text-soft">{e.strengthKcal} kcal</span>
@@ -732,7 +732,7 @@ export default function WorkoutLog({ date }) {
                 )}
                 {e.cardioMin > 0 && (
                   <div className="flex items-center justify-between text-caption">
-                    <span className="text-[#8e8e9a]">Cardio · {e.cardioMin} min</span>
+                    <span className="text-mute">Cardio · {e.cardioMin} min</span>
                     <span className="font-bold text-soft">{e.cardioKcal} kcal</span>
                   </div>
                 )}
@@ -755,7 +755,7 @@ export default function WorkoutLog({ date }) {
       {sessionNotes && (
         <div className="mt-3 pt-3 border-t border-white/[0.06]">
           <p className="text-eyebrow font-bold text-dim tracking-wider mb-1.5">Session notes</p>
-          <p className="text-xs text-[#b6b6c2] leading-relaxed whitespace-pre-wrap bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2.5">
+          <p className="text-xs text-mid leading-relaxed whitespace-pre-wrap bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2.5">
             {sessionNotes}
           </p>
         </div>

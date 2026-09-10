@@ -32,7 +32,7 @@ export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }
   return (
     <div className="rounded-xl border border-hair overflow-hidden">
       <div className="px-3 py-2 bg-surface border-b border-white/[0.06] flex justify-between items-center">
-        <span className="text-eyebrow font-bold text-[#4e4e5c]">🏋️ Workout Log</span>
+        <span className="text-eyebrow font-bold text-ghost">🏋️ Workout Log</span>
         {data.session?.duration_min && (
           <span className="text-xs text-faint">{data.session.duration_min} min</span>
         )}
@@ -43,7 +43,7 @@ export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }
             <p className="text-sm font-semibold text-soft mb-1.5">{ex.exercise_name}</p>
             <div className="flex flex-wrap gap-1.5">
               {ex.sets.map((s, i) => (
-                <span key={i} className="text-xs font-medium text-[#9a9aa6] bg-white/[0.04] px-2 py-1 rounded-lg">
+                <span key={i} className="text-xs font-medium text-mid bg-white/[0.04] px-2 py-1 rounded-lg">
                   {s.weight_kg > 0 ? `${s.weight_kg}kg × ${s.reps}` : `${s.reps} reps`}
                 </span>
               ))}

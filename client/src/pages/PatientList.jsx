@@ -109,13 +109,13 @@ export default function MemberList() {
       <OfflineBanner />
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-surface to-charcoal text-white px-4 pt-10 pb-6">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-micro font-medium text-[#6E7480] mb-0.5">Coach</p>
+              <p className="text-micro font-medium text-lo mb-0.5">Coach</p>
               <h1 className="font-display text-xl font-medium">{user?.name}</h1>
-              <p className="text-[#4e4e5c] text-xs mt-0.5">{members.length} {plural(members.length, 'member')} assigned</p>
+              <p className="text-ghost text-xs mt-0.5">{members.length} {plural(members.length, 'member')} assigned</p>
             </div>
             <button onClick={() => navigate('/settings')}
               className="w-9 h-9 rounded-xl bg-white/[0.06] hover:bg-white/20 flex items-center justify-center transition-colors">
@@ -131,7 +131,7 @@ export default function MemberList() {
               the figure that decides whether this page needs Sachin's attention
               at all, so it carries the gold and the others stay ink — three
               equally coloured numbers made him read all three every time. */}
-          <div className="grid grid-cols-3 mt-4 rounded-[20px] bg-[#17181C] divide-x divide-white/[0.055]"
+          <div className="grid grid-cols-3 mt-4 rounded-[20px] bg-surface divide-x divide-white/[0.055]"
             style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
             {[
               { label: 'Logged today', value: loggedToday.length },
@@ -140,7 +140,7 @@ export default function MemberList() {
             ].map(stat => (
               <div key={stat.label} className="py-3.5 text-center">
                 <div className={`font-display text-[23px] leading-none font-medium tabular-nums ${
-                  stat.accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{stat.value}</div>
+                  stat.accent ? 'text-gold-light' : 'text-white'}`}>{stat.value}</div>
                 <div className="text-micro text-lo mt-1.5">{stat.label}</div>
               </div>
             ))}
@@ -157,7 +157,7 @@ export default function MemberList() {
       {withMessages.length > 0 && (
         <div className="max-w-md mx-auto px-4 pt-4">
           <div className="bg-surface rounded-2xl border border-gold/35 p-4">
-            <p className="text-note font-semibold text-[#8C7A46] mb-2.5">
+            <p className="text-note font-semibold text-gold-dark mb-2.5">
               ✉️ Messages from members{totalUnread > 0 ? ` · ${totalUnread} new` : ''}
             </p>
             <div className="space-y-2">
@@ -235,7 +235,7 @@ export default function MemberList() {
         {/* Sprint 9: Search bar */}
         {members.length > 0 && (
           <div className="relative">
-            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4e4e5c]"
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ghost"
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -248,7 +248,7 @@ export default function MemberList() {
             />
             {search && (
               <button onClick={() => setSearch('')}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#4e4e5c] hover:text-white text-lg">
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ghost hover:text-white text-lg">
                 ×
               </button>
             )}
@@ -273,7 +273,7 @@ export default function MemberList() {
                 }`}>
                 {chip.label}
                 {chip.count > 0 && (
-                  <span className={`ml-1 ${filter === chip.id ? 'text-ghost' : 'text-[#4e4e5c]'}`}>
+                  <span className={`ml-1 ${filter === chip.id ? 'text-ghost' : 'text-ghost'}`}>
                     ({chip.count})
                   </span>
                 )}
@@ -283,7 +283,7 @@ export default function MemberList() {
         )}
 
         {filtered.length === 0 && !error && (
-          <div className="text-center py-16 text-[#4e4e5c]">
+          <div className="text-center py-16 text-ghost">
             <div className="text-4xl mb-3">👥</div>
             <p className="font-medium">{search ? `No members matching "${search}"` : 'No members assigned yet'}</p>
           </div>
@@ -332,7 +332,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
 
   return (
     <div onClick={onClick}
-      className={`bg-[#131317] rounded-2xl border p-4 shadow-card-raised cursor-pointer transition-all
+      className={`bg-charcoal rounded-2xl border p-4 shadow-card-raised cursor-pointer transition-all
         hover:shadow-md active:scale-98 ${unread > 0
           ? 'border-gold/45'
           : noLog ? 'border-red-500/25' : 'border-hair'}`}>
@@ -354,7 +354,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
           {conditions.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {conditions.map(c => (
-                <span key={c} className="text-xs bg-white/[0.05] text-[#9a9aa6] px-2 py-0.5 rounded-full font-medium">
+                <span key={c} className="text-xs bg-white/[0.05] text-mid px-2 py-0.5 rounded-full font-medium">
                   {c.replace(/_/g, ' ')}
                 </span>
               ))}
@@ -374,7 +374,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
               )}
             </>
           ) : (
-            <span className="text-xs text-[#3a3a46]">No weight</span>
+            <span className="text-xs text-ghost">No weight</span>
           )}
           <div className={`mt-1.5 text-xs font-bold px-2 py-0.5 rounded-full inline-block ${badge.bg} ${badge.text}`}>
             {badge.label}
@@ -397,9 +397,9 @@ function MemberCard({ member: p, todayStr, onClick }) {
               Muscle Coverage's recency lens for consistency. */}
           {workoutDaysAgo !== null && (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-              workoutDaysAgo === 0 ? 'text-[#e0c98a] bg-gold/10'
+              workoutDaysAgo === 0 ? 'text-gold-light bg-gold/10'
               : workoutDaysAgo > 10 ? 'text-amber-400 bg-amber-400/10'
-              : 'text-[#9a9aa6] bg-white/[0.05]'}`}>
+              : 'text-mid bg-white/[0.05]'}`}>
               🏋️ {workoutDaysAgo === 0 ? 'Today' : `${workoutDaysAgo}d ago`}
             </span>
           )}
@@ -409,7 +409,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
               🔑 No PIN
             </span>
           )}
-          <div className="flex items-center gap-1 text-[#3a3a46]">
+          <div className="flex items-center gap-1 text-ghost">
             <span className="text-xs">Goal: {p.target_weight} kg</span>
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

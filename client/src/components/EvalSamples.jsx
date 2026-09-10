@@ -128,7 +128,7 @@ export default function EvalSamples() {
       </div>
 
       <div className="bg-gold/5 border border-gold/[0.18] rounded-2xl px-4 py-3 mb-3">
-        <p className="text-caption text-[#C9B37E] leading-relaxed">
+        <p className="text-caption text-gold-light leading-relaxed">
           Every correction a member or coach makes lands here as a test case.
           Run <span className="font-mono text-eyebrow text-gold-light">node scripts/replay-evals.js</span> after
           a prompt change to score it against these. Dismiss anything that was

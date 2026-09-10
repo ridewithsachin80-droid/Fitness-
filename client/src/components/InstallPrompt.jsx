@@ -70,7 +70,7 @@ export default function InstallPrompt() {
   if (!show || installed) return null;
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 max-w-sm mx-auto bg-[#131317] border border-white/[0.08] text-white
+    <div className="fixed bottom-24 left-4 right-4 max-w-sm mx-auto bg-charcoal border border-white/[0.08] text-white
       rounded-2xl p-4 shadow-card-raised z-50 flex items-center gap-3 fade-up">
 
       {/* Icon */}
@@ -85,12 +85,12 @@ export default function InstallPrompt() {
       <div className="flex-1 min-w-0">
         <div className="font-display font-semibold text-sm">Add to Home Screen</div>
         {isIOS ? (
-          <div className="text-xs text-[#9a9aa6] mt-0.5">
+          <div className="text-xs text-mid mt-0.5">
             Tap <strong className="text-soft">Share</strong> then{' '}
             <strong className="text-soft">Add to Home Screen</strong>
           </div>
         ) : (
-          <div className="text-xs text-[#9a9aa6] mt-0.5">
+          <div className="text-xs text-mid mt-0.5">
             Use as an app — works offline too
           </div>
         )}
@@ -100,7 +100,7 @@ export default function InstallPrompt() {
       {!isIOS && (
         <button
           onClick={install}
-          className="px-3 py-2 bg-gold hover:bg-[#e0c98a] text-charcoal text-xs
+          className="px-3 py-2 bg-gold hover:bg-gold-light text-charcoal text-xs
             font-bold rounded-xl flex-shrink-0 transition-colors"
         >
           Install
@@ -109,7 +109,7 @@ export default function InstallPrompt() {
 
       <button
         onClick={dismiss}
-        className="text-dim hover:text-[#9a9aa6] text-xl leading-none flex-shrink-0 ml-1"
+        className="text-dim hover:text-mid text-xl leading-none flex-shrink-0 ml-1"
         aria-label="Dismiss"
       >
         ×

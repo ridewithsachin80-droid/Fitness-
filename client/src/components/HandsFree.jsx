@@ -79,15 +79,15 @@ export default function HandsFree() {
 
   return (
     <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2
-                    px-4 py-2 rounded-full bg-[#1a1b1f] border border-gold/40 shadow-lg">
+                    px-4 py-2 rounded-full bg-surface border border-gold/40 shadow-lg">
       <span className={`w-2.5 h-2.5 rounded-full ${
-        state === 'confirming' ? 'bg-[#E4572E]' : 'bg-gold'
+        state === 'confirming' ? 'bg-danger' : 'bg-gold'
       } ${state === 'idle' ? 'animate-pulse' : ''}`} />
-      <span className="text-xs text-[#E8E6E1] max-w-[55vw] truncate">
+      <span className="text-xs text-bright max-w-[55vw] truncate">
         {error || label}
       </span>
       <button onClick={() => setEnabled(false)}
-        className="text-xs text-[#9A968E] underline underline-offset-2 shrink-0">
+        className="text-xs text-mute underline underline-offset-2 shrink-0">
         Stop
       </button>
     </div>

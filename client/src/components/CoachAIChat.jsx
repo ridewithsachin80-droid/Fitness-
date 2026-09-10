@@ -99,19 +99,19 @@ function FoodEditCard({ food, onSaved }) {
   };
 
   if (done) {
-    return <p className="text-note text-[#6E8F6B] mt-2">{done}</p>;
+    return <p className="text-note text-ok mt-2">{done}</p>;
   }
 
   return (
-    <div className="mt-2 rounded-2xl bg-[#17181C] px-3.5 py-3"
+    <div className="mt-2 rounded-2xl bg-surface px-3.5 py-3"
       style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
-      <p className="text-[14px] font-semibold text-[#F2F1EE]">{food.name}</p>
+      <p className="text-[14px] font-semibold text-white">{food.name}</p>
       <p className="text-caption text-lo mt-0.5">
         Per 100g · {food.verified ? 'verified' : `from ${food.source}, unverified`} ·
         {' '}applies to every member
       </p>
       {food.warning && (
-        <p className="text-caption text-[#D9A66B] mt-1.5 leading-snug">⚠ {food.warning}</p>
+        <p className="text-caption text-gold-deep mt-1.5 leading-snug">⚠ {food.warning}</p>
       )}
 
       {/* Arithmetic that cannot be true, listed in full rather than one at a
@@ -121,7 +121,7 @@ function FoodEditCard({ food, onSaved }) {
       {food.mass_balance?.problems?.length > 1 && (
         <ul className="mt-1.5 space-y-0.5">
           {food.mass_balance.problems.slice(1).map((x, i) => (
-            <li key={i} className="text-caption text-[#D98A80] leading-snug">⚠ {x}</li>
+            <li key={i} className="text-caption text-danger leading-snug">⚠ {x}</li>
           ))}
         </ul>
       )}
@@ -145,7 +145,7 @@ function FoodEditCard({ food, onSaved }) {
         <input type="number" inputMode="numeric" value={defG} placeholder="—"
           onChange={e => setDefG(e.target.value)} disabled={!food.editable || busy}
           className="w-[74px] bg-charcoal border border-gold/30 rounded-lg
-            px-2 py-1.5 text-body-sm text-[#E8CE7A] tabular-nums disabled:opacity-50" />
+            px-2 py-1.5 text-body-sm text-gold-light tabular-nums disabled:opacity-50" />
         <span className="text-micro text-mid">
           g — one typical serving
           <span className="block text-[10.5px] text-lo">
@@ -161,7 +161,7 @@ function FoodEditCard({ food, onSaved }) {
               onChange={e => set(k, e.target.value)}
               disabled={!food.editable || busy}
               className="w-[74px] bg-charcoal border border-white/[0.09] rounded-lg
-                px-2 py-1.5 text-body-sm text-[#F2F1EE] tabular-nums disabled:opacity-50" />
+                px-2 py-1.5 text-body-sm text-white tabular-nums disabled:opacity-50" />
             <span className="text-caption text-mute">{label}</span>
           </label>
         ))}
@@ -182,25 +182,25 @@ function FoodEditCard({ food, onSaved }) {
         const suggested = Math.round(fat * src.sat * 10) / 10;
         return (
           <div className="mt-3 rounded-xl bg-gold/[0.06] px-3 py-2.5">
-            <p className="text-micro text-[#D9A66B] leading-snug">
+            <p className="text-micro text-gold-deep leading-snug">
               ⚠ {fat}g fat with no saturated fat recorded — no fat is 0% saturated.
             </p>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span className="text-micro text-mid">Cooked in</span>
               <select value={fatSrc} onChange={e => setFatSrc(e.target.value)}
                 className="bg-charcoal border border-white/[0.09] rounded-lg px-2 py-1
-                  text-note text-[#F2F1EE]">
+                  text-note text-white">
                 {(food.fat_sources || []).map(f => (
                   <option key={f.key} value={f.key}>{f.label}</option>
                 ))}
               </select>
               <span className="text-micro text-mid">
-                → <strong className="text-[#E8CE7A]">{suggested}g</strong> saturated
+                → <strong className="text-gold-light">{suggested}g</strong> saturated
                 {' '}({Math.round(src.sat * 100)}% of the fat)
               </span>
               <button
                 onClick={() => setVals(o => ({ ...o, saturated_fat: suggested }))}
-                className="text-micro font-semibold text-[#E8CE7A] border
+                className="text-micro font-semibold text-gold-light border
                   border-gold/[0.34] rounded-full px-2.5 py-0.5">
                 Use
               </button>
@@ -210,7 +210,7 @@ function FoodEditCard({ food, onSaved }) {
       })()}
 
       <button onClick={() => setMore(v => !v)}
-        className="text-caption font-semibold text-[#8C7A46] mt-2.5">
+        className="text-caption font-semibold text-gold-dark mt-2.5">
         {more ? 'Hide' : `Show ${micros.length} more nutrients`}
       </button>
 
@@ -222,7 +222,7 @@ function FoodEditCard({ food, onSaved }) {
                 onChange={e => set(k, e.target.value)}
                 disabled={!food.editable || busy}
                 className="w-[74px] bg-charcoal border border-white/[0.09] rounded-lg
-                  px-2 py-1.5 text-note text-[#F2F1EE] tabular-nums disabled:opacity-50" />
+                  px-2 py-1.5 text-note text-white tabular-nums disabled:opacity-50" />
               <span className="text-caption text-mute">{k.replace(/_/g, ' ')}</span>
             </label>
           ))}
@@ -237,8 +237,8 @@ function FoodEditCard({ food, onSaved }) {
         <label className="flex items-start gap-2 mt-3 cursor-pointer">
           <input type="checkbox" checked={prop} onChange={e => setProp(e.target.checked)} className="mt-0.5" />
           <span className="text-micro text-mid leading-snug">
-            Also correct <strong className="text-[#E8CE7A]">{food.impact.entries}</strong> already
-            logged by <strong className="text-[#E8CE7A]">{food.impact.members}</strong>
+            Also correct <strong className="text-gold-light">{food.impact.entries}</strong> already
+            logged by <strong className="text-gold-light">{food.impact.members}</strong>
             {food.impact.members === 1 ? ' member' : ' members'}
             {food.impact.earliest ? ` since ${food.impact.earliest}` : ''}.
             <span className="block text-[10.5px] text-lo mt-0.5">
@@ -263,8 +263,8 @@ function FoodEditCard({ food, onSaved }) {
         <label className="flex items-start gap-2 mt-2 cursor-pointer">
           <input type="checkbox" checked={propG} onChange={e => setPropG(e.target.checked)} className="mt-0.5" />
           <span className="text-micro text-mid leading-snug">
-            Also reset the portion to <strong className="text-[#E8CE7A]">{defG}g</strong> on
-            {' '}<strong className="text-[#E8CE7A]">{food.impact.guessed}</strong>
+            Also reset the portion to <strong className="text-gold-light">{defG}g</strong> on
+            {' '}<strong className="text-gold-light">{food.impact.guessed}</strong>
             {food.impact.guessed === 1 ? ' entry' : ' entries'} where no quantity was given.
             <span className="block text-[10.5px] text-lo mt-0.5">
               Entries where the member said how much are left alone.
@@ -286,7 +286,7 @@ function FoodEditCard({ food, onSaved }) {
         <label className="flex items-start gap-2 mt-2 cursor-pointer">
           <input type="checkbox" checked={propU} onChange={e => setPropU(e.target.checked)} className="mt-0.5" />
           <span className="text-micro text-mid leading-snug">
-            Also correct <strong className="text-[#E8CE7A]">{food.impact.unlinked}</strong>
+            Also correct <strong className="text-gold-light">{food.impact.unlinked}</strong>
             {food.impact.unlinked === 1 ? ' entry' : ' entries'} named "{food.name}" that were
             never linked to this food.
             <span className="block text-[10.5px] text-lo mt-0.5">
@@ -562,22 +562,22 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-[#0d0d11] flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <div className="fixed inset-0 z-[70] bg-charcoal flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
 
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#111116]">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-charcoal">
         <button onClick={closeChat}
           style={{ minWidth: 44, minHeight: 44 }}
-          className="flex items-center justify-center rounded-full text-[#8e8e9a] hover:text-white hover:bg-white/[0.06] transition-colors">
+          className="flex items-center justify-center rounded-full text-mute hover:text-white hover:bg-white/[0.06] transition-colors">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-[#8a6a1e] flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">Coach AI</p>
-            <p className="text-eyebrow text-[#4e4e5c] leading-tight">Manage protocols & messages by chat</p>
+            <p className="text-eyebrow text-ghost leading-tight">Manage protocols & messages by chat</p>
           </div>
         </div>
 
@@ -591,7 +591,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         {messages.length > 0 && (
           <button onClick={() => { setMessages([]); setInput(''); }}
             style={{ minHeight: 36 }}
-            className="ml-auto px-3 rounded-full text-caption font-semibold text-[#8e8e9a]
+            className="ml-auto px-3 rounded-full text-caption font-semibold text-mute
               hover:text-white hover:bg-white/[0.06] transition-colors">
             Clear
           </button>
@@ -602,14 +602,14 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 
         {messages.length === 0 && (
-          <div className="bg-[#16161c] border border-hair rounded-2xl p-4">
+          <div className="bg-surface border border-hair rounded-2xl p-4">
             <p className="text-sm font-semibold text-white mb-1.5">What would you like to change? 🏋️</p>
-            <p className="text-xs text-[#8e8e9a] leading-relaxed mb-3">
+            <p className="text-xs text-mute leading-relaxed mb-3">
               Name a member and describe the change — protocols, targets, custom
               activities, messages, or push notifications. I'll show a preview
               before anything is applied.
             </p>
-            <div className="space-y-1.5 text-xs text-[#b6b6c2]">
+            <div className="space-y-1.5 text-xs text-mid">
               <p>· "Set Bujju's water target to 4 litres"</p>
               <p>· "Asha: 1400 kcal, protein 90g, add evening walk"</p>
               <p>· "Remove flaxseed oil for Suresh, message him to log daily"</p>
@@ -635,7 +635,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                       // Answers are gold-tinted so a READ is visually distinct
                       // from a pending CHANGE. Nothing here needs applying.
                       ? 'bg-gold/[0.06] border-gold/20 text-gold-light'
-                      : 'bg-[#16161c] border-hair text-soft'
+                      : 'bg-surface border-hair text-soft'
                 }`}>
                   {(m.isAnswer || m.summary) && m.answeredFor && (
                     <p className="text-eyebrow font-bold text-gold mb-1.5">
@@ -657,7 +657,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                         <button key={ai}
                           onClick={() => toggleAction(mi, ai)}
                           disabled={!a.resolved || m.applied}
-                          className={`w-full text-left bg-[#0d0d11] border rounded-xl px-3.5 py-3 transition-all ${
+                          className={`w-full text-left bg-charcoal border rounded-xl px-3.5 py-3 transition-all ${
                             !a.resolved
                               ? 'border-amber-500/30 opacity-80'
                               : a.on
@@ -671,11 +671,11 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                                   a.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
                                 }`}>✓</span>
                               )}
-                              <p className={`text-body-sm font-bold truncate ${a.on || !a.resolved ? 'text-white' : 'text-[#8e8e9a] line-through'}`}>
+                              <p className={`text-body-sm font-bold truncate ${a.on || !a.resolved ? 'text-white' : 'text-mute line-through'}`}>
                                 {a.member_name}
                               </p>
                               {a.is_all && (
-                                <span className="text-tiny font-bold text-[#e0c98a] bg-gold/[0.14] border border-gold/30 rounded-full px-2 py-0.5 flex-shrink-0">BROADCAST</span>
+                                <span className="text-tiny font-bold text-gold-light bg-gold/[0.14] border border-gold/30 rounded-full px-2 py-0.5 flex-shrink-0">BROADCAST</span>
                               )}
                             </div>
                             {!a.resolved && (
@@ -686,7 +686,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                           </div>
                           <div className="space-y-1">
                             {a.changes.map((c, ci) => (
-                              <p key={ci} className="text-note text-[#b6b6c2] leading-relaxed">
+                              <p key={ci} className="text-note text-mid leading-relaxed">
                                 <span className="mr-1.5">{c.icon}</span>{c.text}
                               </p>
                             ))}
@@ -704,7 +704,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                         <button onClick={() => applyAll(mi)}
                           disabled={applying}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
                           {applying
                             ? 'Applying…'
                             : `Apply changes for ${m.actions.filter(a => a.on && a.resolved).length} ${plural(m.actions.filter(a => a.on && a.resolved).length, 'member')}`}
@@ -717,7 +717,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                           <p className="text-body-sm font-bold text-gold-light">✓ Applied</p>
                           {(m.results || []).map((r, ri) => (
                             <div key={ri}>
-                              <p className={`text-caption leading-relaxed ${r.ok ? 'text-[#b6b6c2]' : 'text-red-300'}`}>
+                              <p className={`text-caption leading-relaxed ${r.ok ? 'text-mid' : 'text-red-300'}`}>
                                 {r.ok ? '✓' : '✗'} <span className="font-semibold">{r.member_name}</span>
                                 {r.detail ? ` — ${r.detail}` : ''}
                               </p>
@@ -741,7 +741,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                               )}
                             </div>
                           ))}
-                          <p className="text-eyebrow text-[#4e4e5c] pt-0.5">
+                          <p className="text-eyebrow text-ghost pt-0.5">
                             Members see protocol changes on next app open · logged in Audit
                           </p>
                         </div>
@@ -756,7 +756,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
 
         {busy && (
           <div className="flex justify-start">
-            <div className="bg-[#16161c] border border-hair rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="bg-surface border border-hair rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-1.5 h-1.5 rounded-full bg-gold animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -779,7 +779,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                 else send(chip);
               }}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
-              className="text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-full px-3.5 py-1.5 text-[#b6b6c2] transition-colors">
+              className="text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-full px-3.5 py-1.5 text-mid transition-colors">
               {chip.trim()}{chip.endsWith(' ') ? '…' : ''}
             </button>
           ))}
@@ -787,7 +787,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       )}
 
       {/* ── Input bar ── */}
-      <div className="px-4 py-3 border-t border-white/[0.06] bg-[#111116]"
+      <div className="px-4 py-3 border-t border-white/[0.06] bg-charcoal"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {vc.card}
         <div className="flex items-end gap-2">
@@ -798,7 +798,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
               placeholder="Ask or instruct — &quot;how many calories has Padmini eaten?&quot;"
-              className="flex-1 bg-transparent text-sm text-white placeholder-[#4e4e5c] py-3 outline-none min-w-0"
+              className="flex-1 bg-transparent text-sm text-white placeholder-ghost py-3 outline-none min-w-0"
             />
             {vc.micButton}
             {/* Attach a diet plan. Sits beside the mic because both are ways of
@@ -807,7 +807,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
               style={{ minWidth: 40, minHeight: 40 }}
               title="Attach a diet plan (PDF or photo)"
               className={`flex items-center justify-center rounded-full flex-shrink-0 cursor-pointer
-                transition-colors ${busy ? 'text-[#4e4e5c]' : 'text-mid hover:text-[#E8CE7A]'}`}>
+                transition-colors ${busy ? 'text-ghost' : 'text-mid hover:text-gold-light'}`}>
               <input type="file" accept="application/pdf,image/*" className="hidden" disabled={busy}
                 onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; sendDoc(f); }} />
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -823,7 +823,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
                 ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
-                : 'bg-white/[0.05] text-[#4e4e5c]'
+                : 'bg-white/[0.05] text-ghost'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />

@@ -89,21 +89,21 @@ export default function NotificationBell() {
             d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-[#d4af6a]
-            text-charcoal text-xs font-bold flex items-center justify-center border-2 border-[#0d0b18] z-10">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-gold
+            text-charcoal text-xs font-bold flex items-center justify-center border-2 border-surface z-10">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[52px] w-80 max-w-[88vw] bg-[#131317] border border-white/[0.08]
+        <div className="absolute right-0 top-[52px] w-80 max-w-[88vw] bg-charcoal border border-white/[0.08]
           rounded-2xl shadow-card-raised z-50 max-h-[70vh] overflow-y-auto">
-          <div className="flex gap-1 p-1.5 border-b border-hair sticky top-0 bg-[#131317] z-10">
+          <div className="flex gap-1 p-1.5 border-b border-hair sticky top-0 bg-charcoal z-10">
             {[['messages', `Messages${messages.length ? ` (${messages.length})` : ''}`], ['reminders', 'Reminders']].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
-                  tab === k ? 'bg-gold text-charcoal' : 'text-dim hover:text-[#9a9aa6]'
+                  tab === k ? 'bg-gold text-charcoal' : 'text-dim hover:text-mid'
                 }`}>{label}</button>
             ))}
           </div>
@@ -133,7 +133,7 @@ export default function NotificationBell() {
                         {new Date(m.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </span>
                     </div>
-                    <p className="text-xs text-[#9a9aa6] leading-relaxed whitespace-pre-wrap">{m.note}</p>
+                    <p className="text-xs text-mid leading-relaxed whitespace-pre-wrap">{m.note}</p>
                   </div>
                 ))}
               </div>
@@ -154,7 +154,7 @@ export default function NotificationBell() {
                     <span className="text-sm font-medium text-soft leading-tight">{n.title}</span>
                     <span className="text-eyebrow text-dim flex-shrink-0 mt-0.5 whitespace-nowrap">{timeAgo(n.sent_at)}</span>
                   </div>
-                  <p className="text-xs text-[#9a9aa6] mt-1 leading-relaxed">{n.body}</p>
+                  <p className="text-xs text-mid mt-1 leading-relaxed">{n.body}</p>
                   {/* There used to be a red "Delivery failed — your coach may
                       want to know" badge here, shown to the MEMBER.
                       Two things wrong with it:

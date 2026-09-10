@@ -80,7 +80,7 @@ export default function MorningNudges() {
         <SectionTitle>Morning messages</SectionTitle>
         {failed ? (
           <>
-            <p className="text-sm text-[#E4572E] mt-1">Couldn't load today's messages.</p>
+            <p className="text-sm text-danger mt-1">Couldn't load today's messages.</p>
             <button onClick={load}
               className="mt-3 px-4 py-2 rounded-lg text-xs font-semibold bg-gold text-charcoal">
               Try again
@@ -122,7 +122,7 @@ export default function MorningNudges() {
       </p>
 
       {error && (
-        <p className="text-sm text-[#E4572E] mb-3">{error}</p>
+        <p className="text-sm text-danger mb-3">{error}</p>
       )}
 
       {rows.length === 0 && (
@@ -137,16 +137,16 @@ export default function MorningNudges() {
           return (
             <div key={m.id} className="py-3 flex items-start gap-3">
               <div className="min-w-0 flex-1">
-                <p className={`text-sm ${m.status === 'coach_sent' ? 'text-lo' : 'text-[#E8E6E1]'}`}>
+                <p className={`text-sm ${m.status === 'coach_sent' ? 'text-lo' : 'text-bright'}`}>
                   {m.name}
                 </p>
                 {m.status === 'push_failed' && (
-                  <p className="text-xs text-[#E4572E] mt-0.5">
+                  <p className="text-xs text-danger mt-0.5">
                     Tried at 6:30, couldn't reach them — notifications are off.
                   </p>
                 )}
                 {m.status === 'push_sent' && (
-                  <p className="text-xs text-[#B08D2F] mt-0.5">
+                  <p className="text-xs text-gold-deep mt-0.5">
                     Phone notification sent at 6:30 — no way to tell if they saw it.
                   </p>
                 )}
@@ -157,7 +157,7 @@ export default function MorningNudges() {
                   {m.message}
                 </p>
                 {!usable && (
-                  <p className="text-xs text-[#E4572E] mt-1">No usable WhatsApp number</p>
+                  <p className="text-xs text-danger mt-1">No usable WhatsApp number</p>
                 )}
               </div>
 
@@ -170,7 +170,7 @@ export default function MorningNudges() {
                 className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold
                            disabled:opacity-40 ${
                              m.status === 'coach_sent'
-                               ? 'bg-white/[0.06] text-[#E8E6E1] border border-white/20'
+                               ? 'bg-white/[0.06] text-bright border border-white/20'
                                : 'bg-gold text-charcoal'}`}>
                 {busyId === m.id ? '…' : (m.status === 'none' ? 'Send' : 'Send again')}
               </button>

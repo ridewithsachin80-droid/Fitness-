@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '../store/settingsStore';
-import { useAIChat } from './AIChatLog';
+import { useAIChat } from '../store/aiChatStore';
 import { Icon } from './primitives';
 
 /**
@@ -19,7 +19,7 @@ import { Icon } from './primitives';
  */
 export function Card({ children, className = '' }) {
   return (
-    <div className={`rounded-[20px] px-4 py-4 bg-[#17181C] ${className}`}
+    <div className={`rounded-[20px] px-4 py-4 bg-surface ${className}`}
       style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
       {children}
     </div>
@@ -92,7 +92,7 @@ export function SectionTitle({ children, icon, tooltip }) {
   return (
     <div className="flex items-center gap-2 mb-3 text-mute">
       {icon && <SectionGlyph name={icon} />}
-      <h3 className="font-semibold text-body-sm tracking-[0.005em] text-[#A9B0BF] flex-1">
+      <h3 className="font-semibold text-body-sm tracking-[0.005em] text-mid flex-1">
         {children}
       </h3>
       {tooltip && (
@@ -225,7 +225,7 @@ export function StatPill({ value, label, color = 'stone', accent = false }) {
     <div className={`text-center rounded-xl py-2 px-2 ${
       isAccent ? 'bg-gold/[0.08]' : 'bg-white/[0.045]'}`}>
       <div className={`font-display text-body leading-tight font-medium tabular-nums ${
-        isAccent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>{value}</div>
+        isAccent ? 'text-gold-light' : 'text-white'}`}>{value}</div>
       <div className="text-caption text-mute mt-1">{label}</div>
     </div>
   );

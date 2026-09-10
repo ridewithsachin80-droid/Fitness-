@@ -17,101 +17,27 @@
  * on DailyLog open the same instance.
  *
  * Mount ONCE per page (DailyLog does this). Open from anywhere with:
- *   import { useAIChat } from './AIChatLog';
+ *   import { useAIChat } from '../store/aiChatStore';
  *   const openChat = useAIChat(s => s.openChat);
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { create } from 'zustand';
 import { createPortal } from 'react-dom';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import api from '../api/client';
 import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, today, plural } from '../constants';
+import { today, plural } from '../constants';
+import { resolveProtocolItems } from '../lib/day';
+import { useAIChat, undoSnap, workoutUndoSnap } from '../store/aiChatStore';
+import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CHIPS, GroupHeader, ToggleChip } from './chat/ChatAtoms';
+
+// Re-exported so every existing `import { useAIChat } from './AIChatLog'` keeps working.
+export { useAIChat };
 import DaySummary from './DaySummary';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
 import { rollbackCard } from '../utils/chatCard';
-
-// ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
-//
-// The conversation lives HERE, not in component state. AIChatLog is mounted
-// inside DailyLog, so tapping Progress unmounts it — and with `messages` in
-// useState that destroyed the whole exchange, including any preview card the
-// member had not applied yet. They then had to re-dictate the entire day.
-//
-// setMessages/setInput accept either a value or an updater function so every
-// existing call site (`setMessages(m => [...m, x])`) works unchanged.
-export const useAIChat = create((set, get) => ({
-  // Sprint 4: the chat is no longer a full-screen overlay — the thread lives on
-  // the Today page and the composer is docked above the nav. `open` now means
-  // "the member asked for the chat" (kept for callers that read it), and
-  // `focusRequest` is a counter: every openChat() bumps it, and the composer
-  // reacts by closing any sheet, scrolling the thread into view and focusing
-  // the input. A counter, not a boolean, so a second tap while already
-  // "open" still brings the composer up.
-  open: false,
-  focusRequest: 0,
-  // Sprint 5b.3: the composer is summoned, not permanent. openChat() shows it
-  // (and focuses it); closeComposer() hides it. The thread stays on the page.
-  composerOpen: false,
-  openChat:  () => set((s) => ({ open: true, composerOpen: true, focusRequest: s.focusRequest + 1 })),
-  closeComposer: () => set({ composerOpen: false, composerFocused: false }),
-  toggleComposer: () => set((s) => s.composerOpen
-    ? { composerOpen: false, composerFocused: false }
-    : { open: true, composerOpen: true, focusRequest: s.focusRequest + 1 }),
-  closeChat: () => set({ open: false }),
-
-  // Bumped after every successful Apply. useTodayModel refreshes the workout
-  // summary from it (it used to watch the overlay closing — there is no
-  // overlay to close any more).
-  lastAppliedAt: null,
-  markApplied: () => set({ lastAppliedAt: Date.now() }),
-  // While the member is typing, the bottom nav steps aside so the keyboard,
-  // the composer and the thread share the screen (MemberBottomNav reads this).
-  composerFocused: false,
-  setComposerFocused: (v) => set({ composerFocused: !!v }),
-  // Text to drop into the composer the next time it mounts (onboarding's
-  // sample message). Consumed once.
-  prefillText: '',
-  prefill: (text) => set((s) => ({ prefillText: text || '', open: true, composerOpen: true, focusRequest: s.focusRequest + 1 })),
-
-  messages: [],
-  input: '',
-  // The day the conversation belongs to. A preview parsed last night must not
-  // be applicable to today's log after the date rolls over.
-  dayKey: null,
-
-  setMessages: (next) =>
-    set((s) => ({ messages: typeof next === 'function' ? next(s.messages) : next })),
-  setInput: (next) =>
-    set((s) => ({ input: typeof next === 'function' ? next(s.input) : next })),
-
-  /** Wipe the transcript — on logout, or when the day has rolled over. */
-  resetChat: () => {
-    undoSnap.current = null;
-    workoutUndoSnap.current = null;
-    set({ messages: [], input: '', dayKey: null });
-  },
-
-  /** Called when the panel opens; clears a conversation left over from a previous day. */
-  ensureFreshDay: (todayKey) => {
-    if (get().dayKey && get().dayKey !== todayKey) get().resetChat();
-    set({ dayKey: todayKey });
-  },
-}));
-
-// ── Pre-apply snapshots for Undo ─────────────────────────────────────────────
-// Module-level rather than useRef for the same reason as the messages above:
-// the component unmounts on navigation but the "Applied ✓ · Undo" card now
-// survives, so the snapshot behind that Undo button has to survive with it.
-// Without this, Undo would render as an active button and silently do nothing.
-//
-// Safe across accounts: authStore.logout() sets window.location.href, which is
-// a full document load — this module is re-evaluated and both snapshots reset.
-const undoSnap        = { current: null };
-const workoutUndoSnap = { current: null };
 
 // ── Speech recognition ───────────────────────────────────────────────────────
 const SpeechRecognition =
@@ -119,73 +45,11 @@ const SpeechRecognition =
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null;
 
-// Bottom nav card (~64px) + its 12px pad + the orb lifted 22px above the card.
-// Measured in UI.jsx (the nav's own spacer is 104px); the composer sits just
-// above the orb's crown.
-const COMPOSER_BOTTOM_PX = 100;
-const COMPOSER_BOTTOM_FOCUSED_PX = 12;   // nav hidden while typing
-
-// Grow the textarea to its content, capped by its max-height (5 lines).
-function autoGrow(el) {
-  if (!el) return;
-  el.style.height = 'auto';
-  el.style.height = `${el.scrollHeight}px`;
-}
-
-const SUGGESTION_CHIPS = [
-  'weight 82.5, morning walk done',
-  '2 chapati, 1 bowl dal for lunch',
-  'drank 1 litre water, took my supplements',
-  'slept 10:30 to 6:30',
-];
-
-// ── Protocol derivation — same logic as DailyLog ─────────────────────────────
-function deriveProtocolItems(protocol) {
-  const overrides = protocol?.item_overrides || {};
-  const applyOverride = (item) => {
-    const ov = overrides[item.id];
-    if (!ov) return item;
-    const timing = [ov.fromTime, ov.toTime].filter(Boolean).join('–');
-    const sub    = [ov.totalTime, timing].filter(Boolean).join(' · ') || ov.sub || item.sub || '';
-    return { ...item, label: ov.label || item.label, sub };
-  };
-  const allActivities  = [...ACTIVITIES,  ...(protocol?.custom_activities  || [])].map(applyOverride);
-  const allACV         = [...ACV_ITEMS,   ...(protocol?.custom_acv         || [])].map(applyOverride);
-  const allSupplements = [...SUPPLEMENTS, ...(protocol?.custom_supplements || [])].map(applyOverride);
-  return {
-    activities:  allActivities.filter(a  => !protocol?.activities  || protocol.activities.includes(a.id)),
-    acv:         allACV.filter(a         => !protocol?.acv         || protocol.acv.includes(a.id)),
-    supplements: allSupplements.filter(s => !protocol?.supplements || protocol.supplements.includes(s.id)),
-  };
-}
-
-// ── Small UI atoms ───────────────────────────────────────────────────────────
-function GroupHeader({ icon, title, count }) {
-  return (
-    <div className="flex items-center gap-1.5 mb-1.5">
-      <span className="text-xs">{icon}</span>
-      <span className="text-eyebrow font-bold text-mid tracking-widest">{title}</span>
-      {count != null && <span className="text-eyebrow text-lo">· {count}</span>}
-    </div>
-  );
-}
-
-/** Tappable include/exclude chip — purple when included, dimmed when excluded */
-function ToggleChip({ on, onToggle, children }) {
-  return (
-    <button onClick={onToggle}
-      style={{ minHeight: 36 }}
-      className={`flex items-center gap-1.5 text-xs rounded-full px-3 py-1.5 border transition-all active:scale-95 ${
-        on
-          ? 'bg-gold/[0.16] border-gold/45 text-white font-semibold'
-          : 'bg-white/[0.03] border-white/[0.08] text-lo line-through'
-      }`}>
-      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
-        on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
-      }`}>✓</span>
-      {children}
-    </button>
-  );
+// resolveProtocolItems (lib/day) is the ONE derivation, shared with Today and
+// Plan; this adapter keeps the field names the chat has always used.
+function deriveProtocolItemsCompat(protocol) {
+  const r = resolveProtocolItems(protocol);
+  return { activities: r.activeActivities, acv: r.activeACV, supplements: r.activeSupplements };
 }
 
 export default function AIChatLog() {
@@ -504,7 +368,7 @@ export default function AIChatLog() {
     haptic(10);
 
     try {
-      const proto = deriveProtocolItems(useLogStore.getState().protocol);
+      const proto = deriveProtocolItemsCompat(useLogStore.getState().protocol);
       // Chat memory: the last few visible turns plus today's logged foods, so
       // follow-ups like "make the dal 250g" or "that was dinner" resolve to
       // real items instead of "couldn't find anything to log".
@@ -608,7 +472,7 @@ export default function AIChatLog() {
 
   // ── What's still pending after applying — the "coach nudge" ────────────────
   const computePending = useCallback((newLog) => {
-    const proto  = deriveProtocolItems(useLogStore.getState().protocol);
+    const proto  = deriveProtocolItemsCompat(useLogStore.getState().protocol);
     const target = useLogStore.getState().protocol?.water_target || 3000;
     const pending = [];
 
@@ -1369,7 +1233,7 @@ export default function AIChatLog() {
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
                         <button onClick={() => applyAll(mi)}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-[#6344e8] text-white hover:from-[#8b6dff] hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
                           Apply {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
                         </button>
                       )}

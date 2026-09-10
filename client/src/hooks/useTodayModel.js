@@ -26,7 +26,7 @@ import {
   today, istDate, istDaysAgo,
   calcCompliance, plural,
 } from '../constants';
-import { useAIChat } from '../components/AIChatLog';
+import { useAIChat } from '../store/aiChatStore';
 import { sessionEnergy } from '../utils/exerciseCalories';
 import { dailyRead } from '../utils/dailyRead';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';

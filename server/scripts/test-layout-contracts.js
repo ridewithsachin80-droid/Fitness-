@@ -490,17 +490,21 @@ const srcFiles = [];
 ck('the client source tree was found', srcFiles.length > 40, srcFiles.length);
 
 const LEGACY_PALETTE = /(?<![\w-])(?:hover:|focus:|active:|disabled:|group-hover:)?(?:bg|text|border|divide|from|to|via|ring|placeholder|accent|fill|stroke)-(?:stone|emerald)-\d{2,3}(?:\/[\w.\[\]]+)?(?![\w-])/g;
-const BRAND_HEX = /(?<![\w-])(?:hover:|focus:|active:|group-hover:)?[a-z-]+-\[#(?:121316|1A1C20|D4AF37|F0E2B6|C5A059|8C6D37|7E8596|9EA3B0|8C93A3|FFFFFF)\](?:\/[\w.\[\]]+)?(?![\w-])/gi;
+// Sprint 12: NO arbitrary hex colour class at all. Every colour in the JSX is a
+// token. The one exception is a third-party brand colour used on its own
+// button (WhatsApp green) — not ours to rename.
+const HEX_ALLOWED = new Set(['25D366']);
+const BRAND_HEX = /(?<![\w-])(?:hover:|focus:|active:|group-hover:)?[a-z-]+-\[#([0-9A-Fa-f]{3,8})\](?:\/[\w.\[\]]+)?(?![\w-])/g;
 
 const legacyHits = [], hexHits = [];
 for (const f of srcFiles) {
   const src = stripComments(read(f)).replace(/^\s*\/\/.*$/gm, '');
   let m;
   while ((m = LEGACY_PALETTE.exec(src))) legacyHits.push(m[0] + ' (' + f + ')');
-  while ((m = BRAND_HEX.exec(src)))      hexHits.push(m[0] + ' (' + f + ')');
+  while ((m = BRAND_HEX.exec(src)))      { if (!HEX_ALLOWED.has(m[1].toUpperCase())) hexHits.push(m[0] + ' (' + f + ')'); }
 }
 ck('no stone-* or emerald-* palette class in any client file', legacyHits.length === 0, legacyHits.slice(0, 8));
-ck('no brand colour written as a hex inside a class', hexHits.length === 0, hexHits.slice(0, 8));
+ck('no hex colour inside a class anywhere (tokens only; WhatsApp green is the one allowed brand colour)', hexHits.length === 0, hexHits.slice(0, 8));
 
 const cssNow = read('index.css');
 ck('the override layer is gone from index.css (no .bg-stone / .text-emerald rules)',
@@ -602,7 +606,7 @@ ck('AIChatLog no longer renders a full-screen overlay', !/fixed inset-0/.test(ch
 ck('the composer is portaled to <body> and fixed above the nav',
    /createPortal\(/.test(chat) && /data-testid="composer"[^>]*className="fixed/.test(chat) && /COMPOSER_BOTTOM_PX/.test(chat));
 ck('openChat() is a focus counter, not a boolean (a second tap still brings the composer up)',
-   /focusRequest: s\.focusRequest \+ 1/.test(chat));
+   /focusRequest: s\.focusRequest \+ 1/.test(read('../src/store/aiChatStore.js')));
 ck('Apply stamps lastAppliedAt; the model refreshes the workout summary from it, not from "overlay closed"',
    /markApplied\(\)/.test(chat) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
 ck('openChat() closes any open sheet so the composer is reachable', /if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
@@ -613,7 +617,7 @@ ck('the viewport meta asks Android to resize the layout viewport for the keyboar
 ck('the keyboard inset hook exists for iOS (visualViewport delta)', /visualViewport/.test(read('../src/hooks/useKeyboardInset.js')));
 // Sprint 5b.1: what you say must be readable while you say it.
 ck('the composer is an auto-growing textarea capped at 5 lines, with the tools on their own row',
-   /<textarea[\s\S]*data-testid="composer-input"/.test(chat) && /maxHeight: 5 \* 22 \+ 16/.test(chat) && /function autoGrow/.test(chat));
+   /<textarea[\s\S]*data-testid="composer-input"/.test(chat) && /maxHeight: 5 \* 22 \+ 16/.test(chat) && /export function autoGrow/.test(read('components/chat/ChatAtoms.jsx')));
 ck('Enter sends, Shift+Enter is a new line', /e\.key === 'Enter' && !e\.shiftKey/.test(chat));
 ck('the composer can be left without sending: × clears the draft, Escape steps away',
    /data-testid="composer-clear"/.test(chat) && /e\.key === 'Escape'/.test(chat) && /const clearDraft/.test(chat));
@@ -788,6 +792,18 @@ ck('the prompt carries the circuits and the parse ENFORCES them (not just asks)'
    /\$\{circuitsPromptBlock\(circuits\)\}\nRULES:/.test(aiSrc) && /function applyHouseCircuits/.test(aiSrc) && /applyHouseCircuits\(normaliseProgram\(raw\.program\), circuits\)/.test(aiSrc));
 ck('replacing a circuit keeps the coach\'s original casing', /DO UPDATE SET exercises = EXCLUDED\.exercises, updated_at = NOW\(\)/.test(aiSrc) && !/DO UPDATE SET name = EXCLUDED\.name, exercises/.test(aiSrc));
 ck('the circuits card is on Settings for coaches and admins only', /\(user\?\.role === 'monitor' \|\| user\?\.role === 'admin'\) && <HouseCircuits \/>/.test(read('pages/Settings.jsx')));
+
+// ── 23. Architecture (Sprint 12) ────────────────────────────────────────────
+console.log('\n[23] Architecture');
+const chatSrc = read('components/AIChatLog.jsx');
+ck('the AI chat store lives in store/aiChatStore.js and AIChatLog re-exports it (old imports keep working)',
+   /export const useAIChat = create\(/.test(read('../src/store/aiChatStore.js')) && !/export const useAIChat = create\(/.test(chatSrc) && /export \{ useAIChat \};/.test(chatSrc));
+ck('the nav no longer imports the 1,400-line chat component to read one flag (the UI ↔ AIChatLog cycle is gone)',
+   /from '\.\.\/store\/aiChatStore'/.test(read('components/UI.jsx')) && !/from '\.\/AIChatLog'/.test(read('components/UI.jsx')));
+ck('the chat uses the ONE protocol derivation (lib/day), not its own copy',
+   /resolveProtocolItems\(protocol\)/.test(chatSrc) && !/const allActivities  = \[\.\.\.ACTIVITIES/.test(chatSrc));
+ck('layout constants and atoms live in components/chat/ChatAtoms.jsx', /export const COMPOSER_BOTTOM_PX/.test(read('components/chat/ChatAtoms.jsx')) && /export function ToggleChip/.test(read('components/chat/ChatAtoms.jsx')));
+ck('AIChatLog is smaller than it was (1,568 → under 1,450 lines)', chatSrc.split('\n').length < 1450, chatSrc.split('\n').length);
 
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.

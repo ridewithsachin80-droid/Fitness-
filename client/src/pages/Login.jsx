@@ -28,7 +28,7 @@ function Field({ label, children }) {
 }
 
 const inputCls = `w-full bg-surface border border-white/[0.1] rounded-xl px-4 py-3 text-white
-  text-sm font-medium placeholder-[#4A4E5A] outline-none
+  text-sm font-medium placeholder-ghost outline-none
   focus:border-gold/40 focus:ring-2 focus:ring-gold/[0.12]
   transition-all duration-200`;
 

@@ -76,7 +76,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
             className={`flex-1 rounded-lg text-caption font-bold transition-colors ${
               days === r.days
                 ? 'bg-gold text-charcoal'
-                : 'bg-white/[0.04] text-[#8e8e9a] hover:text-soft'
+                : 'bg-white/[0.04] text-mute hover:text-soft'
             }`}>
             {r.label}
           </button>
@@ -92,7 +92,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
           {/* Headline stats */}
           <div className="grid grid-cols-2 gap-2 mb-3">
             {[
-              { v: totals.session_count,                        l: 'Sessions',   c: 'text-[#e0c98a]' },
+              { v: totals.session_count,                        l: 'Sessions',   c: 'text-gold-light' },
               { v: `${(totals.volume_kg / 1000).toFixed(1)}t`,  l: 'Volume',     c: 'text-blue-300' },
               { v: `${totals.cardio_min}m`,                     l: 'Cardio',     c: 'text-gold-light' },
               { v: totalKcal.toLocaleString(),                  l: 'Kcal burned', c: 'text-orange-400' },
@@ -126,12 +126,12 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
           </p>
           <div className="space-y-1.5">
             {withKcal.slice(-6).reverse().map((s, i) => (
-              <div key={i} className="bg-[#0d0d11] border border-white/[0.06] rounded-xl px-3 py-2">
+              <div key={i} className="bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2">
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-caption font-bold text-bright">{fmtDate(s.date)}</span>
                   <span className="text-caption font-bold text-orange-400">{s.totalKcal} kcal</span>
                 </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-eyebrow text-[#8e8e9a]">
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-eyebrow text-mute">
                   {s.sets > 0 && (
                     <span>💪 {s.sets} sets · {s.volume_kg.toLocaleString()} kg
                       {s.volume_kg === best.volume_kg && s.volume_kg > 0 && (

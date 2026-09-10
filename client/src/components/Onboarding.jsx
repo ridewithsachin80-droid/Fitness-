@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { saveMyOnboarding } from '../api/logs';
 import { useSettingsStore, haptic } from '../store/settingsStore';
-import { useAIChat } from './AIChatLog';
+import { useAIChat } from '../store/aiChatStore';
 import { Icon, Eyebrow, Pressable } from './primitives';
 
 /**

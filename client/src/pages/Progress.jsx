@@ -8,10 +8,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  LineChart, Line, BarChart, Bar, ComposedChart,
+  AreaChart, Area, BarChart, Bar, ComposedChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, ReferenceLine, Legend,
 } from 'recharts';
+import { HeroNumber, Segmented, Eyebrow, Icon, EmptyState } from '../components/primitives';
+import { calcFoodMacros } from '../lib/day';
+import { haptic } from '../store/settingsStore';
 import { useAuthStore }  from '../store/authStore';
 import { getLogRange, getMyProfile }   from '../api/logs';
 import { Card, SectionTitle, PageLoader, MemberBottomNav } from '../components/UI';
@@ -19,7 +22,7 @@ import StrengthProgress from '../components/StrengthProgress';
 import WeeklyReportCard from '../components/WeeklyReportCard';
 import MuscleCoverage from '../components/MuscleCoverage';
 import TrainingSummary from '../components/TrainingSummary';
-import { today, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
+import { today, istDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -46,19 +49,6 @@ function WeightTip({ active, payload }) {
   );
 }
 
-function ComplianceTip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const v = payload[0].value;
-  return (
-    <div className="bg-surface border border-hair rounded-xl px-3 py-2 shadow-sm text-xs">
-      <p className={`font-bold ${v >= 75 ? 'text-gold-deep' : v >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{v}%</p>
-      <p className="text-lo">{payload[0].payload.date}</p>
-    </div>
-  );
-}
-
-// ── Past Log Viewer Modal (Sprint 11) ─────────────────────────────────────────
-
 function PastLogModal({ log, onClose }) {
   if (!log) return null;
 
@@ -83,7 +73,7 @@ function PastLogModal({ log, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2">
-      <div className="bg-[#131317] rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[88vh] flex flex-col">
+      <div className="bg-charcoal rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[88vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair flex-shrink-0">
           <div>
@@ -226,20 +216,20 @@ function PastLogModal({ log, onClose }) {
  * the caption rather than by repainting the whole tile.
  */
 function StatBox({ value, label, sub, accent = false, tone = null }) {
-  const dot = tone === 'good' ? 'bg-[#6E8F6B]'
-            : tone === 'warn' ? 'bg-[#C4924B]'
+  const dot = tone === 'good' ? 'bg-ok'
+            : tone === 'warn' ? 'bg-gold-deep'
             : null;
   return (
     <div className={`rounded-2xl px-4 py-3 border ${
       accent
         ? 'bg-gold/[0.07] border-gold/[0.22]'
-        : 'bg-[#16171A] border-hair'
+        : 'bg-surface border-hair'
     }`}>
       <div className={`font-display text-num leading-none font-semibold ${
-        accent ? 'text-[#E8CE7A]' : 'text-[#F2F1EE]'}`}>
+        accent ? 'text-gold-light' : 'text-white'}`}>
         {value}
       </div>
-      <div className="text-note font-medium mt-1.5 text-[#A9B0BF]">{label}</div>
+      <div className="text-note font-medium mt-1.5 text-mid">{label}</div>
       {sub && (
         <div className="flex items-center gap-1.5 mt-1">
           {dot && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />}
@@ -278,6 +268,7 @@ export default function Progress() {
   const [profile, setProfile] = useState(null);
   const [labs,    setLabs]    = useState([]);
   const [selectedLog, setSelectedLog] = useState(null); // Sprint 11: past log viewer
+  const [range, setRange] = useState('30');             // Sprint 5: 7 / 30 / 90 day chart window
 
   useEffect(() => {
     const from = nDaysAgo(90);
@@ -305,9 +296,15 @@ export default function Progress() {
     .sort((a, b) => a.log_date.localeCompare(b.log_date));
   const last30   = sorted.slice(-30);
 
-  const weightData = sorted
-    .filter(l => l.weight_kg)
+  const rangeFrom  = nDaysAgo(parseInt(range, 10));
+  const weightAll  = sorted.filter(l => l.weight_kg);
+  const weightData = weightAll
+    .filter(l => l.log_date >= rangeFrom)
     .map(l => ({ date: shortDate(l.log_date), weight: parseFloat(l.weight_kg) }));
+  // Change over the selected window: first weigh-in in range → latest
+  const rangeDelta = weightData.length > 1
+    ? +(weightData[weightData.length - 1].weight - weightData[0].weight).toFixed(1)
+    : null;
 
   const complianceData = last30.map(l => ({
     date:  shortDate(l.log_date),
@@ -356,17 +353,10 @@ export default function Progress() {
   const last7 = sorted.slice(-7);
   const nutritionTrend = last7.map(log => {
     const items = Array.isArray(log.food_items) ? log.food_items : [];
-    const macros = items.reduce((acc, item) => {
-      if (!item.per_100g) return acc;
-      const f = (item.grams || 0) / 100;
-      const n = item.per_100g;
-      return {
-        kcal: acc.kcal + Math.round((n.calories || 0) * f),
-        pro:  +(acc.pro  + (n.protein    || 0) * f).toFixed(1),
-        carb: +(acc.carb + ((n.net_carbs != null ? n.net_carbs : n.total_carbs) || 0) * f).toFixed(1),
-        fat:  +(acc.fat  + (n.fat        || 0) * f).toFixed(1),
-      };
-    }, { kcal: 0, pro: 0, carb: 0, fat: 0 });
+    // One definition of macros (lib/day) — this used to be a hand copy of
+    // calcFoodMacros that had already drifted (it rounded per item).
+    const mm = calcFoodMacros(items);
+    const macros = { kcal: mm.kcal, pro: +mm.pro.toFixed(1), carb: +mm.carb.toFixed(1), fat: +mm.fat.toFixed(1) };
     const d = new Date(String(log.log_date).slice(0, 10) + 'T00:00:00');
     return {
       date: `${d.getDate()}/${d.getMonth() + 1}`,
@@ -388,71 +378,103 @@ export default function Progress() {
     ? Math.min(100, Math.max(0, Math.round(((startW - latestW) / (startW - targetW)) * 100)))
     : null;
 
-  const complianceColor = avg30 >= 75 ? 'emerald' : avg30 >= 50 ? 'amber' : 'orange';
 
   return (
     <div className="min-h-screen bg-charcoal font-sans">
 
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[#0d0b18] to-[#07060f] text-white px-4 pt-10 pb-6">
+      {/* ── Hero: the weight, the window, the trend ─────────────────────── */}
+      <header className="px-4 pt-8 pb-2 bg-gradient-to-b from-surface to-charcoal">
         <div className="max-w-md mx-auto">
-          <button onClick={() => navigate('/')}
-            className="text-[#4e4e5c] text-sm mb-3 hover:text-[#8e8e9a] transition-colors">
-            ← Back to today
+          <button type="button" onClick={() => { haptic(8); navigate('/'); }} style={{ minHeight: 36 }}
+            className="inline-flex items-center gap-1 text-sm text-lo hover:text-white transition-colors -ml-1">
+            <Icon name="chevron-left" size={16} /> Today
           </button>
-          <h1 className="font-display text-2xl font-medium">My Progress</h1>
-          <p className="text-blue-200 text-sm mt-1">Last 90 days · {user?.name}</p>
-
-          {/* Sunday weekly report — renders nothing until the first one exists */}
-          <div className="mt-4">
-            <WeeklyReportCard />
+          <div className="flex items-end justify-between gap-3 mt-2">
+            <div className="min-w-0">
+              <Eyebrow tone="gold">Progress</Eyebrow>
+              <h1 className="font-display text-num font-medium text-white leading-tight mt-1 truncate">{user?.name ? `${user.name.split(' ')[0]}\u2019s` : 'Your'} journey</h1>
+            </div>
+            <Segmented size="sm" name="range" value={range} onChange={setRange} className="w-[168px] flex-shrink-0"
+              options={[{ id: '7', label: '7d' }, { id: '30', label: '30d' }, { id: '90', label: '90d' }]} />
           </div>
 
-          {/* Journey progress bar. When start/target aren't set this used to
-              render nothing at all, so a new member had no idea a goal even
-              existed — let alone that their coach sets it. */}
-          {journeyPct === null && (
-            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-hair">
-              <p className="text-sm text-white font-medium">No goal set yet</p>
-              <p className="text-xs text-mid mt-1 leading-relaxed">
+          <div className="mt-5" data-testid="progress-hero">
+            {latestW ? (
+              <HeroNumber value={latestW} unit="kg" delta={rangeDelta} deltaUnit=" kg"
+                label={rangeDelta == null ? 'latest weigh-in' : `over ${range} ${plural(parseInt(range, 10), 'day')}`} />
+            ) : (
+              <HeroNumber value="—" unit="kg" placeholder label="No weight logged yet" />
+            )}
+          </div>
+
+          {/* Start → now → goal. Renders a hint when the coach has not set a goal —
+              a new member should know a goal exists and who sets it. */}
+          <div className="mt-4" data-testid="journey">
+            {journeyPct === null ? (
+              <p className="text-caption text-mid leading-relaxed">
                 {!latestW
-                  ? 'Log your weight and ask your coach to set your target — your progress bar appears here.'
+                  ? 'Log your weight and ask your coach to set your target — your journey line appears here.'
                   : 'Ask your coach to set your target weight and you\'ll see how far along you are.'}
               </p>
-            </div>
-          )}
-          {journeyPct !== null && (
-            <div className="mt-4 bg-white/[0.05] rounded-2xl p-3 border border-hair">
-              <div className="flex justify-between text-xs text-blue-200 mb-2">
-                <span>Start: {startW} kg</span>
-                <span className="font-bold text-white">{journeyPct}% to goal</span>
-                <span>Goal: {targetW} kg</span>
-              </div>
-              <div className="h-3 bg-white/[0.10] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-gold to-gold-light rounded-full transition-all duration-700"
-                  style={{ width: `${journeyPct}%` }}
-                />
-              </div>
-              {lostKg !== null && lostKg > 0 && (
-                <p className="text-center text-xs text-gold mt-2 font-semibold">
-                  🎉 {lostKg} kg lost · {toGoKg} kg to go
+            ) : (
+              <>
+                <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-gold-deep to-gold-light transition-all duration-700" style={{ width: `${journeyPct}%` }} />
+                </div>
+                <div className="flex justify-between text-caption mt-1.5">
+                  <span className="text-lo">Start <span className="text-mid font-semibold tabular-nums">{startW} kg</span></span>
+                  <span className="text-gold-light font-bold tabular-nums">{journeyPct}% there{lostKg > 0 ? ` · ${lostKg} kg lost` : ''}</span>
+                  <span className="text-lo">Goal <span className="text-mid font-semibold tabular-nums">{targetW} kg</span></span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* The trend, full-bleed, gold. Needs two weigh-ins in the window. */}
+          <div className="-mx-4 mt-3" data-testid="weight-chart">
+            {weightData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={150}>
+                <AreaChart data={weightData} margin={{ top: 8, right: 16, left: 16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"   stopColor="#D4AF37" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#D4AF37" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false}
+                    interval={Math.max(0, Math.floor(weightData.length / 4))} />
+                  <YAxis domain={['auto', 'auto']} hide />
+                  <Tooltip content={<WeightTip />} cursor={{ stroke: 'rgba(212,175,55,0.35)' }} />
+                  {targetW && (
+                    <ReferenceLine y={targetW} stroke="#C5A059" strokeDasharray="4 4"
+                      label={{ value: `Goal ${targetW}`, position: 'insideTopRight', fontSize: 9, fill: '#C5A059' }} />
+                  )}
+                  <Area type="monotone" dataKey="weight" stroke="#D4AF37" strokeWidth={2.5} fill="url(#goldFill)"
+                    dot={weightData.length <= 14 ? { fill: '#D4AF37', r: 3, strokeWidth: 0 } : false} activeDot={{ r: 5, fill: '#F0E2B6' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="px-4 py-4">
+                <p className="text-caption text-lo">
+                  {weightAll.length > 1 ? `No two weigh-ins in the last ${range} ${plural(parseInt(range, 10), 'day')} — try a wider window.`
+                    : weightAll.length === 1 ? 'One more weigh-in and your trend line starts here.'
+                    : 'Log your weight on two days to see your trend.'}
                 </p>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </header>
 
       <div className="max-w-md mx-auto px-4 pt-4 pb-20 space-y-3">
 
         {/* Quick stats */}
         <div className="grid grid-cols-2 gap-2">
           <StatBox
-            value={latestW ? `${latestW} kg` : '—'}
-            label="Current Weight"
-            sub={bmi ? `BMI ${bmi}` : ''}
-            accent
+            value={bmi || '—'}
+            label="BMI"
+            sub={bmi ? (bmi < 18.5 ? 'Under' : bmi < 25 ? 'Healthy range' : bmi < 30 ? 'Over' : 'Obese') : 'Add height in Profile'}
+            tone={bmi && bmi >= 18.5 && bmi < 25 ? 'good' : null}
           />
           <StatBox
             value={`${streak} ${plural(streak, 'day')}`}
@@ -473,70 +495,60 @@ export default function Progress() {
           />
         </div>
 
-        {/* Weight trend */}
-        {weightData.length <= 1 && (
-          <ChartEmpty icon="⚖️" title="Weight Trend"
-            need={weightData.length === 1
-              ? 'One more weigh-in and your trend line starts here.'
-              : 'Log your weight for two days to see your trend.'} />
-        )}
-        {weightData.length > 1 && (
-          <Card>
-            <SectionTitle icon="⚖️">Weight Trend</SectionTitle>
-            <ResponsiveContainer width="100%" height={160}>
-              <LineChart data={weightData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false}
-                  interval={Math.floor(weightData.length / 5)} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
-                <Tooltip content={<WeightTip />} />
-                {targetW && (
-                  <ReferenceLine y={targetW} stroke="#e0c98a" strokeDasharray="4 4"
-                    label={{ value: `Goal ${targetW}`, position: 'right', fontSize: 9, fill: '#e0c98a' }} />
-                )}
-                <Line type="monotone" dataKey="weight" stroke="#8FA8C8" strokeWidth={2.5}
-                  dot={{ fill: '#3b82f6', r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-            {lostKg !== null && (
-              <div className="mt-2 flex justify-between text-xs px-1">
-                <span className="text-lo">Started {startW} kg</span>
-                <span className={`font-bold ${lostKg > 0 ? 'text-gold-deep' : 'text-red-400'}`}>
-                  {lostKg > 0 ? `↓ ${lostKg} kg lost` : `↑ ${Math.abs(lostKg)} kg gained`}
-                </span>
-              </div>
-            )}
-          </Card>
-        )}
+        {/* Weekly report — the AI's Sunday narrative. Renders nothing until one exists. */}
+        <WeeklyReportCard />
 
-        {/* 30-day compliance chart */}
-        {complianceData.length <= 1 && (
-          <ChartEmpty icon="📊" title="30-Day Compliance"
-            need="Log two days and your compliance chart builds itself." />
-        )}
-        {complianceData.length > 1 && (
-          <Card>
-            <SectionTitle icon="📊">30-Day Compliance</SectionTitle>
-            <ResponsiveContainer width="100%" height={130}>
-              <BarChart data={complianceData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false}
-                  interval={Math.floor(complianceData.length / 6)} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
-                <Tooltip content={<ComplianceTip />} />
-                <ReferenceLine y={75} stroke="#e0c98a" strokeDasharray="3 3" />
-                <Bar dataKey="score" radius={[3, 3, 0, 0]}
-                  fill="#D4AF37"
-                  label={false}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="flex justify-between text-xs text-lo mt-1 px-1">
-              <span>Each bar = 1 day</span>
-              <span>Dashed line = 75% target</span>
-            </div>
-          </Card>
-        )}
+        {/* 30 days as a calendar. Each cell is a day, tinted by compliance;
+            tap one to open that day's full log (the same PastLogModal the
+            history list uses). Replaces the bar chart: a grid says which
+            weekdays slip, a bar chart only says that something did. */}
+        <Card>
+          <div className="flex items-baseline justify-between mb-3">
+            <Eyebrow>Last 30 days</Eyebrow>
+            <span className="text-caption text-mid"><span className="font-bold text-white tabular-nums">{avg30}%</span> average</span>
+          </div>
+          {(() => {
+            const byDate = new Map(sorted.map(l => [l.log_date, l]));
+            const cells = [];
+            const start = new Date(today() + 'T12:00:00'); start.setDate(start.getDate() - 29);
+            // pad to the week start so columns are weekdays (Mon first)
+            const pad = (start.getDay() + 6) % 7;
+            for (let i = 0; i < pad; i++) cells.push(null);
+            for (let i = 0; i < 30; i++) {
+              const d = new Date(start); d.setDate(start.getDate() + i);
+              const key = istDate(d);
+              cells.push({ key, log: byDate.get(key) || null, day: d.getDate() });
+            }
+            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-ghost'
+              : pct >= 75 ? 'bg-gold/[0.55] text-charcoal' : pct >= 50 ? 'bg-gold/[0.28] text-white' : pct > 0 ? 'bg-gold/[0.12] text-mid' : 'bg-white/[0.06] text-lo';
+            return (
+              <div data-testid="heat-grid">
+                <div className="grid grid-cols-7 gap-1.5 text-center text-tiny text-lo mb-1.5">
+                  {['M','T','W','T','F','S','S'].map((w, i) => <span key={i}>{w}</span>)}
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {cells.map((c, i) => c === null
+                    ? <span key={'p' + i} />
+                    : (
+                      <button key={c.key} type="button" data-testid="heat-cell" data-date={c.key}
+                        onClick={() => { if (c.log) { haptic(8); setSelectedLog(c.log); } }}
+                        aria-label={`${c.key}: ${c.log ? (c.log.compliance_pct ?? 0) + '%' : 'not logged'}`}
+                        className={`aspect-square rounded-lg text-caption font-semibold tabular-nums flex items-center justify-center transition-transform active:scale-95 ${tone(c.log ? (c.log.compliance_pct ?? 0) : null)}`}>
+                        {c.day}
+                      </button>
+                    ))}
+                </div>
+                <div className="flex items-center justify-between text-tiny text-lo mt-2">
+                  <span>Not logged</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-white/[0.06]" /><span className="w-3 h-3 rounded bg-gold/[0.12]" /><span className="w-3 h-3 rounded bg-gold/[0.28]" /><span className="w-3 h-3 rounded bg-gold/[0.55]" />
+                  </span>
+                  <span>75%+</span>
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
 
         {/* Sprint 12: 7-day nutrition trend */}
         {nutritionTrend.length <= 1 && (
@@ -557,8 +569,8 @@ export default function Progress() {
             <ResponsiveContainer width="100%" height={90}>
               <BarChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']}
                   contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }} />
                 {profile?.macros?.kcal && (
@@ -573,8 +585,8 @@ export default function Progress() {
             <ResponsiveContainer width="100%" height={110}>
               <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#4e4e5c' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }}
                   formatter={(v, name) => [`${v}g`, name.charAt(0).toUpperCase() + name.slice(1)]} />
                 <Line type="monotone" dataKey="pro"  stroke="#8FA8C8" strokeWidth={2} dot={{ r: 3, fill: '#8FA8C8' }} />
@@ -620,7 +632,7 @@ export default function Progress() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-[#4e4e5c] mt-2 italic">Ask your coach to add new lab results.</p>
+            <p className="text-xs text-lo mt-2 italic">Ask your coach to add new lab results.</p>
           </Card>
         )}
 
