@@ -1695,6 +1695,50 @@ async function sprint11cTest() {
   ck('the hero and Today\'s plan do not depend on it', !!bq('hero-weight') && !!bq('todays-plan'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 21. House circuits card (Sprint 11d)
+// ═══════════════════════════════════════════════════════════════════════════
+async function circuitsCardTest() {
+  console.log('\n[21] House circuits card (coach Settings)');
+  const api = stub('api-circ.js', `
+    window.__calls = []; window.__puts = []; window.__dels = [];
+    let list = [{ id: 1, name: 'Push', exercises: [{ name: 'Bench press', sets: 4, reps_min: 8, reps_max: 12, muscle_group: 'chest' }, { name: 'Plank', sets: null, reps_min: null, reps_max: null, muscle_group: null }] }];
+    const get = async (url) => { window.__calls.push(url); if (/^\\/ai-chat\\/circuits$/.test(url)) return { data: { circuits: list } }; if (/subscriptions|notifications\\/log/.test(url)) return { data: [] }; return { data: {} }; };
+    const put = async (url, body) => { window.__puts.push({ url, body }); const name = decodeURIComponent(url.split('/').pop()); list = [...list.filter(c => c.name.toLowerCase() !== name.toLowerCase()), { id: 9, name, exercises: [{ name: 'Squat', sets: 4, reps_min: 6, reps_max: 10, muscle_group: 'legs' }] }]; return { data: {} }; };
+    const del = async (url) => { window.__dels.push(url); const name = decodeURIComponent(url.split('/').pop()); list = list.filter(c => c.name.toLowerCase() !== name.toLowerCase()); return { data: { deleted: 1 } }; };
+    export default { get, post: async () => ({ data: {} }), put, patch: put, delete: del };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Settings from './pages/Settings.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: 'monitor' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><Settings /></MemoryRouter>);`, api);
+  const { w, errors } = run(code); await tick(500);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('a coach\'s Settings shows My circuits with the saved circuit rendered "Bench press 4×8–12 · Plank"', errors.length === 0 && q('circuit-list') && /Bench press 4×8–12 · Plank/.test(q('circuit-list').textContent), [errors.join('|'), q('circuit-list')?.textContent]);
+  q('circuit-add').click(); await tick(50);
+  const setV = (el, v) => { const proto = el.tagName === 'TEXTAREA' ? w.HTMLTextAreaElement.prototype : w.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  q('circuit-save').click(); await tick(50);
+  ck('saving without a name is refused with a message', /Give the circuit a name/.test(d.body.innerHTML) && w.__puts.length === 0);
+  setV(q('circuit-name'), 'Legs'); setV(q('circuit-text'), 'Squat 4x6-10 legs\nRDL 3x8-12 legs'); q('circuit-save').click(); await tick(300);
+  ck('save PUTs the text to /ai-chat/circuits/Legs and the list refreshes with it', w.__puts.length === 1 && /circuits\/Legs$/.test(w.__puts[0].url) && /Squat 4x6-10 legs/.test(w.__puts[0].body.text) && /Squat 4×6–10/.test(q('circuit-list').textContent), [w.__puts, q('circuit-list')?.textContent]);
+  w.confirm = () => true;
+  [...d.querySelectorAll('[data-testid="circuit-delete"]')].find(b => /Push/.test(b.getAttribute('aria-label'))).click(); await tick(300);
+  ck('Delete removes that circuit only', w.__dels.length === 1 && /circuits\/Push$/.test(w.__dels[0]) && !/Bench press/.test(q('circuit-list').textContent) && /Squat/.test(q('circuit-list').textContent));
+
+  // a member never sees it
+  const memberCode = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Settings from './pages/Settings.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><Settings /></MemoryRouter>);`, api);
+  const M = run(memberCode); await tick(400);
+  ck('a member\'s Settings has no circuits card', !M.w.document.querySelector('[data-testid="circuit-add"]') && !/My circuits/.test(M.w.document.body.innerHTML));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1833,6 +1877,7 @@ async function overflowTest() {
     await sprint11Test();
     await sprint11bTest();
     await sprint11cTest();
+    await circuitsCardTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

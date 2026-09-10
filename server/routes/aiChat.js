@@ -31,6 +31,7 @@
 
 const router = require('express').Router();
 const pool   = require('../db/pool');
+const { circuitsPromptBlock, matchCircuit } = require('../services/circuits');   // Sprint 11d
 const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
@@ -2439,7 +2440,7 @@ function coachAudit(actor, action, targetId, targetName, detail) {
 }
 
 // ── Coach prompt ─────────────────────────────────────────────────────────────
-function buildCoachPrompt(message, members, memberStats = [], contextMember = null, recent = []) {
+function buildCoachPrompt(message, members, memberStats = [], contextMember = null, recent = [], circuits = []) {
   const { statsLine } = require('../services/milestones');
   const statsById = new Map(memberStats.map(s => [s.id, statsLine(s)]));
   const cat = (list) => list.map(i => `"${i.id}" (${i.label})`).join(', ');
@@ -2546,7 +2547,7 @@ SUPPORTED OPERATIONS per command:
   · weekday: lowercase english day if the coach gave one, else null.
   · muscle_group: one of chest, back, legs, shoulders, arms, core, full_body.
   · Assigning a program REPLACES the member's current one — mention that in reply.
-
+${circuitsPromptBlock(circuits)}
 RULES:
 1. member_name must be copied EXACTLY from the members list. If the coach says
    "all members" / "everyone", use member_name "ALL" — allowed ONLY for note
@@ -3202,6 +3203,72 @@ async function detectFoodEdit(msg, user) {
   };
 }
 
+// ── Sprint 11d: the coach's house circuits ───────────────────────────────────
+async function loadCircuits(monitorId) {
+  const { rows } = await pool.query(
+    `SELECT id, name, exercises FROM coach_circuits WHERE monitor_id = $1 ORDER BY LOWER(name)`, [monitorId]);
+  return rows.map(r => ({ id: r.id, name: r.name, exercises: Array.isArray(r.exercises) ? r.exercises : [] }));
+}
+
+/**
+ * Replace any program day whose label matches a house circuit with that
+ * circuit's exact exercises. The AI was told to do this; this guarantees it.
+ * Days with no match are left as the model built them. Returns the program
+ * with `house_circuit` set on replaced days so the preview can say so.
+ */
+function applyHouseCircuits(program, circuits = []) {
+  if (!program || !circuits.length) return program;
+  return {
+    ...program,
+    days: program.days.map(d => {
+      const hit = matchCircuit(d.label, circuits);
+      if (!hit || !hit.exercises.length) return d;
+      return {
+        ...d,
+        house_circuit: hit.name,
+        exercises: hit.exercises.map(e => ({
+          name: e.name,
+          sets: e.sets || 3,
+          reps_min: e.reps_min || 8,
+          reps_max: e.reps_max || (e.reps_min ? null : 12),
+          muscle_group: e.muscle_group || null,
+        })),
+      };
+    }),
+  };
+}
+
+// GET /ai-chat/circuits — the coach's circuits
+router.get('/circuits', roleCheck('monitor', 'admin'), async (req, res) => {
+  try { res.json({ circuits: await loadCircuits(req.user.id) }); }
+  catch (err) { console.error('GET /ai-chat/circuits', err); res.status(500).json({ error: 'Could not load circuits' }); }
+});
+
+// PUT /ai-chat/circuits/:name — create or replace one circuit (by name, case-insensitive)
+router.put('/circuits/:name', roleCheck('monitor', 'admin'), async (req, res) => {
+  const { validateCircuit } = require('../services/circuits');
+  const v = validateCircuit({ ...req.body, name: req.params.name });
+  if (!v.ok) return res.status(400).json({ error: v.error });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO coach_circuits (monitor_id, name, exercises)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (monitor_id, LOWER(name))
+       DO UPDATE SET exercises = EXCLUDED.exercises, updated_at = NOW()   -- keep the coach's original casing
+       RETURNING id, name, exercises`,
+      [req.user.id, v.circuit.name, JSON.stringify(v.circuit.exercises)]);
+    res.json({ circuit: rows[0] });
+  } catch (err) { console.error('PUT /ai-chat/circuits', err); res.status(500).json({ error: 'Could not save the circuit' }); }
+});
+
+// DELETE /ai-chat/circuits/:name
+router.delete('/circuits/:name', roleCheck('monitor', 'admin'), async (req, res) => {
+  try {
+    const r = await pool.query(`DELETE FROM coach_circuits WHERE monitor_id = $1 AND LOWER(name) = LOWER($2)`, [req.user.id, req.params.name]);
+    res.json({ deleted: r.rowCount });
+  } catch (err) { res.status(500).json({ error: 'Could not delete the circuit' }); }
+});
+
 router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
   const { message, context_member_id } = req.body;
   // Last few turns, so a two-part instruction survives. Capped and truncated
@@ -3245,6 +3312,10 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
     } catch (e) { console.error('detectFoodEdit failed:', e.message); }
 
     const members = await coachMembers(req.user);
+    // Sprint 11d: the coach's own circuits go into the prompt, and are enforced
+    // on the way out (see applyHouseCircuits) — a model that ignores the
+    // instruction still cannot ship a generic "Push" to a coach who has one.
+    const circuits = await loadCircuits(req.user.id);
     if (!members.length) {
       return res.json({ reply: 'You have no active members assigned yet.', actions: [] });
     }
@@ -3265,7 +3336,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
       : null;
 
     const { text: rawText, provider } =
-      await callAI(buildCoachPrompt(cleanMsg, members, memberStats, contextMember, recent));
+      await callAI(buildCoachPrompt(cleanMsg, members, memberStats, contextMember, recent, circuits));
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(jsonText);
 
@@ -3393,7 +3464,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
         water_target,
         macros,
         target_weight,
-        program: normaliseProgram(raw.program),
+        program: applyHouseCircuits(normaliseProgram(raw.program), circuits),
         meal_plan: normaliseMealPlan(raw.meal_plan),
         activities:  normaliseGroupOp(raw.activities,  CATALOG.activities),
         acv:         normaliseGroupOp(raw.acv,         CATALOG.acv),

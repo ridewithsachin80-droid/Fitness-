@@ -779,6 +779,16 @@ ck('the card renders nothing without data for today or yesterday', /if \(!s\) re
 ck('the provider is named on the card', /s\.providers\.join/.test(recCard));
 ck('Today mounts it after the plan and only for today; the hero does not read it', /\{isToday && <RecoveryCard today=\{m\.date\} \/>\}/.test(todayPage) && !/RecoveryCard/.test(model));
 
+// ── 22. House circuits (Sprint 11d) ─────────────────────────────────────────
+console.log('\n[22] House circuits');
+const aiSrc = fs.readFileSync(path.join(__dirname, '../routes/aiChat.js'), 'utf8');
+ck('coach_circuits is additive, unique per coach per name (case-insensitive), above the backfills',
+   /CREATE TABLE IF NOT EXISTS coach_circuits/.test(schemaSrc) && /idx_coach_circuits_name\s+ON coach_circuits\(monitor_id, LOWER\(name\)\)/.test(schemaSrc) && schemaSrc.indexOf('coach_circuits') < schemaSrc.indexOf('DEFERRED BACKFILLS'));
+ck('the prompt carries the circuits and the parse ENFORCES them (not just asks)',
+   /\$\{circuitsPromptBlock\(circuits\)\}\nRULES:/.test(aiSrc) && /function applyHouseCircuits/.test(aiSrc) && /applyHouseCircuits\(normaliseProgram\(raw\.program\), circuits\)/.test(aiSrc));
+ck('replacing a circuit keeps the coach\'s original casing', /DO UPDATE SET exercises = EXCLUDED\.exercises, updated_at = NOW\(\)/.test(aiSrc) && !/DO UPDATE SET name = EXCLUDED\.name, exercises/.test(aiSrc));
+ck('the circuits card is on Settings for coaches and admins only', /\(user\?\.role === 'monitor' \|\| user\?\.role === 'admin'\) && <HouseCircuits \/>/.test(read('pages/Settings.jsx')));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

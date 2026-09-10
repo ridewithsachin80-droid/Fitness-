@@ -6,6 +6,7 @@ import api from '../api/client';
 import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword, getNotifLog } from '../api/logs';
 import { disconnectSocket } from '../hooks/useSync';
 import { Card, SectionTitle, BackButton, MemberBottomNav, BottomNav } from '../components/UI';
+import HouseCircuits from '../components/coach/HouseCircuits';
 import VoiceLogging from '../components/VoiceLogging';
 import { roleLabel } from '../constants';
 import { changeMyPin, getMyReminderSchedule } from '../api/logs';
@@ -283,6 +284,8 @@ export default function Settings() {
 
         {/* Members only — a coach has no day to log by voice. */}
         {user?.role === 'patient' && <VoiceLogging />}
+        {/* Sprint 11d: coaches only — the circuits the coach AI assigns by name. */}
+        {(user?.role === 'monitor' || user?.role === 'admin') && <HouseCircuits />}
         <p className="text-eyebrow font-semibold uppercase tracking-widest text-lo pt-3" data-testid="settings-group">Integrations</p>
         {/* ── Connected Devices ──────────────────────────────────── */}
         <button

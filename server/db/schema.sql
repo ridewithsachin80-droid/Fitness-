@@ -819,6 +819,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_reads_unique
   ON ai_reads(patient_id, read_date, kind);
 CREATE INDEX IF NOT EXISTS idx_ai_reads_member ON ai_reads(patient_id, read_date DESC);
 
+-- ── Coach house circuits (Sprint 11d) ────────────────────────────────────────
+-- A coach's own named circuits ("Push", "Legs", "Core") with exact exercises
+-- and sets × reps. When the coach assigns a split by name, the AI uses THESE
+-- instead of building a generic day. One row per coach per circuit name.
+CREATE TABLE IF NOT EXISTS coach_circuits (
+  id          SERIAL PRIMARY KEY,
+  monitor_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        VARCHAR(60) NOT NULL,
+  exercises   JSONB NOT NULL DEFAULT '[]',   -- [{ name, sets, reps_min, reps_max, muscle_group }]
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_coach_circuits_name
+  ON coach_circuits(monitor_id, LOWER(name));
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was
