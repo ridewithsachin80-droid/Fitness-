@@ -215,6 +215,24 @@ console.log('\n[7d] suggestMeal');
   ck('remaining() is null without any target', day.remaining({ kcalIn: 900 }) === null);
 }
 
+// ── 7e. suggestLoad — double progression ────────────────────────────────────
+console.log('\n[7e] suggestLoad');
+{
+  const wl = importClient('lib/workout/suggestLoad.js');
+  const S = (last, target) => wl.suggestLoad({ last, target });
+  ck('no history → nothing to suggest', S(null) === null && S({ weight_kg: 40, reps: 0 }) === null);
+  ck('hit the top of the range → add weight, reps back to the bottom (40 kg ×12 in 8–12 → 42.5 × 8)',
+     eq({ w: S({ weight_kg: 40, reps: 12 }, { target_reps_min: 8, target_reps_max: 12 }).weight_kg, r: S({ weight_kg: 40, reps: 12 }, { target_reps_min: 8, target_reps_max: 12 }).reps }, { w: 42.5, r: 8 }));
+  ck('below the top → same weight, one more rep, capped at the range top',
+     eq({ w: S({ weight_kg: 40, reps: 9 }, { target_reps_min: 8, target_reps_max: 12 }).weight_kg, r: S({ weight_kg: 40, reps: 9 }, { target_reps_min: 8, target_reps_max: 12 }).reps }, { w: 40, r: 10 }));
+  ck('the increment scales: 12 kg → +1, 40 kg → +2.5, 100 kg → +5',
+     wl.increment(12) === 1 && wl.increment(40) === 2.5 && wl.increment(100) === 5 && S({ weight_kg: 100, reps: 12 }, { target_reps_min: 8, target_reps_max: 12 }).weight_kg === 105);
+  ck('a fixed-rep prescription (3 × 10) treats 10 as the top', S({ weight_kg: 30, reps: 10 }, { target_reps_min: 10, target_reps_max: 10 }).weight_kg === 32.5);
+  ck('no prescription → 12 is the ceiling', S({ weight_kg: 40, reps: 12 }).weight_kg === 42.5 && S({ weight_kg: 40, reps: 11 }).weight_kg === 40 && S({ weight_kg: 40, reps: 11 }).reps === 12);
+  ck('bodyweight → one more rep, no weight', eq({ w: S({ weight_kg: 0, reps: 15 }).weight_kg, r: S({ weight_kg: 0, reps: 15 }).reps }, { w: 0, r: 16 }));
+  ck('every suggestion carries a plain-English reason', /kg/.test(S({ weight_kg: 40, reps: 12 }).reason) && /last time/.test(S({ weight_kg: 0, reps: 15 }).reason));
+}
+
 // ── 8. The page and Profile import from lib/day — no private copies left ────
 console.log('\n[8] no mirrored copies');
 {

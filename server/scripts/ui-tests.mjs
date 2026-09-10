@@ -1568,6 +1568,62 @@ async function sprint11Test() {
   ck('no error escaped', errors.length === 0 && P.errors.length === 0, [errors.join('|'), P.errors.join('|')]);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 19. Workout companion + health markers (Sprint 11b)
+// ═══════════════════════════════════════════════════════════════════════════
+async function sprint11bTest() {
+  console.log('\n[19] Workout companion (suggested load) + health markers (↓ from)');
+  const api = stub('api-s11b.js', `
+    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    const T = today(), Y = istDaysAgo(3);
+    window.__calls = []; window.__posts = [];
+    const workout = { exercises: [{ exercise_id: 7, exercise_name: 'Bench press', sets: [{ reps: '', weight_kg: '' }] }], cardio: [], session: null,
+      program_day: { exercises: [{ exercise_id: 7, exercise_name: 'Bench press', target_sets: 3, target_reps_min: 8, target_reps_max: 12 }] } };
+    const history = [ { session_date: Y, set_number: 1, reps: 12, weight_kg: '40' }, { session_date: Y, set_number: 2, reps: 12, weight_kg: '40' } ];
+    const analysis = { comparisons: [
+      { test_name: 'HbA1c', unit: '%', from: 6.1, to: 5.8, direction: 'improved', from_state: 'high', to_state: 'borderline', interval_days: 90, from_date: '2026-06-01', to_date: '2026-09-01' },
+      { test_name: 'LDL',   unit: 'mg/dL', from: 110, to: 128, direction: 'worsened', interval_days: 90, from_date: '2026-06-01', to_date: '2026-09-01' },
+      { test_name: 'TSH',   unit: 'mIU/L', from: 2.1, to: 2.2, direction: 'stable', interval_days: 90, from_date: '2026-06-01', to_date: '2026-09-01' },
+    ], out_of_range: [] };
+    const get = async (url) => {
+      window.__calls.push(url);
+      if (/^\\/workouts\\/history\\/7$/.test(url)) return { data: history };
+      if (/^\\/workouts$/.test(url)) return { data: workout };
+      if (/^\\/programs\\/active/.test(url)) return { data: { program: { id: 1, name: 'Foundation' }, days: [{ id: 1, day_label: 'Push', exercises: [{ exercise_id: 7, exercise_name: 'Bench press', target_sets: 3, target_reps_min: 8, target_reps_max: 12 }] }] } };
+      if (/^\\/members\\/me\\/lab-analysis$/.test(url)) return { data: analysis };
+      if (/^\\/members\\/me\\/labs$/.test(url)) return { data: { labs: [] } };
+      return { data: {} };
+    };
+    export default { get, post: async (u, b) => { window.__posts.push({ u, b }); return { data: {} }; }, put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import WorkoutLog from './components/WorkoutLog.jsx';
+    import LabResults from './components/LabResults.jsx';
+    import { today } from './constants.js';
+    createRoot(document.getElementById('root')).render(<MemoryRouter><div><WorkoutLog date={today()} /><LabResults /></div></MemoryRouter>);`, api);
+  const { w, errors, html } = run(code); await tick(900);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('workout log and labs mount', errors.length === 0, errors.join('|'));
+  ck('the companion shows last time AND a suggestion from the coach\'s 8–12 range: 40 × 12 → Try 42.5 kg × 8',
+     /Last time: 40 kg × 12/.test(html()) && q('load-suggestion') && /Try 42\.5 kg × 8/.test(q('load-suggestion').textContent), q('load-suggestion')?.textContent);
+  ck('the reason is plain English', /You hit 12 at 40 kg/.test(q('load-suggestion').textContent), q('load-suggestion').textContent);
+  q('use-suggestion').click(); await tick(100);
+  const inputs = [...d.querySelectorAll('input[type=number]')];
+  const vals = inputs.map(i => i.value);
+  ck('"Use" prefills the empty set with 42.5 kg × 8 (the member can still edit)', vals.includes('42.5') && vals.includes('8'), vals);
+
+  ck('labs: the summary line counts markers by direction', q('lab-summary') && /1 marker improved · 1 marker worse · 1 steady/.test(q('lab-summary').textContent), q('lab-summary')?.textContent.slice(0, 80));
+  const markers = [...d.querySelectorAll('[data-testid="lab-marker"]')];
+  ck('each marker reads latest ↓/↑ from previous (HbA1c 5.8 ↓ from 6.1; LDL 128 ↑ from 110)',
+     markers.length === 3 && /HbA1c/.test(markers[0].textContent) && /5\.8/.test(markers[0].textContent) && /↓ from 6\.1/.test(markers[0].textContent) && /↑ from 110/.test(markers[1].textContent), markers.map(m => m.textContent));
+  ck('the full comparison cards are behind View all', !q('lab-details') && !!q('lab-view-all'));
+  q('lab-view-all').click(); await tick(100);
+  ck('View all reveals them (with the interval and state change)', !!q('lab-details') && /90 days/.test(q('lab-details').textContent) && /high → borderline/.test(q('lab-details').textContent));
+  ck('no error escaped', errors.length === 0, errors.join('|'));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1704,6 +1760,7 @@ async function overflowTest() {
     await memberPage9bTest();
     await cachedReadTest();
     await sprint11Test();
+    await sprint11bTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

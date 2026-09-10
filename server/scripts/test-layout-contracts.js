@@ -754,6 +754,18 @@ ck('the weekly card renders all four and keeps the coach note above them',
    ['week-wins', 'week-opportunities', 'week-pattern', 'week-next'].every(t => read('components/WeeklyReportCard.jsx').includes(t)) &&
    read('components/WeeklyReportCard.jsx').indexOf('From your coach') < read('components/WeeklyReportCard.jsx').indexOf('week-sections'));
 
+// ── 20. Workout companion + health markers (Sprint 11b) ─────────────────────
+console.log('\n[20] Workout companion + health markers');
+const wlog = read('components/WorkoutLog.jsx');
+const labs = read('components/LabResults.jsx');
+ck('the suggested load comes from lib/workout (pure, golden-tested), and only prefills — never writes a set by itself',
+   /import \{ suggestLoad \} from '\.\.\/lib\/workout\/suggestLoad'/.test(wlog) && /data-testid="use-suggestion"/.test(wlog) && /updateSet\(ex\.exercise_id, firstEmpty, 'reps'/.test(wlog));
+ck('the increment scales with the load (1 / 2.5 / 5 kg)', /if \(weightKg < 20\) return 1;[\s\S]*if \(weightKg <= 60\) return 2\.5;[\s\S]*return 5;/.test(read('../src/lib/workout/suggestLoad.js')));
+ck('labs: a summary line, each marker as latest ↓/↑ from previous, full cards behind View all',
+   /data-testid="lab-summary"/.test(labs) && /data-testid="lab-marker"/.test(labs) && /data-testid="lab-view-all"/.test(labs) && /!showAll \? null :/.test(labs));
+ck('the lab detail card no longer assumes the context object exists (a sparse row must not blank the page)',
+   !/c\.context\./.test(labs) && /const ctx = c\.context \|\| \{\};/.test(labs) && /\(ctx\.supplements \|\| \[\]\)\.length/.test(labs));
+
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

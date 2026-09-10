@@ -38,6 +38,7 @@ const STATE_STYLE = {
 };
 
 export default function LabResults({ memberId = null, memberName = '' }) {
+  const [showAll, setShowAll] = useState(false);   // Sprint 11b: full comparison cards behind View all
   const isCoach = !!memberId;
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -348,15 +349,52 @@ export default function LabResults({ memberId = null, memberName = '' }) {
         </div>
       )}
 
+      {/* Sprint 11b: the one line a member reads first — how many markers moved
+          which way since the last test — then each marker as "latest ↓ from
+          previous". The full comparison cards stay below, behind View all. */}
+      {comparisons.length > 0 && (() => {
+        const improved = comparisons.filter(c => c.direction === 'improved').length;
+        const worsened = comparisons.filter(c => c.direction === 'worsened').length;
+        const stable   = comparisons.length - improved - worsened;
+        const bits = [];
+        if (improved) bits.push(`${improved} ${improved === 1 ? 'marker' : 'markers'} improved`);
+        if (worsened) bits.push(`${worsened} ${worsened === 1 ? 'marker' : 'markers'} worse`);
+        if (stable)   bits.push(`${stable} steady`);
+        return (
+          <div className="mb-3" data-testid="lab-summary">
+            <p className="font-display text-lg font-medium text-white leading-tight">
+              {bits.join(' · ')} <span className="text-mid text-sm font-sans">since your last test</span>
+            </p>
+            <div className="mt-2 space-y-1" data-testid="lab-markers">
+              {comparisons.map((c, i) => {
+                const arrow = c.direction === 'improved' ? '↓' : c.direction === 'worsened' ? '↑' : '→';
+                const tone  = c.direction === 'improved' ? 'text-gold-light' : c.direction === 'worsened' ? 'text-amber-300' : 'text-mid';
+                return (
+                  <div key={i} className="flex items-baseline gap-2 py-1 border-b border-hair last:border-b-0" data-testid="lab-marker">
+                    <span className="min-w-0 flex-1 text-sm text-white truncate">{c.test_name}</span>
+                    <span className="font-display font-semibold tabular-nums text-white">{c.to}</span>
+                    <span className={`text-caption font-semibold tabular-nums ${tone}`}>{arrow} from {c.from}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => setShowAll(v => !v)} data-testid="lab-view-all" style={{ minHeight: 36 }}
+              className="text-caption font-bold text-gold mt-2">
+              {showAll ? 'Hide details' : 'View all ›'}
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Interval comparisons */}
       {comparisons.length === 0 ? (
         <p className="text-xs text-mid leading-relaxed mb-3">
           No comparable pairs yet. Two results for the same marker at least 30 days
           apart are needed — most markers cannot move meaningfully faster than that.
         </p>
-      ) : (
-        <div className="space-y-2 mb-3">
-          {comparisons.map((c, i) => (
+      ) : !showAll ? null : (
+        <div className="space-y-2 mb-3" data-testid="lab-details">
+          {comparisons.map((c, i) => { const ctx = c.context || {}; return (
             <div key={i} className="bg-charcoal border border-hair rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-note font-bold text-white">{c.test_name}</span>
@@ -381,47 +419,47 @@ export default function LabResults({ memberId = null, memberName = '' }) {
                   During this interval
                 </p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-eyebrow">
-                  {c.context.mean_kcal && (
+                  {ctx.mean_kcal && (
                     <><span className="text-lo">Avg intake</span>
-                      <span className="text-white text-right">{c.context.mean_kcal} kcal</span></>
+                      <span className="text-white text-right">{ctx.mean_kcal} kcal</span></>
                   )}
-                  {c.context.mean_protein && (
+                  {ctx.mean_protein && (
                     <><span className="text-lo">Avg protein</span>
-                      <span className="text-white text-right">{c.context.mean_protein}g</span></>
+                      <span className="text-white text-right">{ctx.mean_protein}g</span></>
                   )}
-                  {c.context.weight_change != null && (
+                  {ctx.weight_change != null && (
                     <><span className="text-lo">Weight</span>
                       <span className="text-white text-right">
-                        {c.context.weight_change > 0 ? '+' : ''}{c.context.weight_change} kg</span></>
+                        {ctx.weight_change > 0 ? '+' : ''}{ctx.weight_change} kg</span></>
                   )}
-                  {c.context.training_sessions > 0 && (
+                  {ctx.training_sessions > 0 && (
                     <><span className="text-lo">Sessions</span>
-                      <span className="text-white text-right">{c.context.training_sessions}</span></>
+                      <span className="text-white text-right">{ctx.training_sessions}</span></>
                   )}
-                  {c.context.cardio_minutes > 0 && (
+                  {ctx.cardio_minutes > 0 && (
                     <><span className="text-lo">Cardio</span>
-                      <span className="text-white text-right">{c.context.cardio_minutes} min</span></>
+                      <span className="text-white text-right">{ctx.cardio_minutes} min</span></>
                   )}
                   <><span className="text-lo">Days logged</span>
-                    <span className={`text-right ${c.context.coverage_pct < 50 ? 'text-amber-300' : 'text-white'}`}>
-                      {c.context.coverage_pct}%</span></>
+                    <span className={`text-right ${ctx.coverage_pct < 50 ? 'text-amber-300' : 'text-white'}`}>
+                      {ctx.coverage_pct}%</span></>
                 </div>
 
-                {c.context.supplements.length > 0 && (
+                {(ctx.supplements || []).length > 0 && (
                   <p className="text-eyebrow text-lo mt-1.5">
-                    Supplements: {c.context.supplements.slice(0, 4)
+                    Supplements: {ctx.supplements.slice(0, 4)
                       .map(s => `${s.id} ${s.pct}%`).join(' · ')}
                   </p>
                 )}
-                {c.context.coverage_pct < 50 && (
+                {ctx.coverage_pct < 50 && (
                   <p className="text-eyebrow text-amber-300/90 mt-1.5 leading-relaxed">
-                    Only {c.context.coverage_pct}% of this window was logged, so the figures
+                    Only {ctx.coverage_pct}% of this window was logged, so the figures
                     above describe a fraction of it.
                   </p>
                 )}
               </div>
             </div>
-          ))}
+          ); })}
         </div>
       )}
 

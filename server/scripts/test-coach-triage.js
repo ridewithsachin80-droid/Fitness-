@@ -75,7 +75,9 @@ const IST = (offsetDays = 0) => new Date(Date.now() + 5.5 * 3600000 - offsetDays
   ck('sleep down 3 h + 1 unread → attention, both reasons, Reply first', d.priority === 'attention' && d.reasons.some(r => /Sleep down 3\.\d h|Sleep down 3 h/.test(r)) && d.reasons.some(r => /1 unread message/.test(r)) && d.action.key === 'reply' && d.unread === 1, d);
   const b = by['Bujju Blank'];
   const hour = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
-  ck('nothing today (after the gap detector\'s hour gate) → attention · Check in; before it → ok', hour >= 11 ? (b.priority === 'attention' && b.reasons[0] === 'Nothing logged today' && b.action.key === 'checkin') : (b.priority === 'ok'), [hour, b]);
+  // The "nothing logged today" gap opens at 14:00 IST (gapDetector: after: 14),
+  // so members get most of the day before they are chased.
+  ck('nothing today (after the gap detector\'s 14:00 gate) → attention · Check in; before it → ok', hour >= 14 ? (b.priority === 'attention' && b.reasons[0] === 'Nothing logged today' && b.action.key === 'checkin') : (b.priority === 'ok'), [hour, b]);
   const rankOf = { high: 0, attention: 1, watch: 2, ok: 3 };
   ck('sorted worst first: the two high members lead and priorities never go back up', body.members[0].priority === 'high' && body.members[1].priority === 'high' && body.members.every((m, i, a) => i === 0 || rankOf[m.priority] >= rankOf[a[i - 1].priority]), body.members.map(m => m.name + ':' + m.priority));
   ck('per-member: last_logged, latest_weight, streak, days_since_log', star8.last_logged === IST(0) && star8.latest_weight === 84 && star8.streak === 8 && by['Quiet Five'].days_since_log === 5 && by['Never Logged'].days_since_log === null, [star8.last_logged, star8.latest_weight, star8.streak]);

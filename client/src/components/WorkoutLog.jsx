@@ -15,6 +15,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardSkeleton } from './UI';
 import { haptic } from '../store/settingsStore';
 import { searchExercises, addCustomExercise, getWorkout, saveWorkout, getExerciseHistory } from '../api/workouts';
+import { suggestLoad } from '../lib/workout/suggestLoad';
 import { getActiveProgram } from '../api/programs';
 import { parseVoiceSet } from '../utils/voiceSetParser';
 import { CARDIO_TYPES, cardioTypeById, sessionEnergy, distanceFrom } from '../utils/exerciseCalories';
@@ -545,6 +546,36 @@ export default function WorkoutLog({ date }) {
                 </div>
                 <button onClick={() => removeExercise(ex.exercise_id)} className="text-dim hover:text-red-400 text-xs">Remove</button>
               </div>
+
+              {/* Sprint 11b: the companion. From last time and the coach's
+                  rep range, one suggested set — and one tap to start from it.
+                  The member can still type anything; this only prefills. */}
+              {(() => {
+                const idea = lastTime ? suggestLoad({ last: lastTime, target }) : null;
+                if (!idea) return null;
+                const firstEmpty = ex.sets.findIndex(st => !st.reps && !st.weight_kg);
+                const use = () => {
+                  if (firstEmpty === -1) addSetRow(ex.exercise_id, { reps: String(idea.reps), weight_kg: idea.weight_kg ? String(idea.weight_kg) : '' });
+                  else {
+                    updateSet(ex.exercise_id, firstEmpty, 'reps', String(idea.reps));
+                    updateSet(ex.exercise_id, firstEmpty, 'weight_kg', idea.weight_kg ? String(idea.weight_kg) : '');
+                  }
+                };
+                return (
+                  <div className="flex items-center gap-2 mb-2 rounded-xl bg-gold/[0.06] border border-gold/[0.18] px-3 py-2" data-testid="load-suggestion">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-caption font-bold text-gold-light tabular-nums">
+                        Try {idea.weight_kg ? `${idea.weight_kg} kg × ` : ''}{idea.reps}{idea.weight_kg ? '' : ' reps'}
+                      </span>
+                      <span className="block text-eyebrow text-mid leading-snug">{idea.reason}</span>
+                    </span>
+                    <button type="button" onClick={use} data-testid="use-suggestion" style={{ minHeight: 34 }}
+                      className="flex-shrink-0 text-caption font-bold text-charcoal bg-gold rounded-full px-3 active:scale-95 transition-transform">
+                      Use
+                    </button>
+                  </div>
+                );
+              })()}
 
               {ex.sets.length > 0 && (
                 <div className="space-y-1.5 mb-2">
