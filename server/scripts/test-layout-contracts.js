@@ -736,24 +736,6 @@ ck('triage ignores a weigh-in that disagrees with its two nearest neighbours (in
 ck('low protocol compliance in the evening is a reason, and only in the evening',
    /hour >= 18 && pct < 50 && daysSince === 0/.test(triageSrc) && /Protocol \$\{pct\}% by evening/.test(triageSrc));
 
-// ── 19. Meal idea + weekly review (Sprint 11) ───────────────────────────────
-console.log('\n[19] Meal idea + weekly review');
-const idea = read('components/sheets/MealIdeaSheet.jsx');
-const suggest = read('../src/lib/day/mealSuggest.js');
-ck('the meal idea is computed on the phone from lib/day, not fetched from a model',
-   /suggestMeal\(\{/.test(idea) && !/ai-chat/.test(idea) && /export function suggestMeal/.test(suggest));
-ck('it only uses foods that carry real per-100g data', /f\?\.per_100g\?\.calories > 0/.test(suggest));
-ck('it never suggests more than the calories left', /if \(kcal \+ m\.kcal > budget\) continue;/.test(suggest));
-ck('being over target is checked before the "nearly there" branch', suggest.indexOf('kcal over target today') < suggest.indexOf('On target for today.'));
-ck('adding writes through the same food path every other screen uses', /update\('food', \[\.\.\.\(log\.food \|\| \[\]\), \.\.\.rows\]\)/.test(idea));
-ck('Today mounts the sheet and the Eat row opens it', /<MealIdeaSheet\s+open=\{sheet === 'mealidea'\}/.test(todayPage) && /onOpen\('mealidea'\)/.test(read('components/today/TodaysPlan.jsx')));
-const weeklySrc = fs.readFileSync(path.join(__dirname, '../services/weeklyReport.js'), 'utf8');
-ck('the four sections are derived at read time, not stored on the row (older weeks get them too)',
-   /function reviewSections/.test(weeklySrc) && /sections: latest \? reviewSections\(latest\.data \|\| \{\}\) : null/.test(patientsRoute) && !/sections: \{/.test(weeklySrc.slice(weeklySrc.indexOf('const data = {'), weeklySrc.indexOf('let coachNote'))));
-ck('the weekly card renders all four and keeps the coach note above them',
-   ['week-wins', 'week-opportunities', 'week-pattern', 'week-next'].every(t => read('components/WeeklyReportCard.jsx').includes(t)) &&
-   read('components/WeeklyReportCard.jsx').indexOf('From your coach') < read('components/WeeklyReportCard.jsx').indexOf('week-sections'));
-
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
 //

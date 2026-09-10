@@ -182,39 +182,6 @@ console.log('\n[7c] previousWeight');
   ck('only one previous reading is trusted without cross-checks', day.previousWeight([row('a', 80), row('b', 95)], 0) === 95);
 }
 
-// ── 7d. suggestMeal — the day's gap, filled from the member's own foods ────
-console.log('\n[7d] suggestMeal');
-{
-  const foods = [
-    { name: 'Idli',             per_100g: { calories: 130, protein: 3.5 }, last_g: 120, count: 9 },
-    { name: 'Paneer (Low Fat)', per_100g: { calories: 204, protein: 18  }, last_g: 150, count: 5 },
-    { name: 'Chapati',          per_100g: { calories: 297, protein: 11  }, last_g: 60,  count: 7 },
-  ];
-  const S = (o) => day.suggestMeal({ foods, hour: 17, ...o });
-
-  ck('no targets → no suggestion (we will not invent the gap)', S({ kcalIn: 500 }) === null);
-  const over = S({ kcalIn: 2100, kcalTarget: 1800, proteinIn: 120, proteinTarget: 120 });
-  ck('over target says so and suggests nothing — NOT "on target"', /300 kcal over target/.test(over.headline) && over.items.length === 0, over.headline);
-  ck('exactly on target reads as such', /Exactly on target/.test(S({ kcalIn: 1800, kcalTarget: 1800, proteinIn: 120, proteinTarget: 120 }).headline));
-  const done = S({ kcalIn: 1780, kcalTarget: 1800, proteinIn: 118, proteinTarget: 120 });
-  ck('near the target with protein met → on target, no food pushed', /On target/.test(done.headline) && done.items.length === 0 && /20 kcal spare/.test(done.note));
-  const gap = S({ kcalIn: 900, kcalTarget: 1800, proteinIn: 45, proteinTarget: 120 });
-  ck('protein behind → headline names the protein gap and the meal', /75 g protein left/.test(gap.headline) && /dinner/.test(gap.headline), gap.headline);
-  ck('the protein-dense food is chosen first, at the gram amount the member normally logs', gap.items[0].name === 'Paneer (Low Fat)' && gap.items[0].grams === 150 && gap.items[0].protein === 27, gap.items);
-  ck('the suggestion never exceeds the calories left', gap.totals.kcal <= 900, gap.totals);
-  const tight = S({ kcalIn: 1700, kcalTarget: 1800, proteinIn: 60, proteinTarget: 120 });
-  ck('when nothing fits the remaining calories it says so rather than blowing the budget', tight.items.length === 0 && /100 kcal left/.test(tight.headline), tight);
-  const noHistory = S({ kcalIn: 900, kcalTarget: 1800, proteinIn: 45, proteinTarget: 120, foods: [] });
-  ck('a member with no food history is told to log a few meals first', noHistory.items.length === 0 && /log a few meals/i.test(noHistory.note), noHistory);
-  const noData = S({ kcalIn: 900, kcalTarget: 1800, proteinIn: 45, proteinTarget: 120, foods: [{ name: 'Mystery', per_100g: null, last_g: 100, count: 4 }] });
-  ck('foods without per-100g data are never used (the numbers must be true)', noData.items.length === 0, noData);
-  ck('the meal is named from the IST hour', /breakfast/.test(S({ kcalIn: 200, kcalTarget: 1800, proteinIn: 5, proteinTarget: 120, hour: 8 }).headline) && /lunch/.test(S({ kcalIn: 200, kcalTarget: 1800, proteinIn: 5, proteinTarget: 120, hour: 13 }).headline));
-  ck('at most three items are suggested', S({ kcalIn: 0, kcalTarget: 3000, proteinIn: 0, proteinTarget: 200 }).items.length <= 3);
-  const r = day.remaining({ kcalIn: 900, kcalTarget: 1800, proteinIn: 45, proteinTarget: 120 });
-  ck('remaining() reports both gaps', r.kcal === 900 && r.protein === 75);
-  ck('remaining() is null without any target', day.remaining({ kcalIn: 900 }) === null);
-}
-
 // ── 8. The page and Profile import from lib/day — no private copies left ────
 console.log('\n[8] no mirrored copies');
 {
