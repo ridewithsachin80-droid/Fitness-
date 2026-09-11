@@ -730,8 +730,9 @@ ck('Today prefers the cached read but keeps the local one as a fallback',
 // ── 18. Coach charts and the outlier rule (Sprint 9b.1) ─────────────────────
 console.log('\n[18] Coach charts + outlier rule');
 const mon3 = read('pages/Monitor.jsx');
-ck('the coach\'s weight chart is gold, not the old green/red', /stroke="#D4AF37" strokeWidth=\{2\.5\}/.test(mon3) && !/stroke="#10b981"/.test(mon3) && !/stroke="#f87171"\n\s+strokeDasharray/.test(mon3));
-ck('compliance bars are tinted gold by value, and each still opens that day', /<Cell key=\{i\} fill=\{\(d\.score \|\| 0\) >= 75 \? '#D4AF37'/.test(mon3) && /setSelectedLog\(data\.log\)/.test(mon3));
+const charts = read('components/coach/MemberCharts.jsx');   // moved out of Monitor in 12b
+ck('the coach\'s weight chart is gold, not the old green/red', /stroke="#D4AF37" strokeWidth=\{2\.5\}/.test(charts) && !/stroke="#10b981"/.test(charts) && !/stroke="#f87171"\n\s+strokeDasharray/.test(charts));
+ck('compliance bars are tinted gold by value, and each still opens that day', /<Cell key=\{i\} fill=\{\(d\.score \|\| 0\) >= 75 \? '#D4AF37'/.test(charts) && /setSelectedLog\(data\.log\)/.test(charts));
 ck('the member page\'s "vs yesterday" uses the shared outlier rule, not the raw previous row',
    /previousWeight\(sortedLogs, sortedLogs\.findIndex/.test(mon3) && !/const prev = sortedLogs\[i \+ 1\]/.test(mon3));
 const triageSrc = fs.readFileSync(path.join(__dirname, '../services/triage.js'), 'utf8');
@@ -804,6 +805,17 @@ ck('the chat uses the ONE protocol derivation (lib/day), not its own copy',
    /resolveProtocolItems\(protocol\)/.test(chatSrc) && !/const allActivities  = \[\.\.\.ACTIVITIES/.test(chatSrc));
 ck('layout constants and atoms live in components/chat/ChatAtoms.jsx', /export const COMPOSER_BOTTOM_PX/.test(read('components/chat/ChatAtoms.jsx')) && /export function ToggleChip/.test(read('components/chat/ChatAtoms.jsx')));
 ck('AIChatLog is smaller than it was (1,568 → under 1,450 lines)', chatSrc.split('\n').length < 1450, chatSrc.split('\n').length);
+
+// ── 24. Monitor split (Sprint 12b) ──────────────────────────────────────────
+console.log('\n[24] Monitor split');
+const monSrc = read('pages/Monitor.jsx');
+ck('the day detail and the charts are components of their own, and Monitor renders them',
+   /<DayDetail activeLog=\{activeLog\}/.test(monSrc) && /<MemberCharts weightData=/.test(monSrc) && fs.existsSync(path.join(CLIENT, 'components/coach/DayDetail.jsx')) && fs.existsSync(path.join(CLIENT, 'components/coach/MemberCharts.jsx')));
+ck('the per-day maths moved to lib/coach/dayMath (one definition shared by all three)',
+   /from '\.\.\/lib\/coach\/dayMath\.jsx'/.test(monSrc) && /from '\.\.\/\.\.\/lib\/coach\/dayMath\.jsx'/.test(read('components/coach/DayDetail.jsx')) && !/^function calcN\(/m.test(monSrc) && !/^function rowCompliance\(/m.test(monSrc));
+ck('the dead AddNoteModal is gone from Monitor', !/function AddNoteModal/.test(monSrc));
+ck('Monitor is smaller (1,900 → under 1,400 lines)', monSrc.split('\n').length < 1400, monSrc.split('\n').length);
+ck('the gate runs the undefined-identifier lint', /node scripts\/lint-undef\.mjs/.test(fs.readFileSync(path.join(__dirname, 'test-local.sh'), 'utf8')) && fs.existsSync(path.join(__dirname, 'lint-undef.mjs')));
 
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.

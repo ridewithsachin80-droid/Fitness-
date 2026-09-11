@@ -244,6 +244,12 @@ echo "▸ Database suites (these self-seed; no fixtures required)"
 for s in $DB_SUITES; do run_suite "$s"; done
 
 echo
+echo "▸ Lint (undefined identifiers — Sprint 12b)"
+# The one rule a bundler will not enforce. Optional: prints NOT RUN when ESLint
+# is absent (npm run lint:install), fails the gate when it finds a problem.
+if node scripts/lint-undef.mjs; then :; else failed=$((failed + 1)); fi
+echo
+
 echo "▸ UI suites (jsdom — needs client dependencies installed)"
 # Bundles the real client and mounts it in jsdom. Deliberately NOT written as
 # "skip if the dependencies are missing": a suite that skips itself while

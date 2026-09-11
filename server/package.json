@@ -10,7 +10,9 @@
     "test": "bash scripts/test-local.sh",
     "test:db": "bash scripts/test-local.sh --db-only",
     "test:ui": "node scripts/ui-tests.mjs",
-    "test:ui:install": "npm i --no-save puppeteer-core @sparticuz/chromium"
+    "test:ui:install": "npm i --no-save puppeteer-core @sparticuz/chromium",
+    "lint:install": "npm i --no-save eslint@9 @eslint/js@9 globals@15 eslint-plugin-react@7",
+    "lint:undef": "node scripts/lint-undef.mjs"
   },
   "keywords": [],
   "author": "",
