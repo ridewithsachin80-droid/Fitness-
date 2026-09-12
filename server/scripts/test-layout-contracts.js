@@ -130,7 +130,9 @@ const PAGES = ['pages/AdminDashboard.jsx', 'pages/AdminFoods.jsx', 'pages/Monito
                'pages/PatientList.jsx', 'pages/Settings.jsx', 'pages/Profile.jsx',
                'pages/Progress.jsx', 'pages/DailyLog.jsx', 'pages/Today.jsx', 'pages/Login.jsx',
                // Sprint 3: the Today screen is spread over these folders now
-               ...listJsx('components/today'), ...listJsx('components/sheets'), ...listJsx('components/primitives')];
+               ...listJsx('components/today'), ...listJsx('components/sheets'), ...listJsx('components/primitives'),
+               // Sprint 12: the split-out folders get the same hygiene checks
+               ...listJsx('components/admin'), ...listJsx('components/food'), ...listJsx('components/coach'), ...listJsx('components/chat')];
 
 const segmentsOf = (classList) => {
   const segs = [classList.replace(/\$\{[\s\S]*?\}/g, ' ')];
@@ -816,6 +818,21 @@ ck('the per-day maths moved to lib/coach/dayMath (one definition shared by all t
 ck('the dead AddNoteModal is gone from Monitor', !/function AddNoteModal/.test(monSrc));
 ck('Monitor is smaller (1,900 → under 1,400 lines)', monSrc.split('\n').length < 1400, monSrc.split('\n').length);
 ck('the gate runs the undefined-identifier lint', /node scripts\/lint-undef\.mjs/.test(fs.readFileSync(path.join(__dirname, 'test-local.sh'), 'utf8')) && fs.existsSync(path.join(__dirname, 'lint-undef.mjs')));
+
+// ── 25. Admin + FoodLog split (Sprint 12c) ──────────────────────────────────
+console.log('\n[25] Admin + FoodLog split');
+const adminSrc = read('pages/AdminDashboard.jsx');
+const adminModals = ['AddMemberModal', 'EditMemberModal', 'PushModal', 'AddCoachModal', 'AssignModal', 'DeleteMemberModal'];
+ck('the six admin modals live in components/admin/ and the page imports them',
+   adminModals.every(m => fs.existsSync(path.join(CLIENT, `components/admin/${m}.jsx`)) && new RegExp(`import \\{ ${m} \\} from '\\.\\./components/admin/${m}'`).test(adminSrc) && !new RegExp(`^function ${m}\\(`, 'm').test(adminSrc)),
+   adminModals.filter(m => new RegExp(`^function ${m}\\(`, 'm').test(adminSrc)));
+ck('AdminDashboard is under 800 lines (was 2,163)', adminSrc.split('\n').length < 800, adminSrc.split('\n').length);
+const foodSrc = read('components/FoodLog.jsx');
+ck('FoodLog\'s pieces live in components/food/ (portions, macros, badge, scanner, prescribed meals)',
+   ['portions.jsx', 'macros.js', 'TrafficBadge.jsx', 'BarcodeScanner.jsx', 'PrescribedMeals.jsx'].every(f => fs.existsSync(path.join(CLIENT, 'components/food', f))) &&
+   /from '\.\/food\/portions\.jsx'/.test(foodSrc) && !/^function BarcodeScanner\(/m.test(foodSrc) && !/^function PrescribedMeals\(/m.test(foodSrc));
+ck('FoodLog is under 800 lines (was 1,041)', foodSrc.split('\n').length < 800, foodSrc.split('\n').length);
+ck('hasBarcodeDetector lives with the scanner and is exported', /export const hasBarcodeDetector/.test(read('components/food/BarcodeScanner.jsx')));
 
 // ── Voice logging must not promise what is not set up ───────────────────────
 // The card issues a CODE. Something else — a phone shortcut — has to use it.
