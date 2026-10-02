@@ -17,12 +17,13 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { getQueueStatus, onQueueChange, retryQueueNow } from '../hooks/useOfflineQueue';
+import { getQueueStatus, onQueueChange, retryQueueNow, claimLegacyEntries, dismissLegacyEntries } from '../hooks/useOfflineQueue';
 import { formatDate, plural } from '../constants';
 import { haptic } from '../store/settingsStore';
 
 export default function PendingSync() {
-  const [status, setStatus]   = useState({ count: 0, stuck: false, exhausted: false, oldestDate: null });
+  const [status, setStatus]   = useState({ count: 0, stuck: false, exhausted: false, oldestDate: null, unclaimed: 0 });
+  const [claiming, setClaiming] = useState(false);
   const [retrying, setRetry]  = useState(false);
 
   const refresh = useCallback(() => {
@@ -45,6 +46,43 @@ export default function PendingSync() {
     try { await retryQueueNow(); } catch (_) {}
     finally { setRetry(false); refresh(); }
   };
+
+  // Entries queued before each one carried its member. They are never sent on
+  // a guess — on a shared phone that guess could put one member's day on
+  // another's record — so the member is asked. Only the count is shown, never
+  // the contents: this card may be in front of someone the entry is not for.
+  const claim = async (mine) => {
+    haptic(15);
+    setClaiming(true);
+    try { await (mine ? claimLegacyEntries() : dismissLegacyEntries()); } catch (_) {}
+    finally { setClaiming(false); refresh(); }
+  };
+
+  if (status.unclaimed > 0) {
+    const n = status.unclaimed;
+    return (
+      <div className="rounded-xl px-3.5 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]" data-testid="unclaimed-queue">
+        <p className="text-xs font-semibold text-amber-300">
+          {n} unsent {plural(n, 'day')} found on this phone
+        </p>
+        <p className="text-caption text-mid mt-0.5 leading-relaxed">
+          Saved here before an app update and never sent. If you logged {n === 1 ? 'it' : 'them'}, send {n === 1 ? 'it' : 'them'} to your account.
+        </p>
+        <div className="mt-1.5 flex gap-2">
+          <button onClick={() => claim(true)} disabled={claiming} style={{ minHeight: 36 }}
+            className="text-caption font-bold text-charcoal bg-amber-300 hover:bg-amber-200
+              disabled:opacity-50 rounded-lg px-3 transition-colors">
+            {claiming ? 'Sending…' : 'Mine, send it'}
+          </button>
+          <button onClick={() => claim(false)} disabled={claiming} style={{ minHeight: 36 }}
+            className="text-caption font-semibold text-mid border border-white/[0.12]
+              disabled:opacity-50 rounded-lg px-3 transition-colors">
+            Not mine
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!status.count) return null;
 

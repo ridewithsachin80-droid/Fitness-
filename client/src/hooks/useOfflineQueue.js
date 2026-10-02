@@ -1,6 +1,8 @@
 import { openDB }  from 'idb';
 import { useEffect } from 'react';
 import api           from '../api/client';
+import { useAuthStore } from '../store/authStore';
+import { createQueue } from '../utils/offlineQueueCore';
 
 const DB_NAME    = 'health-coach-offline';
 const DB_VERSION = 1;
@@ -18,14 +20,33 @@ async function getDB() {
   });
 }
 
+/** The signed-in member. Every queued entry belongs to exactly one. */
+const currentOwner = () => useAuthStore.getState().user?.id ?? null;
+
 /**
- * Save a log. If online, POST directly to API.
- * If offline, persist to IndexedDB queue and return immediately.
- *
- * @param {string} date  - YYYY-MM-DD
- * @param {object} log   - log payload (server shape)
- * @returns {Promise<{queued: boolean, data?: object}>}
+ * One sync pass across ALL open tabs. Web Locks is the only cross-tab mutex a
+ * browser offers; where it is missing, the per-tab single-flight in the core
+ * plus the revision check still keep entries from being lost.
  */
+function crossTabLock(fn) {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : null;
+  if (!locks?.request) return fn();
+  return locks.request('fitlife-offline-sync', { ifAvailable: true },
+    (held) => (held ? fn() : { sent: 0, skipped: 'locked' }));
+}
+
+// The rules live in utils/offlineQueueCore.js so server/scripts/
+// test-offline-queue.js can run the real thing. This file only supplies the
+// browser pieces: IndexedDB, the API client, the signed-in member.
+const queue = createQueue({
+  getDB,
+  store:    STORE,
+  post:     (date, log) => api.post(`/logs/${date}`, log),
+  getOwner: currentOwner,
+  onChange: () => notifyQueueChanged(),
+  lock:     crossTabLock,
+});
+
 /**
  * Is this failure worth retrying?
  *
@@ -42,7 +63,19 @@ function isRetryable(err) {
   return s >= 500 || s === 408 || s === 429;
 }
 
+/**
+ * Save a log. If online, POST directly to API.
+ * If offline, persist to IndexedDB queue and return immediately.
+ *
+ * @param {string} date  - YYYY-MM-DD
+ * @param {object} log   - log payload (server shape)
+ * @returns {Promise<{queued: boolean, data?: object}>}
+ */
 export async function saveLogWithFallback(date, log) {
+  // Who this entry belongs to is decided NOW, when the member makes the edit —
+  // not later, when the queue happens to drain.
+  const owner = currentOwner();
+
   // Try the request FIRST rather than trusting navigator.onLine.
   //
   // navigator.onLine only reports whether a network interface is up. It says
@@ -56,6 +89,8 @@ export async function saveLogWithFallback(date, log) {
   if (navigator.onLine) {
     try {
       const { data } = await api.post(`/logs/${date}`, log);
+      // This save is newer than anything still queued for the same day.
+      await queue.supersede(date, owner);
       return { queued: false, data };
     } catch (err) {
       if (!isRetryable(err)) throw err;           // a real error the member must see
@@ -65,10 +100,8 @@ export async function saveLogWithFallback(date, log) {
 
   // Offline, or the request failed in a way worth retrying
   try {
-    const db = await getDB();
-    await db.put(STORE, { key: `log:${date}`, date, log, queuedAt: Date.now() });
+    await queue.enqueue(date, log, owner);
     console.log(`📦 Queued log for ${date}`);
-    notifyQueueChanged();
     return { queued: true };
   } catch (dbErr) {
     // IndexedDB unavailable — private browsing, storage full. Failing loudly
@@ -79,61 +112,20 @@ export async function saveLogWithFallback(date, log) {
 }
 
 /**
- * Sync all queued offline logs to the server.
- * Call this when the browser comes back online.
- * Removes successfully synced items from the queue.
+ * Send the signed-in member's queued logs to the server.
  *
- * Retries are capped. An entry the server keeps rejecting used to be resent
- * every 60 seconds forever — burning battery and data on a request that was
- * never going to succeed, while the member believed the day was logged. After
- * MAX_ATTEMPTS we stop trying and let the UI say so instead. The entry is
- * never discarded: the member's data stays on the device, and the "Try again
- * now" button in PendingSync resets the counter so a real fix (server back up,
- * app updated) can still drain it.
+ * Only entries that belong to the current member are sent. Retries are capped
+ * (MAX_ATTEMPTS in the core): an entry the server keeps rejecting is left on
+ * the device and the UI says so, rather than being resent every minute
+ * forever. Entries are never discarded.
  */
-const MAX_ATTEMPTS = 12;
-
 export async function syncOfflineQueue() {
-  let db;
   try {
-    db = await getDB();
+    return await queue.sync();
   } catch (err) {
-    console.error('syncOfflineQueue: failed to open DB:', err);
-    return;
-  }
-
-  const items = await db.getAll(STORE);
-  if (!items.length) return;
-
-  const live = items.filter(i => (i.attempts || 0) < MAX_ATTEMPTS);
-  if (!live.length) {
-    // Everything left has exhausted its retries. Don't hammer the network.
+    console.error('syncOfflineQueue failed:', err);
     notifyQueueChanged();
-    return;
   }
-
-  console.log(`🔄 Syncing ${live.length} queued log(s)…`);
-
-  for (const item of live) {
-    try {
-      await api.post(`/logs/${item.date}`, item.log);
-      await db.delete(STORE, item.key);
-      console.log(`✅ Synced queued log for ${item.date}`);
-    } catch (err) {
-      const attempts = (item.attempts || 0) + 1;
-      await db.put(STORE, { ...item, attempts, lastError: err.message });
-      console.error(
-        `❌ Failed to sync log for ${item.date} (attempt ${attempts}/${MAX_ATTEMPTS}):`,
-        err.message
-      );
-      // Stays in the queue either way — the member's entry is never thrown
-      // away just because the server is unhappy.
-    }
-  }
-
-  // Whether anything drained or not, the badge needs to re-read: a successful
-  // pass should clear it, and a failed one may have crossed the stuck threshold.
-  notifyQueueChanged();
 }
 
 /**
@@ -142,60 +134,38 @@ export async function syncOfflineQueue() {
  */
 export async function retryQueueNow() {
   try {
-    const db    = await getDB();
-    const items = await db.getAll(STORE);
-    for (const item of items) {
-      if (item.attempts) await db.put(STORE, { ...item, attempts: 0 });
-    }
+    return await queue.retryNow();
   } catch (err) {
-    console.error('retryQueueNow: could not reset attempts:', err);
+    console.error('retryQueueNow failed:', err);
   }
-  await syncOfflineQueue();
 }
 
-/**
- * Returns the count of logs currently in the offline queue.
- */
+/** Count of the signed-in member's logs waiting in the queue. */
 export async function getQueueCount() {
-  try {
-    const db = await getDB();
-    return (await db.count(STORE));
-  } catch {
-    return 0;
-  }
+  return (await getQueueStatus()).count;
 }
 
 /**
- * Queue status for the UI: how many entries are waiting, and whether any has
- * been waiting long enough to be considered stuck.
- *
- * "Stuck" matters because syncOfflineQueue() retries forever. An entry the
- * server keeps rejecting with a 5xx would sit in IndexedDB indefinitely with
- * nobody told — the member believes the day is logged, the coach sees nothing.
- * After STUCK_AFTER_MS we say so plainly instead.
+ * Queue status for the UI, for the signed-in member only: how many entries
+ * are waiting, whether any is stuck, and how many ownerless entries from
+ * before owner-tagging are waiting to be claimed.
  */
-const STUCK_AFTER_MS = 24 * 60 * 60 * 1000;
-
 export async function getQueueStatus() {
   try {
-    const db    = await getDB();
-    const items = await db.getAll(STORE);
-    if (!items.length) return { count: 0, stuck: false, oldestDate: null };
-    const oldest = items.reduce((a, b) => (a.queuedAt <= b.queuedAt ? a : b));
-    // Stuck on either signal: waiting too long, or out of retries. The second
-    // catches a poison entry fast — a server rejecting it every minute hits
-    // the cap in about twelve minutes rather than taking a day to admit it.
-    const tooOld    = Date.now() - oldest.queuedAt > STUCK_AFTER_MS;
-    const exhausted = items.some(i => (i.attempts || 0) >= MAX_ATTEMPTS);
-    return {
-      count:      items.length,
-      stuck:      tooOld || exhausted,
-      exhausted,
-      oldestDate: oldest.date,
-    };
+    return await queue.status();
   } catch {
-    return { count: 0, stuck: false, exhausted: false, oldestDate: null };
+    return { count: 0, stuck: false, exhausted: false, oldestDate: null, unclaimed: 0, unclaimedDates: [] };
   }
+}
+
+/** "These are mine — send them." For entries queued before owner-tagging. */
+export async function claimLegacyEntries() {
+  return queue.claimLegacy();
+}
+
+/** "Not mine." Stops asking this member; the entries stay for their owner. */
+export async function dismissLegacyEntries() {
+  return queue.dismissLegacy();
 }
 
 // ── Change notification ──────────────────────────────────────────────────────
@@ -216,36 +186,59 @@ function notifyQueueChanged() {
 
 // ── React hook ───────────────────────────────────────────────────────────────
 
+// The hook is called from App.jsx AND useTodayModel.js. Two sets of timers and
+// listeners meant two sync passes racing over the same entries. The wiring is
+// now installed once however many components mount it.
+let mounts   = 0;
+let teardown = null;
+
+function installSyncWiring() {
+  const handleOnline = () => {
+    console.log('🌐 Back online — syncing offline queue…');
+    syncOfflineQueue();
+  };
+  window.addEventListener('online', handleOnline);
+
+  // The 'online' event only fires when the interface changes state. A flaky
+  // connection that starts working again never fires it, so poll as well.
+  const timer = setInterval(() => {
+    if (navigator.onLine) syncOfflineQueue();
+  }, 60000);
+
+  // A member's entries can only be sent once we know who is signed in. On a
+  // cold start that is after the session restore, so sync when it lands — and
+  // re-read the badge, since "my queue" depends on who "me" is.
+  let lastOwner = currentOwner();
+  const unsubscribe = useAuthStore.subscribe((state) => {
+    const owner = state.user?.id ?? null;
+    if (owner === lastOwner) return;
+    lastOwner = owner;
+    notifyQueueChanged();
+    if (owner != null && navigator.onLine) syncOfflineQueue();
+  });
+
+  // Also attempt a sync on mount in case we're already online
+  // with items left from a previous offline session
+  if (navigator.onLine) syncOfflineQueue();
+
+  return () => {
+    clearInterval(timer);              // without this the poll leaks on unmount
+    window.removeEventListener('online', handleOnline);
+    unsubscribe();
+  };
+}
+
 /**
- * Wire up the online event listener once at the app root level.
- * When the browser comes back online, automatically sync the queue.
- *
- * Usage: call useOfflineSync() once in App.jsx or a top-level layout.
+ * Wire up the online listener, the poll and the sign-in trigger.
+ * Safe to call from more than one component: the wiring exists once.
  */
 export function useOfflineSync() {
   useEffect(() => {
-    const handleOnline = () => {
-      console.log('🌐 Back online — syncing offline queue…');
-      syncOfflineQueue();
-    };
-
-    window.addEventListener('online', handleOnline);
-
-    // The 'online' event only fires when the interface changes state. A flaky
-    // connection that starts working again never fires it, so poll as well.
-    const timer = setInterval(() => {
-      if (navigator.onLine) syncOfflineQueue().catch(() => {});
-    }, 60000);
-
-    // Also attempt a sync on mount in case we're already online
-    // with items left from a previous offline session
-    if (navigator.onLine) {
-      syncOfflineQueue();
-    }
-
+    mounts += 1;
+    if (mounts === 1) teardown = installSyncWiring();
     return () => {
-      clearInterval(timer);              // without this the poll leaks on unmount
-      window.removeEventListener('online', handleOnline);
+      mounts -= 1;
+      if (mounts === 0 && teardown) { teardown(); teardown = null; }
     };
   }, []);
 }
