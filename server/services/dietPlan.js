@@ -111,29 +111,68 @@ function normaliseItem(it) {
  * @returns {{title, targets, content, days: Array<Array<{meal, time, items}>>}|null}
  */
 function normaliseDraft(raw) {
-  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.meals)) return null;
+  if (!raw || typeof raw !== 'object') return null;
   const time = (v) => (/^\d{1,2}:\d{2}$/.test(String(v || '').trim()) ? String(v).trim().padStart(5, '0') : null);
+  const head = () => ({
+    title:   str(raw.title, 120) || 'Diet plan',
+    targets: normaliseTargets(raw.targets),
+    content: normaliseContent(raw),
+  });
+
+  // A model asked to "change this plan" sometimes answers in seven explicit
+  // days instead of meals + rotation. Accept that too.
+  if (!Array.isArray(raw.meals) && Array.isArray(raw.days) && raw.days.length === 7) {
+    const days = raw.days.map(d => (Array.isArray(d) ? d : (Array.isArray(d?.meals) ? d.meals : []))
+      .slice(0, 6)
+      .map(m => ({ meal: str(m?.meal, 40), time: time(m?.time),
+                   items: (Array.isArray(m?.items) ? m.items : []).slice(0, 15).map(normaliseItem).filter(Boolean) }))
+      .filter(m => m.meal && m.items.length));
+    return days.some(d => d.length) ? { ...head(), days } : null;
+  }
+  if (!Array.isArray(raw.meals)) return null;
 
   const meals = raw.meals.slice(0, 6).map(m => {
     const meal = str(m?.meal, 40);
     if (!meal) return null;
     const fixed = (Array.isArray(m.items) ? m.items : []).slice(0, 15).map(normaliseItem).filter(Boolean);
     const rot = m.rotation && typeof m.rotation === 'object' ? m.rotation : {};
-    const rotation = WEEKDAYS.map(w => normaliseItem(rot[w]));
+    // One rotating item per weekday, or a list of them.
+    const rotation = WEEKDAYS.map(w => (Array.isArray(rot[w]) ? rot[w] : [rot[w]]).map(normaliseItem).filter(Boolean));
     return { meal, time: time(m.time), fixed, rotation };
   }).filter(Boolean);
 
   const days = WEEKDAYS.map((_, w) => meals
-    .map(m => ({ meal: m.meal, time: m.time, items: [...(m.rotation[w] ? [m.rotation[w]] : []), ...m.fixed] }))
+    .map(m => ({ meal: m.meal, time: m.time, items: [...m.rotation[w], ...m.fixed] }))
     .filter(m => m.items.length));
 
   if (!days.some(d => d.length)) return null;
-  return {
-    title:   str(raw.title, 120) || 'Diet plan',
-    targets: normaliseTargets(raw.targets),
-    content: normaliseContent(raw),
-    days,
-  };
+  return { ...head(), days };
+}
+
+/**
+ * The reverse of normaliseDraft: seven days back into meals + rotation, the
+ * shape the draft prompt asks the model to return. Items on all seven days go
+ * in "items"; the rest go in "rotation" for their weekday. Sending the current
+ * draft in the SAME shape the model must answer in keeps it from echoing the
+ * input shape back.
+ */
+function toMealsShape(days) {
+  const order = [];
+  (days || []).forEach(d => d.forEach(m => { if (!order.includes(m.meal)) order.push(m.meal); }));
+  const brief = (it) => ({ name: it.name, grams: Number(it.grams) });
+  return order.map(meal => {
+    const perDay = WEEKDAYS.map((_, w) => (days[w] || []).find(m => m.meal === meal));
+    const key = (it) => `${String(it.name).toLowerCase()}|${Number(it.grams)}`;
+    const everyDay = (perDay[0]?.items || []).filter(it => perDay.every(m => m && m.items.some(x => key(x) === key(it))));
+    const fixed = new Set(everyDay.map(key));
+    const rotation = {};
+    WEEKDAYS.forEach((wd, w) => {
+      const extra = (perDay[w]?.items || []).filter(it => !fixed.has(key(it))).map(brief);
+      if (extra.length) rotation[wd] = extra.length === 1 ? extra[0] : extra;
+    });
+    return { meal, time: perDay.find(Boolean)?.time || null, items: everyDay.map(brief),
+             ...(Object.keys(rotation).length ? { rotation } : {}) };
+  });
 }
 
 // ── Flags: from stored data only ─────────────────────────────────────────────
@@ -551,7 +590,7 @@ async function recordImportedPlan(client, { memberId, coachId, title, macros, me
 module.exports = {
   WEEKDAYS, WEEKDAY_NAMES, FILL_AHEAD_DAYS,
   weekdayOf, addDays, isDate,
-  normaliseTargets, normaliseContent, normaliseItem, normaliseDraft,
+  normaliseTargets, normaliseContent, normaliseItem, normaliseDraft, toMealsShape,
   buildFlags, runChecks, hasErrors, hasWarnings, diffPlans,
   loadPlan, planInForce, saveDraft, updateDraft, approveDraft, ensureDay, recordImportedPlan,
 };

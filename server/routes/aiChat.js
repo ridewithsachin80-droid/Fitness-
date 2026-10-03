@@ -56,19 +56,21 @@ const GEMINI_MODELS = [
 ].filter(Boolean);
 const geminiUrlFor = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-async function callGroqOnce(model, prompt) {
+// opts.maxTokens / opts.timeout default to the values every existing caller
+// was built against; only the diet plan draft asks for more.
+async function callGroqOnce(model, prompt, opts = {}) {
   const response = await axios.post(
     'https://api.groq.com/openai/v1/chat/completions',
     {
       model,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
-      max_tokens: 3000,
+      max_tokens: opts.maxTokens || 3000,
       response_format: { type: 'json_object' },
     },
     {
       headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
-      timeout: 30000,
+      timeout: opts.timeout || 30000,
     }
   );
   return {
@@ -77,14 +79,18 @@ async function callGroqOnce(model, prompt) {
   };
 }
 
-async function callGeminiOnce(model, prompt) {
+async function callGeminiOnce(model, prompt, opts = {}) {
   const response = await axios.post(
     `${geminiUrlFor(model)}?key=${GEMINI_API_KEY}`,
     {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 3000 },
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: opts.maxTokens || 3000,
+        ...(opts.json ? { responseMimeType: 'application/json' } : {}),
+      },
     },
-    { headers: { 'content-type': 'application/json' }, timeout: 30000 }
+    { headers: { 'content-type': 'application/json' }, timeout: opts.timeout || 30000 }
   );
   const candidate = response.data.candidates?.[0];
   return {
@@ -94,7 +100,14 @@ async function callGeminiOnce(model, prompt) {
 }
 
 // ── Provider + model fallback orchestrator (429/503 retry with backoff) ──────
-async function callAI(prompt) {
+/**
+ * @param {object} [opts]
+ *   maxTokens, timeout, json — passed to the provider (defaults unchanged).
+ *   failOnTruncation — a reply cut off at the length limit is half a JSON
+ *     object, which no parser can read. Treat it as a failure and try the
+ *     next model, instead of returning it as if it were an answer.
+ */
+async function callAI(prompt, opts = {}) {
   const providers = [
     GROQ_API_KEY   && { name: 'groq',   models: GROQ_MODELS,   call: callGroqOnce },
     GEMINI_API_KEY && { name: 'gemini', models: GEMINI_MODELS, call: callGeminiOnce },
@@ -112,7 +125,12 @@ async function callAI(prompt) {
       const maxRetries = 2;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          const { text, finishReason } = await provider.call(model, prompt);
+          const { text, finishReason } = await provider.call(model, prompt, opts);
+          if (opts.failOnTruncation && (finishReason === 'length' || finishReason === 'MAX_TOKENS')) {
+            const cut = new Error(`AI reply was cut off at the length limit (${provider.name}/${model})`);
+            cut.response = { status: 502 };
+            throw cut;
+          }
           if (finishReason === 'SAFETY' || finishReason === 'RECITATION' || finishReason === 'content_filter') {
             const blocked = new Error(`AI blocked the response (${finishReason})`);
             blocked.response = { status: 502 };
