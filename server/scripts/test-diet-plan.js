@@ -251,6 +251,11 @@ const item = (name, grams) => ({ name, grams, qty_text: `${grams} g`,
   console.log('\n[4] the typed path is unchanged');
   {
     await pool.query('DELETE FROM meal_plans');
+    // Sections 2 and 3 applied multi-day plans, which are now recorded as a
+    // diet plan version (Phase 1). With a plan in force, a typed change lands
+    // ON TOP of that day's plan — that is covered in test-diet-studio [9].
+    // This section is about a member with no standing plan.
+    await pool.query('DELETE FROM diet_plans');
     const ops = {
       water_target: null, macros: null, target_weight: null, program: null,
       activities: null, acv: null, supplements: null, note: null, push: null,

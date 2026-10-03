@@ -91,7 +91,12 @@ export default function Plan() {
   const todayWd  = istWeekday();
   const { scheduled, todayDay } = deriveTodayDay(days, todayWd);
   const { activeActivities, activeACV, activeSupplements } = resolveProtocolItems(protocol);
-  const macros = protocol?.macros || null;
+  // /members/me/today returns the raw profile row (macro_kcal …), not the
+  // { macros: { kcal … } } shape /members/me returns, so the Eat section said
+  // "Targets not set yet" for every member. Accept both shapes.
+  const macros = protocol?.macros || (protocol?.macro_kcal ? {
+    kcal: protocol.macro_kcal, pro: protocol.macro_pro, carb: protocol.macro_carb, fat: protocol.macro_fat,
+  } : null);
   const waterL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
   const fasting = protocol?.fasting_start && protocol?.fasting_end ? { start: protocol.fasting_start, end: protocol.fasting_end } : null;
 

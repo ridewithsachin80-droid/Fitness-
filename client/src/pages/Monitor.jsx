@@ -19,6 +19,7 @@ import ProgramBuilderModal from '../components/ProgramBuilderModal';
 import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
 import TrainingSummary from '../components/TrainingSummary';
 import MetabolicInsight from '../components/MetabolicInsight';
+import DietPlanStudio from '../components/coach/DietPlanStudio';
 import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
 import LabResults from '../components/LabResults';
@@ -900,6 +901,10 @@ export default function Coach() {
         {/* What their own data says about their metabolism — the engine
             proposes targets, the coach decides whether to apply them. */}
         {tab === 'nutrition' && (<>   {/* Metabolic Insight */}
+        {/* Diet Plan Studio (Phase 1): brief → draft → checks → approve.
+            First on the tab: the plan is what the rest of Nutrition is measured against. */}
+        <DietPlanStudio memberId={parseInt(memberId)} memberName={data?.profile?.name || ''}
+          onApplied={() => load({ quiet: true })} />
         <Card>
           <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
           <div className="mt-2">

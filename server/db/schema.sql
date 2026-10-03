@@ -870,3 +870,62 @@ UPDATE exercises SET muscle_group = 'core'
   WHERE muscle_group IS NULL AND (name ILIKE '%abs%' OR name ILIKE '%core%'
     OR name ILIKE '%plank%' OR name ILIKE '%crunch%' OR name ILIKE '%sit up%'
     OR name ILIKE '%situp%' OR name ILIKE '%oblique%' OR name ILIKE '%leg raise%');
+
+-- ── Diet plans (Phase 1) ─────────────────────────────────────────────────────
+-- One row per VERSION of a member's diet plan. A draft can be edited; once a
+-- version is approved it is never changed again — a change is a new version.
+-- The plan in force on a date is, of the approved versions that have started
+-- by then (effective_from), the one approved last. So an older version stays
+-- in force until its replacement's start date arrives.
+--
+-- meal_plans (above) still holds each day's prescribed meals, exactly as the
+-- food log reads them today. Those rows are GENERATED from the version in
+-- force; this table is the source they are generated from.
+CREATE TABLE IF NOT EXISTS diet_plans (
+  id              SERIAL PRIMARY KEY,
+  patient_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  monitor_id      INT REFERENCES users(id) ON DELETE SET NULL,
+  version         INT NOT NULL,
+  status          VARCHAR(12) NOT NULL DEFAULT 'draft'
+                    CHECK (status IN ('draft', 'approved')),
+  source          VARCHAR(12) NOT NULL DEFAULT 'brief'
+                    CHECK (source IN ('brief', 'import', 'revision')),
+  title           VARCHAR(120),
+  brief           TEXT,
+  targets         JSONB NOT NULL DEFAULT '{}',   -- { kcal, protein, carbs, fat, fiber }
+  content         JSONB NOT NULL DEFAULT '{}',   -- { eating_window, timetable, avoid, cautions, adjustments }
+  flags           JSONB NOT NULL DEFAULT '[]',   -- lab / condition flags, each with its source and date
+  checks          JSONB NOT NULL DEFAULT '[]',   -- automatic checks at last save
+  effective_from  DATE,
+  targets_applied BOOLEAN NOT NULL DEFAULT false,
+  approved_at     TIMESTAMPTZ,
+  approved_by     INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (patient_id, version)
+);
+-- At most one draft per member: a second "create draft" replaces the first
+-- rather than leaving two half-finished plans to approve by mistake.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_diet_plans_one_draft
+  ON diet_plans(patient_id) WHERE status = 'draft';
+CREATE INDEX IF NOT EXISTS idx_diet_plans_member_effective
+  ON diet_plans(patient_id, effective_from DESC) WHERE status = 'approved';
+
+-- The prescribed items of one version: a weekly menu, one row per item per
+-- weekday (0 = Monday … 6 = Sunday). "Same every day" is seven identical days.
+-- Each row's id is the stable identity of that prescribed item.
+CREATE TABLE IF NOT EXISTS diet_plan_items (
+  id          SERIAL PRIMARY KEY,
+  plan_id     INT NOT NULL REFERENCES diet_plans(id) ON DELETE CASCADE,
+  weekday     SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  meal        VARCHAR(40) NOT NULL,
+  meal_time   VARCHAR(5),
+  meal_order  INT NOT NULL DEFAULT 0,
+  position    INT NOT NULL DEFAULT 0,
+  name        VARCHAR(100) NOT NULL,
+  grams       NUMERIC(7,1) NOT NULL CHECK (grams > 0),
+  qty_text    VARCHAR(40),
+  per_100g    JSONB NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_diet_plan_items_plan_day
+  ON diet_plan_items(plan_id, weekday, meal_order, position);

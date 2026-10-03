@@ -72,6 +72,7 @@ app.use('/api/trackers',      trackerRoutes);
 app.use('/api/workouts',      workoutRoutes);
 app.use('/api/programs',      programRoutes);
 app.use('/api/ai-chat',       aiChatRoutes);  // Fittr-style AI chat logging
+app.use('/api/diet-plans',    require('./routes/dietPlans'));  // Diet Plan Studio — versioned plans
 // Voice logging. Its own mount, NOT under /api/ai-chat, because that router
 // applies authMW to everything in it — and this endpoint is authenticated by a
 // write-only token instead, since the caller is a phone shortcut with no

@@ -11,6 +11,12 @@ const { loadProgramDays } = require('./programs');
 const { composeMember, summarise, composeBrief } = require('../services/triage');
 const { computeDayTotals } = require('../services/digests');
 const aiReads = require('../services/aiReads');
+const dietPlan = require('../services/dietPlan');
+/** Top up one date's prescribed meals from the diet plan in force. Never throws. */
+async function ensurePlanDay(memberId, date) {
+  try { await dietPlan.ensureDay(pool, memberId, date, getISTDate()); }
+  catch (err) { console.error('ensurePlanDay failed:', err.message); }
+}
 const { reviewSections } = require('../services/weeklyReport');
 const triageHour = () => parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
 const bcrypt = require('bcryptjs');
@@ -824,6 +830,10 @@ router.get('/me/meal-plan', authMW, roleCheck('patient'), async (req, res) => {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
       ? req.query.date
       : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    // Generate this date's meals from the diet plan in force if they are not
+    // there yet, so a plan does not run out. Best effort: a failure here must
+    // not hide meals that ARE stored.
+    await ensurePlanDay(req.user.id, date);
     const { rows } = await pool.query(
       `SELECT meal, items, created_at FROM meal_plans
        WHERE patient_id = $1 AND plan_date = $2::date
@@ -921,6 +931,8 @@ router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
   try {
     const istToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
       .format(new Date());
+
+    await ensurePlanDay(uid, istToday);   // before the read below, so Today shows the plan in force
 
     const [profile, mealPlan, program] = await Promise.all([
       pool.query(

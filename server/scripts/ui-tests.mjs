@@ -47,6 +47,9 @@ import http from 'http';
 const HERE       = path.dirname(fileURLToPath(import.meta.url));
 const ROOT       = path.resolve(HERE, '../..');
 const CLIENT_SRC = path.join(ROOT, 'client', 'src');
+// The API stubs below import the real constants.js. This used to be a path
+// typed out from one machine, so the suite could only run in that one folder.
+const CONSTANTS_JS = path.join(CLIENT_SRC, 'constants.js').replace(/\\/g, '/');
 
 let pass = 0, fail = 0;
 const ck = (n, c, d) => c
@@ -535,7 +538,7 @@ async function primitivesTest() {
 // Dates: constants.today() is IST-anchored, so the stub computes the same
 // string with the same helper rather than assuming UTC.
 const TODAY_API_STUB = `
-    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { today, istDaysAgo } from '${CONSTANTS_JS}';
     const T = today(), Y = istDaysAgo(1);
     window.__calls = []; window.__posts = []; window.__todayStr = T;
     const log = {
@@ -953,7 +956,7 @@ async function todayVisualTest() {
 async function progressTest() {
   console.log('\n[10] Progress — weight hero, 7/30/90 window, 30-day grid');
   const api = stub('api-progress.js', `
-    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { today, istDaysAgo } from '${CONSTANTS_JS}';
     window.__calls = [];
     // 20 logged days out of the last 30: weight drifting 84.0 → 82.4, compliance
     // alternating, food on the last 3 days. Day -3, -5 and -9 are missing on purpose.
@@ -1213,7 +1216,7 @@ async function onboardingTest() {
 async function profileTest() {
   console.log('\n[13] My Health — goal, plan, insights, account; Login — remembered member');
   const api = stub('api-profile.js', `
-    import { istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { istDaysAgo } from '${CONSTANTS_JS}';
     window.__calls = [];
     const me = { id: 214, name: 'Asha Rao', phone: '9876543210', member_since: istDaysAgo(44) + 'T09:00:00.000Z',
       dob: '1985-03-10', gender: 'female', height_cm: '160', start_weight: '88', target_weight: '78', current_weight: '82.4',
@@ -1385,7 +1388,7 @@ async function memberBriefTest() {
 async function memberPage9bTest() {
   console.log('\n[16] Member page — action sheet, timeline, Full log; admin Coach view');
   const api = stub('api-9b.js', `
-    import { istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { istDaysAgo } from '${CONSTANTS_JS}';
     window.__calls = []; window.__posts = [];
     const T = istDaysAgo(0), Y = istDaysAgo(1);
     const member = { profile: { id: 12, name: 'Daya Kumar', phone: '9000000012', height_cm: 168, start_weight: 86, target_weight: 76, current_weight: 81.2, meal_slots: ['Breakfast', 'Lunch', 'Dinner'], macros: { kcal: 1700, pro: 115 }, water_target: 3000, activities: [], acv: [], supplements: [], conditions: [], has_pin: true },
@@ -1454,7 +1457,7 @@ async function memberPage9bTest() {
 async function cachedReadTest() {
   console.log('\n[17] Cached read on Today');
   const api = stub('api-read.js', `
-    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { today, istDaysAgo } from '${CONSTANTS_JS}';
     const T = today();
     window.__calls = [];
     const log = { weight_kg: '82.4', activities: {}, acv: {}, supplements: {}, food_items: [], water_ml: 0, sleep: {}, notes: '',
@@ -1500,7 +1503,7 @@ async function cachedReadTest() {
 async function sprint11Test() {
   console.log('\n[18] Meal idea sheet + weekly review sections');
   const api = stub('api-s11.js', `
-    import { today } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { today } from '${CONSTANTS_JS}';
     const T = today();
     window.__calls = [];
     const log = { weight_kg: '82.4', activities: {}, acv: {}, supplements: {},
@@ -1575,7 +1578,7 @@ async function sprint11Test() {
 async function sprint11bTest() {
   console.log('\n[19] Workout companion (suggested load) + health markers (↓ from)');
   const api = stub('api-s11b.js', `
-    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { today, istDaysAgo } from '${CONSTANTS_JS}';
     const T = today(), Y = istDaysAgo(3);
     window.__calls = []; window.__posts = [];
     const workout = { exercises: [{ exercise_id: 7, exercise_name: 'Bench press', sets: [{ reps: '', weight_kg: '' }] }], cardio: [], session: null,
@@ -1631,7 +1634,7 @@ async function sprint11bTest() {
 async function sprint11cTest() {
   console.log('\n[20] Settings groups + recovery card');
   const api = stub('api-s11c.js', `
-    import { today, istDaysAgo } from '/home/claude/repo/Fitness--main/client/src/constants.js';
+    import { today, istDaysAgo } from '${CONSTANTS_JS}';
     const T = today();
     window.__calls = []; window.__trackerDays ||= [];
     const log = { weight_kg: '82.4', activities: {}, acv: {}, supplements: {}, food_items: [], water_ml: 0, sleep: {}, notes: '',

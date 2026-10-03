@@ -3730,6 +3730,14 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
             planDates.push(dt.toISOString().slice(0, 10));
           }
         }
+        // A typed one-day change ("add whey to lunch") is made ON TOP of the
+        // diet plan in force. If today's meals have not been generated from
+        // that plan yet, generate them first — otherwise the change would
+        // land on an empty day and become the whole day.
+        const dietPlan = require('../services/dietPlan');
+        if ((ops.meal_plan.repeat_days || 1) === 1) {
+          await dietPlan.ensureDay(client, memberId, planDates[0], getISTDate());
+        }
         for (const m of ops.meal_plan.meals) {
           // Same-day re-prescription replaces — the UNIQUE constraint makes the
           // upsert atomic, and the member always sees exactly one plan per meal.
@@ -3759,6 +3767,20 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
                              created_at = NOW()`,
               [memberId, req.user.id, pd, m.meal, JSON.stringify(itemsToStore)]);
           }
+        }
+        // A plan that spans days is a standing instruction, and the coach's
+        // Apply on the preview is its approval — so it is recorded as a plan
+        // version: it shows in the history and keeps filling days after the
+        // stretch written above runs out. A document (/coach-doc attaches a
+        // "Diet plan attached:" note) is a whole new plan; anything else is a
+        // change to some meals of the plan in force.
+        if ((ops.meal_plan.repeat_days || 1) > 1) {
+          const doc = /^Diet plan attached: (.+?)(?: \(.*\))?$/.exec(ops.note?.text || '');
+          await dietPlan.recordImportedPlan(client, {
+            memberId, coachId: req.user.id, title: doc ? doc[1] : null, wholePlan: !!doc,
+            macros: ops.macros, meals: ops.meal_plan.meals,
+            today: planDates[0], lastDate: planDates[planDates.length - 1],
+          });
         }
         appliedBits.push(`meal plan (${ops.meal_plan.meals.map(m => m.meal).join(', ')})`);
         require('../services/pushService').sendToUser(memberId, 'Meal plan from your coach',
