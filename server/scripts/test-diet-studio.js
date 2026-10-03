@@ -298,8 +298,14 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
        !('brief' in me.data.plan) && !('flags' in me.data.plan) && !('checks' in me.data.plan) && !('adjustments' in me.data.plan.content), Object.keys(me.data.plan));
     const mp = await call('GET', '/api/members/me/meal-plan', M);
     ck("and today's meals in the food log", mp.data.meals.length === 3);
-    await new Promise(r2 => setTimeout(r2, 100));
-    const { rows: aud } = await pool.query(`SELECT 1 FROM audit_log WHERE action='diet_plan_approved' AND target_id=$1`, [member]);
+       // The audit row is written AFTER the approval returns (so a slow audit can
+       // never fail an approval). Wait for it, up to 5 s: a fixed 100 ms wait
+       // passed on one run and failed on a re-run of the same code.
+       let aud = [];
+       for (let i = 0; i < 50 && !aud.length; i++) {
+         ({ rows: aud } = await pool.query(`SELECT 1 FROM audit_log WHERE action='diet_plan_approved' AND target_id=$1`, [member]));
+         if (!aud.length) await new Promise(r2 => setTimeout(r2, 100));
+       }
     ck('the approval is in the audit log', aud.length === 1, aud.length);
 
     ck('approving again is refused', (await call('POST', `/api/diet-plans/${draftId}/approve`, C, { acknowledge_warnings: true })).status === 409);
