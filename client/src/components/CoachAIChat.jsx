@@ -19,6 +19,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { create } from 'zustand';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
@@ -355,6 +356,7 @@ export function CoachAIFab({ bottomOffset = 40 }) {
 export default function CoachAIChat({ onApplied, contextMember = null }) {
   const open      = useCoachAI(s => s.open);
   const closeChat = useCoachAI(s => s.closeChat);
+  const navigate  = useNavigate();
 
   const [messages, setMessages]   = useState([]);
   /**
@@ -726,6 +728,20 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                                   notifications. Offer the send right here rather
                                   than reporting the failure and leaving the coach
                                   to go and find a button on another screen. */}
+                              {/* A Studio draft was written from the brief. It is
+                                  not sent: the only next step is to review it. */}
+                              {r.studio?.member_id && (
+                                <button data-testid="review-draft"
+                                  onClick={() => {
+                                    closeChat();
+                                    navigate(`/coach/${r.studio.member_id}?tab=nutrition&draft=${r.studio.plan_id || ''}`);
+                                  }}
+                                  style={{ minHeight: 40 }}
+                                  className="mt-1.5 mb-0.5 text-caption font-semibold text-charcoal
+                                             bg-gold px-3 rounded-lg active:scale-95 transition-transform">
+                                  Review in Nutrition
+                                </button>
+                              )}
                               {r.whatsapp?.url && (
                                 <button
                                   onClick={() => {

@@ -16,6 +16,11 @@
  *    one says where it came from and when. The model does not invent flags.
  * 5. Checks are arithmetic, done here, not by the model. A food with no
  *    calorie figure is an error: such a plan cannot be approved.
+ * 6. (Phase 1.3) A day over the calorie target by more than the allowed
+ *    margin, or over the carb target, is an error too. "Fit to target" is
+ *    arithmetic done here: it scales the portions that are not compulsory.
+ * 7. (Phase 1.3) Cautions for out-of-range lab results are written here from
+ *    the stored flags, so a redraft cannot drop them.
  *
  * Nothing in this file calls an AI. The route does that and hands the result
  * to normaliseDraft(), so every rule here runs in tests against real Postgres
@@ -27,6 +32,12 @@ const { normaliseNutrients } = require('./nutrients');
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const FILL_AHEAD_DAYS = 30;
+
+// Sachin's rule: "calories adjustment 5% allowed". A day may land within 5%
+// of the calorie target either way; carbs may not pass the carb target by
+// more than 5%. One place to change both.
+const KCAL_MARGIN = 0.05;
+const CARB_MARGIN = 0.05;
 
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 
@@ -97,7 +108,10 @@ function normaliseItem(it) {
     total_carbs: num(p.total_carbs ?? it.carbs_100g, 0, 100) ?? 0,
     fat:         num(p.fat ?? it.fat_100g, 0, 100) ?? 0,
   };
-  return { name, grams, qty_text: str(it.qty_text, 40) || `${grams} g`, per_100g };
+  // compulsory: the coach's brief fixed this food and its amount ("200 g curd
+  // daily"). Fit to target never changes its grams.
+  return { name, grams, qty_text: str(it.qty_text, 40) || `${grams} g`, per_100g,
+           compulsory: it.compulsory === true };
 }
 
 /**
@@ -159,7 +173,7 @@ function normaliseDraft(raw) {
 function toMealsShape(days) {
   const order = [];
   (days || []).forEach(d => d.forEach(m => { if (!order.includes(m.meal)) order.push(m.meal); }));
-  const brief = (it) => ({ name: it.name, grams: Number(it.grams) });
+  const brief = (it) => ({ name: it.name, grams: Number(it.grams), ...(it.compulsory ? { compulsory: true } : {}) });
   return order.map(meal => {
     const perDay = WEEKDAYS.map((_, w) => (days[w] || []).find(m => m.meal === meal));
     const key = (it) => `${String(it.name).toLowerCase()}|${Number(it.grams)}`;
@@ -209,9 +223,93 @@ function buildFlags(labRows, conditions, today) {
   return flags;
 }
 
+// ── Lab cautions: written by the app, from the flags ─────────────────────────
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const prettyDate = (d) => (isDate(d) ? `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : '');
+
+// First rule that matches the test name AND has words for that status wins.
+// Dietary points and "see your doctor" only: never a medicine, never a dose.
+const LAB_ADVICE = [
+  { re: /glucose|sugar|hba1c|glycated|glycosylated|\bfbs\b|\bppbs\b|\brbs\b/i,
+    high: 'Keep sweets, fruit juice and maida out, and keep to the carbs in this plan. Review this result with your doctor.',
+    low:  'Do not skip meals or stretch the fasting window. Tell your doctor about this result.' },
+  { re: /\btsh\b|thyroid|\bft?[34]\b/i,
+    any:  'Thyroid results need your doctor\'s review. Take any thyroid medicine exactly as prescribed; this plan does not replace it.' },
+  { re: /b[\s-]?12|cobalamin/i,
+    low:  'Food alone may not correct this. Ask your doctor about a B12 supplement.' },
+  { re: /vitamin\s*d|vit\.?\s*d\b|25[\s-]?\(?oh/i,
+    low:  'Food alone rarely corrects this. Ask your doctor about a vitamin D supplement, and get some morning sun.' },
+  { re: /uric/i,
+    high: 'Drink water through the day and go easy on organ meats, red meat and alcohol. See your doctor if a joint swells or hurts.' },
+  { re: /\bldl\b|\bvldl\b|non[\s-]?hdl|triglycerid|cholesterol/i,
+    high: 'Keep fried food and bakery items out and stay within the fat in this plan. Review this result with your doctor.' },
+  { re: /\bhdl\b/i,
+    low:  'Regular exercise and the nuts and seeds in this plan help over time. Review this result with your doctor.' },
+  { re: /sgpt|sgot|\balt\b|\bast\b|\bggt\b|liver|bilirubin/i,
+    high: 'Avoid alcohol and keep sugar and fried food low. Review your liver results with your doctor.' },
+  { re: /creatinine|\burea\b|\bbun\b|egfr/i,
+    any:  'Check with your doctor before following a high-protein plan.' },
+  { re: /h[a]?emoglobin|ferritin|\biron\b/i,
+    low:  'Ask your doctor whether you need an iron supplement; food alone can be slow to correct this.' },
+];
+const CONDITION_ADVICE = [
+  { re: /fatty\s*liver|nafld|liver/i, text: 'Avoid alcohol and keep sugar and fried food low. Follow your doctor\'s advice alongside this plan.' },
+  { re: /diabet|sugar|insulin/i,      text: 'Do not change any diabetes medicine on your own. Tell your doctor you have started this plan, as doses may need review.' },
+  { re: /thyroid/i,                   text: 'Take any thyroid medicine exactly as prescribed; this plan does not replace it.' },
+  { re: /hypertension|blood\s*pressure|\bbp\b/i, text: 'Keep salt, pickles and papad low, and check your BP as your doctor advised.' },
+  { re: /kidney|renal/i,              text: 'Check with your doctor before following a high-protein plan.' },
+  { re: /pregnan|lactat|breast\s*feed/i, text: 'Do not cut calories or fast without your doctor\'s agreement.' },
+];
+
+/**
+ * One caution per flag, in fixed words. The model used to write these, and a
+ * redraft dropped every one of them (glucose, TSH, B12, D, uric acid, LDL) in
+ * favour of generic lines. Built here from the same stored flags the coach
+ * sees, they are on every draft and every version whatever the model returns.
+ */
+function labCautions(flags) {
+  const out = [];
+  for (const f of Array.isArray(flags) ? flags : []) {
+    if (!f || !f.text) continue;
+    if (f.kind === 'lab') {
+      const rule = LAB_ADVICE.find(r => r.re.test(f.test || '') && (r.any || r[f.status]));
+      const advice = rule ? (rule.any || rule[f.status]) : 'Review this result with your doctor.';
+      const when = prettyDate(f.date);
+      out.push(`${f.text}${when ? ` (${when}${f.stale ? ', an old result: a fresh test would help' : ''})` : ''}. ${advice}`);
+    } else if (f.kind === 'condition') {
+      const rule = CONDITION_ADVICE.find(r => r.re.test(f.text));
+      out.push(`${f.text}. ${rule ? rule.text : 'Follow your doctor\'s advice alongside this plan.'}`);
+    }
+  }
+  return out.slice(0, 20);
+}
+
+/** Content as stored: whatever was normalised, plus the app's lab cautions. */
+const withLabCautions = (content, flags) => ({ ...(content || {}), lab_cautions: labCautions(flags) });
+
 // ── Checks: arithmetic, not opinion ──────────────────────────────────────────
 
-const itemKcal = (it) => (Number(it.grams) || 0) * (Number(it.per_100g?.calories) || 0) / 100;
+const itemKcal  = (it) => (Number(it.grams) || 0) * (Number(it.per_100g?.calories) || 0) / 100;
+const itemCarbs = (it) => (Number(it.grams) || 0) * (Number(it.per_100g?.total_carbs) || 0) / 100;
+
+/** What a day's meals add up to, rounded the way the coach sees it. */
+function dayTotals(day) {
+  let kcal = 0, carbs = 0;
+  (day || []).forEach(m => m.items.forEach(it => { kcal += itemKcal(it); carbs += itemCarbs(it); }));
+  return { kcal: Math.round(kcal), carbs: Math.round(carbs) };
+}
+const kcalRange = (kcal) => ({ lo: Math.round(kcal * (1 - KCAL_MARGIN)), hi: Math.round(kcal * (1 + KCAL_MARGIN)) });
+const carbCap   = (carbs) => Math.round(carbs * (1 + CARB_MARGIN));
+
+const GREEN_WORD  = /(^|[^a-z])(sopp?u|sopp?ina|soppina)([^a-z]|$)/i;
+const NAMED_GREEN = /palak|spinach|dantu|amaranth|sabb?a?sige|dill|menth[yi]a|methi|fenugreek|harive|nugge|drumstick|basale|malabar|pudina|mint|kothambari|coriander|honagone|chakota|agase|curry\s*lea/i;
+/** "Soppu palya" with no green named, or with "kale" (not an Indian market green). */
+function isVagueGreen(name) {
+  const n = String(name || '');
+  if (/(^|[^a-z])kale([^a-z]|$)/i.test(n) && GREEN_WORD.test(n)) return true;
+  return GREEN_WORD.test(n) && !NAMED_GREEN.test(n);
+}
 
 function runChecks({ targets, content, days }) {
   const out = [];
@@ -246,17 +344,45 @@ function runChecks({ targets, content, days }) {
       text: `No calorie figure for: ${[...unknown].slice(0, 8).join(', ')}${unknown.size > 8 ? '…' : ''}. Look them up or remove them before approving.` });
   }
 
+  // Over the target is an ERROR (Phase 1.3). As a 15% warning it was ticked
+  // through: a 1,500 kcal plan went out with a 2,206 kcal Monday. Under the
+  // target stays a warning: a coach may want a light day.
+  const totals = days.map(dayTotals);
   if (t.kcal) {
-    const off = [];
+    const { lo, hi } = kcalRange(t.kcal);
+    const over = [], under = [];
     days.forEach((d, w) => {
       if (!d.length) return;
-      const total = Math.round(d.reduce((a, m) => a + m.items.reduce((b, it) => b + itemKcal(it), 0), 0));
-      if (Math.abs(total - t.kcal) / t.kcal > 0.15) off.push(`${WEEKDAY_NAMES[w].slice(0, 3)} ${total}`);
+      const label = `${WEEKDAY_NAMES[w].slice(0, 3)} ${totals[w].kcal}`;
+      if (totals[w].kcal > hi) over.push(label);
+      else if (totals[w].kcal < lo) under.push(label);
     });
-    if (off.length) {
-      out.push({ level: 'warn', code: 'day_total',
-        text: `Meals do not add up to the ${t.kcal} kcal target (more than 15% off): ${off.join(', ')} kcal.` });
+    if (over.length) {
+      out.push({ level: 'error', code: 'day_over',
+        text: `Over the ${t.kcal} kcal target (allowed ${lo} to ${hi}): ${over.join(', ')} kcal. Use Fit to target, or reduce portions.` });
     }
+    if (under.length) {
+      out.push({ level: 'warn', code: 'day_under',
+        text: `Under the ${t.kcal} kcal target (allowed ${lo} to ${hi}): ${under.join(', ')} kcal.` });
+    }
+  }
+  if (t.carbs) {
+    const cap = carbCap(t.carbs);
+    const over = [];
+    days.forEach((d, w) => { if (d.length && totals[w].carbs > cap) over.push(`${WEEKDAY_NAMES[w].slice(0, 3)} ${totals[w].carbs} g`); });
+    if (over.length) {
+      out.push({ level: 'error', code: 'carbs_over',
+        text: `Carbs over the ${t.carbs} g target (limit ${cap} g): ${over.join(', ')}. Use Fit to target, or reduce the carb foods.` });
+    }
+  }
+
+  // "Soppu" only means leafy greens. A model once wrote "Sopu Palya (kale)",
+  // which no member in Karnataka buys. Ask for the actual green by name.
+  const vague = new Set();
+  days.forEach(d => d.forEach(m => m.items.forEach(it => { if (isVagueGreen(it.name)) vague.add(it.name); })));
+  if (vague.size) {
+    out.push({ level: 'warn', code: 'vague_green',
+      text: `Name the actual green for: ${[...vague].slice(0, 6).join(', ')}. "Soppu" only means leafy greens (palak, dantu, sabsige, menthya, harive).` });
   }
 
   // An item the plan itself says to avoid. Whole-word match, so "ghee" in the
@@ -273,6 +399,237 @@ function runChecks({ targets, content, days }) {
       text: `On the avoid list but in a meal: ${[...hits].slice(0, 6).join('; ')}.` });
   }
   return out;
+}
+
+// ── Fit to target: arithmetic, not the model ─────────────────────────────────
+
+// A portion is never scaled below 40% or above 250% of what the draft said:
+// past that it is a different plan, and the coach should change the foods.
+const FIT_MIN_SCALE = 0.4;
+const FIT_MAX_SCALE = 2.5;
+// Small amounts (ghee, nuts, seeds) move by the gram; the rest in 5 g steps.
+const roundGrams = (g) => (g < 30 ? Math.max(1, Math.round(g)) : Math.round(g / 5) * 5);
+// A food that gets 30% or more of its calories from carbs: rice, roti, fruit, dal, chikki.
+const isCarbFood = (it) => {
+  const k = Number(it.per_100g?.calories) || 0;
+  return k > 0 && (4 * (Number(it.per_100g?.total_carbs) || 0)) / k >= 0.3;
+};
+
+/**
+ * Scale `items` (in place, unrounded) so their calories come to `needKcal`,
+ * keeping their carbs at or under `maxCarbs` when that is given.
+ *
+ * One factor for everything when carbs allow it, so the plan keeps its shape.
+ * When they do not, two factors: carb foods come down further, and the rest
+ * make up the calories. Each item stays inside its own limits; whatever a
+ * limited item could not absorb is shared among the others on the next pass.
+ */
+function scaleItems(items, needKcal, maxCarbs) {
+  let free = items.filter(it => itemKcal(it) > 0);
+  const lim = (it) => ({ lo: Math.max(1, it._orig * FIT_MIN_SCALE), hi: Math.min(2000, it._orig * FIT_MAX_SCALE) });
+  for (let pass = 0; pass < 40 && free.length; pass++) {
+    const fixedK = items.filter(it => !free.includes(it)).reduce((a, it) => a + itemKcal(it), 0);
+    const fixedC = items.filter(it => !free.includes(it)).reduce((a, it) => a + itemCarbs(it), 0);
+    const need = needKcal - fixedK;
+    const carbRoom = maxCarbs == null ? null : maxCarbs - fixedC;
+    const K = free.reduce((a, it) => a + itemKcal(it), 0);
+    const C = free.reduce((a, it) => a + itemCarbs(it), 0);
+    if (!(K > 0)) break;
+
+    let factor = () => need / K;
+    if (carbRoom != null && (need / K) * C > carbRoom) {
+      const carb = free.filter(isCarbFood), rest = free.filter(it => !isCarbFood(it));
+      const Kc = carb.reduce((a, it) => a + itemKcal(it), 0), Cc = carb.reduce((a, it) => a + itemCarbs(it), 0);
+      const Ko = K - Kc, Co = C - Cc;
+      const det = Kc * Co - Ko * Cc;
+      if (carb.length && rest.length && Math.abs(det) > 1e-6) {
+        // sc*Kc + so*Ko = need   and   sc*Cc + so*Co = carbRoom
+        const sc = Math.max(0, (need * Co - Ko * carbRoom) / det);
+        const so = Math.max(0, (need - sc * Kc) / Ko);
+        factor = (it) => (isCarbFood(it) ? sc : so);
+      } else if (carb.length) {
+        // Only carb foods left to move: the carb limit wins over the calories.
+        const s = Math.max(0, carbRoom / C);
+        factor = () => s;
+      }
+      // Only protein and fat foods left: shrinking them barely moves the
+      // carbs and would starve the day. Calories win; the day is reported
+      // as still over on carbs.
+    }
+
+    // Work out everyone's new grams first. If any item would pass its limit,
+    // pin ONLY those to the limit and solve again for the rest: applying the
+    // others now would use factors that assumed the pinned items could move.
+    const want = free.map(it => ({ it, g: it.grams * factor(it), ...lim(it) }));
+    const stuck = want.filter(x => x.g < x.lo - 1e-9 || x.g > x.hi + 1e-9);
+    if (!stuck.length) { want.forEach(x => { x.it.grams = x.g; }); break; }
+    stuck.forEach(x => { x.it.grams = x.g < x.lo ? x.lo : x.hi; });
+    stuck.splice(0, stuck.length, ...stuck.map(x => x.it));
+    free = free.filter(it => !stuck.includes(it));
+  }
+}
+
+/**
+ * Bring every day within the allowed calorie range, and under the carb limit,
+ * by changing the grams of items that are not compulsory.
+ *
+ * Step 1 uses ONE pair of factors for the whole week, worked out on the
+ * average day. A food eaten every day keeps the same grams every day.
+ * Step 2 looks at each day still outside the range and adjusts that day's own
+ * (rotating) dishes; only if that is not enough does it touch the everyday
+ * items for that one day.
+ *
+ * Pure: returns new days and a report, saves nothing.
+ *
+ * @returns {{ ok, reason?, days, changes, totals, unfit }}
+ */
+function fitToTarget({ targets, days }) {
+  const t = targets || {};
+  if (!t.kcal) return { ok: false, reason: 'Set a daily calorie target first.', days, changes: [], totals: [], unfit: [] };
+  const { lo, hi } = kcalRange(t.kcal);
+  const cap = t.carbs ? carbCap(t.carbs) : null;
+
+  const next = (days || []).map(d => d.map(m => ({ ...m, items: m.items.map(it => ({ ...it, grams: Number(it.grams), _orig: Number(it.grams) })) })));
+  const before = next.map(dayTotals);
+  const live = next.map((d, w) => (d.length ? w : -1)).filter(w => w >= 0);
+  const all  = (w) => next[w].flatMap(m => m.items);
+  const flex = (w) => all(w).filter(it => !it.compulsory);
+  const sum  = (items, f) => items.reduce((a, it) => a + f(it), 0);
+
+  // Items the same (meal, name, grams) on every day with meals: the everyday items.
+  const sig = (m, it) => `${m.meal.toLowerCase()}|${it.name.toLowerCase()}|${it._orig}`;
+  const everyday = new Set();
+  if (live.length) {
+    next[live[0]].forEach(m => m.items.forEach(it => {
+      const k = sig(m, it);
+      if (live.every(w => next[w].some(x => x.items.some(y => sig(x, y) === k)))) everyday.add(k);
+    }));
+  }
+  const isEveryday = new Map();
+  next.forEach(d => d.forEach(m => m.items.forEach(it => isEveryday.set(it, everyday.has(sig(m, it))))));
+
+  // A day that no amount of scaling can fit is left exactly as it is, and
+  // reported. Shrinking everything else to 40% around a compulsory item that
+  // is itself over the target would only make a bad day worse.
+  const unfit = [];
+  const fittable = [];
+  for (const w of live) {
+    const fixed = all(w).filter(it => it.compulsory);
+    const fixedK = Math.round(sum(fixed, itemKcal)), fixedC = Math.round(sum(fixed, itemCarbs));
+    if (!flex(w).length) unfit.push({ weekday: w, reason: 'Every item is compulsory, so there is nothing to scale.' });
+    else if (fixedK > hi) unfit.push({ weekday: w, reason: `The compulsory items alone are ${fixedK} kcal. Reduce one, or raise the target.` });
+    else if (cap != null && fixedC > cap) unfit.push({ weekday: w, reason: `The compulsory items alone carry ${fixedC} g carbs. Reduce one, or raise the carb target.` });
+    else fittable.push(w);
+  }
+
+  const inRange = (w) => {
+    const tot = dayTotals(next[w]);
+    return tot.kcal >= lo && tot.kcal <= hi && (cap == null || tot.carbs <= cap);
+  };
+  const roundDay = (w) => flex(w).forEach(it => { it.grams = roundGrams(it.grams); });
+
+  // ── Step 1: the average day ────────────────────────────────────────────────
+  if (fittable.length && !fittable.every(inRange)) {
+    const n = fittable.length;
+    // One stand-in item per real item, weighted by how many days it is eaten.
+    const pseudo = [];
+    fittable.forEach(w => flex(w).forEach(it => pseudo.push({ src: it, grams: it.grams / n, _orig: it._orig / n, per_100g: it.per_100g })));
+    const fixedK = sum(fittable.flatMap(w => all(w).filter(it => it.compulsory)), itemKcal) / n;
+    const fixedC = sum(fittable.flatMap(w => all(w).filter(it => it.compulsory)), itemCarbs) / n;
+    // Two factors only, so identical items stay identical: scale the two
+    // groups as wholes rather than item by item.
+    const group = (pred) => pseudo.filter(p => pred(p));
+    const carbG = group(isCarbFood), restG = group(p => !isCarbFood(p));
+    const K = sum(pseudo, itemKcal), C = sum(pseudo, itemCarbs);
+    if (K > 0) {
+      const need = t.kcal - fixedK;
+      let sc = need / K, so = need / K;
+      if (t.carbs && sc * C > t.carbs - fixedC) {
+        const Kc = sum(carbG, itemKcal), Cc = sum(carbG, itemCarbs), Ko = K - Kc, Co = C - Cc;
+        const det = Kc * Co - Ko * Cc, room = t.carbs - fixedC;
+        if (carbG.length && restG.length && Math.abs(det) > 1e-6) {
+          sc = (need * Co - Ko * room) / det;
+          so = Ko > 0 ? (need - sc * Kc) / Ko : so;
+        } else { sc = so = room / C; }
+      }
+      const clamp = (x) => Math.min(FIT_MAX_SCALE, Math.max(FIT_MIN_SCALE, x));
+      sc = clamp(sc);
+      // Whatever the carb foods could not give up, the rest make up in calories.
+      const Kc = sum(carbG, itemKcal), Ko = sum(restG, itemKcal);
+      so = Ko > 0 ? clamp((need - Kc * sc) / Ko) : sc;
+      pseudo.forEach(p => { p.src.grams = Math.min(2000, Math.max(1, p.src._orig * (isCarbFood(p) ? sc : so))); });
+      fittable.forEach(roundDay);
+    }
+  }
+
+  // ── Step 2: each day still outside the range ───────────────────────────────
+  for (const w of fittable) {
+    if (inRange(w)) continue;
+    const own = flex(w).filter(it => !isEveryday.get(it));
+    for (const set of [own, flex(w)]) {
+      if (!set.length) continue;
+      const others = all(w).filter(it => !set.includes(it));
+      scaleItems(set, t.kcal - sum(others, itemKcal), t.carbs ? t.carbs - sum(others, itemCarbs) : null);
+      set.forEach(it => { it.grams = roundGrams(it.grams); });
+      // Rounding to 5 g can leave a day just outside. Close the gap to the
+      // gram: calories first, on the item with the most calories that still
+      // has room to move; then carbs, on the biggest carb food.
+      const loOf = (it) => Math.max(1, it._orig * FIT_MIN_SCALE), hiOf = (it) => Math.min(2000, it._orig * FIT_MAX_SCALE);
+      const room = (it, up) => (up ? it.grams + 1 <= hiOf(it) : it.grams - 1 >= loOf(it));
+      const bound = (it, g) => Math.round(Math.min(hiOf(it), Math.max(loOf(it), g)));
+      const kPerG = (it) => (Number(it.per_100g?.calories) || 0) / 100;
+      // Grams of carbs per kcal: how "carby" a food is for the calories it brings.
+      const density = (it) => (kPerG(it) > 0 ? ((Number(it.per_100g?.total_carbs) || 0) / 100) / kPerG(it) : 0);
+      let tot = dayTotals(next[w]);
+      if (tot.kcal < lo || tot.kcal > hi) {
+        const up = tot.kcal < t.kcal;
+        const pick = set.filter(it => itemKcal(it) > 0 && room(it, up) && !(up && isCarbFood(it) && cap != null))
+          .sort((a, b) => itemKcal(b) - itemKcal(a))[0];
+        if (pick) pick.grams = bound(pick, pick.grams + (t.kcal - tot.kcal) / kPerG(pick));
+      }
+      // Carbs still over: trade calories from the carbiest food that can
+      // still shrink to the least carby food that can still grow. The day's
+      // calories stay where they are; only the carbs come down.
+      for (let i = 0; cap != null && i < 40; i++) {
+        tot = dayTotals(next[w]);
+        if (tot.carbs <= cap) break;
+        const donor = set.filter(it => itemCarbs(it) > 0 && room(it, false)).sort((a, b) => density(b) - density(a))[0];
+        const taker = donor && set.filter(it => it !== donor && itemKcal(it) > 0 && room(it, true) && density(it) < density(donor))
+          .sort((a, b) => density(a) - density(b))[0];
+        if (!donor || !taker) break;
+        const move = Math.min(
+          (tot.carbs - t.carbs) / (density(donor) - density(taker)),
+          (donor.grams - loOf(donor)) * kPerG(donor),
+          (hiOf(taker) - taker.grams) * kPerG(taker));
+        const dg = Math.max(1, Math.round(move / kPerG(donor))), tg = Math.max(1, Math.round(move / kPerG(taker)));
+        donor.grams = bound(donor, donor.grams - dg);
+        taker.grams = bound(taker, taker.grams + tg);
+      }
+      if (inRange(w)) break;
+    }
+    if (!inRange(w)) {
+      const tot = dayTotals(next[w]);
+      const top = [...all(w)].sort((a, b) => itemCarbs(b) - itemCarbs(a)).slice(0, 2).map(it => it.name).join(' and ');
+      unfit.push({ weekday: w, reason: cap != null && tot.carbs > cap
+        ? `Carbs still come to ${tot.carbs} g (limit ${cap} g) with the carb foods at their smallest sensible portion. Most of it is ${top}: remove or swap one.`
+        : `Still ${tot.kcal} kcal after the largest safe change to portions. Add, remove or swap a food instead.` });
+    }
+  }
+
+  // ── Report ─────────────────────────────────────────────────────────────────
+  const changes = [];
+  next.forEach((d, w) => d.forEach(m => m.items.forEach(it => {
+    if (it.grams === it._orig) return;
+    const key = `${m.meal}|${it.name}|${it._orig}|${it.grams}`;
+    let row = changes.find(c => c.key === key);
+    if (!row) { row = { key, meal: m.meal, name: it.name, from: it._orig, to: it.grams, weekdays: [] }; changes.push(row); }
+    row.weekdays.push(w);
+    it.qty_text = `${it.grams} g`;
+  })));
+  changes.forEach(c => { delete c.key; });
+  const totals = live.map(w => ({ weekday: w, before: before[w], after: dayTotals(next[w]), fits: inRange(w) }));
+  next.forEach(d => d.forEach(m => m.items.forEach(it => { delete it._orig; })));
+  return { ok: true, days: next, changes, totals, unfit, range: { lo, hi, carb_cap: cap } };
 }
 
 const hasErrors   = (checks) => (checks || []).some(c => c.level === 'error');
@@ -329,7 +686,7 @@ function groupDays(itemRows) {
     const day = days[r.weekday];
     let meal = day.find(m => m.meal === r.meal);
     if (!meal) { meal = { meal: r.meal, time: r.meal_time || null, items: [] }; day.push(meal); }
-    meal.items.push({ id: r.id, name: r.name, grams: Number(r.grams), qty_text: r.qty_text, per_100g: r.per_100g || {} });
+    meal.items.push({ id: r.id, name: r.name, grams: Number(r.grams), qty_text: r.qty_text, per_100g: r.per_100g || {}, compulsory: r.compulsory === true });
   }
   return days;
 }
@@ -341,7 +698,7 @@ async function loadPlan(db, id) {
   const { rows: [plan] } = await db.query(`SELECT ${PLAN_COLS} FROM diet_plans WHERE id = $1`, [id]);
   if (!plan) return null;
   const { rows } = await db.query(
-    `SELECT id, weekday, meal, meal_time, name, grams, qty_text, per_100g
+    `SELECT id, weekday, meal, meal_time, name, grams, qty_text, per_100g, compulsory
        FROM diet_plan_items WHERE plan_id = $1
       ORDER BY weekday, meal_order, position, id`, [id]);
   return { ...plan, days: groupDays(rows) };
@@ -370,9 +727,9 @@ async function insertItems(client, planId, days) {
       for (let i = 0; i < m.items.length; i++) {
         const it = m.items[i];
         await client.query(
-          `INSERT INTO diet_plan_items (plan_id, weekday, meal, meal_time, meal_order, position, name, grams, qty_text, per_100g)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [planId, w, m.meal, m.time || null, mi, i, it.name, it.grams, it.qty_text || null, JSON.stringify(it.per_100g || {})]);
+          `INSERT INTO diet_plan_items (plan_id, weekday, meal, meal_time, meal_order, position, name, grams, qty_text, per_100g, compulsory)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [planId, w, m.meal, m.time || null, mi, i, it.name, it.grams, it.qty_text || null, JSON.stringify(it.per_100g || {}), it.compulsory === true]);
       }
     }
   }
@@ -405,7 +762,7 @@ async function saveDraft(client, { memberId, coachId, source, title, brief, targ
     `INSERT INTO diet_plans (patient_id, monitor_id, version, status, source, title, brief, targets, content, flags, checks)
      VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
     [memberId, coachId, version, source, title || 'Diet plan', brief || null,
-     JSON.stringify(targets || {}), JSON.stringify(content || {}), JSON.stringify(flags || []), JSON.stringify(checks)]);
+     JSON.stringify(targets || {}), JSON.stringify(withLabCautions(content, flags)), JSON.stringify(flags || []), JSON.stringify(checks)]);
   await insertItems(client, row.id, days);
   return row.id;
 }
@@ -419,7 +776,9 @@ async function updateDraft(client, planId, { title, targets, content, days, effe
   const next = {
     title:   title ?? plan.title,
     targets: targets ? normaliseTargets(targets) : plan.targets,
-    content: content ? normaliseContent({ ...plan.content, ...content }) : plan.content,
+    // Rebuilt from the draft's own flags on every save: neither the model
+    // nor an edit to the cautions list can take a lab caution off.
+    content: withLabCautions(content ? normaliseContent({ ...plan.content, ...content }) : plan.content, plan.flags),
     days:    days ?? plan.days,
   };
   const checks = runChecks(next);
@@ -588,9 +947,10 @@ async function recordImportedPlan(client, { memberId, coachId, title, macros, me
 }
 
 module.exports = {
-  WEEKDAYS, WEEKDAY_NAMES, FILL_AHEAD_DAYS,
+  WEEKDAYS, WEEKDAY_NAMES, FILL_AHEAD_DAYS, KCAL_MARGIN, CARB_MARGIN,
   weekdayOf, addDays, isDate,
   normaliseTargets, normaliseContent, normaliseItem, normaliseDraft, toMealsShape,
-  buildFlags, runChecks, hasErrors, hasWarnings, diffPlans,
+  buildFlags, labCautions, runChecks, hasErrors, hasWarnings, diffPlans,
+  dayTotals, kcalRange, carbCap, isVagueGreen, fitToTarget,
   loadPlan, planInForce, saveDraft, updateDraft, approveDraft, ensureDay, recordImportedPlan,
 };

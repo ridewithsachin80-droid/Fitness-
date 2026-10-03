@@ -63,6 +63,9 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
   const [ack, setAck]         = useState(false);
   const [start, setStart]     = useState('');
   const [targets, setTargets] = useState({});
+  // Fit to target: the server's preview of what it would change. Shown before
+  // anything is saved, and thrown away by any other action.
+  const [fit, setFit]         = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +74,7 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
       setTargets(d.draft?.targets || {});
       setStart('');
       setAck(false);
+      setFit(null);
       setError('');
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load the diet plan.');
@@ -117,6 +121,7 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
     const warnings = draft.checks.filter(c => c.level === 'warn');
     const meals    = draft.days[day] || [];
     const patch    = (body) => api.patch(`/diet-plans/${draft.id}`, body);
+    const canFit   = draft.checks.some(c => ['day_over', 'day_under', 'carbs_over'].includes(c.code));
     const dirtyTargets = TARGETS.some(([k]) => (targets[k] ?? '') !== (draft.targets[k] ?? ''));
 
     return (
@@ -170,6 +175,58 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
             </Pressable>
           )}
 
+          {/* Fit to target (Phase 1.3). Arithmetic on the server, not the AI:
+              scales the portions that are not fixed so each day lands inside
+              the allowed range. Two steps, so the coach sees every change
+              before it is saved. */}
+          {canFit && !fit && (
+            <Pressable variant="secondary" className="w-full" disabled={!!busy} data-testid="plan-fit"
+              onPress={async () => {
+                haptic(10); setBusy('fit'); setError('');
+                try { const { data: d } = await api.post(`/diet-plans/${draft.id}/fit`, {}); setFit(d.fit); }
+                catch (err) { setError(err.response?.data?.error || 'That did not work. Nothing was changed.'); }
+                finally { setBusy(''); }
+              }}>
+              {busy === 'fit' ? 'Working it out…' : 'Fit to target'}
+            </Pressable>
+          )}
+          {fit && (
+            <div className="rounded-xl border border-gold/30 bg-gold/[0.05] px-3 py-2.5 space-y-2" data-testid="plan-fit-preview">
+              <Eyebrow>Fit to target — nothing saved yet</Eyebrow>
+              <p className="text-caption text-mid leading-snug">
+                Allowed {fit.range.lo} to {fit.range.hi} kcal a day{fit.range.carb_cap ? `, carbs up to ${fit.range.carb_cap} g` : ''}. Fixed items keep their grams.
+              </p>
+              {fit.changes.length === 0
+                ? <p className="text-caption text-white">No portion can be changed.</p>
+                : (
+                  <ul className="space-y-1">
+                    {fit.changes.map((c, i) => (
+                      <li key={i} className="text-caption text-white leading-snug">
+                        {c.meal}: {c.name} {c.from} g to {c.to} g <span className="text-mid">({dayList(c.weekdays)})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              <ul className="space-y-0.5">
+                {fit.totals.map(t => (
+                  <li key={t.weekday} className={`text-caption leading-snug ${t.fits ? 'text-mid' : 'text-red-300'}`}>
+                    {DAYS[t.weekday]}: {t.before.kcal} to {t.after.kcal} kcal{fit.range.carb_cap ? `, carbs ${t.before.carbs} to ${t.after.carbs}\u00a0g` : ''}{t.fits ? '' : ' — still outside'}
+                  </li>
+                ))}
+              </ul>
+              {fit.unfit.map((u, i) => <Notice key={i} tone="error">{DAYS[u.weekday]}: {u.reason}</Notice>)}
+              {fit.changes.length > 0 && (
+                <Pressable variant="primary" className="w-full" disabled={!!busy} data-testid="plan-fit-apply"
+                  onPress={() => run('fit-apply', () => api.post(`/diet-plans/${draft.id}/fit`, { apply: true }))}>
+                  {busy === 'fit-apply' ? 'Saving…' : 'Save these portions'}
+                </Pressable>
+              )}
+              <Pressable variant="secondary" className="w-full" disabled={!!busy} onPress={() => setFit(null)}>
+                Leave the plan as it is
+              </Pressable>
+            </div>
+          )}
+
           <Differences diff={draft.diff} version={draft.compared_to_version} />
 
           <div>
@@ -217,6 +274,13 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                       <span className={`block ${kcalOf(it) > 0 ? 'text-mid' : 'text-amber-300'}`}>
                         {kcalOf(it) > 0 ? `${kcalOf(it)} kcal` : 'no calorie figure'}
                       </span>
+                      {/* Fixed = compulsory: Fit to target leaves these grams alone. */}
+                      <button type="button" disabled={!!busy} aria-pressed={!!it.compulsory} style={{ minHeight: 32 }}
+                        aria-label={it.compulsory ? `${it.name}: portion is fixed. Tap to let it change.` : `${it.name}: fix this portion`}
+                        className={`block text-left text-caption font-semibold ${it.compulsory ? 'text-gold' : 'text-lo underline'}`}
+                        onClick={() => run('edit', () => patch({ edits: [{ meal: m.meal, name: it.name, compulsory: !it.compulsory }] }))}>
+                        {it.compulsory ? 'Fixed ✓' : 'Fix portion'}
+                      </button>
                     </span>
                     <input type="number" inputMode="decimal" defaultValue={it.grams} aria-label={`${it.name} grams`} disabled={!!busy}
                       style={{ minHeight: 40, width: 72 }} className={`${input} text-right`}
@@ -234,8 +298,16 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                 ))}
               </div>
             ))}
-            <p className="text-caption text-lo">A change to grams, or removing an item, applies to every day that has it. Calorie figures are for the food as eaten, and are estimates unless the food is in your food table.</p>
+            <p className="text-caption text-lo">A change to grams, fixing a portion, or removing an item applies to every day that has it. Calorie figures are for the food as eaten, and are estimates unless the food is in your food table.</p>
           </div>
+
+          {draft.content.lab_cautions?.length > 0 && (
+            <div data-testid="plan-lab-cautions">
+              <Eyebrow className="mb-1">Cautions from lab results and conditions</Eyebrow>
+              <ul className="space-y-1">{draft.content.lab_cautions.map((c, i) => <li key={i} className="text-caption text-white leading-snug">{c}</li>)}</ul>
+              <p className="text-caption text-lo mt-1">Added by the app from what is on file. A redraft cannot remove them.</p>
+            </div>
+          )}
 
           {(draft.content.avoid?.length > 0 || draft.content.cautions?.length > 0) && (
             <div className="space-y-2">

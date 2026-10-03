@@ -7,6 +7,7 @@
  *   POST  /api/diet-plans/member/:memberId/revise  copy the plan in force into a draft
  *   GET   /api/diet-plans/:id                      one version in full
  *   PATCH /api/diet-plans/:id                      edit a draft
+ *   POST  /api/diet-plans/:id/fit                  Fit to target: preview, or apply:true to save
  *   POST  /api/diet-plans/:id/approve              approve a draft
  *   POST  /api/diet-plans/:id/discard              throw a draft away
  * Member:
@@ -98,6 +99,17 @@ async function memberContext(memberId, today) {
   };
 }
 
+// "Soppu" is a family of leafy greens, not one vegetable. Shared by the draft
+// prompt and the nutrition lookup so both name the same things.
+const GREENS_RULE = 'Soppu / sopina means leafy greens. Name the actual green: palak, dantu (amaranth), sabsige (dill), menthya (methi), harive. Never write "kale", and never a bare "soppu".';
+
+/** A calorie figure the coach wrote in the brief ("1500 kcal", "1,800 calories"). */
+function kcalFromBrief(brief) {
+  const m = String(brief || '').match(/(\d{1,2},?\d{3})\s*(?:k?cal|calories)/i);
+  const n = m ? parseInt(m[1].replace(',', '')) : NaN;
+  return Number.isFinite(n) && n >= 800 && n <= 6000 ? n : null;
+}
+
 function buildDraftPrompt(ctx, brief, { base, instruction } = {}) {
   const facts = [
     ctx.age != null && `Age: ${ctx.age}`,
@@ -109,6 +121,17 @@ function buildDraftPrompt(ctx, brief, { base, instruction } = {}) {
   const flags = ctx.flags.length
     ? ctx.flags.map(f => `- ${f.text}${f.date ? ` (${f.date}${f.stale ? ', old result' : ''})` : ''}`).join('\n')
     : 'None on file.';
+
+  // The exact numbers, when we know the target: "about kcal" produced a
+  // 2,206 kcal Monday on a 1,500 kcal plan.
+  const pct = Math.round(DP.KCAL_MARGIN * 100);
+  const kcal = base?.targets?.kcal || kcalFromBrief(brief);
+  const carbs = base?.targets?.carbs || null;
+  const range = kcal ? DP.kcalRange(kcal) : null;
+  const allowed = [
+    range && `ALLOWED RANGE PER DAY: ${range.lo} to ${range.hi} kcal (target ${kcal}). Every weekday must land inside it.`,
+    carbs && `CARB LIMIT PER DAY: ${carbs} g. No weekday may go above it.`,
+  ].filter(Boolean).join('\n');
 
   return `You are drafting a diet plan for a fitness coach in India to review. The coach
 approves or changes everything; the member never sees your draft directly. This
@@ -122,14 +145,18 @@ ${flags}
 
 COACH'S BRIEF
 message: ${String(brief || '').slice(0, 2000)}
-${base ? `\nCURRENT DRAFT (JSON, in the same shape you must return)\n${JSON.stringify(base).slice(0, 12000)}\n\nCHANGE REQUESTED BY THE COACH\nmessage: ${String(instruction || '').slice(0, 1000)}\nReturn the whole plan again with that change made and everything else kept, in the JSON shape below ("meals" with "items" and "rotation"; never a list of days).\n` : ''}
+${base ? `\nCURRENT DRAFT (JSON, in the same shape you must return)\n${JSON.stringify(base).slice(0, 12000)}\n\nCHANGE REQUESTED BY THE COACH\nmessage: ${String(instruction || '').slice(0, 1000)}\nReturn the whole plan again with that change made and everything else kept, in the JSON shape below ("meals" with "items" and "rotation"; never a list of days).\nKeep every existing caution, avoid-list entry and timetable row word for word unless the change request is about that line.\nItems marked "compulsory" keep their grams and stay compulsory unless the change request names that item.\n` : ''}${allowed ? `\n${allowed}\n` : ''}
 Rules:
 - Follow the brief. Where it names foods, meal count, fasting window or timings, use them.
 - Indian foods and household portions. Every item needs grams, AS EATEN (cooked weight, not raw grain or flour).
 - Every item MUST carry all four per-100 g numbers, for the food AS EATEN: cooked rice is about 130 kcal per 100 g, not 360.
+- ${GREENS_RULE}
+- Mark an item "compulsory": true ONLY when the brief fixes that food and its amount (for example "200 g curd daily", "1 scoop whey after gym"). Leave it off everything else.
 - For each out-of-range result above, either adjust the plan or leave it, and say which in "adjustments". Do not invent results that are not listed.
-- Do not prescribe or change medicines. Put "see your doctor" points in "cautions".
-- Targets must be consistent: 4 x protein + 4 x carbs + 9 x fat should be within 10% of kcal, and each day's meals should add up to about kcal.
+- Do not prescribe or change medicines. The app adds a caution for each out-of-range result above by itself: do not repeat those. Use "cautions" for other "see your doctor" points.
+- Targets must be consistent: 4 x protein + 4 x carbs + 9 x fat should be within 10% of kcal. If the brief gives a calorie figure or a carb limit, use exactly that as the target.
+- CALORIES: for EVERY weekday, the every-day items plus that weekday's rotation items must add up to within ${pct}% of targets.kcal (for 1500 kcal: 1425 to 1575), and never above it. Add each weekday up before you answer and change the grams of non-compulsory items until it fits.
+- CARBS: for every weekday, total carbs must not go above targets.carbs.
 - Each meal lists the items eaten EVERY day in "items". If one dish changes by weekday, put it in "rotation" with one item per weekday. Omit "rotation" if nothing rotates.
 - Keep it compact: at most 5 meals, at most 6 items per meal, at most 5 cautions and 6 adjustments, each one short sentence.
 
@@ -141,7 +168,7 @@ Return ONLY this JSON, no other text:
   "timetable": [ { "time": "HH:MM", "what": "<short>" } ],
   "meals": [
     { "meal": "<name>", "time": "HH:MM",
-      "items": [ { "name": "<food>", "grams": <number>, "qty_text": "<household measure>",
+      "items": [ { "name": "<food>", "grams": <number>, "qty_text": "<household measure>", "compulsory": <true or false>,
                    "kcal_100g": <number>, "protein_100g": <number>, "carbs_100g": <number>, "fat_100g": <number> } ],
       "rotation": { "mon": { <item> }, "tue": { <item> }, "wed": { <item> }, "thu": { <item> }, "fri": { <item> }, "sat": { <item> }, "sun": { <item> } } }
   ],
@@ -197,6 +224,8 @@ function buildFillPrompt(names) {
 Give typical per-100 g nutrition for each food below AS EATEN (cooked, ready
 to eat — not raw grain, flour or dry lentils). These are Indian home foods.
 Estimate sensibly; do not return 0 for a food that has calories.
+${GREENS_RULE} If a name below only says "soppu", cost it as cooked
+palak palya.
 
 Foods:
 ${names.map(n => `- ${n}`).join('\n')}
@@ -249,55 +278,66 @@ router.get('/me', roleCheck('patient'), async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+/**
+ * Write a draft for a member from a brief (or change the open draft on an
+ * instruction). The one way a draft is made by the AI: the Studio and the
+ * coach chat both come through here, so both get the same checks.
+ * Throws an Error carrying .status for anything the coach should be told.
+ */
+async function createDraft(user, { memberId, brief = '', instruction = '' }) {
+  const err = (status, message) => Object.assign(new Error(message), { status });
+  if (!Number.isInteger(memberId)) throw err(400, 'member_id is required.');
+  if (!(await canAccess(user, memberId))) throw err(403, 'Member not assigned to you.');
+  const today = getISTDate();
+  const ctx = await memberContext(memberId, today);
+  if (!ctx) throw err(404, 'Member not found.');
+
+  // A change request works on the existing draft.
+  let base = null, baseRow = null;
+  if (instruction) {
+    const { rows: [d] } = await pool.query(`SELECT id FROM diet_plans WHERE patient_id=$1 AND status='draft'`, [memberId]);
+    baseRow = d ? await DP.loadPlan(pool, d.id) : null;
+    if (!baseRow) throw err(409, 'There is no draft to change. Create a draft first.');
+    // Same shape as the answer we want back ("meals" + "rotation"), never
+    // seven explicit days: a model echoes the shape it is shown.
+    // lab_cautions are the app's, rebuilt on save: the model is not shown them.
+    const { adjustments, lab_cautions, ...rest } = baseRow.content || {};
+    base = { title: baseRow.title, targets: baseRow.targets, ...rest, meals: DP.toMealsShape(baseRow.days) };
+  } else if (brief.length < 10) {
+    throw err(400, 'Write a short brief first: the kind of diet, meals a day, foods to include.');
+  }
+  const useBrief = brief || baseRow?.brief || '';
+
+  let text;
+  try {
+    // A whole week of meals with cautions does not fit in the 3000-token
+    // reply every other AI call uses; cut off, it is half a JSON object.
+    ({ text } = await require('./aiChat').callAI(buildDraftPrompt(ctx, useBrief, { base, instruction }),
+      { maxTokens: 8000, timeout: 60000, json: true, failOnTruncation: true }));
+  } catch (_) {
+    throw err(502, 'The AI could not draft a plan just now. Nothing was changed. Try again in a minute.');
+  }
+  const draft = DP.normaliseDraft(parseModelJSON(text));
+  if (!draft) throw err(502, 'The AI answer could not be read as a plan. Nothing was changed. Try again, or shorten the brief.');
+  await fillMissingNutrition(draft.days);
+  await enrichDays(draft.days);
+
+  const id = await inTx(client => DP.saveDraft(client, {
+    memberId, coachId: user.id, source: baseRow?.source || 'brief',
+    title: draft.title, brief: useBrief, targets: draft.targets, content: draft.content,
+    flags: ctx.flags, days: draft.days,
+  }));
+  return present(await DP.loadPlan(pool, id), today);
+}
+
 // ── Coach ────────────────────────────────────────────────────────────────────
 router.post('/draft', coachOnly, async (req, res) => {
   try {
-    const memberId = parseInt(req.body?.member_id);
-    const brief = String(req.body?.brief || '').trim();
-    const instruction = String(req.body?.instruction || '').trim();
-    if (!Number.isInteger(memberId)) return res.status(400).json({ error: 'member_id is required.' });
-    if (!(await canAccess(req.user, memberId))) return res.status(403).json({ error: 'Member not assigned to you.' });
-    const today = getISTDate();
-    const ctx = await memberContext(memberId, today);
-    if (!ctx) return res.status(404).json({ error: 'Member not found.' });
-
-    // A change request works on the existing draft.
-    let base = null, baseRow = null;
-    if (instruction) {
-      const { rows: [d] } = await pool.query(`SELECT id FROM diet_plans WHERE patient_id=$1 AND status='draft'`, [memberId]);
-      baseRow = d ? await DP.loadPlan(pool, d.id) : null;
-      if (!baseRow) return res.status(409).json({ error: 'There is no draft to change. Create a draft first.' });
-      // Same shape as the answer we want back ("meals" + "rotation"), never
-      // seven explicit days: a model echoes the shape it is shown.
-      const { adjustments, ...rest } = baseRow.content || {};
-      base = { title: baseRow.title, targets: baseRow.targets, ...rest, meals: DP.toMealsShape(baseRow.days) };
-    } else if (brief.length < 10) {
-      return res.status(400).json({ error: 'Write a short brief first: the kind of diet, meals a day, foods to include.' });
-    }
-    const useBrief = brief || baseRow?.brief || '';
-
-    let text;
-    try {
-      // A whole week of meals with cautions does not fit in the 3000-token
-      // reply every other AI call uses; cut off, it is half a JSON object.
-      ({ text } = await require('./aiChat').callAI(buildDraftPrompt(ctx, useBrief, { base, instruction }),
-        { maxTokens: 8000, timeout: 60000, json: true, failOnTruncation: true }));
-    } catch (err) {
-      return res.status(502).json({ error: 'The AI could not draft a plan just now. Nothing was changed. Try again in a minute.' });
-    }
-    const draft = DP.normaliseDraft(parseModelJSON(text));
-    if (!draft) {
-      return res.status(502).json({ error: 'The AI answer could not be read as a plan. Nothing was changed. Try again, or shorten the brief.' });
-    }
-    await fillMissingNutrition(draft.days);
-    await enrichDays(draft.days);
-
-    const id = await inTx(client => DP.saveDraft(client, {
-      memberId, coachId: req.user.id, source: baseRow?.source || 'brief',
-      title: draft.title, brief: useBrief, targets: draft.targets, content: draft.content,
-      flags: ctx.flags, days: draft.days,
-    }));
-    res.json({ plan: await present(await DP.loadPlan(pool, id), today) });
+    res.json({ plan: await createDraft(req.user, {
+      memberId: parseInt(req.body?.member_id),
+      brief: String(req.body?.brief || '').trim(),
+      instruction: String(req.body?.instruction || '').trim(),
+    }) });
   } catch (err) { fail(res, err); }
 });
 
@@ -365,6 +405,7 @@ router.get('/:id', coachOnly, async (req, res) => {
  * timetable, eating_window}, effective_from, and item `edits`:
  *   { meal, name, grams }           change grams      (all weekdays unless `weekday` given)
  *   { meal, name, remove: true }    remove the item
+ *   { meal, name, compulsory: bool } fix (or free) the item's portion for Fit to target
  *   { meal, add: { name, grams } }  add an item
  * and fill_nutrition: true to look up foods that have no calorie figure.
  */
@@ -392,6 +433,10 @@ router.patch('/:id', coachOnly, async (req, res) => {
             return;
           }
           const name = String(e.name || '').toLowerCase();
+          if (typeof e.compulsory === 'boolean') {
+            m.items.forEach(x => { if (x.name.toLowerCase() === name) x.compulsory = e.compulsory; });
+            return;
+          }
           if (e.remove) { m.items = m.items.filter(x => x.name.toLowerCase() !== name); return; }
           const g = parseFloat(e.grams);
           if (Number.isFinite(g) && g >= 1 && g <= 2000) {
@@ -414,6 +459,31 @@ router.patch('/:id', coachOnly, async (req, res) => {
       title: b.title, targets: b.targets, content: b.content, effective_from: b.effective_from, days,
     }));
     res.json({ plan: await present(await DP.loadPlan(pool, plan.id), getISTDate()) });
+  } catch (err) { fail(res, err); }
+});
+
+/**
+ * Fit to target. Scales the portions of non-compulsory items so each day
+ * lands inside the allowed calorie range and under the carb limit.
+ * Arithmetic in services/dietPlan.js; no AI call.
+ *
+ * Without `apply` nothing is saved: the coach is shown what would change.
+ * With apply: true the same sum is done again on the draft as it stands now
+ * and saved, so what is saved can never be a stale preview.
+ */
+router.post('/:id/fit', coachOnly, async (req, res) => {
+  try {
+    const plan = await ownedPlan(req, res);
+    if (!plan) return;
+    if (plan.status !== 'draft') return res.status(409).json({ error: 'An approved plan cannot be edited. Use Revise to make a new version.' });
+    const fit = DP.fitToTarget(plan);
+    if (!fit.ok) return res.status(422).json({ error: fit.reason });
+    const { days, ...report } = fit;
+    if (req.body?.apply !== true || !fit.changes.length) {
+      return res.json({ applied: false, fit: report });
+    }
+    await inTx(client => DP.updateDraft(client, plan.id, { days }));
+    res.json({ applied: true, fit: report, plan: await present(await DP.loadPlan(pool, plan.id), getISTDate()) });
   } catch (err) { fail(res, err); }
 });
 
@@ -456,3 +526,5 @@ module.exports = router;
 module.exports.buildDraftPrompt = buildDraftPrompt;
 module.exports.parseModelJSON   = parseModelJSON;
 module.exports.buildFillPrompt  = buildFillPrompt;
+module.exports.createDraft      = createDraft;
+module.exports.kcalFromBrief    = kcalFromBrief;

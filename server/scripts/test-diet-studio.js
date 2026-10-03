@@ -135,10 +135,10 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('macros that do not add up to the calories are caught (1710 vs 1950)',
        has('macro_mismatch') && /1710/.test(checks.find(c => c.code === 'macro_mismatch').text), checks);
     ck('an item with no calorie figure is named', has('no_nutrition') && /Mystery soup/.test(checks.find(c => c.code === 'no_nutrition').text));
-    ck('meals far from the target are caught', has('day_total'));
+    ck('meals far under the target are caught', has('day_under'));
     ck('no avoid-list hit when no meal contains one', !has('avoid_conflict'));
     ck('a food with no calorie figure is an ERROR: it blocks approval', checks.find(c => c.code === 'no_nutrition').level === 'error' && DP.hasErrors(checks));
-    ck('the other two are warnings', checks.filter(c => c.level === 'warn').map(c => c.code).sort().join() === 'day_total,macro_mismatch', checks);
+    ck('the other two are warnings', checks.filter(c => c.level === 'warn').map(c => c.code).sort().join() === 'day_under,macro_mismatch', checks);
     const fed = JSON.parse(JSON.stringify(d));
     fed.days.forEach(day => day.forEach(m => m.items.forEach(i => { if (i.name === 'Mystery soup') i.per_100g.calories = 35; })));
     ck('once every food has a figure there is no error', !DP.hasErrors(DP.runChecks(fed)));

@@ -929,3 +929,7 @@ CREATE TABLE IF NOT EXISTS diet_plan_items (
 );
 CREATE INDEX IF NOT EXISTS idx_diet_plan_items_plan_day
   ON diet_plan_items(plan_id, weekday, meal_order, position);
+
+-- Phase 1.3: an item the coach's brief fixed ("200 g curd daily"). "Fit to
+-- target" scales every other portion and leaves these alone.
+ALTER TABLE diet_plan_items ADD COLUMN IF NOT EXISTS compulsory BOOLEAN NOT NULL DEFAULT false;

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LineChart, BarChart, Bar, Cell, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
@@ -342,6 +342,21 @@ export default function Coach() {
   ];
   // Bumped whenever the coach saves something on this page, so the brief re-reads.
   const [briefKey, setBriefKey] = useState(0);
+
+  // "Review in Nutrition" from the coach chat lands on ?tab=nutrition. The
+  // chat may have written a draft while the Studio was already on screen
+  // (the coach was on this member's Nutrition tab), so the Studio is given a
+  // new key and re-reads rather than showing the plan as it was.
+  const [searchParams] = useSearchParams();
+  const [studioKey, setStudioKey] = useState(0);
+  const wantedTab = searchParams.get('tab');
+  const wantedDraft = searchParams.get('draft');
+  useEffect(() => {
+    if (wantedTab && ['today', 'nutrition', 'training', 'labs'].includes(wantedTab)) {
+      setTab(wantedTab);
+      setStudioKey(k => k + 1);
+    }
+  }, [wantedTab, wantedDraft, memberId]);
 
   // ── Roster, for prev/next ───────────────────────────────────────────────────
   // Reviewing seven members meant: open one, scroll a very long page, go back,
@@ -903,7 +918,7 @@ export default function Coach() {
         {tab === 'nutrition' && (<>   {/* Metabolic Insight */}
         {/* Diet Plan Studio (Phase 1): brief → draft → checks → approve.
             First on the tab: the plan is what the rest of Nutrition is measured against. */}
-        <DietPlanStudio memberId={parseInt(memberId)} memberName={data?.profile?.name || ''}
+        <DietPlanStudio key={`studio-${memberId}-${studioKey}`} memberId={parseInt(memberId)} memberName={data?.profile?.name || ''}
           onApplied={() => load({ quiet: true })} />
         <Card>
           <SectionTitle icon="🧬">Metabolic Insight</SectionTitle>
@@ -1345,7 +1360,7 @@ export default function Coach() {
           is where the intent forms. */}
       <CoachAIChat
         contextMember={{ id: parseInt(memberId), name: profile?.name }}
-        onApplied={() => load({ quiet: true })}
+        onApplied={() => { load({ quiet: true }); setStudioKey(k => k + 1); }}
       />
       <CoachAIFab bottomOffset={88} />
     </div>

@@ -2548,6 +2548,16 @@ SUPPORTED OPERATIONS per command:
     items (with grams: 1 scoop whey ≈ 30 g), NOT protocol supplements —
     supplements are standing daily pills/powders, not food for a specific meal.
   · Replace mode overwrites that meal's plan — say so in reply.
+- diet_plan: { "brief": "<everything the coach said about the plan>" } — use
+  when the coach asks to DRAFT / make / create / prepare a whole DIET PLAN for a
+  member ("draft a diet plan for Sachin: 1500 kcal, low carb, 3 meals, veg, carbs
+  below 80 g"). Copy the coach's requirements into brief in their own words:
+  calories, carbs, meal count, fasting window, foods to include or avoid.
+  · This is NOT meal_plan. meal_plan is the coach dictating the exact foods of
+    a meal. diet_plan is the coach asking for a plan to be WRITTEN.
+  · Do not write any meals or foods yourself, and do not also set macros: the
+    app drafts the plan in the Diet Plan Studio for the coach to review.
+  · reply: say a draft will be prepared for review. Never say it was sent.
 - program: assigns a WORKOUT PROGRAM / training split. Shape:
   { "name": "Push Pull Legs",
     "days": [
@@ -2621,7 +2631,8 @@ Return ONLY a raw JSON object, no markdown fences:
       "push": null,
       "morning_nudge": null,
       "program": null,
-      "meal_plan": null
+      "meal_plan": null,
+      "diet_plan": null
     }
   ]
 }`;
@@ -2746,6 +2757,19 @@ function labelFor(group, id) {
   return it ? it.label : id;
 }
 
+/**
+ * "Draft a diet plan for Sachin…" from the coach chat. Only the brief is kept:
+ * the plan itself is written by the Studio's own draft path, with its checks.
+ * A brief the model cut down to a few words falls back to the coach's message.
+ */
+function normaliseDietPlanOp(raw, coachMessage) {
+  if (!raw || typeof raw !== 'object') return null;
+  let brief = String(raw.brief || '').trim();
+  if (brief.length < 10) brief = String(coachMessage || '').trim();
+  brief = brief.slice(0, 2000);
+  return brief.length >= 10 ? { brief } : null;
+}
+
 // Human-readable change list for the preview UI
 function describeOps(cmd) {
   const out = [];
@@ -2778,6 +2802,12 @@ function describeOps(cmd) {
         ? ` · next ${cmd.meal_plan.repeat_days} days` : '';
       out.push({ icon: '🍽️', text: `${m.mode === 'append' ? `Add to ${m.meal} plan` : `${m.meal} plan`}${span} (~${kcal} kcal): ${names}${m.items.length > 4 ? ` +${m.items.length - 4} more` : ''}` });
     }
+  }
+  // Nothing reaches the member from here: Apply only writes a DRAFT, and the
+  // preview has to say so or "Apply" reads as "send".
+  if (cmd.diet_plan) {
+    const b = cmd.diet_plan.brief;
+    out.push({ icon: '📋', text: `Draft a diet plan in the Studio${cmd.diet_plan.replaces_draft ? ' (replaces the draft already open)' : ''}: "${b.length > 160 ? b.slice(0, 160) + '…' : b}". Not sent to the member: you review and approve it in Nutrition.` });
   }
   if (cmd.program) {
     const daysTxt = cmd.program.days.map(d => `${d.label} (${d.exercises.length})`).join(', ');
@@ -3484,6 +3514,7 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
         target_weight,
         program: applyHouseCircuits(normaliseProgram(raw.program), circuits),
         meal_plan: normaliseMealPlan(raw.meal_plan),
+        diet_plan: normaliseDietPlanOp(raw.diet_plan, cleanMsg),
         activities:  normaliseGroupOp(raw.activities,  CATALOG.activities),
         acv:         normaliseGroupOp(raw.acv,         CATALOG.acv),
         supplements: normaliseGroupOp(raw.supplements, CATALOG.supplements),
@@ -3497,6 +3528,15 @@ router.post('/coach-parse', roleCheck('monitor', 'admin'), async (req, res) => {
         ops.activities = null; ops.acv = null; ops.supplements = null;
         ops.program = null;   // a split for "everyone" is almost always a mistake
         ops.meal_plan = null; // and so is one dinner for every member
+        ops.diet_plan = null; // a diet plan is written for one member
+      }
+      // A new draft replaces the one already open. Say so before Apply.
+      if (ops.diet_plan && member) {
+        try {
+          const { rows } = await pool.query(
+            `SELECT 1 FROM diet_plans WHERE patient_id=$1 AND status='draft'`, [member.id]);
+          if (rows.length) ops.diet_plan.replaces_draft = true;
+        } catch (_) { /* the preview just says less */ }
       }
 
       const changes = describeOps(ops);
@@ -3951,11 +3991,36 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
         }
       }
 
+      // A Studio draft from the brief. After the commit and outside it: the
+      // AI call takes seconds, and a draft that fails must not undo the other
+      // changes made in the same turn. It goes through the Studio's own
+      // createDraft, so it gets the same checks and is NEVER approved here.
+      let studio = null, draftFailed = false;
+      if (ops.diet_plan && typeof ops.diet_plan.brief === 'string') {
+        try {
+          const plan = await require('./dietPlans').createDraft(req.user, {
+            memberId, brief: ops.diet_plan.brief.trim().slice(0, 2000),
+          });
+          const errs = (plan.checks || []).filter(c => c.level === 'error').length;
+          appliedBits.push(`diet plan draft ready (version ${plan.version}, not sent)` +
+            (errs ? `, ${errs} must-fix ${errs === 1 ? 'check' : 'checks'} to clear` : ''));
+          studio = { member_id: memberId, plan_id: plan.id };
+        } catch (e) {
+          if (!e.status || e.status >= 500) console.error('coach-apply diet draft failed:', e.message);
+          appliedBits.push(`diet plan draft not created: ${e.status ? e.message : 'something went wrong, try again'}`);
+          draftFailed = true;
+        }
+      }
+
       coachAudit(req.user, 'coach_ai_update', memberId, memberName,
         `AI chat applied: ${appliedBits.join(', ')}`);
       results.push({
         member_name: memberName,
-        ok: true,
+        // A failed draft with nothing else applied is a failure, not "Applied".
+        ok: !(draftFailed && appliedBits.length === 1),
+        // Present only when a Studio draft was created: the chat renders it as
+        // a "Review in Nutrition" button.
+        studio,
         detail: appliedBits.join(', ') || 'no changes',
         // Present only when the morning message could not be delivered — the
         // chat renders it as a "Send on WhatsApp" button.
@@ -4163,6 +4228,7 @@ module.exports.buildParsePrompt   = buildParsePrompt;
 // asserted directly rather than inferred from an HTTP round trip.
 module.exports.normaliseMealPlan  = normaliseMealPlan;
 module.exports.describeOps        = describeOps;
+module.exports.normaliseDietPlanOp = normaliseDietPlanOp;
 module.exports.dietPlanMacros     = dietPlanMacros;
 module.exports.learnFoods         = learnFoods;
 module.exports.enrichFromDB       = enrichFromDB;

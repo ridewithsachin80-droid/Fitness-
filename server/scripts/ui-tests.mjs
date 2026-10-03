@@ -322,9 +322,28 @@ const log = { log_date:'2026-09-01', weight_kg:'84.0', water_ml:1500,
   activities:{walk:true}, acv:{acv1:true}, supplements:{b12:true},
   sleep:{bedtime:'22:30',waketime:'06:30'} };
 const ok = (data) => Promise.resolve({ data });
+// Phase 1.3: a Studio draft with long food names, a fixed portion, lab
+// cautions and a Fit to target preview, so the widest rows are on screen.
+const dpItem = (id, name, grams, compulsory) => ({ id, name, grams, qty_text: grams + ' g', compulsory,
+  per_100g: { calories: 265, total_carbs: 6 } });
+const dpDay = () => [{ meal: 'Meal 1', time: '12:00', items: [
+  dpItem(1, 'Homemade low-fat curd', 200, true),
+  dpItem(2, 'Paneer-mushroom-capsicum masala with menthya soppu', 1250.5, false) ] }];
+const dietDraft = { id: 41, patient_id: 1, version: 2, status: 'draft', title: 'Low carb vegetarian, 16:8',
+  targets: { kcal: 1500, protein: 120, carbs: 80, fat: 78 },
+  flags: [{ kind:'lab', text:'Fasting Glucose is high: 132 mg/dL', source:'Lab result', date:'2026-09-12', stale:false }],
+  content: { avoid: ['sugar'], cautions: ['See your doctor for a BP check before starting the gym.'], adjustments: [],
+    lab_cautions: ['Fasting Glucose is high: 132 mg/dL (12 Sep 2026). Keep sweets, fruit juice and maida out, and keep to the carbs in this plan. Review this result with your doctor.'] },
+  checks: [{ level:'error', code:'day_over', text:'Over the 1500 kcal target (allowed 1425 to 1575): Mon 2206, Tue 2317, Wed 2277, Thu 2332, Fri 2317, Sat 2297, Sun 2373 kcal. Use Fit to target, or reduce portions.' }],
+  days: [dpDay(), dpDay(), dpDay(), dpDay(), dpDay(), dpDay(), dpDay()], diff: null, compared_to_version: null };
+const dietFit = { ok: true, range: { lo: 1425, hi: 1575, carb_cap: 84 },
+  unfit: [{ weekday: 6, reason: 'Carbs still come to 112 g (limit 84 g) with the carb foods at their smallest sensible portion. Most of it is Paneer-mushroom-capsicum masala with menthya soppu and Jowar roti: remove or swap one.' }],
+  changes: [{ meal: 'Meal 1', name: 'Paneer-mushroom-capsicum masala with menthya soppu', from: 1250.5, to: 505, weekdays: [0,1,2,3,4,5] }],
+  totals: [0,1,2,3,4,5,6].map(w => ({ weekday: w, before: { kcal: 2206, carbs: 163 }, after: { kcal: 1498, carbs: 79 }, fits: w !== 6 })) };
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/diet-plans/member/')) return ok({ today: '2026-10-03', in_force: null, upcoming: null, draft: dietDraft, history: [] });
     if (u.includes('/gaps/effectiveness')) return ok({ window_days:90, min_bucket:20,
       response_window_hours:48,
       overall:{label:'all',sent:27,responded:12,enough_data:true,rate_pct:44},
@@ -399,7 +418,7 @@ export default {
     if (u.includes('/members') || u.includes('/patients')) return ok(members);
     return ok([]);
   },
-  post: async () => ok({}), put: async () => ok({}),
+  post: async (url) => (String(url).includes('/fit') ? ok({ applied: false, fit: dietFit }) : ok({})), put: async () => ok({}),
   patch: async () => ok({}), delete: async () => ok({}),
 };
 `;
@@ -431,6 +450,11 @@ const OVERFLOW_PAGES = [
   ['Progress',       "import P from './pages/Progress.jsx';"],
   ['Plan',           "import P from './pages/Plan.jsx';"],
   ['DailyLog',       "import P from './pages/DailyLog.jsx';"],
+  // The Studio with a draft open and the Fit to target preview showing: the
+  // item row gained a third control in Phase 1.3 and is the tightest row here.
+  ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
+     const P = () => { setTimeout(() => document.querySelector('[data-testid="plan-fit"]')?.click(), 250);
+       return <div className="p-4"><S memberId={1} memberName="Mrs. Venkataramana Reddy" /></div>; };`],
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1742,6 +1766,123 @@ async function circuitsCardTest() {
   ck('a member\'s Settings has no circuits card', !M.w.document.querySelector('[data-testid="circuit-add"]') && !/My circuits/.test(M.w.document.body.innerHTML));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 22. Diet Plan Studio, Phase 1.3 — must-fix totals, Fit to target, lab
+//     cautions, fixed portions, and the coach chat's "Review in Nutrition"
+// ═══════════════════════════════════════════════════════════════════════════
+async function dietStudio13Test() {
+  console.log('\n[22] Diet Plan Studio (Phase 1.3)');
+  const api = stub('api-studio13.js', `
+    window.__calls = []; window.__posts = []; window.__patches = [];
+    const item = (id, name, grams, kcal, compulsory) => ({ id, name, grams, qty_text: grams + ' g', compulsory: !!compulsory, per_100g: { calories: kcal, total_carbs: 5 } });
+    const day = () => [{ meal: 'Meal 1', time: '12:00', items: [item(1, 'Curd', 200, 60, true), item(2, 'Paneer bhurji', 300, 265, false)] }];
+    const draft = () => ({ id: 41, patient_id: 12, version: 2, status: 'draft', title: 'Low carb vegetarian', targets: { kcal: 1500, protein: 120, carbs: 80, fat: 78 },
+      flags: [{ kind: 'lab', test: 'Fasting Glucose', status: 'high', text: 'Fasting Glucose is high: 132 mg/dL', source: 'Lab result', date: '2026-09-12', stale: false }],
+      content: { avoid: ['sugar'], cautions: ['Drink more water.'], adjustments: [],
+                 lab_cautions: ['Fasting Glucose is high: 132 mg/dL (12 Sep 2026). Keep sweets, fruit juice and maida out.'] },
+      checks: window.__fitted ? [] : [{ level: 'error', code: 'day_over', text: 'Over the 1500 kcal target (allowed 1425 to 1575): Mon 2206 kcal. Use Fit to target, or reduce portions.' }],
+      days: [day(), day(), day(), day(), day(), day(), day()], diff: null, compared_to_version: null });
+    const fit = { ok: true, range: { lo: 1425, hi: 1575, carb_cap: 84 }, unfit: [{ weekday: 6, reason: 'The compulsory items alone are 1718 kcal. Reduce one, or raise the target.' }],
+      changes: [{ meal: 'Meal 1', name: 'Paneer bhurji', from: 300, to: 190, weekdays: [0, 1, 2, 3, 4, 5] }],
+      totals: [0, 1, 2, 3, 4, 5, 6].map(w => ({ weekday: w, before: { kcal: 2206, carbs: 120 }, after: { kcal: w === 6 ? 2206 : 1498, carbs: 79 }, fits: w !== 6 })) };
+    const member = { profile: { id: 12, name: 'Daya Kumar', phone: '9000000012', protocol: { activities: [], acv: [], supplements: [], macros: {}, water_target: 3000 } }, logs: [], labs: [], notes: [] };
+    const get = async (url) => { window.__calls.push(url);
+      if (/\\/diet-plans\\/member\\/12$/.test(url)) return { data: { today: '2026-10-03', in_force: null, upcoming: null, draft: draft(), history: [] } };
+      if (/\\/members\\/12$/.test(url)) return { data: member };
+      if (/\\/members\\/12\\/brief$/.test(url)) return { data: { priority: 'ok', brief: ['a', 'b', 'c'] } };
+      if (/\\/workouts\\/summary/.test(url)) return { data: { sessions: [] } };
+      if (/\\/workouts/.test(url)) return { data: { exercises: [], cardio: [], session: null } };
+      if (/\\/members$/.test(url)) return { data: [{ id: 12, name: 'Daya Kumar' }] };
+      return { data: {} }; };
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (/\\/diet-plans\\/41\\/fit$/.test(url)) { if (body && body.apply) { window.__fitted = true; return { data: { applied: true, fit, plan: draft() } }; } return { data: { applied: false, fit } }; }
+      if (/coach-parse$/.test(url)) return { data: { reply: 'Preparing a draft diet plan for review.', actions: [{ member_id: 12, member_name: 'Daya Kumar', resolved: true, is_all: false,
+        ops: { diet_plan: { brief: 'Low carb veg, 1500 kcal' } }, changes: [{ icon: '📋', text: 'Draft a diet plan in the Studio: "Low carb veg, 1500 kcal". Not sent to the member: you review and approve it in Nutrition.' }] }] } };
+      if (/coach-apply$/.test(url)) return { data: { results: [{ member_name: 'Daya Kumar', ok: true, detail: 'diet plan draft ready (version 2, not sent), 1 must-fix check to clear', studio: { member_id: 12, plan_id: 41 } }] } };
+      return { data: {} }; };
+    const patch = async (url, body) => { window.__patches.push({ url, body }); return { data: { plan: draft() } }; };
+    export default { get, post, put: post, patch, delete: post };`);
+
+  // ── The Studio on its own ───────────────────────────────────────────────────
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import DietPlanStudio from './components/coach/DietPlanStudio.jsx';
+    createRoot(document.getElementById('root')).render(<DietPlanStudio memberId={12} memberName="Daya Kumar" />);`, api);
+  const { w, errors } = run(code); await tick(500);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('the draft renders', errors.length === 0 && !!q('diet-draft'), errors.join('|'));
+  ck('the over-target day shows as "Must fix", in the error style', /Must fix: Over the 1500 kcal target/.test(q('plan-checks').textContent) && !!q('plan-checks').querySelector('.text-red-300'), q('plan-checks')?.textContent);
+  ck('Approve is disabled while a must-fix error stands', q('plan-approve').disabled === true);
+  ck('there is no "approve anyway" tick box for an error', !d.querySelector('input[type=checkbox]'));
+  ck('lab cautions show in their own section, marked as added by the app', !!q('plan-lab-cautions') && /Fasting Glucose is high: 132 mg\/dL \(12 Sep 2026\)/.test(q('plan-lab-cautions').textContent) && /redraft cannot remove/.test(q('plan-lab-cautions').textContent), q('plan-lab-cautions')?.textContent);
+  const fixedBtn = [...d.querySelectorAll('button[aria-pressed]')];
+  ck('a compulsory item reads "Fixed", the others offer "Fix portion"', fixedBtn.length === 2 && /^Fixed/.test(fixedBtn[0].textContent) && fixedBtn[0].getAttribute('aria-pressed') === 'true' && /^Fix portion/.test(fixedBtn[1].textContent) && /fix this portion/.test(fixedBtn[1].getAttribute('aria-label')), fixedBtn.map(b => b.textContent));
+  ck('"Fit to target" is offered, and no preview yet', !!q('plan-fit') && !q('plan-fit-preview'));
+
+  q('plan-fit').click(); await tick(300);
+  const firstFit = w.__posts.find(p => /\/fit$/.test(p.url));
+  ck('the first tap asks for a preview only (no apply)', !!firstFit && firstFit.body.apply !== true && w.__posts.filter(p => /\/fit$/.test(p.url)).length === 1, w.__posts);
+  const pv = q('plan-fit-preview');
+  ck('the preview says nothing is saved yet', !!pv && /nothing saved yet/i.test(pv.textContent));
+  ck('and lists each change with from and to grams and its days', /Paneer bhurji 300 g to 190 g/.test(pv.textContent) && /Mon, Tue, Wed, Thu, Fri, Sat/.test(pv.textContent), pv?.textContent.slice(0, 300));
+  ck('and each day before and after', /Mon: 2206 to 1498 kcal/.test(pv.textContent));
+  ck('a day that cannot be fitted is marked and says why', /Sun: 2206 to 2206 kcal.*still outside/.test(pv.textContent) && /Sun: The compulsory items alone are 1718 kcal/.test(pv.textContent), pv?.textContent.slice(-400));
+  ck('nothing was edited by looking at the preview', w.__patches.length === 0);
+  ck('Approve is still disabled during the preview', q('plan-approve').disabled === true);
+
+  q('plan-fit-apply').click(); await tick(500);
+  const applied = w.__posts.filter(p => /\/fit$/.test(p.url));
+  ck('"Save these portions" sends apply: true', applied.length === 2 && applied[1].body.apply === true, applied);
+  ck('the screen re-reads the plan from the server; the error and the preview are gone', !q('plan-fit-preview') && !q('plan-checks') && w.__calls.filter(u => /diet-plans\/member\/12$/.test(u)).length === 2);
+  ck('and Approve is enabled', q('plan-approve').disabled === false);
+
+  [...d.querySelectorAll('button[aria-pressed]')][1].click(); await tick(300);
+  ck('"Fix portion" PATCHes compulsory: true for that item', w.__patches.length === 1 && w.__patches[0].body.edits[0].name === 'Paneer bhurji' && w.__patches[0].body.edits[0].compulsory === true, w.__patches);
+
+  // ── The member page: ?tab=nutrition, and the chat's review button ───────────
+  const page = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+    import Monitor from './pages/Monitor.jsx';
+    import MemberList from './pages/PatientList.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    import { useCoachAI } from './components/CoachAIChat.jsx';
+    useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: 'monitor' }, isRestoring: false });
+    window.__openChat = () => useCoachAI.getState().openChat();
+    window.__chatOpen = () => useCoachAI.getState().open;
+    function Where() { const l = useLocation(); window.__where = l.pathname + l.search; return null; }
+    createRoot(document.getElementById('root')).render(
+      <MemoryRouter initialEntries={[window.__start || '/coach']}>
+        <Where />
+        <Routes><Route path="/coach" element={<MemberList />} /><Route path="/coach/:memberId" element={<Monitor />} /></Routes>
+      </MemoryRouter>);`, api);
+
+  const P = run(page, (win) => { win.__start = '/coach/12?tab=nutrition&draft=41'; }); await tick(900);
+  const pq = (id) => P.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('/coach/12?tab=nutrition opens the member page on the Nutrition tab with the draft', P.errors.length === 0 && !!pq('diet-draft'), P.errors.join('|'));
+  const plain = run(page, (win) => { win.__start = '/coach/12'; }); await tick(900);
+  ck('without ?tab the page still opens on Today (no Studio)', plain.errors.length === 0 && !plain.w.document.querySelector('[data-testid="diet-draft"]'));
+
+  // jsdom has no scrollIntoView; the chat scrolls to its newest message.
+  const L = run(page, (win) => { win.Element.prototype.scrollIntoView = () => {}; }); await tick(700);
+  const ld = L.w.document;
+  L.w.__openChat(); await tick(300);
+  const inputEl = [...ld.querySelectorAll('input')].find(i => /Ask or instruct/.test(i.getAttribute('placeholder') || ''));
+  Object.getOwnPropertyDescriptor(L.w.HTMLInputElement.prototype, 'value').set.call(inputEl, 'Draft a diet plan for Daya: low carb veg, 1500 kcal');
+  inputEl.dispatchEvent(new L.w.Event('input', { bubbles: true })); await tick(50);
+  inputEl.dispatchEvent(new L.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(500);
+  ck('the chat previews the draft as an action, saying it is not sent', /Draft a diet plan in the Studio/.test(ld.body.textContent) && /Not sent to the member/.test(ld.body.textContent), L.errors.join('|'));
+  ck('nothing is applied before the coach taps Apply', !L.w.__posts.some(p => /coach-apply$/.test(p.url)) && !ld.querySelector('[data-testid="review-draft"]'));
+  L.w.__click('Apply changes'); await tick(500);
+  const sent = L.w.__posts.find(p => /coach-apply$/.test(p.url));
+  ck('Apply sends the diet_plan brief to coach-apply', !!sent && sent.body.actions[0].ops.diet_plan.brief === 'Low carb veg, 1500 kcal', sent?.body);
+  const review = ld.querySelector('[data-testid="review-draft"]');
+  ck('the result says the draft is ready and not sent, with a "Review in Nutrition" button', !!review && /Review in Nutrition/.test(review.textContent) && /not sent/.test(ld.body.textContent));
+  review.click(); await tick(900);
+  ck('the button goes to that member\'s Nutrition tab', L.w.__where === '/coach/12?tab=nutrition&draft=41', L.w.__where);
+  ck('closes the chat, and the draft is on screen', L.w.__chatOpen() === false && !!ld.querySelector('[data-testid="diet-draft"]') && L.errors.length === 0, L.errors.join('|'));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -1881,6 +2022,7 @@ async function overflowTest() {
     await sprint11bTest();
     await sprint11cTest();
     await circuitsCardTest();
+    await dietStudio13Test();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
