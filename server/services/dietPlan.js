@@ -14,7 +14,8 @@
  *    plan no longer runs out after N days.
  * 4. Flags come from stored data — a lab row, a profile condition — and each
  *    one says where it came from and when. The model does not invent flags.
- * 5. Checks are arithmetic, done here, not by the model.
+ * 5. Checks are arithmetic, done here, not by the model. A food with no
+ *    calorie figure is an error: such a plan cannot be approved.
  *
  * Nothing in this file calls an AI. The route does that and hands the result
  * to normaliseDraft(), so every rule here runs in tests against real Postgres
@@ -199,8 +200,11 @@ function runChecks({ targets, content, days }) {
   const unknown = new Set();
   days.forEach(d => d.forEach(m => m.items.forEach(it => { if (!(Number(it.per_100g?.calories) > 0)) unknown.add(it.name); })));
   if (unknown.size) {
-    out.push({ level: 'warn', code: 'no_nutrition',
-      text: `No calorie figure for: ${[...unknown].slice(0, 8).join(', ')}${unknown.size > 8 ? '…' : ''}. Day totals leave these out.` });
+    // An ERROR, not a warning. As a warning it was ticked through, and a plan
+    // went live where most foods counted as 0 kcal: the member saw "~0 kcal"
+    // meals and the day "added up" to 764 of 1,800.
+    out.push({ level: 'error', code: 'no_nutrition',
+      text: `No calorie figure for: ${[...unknown].slice(0, 8).join(', ')}${unknown.size > 8 ? '…' : ''}. Look them up or remove them before approving.` });
   }
 
   if (t.kcal) {

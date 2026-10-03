@@ -150,7 +150,7 @@ export default function Plan() {
                   {meals.map(mp => (
                     <Line key={mp.meal} icon="food" title={mp.meal}
                       sub={(mp.items || []).slice(0, 3).map(it => it.name).join(' · ') + ((mp.items || []).length > 3 ? ` +${mp.items.length - 3}` : '')}
-                      right={`~${mealKcal(mp.items)} ${terms.kcal}`} />
+                      right={mealKcal(mp.items) > 0 ? `~${mealKcal(mp.items)} ${terms.kcal}` : null} />
                   ))}
                 </div>
               ) : (
@@ -218,7 +218,7 @@ export default function Plan() {
             <Section eyebrow="Meal plan" title={meals.length ? `${meals.length} ${plural(meals.length, 'meal')} prescribed` : 'No meal plan'}>
               {meals.length ? meals.map(mp => (
                 <div key={mp.meal} className="mb-3" data-testid="plan-meal">
-                  <div className="flex items-baseline justify-between"><span className="text-sm font-semibold text-white">{mp.meal}</span><span className="text-caption text-mid tabular-nums">~{mealKcal(mp.items)} {terms.kcal}</span></div>
+                  <div className="flex items-baseline justify-between"><span className="text-sm font-semibold text-white">{mp.meal}</span>{mealKcal(mp.items) > 0 && <span className="text-caption text-mid tabular-nums">~{mealKcal(mp.items)} {terms.kcal}</span>}</div>
                   {(mp.items || []).map((it, i) => (
                     <div key={i} className="flex justify-between text-caption py-1 border-b border-hair last:border-b-0">
                       <span className="text-mid truncate">{it.name}</span><span className="text-lo tabular-nums flex-shrink-0 ml-3">{it.grams} g</span>

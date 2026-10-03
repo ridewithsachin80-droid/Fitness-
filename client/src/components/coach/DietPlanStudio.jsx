@@ -163,6 +163,13 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
             </div>
           )}
 
+          {draft.checks.some(c => c.code === 'no_nutrition') && (
+            <Pressable variant="secondary" className="w-full" disabled={!!busy} data-testid="plan-fill"
+              onPress={() => run('fill', () => patch({ fill_nutrition: true }))}>
+              {busy === 'fill' ? 'Looking up…' : 'Look up missing calories'}
+            </Pressable>
+          )}
+
           <Differences diff={draft.diff} version={draft.compared_to_version} />
 
           <div>
@@ -204,7 +211,13 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                 </div>
                 {m.items.map(it => (
                   <div key={it.id} className="flex items-center gap-2 mt-1.5">
-                    <span className="flex-1 text-caption text-white leading-snug">{it.name}</span>
+                    <span className="flex-1 text-caption text-white leading-snug">
+                      {it.name}
+                      {/* Per-food calories, so "120 g brown rice = 434 kcal" is seen before approving. */}
+                      <span className={`block ${kcalOf(it) > 0 ? 'text-mid' : 'text-amber-300'}`}>
+                        {kcalOf(it) > 0 ? `${kcalOf(it)} kcal` : 'no calorie figure'}
+                      </span>
+                    </span>
                     <input type="number" inputMode="decimal" defaultValue={it.grams} aria-label={`${it.name} grams`} disabled={!!busy}
                       style={{ minHeight: 40, width: 72 }} className={`${input} text-right`}
                       onBlur={e => {
@@ -221,7 +234,7 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                 ))}
               </div>
             ))}
-            <p className="text-caption text-lo">A change to grams, or removing an item, applies to every day that has it.</p>
+            <p className="text-caption text-lo">A change to grams, or removing an item, applies to every day that has it. Calorie figures are for the food as eaten, and are estimates unless the food is in your food table.</p>
           </div>
 
           {(draft.content.avoid?.length > 0 || draft.content.cautions?.length > 0) && (
