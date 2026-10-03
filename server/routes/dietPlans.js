@@ -122,7 +122,7 @@ ${flags}
 
 COACH'S BRIEF
 message: ${String(brief || '').slice(0, 2000)}
-${base ? `\nCURRENT DRAFT (JSON)\n${JSON.stringify(base).slice(0, 6000)}\n\nCHANGE REQUESTED BY THE COACH\nmessage: ${String(instruction || '').slice(0, 1000)}\nReturn the whole plan again with that change made and everything else kept.\n` : ''}
+${base ? `\nCURRENT DRAFT (JSON, in the same shape you must return)\n${JSON.stringify(base).slice(0, 12000)}\n\nCHANGE REQUESTED BY THE COACH\nmessage: ${String(instruction || '').slice(0, 1000)}\nReturn the whole plan again with that change made and everything else kept, in the JSON shape below ("meals" with "items" and "rotation"; never a list of days).\n` : ''}
 Rules:
 - Follow the brief. Where it names foods, meal count, fasting window or timings, use them.
 - Indian foods and household portions. Every item needs grams, AS EATEN (cooked weight, not raw grain or flour).
@@ -131,7 +131,7 @@ Rules:
 - Do not prescribe or change medicines. Put "see your doctor" points in "cautions".
 - Targets must be consistent: 4 x protein + 4 x carbs + 9 x fat should be within 10% of kcal, and each day's meals should add up to about kcal.
 - Each meal lists the items eaten EVERY day in "items". If one dish changes by weekday, put it in "rotation" with one item per weekday. Omit "rotation" if nothing rotates.
-- Keep it compact: at most 4 meals, at most 6 items per meal.
+- Keep it compact: at most 5 meals, at most 6 items per meal, at most 5 cautions and 6 adjustments, each one short sentence.
 
 Return ONLY this JSON, no other text:
 {
@@ -267,8 +267,10 @@ router.post('/draft', coachOnly, async (req, res) => {
       const { rows: [d] } = await pool.query(`SELECT id FROM diet_plans WHERE patient_id=$1 AND status='draft'`, [memberId]);
       baseRow = d ? await DP.loadPlan(pool, d.id) : null;
       if (!baseRow) return res.status(409).json({ error: 'There is no draft to change. Create a draft first.' });
-      base = { title: baseRow.title, targets: baseRow.targets, ...baseRow.content,
-               days: baseRow.days.map(d2 => d2.map(m => ({ meal: m.meal, time: m.time, items: m.items.map(it => ({ name: it.name, grams: it.grams })) }))) };
+      // Same shape as the answer we want back ("meals" + "rotation"), never
+      // seven explicit days: a model echoes the shape it is shown.
+      const { adjustments, ...rest } = baseRow.content || {};
+      base = { title: baseRow.title, targets: baseRow.targets, ...rest, meals: DP.toMealsShape(baseRow.days) };
     } else if (brief.length < 10) {
       return res.status(400).json({ error: 'Write a short brief first: the kind of diet, meals a day, foods to include.' });
     }
@@ -276,7 +278,10 @@ router.post('/draft', coachOnly, async (req, res) => {
 
     let text;
     try {
-      ({ text } = await require('./aiChat').callAI(buildDraftPrompt(ctx, useBrief, { base, instruction })));
+      // A whole week of meals with cautions does not fit in the 3000-token
+      // reply every other AI call uses; cut off, it is half a JSON object.
+      ({ text } = await require('./aiChat').callAI(buildDraftPrompt(ctx, useBrief, { base, instruction }),
+        { maxTokens: 8000, timeout: 60000, json: true, failOnTruncation: true }));
     } catch (err) {
       return res.status(502).json({ error: 'The AI could not draft a plan just now. Nothing was changed. Try again in a minute.' });
     }

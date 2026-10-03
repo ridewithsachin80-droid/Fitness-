@@ -18,6 +18,9 @@
  *   8. A coach's one-day change is never overwritten by that generation, and
  *      lands on top of the plan rather than replacing the day.
  *   9. A multi-day plan applied from the coach chat becomes a version too.
+ *  11. A plan draft gets a large reply limit, and a reply cut off at that
+ *      limit is retried on the next model, never parsed as a plan. A change
+ *      request shows the model the draft in the shape it must answer in.
  *  10. A food with no calorie figure blocks approval. The app asks the model
  *      once more for just those foods, and never swaps an as-eaten figure for
  *      a raw-ingredient row from the food table.
@@ -62,6 +65,7 @@ const DRAFT = () => ({
 });
 
 let aiMode = 'ok', lastPrompt = '', nextDraft = null, nextFill = null, fillCalls = 0, lastFillPrompt = '';
+let lastDraftText = '', lastDraftBody = null, draftCalls = 0;
 const stubbedPost = async (url, body, cfg) => {
   if (String(url).includes('generativelanguage') || String(url).includes('groq')) {
     // The second, smaller request: per-100 g figures for foods that came back
@@ -72,6 +76,23 @@ const stubbedPost = async (url, body, cfg) => {
       return { data: { candidates: [{ content: { parts: [{ text }] } }], choices: [{ message: { content: text } }] } };
     }
     lastPrompt = JSON.stringify(body);
+    lastDraftBody = body; draftCalls += 1;
+    lastDraftText = body.messages?.[0]?.content || body.contents?.[0]?.parts?.[0]?.text || '';
+    if (aiMode === 'truncate-once') {
+      aiMode = 'ok';
+      const cut = JSON.stringify(nextDraft || DRAFT()).slice(0, 400);
+      return { data: { candidates: [{ content: { parts: [{ text: cut }] }, finishReason: 'MAX_TOKENS' }],
+                       choices: [{ message: { content: cut }, finish_reason: 'length' }] } };
+    }
+    if (aiMode === 'days-shape') {
+      aiMode = 'ok';
+      const d = DP.normaliseDraft(DRAFT());
+      const text = JSON.stringify({ title: 'Seven-day answer', targets: DRAFT().targets,
+        days: d.days.map(day => day.map(m => ({ meal: m.meal, time: m.time,
+          items: m.items.map(i => ({ name: i.name, grams: i.grams, kcal_100g: i.per_100g.calories || 40,
+            protein_100g: i.per_100g.protein, carbs_100g: i.per_100g.total_carbs, fat_100g: i.per_100g.fat })) }))) });
+      return { data: { candidates: [{ content: { parts: [{ text }] } }], choices: [{ message: { content: text } }] } };
+    }
     if (aiMode === 'down') { const e = new Error('503'); e.response = { status: 500 }; throw e; }
     const text = aiMode === 'garbage' ? 'Sorry, I cannot help with that.' : JSON.stringify(nextDraft || DRAFT());
     return { data: { candidates: [{ content: { parts: [{ text }] } }], choices: [{ message: { content: text } }] } };
@@ -239,6 +260,36 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     const after = await plans();
     ck('drafting again replaces the draft: still one, still version 1', after.length === 1 && after[0].version === 1 && after[0].id !== draftId, after);
     draftId = again.data.plan.id;
+    const tokens = lastDraftBody.max_tokens || lastDraftBody.generationConfig?.maxOutputTokens;
+    ck('a plan draft asks for a large reply (8000 tokens, not the usual 3000)', tokens === 8000, tokens);
+
+    // A reply cut off at the limit is half a JSON object. It must be retried,
+    // not parsed — and certainly not reported as "could not be read".
+    aiMode = 'truncate-once';
+    const callsBefore = draftCalls;
+    const t = await call('POST', '/api/diet-plans/draft', C, { member_id: member, brief: BRIEF });
+    ck('a reply cut off at the limit is retried on the next model, and the draft succeeds', t.status === 200 && draftCalls === callsBefore + 2 && t.data.plan?.days?.length === 7, [t.status, draftCalls - callsBefore, t.data.error]);
+    draftId = t.data.plan.id;
+
+    // "Tell the AI what to change": the current draft goes to the model in
+    // the meals + rotation shape it must answer in, never as seven days.
+    const ch = await call('POST', '/api/diet-plans/draft', C, { member_id: member, instruction: 'swap tofu for sprouts in Meal 2' });
+    ck('a change request redrafts', ch.status === 200 && ch.data.plan?.status === 'draft', ch.data);
+    const m = /CURRENT DRAFT[^\n]*\n(\{.*\})\n/.exec(lastDraftText);
+    let shown = null; try { shown = JSON.parse(m[1]); } catch (_) { /* stays null */ }
+    ck('the model is shown the draft as meals + rotation, not seven days', !!shown && Array.isArray(shown.meals) && !('days' in shown)
+       && shown.meals[0].rotation?.mon?.name === DISH[0] && shown.meals[0].items.some(i => i.name === 'Curd'), shown && Object.keys(shown));
+    ck("the model's own notes are not fed back to it", !!shown && !('adjustments' in shown));
+    ck('the change request reached the model', lastDraftText.includes('swap tofu for sprouts in Meal 2'));
+    draftId = ch.data.plan.id;
+
+    // And if it answers in seven explicit days anyway, that is still a plan.
+    aiMode = 'days-shape';
+    const ds = await call('POST', '/api/diet-plans/draft', C, { member_id: member, instruction: 'keep everything' });
+    ck('a seven-day answer is read as a plan, not "could not be read"', ds.status === 200 && ds.data.plan?.title === 'Seven-day answer' && ds.data.plan.days[0][0].items[0].name === DISH[0], [ds.status, ds.data.error]);
+    // Back to the standard draft for the sections that follow.
+    const std = await call('POST', '/api/diet-plans/draft', C, { member_id: member, brief: BRIEF });
+    draftId = std.data.plan.id;
   }
 
   console.log('\n[2] editing a draft');
@@ -298,8 +349,14 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
        !('brief' in me.data.plan) && !('flags' in me.data.plan) && !('checks' in me.data.plan) && !('adjustments' in me.data.plan.content), Object.keys(me.data.plan));
     const mp = await call('GET', '/api/members/me/meal-plan', M);
     ck("and today's meals in the food log", mp.data.meals.length === 3);
-    await new Promise(r2 => setTimeout(r2, 100));
-    const { rows: aud } = await pool.query(`SELECT 1 FROM audit_log WHERE action='diet_plan_approved' AND target_id=$1`, [member]);
+    // The audit row is written AFTER the approval returns (so a slow audit can
+    // never fail an approval). Wait for it, up to 5 s: a fixed 100 ms wait
+    // passed on one run and failed on a re-run of the same code.
+    let aud = [];
+    for (let i = 0; i < 50 && !aud.length; i++) {
+      ({ rows: aud } = await pool.query(`SELECT 1 FROM audit_log WHERE action='diet_plan_approved' AND target_id=$1`, [member]));
+      if (!aud.length) await new Promise(r2 => setTimeout(r2, 100));
+    }
     ck('the approval is in the audit log', aud.length === 1, aud.length);
 
     ck('approving again is refused', (await call('POST', `/api/diet-plans/${draftId}/approve`, C, { acknowledge_warnings: true })).status === 409);
