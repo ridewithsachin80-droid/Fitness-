@@ -18,6 +18,9 @@
  *   8. A coach's one-day change is never overwritten by that generation, and
  *      lands on top of the plan rather than replacing the day.
  *   9. A multi-day plan applied from the coach chat becomes a version too.
+ *  10. A food with no calorie figure blocks approval. The app asks the model
+ *      once more for just those foods, and never swaps an as-eaten figure for
+ *      a raw-ingredient row from the food table.
  */
 if (!process.env.DATABASE_URL?.includes('localhost') && !process.env.ALLOW_TEST_DB) {
   console.error('Refusing to run: DATABASE_URL is not localhost.'); process.exit(1);
@@ -58,9 +61,16 @@ const DRAFT = () => ({
   flags: [{ kind: 'lab', text: 'Potassium is critically high' }],
 });
 
-let aiMode = 'ok', lastPrompt = '', nextDraft = null;
+let aiMode = 'ok', lastPrompt = '', nextDraft = null, nextFill = null, fillCalls = 0, lastFillPrompt = '';
 const stubbedPost = async (url, body, cfg) => {
   if (String(url).includes('generativelanguage') || String(url).includes('groq')) {
+    // The second, smaller request: per-100 g figures for foods that came back
+    // without any. Routed on its marker line, never on food words.
+    if (JSON.stringify(body).includes('NUTRITION LOOKUP')) {
+      fillCalls += 1; lastFillPrompt = JSON.stringify(body);
+      const text = JSON.stringify(nextFill || { foods: [] });
+      return { data: { candidates: [{ content: { parts: [{ text }] } }], choices: [{ message: { content: text } }] } };
+    }
     lastPrompt = JSON.stringify(body);
     if (aiMode === 'down') { const e = new Error('503'); e.response = { status: 500 }; throw e; }
     const text = aiMode === 'garbage' ? 'Sorry, I cannot help with that.' : JSON.stringify(nextDraft || DRAFT());
@@ -106,7 +116,11 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('an item with no calorie figure is named', has('no_nutrition') && /Mystery soup/.test(checks.find(c => c.code === 'no_nutrition').text));
     ck('meals far from the target are caught', has('day_total'));
     ck('no avoid-list hit when no meal contains one', !has('avoid_conflict'));
-    ck('none of these is an error', !DP.hasErrors(checks) && DP.hasWarnings(checks));
+    ck('a food with no calorie figure is an ERROR: it blocks approval', checks.find(c => c.code === 'no_nutrition').level === 'error' && DP.hasErrors(checks));
+    ck('the other two are warnings', checks.filter(c => c.level === 'warn').map(c => c.code).sort().join() === 'day_total,macro_mismatch', checks);
+    const fed = JSON.parse(JSON.stringify(d));
+    fed.days.forEach(day => day.forEach(m => m.items.forEach(i => { if (i.name === 'Mystery soup') i.per_100g.calories = 35; })));
+    ck('once every food has a figure there is no error', !DP.hasErrors(DP.runChecks(fed)));
 
     const ok = DP.runChecks({ ...d, targets: { kcal: 1710, protein: 120, carbs: 105, fat: 90 } });
     ck('consistent macros raise no macro warning', !ok.some(c => c.code === 'macro_mismatch'));
@@ -195,6 +209,8 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck("the model's notes are kept apart, as adjustments", p.content.adjustments.length === 1 && p.content.adjustments[0].for === 'LDL');
     ck('the checks ran and found the macro mismatch', p.checks.some(c => c.code === 'macro_mismatch'), p.checks);
     ck('every item has a stable id', p.days.every(d => d.every(m => m.items.every(i => Number.isInteger(i.id)))));
+    ck('the app asked the model once more, for just the food with no figure', fillCalls === 1 && lastFillPrompt.includes('Mystery soup') && !lastFillPrompt.includes('Almonds'), [fillCalls]);
+    ck('the lookup found nothing, so the draft carries a must-fix error', p.checks.some(c => c.code === 'no_nutrition' && c.level === 'error'), p.checks);
 
     const me = await call('GET', '/api/diet-plans/me', M);
     ck('the member sees NO plan while it is a draft', me.status === 200 && me.data.plan === null, me.data);
@@ -227,6 +243,15 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
 
   console.log('\n[2] editing a draft');
   {
+    const blocked = await call('POST', `/api/diet-plans/${draftId}/approve`, C, { acknowledge_warnings: true });
+    ck('a food with no calorie figure cannot be ticked through: approve is refused', blocked.status === 422 && !blocked.data.needs_ack && /No calorie figure/.test(blocked.data.error), blocked.data);
+    ck('and nothing reached the member', (await call('GET', '/api/diet-plans/me', M)).data.plan === null && (await mealRows()).length === 0);
+    nextFill = { foods: [{ name: 'Mystery soup', kcal_100g: 35, protein_100g: 1.5, carbs_100g: 5, fat_100g: 1 }] };
+    const f = await call('PATCH', `/api/diet-plans/${draftId}`, C, { fill_nutrition: true });
+    ck('"Look up missing calories" fills the food on every weekday', f.status === 200 && f.data.plan.days.every(d => d[2].items.find(i => i.name === 'Mystery soup').per_100g.calories === 35), f.data.plan?.days?.[0]?.[2]);
+    ck('and the error is gone', !f.data.plan.checks.some(c => c.code === 'no_nutrition'), f.data.plan.checks);
+    ck('foods that already had a figure are untouched', f.data.plan.days[0][2].items.find(i => i.name === 'Almonds').per_100g.calories === 579);
+
     let r = await call('PATCH', `/api/diet-plans/${draftId}`, C, { edits: [{ meal: 'Meal 1', name: 'Curd', grams: 200 }] });
     ck('changing grams applies to every weekday', r.status === 200 && r.data.plan.days.every(d => d[0].items.find(i => i.name === 'Curd').grams === 200), r.data);
     r = await call('PATCH', `/api/diet-plans/${draftId}`, C, { edits: [{ meal: 'Meal 3', name: 'Mystery soup', remove: true }] });
@@ -342,7 +367,23 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
   {
     const r = await call('POST', `/api/diet-plans/member/${member2}/revise`, C2);
     ck('revise with no approved plan is a clear 404', r.status === 404, r.data);
+    // Two rows in the food table: a RAW grain whose everyday name is what a
+    // plan would say, and a food whose table value is close to the model's.
+    await pool.query(`DELETE FROM foods WHERE name IN ('Zzgrain, Raw (Brown)', 'Zzcurd')`);
+    await pool.query(
+      `INSERT INTO foods (name, name_local, category, source, verified, per_100g) VALUES
+         ('Zzgrain, Raw (Brown)', 'Zzbrown Rice', 'grain', 'nin', true, '{"calories":362,"protein":7.5,"total_carbs":76,"fat":2.2}'),
+         ('Zzcurd', 'Zzcurd', 'dairy', 'nin', true, '{"calories":62,"protein":3.4,"total_carbs":4.6,"fat":3.1}')`);
+    nextDraft = DRAFT();
+    nextDraft.meals[1].items.push(it100('Zzbrown Rice', 120, 125, 2.7, 26, 1), it100('Zzcurd', 100, 60, 3.5, 4.5, 3));
+    const fillsBefore = fillCalls;
     const d = await call('POST', '/api/diet-plans/draft', C2, { member_id: member2, brief: BRIEF });
+    nextDraft = null;
+    const m2 = d.data.plan.days[0][1].items;
+    ck('cooked rice keeps its as-eaten figure, not the raw-grain row (125, not 362)', m2.find(i => i.name === 'Zzbrown Rice').per_100g.calories === 125, m2.find(i => i.name === 'Zzbrown Rice'));
+    ck("a food the table agrees with takes the table's measured figure (62)", m2.find(i => i.name === 'Zzcurd').per_100g.calories === 62, m2.find(i => i.name === 'Zzcurd'));
+    ck('the missing food was looked up while drafting, so there is no error', fillCalls === fillsBefore + 1 && !d.data.plan.checks.some(c => c.level === 'error'), d.data.plan.checks);
+    await pool.query(`DELETE FROM foods WHERE name IN ('Zzgrain, Raw (Brown)', 'Zzcurd')`);
     const a = await call('POST', `/api/diet-plans/${d.data.plan.id}/approve`, C2, { acknowledge_warnings: true, effective_from: DP.addDays(today, -10) });
     ck('a past start date becomes today, never back-dating meals', a.status === 200 && a.data.plan.effective_from === today, a.data.plan?.effective_from);
     ck('no meals are written for past days', (await mealRows(member2)).every(x => x.d >= today));

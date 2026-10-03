@@ -125,7 +125,8 @@ message: ${String(brief || '').slice(0, 2000)}
 ${base ? `\nCURRENT DRAFT (JSON)\n${JSON.stringify(base).slice(0, 6000)}\n\nCHANGE REQUESTED BY THE COACH\nmessage: ${String(instruction || '').slice(0, 1000)}\nReturn the whole plan again with that change made and everything else kept.\n` : ''}
 Rules:
 - Follow the brief. Where it names foods, meal count, fasting window or timings, use them.
-- Indian foods and household portions. Every item needs grams.
+- Indian foods and household portions. Every item needs grams, AS EATEN (cooked weight, not raw grain or flour).
+- Every item MUST carry all four per-100 g numbers, for the food AS EATEN: cooked rice is about 130 kcal per 100 g, not 360.
 - For each out-of-range result above, either adjust the plan or leave it, and say which in "adjustments". Do not invent results that are not listed.
 - Do not prescribe or change medicines. Put "see your doctor" points in "cautions".
 - Targets must be consistent: 4 x protein + 4 x carbs + 9 x fat should be within 10% of kcal, and each day's meals should add up to about kcal.
@@ -160,19 +161,79 @@ function parseModelJSON(text) {
   return null;
 }
 
-/** Replace the model's nutrition guesses with the food table's measured
- *  values wherever we have the food. */
+/**
+ * Replace the model's nutrition guesses with the food table's measured values
+ * wherever we have the food — unless the two disagree wildly.
+ *
+ * A plan's grams are as eaten. The food table also holds RAW ingredients, and
+ * the name lookup finds them: "Brown Rice" matches "Rice, Raw (Brown)" at 362
+ * kcal, so 120 g of cooked rice was costed at 434 kcal instead of about 150.
+ * When the model's as-eaten figure and the table's differ by more than 2x,
+ * the table row is a different food state; keep the model's figure.
+ */
 async function enrichDays(days) {
   const { enrichFromDB } = require('./aiChat');
   for (const day of days) {
     for (const m of day) {
       const enriched = await enrichFromDB(m.items).catch(() => null);
-      if (enriched) {
-        m.items = m.items.map((it, i) => (enriched[i]?.per_100g ? { ...it, per_100g: enriched[i].per_100g } : it));
-      }
+      if (!enriched) continue;
+      m.items = m.items.map((it, i) => {
+        const e = enriched[i];
+        if (!e || !e.per_100g || !e.source || e.source === 'ai') return it;
+        const ai = Number(it.per_100g?.calories) || 0;
+        const db = Number(e.per_100g.calories) || 0;
+        if (ai > 0 && (db > ai * 2 || db < ai / 2)) return it;
+        return { ...it, per_100g: e.per_100g };
+      });
     }
   }
   return days;
+}
+
+const NUTRITION_LOOKUP = 'NUTRITION LOOKUP';
+
+function buildFillPrompt(names) {
+  return `${NUTRITION_LOOKUP}
+Give typical per-100 g nutrition for each food below AS EATEN (cooked, ready
+to eat — not raw grain, flour or dry lentils). These are Indian home foods.
+Estimate sensibly; do not return 0 for a food that has calories.
+
+Foods:
+${names.map(n => `- ${n}`).join('\n')}
+
+Return ONLY this JSON, using each name exactly as written above:
+{ "foods": [ { "name": "<name>", "kcal_100g": <number>, "protein_100g": <number>, "carbs_100g": <number>, "fat_100g": <number> } ] }`;
+}
+
+/**
+ * The model sometimes leaves the per-100 g numbers off a long plan. Ask once
+ * more, for just those foods. Best effort: if this fails the items stay at 0
+ * and the "no calorie figure" check blocks approval, which is the safe side.
+ */
+async function fillMissingNutrition(days) {
+  const missing = new Set();
+  days.forEach(d => d.forEach(m => m.items.forEach(it => { if (!(Number(it.per_100g?.calories) > 0)) missing.add(it.name); })));
+  if (!missing.size) return 0;
+  let found;
+  try {
+    const { text } = await require('./aiChat').callAI(buildFillPrompt([...missing].slice(0, 40)));
+    found = parseModelJSON(text);
+  } catch (_) { return 0; }
+  const byName = new Map();
+  for (const f of Array.isArray(found?.foods) ? found.foods : []) {
+    const it = DP.normaliseItem({ ...f, grams: 100 });
+    if (it && it.per_100g.calories > 0) byName.set(it.name.toLowerCase(), it.per_100g);
+  }
+  let filled = 0;
+  days.forEach(d => d.forEach(m => {
+    m.items = m.items.map(it => {
+      const p = !(Number(it.per_100g?.calories) > 0) && byName.get(it.name.toLowerCase());
+      if (!p) return it;
+      filled += 1;
+      return { ...it, per_100g: p };
+    });
+  }));
+  return filled;
 }
 
 // ── Member: the approved plan in force. Declared before /:id. ────────────────
@@ -223,6 +284,7 @@ router.post('/draft', coachOnly, async (req, res) => {
     if (!draft) {
       return res.status(502).json({ error: 'The AI answer could not be read as a plan. Nothing was changed. Try again, or shorten the brief.' });
     }
+    await fillMissingNutrition(draft.days);
     await enrichDays(draft.days);
 
     const id = await inTx(client => DP.saveDraft(client, {
@@ -299,6 +361,7 @@ router.get('/:id', coachOnly, async (req, res) => {
  *   { meal, name, grams }           change grams      (all weekdays unless `weekday` given)
  *   { meal, name, remove: true }    remove the item
  *   { meal, add: { name, grams } }  add an item
+ * and fill_nutrition: true to look up foods that have no calorie figure.
  */
 router.patch('/:id', coachOnly, async (req, res) => {
   try {
@@ -333,6 +396,13 @@ router.patch('/:id', coachOnly, async (req, res) => {
       }
       days = days.map(d => d.filter(m => m.items.length));
       if (added) await enrichDays(days);
+    }
+    // "Look up missing calories": for a draft that still has foods at 0 kcal
+    // (a revision of an older plan, or a lookup that failed the first time).
+    if (b.fill_nutrition === true) {
+      days = days || plan.days.map(d => d.map(m => ({ ...m, items: m.items.map(it => ({ ...it })) })));
+      await fillMissingNutrition(days);
+      await enrichDays(days);
     }
 
     await inTx(client => DP.updateDraft(client, plan.id, {
@@ -380,3 +450,4 @@ router.post('/:id/discard', coachOnly, async (req, res) => {
 module.exports = router;
 module.exports.buildDraftPrompt = buildDraftPrompt;
 module.exports.parseModelJSON   = parseModelJSON;
+module.exports.buildFillPrompt  = buildFillPrompt;
