@@ -1,0 +1,27 @@
+name: Test gate
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install server packages
+        working-directory: server
+        run: npm install --no-audit --no-fund
+      - name: Install client packages
+        working-directory: client
+        run: npm install --no-audit --no-fund
+      - name: Run all test suites
+        working-directory: server
+        run: npm test
+      - name: Build the client
+        working-directory: client
+        run: npm run build
