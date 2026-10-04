@@ -1637,6 +1637,12 @@ async function buildDayContext(userId, ctx) {
     if (tg.length) lines.push(`Targets: ${tg.join(', ')}`);
   }
 
+  // ── Diet plan (Phase 2) ─────────────────────────────────────────────────────
+  // "What's today's meal plan?" got "I don't have that" from an app whose
+  // coach had approved one. The lines come from the same prescribed meals the
+  // Today screen shows, marked logged or not from today's food log.
+  lines.push(...await require('../services/dietPlan').memberPlanLines(pool, userId, today, t?.food_items));
+
   // ── Training ────────────────────────────────────────────────────────────────
   // "What's my workout today?" was the most obvious question this snapshot
   // could not answer. It carried food, water, weight, sleep and protocol, and
@@ -1700,6 +1706,14 @@ ${dayContext}
 
 RULES:
 - 1–3 short sentences, warm and direct, lead with the number they asked for.
+- Meal-plan questions ("what is today's meal plan", "what do I eat next",
+  "aaj kya khana hai", "what's for dinner"): answer from the "Diet plan from
+  the coach" lines only. Give each meal's time, foods and grams exactly as
+  listed, and say which meals are already logged. For the whole day you may
+  use one short line per meal instead of 3 sentences. Never add, swap, remove
+  or resize a food: a change to the plan is the coach's decision, so tell
+  them to ask their coach. If there are no "Diet plan" lines, say their coach
+  has not set a meal plan for today.
 - Numbers exactly as given in the data. No emojis. No markdown.
 - If they ask how much is LEFT, subtract from the target when a target exists;
   if there is no target, give the eaten total and say no target is set.

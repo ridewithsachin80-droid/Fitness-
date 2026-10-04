@@ -946,7 +946,81 @@ async function recordImportedPlan(client, { memberId, coachId, title, macros, me
   return row.id;
 }
 
+// ── What the member sees (Phase 2) ───────────────────────────────────────────
+
+/**
+ * The approved plan as the member may see it. The brief, the flags, the checks
+ * and the model's "adjustments" are the coach's working notes and stay out.
+ */
+function memberView(plan) {
+  if (!plan) return null;
+  const { id, version, title, targets, content, effective_from, days } = plan;
+  const { adjustments, ...memberContent } = content || {};
+  return { id, version, title, targets, content: memberContent, effective_from, days };
+}
+
+/** meal name (lower case) -> "HH:MM" for a date, from the plan's weekly menu. */
+function mealTimesFor(plan, date) {
+  const out = new Map();
+  if (!plan || !isDate(date)) return out;
+  for (const m of plan.days?.[weekdayOf(date)] || []) if (m.time) out.set(String(m.meal).toLowerCase(), m.time);
+  return out;
+}
+
+/**
+ * One date's prescribed meals with their times, in the order the member eats
+ * them: by time, meals with no time last, in the order they were written.
+ * A coach's one-off meal for the day has no time unless the plan has a meal
+ * of the same name.
+ */
+function timedMeals(rows, plan, date) {
+  const times = mealTimesFor(plan, date);
+  return (rows || [])
+    .map((r, i) => ({ ...r, time: times.get(String(r.meal).toLowerCase()) || null, _i: i }))
+    .sort((a, b) => (a.time && b.time ? a.time.localeCompare(b.time) : a.time ? -1 : b.time ? 1 : 0) || a._i - b._i)
+    .map(({ _i, ...r }) => r);
+}
+
+/**
+ * Today's prescribed meals as plain lines for the member chat, so "what's
+ * today's meal plan?" is answered from what the coach approved. Marks each
+ * meal logged or not from today's food log. Returns [] when nothing is
+ * prescribed. Never throws: the chat must still answer everything else.
+ */
+async function memberPlanLines(db, memberId, today, foodItems) {
+  try {
+    await ensureDay(db, memberId, today, today);
+    const [plan, { rows }] = await Promise.all([
+      planInForce(db, memberId, today),
+      db.query(`SELECT meal, items, created_at FROM meal_plans
+                 WHERE patient_id = $1 AND plan_date = $2::date ORDER BY created_at`, [memberId, today]),
+    ]);
+    if (!Array.isArray(rows) || !rows.length) return [];
+    const meals = timedMeals(rows, plan, today);
+    const logged = new Set((Array.isArray(foodItems) ? foodItems : [])
+      .map(f => `${String(f.meal || '').toLowerCase()}|${String(f.name || '').toLowerCase()}`));
+    const kcalOf = (items) => Math.round((items || []).reduce((a, it) => a + itemKcal(it), 0));
+    const lines = [];
+    const total = meals.reduce((a, m) => a + kcalOf(m.items), 0);
+    lines.push(`Diet plan from the coach for today${plan?.title ? `: "${plan.title}"` : ''} - ${meals.length} meal${meals.length === 1 ? '' : 's'}, ${total} kcal in all.`);
+    if (plan?.content?.eating_window) lines.push(`  Eating window: ${plan.content.eating_window}`);
+    for (const m of meals) {
+      const items = Array.isArray(m.items) ? m.items : [];
+      const done = items.filter(it => logged.has(`${String(m.meal).toLowerCase()}|${String(it.name || '').toLowerCase()}`)).length;
+      const state = !items.length ? 'no items' : done === items.length ? 'LOGGED' : done ? `partly logged (${done} of ${items.length} items)` : 'NOT logged yet';
+      lines.push(`  ${m.time ? m.time + ' ' : ''}${m.meal} (${kcalOf(items)} kcal) - ${state}: ` +
+        items.map(it => `${it.name} ${Number(it.grams)} g`).join(', '));
+    }
+    if (plan?.content?.avoid?.length) lines.push(`  Avoid: ${plan.content.avoid.join(', ')}`);
+    return lines;
+  } catch (err) {
+    console.error('memberPlanLines failed:', err.message);
+    return [];
+  }
+}
+
 module.exports = {
+  memberView, mealTimesFor, timedMeals, memberPlanLines,
   WEEKDAYS, WEEKDAY_NAMES, FILL_AHEAD_DAYS, KCAL_MARGIN, CARB_MARGIN,
   weekdayOf, addDays, isDate,
   normaliseTargets, normaliseContent, normaliseItem, normaliseDraft, toMealsShape,

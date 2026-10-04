@@ -9,3 +9,4 @@ export * from './protocol';
 export * from './fromServerLog';
 export * from './mealSuggest';
 export * from './recovery';
+export * from './planMeals';
