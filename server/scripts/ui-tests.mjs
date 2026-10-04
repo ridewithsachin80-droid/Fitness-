@@ -400,6 +400,20 @@ export default {
     if (u.includes('/logs')) return ok([log]);
     if (u.includes('push') || u.includes('subscription')) return ok([]);
     if (u.includes('/me/today')) return ok({ log,
+      // Phase 2: prescribed meals with times and long names, plus the approved
+      // plan, so the Next up card and Plan > Nutrition are on screen.
+      meal_plan: { date: '2026-10-04', meals: [
+        { meal: 'Pre-workout evening snack', time: '23:59', items: [
+          { name: 'Paneer-mushroom-capsicum masala with menthya soppu', grams: 1250.5, qty_text: '2 large katoris, heaped', per_100g: { calories: 265 } },
+          { name: 'Curd', grams: 200, qty_text: '1 katori', per_100g: { calories: 60 } } ] },
+        { meal: 'Late dinner', time: null, items: [{ name: 'Jowar roti', grams: 40, qty_text: '1 roti', per_100g: { calories: 260 } }] } ] },
+      diet_plan: { id: 9, version: 12, title: 'Low carb vegetarian with intermittent fasting, 16:8', effective_from: '2026-10-03',
+        targets: { kcal: 1500, protein: 120, carbs: 80, fat: 78 },
+        content: { eating_window: '12:00-20:00', timetable: [{ time: '05:30', what: 'Wake, 500 ml warm water with a pinch of salt and lemon' }],
+          avoid: ['sugar', 'maida', 'fried snacks', 'bakery items', 'fruit juice'], cautions: ['See your doctor for a BP check before starting the gym.'],
+          lab_cautions: ['Fasting Glucose is high: 132 mg/dL (12 Sep 2026). Keep sweets, fruit juice and maida out, and keep to the carbs in this plan. Review this result with your doctor.'] },
+        days: [0,1,2,3,4,5,6].map(() => [{ meal: 'Pre-workout evening snack', time: '23:59', items: [
+          { name: 'Paneer-mushroom-capsicum masala with menthya soppu', grams: 1250.5, qty_text: '2 large katoris, heaped', per_100g: { calories: 265 } } ] }]) },
       protocol:{macros:{kcal:1800,protein:120},water_target:3000,
       meal_slots:['Breakfast','Lunch','Snack','Dinner']},
       program:null, workoutSummary:{sets:[],cardio:[]}, mealPlans:[], notifications:[] });
@@ -450,6 +464,17 @@ const OVERFLOW_PAGES = [
   ['Progress',       "import P from './pages/Progress.jsx';"],
   ['Plan',           "import P from './pages/Plan.jsx';"],
   ['DailyLog',       "import P from './pages/DailyLog.jsx';"],
+  // Phase 2: Plan > Nutrition with an approved plan (the Plan entry above only
+  // shows the Today view), and the Log as planned sheet open over Next up.
+  ['Plan+Nutrition', `import Pl from './pages/Plan.jsx';
+     const P = () => { setTimeout(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Nutrition')?.click(), 300); return <Pl />; };`],
+  ['NextUp+Sheet', `import NU from './components/today/NextUp.jsx'; import LS from './components/sheets/LogPlannedSheet.jsx';
+     import { planMeals } from './lib/day';
+     const mp = [{ meal: 'Pre-workout evening snack', time: '23:59', items: [
+       { name: 'Paneer-mushroom-capsicum masala with menthya soppu', grams: 1250.5, qty_text: '2 large katoris, heaped', per_100g: { calories: 265 } },
+       { name: 'Curd', grams: 200, qty_text: '1 katori', per_100g: { calories: 60 } } ] }];
+     const P = () => (<div className="p-4"><NU mealPlans={mp} food={[]} terms={{ kcal: 'kcal' }} onLog={() => {}} onOther={() => {}} />
+       <LS meal={planMeals({ mealPlans: mp, food: [], nowMin: 0 }).next} onClose={() => {}} m={{ log: { food: [] }, terms: { kcal: 'kcal' }, update: () => {} }} /></div>);`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
@@ -1883,6 +1908,121 @@ async function dietStudio13Test() {
   ck('closes the chat, and the draft is on screen', L.w.__chatOpen() === false && !!ld.querySelector('[data-testid="diet-draft"]') && L.errors.length === 0, L.errors.join('|'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 23. Phase 2 — the member side of the diet plan: Next up, Log as planned,
+//     Plan › Nutrition
+// ═══════════════════════════════════════════════════════════════════════════
+async function memberPlanTest() {
+  console.log('\n[23] Member diet plan (Phase 2)');
+  const code = await bundle(`
+    import { useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import NextUp from './components/today/NextUp.jsx';
+    import LogPlannedSheet from './components/sheets/LogPlannedSheet.jsx';
+    const per = (k) => ({ calories: k });
+    const mealPlans = [
+      // Out of order on purpose: the card must still pick the earliest.
+      { meal: 'Meal 2', time: '23:58', items: [{ name: 'Guava', grams: 150, qty_text: '1 medium', per_100g: per(68) }] },
+      { meal: 'Meal 1', time: '00:01', items: [{ name: 'Curd', grams: 200, qty_text: '1 katori', per_100g: per(60) }, { name: 'Moong dal', grams: 100, qty_text: '100 g', per_100g: per(105) }] },
+    ];
+    window.__updates = []; window.__other = 0;
+    function Harness() {
+      const [food, setFood] = useState(window.__startFood || []);
+      const [meal, setMeal] = useState(null);
+      const m = { log: { food }, terms: { kcal: 'kcal' }, update: (field, v) => { window.__updates.push({ field, v }); setFood(v); } };
+      return (<div>
+        <NextUp mealPlans={mealPlans} food={food} terms={m.terms} onLog={setMeal} onOther={() => { window.__other++; }} />
+        <LogPlannedSheet meal={meal} onClose={() => setMeal(null)} m={m} />
+      </div>);
+    }
+    createRoot(document.getElementById('root')).render(<Harness />);`);
+  const { w, errors } = run(code); await tick(300);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  const setV = (el, v) => { Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  ck('the Next up card renders', errors.length === 0 && !!q('next-up'), errors.join('|'));
+  ck('it shows the EARLIEST unlogged meal, with its time in 12-hour form', /12:01 AM\s*Meal 1/.test(q('next-up').textContent), q('next-up')?.textContent.slice(0, 120));
+  ck('its foods with the household measure and calories, and the meal total', /Curd/.test(q('next-up').textContent) && /1 katori · 120/.test(q('next-up').textContent) && /225 kcal/.test(q('next-up').textContent), q('next-up')?.textContent);
+  ck('the following meal is named underneath', /Then: 11:58 PM Meal 2 · 102 kcal/.test(q('next-up-then').textContent), q('next-up-then')?.textContent);
+  ck('nothing is logged just by showing the card; no sheet is open', w.__updates.length === 0 && !d.querySelector('[role=dialog]'));
+  q('next-up-other').click(); await tick(50);
+  ck('"I ate something else" hands over to the chat and logs nothing', w.__other === 1 && w.__updates.length === 0);
+
+  q('next-up-log').click(); await tick(400);
+  const dlg = d.querySelector('[role=dialog]');
+  ck('"Log as planned" opens a sheet for that meal', !!dlg && /Meal 1/.test(dlg.textContent) && /Log as planned/.test(dlg.textContent), dlg?.textContent.slice(0, 80));
+  const grams = [...dlg.querySelectorAll('input[type=number]')], ticks = [...dlg.querySelectorAll('input[type=checkbox]')];
+  ck('every item is ticked at its planned grams', grams.map(i => i.value).join() === '200,100' && ticks.every(t => t.checked));
+  ck('the button says what it will log: 2 items, 225 kcal', /Log 2 items · 225 kcal/.test(q('planned-save').textContent), q('planned-save')?.textContent);
+  ck('opening the sheet has still logged nothing', w.__updates.length === 0);
+  setV(grams[1], '50'); await tick(50);
+  ticks[0].click(); await tick(50);
+  ck('changing grams and unticking are spelled out before saving', /Different from the plan: Curd skipped, Moong dal 50 g \(plan 100 g\)/.test(q('planned-changes').textContent), q('planned-changes')?.textContent);
+  ck('and the button follows: 1 item, 53 kcal', /Log 1 item · 53 kcal/.test(q('planned-save').textContent), q('planned-save')?.textContent);
+  q('planned-save').click(); await tick(500);
+  const up = w.__updates[0];
+  ck('saving writes ONE food-log update: Moong dal 50 g under Meal 1, with its nutrition', w.__updates.length === 1 && up.field === 'food' && up.v.length === 1 && up.v[0].name === 'Moong dal' && up.v[0].grams === 50 && up.v[0].meal === 'Meal 1' && up.v[0].per_100g.calories === 105, up);
+  ck('the sheet closes', !d.querySelector('[role=dialog]'));
+  ck('and the card moves on to the next meal', /11:58 PM\s*Meal 2/.test(q('next-up').textContent) && !q('next-up-then'), q('next-up')?.textContent.slice(0, 80));
+
+  const done = run(code, (win) => { win.__startFood = [{ name: 'Curd', grams: 200, meal: 'Meal 1' }, { name: 'Guava', grams: 150, meal: 'Meal 2' }]; }); await tick(300);
+  ck('with every meal logged the card is gone', done.errors.length === 0 && !done.w.document.querySelector('[data-testid="next-up"]'));
+
+  // ── Plan › Nutrition with an approved plan ──────────────────────────────────
+  const api = stub('api-plan2.js', `
+    const wd = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const todayWd = new Date().toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Kolkata' });
+    const ti = wd.indexOf(todayWd);
+    const item = (name, grams) => ({ name, grams, qty_text: grams + ' g', per_100g: { calories: 100 } });
+    const days = wd.map((d, i) => [{ meal: 'Meal 1', time: '12:00', items: [item('Curd', 200), item('Dish for ' + d, 150)] }, { meal: 'Meal 2', time: '16:00', items: [item('Guava', 150)] }]);
+    const payload = {
+      profile: { name: 'Padmini', monitor_name: 'Sachin', macro_kcal: 1500, macro_pro: 120, macro_carb: 80, macro_fat: 78, water_target: 3000 },
+      meal_plan: { date: 'x', meals: [{ meal: 'Meal 1', time: '12:00', items: [item('Curd', 200), item('Today only khichdi', 250)] }, { meal: 'Meal 2', time: '16:00', items: [item('Guava', 150)] }] },
+      program: { program: null, days: [] },
+      diet_plan: window.__noPlan ? null : { id: 9, version: 2, title: 'Low carb vegetarian', effective_from: '2026-10-03',
+        targets: { kcal: 1500, protein: 120, carbs: 80, fat: 78 },
+        content: { eating_window: '12:00-20:00', timetable: [{ time: '06:00', what: 'Wake, 500 ml water' }], avoid: ['sugar', 'maida'],
+                   cautions: ['See your doctor for a BP check.'], lab_cautions: ['Fasting Glucose is high: 132 mg/dL (12 Sep 2026). Keep sweets out.'] },
+        days },
+    };
+    window.__ti = ti; window.__wd = wd;
+    const get = async (url) => ({ data: /\\/members\\/me\\/today$/.test(url) ? payload : {} });
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+  const planCode = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+    import Plan from './pages/Plan.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Padmini', role: 'patient' }, isRestoring: false });
+    function Where() { const l = useLocation(); return <div data-testid="elsewhere">{l.pathname + l.search}</div>; }
+    createRoot(document.getElementById('root')).render(
+      <MemoryRouter initialEntries={['/plan']}><Routes><Route path="/plan" element={<Plan />} /><Route path="*" element={<Where />} /></Routes></MemoryRouter>);`, api);
+  const P = run(planCode); await tick(600);
+  const pd = P.w.document; const pq = (id) => pd.querySelector(`[data-testid="${id}"]`);
+  P.w.__click('Nutrition'); await tick(200);
+  const diet = pq('plan-diet');
+  ck('Nutrition shows the approved diet plan: name, version and start date', P.errors.length === 0 && !!diet && /Low carb vegetarian/.test(diet.textContent) && /v2/.test(diet.textContent) && /3 Oct/.test(diet.textContent), [P.errors.join('|'), diet?.textContent.slice(0, 120)]);
+  ck('the plan\'s four targets', /1,500/.test(pq('plan-diet-targets').textContent) && /120/.test(pq('plan-diet-targets').textContent) && /80/.test(pq('plan-diet-targets').textContent) && /78/.test(pq('plan-diet-targets').textContent), pq('plan-diet-targets')?.textContent);
+  ck('the eating window', /Eating window 12:00-20:00/.test(diet.textContent));
+  const chips = [...pd.querySelectorAll('[data-testid="plan-diet-day"]')];
+  ck('seven weekday chips, today selected', chips.length === 7 && chips[P.w.__ti].getAttribute('aria-selected') === 'true' && chips.filter(c => c.getAttribute('aria-selected') === 'true').length === 1);
+  const mealsText = () => [...pd.querySelectorAll('[data-testid="plan-diet-meal"]')].map(m => m.textContent).join(' | ');
+  ck('today shows today\'s actual prescribed meals (a coach\'s one-day change included), with times', /12:00 PM\s*Meal 1/.test(mealsText()) && /Today only khichdi/.test(mealsText()) && /4:00 PM\s*Meal 2/.test(mealsText()), mealsText());
+  const other = (P.w.__ti + 1) % 7;
+  chips[other].click(); await tick(150);
+  ck('another weekday shows the plan\'s menu for that day', new RegExp('Dish for ' + P.w.__wd[other]).test(mealsText()) && !/Today only khichdi/.test(mealsText()), mealsText());
+  ck('the "log today\'s meals" button is only offered on today', !pq('plan-diet-log'));
+  chips[P.w.__ti].click(); await tick(150);
+  ck('avoid list and cautions, lab cautions included', /sugar, maida/.test(pq('plan-diet-avoid').textContent) && /Fasting Glucose is high/.test(pq('plan-diet-cautions').textContent) && /BP check/.test(pq('plan-diet-cautions').textContent));
+  ck('the old "meals prescribed" list is not shown as well', !pq('plan-meal') && !pq('plan-macros'));
+  pq('plan-diet-log').click(); await tick(200);
+  ck('"Log today\'s meals" goes to Today', pq('elsewhere') && pq('elsewhere').textContent === '/');
+
+  const N = run(planCode, (win) => { win.__noPlan = true; }); await tick(600);
+  N.w.__click('Nutrition'); await tick(200);
+  const nd = N.w.document;
+  ck('with no approved plan the Nutrition view is exactly the old one', N.errors.length === 0 && !nd.querySelector('[data-testid="plan-diet"]') && !!nd.querySelector('[data-testid="plan-macros"]') && nd.querySelectorAll('[data-testid="plan-meal"]').length === 2);
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2023,6 +2163,7 @@ async function overflowTest() {
     await sprint11cTest();
     await circuitsCardTest();
     await dietStudio13Test();
+    await memberPlanTest();
     await overflowTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly

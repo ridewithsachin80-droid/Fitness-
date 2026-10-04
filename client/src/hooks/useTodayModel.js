@@ -625,6 +625,10 @@ export default function useTodayModel() {
 
   const openSheet  = (key) => { setHeroPanel(key); haptic(10); };
   const closeSheet = () => setHeroPanel(null);
+  // Phase 2: the prescribed meal being logged "as planned" (null = sheet closed).
+  const [plannedMeal, setPlannedMeal] = useState(null);
+  const openPlanned  = (meal) => setPlannedMeal(meal);
+  const closePlanned = () => setPlannedMeal(null);
 
   return {
     // identity & settings
@@ -653,6 +657,7 @@ export default function useTodayModel() {
     streak, streakIsBest, milestone, setMilestone, volumePB,
     // sheets (heroPanel under its historical name)
     sheet: heroPanel, openSheet, closeSheet,
+    plannedMeal, openPlanned, closePlanned,
     // protocol chip long-press popover
     chipInfo, setChipInfo, chipPressStart, chipPressEnd,
     // weight validation

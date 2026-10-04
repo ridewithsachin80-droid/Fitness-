@@ -272,9 +272,7 @@ router.get('/me', roleCheck('patient'), async (req, res) => {
     const plan = await DP.planInForce(pool, req.user.id, today);
     if (!plan) return res.json({ plan: null });
     // The brief, the lab flags and the checks are the coach's working notes.
-    const { id, version, title, targets, content, effective_from, days } = plan;
-    const { adjustments, ...memberContent } = content || {};
-    res.json({ plan: { id, version, title, targets, content: memberContent, effective_from, days } });
+    res.json({ plan: DP.memberView(plan) });
   } catch (err) { fail(res, err); }
 });
 

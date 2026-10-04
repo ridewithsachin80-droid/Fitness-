@@ -6,7 +6,8 @@ import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { OfflineBanner, MemberBottomNav } from '../components/UI';
 import { Eyebrow, Icon, Segmented, Skeleton, SkeletonCard, EmptyState } from '../components/primitives';
 import { WEEKDAYS, istWeekday, labelHasWeekday, isWeekdayScheduled, deriveTodayDay } from '../utils/programDay';
-import { resolveProtocolItems, AUTO_TICK_IDS } from '../lib/day';
+import { resolveProtocolItems, AUTO_TICK_IDS, clock } from '../lib/day';
+import { formatDate } from '../constants';
 import { plural } from '../constants';
 
 /**
@@ -99,6 +100,21 @@ export default function Plan() {
   } : null);
   const waterL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
   const fasting = protocol?.fasting_start && protocol?.fasting_end ? { start: protocol.fasting_start, end: protocol.fasting_end } : null;
+
+  // Phase 2: the approved diet plan (never a draft). When there is one, the
+  // Nutrition view shows the plan itself and lets the member look at any
+  // weekday; when there is none it is exactly the view it was.
+  const dietPlan = data?.diet_plan || null;
+  const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const todayIdx = Math.max(0, WD.indexOf(todayWd));
+  const [planDay, setPlanDay] = useState(null);          // null = today
+  const shownDay = planDay ?? todayIdx;
+  // Today shows today's ACTUAL prescribed meals (a coach's one-day change
+  // included); other days show the plan's weekly menu.
+  const planMealsShown = dietPlan
+    ? (shownDay === todayIdx && meals.length ? meals.map(mp => ({ meal: mp.meal, time: mp.time, items: mp.items })) : (dietPlan.days?.[shownDay] || []))
+    : [];
+  const planCautions = [...(dietPlan?.content?.lab_cautions || []), ...(dietPlan?.content?.cautions || [])];
 
   const mealKcal = (items = []) => Math.round(items.reduce((a, it) => a + ((it.per_100g?.calories || 0) * (it.grams || 0) / 100), 0));
   const goToday = (sheet) => navigate(sheet ? `/?open=${sheet}` : '/');
@@ -200,7 +216,81 @@ export default function Plan() {
           </Section>
         )}
 
-        {data && view === 'nutrition' && (
+        {data && view === 'nutrition' && dietPlan && (
+          <div data-testid="plan-diet">
+            <Section eyebrow="Diet plan" title={dietPlan.title || 'Your diet plan'}
+              action={<span className="text-caption text-mid whitespace-nowrap">from {formatDate(dietPlan.effective_from)} · v{dietPlan.version}</span>}>
+              <div className="grid grid-cols-4 gap-2" data-testid="plan-diet-targets">
+                {[[terms.kcal, dietPlan.targets?.kcal, ''], ['Protein', dietPlan.targets?.protein, 'g'], ['Carbs', dietPlan.targets?.carbs, 'g'], ['Fat', dietPlan.targets?.fat, 'g']].map(([k, v, u]) => (
+                  <div key={k} className="rounded-2xl bg-white/[0.04] border border-hair px-1.5 py-2 text-center">
+                    <span className="block font-display text-num-sm font-semibold text-white tabular-nums">{v != null ? Number(v).toLocaleString('en-IN') : '—'}{v != null && u && <span className="text-caption text-lo font-sans font-medium"> {u}</span>}</span>
+                    <span className="block text-caption text-mid">{k}</span>
+                  </div>
+                ))}
+              </div>
+              {dietPlan.content?.eating_window && <p className="text-caption text-mid mt-2">Eating window {dietPlan.content.eating_window} · fast outside it</p>}
+            </Section>
+
+            <Section eyebrow="Meals" title={shownDay === todayIdx ? 'Today' : WD[shownDay]}>
+              <div className="flex gap-1.5 flex-wrap mb-3" role="tablist" aria-label="Weekday">
+                {WD.map((d, i) => (
+                  <button key={d} type="button" role="tab" aria-selected={shownDay === i} data-testid="plan-diet-day"
+                    onClick={() => { haptic(8); setPlanDay(i); }} style={{ minHeight: 40, minWidth: 44 }}
+                    className={`text-caption font-semibold rounded-full px-2.5 border ${shownDay === i ? 'border-gold text-gold' : 'border-white/[0.12] text-mid'}`}>
+                    {d}{i === todayIdx && <span className="sr-only"> (today)</span>}
+                  </button>
+                ))}
+              </div>
+              {planMealsShown.length ? planMealsShown.map(mp => (
+                <div key={mp.meal} className="rounded-2xl bg-white/[0.03] border border-hair px-3 py-2.5 mb-2" data-testid="plan-diet-meal">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm font-semibold text-white min-w-0 leading-snug">{mp.time && <span className="font-display text-gold tabular-nums">{clock(mp.time)} </span>}{mp.meal}</span>
+                    {mealKcal(mp.items) > 0 && <span className="text-caption text-mid tabular-nums whitespace-nowrap">{mealKcal(mp.items).toLocaleString('en-IN')} {terms.kcal}</span>}
+                  </div>
+                  {(mp.items || []).map((it, i) => (
+                    <div key={i} className="flex justify-between gap-3 text-caption py-1 border-b border-hair last:border-b-0">
+                      <span className="text-white min-w-0">{it.name}</span><span className="text-mid tabular-nums flex-shrink-0 text-right max-w-[50%]">{it.qty_text || `${it.grams} g`}</span>
+                    </div>
+                  ))}
+                </div>
+              )) : <p className="text-sm text-mid">No meals planned for this day.</p>}
+              {shownDay === todayIdx && planMealsShown.length > 0 && (
+                <button type="button" onClick={() => { haptic(10); goToday(); }} style={{ minHeight: 44 }} data-testid="plan-diet-log"
+                  className="w-full rounded-2xl border border-gold/40 text-gold text-sm font-bold active:scale-[0.99] transition-transform">
+                  Log today&rsquo;s meals on Today ›
+                </button>
+              )}
+            </Section>
+
+            {(dietPlan.content?.timetable || []).length > 0 && (
+              <Section eyebrow="Your day">
+                {dietPlan.content.timetable.map((r, i) => (
+                  <div key={i} className="flex gap-3 text-caption py-1.5 border-b border-hair last:border-b-0">
+                    <span className="w-16 flex-shrink-0 font-display text-gold tabular-nums">{clock(r.time) || '·'}</span>
+                    <span className="text-white min-w-0">{r.what}</span>
+                  </div>
+                ))}
+              </Section>
+            )}
+
+            {(dietPlan.content?.avoid || []).length > 0 && (
+              <Section eyebrow="Avoid">
+                <p className="text-sm text-mid leading-relaxed" data-testid="plan-diet-avoid">{dietPlan.content.avoid.join(', ')}</p>
+              </Section>
+            )}
+
+            {planCautions.length > 0 && (
+              <Section eyebrow="Keep in mind">
+                <ul className="space-y-2" data-testid="plan-diet-cautions">
+                  {planCautions.map((c, i) => <li key={i} className="text-caption text-white leading-relaxed">{c}</li>)}
+                </ul>
+                <p className="text-caption text-lo mt-2">This is dietary guidance from your coach, not medical treatment.</p>
+              </Section>
+            )}
+          </div>
+        )}
+
+        {data && view === 'nutrition' && !dietPlan && (
           <>
             <Section eyebrow="Daily targets" title={macros?.kcal ? `${macros.kcal.toLocaleString('en-IN')} ${terms.kcal}` : 'Not set yet'}>
               {macros ? (

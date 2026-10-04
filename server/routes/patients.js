@@ -17,6 +17,12 @@ async function ensurePlanDay(memberId, date) {
   try { await dietPlan.ensureDay(pool, memberId, date, getISTDate()); }
   catch (err) { console.error('ensurePlanDay failed:', err.message); }
 }
+/** The plan in force for a date, or null. Never throws: a plan lookup that
+ *  fails must not blank the member's day. */
+async function planFor(memberId, date) {
+  try { return await dietPlan.planInForce(pool, memberId, date); }
+  catch (err) { console.error('planFor failed:', err.message); return null; }
+}
 const { reviewSections } = require('../services/weeklyReport');
 const triageHour = () => parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
 const bcrypt = require('bcryptjs');
@@ -839,7 +845,8 @@ router.get('/me/meal-plan', authMW, roleCheck('patient'), async (req, res) => {
        WHERE patient_id = $1 AND plan_date = $2::date
        ORDER BY created_at`,
       [req.user.id, date]);
-    res.json({ date, meals: rows });
+    // Phase 2: each meal carries its time from the plan in force, in eating order.
+    res.json({ date, meals: dietPlan.timedMeals(rows, await planFor(req.user.id, date), date) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -934,7 +941,7 @@ router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
 
     await ensurePlanDay(uid, istToday);   // before the read below, so Today shows the plan in force
 
-    const [profile, mealPlan, program] = await Promise.all([
+    const [profile, mealPlan, program, plan] = await Promise.all([
       pool.query(
         `SELECT pp.*, u.name
            FROM patient_profiles pp JOIN users u ON u.id = pp.user_id
@@ -949,6 +956,7 @@ router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
       pool.query(
         `SELECT id, name FROM workout_programs
           WHERE patient_id = $1 AND active = true LIMIT 1`, [uid]),
+      planFor(uid, istToday),
     ]);
 
     // Program days come from the SAME helper /programs/active uses, so the two
@@ -962,7 +970,10 @@ router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
     //   program    === GET /programs/active       -> { program, days }
     res.json({
       profile:   profile.rows[0] || null,
-      meal_plan: { date: istToday, meals: mealPlan.rows || [] },
+      meal_plan: { date: istToday, meals: dietPlan.timedMeals(mealPlan.rows || [], plan, istToday) },
+      // Phase 2: the approved plan itself (never a draft), for Plan > Nutrition.
+      // Same shape as GET /diet-plans/me -> plan. null when there is none.
+      diet_plan: dietPlan.memberView(plan),
       program:   { program: prog, days },
     });
   } catch (err) {

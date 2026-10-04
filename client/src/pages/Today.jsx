@@ -16,6 +16,8 @@ import Timeline      from '../components/today/Timeline';
 import CoachNotes    from '../components/today/CoachNotes';
 import MilestoneModal from '../components/today/MilestoneModal';
 import RecoveryCard  from '../components/today/RecoveryCard';
+import NextUp        from '../components/today/NextUp';
+import LogPlannedSheet from '../components/sheets/LogPlannedSheet';
 import { FastingBar } from '../components/today/DayWidgets';
 import { nextAction, istHour } from '../lib/day';
 import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet, MealIdeaSheet } from '../components/sheets';
@@ -97,6 +99,13 @@ export default function Today() {
                 workoutLogged: (m.workoutSummary.count || 0) > 0 || (m.workoutSummary.cardio || []).length > 0,
               })} />
 
+            {/* Phase 2: the next meal from the coach's diet plan, one tap to log.
+                Above Today's Plan: it is the one thing to do next. Today only. */}
+            {isToday && (m.mealPlans || []).length > 0 && (
+              <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
+                onLog={m.openPlanned} onOther={() => openChat()} />
+            )}
+
             <TodaysPlan m={m} onOpen={openSheet} />
 
             {/* Sprint 11c: only for members whose tracker has synced — otherwise renders nothing. */}
@@ -159,6 +168,7 @@ export default function Today() {
       <WorkoutSheet   open={sheet === 'workout'}   onClose={closeSheet} m={m} />
       <NutritionSheet open={sheet === 'nutrition'} onClose={closeSheet} m={m} />
       <MealIdeaSheet   open={sheet === 'mealidea'}  onClose={closeSheet} m={m} />
+      <LogPlannedSheet meal={m.plannedMeal} onClose={m.closePlanned} m={m} />
 
       <MemberBottomNav />
       <InstallPrompt />
