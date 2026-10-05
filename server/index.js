@@ -78,6 +78,7 @@ app.use('/api/diet-plans',    require('./routes/dietPlans'));  // Diet Plan Stud
 // write-only token instead, since the caller is a phone shortcut with no
 // login session. A separate path also avoids any route-ordering subtlety.
 app.use('/api/quick-log',     require('./routes/quickLog'));
+app.use('/api/plate',         require('./routes/platePhotos'));  // Phase 3: plate photo vs plan
 app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────

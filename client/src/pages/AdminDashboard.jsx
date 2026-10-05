@@ -1,3 +1,4 @@
+import StorageCheck from '../components/admin/StorageCheck';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -168,6 +169,8 @@ export default function AdminDashboard() {
             <span className="text-sm text-mid font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
             <span className="text-gold-light">🎤</span>
           </button>
+          {/* Phase 3: one tap proves R2 photo storage works on this environment. */}
+          <StorageCheck />
         </div>
       </div>
 

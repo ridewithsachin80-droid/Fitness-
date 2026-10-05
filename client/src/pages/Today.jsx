@@ -18,6 +18,7 @@ import MilestoneModal from '../components/today/MilestoneModal';
 import RecoveryCard  from '../components/today/RecoveryCard';
 import NextUp        from '../components/today/NextUp';
 import LogPlannedSheet from '../components/sheets/LogPlannedSheet';
+import PlatePhotoSheet from '../components/sheets/PlatePhotoSheet';
 import { FastingBar } from '../components/today/DayWidgets';
 import { nextAction, istHour } from '../lib/day';
 import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet, MealIdeaSheet } from '../components/sheets';
@@ -103,7 +104,7 @@ export default function Today() {
                 Above Today's Plan: it is the one thing to do next. Today only. */}
             {isToday && (m.mealPlans || []).length > 0 && (
               <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
-                onLog={m.openPlanned} onOther={() => openChat()} />
+                onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat()} />
             )}
 
             <TodaysPlan m={m} onOpen={openSheet} />
@@ -169,6 +170,7 @@ export default function Today() {
       <NutritionSheet open={sheet === 'nutrition'} onClose={closeSheet} m={m} />
       <MealIdeaSheet   open={sheet === 'mealidea'}  onClose={closeSheet} m={m} />
       <LogPlannedSheet meal={m.plannedMeal} onClose={m.closePlanned} m={m} />
+      <PlatePhotoSheet job={m.plateJob} onClose={m.closePlate} onRetake={m.openPlate} m={m} />
 
       <MemberBottomNav />
       <InstallPrompt />

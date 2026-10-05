@@ -256,6 +256,39 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     const compliance_pct = calcCompliance(activities, acv, supplements, protocol_total || null);
     const patientId = req.user.id;
 
+    // ── An offline copy arriving after newer edits (services/dayMerge.js) ──
+    // Only replays from the offline queue say offline_replay. If the day was
+    // written since the phone loaded it, merge food and keep the rest, rather
+    // than let a stale copy wipe what was logged meanwhile.
+    if (req.body.offline_replay === true) {
+      const { mergeOfflineDay, isStale } = require('../services/dayMerge');
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const { rows: [stored] } = await client.query(
+          `SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2 FOR UPDATE`, [patientId, date]);
+        if (isStale(stored, req.body.base_saved_at)) {
+          const m = mergeOfflineDay(stored, { ...req.body, weight_kg: safeWeight, water_ml: safeWater }, req.body.base_food_ids);
+          const { rows: [saved] } = await client.query(
+            `UPDATE daily_logs SET food_items = $3, saved_at = NOW()
+              WHERE patient_id = $1 AND log_date = $2 RETURNING *`,
+            [patientId, date, JSON.stringify(m.food_items)]);
+          await client.query('COMMIT');
+          const monitors = await pool.query(`SELECT monitor_id FROM monitor_patients WHERE patient_id = $1 AND active = true`, [patientId]);
+          for (const row of monitors.rows) {
+            req.io?.to(`monitor_${row.monitor_id}`).emit('log_updated', { patientId, date, compliance: saved.compliance_pct, weight_kg: saved.weight_kg });
+          }
+          return res.json({ ...saved, merged: true, kept_server: m.kept_server, food_added: m.added, food_removed: m.removed });
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+    }
+
     const result = await pool.query(
       `INSERT INTO daily_logs
          (patient_id, log_date, weight_kg, activities, acv,

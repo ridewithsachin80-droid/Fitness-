@@ -341,9 +341,19 @@ const dietFit = { ok: true, range: { lo: 1425, hi: 1575, carb_cap: 84 },
   unfit: [{ weekday: 6, reason: 'Carbs still come to 112 g (limit 84 g) with the carb foods at their smallest sensible portion. Most of it is Paneer-mushroom-capsicum masala with menthya soppu and Jowar roti: remove or swap one.' }],
   changes: [{ meal: 'Meal 1', name: 'Paneer-mushroom-capsicum masala with menthya soppu', from: 1250.5, to: 505, weekdays: [0,1,2,3,4,5] }],
   totals: [0,1,2,3,4,5,6].map(w => ({ weekday: w, before: { kcal: 2206, carbs: 163 }, after: { kcal: 1498, carbs: 79 }, fits: w !== 6 })) };
+// Phase 3: a plate check with long names, every status and two extras.
+const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:59', matches: true, photo_saved: true, photo_url: null,
+  planned: [
+    { name: 'Paneer-mushroom-capsicum masala with menthya soppu', planned_grams: 1250.5, grams: 900, status: 'less', per_100g: { calories: 265 }, kcal: 2385 },
+    { name: 'Curd', planned_grams: 200, grams: 200, status: 'not_seen', per_100g: { calories: 60 }, kcal: 120 } ],
+  extras: [{ name: 'Masala peanuts with sev and a squeeze of lemon', grams: 45, per_100g: { calories: 560 }, kcal: 252 },
+           { name: 'Gulab jamun', grams: 80, per_100g: { calories: 380 }, kcal: 304 }] };
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/plate/off-plan')) return ok({ items: [{ id: 5, member_id: 1, name: 'Mrs. Venkataramana Reddy Lakshmi', phone: '9876543210', meal: 'Pre-workout evening snack', outcome: 'extra',
+      extras: [{ name: 'Masala peanuts with sev and a squeeze of lemon', grams: 45, kcal: 252 }, { name: 'Gulab jamun', grams: 80, kcal: 304 }], extras_kcal: 556,
+      differences: ['less Paneer-mushroom-capsicum masala with menthya soppu (900 g of 1250.5 g)', 'Curd skipped'], at: '2026-10-05T10:42:00Z', day_kcal: 12971, target_kcal: 1500, photo_url: null }] });
     if (u.includes('/diet-plans/member/')) return ok({ today: '2026-10-03', in_force: null, upcoming: null, draft: dietDraft, history: [] });
     if (u.includes('/gaps/effectiveness')) return ok({ window_days:90, min_bucket:20,
       response_window_hours:48,
@@ -433,7 +443,8 @@ export default {
     if (u.includes('/members') || u.includes('/patients')) return ok(members);
     return ok([]);
   },
-  post: async (url) => (String(url).includes('/fit') ? ok({ applied: false, fit: dietFit }) : ok({})), put: async () => ok({}),
+  post: async (url) => (String(url).includes('/fit') ? ok({ applied: false, fit: dietFit })
+    : String(url).includes('/plate/check') ? ok(plateCheck) : ok({})), put: async () => ok({}),
   patch: async () => ok({}), delete: async () => ok({}),
 };
 `;
@@ -476,6 +487,15 @@ const OVERFLOW_PAGES = [
        { name: 'Curd', grams: 200, qty_text: '1 katori', per_100g: { calories: 60 } } ] }];
      const P = () => (<div className="p-4"><NU mealPlans={mp} food={[]} terms={{ kcal: 'kcal' }} onLog={() => {}} onOther={() => {}} />
        <LS meal={planMeals({ mealPlans: mp, food: [], nowMin: 0 }).next} onClose={() => {}} m={{ log: { food: [] }, terms: { kcal: 'kcal' }, update: () => {} }} /></div>);`],
+  // Phase 3: the plate result sheet (real canvas downscale in Chrome) and the
+  // coach's Off plan today tab, both with the longest names.
+  ['PlateSheet', `import PS from './components/sheets/PlatePhotoSheet.jsx';
+     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+     const job = { meal: { meal: 'Pre-workout evening snack', time: '23:59' }, file: new File([png], 'p.png', { type: 'image/png' }), at: 1 };
+     // The sheet renders in a portal, so give the root something of its own.
+     const P = () => <div className="p-4"><p>Today</p><PS job={job} onClose={() => {}} onRetake={() => {}} m={{ log: { food: [] }, terms: { kcal: 'kcal' }, update: () => {} }} /></div>;`],
+  ['OffPlanTab', `import TF from './components/coach/TriageFeed.jsx';
+     const P = () => { setTimeout(() => document.querySelector('[data-testid="triage-tab-offplan"]')?.click(), 400); return <div className="p-4"><TF /></div>; };`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
@@ -990,8 +1010,14 @@ async function todayVisualTest() {
       m = await measure(page, width);
       ck(`protocol sheet @${width}px: no sideways scroll`, m.scrollW <= width + 1 && m.dialogW != null, `scrollWidth ${m.scrollW}`);
       if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-protocol-sheet.png') });
-      await page.keyboard.press('Escape'); await new Promise(r => setTimeout(r, 600));
-      ck(`Escape closes the sheet in a real browser @${width}px`, (await measure(page, width)).dialogW === null);
+      await page.keyboard.press('Escape');
+      // The sheet slides out over ~300 ms. A fixed 600 ms wait failed on a busy
+      // machine (three times on 5 Oct, always at 390 px, never reproducible):
+      // wait up to 3 s for it to go, so a slow runner is not a red gate.
+      // A sheet that never closes still fails.
+      let closed = false;
+      for (let t = 0; t < 15 && !closed; t++) { await new Promise(r => setTimeout(r, 200)); closed = (await measure(page, width)).dialogW === null; }
+      ck(`Escape closes the sheet in a real browser @${width}px`, closed);
       await page.close();
     }
   } finally {
@@ -2083,6 +2109,153 @@ async function cspTest() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 25. Phase 3 — plate photo: the camera button, the result sheet, the coach's
+//     Off plan today tab
+// ═══════════════════════════════════════════════════════════════════════════
+async function platePhotoTest() {
+  console.log('\n[25] Plate photo (Phase 3)');
+  const api = stub('api-plate.js', `
+    window.__posts = [];
+    const per = (k) => ({ calories: k });
+    const matched = { photo_id: 77, meal: 'Meal 2', time: '16:00', matches: true, photo_saved: true, photo_url: null,
+      planned: [
+        { name: 'Whey protein', planned_grams: 30, grams: 30, status: 'as_planned', per_100g: per(400), kcal: 120 },
+        { name: 'Guava', planned_grams: 150, grams: 100, status: 'less', per_100g: per(68), kcal: 68 },
+        { name: 'Buttermilk', planned_grams: 200, grams: 200, status: 'not_seen', per_100g: per(40), kcal: 80 } ],
+      extras: [{ name: 'Banana chips', grams: 30, per_100g: per(520), kcal: 156 }] };
+    const mismatch = { ...matched, photo_id: 78, matches: false, planned: matched.planned.map(p => ({ ...p, status: 'not_seen' })),
+      extras: [{ name: 'Idli', grams: 120, per_100g: per(130), kcal: 156 }, { name: 'Sambar', grams: 150, per_100g: per(65), kcal: 98 }] };
+    const post = async (url, body) => {
+      window.__posts.push({ url, body });
+      if (/\\/plate\\/check$/.test(url)) {
+        if (window.__plateMode === 'down') { const e = new Error('x'); e.response = { status: 502, data: { error: 'I could not read that photo just now. Try again, or log the meal as planned.' } }; throw e; }
+        return { data: window.__plateMode === 'mismatch' ? mismatch : matched };
+      }
+      return { data: { ok: true } };
+    };
+    const get = async (url) => {
+      if (/\\/plate\\/storage-check$/.test(url)) return { data: window.__storageMode === 'bad' ? { ok: false, step: 'upload', bucket: 'fitlife-test', error: 'Storage upload failed (403)' } : { ok: true, bucket: 'fitlife-test' } };
+      if (/\\/members\\/triage$/.test(url)) return { data: { members: [], counts: { total: 2, on_track: 2 } } };
+      if (/\\/plate\\/off-plan$/.test(url)) return { data: { items: [{ id: 5, member_id: 12, name: 'Padmini', phone: '9876543210', meal: 'Meal 2', outcome: 'extra',
+        extras: [{ name: 'banana chips', grams: 30, kcal: 156 }], extras_kcal: 156, differences: ['Buttermilk skipped'], at: '2026-10-05T10:42:00Z',
+        day_kcal: 971, target_kcal: 1500, photo_url: null }] } };
+      return { data: {} };
+    };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  // jsdom has no canvas and never loads images: stand-ins so the real
+  // downscaleImage runs end to end.
+  const prep = (mode) => (win) => {
+    win.__plateMode = mode;
+    win.HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
+    win.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/jpeg;base64,QUJD';
+    win.Image = class { set src(v) { this._s = v; setTimeout(() => this.onload && this.onload(), 0); } get src() { return this._s; } get width() { return 4000; } get height() { return 3000; } };
+  };
+  const code = await bundle(`
+    import { useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import NextUp from './components/today/NextUp.jsx';
+    import PlatePhotoSheet from './components/sheets/PlatePhotoSheet.jsx';
+    const per = (k) => ({ calories: k });
+    const mealPlans = [{ meal: 'Meal 2', time: '23:58', items: [{ name: 'Whey protein', grams: 30, per_100g: per(400) }, { name: 'Guava', grams: 150, per_100g: per(68) }, { name: 'Buttermilk', grams: 200, per_100g: per(40) }] }];
+    window.__updates = [];
+    function H() {
+      const [food, setFood] = useState([]);
+      const [job, setJob] = useState(null);
+      const m = { log: { food }, terms: { kcal: 'kcal' }, update: (f, v) => { window.__updates.push({ f, v }); setFood(v); } };
+      window.__snap = (file) => setJob({ meal: { meal: 'Meal 2', time: '23:58' }, file, at: Date.now() });
+      return (<div><NextUp mealPlans={mealPlans} food={food} terms={m.terms} onLog={() => {}} onOther={() => {}} onSnap={(meal, f) => setJob({ meal, file: f, at: Date.now() })} />
+        <PlatePhotoSheet job={job} onClose={() => setJob(null)} onRetake={(meal, f) => setJob({ meal, file: f, at: Date.now() })} m={m} /></div>);
+    }
+    createRoot(document.getElementById('root')).render(<H />);`, api);
+
+  // ── Matched ─────────────────────────────────────────────────────────────────
+  const { w, errors } = run(code, prep('matched')); await tick(300);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  const snap = q('next-up-snap');
+  const fileIn = snap?.querySelector('input[type=file]');
+  ck('Next up offers "Snap your plate", a real camera input inside the tap target', errors.length === 0 && !!snap && /Snap your plate/.test(snap.textContent) && fileIn?.getAttribute('capture') === 'environment' && fileIn.getAttribute('accept') === 'image/*', errors.join('|'));
+  const file = new w.File([new Uint8Array([1, 2, 3])], 'plate.jpg', { type: 'image/jpeg' });
+  Object.defineProperty(fileIn, 'files', { value: [file], configurable: true });
+  fileIn.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(600);
+  const check = w.__posts.find(p => /\/plate\/check$/.test(p.url));
+  ck('choosing a photo sends it, downscaled, with the meal it is for', !!check && check.body.meal === 'Meal 2' && check.body.image === 'QUJD' && check.body.mimeType === 'image/jpeg', check?.body);
+  ck('nothing is logged just by checking', w.__updates.length === 0);
+  const res = q('plate-result');
+  ck('the result shows each planned item and the extra', !!res && d.querySelectorAll('[data-testid="plate-planned"]').length === 3 && d.querySelectorAll('[data-testid="plate-extra"]').length === 1, d.body.textContent.slice(0, 200));
+  ck('as planned, less, and "did you have it?"', /As planned · about 30 g/.test(res.textContent) && /About 100 g · plan says 150 g/.test(res.textContent) && /Not in the photo. Did you have it\?/.test(res.textContent));
+  const boxes = [...res.querySelectorAll('input[type=checkbox]')];
+  ck('items in the photo start ticked; the one not seen starts unticked', boxes.map(b => b.checked).join() === 'true,true,false,true', boxes.map(b => b.checked));
+  ck('extras over 100 kcal: "Your coach will see the extras"', !!q('plate-coach-note'));
+  ck('the button logs what is ticked: 120 + 68 + 156 = 344 kcal', /Log this · 344 kcal/.test(q('plate-save').textContent), q('plate-save')?.textContent);
+  const gramsBox = res.querySelectorAll('input[type=number]')[1];
+  Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(gramsBox, '120');
+  gramsBox.dispatchEvent(new w.Event('input', { bubbles: true })); await tick(50);
+  ck('typing grams keeps the same box (the keyboard stays open)', gramsBox.isConnected && gramsBox.value === '120');
+  boxes[2].click(); await tick(50);
+  ck('ticking "had buttermilk" adds it: now 120 + 82 + 80 + 156 = 438 kcal', /Log this · 438 kcal/.test(q('plate-save').textContent), q('plate-save')?.textContent);
+  q('plate-save').click(); await tick(700);
+  const up = w.__updates[0]?.v || [];
+  ck('saving logs four foods under Meal 2, with the changed grams', w.__updates.length === 1 && up.length === 4 && up.every(r => r.meal === 'Meal 2') && up.find(r => r.name === 'Guava').grams === 120, up);
+  ck('the "kind" bookkeeping does not leak into the food log', up.every(r => r.kind === undefined));
+  const conf = w.__posts.find(p => /\/plate\/77\/confirm$/.test(p.url));
+  ck('and tells the server what was logged, as the meal, with kinds', conf?.body.as === 'meal' && conf.body.items.length === 4 && conf.body.items.filter(i => i.kind === 'extra').length === 1, conf?.body);
+  ck('the sheet closes', !q('plate-result') && !d.querySelector('[role=dialog]'));
+
+  // ── Not this meal ───────────────────────────────────────────────────────────
+  const X = run(code, prep('mismatch')); await tick(300);
+  X.w.__snap(new X.w.File([new Uint8Array([1])], 'p.jpg', { type: 'image/jpeg' })); await tick(600);
+  const xq = (id) => X.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('a different plate says so, naming the planned meal', !!xq('plate-mismatch') && /doesn.t look like Meal 2/.test(xq('plate-mismatch').textContent) && /whey protein, guava, buttermilk/.test(xq('plate-mismatch').textContent));
+  ck('it offers: extra snack (254 kcal), instead of the meal, or retake', /Log as an extra snack · 254 kcal/.test(xq('plate-as-extra').textContent) && !!xq('plate-as-swap') && /Retake photo/.test(xq('plate-mismatch').textContent));
+  xq('plate-as-extra').click(); await tick(300);
+  const xu = X.w.__updates[0]?.v || [];
+  ck('as an extra snack: idli and sambar logged under Snack', xu.length === 2 && xu.every(r => r.meal === 'Snack'), xu);
+  ck('and confirmed as "extra"', X.w.__posts.some(p => /\/plate\/78\/confirm$/.test(p.url) && p.body.as === 'extra'));
+
+  const S = run(code, prep('mismatch')); await tick(300);
+  S.w.__snap(new S.w.File([new Uint8Array([1])], 'p.jpg', { type: 'image/jpeg' })); await tick(600);
+  S.w.document.querySelector('[data-testid="plate-as-swap"]').click(); await tick(300);
+  ck('"instead of the plan": logged under Meal 2 and confirmed as "swap"', (S.w.__updates[0]?.v || []).every(r => r.meal === 'Meal 2') && S.w.__posts.some(p => /confirm$/.test(p.url) && p.body.as === 'swap'));
+
+  // ── The check failing ───────────────────────────────────────────────────────
+  const E = run(code, prep('down')); await tick(300);
+  E.w.__snap(new E.w.File([new Uint8Array([1])], 'p.jpg', { type: 'image/jpeg' })); await tick(600);
+  const err = E.w.document.querySelector('[data-testid="plate-error"]');
+  ck('the check failing says so plainly and offers a retake; nothing logged', !!err && /log the meal as planned/.test(err.textContent) && /Retake photo/.test(err.textContent) && E.w.__updates.length === 0);
+
+  // ── Coach: Off plan today ──────────────────────────────────────────────────
+  const feed = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import TriageFeed from './components/coach/TriageFeed.jsx';
+    createRoot(document.getElementById('root')).render(<MemoryRouter><TriageFeed /></MemoryRouter>);`, api);
+  const F = run(feed); await tick(500);
+  const fq = (id) => F.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('the coach\'s feed has an "Off plan today · 1" tab', F.errors.length === 0 && /Off plan today · 1/.test(fq('triage-tab-offplan')?.textContent || ''), F.errors.join('|'));
+  ck('the All tab is shown first, as before', fq('triage-tab-all').getAttribute('aria-selected') === 'true' && !fq('offplan-feed'));
+  fq('triage-tab-offplan').click(); await tick(150);
+  const card = fq('offplan-card');
+  ck('the card: member, meal, the extra with its calories, what was skipped, the day so far', !!card && /Padmini/.test(card.textContent) && /Meal 2/.test(card.textContent) && /Extra: banana chips, about 30 g · 156 kcal/.test(card.textContent) && /Buttermilk skipped/.test(card.textContent) && /Day so far 971 of 1,500 kcal/.test(card.textContent), card?.textContent);
+  fq('offplan-seen').click(); await tick(150);
+  ck('"Seen" removes it and tells the server', !fq('offplan-card') && !!fq('offplan-empty') && F.w.__posts.some(p => /\/plate\/5\/seen$/.test(p.url)));
+
+  // ── Admin: photo storage check ─────────────────────────────────────────────
+  const sc = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import StorageCheck from './components/admin/StorageCheck.jsx';
+    createRoot(document.getElementById('root')).render(<StorageCheck />);`, api);
+  for (const mode of ['ok', 'bad']) {
+    const T = run(sc, (win) => { win.__storageMode = mode; }); await tick(200);
+    const tq = (id) => T.w.document.querySelector(`[data-testid="${id}"]`);
+    ck(`storage check (${mode}): nothing runs until the admin taps`, T.errors.length === 0 && !tq('storage-check-result'));
+    tq('storage-check-run').click(); await tick(200);
+    const out = tq('storage-check-result')?.textContent || '';
+    ck(mode === 'ok' ? 'a working bucket says so, by name' : 'a refused upload says what usually causes it, with the error',
+       mode === 'ok' ? /Working\. Uploaded, read back and deleted a test file in "fitlife-test"/.test(out) : /wrong key/.test(out) && /403/.test(out), out);
+  }
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2169,7 +2342,10 @@ async function overflowTest() {
         await new Promise(r => setTimeout(r, 700));
 
         const res = await page.evaluate((vw) => {
-          const mounted = document.getElementById('root').innerHTML.length;
+          // A sheet renders in a portal outside #root; it counts as mounted too.
+          const mounted = document.getElementById('root').innerHTML.length
+            + [...document.querySelectorAll('[role=dialog]')].reduce((a, d) => a + d.innerHTML.length, 0);
+          const plateResult = !!document.querySelector('[data-testid="plate-result"]');
           const scrollW = document.documentElement.scrollWidth;
           const offenders = [];
           if (scrollW > vw + 1) {
@@ -2182,9 +2358,12 @@ async function overflowTest() {
               offenders.push(`<${el.tagName.toLowerCase()} class="${cls.slice(0, 90)}"> right=${Math.round(r.right)}`);
             }
           }
-          return { mounted, scrollW, offenders: offenders.slice(0, 4) };
+          return { mounted, plateResult, scrollW, offenders: offenders.slice(0, 4) };
         }, width);
+        if (process.env.UI_SHOTS) await page.screenshot({ path: `${process.env.UI_SHOTS}/${label.replace(/\W/g, '')}-${width}.png`, fullPage: true });
         await page.close();
+        // The plate sheet does a real canvas downscale here, then shows the check.
+        if (label === 'PlateSheet') ck(`PlateSheet @${width}px shows the check result (real canvas downscale)`, res.plateResult);
 
         // A page that did not mount has not been checked. Saying "no overflow"
         // about a blank screen is the vacuous pass this repo keeps finding.
@@ -2224,6 +2403,7 @@ async function overflowTest() {
     await circuitsCardTest();
     await dietStudio13Test();
     await memberPlanTest();
+    await platePhotoTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

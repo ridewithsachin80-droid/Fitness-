@@ -52,7 +52,7 @@ function isAuthFailure(err) {
  *                                  lock; resolves to its result, or to
  *                                  { skipped: 'locked' }
  */
-export function createQueue({ getDB, store, post, getOwner, now = Date.now, onChange = () => {}, lock = (fn) => fn() }) {
+export function createQueue({ getDB, store, post, getOwner, now = Date.now, onChange = () => {}, lock = (fn) => fn(), onMerged = () => {} }) {
   let running = null;
 
   /** Act on an entry only if it is still the revision we read. One
@@ -100,8 +100,11 @@ export function createQueue({ getDB, store, post, getOwner, now = Date.now, onCh
       // Signed out, or someone else signed in, while this pass was running.
       if (!sameId(getOwner(), owner)) { stopped = 'owner-changed'; break; }
       try {
-        await post(item.date, item.log);
+        // A replay says so: the server then checks whether the day changed
+        // since this copy was made, and merges instead of overwriting.
+        const res = await post(item.date, { ...item.log, offline_replay: true });
         await ifSameRev(db, item.key, item.rev, (s) => s.delete(item.key));
+        if (res?.data?.merged) { try { onMerged({ date: item.date, keptServer: res.data.kept_server || [] }); } catch (_) {} }
         sent += 1;
       } catch (err) {
         if (isAuthFailure(err)) { stopped = 'auth'; break; }

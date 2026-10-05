@@ -834,6 +834,32 @@ CREATE TABLE IF NOT EXISTS coach_circuits (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_coach_circuits_name
   ON coach_circuits(monitor_id, LOWER(name));
 
+-- ── PLATE PHOTOS (Phase 3) ────────────────────────────────────────────────
+-- A member's plate photo checked against the prescribed meal. The photo itself
+-- is in private R2 storage (object_key); it is deleted after delete_after and
+-- object_key is cleared. flagged = the coach's "Off plan today" feed shows it:
+-- extras over 100 kcal in the meal, or a different meal eaten instead.
+CREATE TABLE IF NOT EXISTS meal_photos (
+  id            SERIAL PRIMARY KEY,
+  patient_id    INT REFERENCES users(id) ON DELETE CASCADE,
+  log_date      DATE NOT NULL,
+  meal          VARCHAR(40),
+  object_key    TEXT,
+  status        VARCHAR(12) NOT NULL DEFAULT 'checked',
+  outcome       VARCHAR(12),
+  analysis      JSONB NOT NULL DEFAULT '{}',
+  extras        JSONB NOT NULL DEFAULT '[]',
+  extras_kcal   INT NOT NULL DEFAULT 0,
+  differences   JSONB NOT NULL DEFAULT '[]',
+  flagged       BOOLEAN NOT NULL DEFAULT false,
+  coach_seen_at TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  delete_after  TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '90 days')
+);
+CREATE INDEX IF NOT EXISTS idx_meal_photos_patient_date ON meal_photos(patient_id, log_date);
+CREATE INDEX IF NOT EXISTS idx_meal_photos_flagged ON meal_photos(log_date) WHERE flagged = true AND coach_seen_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_meal_photos_expiry ON meal_photos(delete_after) WHERE object_key IS NOT NULL;
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

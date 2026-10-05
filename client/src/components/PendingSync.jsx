@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { getQueueStatus, onQueueChange, retryQueueNow, claimLegacyEntries, dismissLegacyEntries } from '../hooks/useOfflineQueue';
+import { getQueueStatus, onQueueChange, retryQueueNow, claimLegacyEntries, dismissLegacyEntries, getMergeNotices, dismissMergeNotices } from '../hooks/useOfflineQueue';
 import { formatDate, plural } from '../constants';
 import { haptic } from '../store/settingsStore';
 
@@ -26,8 +26,10 @@ export default function PendingSync() {
   const [claiming, setClaiming] = useState(false);
   const [retrying, setRetry]  = useState(false);
 
+  const [merged, setMerged]   = useState(() => getMergeNotices());
   const refresh = useCallback(() => {
     getQueueStatus().then(setStatus).catch(() => {});
+    setMerged(getMergeNotices());
   }, []);
 
   useEffect(() => {
@@ -57,6 +59,22 @@ export default function PendingSync() {
     try { await (mine ? claimLegacyEntries() : dismissLegacyEntries()); } catch (_) {}
     finally { setClaiming(false); refresh(); }
   };
+
+  // An offline day reached the server after the day had changed elsewhere.
+  // Food from both was kept; anything else that differed kept the newer value.
+  if (merged.length > 0) {
+    const n = merged[merged.length - 1];
+    return (
+      <div className="rounded-xl px-3.5 py-2.5 border border-white/[0.12] bg-white/[0.04]" data-testid="merge-notice">
+        <p className="text-caption text-white leading-snug">
+          Your offline entries for {formatDate(n.date)} were added to the day, which had changed on another device.
+          {n.keptServer.length > 0 && ` Your offline ${n.keptServer.join(', ')} ${n.keptServer.length === 1 ? 'was' : 'were'} not saved; the newer ${n.keptServer.length === 1 ? 'value is' : 'values are'} kept.`}
+        </p>
+        <button type="button" onClick={() => { haptic(8); dismissMergeNotices(); }} style={{ minHeight: 40 }}
+          className="text-caption font-semibold text-gold mt-1">OK</button>
+      </div>
+    );
+  }
 
   if (status.unclaimed > 0) {
     const n = status.unclaimed;

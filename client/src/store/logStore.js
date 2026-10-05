@@ -85,6 +85,9 @@ function mapServerLog(row) {
     sleep:       row.sleep       ?? { bedtime: '', waketime: '', quality: 0 },
     notes:       row.notes       ?? '',
     savedAt:     row.saved_at    ?? null,
+    // The food ids in the day as loaded. An offline copy sends them back, so
+    // the server can tell "deleted offline" from "added elsewhere".
+    baseFoodIds: (row.food_items ?? []).map(i => i?.id).filter(Boolean),
   };
 }
 
@@ -118,6 +121,10 @@ function mapToServer(log, protocol) {
       per_100g: item.per_100g || null,
     })),
     water_ml:       log.water,
+    // What this phone last saw of the day. Used only if this save ends up
+    // replayed from the offline queue (server/services/dayMerge.js).
+    base_saved_at:  log.savedAt ?? null,
+    base_food_ids:  log.baseFoodIds ?? null,
     supplements:    log.supplements,
     sleep:          log.sleep,
     notes:          log.notes,

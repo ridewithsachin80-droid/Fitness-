@@ -629,6 +629,10 @@ export default function useTodayModel() {
   const [plannedMeal, setPlannedMeal] = useState(null);
   const openPlanned  = (meal) => setPlannedMeal(meal);
   const closePlanned = () => setPlannedMeal(null);
+  // Phase 3: a plate photo being checked against a meal ({ meal, file } or null).
+  const [plateJob, setPlateJob] = useState(null);
+  const openPlate  = (meal, file) => setPlateJob({ meal, file, at: Date.now() });
+  const closePlate = () => setPlateJob(null);
 
   return {
     // identity & settings
@@ -658,6 +662,7 @@ export default function useTodayModel() {
     // sheets (heroPanel under its historical name)
     sheet: heroPanel, openSheet, closeSheet,
     plannedMeal, openPlanned, closePlanned,
+    plateJob, openPlate, closePlate,
     // protocol chip long-press popover
     chipInfo, setChipInfo, chipPressStart, chipPressEnd,
     // weight validation
