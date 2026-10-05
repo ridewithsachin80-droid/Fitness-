@@ -900,6 +900,35 @@ async function ensureDay(db, memberId, date, today) {
  *    That is NOT a new plan — breakfast must survive. The new version is the
  *    plan in force with those meals swapped in.
  */
+/**
+ * The plan an import WOULD record: the imported meals on every weekday (or
+ * merged into the plan in force, for a change to some meals), with targets.
+ * Saves nothing, so the caller can run the checks first (Phase 1.3 rules:
+ * an imported plan over its targets must not be approved either).
+ * @returns {Promise<{title, targets, content, days, flags, brief}|null>}
+ */
+async function buildImportedPlan(client, { memberId, title, macros, meals, today, wholePlan }) {
+  const applied = (meals || []).map(m => ({ meal: m.meal, time: null, items: (m.items || []).map(normaliseItem).filter(Boolean) })).filter(m => m.items.length);
+  if (!applied.length) return null;
+  const base = wholePlan ? null : await planInForce(client, memberId, today);
+  const days = WEEKDAYS.map((_, w) => {
+    if (!base) return applied.map(m => ({ ...m }));
+    const day = (base.days[w] || []).map(m => ({ ...m }));
+    for (const m of applied) {
+      const i = day.findIndex(x => x.meal.toLowerCase() === m.meal.toLowerCase());
+      if (i >= 0) day[i] = { ...day[i], items: m.items };
+      else day.push({ ...m });
+    }
+    return day;
+  });
+  const given   = normaliseTargets(macros || {});
+  const targets = base ? Object.fromEntries(Object.entries(given).map(([k, v]) => [k, v ?? base.targets?.[k] ?? null])) : given;
+  return {
+    title: str(title, 120) || base?.title || 'Coach plan', brief: base?.brief || null,
+    targets, content: base ? base.content : normaliseContent({}), days, flags: base?.flags || [],
+  };
+}
+
 async function recordImportedPlan(client, { memberId, coachId, title, macros, meals, today, lastDate, wholePlan }) {
   const applied = meals.map(m => ({ meal: m.meal, time: null, items: m.items.map(normaliseItem).filter(Boolean) })).filter(m => m.items.length);
   if (!applied.length) return null;
@@ -1026,5 +1055,5 @@ module.exports = {
   normaliseTargets, normaliseContent, normaliseItem, normaliseDraft, toMealsShape,
   buildFlags, labCautions, runChecks, hasErrors, hasWarnings, diffPlans,
   dayTotals, kcalRange, carbCap, isVagueGreen, fitToTarget,
-  loadPlan, planInForce, saveDraft, updateDraft, approveDraft, ensureDay, recordImportedPlan,
+  loadPlan, planInForce, saveDraft, updateDraft, approveDraft, ensureDay, recordImportedPlan, buildImportedPlan,
 };

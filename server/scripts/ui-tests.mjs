@@ -25,6 +25,7 @@
  *   cd server && npm run test:ui
  */
 
+import { createRequire } from 'module';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
 // puppeteer-core and @sparticuz/chromium are loaded ON DEMAND, not imported.
@@ -2023,6 +2024,65 @@ async function memberPlanTest() {
   ck('with no approved plan the Nutrition view is exactly the old one', N.errors.length === 0 && !nd.querySelector('[data-testid="plan-diet"]') && !!nd.querySelector('[data-testid="plan-macros"]') && nd.querySelectorAll('[data-testid="plan-meal"]').length === 2);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 24. The production security policy (helmet) against the BUILT client
+// ═══════════════════════════════════════════════════════════════════════════
+// The live login page logged "Refused to execute inline script" (login:48):
+// helmet's default policy in production allows scripts from the site itself
+// only, so the inline 10-second boot watchdog in index.html never ran, and
+// its Reload button's onclick never fired. jsdom has no security policy, so
+// only a real browser against the real headers can catch this.
+async function cspTest() {
+  console.log('\n[24] security policy: the built app under production headers (headless Chrome)');
+  let puppeteerCore, chromiumPkg;
+  try {
+    puppeteerCore = (await import('puppeteer-core')).default;
+    chromiumPkg   = (await import('@sparticuz/chromium')).default;
+  } catch {
+    console.log('  – browser not installed, security-policy check NOT RUN');
+    return;
+  }
+  const chromium = chromiumPkg.default || chromiumPkg;
+  const dist = path.join(ROOT, 'client', 'dist');
+  if (!fs.existsSync(path.join(dist, 'index.html'))) throw new Error('No client build at client/dist. Run: cd client && npm run build');
+  const require_ = createRequire(path.join(ROOT, 'server', 'package.json'));
+  const express = require_('express'), helmet = require_('helmet');
+  const app = express();
+  app.use(helmet());                       // exactly what server/index.js uses in production
+  app.use(express.static(dist));
+  app.use((req, res) => res.sendFile(path.join(dist, 'index.html')));
+  const server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+  try {
+    const page = await browser.newPage();
+    // Block the service worker: a stale one from another run must not answer.
+    await page.evaluateOnNewDocument(() => {
+      window.__csp = [];
+      document.addEventListener('securitypolicyviolation', e => window.__csp.push(`${e.violatedDirective} ${e.blockedURI || 'inline'} ${e.lineNumber || ''}`));
+    });
+    const consoleCsp = [];
+    page.on('console', m => { if (/Content Security Policy|Refused to/i.test(m.text())) consoleCsp.push(m.text().slice(0, 160)); });
+    await page.goto(origin + '/login', { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
+    await new Promise(r => setTimeout(r, 1500));
+    const v = await page.evaluate(() => window.__csp);
+    ck('the login page loads with no security-policy violations', v.length === 0 && consoleCsp.length === 0, [...v, ...consoleCsp].join(' | '));
+    const wd = await page.evaluate(() => ({ recover: typeof window.__fitlifeRecover, booted: !!window.__fitlifeBooted, btn: !!document.querySelector('#boot-fallback button') }));
+    ck('the boot watchdog ran: its recovery function exists', wd.recover === 'function', wd);
+    ck('and the app mounted (it marks itself booted)', wd.booted === true, wd);
+    const clicked = await page.evaluate(() => {
+      let called = 0; window.__fitlifeRecover = () => { called++; };
+      document.getElementById('boot-fallback').style.display = 'block';
+      document.querySelector('#boot-fallback button').click();
+      return called;
+    });
+    ck('the "Reload app" button calls the recovery (no blocked onclick)', clicked === 1, clicked);
+  } finally {
+    await browser.close().catch(() => {});
+    server.close();
+  }
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2165,6 +2225,7 @@ async function overflowTest() {
     await dietStudio13Test();
     await memberPlanTest();
     await overflowTest();
+    await cspTest();
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
     // because a dependency is missing is worse than not having one.

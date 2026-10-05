@@ -525,4 +525,5 @@ module.exports.buildDraftPrompt = buildDraftPrompt;
 module.exports.parseModelJSON   = parseModelJSON;
 module.exports.buildFillPrompt  = buildFillPrompt;
 module.exports.createDraft      = createDraft;
+module.exports.memberContext    = memberContext;
 module.exports.kcalFromBrief    = kcalFromBrief;

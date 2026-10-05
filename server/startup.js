@@ -404,6 +404,12 @@ async function main() {
     await runSchema();
     await seedUsers();
     await seedFoodsIfEmpty();
+    // After the seed, every boot: raw-grain rows must not answer to the
+    // everyday names members type ("brown rice"). Never fatal.
+    try {
+      const f = await require('./services/foodFixes').applyFoodFixes(pool);
+      if (f.renamed || f.added || f.aliased) console.log(`🍚 Food fixes: ${f.renamed} renamed, ${f.added} added, ${f.aliased} aliased`);
+    } catch (err) { console.error('⚠️  Food fixes failed (non-fatal):', err.message); }
     await seedExercisesIfEmpty();
     await patchFoods();
     await runKannadaMigration();

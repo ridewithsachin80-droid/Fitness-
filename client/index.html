@@ -37,36 +37,12 @@
     <div id="root"></div>
     <div id="boot-fallback">
       <p>FitLife couldn't load. This usually clears with a fresh start.</p>
-      <button onclick="window.__fitlifeRecover()">Reload app</button>
+      <button type="button" id="boot-reload">Reload app</button>
     </div>
-    <script>
-      // ── Boot watchdog ──────────────────────────────────────────────────────
-      // A PWA can white-screen for reasons the app code never gets to handle:
-      // a stale service worker serving an index.html whose hashed chunks were
-      // purged by a new deploy, a refresh landing mid-rollout, or a script
-      // crash before React mounts. This inline script runs no matter what else
-      // fails: if React hasn't painted into #root within 10s, it shows a
-      // recovery screen whose button wipes service workers + caches and
-      // reloads clean. window.__fitlifeBooted is set by main.jsx after mount.
-      window.__fitlifeRecover = async function () {
-        try {
-          if ('serviceWorker' in navigator) {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map(function (r) { return r.unregister(); }));
-          }
-          if (window.caches && caches.keys) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(function (k) { return caches.delete(k); }));
-          }
-        } catch (e) { /* best effort — reload regardless */ }
-        location.reload();
-      };
-      setTimeout(function () {
-        if (!window.__fitlifeBooted) {
-          document.getElementById('boot-fallback').style.display = 'block';
-        }
-      }, 10000);
-    </script>
+    <!-- Boot watchdog: a plain script file, not inline. The production
+         security policy (helmet) refuses inline scripts, so an inline
+         watchdog never ran on the live site. See public/boot-watchdog.js. -->
+    <script src="/boot-watchdog.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -884,7 +884,7 @@ async function enrichFromDB(foods) {
       //   5  anything else that matched
       const { rows } = await pool.query(
         `WITH c AS (
-           SELECT id, name, per_100g, verified, default_grams,
+           SELECT id, name, per_100g, verified, default_grams, name_aliases,
                   LOWER(BTRIM(SPLIT_PART(name, '(', 1))) AS base
            FROM foods
            WHERE LOWER(name)       = $1
@@ -899,9 +899,19 @@ async function enrichFromDB(foods) {
                   WHEN base = $1                                     THEN 1
                   WHEN base IN ($1 || 's', $1 || 'es')               THEN 2
                   WHEN RTRIM($1, 's') = RTRIM(base, 's')             THEN 2
+                  WHEN LOWER(name_aliases::text) LIKE $2             THEN 3
                   WHEN base LIKE $1 || ' %'                          THEN 4
                   ELSE 5
                 END AS rank,
+                -- Members log food AS EATEN. When rows tie on rank, a row
+                -- that says "Cooked" wins and one that says "Raw" loses, unless
+                -- the member said "raw". "moong dal" tied three ways: Split
+                -- Yellow Raw 334, Whole Green (dry) 347, Cooked 105, and the
+                -- lowest id won, so 200 g of dal was logged as 668 kcal.
+                CASE WHEN $1 ~ '\\mraw\\M'               THEN 0
+                     WHEN name ~* '\\mcooked\\M'          THEN 0
+                     WHEN name ~* '\\mraw\\M'             THEN 2
+                     ELSE 1 END AS eaten,
                 -- Some foods are seeded twice: once per 100g and once per
                 -- serving ("Flaxseed Oil (Alsi Tel)" 884 vs "Flaxseed Oil
                 -- (1 tsp / 5ml)" 44). Both share a base name, so a plain
@@ -910,7 +920,7 @@ async function enrichFromDB(foods) {
                 -- unit explicitly — which the exact-name rank above handles.
                 CASE WHEN name ~ '[(]([ ]*per[ ]|[ ]*[0-9])' THEN 1 ELSE 0 END AS per_unit
          FROM c
-         ORDER BY rank ASC, per_unit ASC, verified DESC, LENGTH(base) ASC, id ASC
+         ORDER BY rank ASC, per_unit ASC, eaten ASC, verified DESC, LENGTH(base) ASC, id ASC
          LIMIT 1`,
         [ql, `%"${ql}"%`, `${ql}%`]
       );
@@ -1719,6 +1729,13 @@ RULES:
   if there is no target, give the eaten total and say no target is set.
 - No medical advice, no diagnosis, no supplement or medication suggestions.
   Progress questions get facts, not clinical interpretation.
+- Safety, whatever else was asked: chest pain or tightness, trouble breathing
+  or fainting -> tell them to call 112 (108 for an ambulance) now. Thoughts of
+  suicide or self-harm -> Tele-MANAS 14416 (free, 24x7) and 112 if in danger.
+  A medicine or dose question -> their doctor decides; keep taking it as
+  prescribed. Never suggest eating under 1,000 kcal a day or fasting for days.
+  Pregnant or breastfeeding -> no calorie cutting or fasting until their
+  doctor agrees, and tell their coach.
 - Training questions: name the exercises exactly as listed, with their sets and
   reps. If today is a rest day, say so. Never invent an exercise, and never
   suggest one the coach has not programmed.
@@ -1764,6 +1781,22 @@ async function parseMemberMessage({ userId, message, context }) {
     return ({ __status: 400,  error: 'Message required' });
   }
   const cleanMsg = String(message).trim().slice(0, 1200);
+
+  // ── Safety first, before the AI sees anything ─────────────────────────────
+  // Chest pain, self-harm, medicine changes, very low calories and pregnancy
+  // get fixed, tested replies (services/safety.js), and nothing is logged.
+  // Same empty shape as an answered question, so the app shows only the reply.
+  const safety = require('../services/safety').checkSafety(cleanMsg);
+  if (safety) {
+    return ({
+      reply: safety.reply,
+      question: true,
+      safety: safety.kind,
+      weight_kg: null, activities: [], acv: [], supplements: [],
+      water_ml_add: null, sleep: null, foods: [], workouts: [],
+      totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
+    });
+  }
 
   const ctx = {
     mealSlots:     Array.isArray(context?.mealSlots) ? context.mealSlots.slice(0, 8).map(s => String(s).slice(0, 40)) : [],
@@ -3600,7 +3633,7 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
   const results = [];
 
   for (const action of actions.slice(0, 15)) {
-    const ops = action?.ops || {};
+    let ops = action?.ops || {};
 
     // ── Broadcast (note/push to all members this coach can see) ──
     if (action.is_all) {
@@ -3664,6 +3697,9 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
       const prof = prows[0];
 
       const appliedBits = [];
+      // An imported plan that fails a must-fix check is saved as a Studio
+      // draft instead of being approved (set in the meal_plan block below).
+      let divertedDraft = null;
 
       // Merge helper for one group (activities/acv/supplements)
       const mergeGroup = (group, protoCol, customCol) => {
@@ -3735,6 +3771,37 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
           [ops.target_weight, memberId]);
         appliedBits.push(`goal ${ops.target_weight}kg`);
       }
+      // Phase 1.3 rules for an IMPORTED plan too. A plan read from a PDF or a
+      // photo, or typed for a stretch of days, was approved by Apply with no
+      // look at its day totals; a 47%-over plan could reach the member that
+      // way. Now the plan it would become is checked first. With a must-fix
+      // error it is saved as a Studio draft, nothing reaches the member, and
+      // the coach gets a "Review in Nutrition" link. One-day typed changes
+      // ("add whey to lunch") are not plans and are applied as before.
+      if (ops.meal_plan && (ops.meal_plan.repeat_days || 1) > 1) {
+        const dp = require('../services/dietPlan');
+        const doc = /^Diet plan attached: (.+?)(?: \(.*\))?$/.exec(ops.note?.text || '');
+        const would = await dp.buildImportedPlan(client, {
+          memberId, title: doc ? doc[1] : null, wholePlan: !!doc,
+          macros: ops.macros, meals: ops.meal_plan.meals, today: getISTDate(),
+        });
+        const checks = would ? dp.runChecks(would) : [];
+        if (would && dp.hasErrors(checks)) {
+          let flags = would.flags;
+          try { flags = (await require('./dietPlans').memberContext(memberId, getISTDate()))?.flags || flags; } catch (_) { /* keep the plan's own */ }
+          const id = await dp.saveDraft(client, {
+            memberId, coachId: req.user.id, source: 'import', title: would.title, brief: would.brief,
+            targets: would.targets, content: would.content, flags, days: would.days,
+          });
+          const errs = checks.filter(c => c.level === 'error');
+          divertedDraft = { id, errors: errs.length };
+          // Its targets wait in the draft with it. Applied now, the member's
+          // day would show the new targets against the old plan.
+          ops = { ...ops, macros: null };
+          appliedBits.push(`diet plan saved as a draft, NOT sent: ${errs.length} must-fix ${errs.length === 1 ? 'check' : 'checks'} (${errs.map(c => c.code.replace(/_/g, ' ')).join(', ')})`);
+        }
+      }
+
       if (ops.macros) {
         const sets = [];
         const vals = [];
@@ -3789,7 +3856,7 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
           `${ops.program.name} — ${ops.program.days.length} day${ops.program.days.length > 1 ? 's' : ''}. Open Workout to see today's session.`,
           'coach-ai').catch(() => {});
       }
-      if (ops.meal_plan) {
+      if (ops.meal_plan && !divertedDraft) {
         // A standing plan covers a stretch of days, one row per meal per date.
         // repeat_days is 1 for everything the coach types, so the ordinary
         // "add whey to lunch" path still touches today and nothing else.
@@ -4009,7 +4076,7 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
       // AI call takes seconds, and a draft that fails must not undo the other
       // changes made in the same turn. It goes through the Studio's own
       // createDraft, so it gets the same checks and is NEVER approved here.
-      let studio = null, draftFailed = false;
+      let studio = divertedDraft ? { member_id: memberId, plan_id: divertedDraft.id } : null, draftFailed = false;
       if (ops.diet_plan && typeof ops.diet_plan.brief === 'string') {
         try {
           const plan = await require('./dietPlans').createDraft(req.user, {
