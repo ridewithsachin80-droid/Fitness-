@@ -39,9 +39,9 @@ const io = new Server(server, {
 });
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
-}));
+// Production policy: helmet's defaults plus plate-photo images (R2, blob:).
+// See services/securityPolicy.js.
+app.use(helmet(require('./services/securityPolicy').helmetOptions()));
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 // 12mb: photo food logging posts a base64 image (~1.35x the file size).
 // The client downscales to ~1280px before upload, so real payloads are well

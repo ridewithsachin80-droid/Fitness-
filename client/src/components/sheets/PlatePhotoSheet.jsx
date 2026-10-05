@@ -51,7 +51,9 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
     (async () => {
       try {
         const image = await downscaleImage(job.file);
-        const { data } = await api.post('/plate/check', { image, mimeType: 'image/jpeg', meal: job.meal.meal });
+        // The model can take most of a minute on a busy day; the app's usual
+        // 35 s limit would give up while the server is still working.
+        const { data } = await api.post('/plate/check', { image, mimeType: 'image/jpeg', meal: job.meal.meal }, { timeout: 110000 });
         if (!live) return;
         const init = {};
         data.planned.forEach((r, i) => { init[`p${i}`] = { on: r.status !== 'not_seen', grams: String(r.grams) }; });

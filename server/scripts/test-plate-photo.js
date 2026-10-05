@@ -128,6 +128,10 @@ function startR2() {
     ck('banana chips are an extra, 156 kcal', a.extras.length === 1 && a.extras[0].kcal === 156, a.extras);
     ck('it matches the meal', a.matches === true);
     ck('a plate with none of the planned items and other food is NOT this meal', PP.analyse(meal2, { planned: [], extras: [{ name: 'idli', grams: 120, kcal_100g: 130 }] }).matches === false);
+    const oneItem = { meal: 'Breakfast', items: [{ name: 'Idli (plain)', grams: 120, per_100g: { calories: 130 } }] };
+    ck('a ONE-item meal with nothing planned on the plate is not that meal either (live test, 5 Oct)',
+       PP.analyse(oneItem, { looks_like_meal: true, planned: [{ i: 0, seen: false }], extras: [{ name: 'ragi mudde', grams: 150, kcal_100g: 140 }, { name: 'palak dal', grams: 150, kcal_100g: 90 }] }).matches === false);
+    ck('the prompt asks for every bowl, and names ragi mudde properly', /EVERY other food or drink/.test(PP.buildPrompt(meal2)) && /ragi mudde/.test(PP.buildPrompt(meal2)) && /not "ragi roti"/.test(PP.buildPrompt(meal2)));
     ck('the model saying it is not this meal is believed', PP.analyse(meal2, { ...PHOTO, looks_like_meal: false }).matches === false);
     ck('nonsense from the model gives safe rows, not a crash', PP.analyse(meal2, { planned: 'x', extras: [{ name: '', grams: -5 }, null] }).extras.length === 0);
     const p = PP.buildPrompt(meal2);
