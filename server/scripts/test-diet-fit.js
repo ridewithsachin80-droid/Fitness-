@@ -402,6 +402,50 @@ const gramsOf = (days, name) => days.map(d => d.flatMap(m => m.items).find(i => 
        /- diet_plan: \{ "brief"/.test(ai.buildCoachPrompt('x', [{ id: 1, name: 'A' }])) && /This is NOT meal_plan/.test(ai.buildCoachPrompt('x', [{ id: 1, name: 'A' }])));
   }
 
+  console.log('\n[11] an imported plan gets the same checks');
+  {
+    const pi = (name, grams, cal, carbs) => ({ name, grams, qty_text: `${grams} g`, per_100g: { calories: cal, protein: 5, total_carbs: carbs, fat: 3 } });
+    // Read from a PDF: three meals, about 2,400 kcal a day against a 1,500 target.
+    const heavyOps = () => ({
+      macros: { kcal: 1500, pro: 110, carb: 80, fat: 60 },
+      note: { text: 'Diet plan attached: Imported low carb (plan.pdf)', flagged: false },
+      meal_plan: { repeat_days: 14, meals: [
+        { meal: 'Breakfast', mode: 'replace', items: [pi('Poha', 300, 140, 30), pi('Banana', 200, 89, 23)] },
+        { meal: 'Lunch',     mode: 'replace', items: [pi('Rice', 400, 130, 28), pi('Dal', 300, 116, 20)] },
+        { meal: 'Dinner',    mode: 'replace', items: [pi('Chapati', 200, 297, 50), pi('Paneer curry', 200, 220, 8)] },
+      ] },
+    });
+    const kcalOf = async () => (await pool.query(`SELECT macro_kcal FROM patient_profiles WHERE user_id=$1`, [member])).rows[0]?.macro_kcal;
+    await pool.query(`UPDATE patient_profiles SET macro_kcal = 1777 WHERE user_id = $1`, [member]);
+    const mealsBefore = await mealCount();
+    const inForce = (await call('GET', '/api/diet-plans/me', M)).data.plan;
+    let r = await call('POST', '/api/ai-chat/coach-apply', C, { actions: [{ member_id: member, is_all: false, ops: heavyOps() }] });
+    let res = r.data.results?.[0];
+    ck('an over-target import is NOT approved: saved as a draft instead', r.status === 200 && res.ok === true && /saved as a draft, NOT sent: \d+ must-fix/.test(res.detail) && /day over/.test(res.detail), res);
+    ck('with a "Review in Nutrition" link to it', res.studio?.member_id === member && Number.isInteger(res.studio.plan_id), res);
+    const row = (await pool.query(`SELECT status, source, title FROM diet_plans WHERE id=$1`, [res.studio.plan_id])).rows[0];
+    ck('the draft is the imported plan, by its own title', row.status === 'draft' && row.source === 'import' && row.title === 'Imported low carb', row);
+    ck('no prescribed meal was written', (await mealCount()) === mealsBefore, [await mealCount(), mealsBefore]);
+    ck('the member still has the plan they had', (await call('GET', '/api/diet-plans/me', M)).data.plan?.version === inForce?.version);
+    ck('and the import\'s targets were held back with the draft, not applied', (await kcalOf()) === 1777, await kcalOf());
+    const studioView = (await call('GET', `/api/diet-plans/member/${member}`, C)).data.draft;
+    ck('in the Studio it shows its must-fix checks and the lab cautions', studioView?.checks.some(c => c.code === 'day_over') && studioView.content.lab_cautions.length === 4, studioView?.checks);
+
+    const fine = heavyOps();
+    fine.meal_plan.meals = [
+      { meal: 'Breakfast', mode: 'replace', items: [pi('Poha', 200, 140, 10)] },
+      { meal: 'Lunch',     mode: 'replace', items: [pi('Paneer curry', 250, 220, 6), pi('Salad', 200, 30, 4)] },
+      { meal: 'Dinner',    mode: 'replace', items: [pi('Dal', 300, 116, 8), pi('Curd', 200, 60, 4)] },
+    ];
+    r = await call('POST', '/api/ai-chat/coach-apply', C, { actions: [{ member_id: member, is_all: false, ops: fine }] });
+    res = r.data.results?.[0];
+    ck('an import inside the targets is approved as before', res.ok === true && !/draft/.test(res.detail) && /meal plan/.test(res.detail) && !res.studio, res);
+    const me = (await call('GET', '/api/diet-plans/me', M)).data.plan;
+    const todayMeals = (await pool.query(`SELECT meal FROM meal_plans WHERE patient_id=$1 AND plan_date=$2::date ORDER BY meal`, [member, today])).rows.map(x => x.meal);
+    ck('it is the member\'s plan now, and today\'s meals are its meals', me?.title === 'Imported low carb' && todayMeals.join() === 'Breakfast,Dinner,Lunch', [me?.title, todayMeals]);
+    ck('and its targets are applied', (await kcalOf()) === 1500, await kcalOf());
+  }
+
   console.log(`\n${fail === 0 ? '\u2713' : '\u2717'} test-diet-fit: ${pass} passed, ${fail} failed\n`);
   srv.close(); await pool.end();
   process.exit(fail ? 1 : 0);

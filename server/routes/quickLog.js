@@ -133,6 +133,11 @@ router.post('/', tokenAuth, async (req, res) => {
       // Say so plainly rather than pretending nothing was said.
       outcome = 'error';
       reply   = 'The assistant is busy. Try again in a moment.';
+    } else if (parsed && parsed.safety) {
+      // Chest pain, self-harm and the rest: the fixed safety reply, read
+      // aloud as written, and nothing applied (services/safety.js).
+      outcome = 'safety';
+      reply   = parsed.reply;
     } else if (parsed && parsed.sent_to_coach) {
       outcome = 'coach';
       reply   = 'Sent that to your coach.';

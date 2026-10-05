@@ -2207,7 +2207,7 @@ router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), requirePatien
       `INSERT INTO daily_logs (patient_id, log_date, weight_kg)
        VALUES ($1, $2, $3)
        ON CONFLICT (patient_id, log_date)
-       DO UPDATE SET weight_kg = EXCLUDED.weight_kg
+       DO UPDATE SET weight_kg = EXCLUDED.weight_kg, saved_at = NOW()
        RETURNING id, log_date, weight_kg`,
       [patientId, date, w]
     );

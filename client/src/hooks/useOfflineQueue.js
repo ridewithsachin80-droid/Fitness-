@@ -45,7 +45,22 @@ const queue = createQueue({
   getOwner: currentOwner,
   onChange: () => notifyQueueChanged(),
   lock:     crossTabLock,
+  onMerged: (notice) => {
+    mergeNotices = [...mergeNotices.filter(n => n.date !== notice.date), notice].slice(-5);
+    notifyQueueChanged();
+    // The day on screen is now older than the server's merged copy.
+    import('../store/logStore').then(({ useLogStore }) => {
+      const st = useLogStore.getState();
+      if (st.date === notice.date) st.reload();
+    }).catch(() => {});
+  },
 });
+
+// Offline days that reached the server after newer edits and were merged.
+// Shown once by PendingSync, then dismissed.
+let mergeNotices = [];
+export const getMergeNotices = () => mergeNotices;
+export function dismissMergeNotices() { mergeNotices = []; notifyQueueChanged(); }
 
 /**
  * Is this failure worth retrying?

@@ -5,6 +5,7 @@ import { Icon, Eyebrow, SkeletonCard, EmptyState } from '../primitives';
 import { haptic } from '../../store/settingsStore';
 import { whatsappLink } from '../../utils/personalMessage';
 import { firstName } from '../../utils/personName';
+import OffPlanFeed from './OffPlanFeed';
 
 /**
  * TriageFeed — "Needs attention" (Sprint 8). The coach home's first screen.
@@ -76,6 +77,10 @@ export default function TriageFeed({ onLoaded }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [showOk, setShowOk] = useState(false);
+  // Phase 3: meals logged from a plate photo that went off plan today. The
+  // tab's own component loads and updates them; this feed only reads triage.
+  const [tab, setTab] = useState('all');
+  const [offCount, setOffCount] = useState(0);
 
   useEffect(() => {
     api.get('/members/triage')
@@ -108,20 +113,32 @@ export default function TriageFeed({ onLoaded }) {
           {counts.high > 0 && <> · <span className="text-red-400 font-semibold tabular-nums">{counts.high}</span> high</>}
       </p>
 
-      {needs.length === 0 ? (
+      <div className="flex gap-1.5 mt-2" role="tablist" aria-label="Filter">
+        {[['all', 'All'], ['offplan', `Off plan today${offCount ? ` · ${offCount}` : ''}`]].map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} data-testid={`triage-tab-${k}`}
+            onClick={() => { haptic(8); setTab(k); }} style={{ minHeight: 40 }}
+            className={`text-caption font-semibold rounded-full px-3.5 border ${tab === k ? 'border-gold text-gold' : 'border-white/[0.12] text-mid'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Always mounted, so the tab shows its count before it is opened. */}
+      <OffPlanFeed active={tab === 'offplan'} onCount={setOffCount} onOpen={(it) => navigate(`/coach/${it.member_id}`)} />
+      {tab === 'offplan' ? null : needs.length === 0 ? (
         <EmptyState compact icon="check" title="Everyone is on track" body="No gaps, no silences, nothing slipping. Enjoy it." />
       ) : (
         <div className="mt-1">{needs.map(m => <Row key={m.id} m={m} onOpen={open} onMessage={message} />)}</div>
       )}
 
-      {ok.length > 0 && (
+      {tab === 'all' && ok.length > 0 && (
         <button type="button" onClick={() => { haptic(8); setShowOk(v => !v); }} data-testid="triage-toggle-ok"
           style={{ minHeight: 40 }} className="w-full flex items-center justify-between text-caption font-semibold text-mid py-1">
           <span>{ok.length} on track{showOk ? '' : ' · tap to see'}</span>
           <Icon name={showOk ? 'chevron-up' : 'chevron-down'} size={14} />
         </button>
       )}
-      {showOk && <div>{ok.map(m => <Row key={m.id} m={m} onOpen={open} onMessage={message} />)}</div>}
+      {tab === 'all' && showOk && <div>{ok.map(m => <Row key={m.id} m={m} onOpen={open} onMessage={message} />)}</div>}
     </section>
   );
 }

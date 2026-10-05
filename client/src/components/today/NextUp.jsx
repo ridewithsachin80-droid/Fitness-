@@ -13,7 +13,7 @@ import { planMeals, istMinutes, clock, untilText, itemKcal } from '../../lib/day
  * When every meal is logged the card leaves: the Eat row carries the total.
  * Which meal is "next" is decided in lib/day/planMeals.js, not here.
  */
-export default function NextUp({ mealPlans, food, onLog, onOther, terms }) {
+export default function NextUp({ mealPlans, food, onLog, onOther, onSnap, terms }) {
   const nowMin = istMinutes();
   const { next, then, loggedCount, total } = planMeals({ mealPlans, food, nowMin });
   if (!next) return null;
@@ -58,9 +58,22 @@ export default function NextUp({ mealPlans, food, onLog, onOther, terms }) {
         <Icon name="check" size={16} className="inline-block mr-1.5 -mt-0.5" />
         {partly ? `Log the other ${next.pending.length}` : 'Log as planned'}
       </Pressable>
-      <Pressable variant="secondary" className="w-full mt-2" data-testid="next-up-other" onPress={() => { haptic(10); onOther(next); }}>
-        I ate something else
-      </Pressable>
+      <div className="flex gap-2 mt-2">
+        {/* Phase 3: snap the plate, the app checks it against this meal. A
+            real file input inside the label, so the camera opens from the tap
+            itself (phones refuse a camera opened any other way). */}
+        {onSnap && (
+          <label data-testid="next-up-snap" style={{ minHeight: 44 }}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl border border-white/[0.12] bg-surface text-sm font-semibold text-white cursor-pointer active:scale-[0.98] transition-transform">
+            <Icon name="camera" size={16} /> Snap your plate
+            <input type="file" accept="image/*" capture="environment" className="sr-only" aria-label={`Photo of your plate for ${next.meal}`}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { haptic(10); onSnap(next, f); } }} />
+          </label>
+        )}
+        <Pressable variant="secondary" className="flex-1" data-testid="next-up-other" onPress={() => { haptic(10); onOther(next); }}>
+          I ate something else
+        </Pressable>
+      </div>
 
       {then && (
         <p className="text-caption text-mid mt-2.5" data-testid="next-up-then">

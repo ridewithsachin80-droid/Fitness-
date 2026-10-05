@@ -202,7 +202,7 @@ test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-
 DB_SUITES="test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
-test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan"
+test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo"
 
 failed=0
 total_pass=0
@@ -263,7 +263,7 @@ elif [ ! -d "$ROOT/../node_modules/react" ] && [ ! -d "$ROOT/../client/node_modu
   failed=$((failed + 1))
 else
   uilog=/tmp/fitlife-ui-tests.log
-  if timeout 300 node scripts/ui-tests.mjs >"$uilog" 2>&1; then
+  if timeout 600 node scripts/ui-tests.mjs >"$uilog" 2>&1; then
     n=$(grep -c '✓' "$uilog")
     if [ "$n" -eq 0 ]; then
       printf "  %-24s %s\n" "ui-tests" "✗ exited 0 having asserted nothing"
