@@ -1,9 +1,19 @@
-# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026 (rev 3)
+# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026 (rev 4)
 
 Cumulative from the `main` ZIP of 3 Oct 2026: it carries every earlier file too
 (Phase 1.3, Phase 2, safety/food, imports/CSP), unchanged since those were
 deployed. Upload to `test`, wait for green, try it on fitness-test.up.railway.app,
 then merge.
+
+## Rev 4 — food that was counted but not shown (5 Oct, 13:54)
+
+Food logged under a meal slot the member does not have ("Snack" from a plate
+photo's "extra snack", "Meal 2" from a diet plan's "Log as planned") was left
+off the food list but still added to the day total: kcal with no rows to delete.
+The food list now shows every item: names match a slot in any case ("lunch"
+goes under Lunch), and any other slot gets its own group (Snack, Meal 2,
+Other). Changed: `client/src/components/FoodLog.jsx`, `server/scripts/ui-tests.mjs`.
+3,062 checks green.
 
 ## Rev 3 — from the live test on production (5 Oct, 13:30)
 
