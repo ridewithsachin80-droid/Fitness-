@@ -1,9 +1,28 @@
-# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026
+# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026 (rev 2)
 
 Cumulative from the `main` ZIP of 3 Oct 2026: it carries every earlier file too
 (Phase 1.3, Phase 2, safety/food, imports/CSP), unchanged since those were
 deployed. Upload to `test`, wait for green, try it on fitness-test.up.railway.app,
 then merge.
+
+## Rev 2 — fixes from the first live test on the Test site (5 Oct)
+
+- **Coach card showed a broken photo.** The production security policy allowed
+  images only from the site itself, so the R2 link was blocked inside the card
+  (opening it in its own tab worked). Images are now also allowed from
+  `https://*.r2.cloudflarestorage.com` and `blob:` (the member's own preview).
+  Scripts are unchanged: the site's own files only. New file
+  `server/services/securityPolicy.js`; the browser check uses the same file.
+- **A plate of ragi mudde, palak dal, salad and paneer was logged as
+  "Breakfast with extras"** when Breakfast was idli. The "different meal" rule
+  needed a meal of two or more items; it now applies to any meal. The prompt
+  now asks for every bowl and names Karnataka foods (ragi mudde, not ragi roti).
+- **Coach chat: attaching a file sent it at once**, and a long PDF timed out in
+  the app after 35 s ("I couldn't read that file just now") while the server
+  was still reading it. Now attaching shows the file above the box; type a note
+  ("for Raghavendra, weekdays only") or just press send. The note goes to the
+  model with the file. The app waits up to 170 s for a document, 110 s for a
+  plate photo.
 
 ## Phase 3: plate photo checked against the plan (as approved on the canvas)
 
@@ -35,13 +54,14 @@ also counts as a newer edit.
 
 ## Files
 
-New (11):
+New (12):
 
 | Path | |
 |---|---|
 | `server/services/storage.js` | **NEW** R2 storage, signed requests |
 | `server/services/platePhoto.js` | **NEW** plate rules (statuses, flagging) |
 | `server/services/dayMerge.js` | **NEW** offline merge rules |
+| `server/services/securityPolicy.js` | **NEW** production security policy (rev 2) |
 | `server/routes/platePhotos.js` | **NEW** `/api/plate/*` |
 | `server/scripts/test-plate-photo.js` | **NEW** |
 | `server/scripts/test-day-merge.js` | **NEW** |
@@ -51,7 +71,7 @@ New (11):
 | `client/src/utils/downscaleImage.js` | **NEW** |
 | `DELIVERY-PHASE3.md` | **NEW** (this file) |
 
-Changed (16): `server/db/schema.sql` (new table `meal_photos`), `server/index.js`,
+Changed (18): `client/src/components/CoachAIChat.jsx`, `server/routes/aiChat.js`, `server/db/schema.sql` (new table `meal_photos`), `server/index.js`,
 `server/routes/logs.js`, `server/routes/patients.js`, `server/services/cronService.js`,
 `server/scripts/test-local.sh`, `server/scripts/ui-tests.mjs`,
 `client/src/components/PendingSync.jsx`, `client/src/components/coach/TriageFeed.jsx`,
@@ -64,9 +84,9 @@ No file renamed or deleted. One table added (`meal_photos`), nothing renamed.
 
 ## Gate
 
-- About 3,035 checks green: all suites on real Postgres (2,556), screen tests
-  in jsdom and real Chrome at 320/360/390 px (479), client build, lint.
-- New: `test-plate-photo` 54, `test-day-merge` 24, screen tests +28, phone-width
+- 3,054 checks green in one full gate run: all suites on real Postgres, screen
+  tests in jsdom and real Chrome at 320/360/390 px (496), client build, lint.
+- New: `test-plate-photo` 57, `test-day-merge` 24, screen tests +28, phone-width
   checks for the plate sheet (with a real canvas downscale) and the coach tab.
 - 12 bugs put back one at a time; each turned a test red.
 - The old "Escape closes the sheet @390px" check waited a fixed 600 ms and

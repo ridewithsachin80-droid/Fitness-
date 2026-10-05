@@ -370,6 +370,9 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
   const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput]         = useState('');
+  // A file attached but not yet sent. Attaching no longer sends at once: the
+  // coach can add a note ("for Raghavendra, 1,500 kcal"), or send it as is.
+  const [pendingFile, setPendingFile] = useState(null);
   const [busy, setBusy]           = useState(false);
   const [applying, setApplying]   = useState(false);
 
@@ -475,7 +478,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
    * PDF is a draft, not an instruction, and the plans that get uploaded here
    * are exactly the ones with medical context attached.
    */
-  const sendDoc = useCallback(async (fileObj) => {
+  const sendDoc = useCallback(async (fileObj, note = '') => {
     if (!fileObj || busy) return;
     if (fileObj.size > 7 * 1024 * 1024) {
       setMessages(m => [...m, { role: 'ai',
@@ -483,7 +486,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       return;
     }
     setBusy(true);
-    setMessages(m => [...m, { role: 'coach', text: `Attached ${fileObj.name}` }]);
+    setMessages(m => [...m, { role: 'coach', text: note ? `Attached ${fileObj.name}: ${note}` : `Attached ${fileObj.name}` }]);
     try {
       const b64 = await new Promise((res, rej) => {
         const r = new FileReader();
@@ -498,6 +501,13 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
         // If the chat was opened from a member's page, that is who the plan is
         // for — better than making the model guess from the document.
         member_name: contextMember?.name || null,
+        // The coach's note with the file; empty means "read it and propose".
+        instruction: note || null,
+      }, {
+        // A multi-page plan can take the model a minute or more to read. The
+        // app's usual 35 s limit gave up first and showed "couldn't read that
+        // file" while the server was still working.
+        timeout: 170000,
       });
       setMessages(m => [...m, {
         role: 'ai',
@@ -513,6 +523,19 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       setBusy(false);
     }
   }, [busy, contextMember]);
+
+  // Send whatever is in the composer: an attached file (with the typed text as
+  // its note, or none), or the typed message.
+  const submit = () => {
+    if (busy) return;
+    if (pendingFile) {
+      const f = pendingFile, note = input.trim();
+      setPendingFile(null); setInput('');
+      sendDoc(f, note);
+      return;
+    }
+    send();
+  };
 
   const applyAll = useCallback(async (mi) => {
     const msg = messages[mi];
@@ -806,14 +829,21 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
       <div className="px-4 py-3 border-t border-white/[0.06] bg-charcoal"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {vc.card}
+        {pendingFile && (
+          <div className="flex items-center gap-2 mb-2 rounded-xl border border-gold/40 bg-gold/[0.06] px-3 py-1.5" data-testid="pending-file">
+            <span className="text-caption text-white truncate flex-1">📎 {pendingFile.name}</span>
+            <button type="button" onClick={() => setPendingFile(null)} aria-label="Remove the attached file"
+              style={{ minWidth: 36, minHeight: 36 }} className="text-mid hover:text-white text-lg leading-none">×</button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <div className="flex-1 flex items-center bg-surface border border-white/[0.10] rounded-2xl px-3">
             <input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-              placeholder="Ask or instruct — &quot;how many calories has Padmini eaten?&quot;"
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+              placeholder={pendingFile ? 'Add a note, or just send to read the plan' : 'Ask or instruct — "how many calories has Padmini eaten?"'}
               className="flex-1 bg-transparent text-sm text-white placeholder-ghost py-3 outline-none min-w-0"
             />
             {vc.micButton}
@@ -825,7 +855,15 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
               className={`flex items-center justify-center rounded-full flex-shrink-0 cursor-pointer
                 transition-colors ${busy ? 'text-ghost' : 'text-mid hover:text-gold-light'}`}>
               <input type="file" accept="application/pdf,image/*" className="hidden" disabled={busy}
-                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; sendDoc(f); }} />
+                onChange={(e) => {
+                  const f = e.target.files?.[0]; e.target.value = '';
+                  if (!f) return;
+                  if (f.size > 7 * 1024 * 1024) {
+                    setMessages(m => [...m, { role: 'ai', text: 'That file is over 7MB — try a single-page export or a photo of the plan.' }]);
+                    return;
+                  }
+                  setPendingFile(f); inputRef.current?.focus();
+                }} />
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M21.4 11.1l-8.5 8.5a5 5 0 01-7.1-7.1l8.5-8.5a3.3 3.3 0 014.7 4.7l-8.5 8.5a1.7 1.7 0 01-2.4-2.4l7.9-7.8" />
@@ -833,11 +871,12 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
             </label>
           </div>
           <button
-            onClick={() => send()}
-            disabled={!input.trim() || busy}
+            onClick={() => submit()}
+            disabled={!(input.trim() || pendingFile) || busy}
+            aria-label={pendingFile ? 'Send the file' : 'Send'}
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
-              input.trim() && !busy
+              (input.trim() || pendingFile) && !busy
                 ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-ghost'
             }`}>

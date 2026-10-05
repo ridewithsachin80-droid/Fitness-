@@ -36,9 +36,11 @@ THE PLANNED MEAL: ${meal.meal}
 ${list}
 
 For EACH numbered planned item: is it in the photo, and about how many grams AS EATEN?
-Then list anything in the photo that is NOT one of the planned items: those are extras.
+Then list EVERY other food or drink in the photo, one entry per bowl or item: those are extras.
+Check each bowl, glass and side of the plate before you answer; do not stop at the first two.
 - A drink in a glass or cup counts as a food. Water, plates, cutlery and garnish do not.
-- Name Indian foods specifically (e.g. "masala dosa", "jowar roti"). ${GREENS}
+- Name Indian foods specifically, as they are known in Karnataka: "ragi mudde" (a round ragi ball, not "ragi roti"),
+  "masala dosa", "jowar roti", "palya", "saaru", "huli". ${GREENS}
 - If you cannot tell whether a planned item is there, say seen: false.
 - Extras need grams and per-100 g nutrition for the food as eaten.
 - "looks_like_meal": false only if the plate is clearly a different meal (most planned items missing and other food there).
@@ -77,8 +79,11 @@ function analyse(meal, raw) {
   // The model's own verdict is checked against what it reported: a plate where
   // most planned items are missing and something else is there is not this meal.
   const seenCount = planned.filter(p => p.status !== 'not_seen').length;
+  // (The first live test: a one-item breakfast of idli, and a plate of ragi
+  // mudde, palak dal, salad and paneer. Nothing planned was there, yet it was
+  // logged as Breakfast "with extras" because this rule needed two items.)
   const looksLike = ans.looks_like_meal === false ? false
-    : !(meal.items.length >= 2 && seenCount === 0 && extras.length > 0);
+    : !(seenCount === 0 && extras.length > 0);
   return { meal: meal.meal, time: meal.time || null, matches: looksLike, planned, extras };
 }
 

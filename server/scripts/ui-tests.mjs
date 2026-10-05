@@ -2074,7 +2074,8 @@ async function cspTest() {
   const require_ = createRequire(path.join(ROOT, 'server', 'package.json'));
   const express = require_('express'), helmet = require_('helmet');
   const app = express();
-  app.use(helmet());                       // exactly what server/index.js uses in production
+  // Exactly what server/index.js sends in production.
+  app.use(helmet(require_('./services/securityPolicy.js').helmetOptions({ NODE_ENV: 'production' })));
   app.use(express.static(dist));
   app.use((req, res) => res.sendFile(path.join(dist, 'index.html')));
   const server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
@@ -2103,6 +2104,26 @@ async function cspTest() {
       return called;
     });
     ck('the "Reload app" button calls the recovery (no blocked onclick)', clicked === 1, clicked);
+
+    // Phase 3 photos. A blob: image (the member's own plate preview) must load,
+    // and the policy must allow the R2 photo host (signed links). Before the
+    // fix the coach's Off plan card showed a broken image.
+    const imgs = await page.evaluate(async () => {
+      window.__csp = [];
+      const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+      const blobUrl = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
+      const load = (src) => new Promise(r => { const i = new Image(); i.onload = () => r('loaded'); i.onerror = () => r('error'); i.src = src; setTimeout(() => r('timeout'), 3000); });
+      const blob = await load(blobUrl);
+      const r2 = new Image(); r2.src = 'https://742fca821afd3f30f29c218d3789f863.r2.cloudflarestorage.com/fitlife-test/meals/x.jpg';
+      const evil = new Image(); evil.src = 'https://example.com/tracker.gif';
+      await new Promise(r => setTimeout(r, 800));
+      return { blob, violations: window.__csp.slice() };
+    });
+    ck('the member\'s own photo preview (blob:) loads under the policy', imgs.blob === 'loaded', imgs);
+    ck('images from the R2 photo host are allowed', !imgs.violations.some(v => /r2\.cloudflarestorage\.com/.test(v)), imgs.violations);
+    ck('images from any other site are still blocked', imgs.violations.some(v => /img-src .*example\.com/.test(v)), imgs.violations);
+    const hdr = (await page.goto(origin + '/login', { waitUntil: 'domcontentloaded' }).catch(() => null))?.headers()?.['content-security-policy'] || '';
+    ck('scripts are still the site\'s own files only', /script-src 'self'(;|$)/.test(hdr) && !/script-src[^;]*unsafe-inline/.test(hdr), hdr);
   } finally {
     await browser.close().catch(() => {});
     server.close();
@@ -2256,6 +2277,58 @@ async function platePhotoTest() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 26. Coach chat: attaching a file waits for the coach's note
+// ═══════════════════════════════════════════════════════════════════════════
+async function coachDocAttachTest() {
+  console.log('\n[26] Coach chat: attach, then send with or without a note');
+  const api = stub('api-coachdoc.js', `
+    window.__posts = [];
+    const post = async (url, body, cfg) => { window.__posts.push({ url, body, cfg });
+      if (/coach-doc$/.test(url)) return { data: { reply: 'Read the plan for Raghavendra.', actions: [] } };
+      return { data: { reply: 'ok', actions: [] } }; };
+    const get = async (url) => (/\\/members$/.test(url) ? { data: [{ id: 49, name: 'Raghavendra' }] } : { data: {} });
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import CoachAIChat, { useCoachAI } from './components/CoachAIChat.jsx';
+    window.__open = () => useCoachAI.getState().openChat();
+    createRoot(document.getElementById('root')).render(<MemoryRouter><CoachAIChat contextMember={{ id: 49, name: 'Raghavendra' }} /></MemoryRouter>);`, api);
+  const pre = (win) => { win.Element.prototype.scrollIntoView = () => {}; };
+  for (const note of ['', 'use only the weekday meals, 1500 kcal']) {
+    const { w, errors } = run(code, pre); await tick(300);
+    w.__open(); await tick(300);
+    const d = w.document;
+    const fileIn = [...d.querySelectorAll('input[type=file]')].find(i => /pdf/.test(i.getAttribute('accept') || ''));
+    const f = new w.File([new Uint8Array([37, 80, 68, 70])], 'Raghavendra-Member-Plan.pdf', { type: 'application/pdf' });
+    Object.defineProperty(fileIn, 'files', { value: [f], configurable: true });
+    fileIn.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(200);
+    const chip = d.querySelector('[data-testid="pending-file"]');
+    ck(`(${note ? 'with a note' : 'no note'}) attaching shows the file and sends NOTHING yet`, errors.length === 0 && !!chip && /Raghavendra-Member-Plan\.pdf/.test(chip.textContent) && !w.__posts.some(p => /coach-doc/.test(p.url)), errors.join('|'));
+    const input = [...d.querySelectorAll('input')].find(i => /Add a note/.test(i.getAttribute('placeholder') || ''));
+    ck('the box invites a note, or just sending', !!input);
+    if (note) {
+      Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(input, note);
+      input.dispatchEvent(new w.Event('input', { bubbles: true })); await tick(50);
+    }
+    const sendBtn = d.querySelector('button[aria-label="Send the file"]');
+    ck('Send is enabled with just the file attached', !!sendBtn && sendBtn.disabled === false);
+    sendBtn.click(); await tick(400);
+    const p = w.__posts.find(x => /coach-doc/.test(x.url));
+    ck(note ? 'sending posts the file WITH the note as its instruction' : 'sending with no note posts the file to be read as is',
+       !!p && p.body.fileName === 'Raghavendra-Member-Plan.pdf' && p.body.member_name === 'Raghavendra' && (note ? p.body.instruction === note : p.body.instruction === null), p?.body && { ...p.body, file: '…' });
+    ck('with a long time limit (a plan can take a minute to read)', p?.cfg?.timeout >= 120000, p?.cfg);
+    ck('the chip clears and the reply shows', !d.querySelector('[data-testid="pending-file"]') && /Read the plan for Raghavendra/.test(d.body.textContent));
+  }
+  const { w } = run(code, pre); await tick(300); w.__open(); await tick(300);
+  const fileIn = [...w.document.querySelectorAll('input[type=file]')].find(i => /pdf/.test(i.getAttribute('accept') || ''));
+  Object.defineProperty(fileIn, 'files', { value: [new w.File([new Uint8Array([1])], 'x.pdf', { type: 'application/pdf' })], configurable: true });
+  fileIn.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(150);
+  w.document.querySelector('[aria-label="Remove the attached file"]').click(); await tick(100);
+  ck('× removes the attached file, nothing sent', !w.document.querySelector('[data-testid="pending-file"]') && !w.__posts.length);
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2404,6 +2477,7 @@ async function overflowTest() {
     await dietStudio13Test();
     await memberPlanTest();
     await platePhotoTest();
+    await coachDocAttachTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

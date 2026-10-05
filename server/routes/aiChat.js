@@ -3002,6 +3002,8 @@ function dietPlanMacros(raw) {
 // a doctor, which is exactly the kind of document that must not auto-apply.
 router.post('/coach-doc', roleCheck('monitor', 'admin'), async (req, res) => {
   const { file, mimeType, fileName, member_name } = req.body || {};
+  // The coach's note sent with the file ("for Raghavendra, 1,500 kcal"). Empty = read and propose.
+  const instruction = String(req.body?.instruction || '').trim().slice(0, 600);
 
   if (!file || typeof file !== 'string') {
     return res.status(400).json({ error: 'Attach a diet plan file' });
@@ -3021,7 +3023,11 @@ router.post('/coach-doc', roleCheck('monitor', 'admin'), async (req, res) => {
 
     const prompt = `You are reading a DIET PLAN document a fitness coach uploaded
 for one of their members. Extract it into JSON. Reply with JSON only.
-
+${instruction ? `
+THE COACH'S NOTE WITH THIS FILE. Follow it where it applies (who the plan is
+for, which part to use, targets to set). It does not change the JSON shape.
+message: ${instruction}
+` : ''}
 The member this plan is for:${member_name ? ` the coach says it is for "${member_name}".` : ''}
 Names on your roster: ${members.map(m => m.name).join(', ')}.
 If the document names a person, match it to the closest roster name. If you
