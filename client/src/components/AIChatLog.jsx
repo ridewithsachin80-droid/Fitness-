@@ -29,7 +29,7 @@ import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { today, plural } from '../constants';
-import { resolveProtocolItems } from '../lib/day';
+import { resolveProtocolItems, defaultMealSlot } from '../lib/day';
 import { useAIChat, undoSnap, workoutUndoSnap } from '../store/aiChatStore';
 import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CHIPS, GroupHeader, ToggleChip } from './chat/ChatAtoms';
 
@@ -52,8 +52,12 @@ function deriveProtocolItemsCompat(protocol) {
   return { activities: r.activeActivities, acv: r.activeACV, supplements: r.activeSupplements };
 }
 
-export default function AIChatLog() {
+export default function AIChatLog({ mealPlans = [] } = {}) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
+  // Where food goes when the member does not say which meal: shown on the
+  // preview, and used on apply, so what they see is what is logged.
+  const todayFood = useLogStore(s => s.log?.food);
+  const autoSlot = defaultMealSlot({ mealSlots, mealPlans, food: todayFood || [] });
 
   // Conversation state comes from the store (see useAIChat above) so it
   // survives the member navigating away from Today and back.
@@ -679,7 +683,9 @@ export default function AIChatLog() {
         id:       baseId + i,
         name:     f.name,
         grams:    f.grams,
-        meal:     (f.meal && mealSlots.includes(f.meal)) ? f.meal : (mealSlots[0] || 'Meal 1'),
+        // No meal said: the one due now (lib/day defaultMealSlot), not the first slot.
+        meal:     (f.meal && mealSlots.includes(f.meal)) ? f.meal
+                  : defaultMealSlot({ mealSlots, mealPlans, food: cur.food || [] }),
         food_id:  f.food_id || null,
         per_100g: f.per_100g && (f.per_100g.calories || 0) > 0 ? f.per_100g : null,
       }));
@@ -1151,7 +1157,7 @@ export default function AIChatLog() {
                                           className="bg-charcoal border border-white/[0.14] rounded-md px-1 text-center
                                             text-caption text-white focus:outline-none focus:ring-1 focus:ring-gold/50"
                                         />
-                                        <span>g · {f.meal || 'Meal 1'}</span>
+                                        <span>g · {(f.meal && mealSlots.includes(f.meal)) ? f.meal : autoSlot}</span>
                                         {f.source === 'db-verified' && <span className="text-gold-light">· verified</span>}
                                         {Number(f.grams) !== Number(f.ai_grams) && (
                                           <span className="text-gold">· I'll remember this</span>
