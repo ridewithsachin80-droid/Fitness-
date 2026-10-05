@@ -262,7 +262,20 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const remove = (id) => { haptic(15); onChange(items.filter((i) => i.id !== id)); };
-  const byMeal = (m) => items.filter((i) => i.meal === m);
+  // Every item belongs to exactly one group on screen. Items are matched to a
+  // meal slot ignoring case; anything under a slot the member does not have
+  // ("Snack" from a plate photo, "Meal 2" from a diet plan, an empty slot)
+  // gets a group of its own. Before, those items were left off the list but
+  // still added into the day total, so a member saw kcal with no food to
+  // delete (live test, 5 Oct: 713 kcal, no rows).
+  const slotOf = (i) => {
+    const raw = String(i.meal || '').trim();
+    const hit = mealSlots.find(m => m.toLowerCase() === raw.toLowerCase());
+    return hit || raw || 'Other';
+  };
+  const extraGroups = [...new Set(items.map(slotOf))].filter(g => !mealSlots.includes(g));
+  const groups = [...mealSlots, ...extraGroups];
+  const byMeal = (m) => items.filter((i) => slotOf(i) === m);
 
   function mealTotal(mealItems) {
     return mealItems.reduce((acc, item) => {
@@ -445,7 +458,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       )}
 
       {/* Meal sections */}
-      {mealSlots.map((m) => {
+      {groups.map((m) => {
         const mealItems = byMeal(m);
         const totals = mealTotal(mealItems);
         return (

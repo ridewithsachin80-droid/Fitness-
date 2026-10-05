@@ -2329,6 +2329,41 @@ async function coachDocAttachTest() {
   ck('× removes the attached file, nothing sent', !w.document.querySelector('[data-testid="pending-file"]') && !w.__posts.length);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 27. Food log: no item is ever hidden while still counted
+// ═══════════════════════════════════════════════════════════════════════════
+async function foodLogGroupsTest() {
+  console.log('\n[27] Food log shows every item it counts');
+  const code = await bundle(`
+    import { useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import FoodLog from './components/FoodLog.jsx';
+    const per = (k) => ({ calories: k, protein: 0, total_carbs: 0, fat: 0 });
+    // Live test, 5 Oct: plate-photo extras went under "Snack", which this
+    // member has no slot for: 713 kcal in the day total, no rows to delete.
+    const start = [
+      { id: 'a', name: 'Idli', grams: 100, meal: 'Breakfast', per_100g: per(130) },
+      { id: 'b', name: 'Black sesame seeds', grams: 50, meal: 'Snack', per_100g: per(574) },
+      { id: 'c', name: 'Guava', grams: 100, meal: 'Meal 2', per_100g: per(68) },
+      { id: 'd', name: 'Curd', grams: 100, meal: 'lunch', per_100g: per(60) },
+      { id: 'e', name: 'Banana', grams: 100, meal: '', per_100g: per(89) },
+    ];
+    window.__items = start;
+    function H() { const [items, set] = useState(start); window.__items = items; return <FoodLog items={items} onChange={set} calorieTarget={1500} />; }
+    createRoot(document.getElementById('root')).render(<H />);`);
+  const { w, errors } = run(code); await tick(300);
+  const d = w.document;
+  const txt = () => d.body.textContent;
+  const removes = () => [...d.querySelectorAll('button[aria-label="Remove item"]')];
+  ck('every item has a row, whatever slot it was logged under', errors.length === 0 && removes().length === 5 && ['Idli', 'Black sesame seeds', 'Guava', 'Curd', 'Banana'].every(n => txt().includes(n)), errors.join('|'));
+  ck('slots the member does not have get their own group (Snack, Meal 2, Other)', /Snack/.test(txt()) && /Meal 2/.test(txt()) && /Other/.test(txt()));
+  ck('"lunch" in any case files under Lunch, not a second Lunch group', (txt().match(/Lunch/g) || []).length === 1, (txt().match(/Lunch/g) || []).length);
+  ck('the day total is the sum of the rows shown: 130 + 287 + 68 + 60 + 89 = 634', /634 kcal/.test(txt()), txt().match(/\d+ kcal/g));
+  for (const b of removes()) { if (b.closest('[class*="space-y"]')?.textContent.includes('Black sesame seeds') && b.parentElement.parentElement.textContent.includes('Black sesame seeds')) { b.click(); break; } }
+  await tick(150);
+  ck('an item under Snack can be deleted, and the total drops with it (347)', !w.__items.some(i => i.id === 'b') && /347 kcal/.test(txt()), [w.__items.map(i => i.id), txt().match(/\d+ kcal/g)]);
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2478,6 +2513,7 @@ async function overflowTest() {
     await memberPlanTest();
     await platePhotoTest();
     await coachDocAttachTest();
+    await foodLogGroupsTest();
     await overflowTest();
     await cspTest();
   } catch (err) {
