@@ -246,6 +246,15 @@ function startR2() {
     ck('a meal with 60 kcal of extras does not reach the feed', (await call('GET', '/api/plate/off-plan', C)).data.items.length === 1);
     ck('a check never confirmed does not reach the feed either', (await pool.query(`SELECT COUNT(*)::int n FROM meal_photos WHERE status='checked'`)).rows[0].n >= 1);
 
+    // Live test, 5 Oct: "instead of the plan" tapped twice for the same meal
+    // put two cards in the coach's feed.
+    const swap = async () => { const c = await call('POST', '/api/plate/check', M, { image: IMG, meal: 'Meal 2' });
+      await call('POST', `/api/plate/${c.data.photo_id}/confirm`, M, { as: 'swap', items: [{ name: 'Idli', grams: 150, per_100g: { calories: 134 }, kind: 'extra' }] }); return c.data.photo_id; };
+    const s1 = await swap(), s2 = await swap();
+    const ids = (await call('GET', '/api/plate/off-plan', C)).data.items.map(i => i.id);
+    ck('a second "different meal" for the same meal replaces the first card, not adds one', ids.includes(s2) && !ids.includes(s1) && ids.length === 2, ids);
+    await call('POST', `/api/plate/${s2}/seen`, C);
+
     r = await call('POST', `/api/plate/${photoId}/seen`, C);
     ck('"Seen" takes the card off the feed', r.status === 200 && (await call('GET', '/api/plate/off-plan', C)).data.items.length === 0);
   }

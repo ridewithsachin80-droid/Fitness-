@@ -108,6 +108,15 @@ router.post('/:id/confirm', authMW, roleCheck('patient'), async (req, res) => {
     const { rows: [p] } = await pool.query(`SELECT * FROM meal_photos WHERE id=$1 AND patient_id=$2`, [id, req.user.id]);
     if (!p) return res.status(404).json({ error: 'Photo not found.' });
     const s = PP.summarise(p.analysis, as, req.body?.items);
+    // One "different meal" card per meal: a second swap for the same meal
+    // replaces the first, unseen one rather than adding another card.
+    if (s.outcome === 'swap') {
+      await pool.query(
+        `UPDATE meal_photos SET flagged = false
+          WHERE patient_id=$1 AND log_date=$2 AND LOWER(meal)=LOWER($3) AND outcome='swap'
+            AND flagged = true AND coach_seen_at IS NULL AND id <> $4`,
+        [req.user.id, p.log_date, p.meal, id]);
+    }
     await pool.query(
       `UPDATE meal_photos SET status='logged', outcome=$2, extras=$3, extras_kcal=$4, differences=$5, flagged=$6 WHERE id=$1`,
       [id, s.outcome, JSON.stringify(s.extras), s.extras_kcal, JSON.stringify(s.differences), s.flagged]);

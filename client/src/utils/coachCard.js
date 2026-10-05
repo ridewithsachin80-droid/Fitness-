@@ -33,10 +33,10 @@ export function coachCardRows({ coachPlan, macrosKcal, sets, cardio, food, mealP
   // A prescribed meal is pending until at least one of its items is logged
   // under that slot — after that the food panel's plan card tracks the rest,
   // and repeating it here would be two places nagging about one meal.
-  const loggedByMeal = new Set(
-    (food || []).map(f => `${f.meal}|${String(f.name).toLowerCase()}`));
-  const pendingMeals = (mealPlans || []).filter(mp =>
-    !(mp.items || []).some(it => loggedByMeal.has(`${mp.meal}|${String(it.name).toLowerCase()}`)));
+  // Anything logged under the meal's slot counts, including a different meal
+  // eaten instead (same rule as lib/day/planMeals.js, the Next up card).
+  const slotsLogged = new Set((food || []).map(f => String(f.meal || '').toLowerCase()).filter(Boolean));
+  const pendingMeals = (mealPlans || []).filter(mp => !slotsLogged.has(String(mp.meal || '').toLowerCase()));
 
   return {
     workout: !!coachPlan?.todayDay && !workoutDone,
