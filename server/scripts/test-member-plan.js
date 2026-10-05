@@ -116,6 +116,14 @@ const PLAN = () => ({
     r = day.planMeals({ mealPlans, food: [], nowMin: at(17, 0) });
     ck('a missed meal is STILL next up: the app never skips a meal for the member', r.next.meal === 'Meal 1' && r.next.missed && r.then.meal === 'Meal 2' && r.then.missed === false, [r.next.meal, r.then.meal]);
 
+    // Live test, 5 Oct: a different meal logged "instead of the plan" under
+    // Breakfast left Breakfast as "Missed" and next up, so it was logged twice.
+    r = day.planMeals({ mealPlans, food: [{ name: 'idli', grams: 150, meal: 'Meal 1' }, { name: 'sambar', grams: 200, meal: 'meal 1' }], nowMin: at(13, 30) });
+    ck('a different meal logged under the meal\'s slot counts as that meal: Next up moves on', r.meals[0].logged === true && r.next.meal === 'Meal 2' && r.loggedCount === 1, [r.next?.meal, r.loggedCount]);
+    const cc = importClient('utils/coachCard.js');
+    const rows = cc.coachCardRows({ coachPlan: null, macrosKcal: null, sets: [], cardio: [], food: [{ name: 'idli', grams: 150, meal: 'Meal 1' }], mealPlans });
+    ck('the coach card agrees: that meal is no longer pending', !JSON.stringify(rows).includes('"Meal 1"') && JSON.stringify(rows).includes('Meal 2'), rows);
+
     const all = mealPlans.map(mp => ({ name: mp.items[0].name, grams: 1, meal: mp.meal }));
     r = day.planMeals({ mealPlans, food: all, nowMin: at(21, 0) });
     ck('every meal logged: nothing is next', r.next === null && r.then === null && r.loggedCount === 3);

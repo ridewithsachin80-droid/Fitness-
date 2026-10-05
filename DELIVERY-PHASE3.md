@@ -1,9 +1,20 @@
-# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026 (rev 2)
+# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026 (rev 3)
 
 Cumulative from the `main` ZIP of 3 Oct 2026: it carries every earlier file too
 (Phase 1.3, Phase 2, safety/food, imports/CSP), unchanged since those were
 deployed. Upload to `test`, wait for green, try it on fitness-test.up.railway.app,
 then merge.
+
+## Rev 3 — from the live test on production (5 Oct, 13:30)
+
+- **"This was Breakfast instead of the plan" left Breakfast as Missed** on the
+  Next up card, because a meal counted as logged only when one of its PLANNED
+  foods was logged. Now anything logged under the meal's slot counts (a swap,
+  or food logged by chat). The coach card uses the same rule.
+- **Tapping it twice put two cards in the coach's feed.** A second "different
+  meal" for the same meal now replaces the first unseen card.
+- Changed: `client/src/lib/day/planMeals.js`, `client/src/utils/coachCard.js`,
+  `server/routes/platePhotos.js`, two test files. 3,057 checks green.
 
 ## Rev 2 — fixes from the first live test on the Test site (5 Oct)
 

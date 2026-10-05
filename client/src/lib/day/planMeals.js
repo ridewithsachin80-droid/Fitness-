@@ -5,9 +5,12 @@
  * plan), what is logged, and the time now, it says which meal is "next up".
  *
  * THE RULES
- *   · A meal counts as LOGGED once at least one of its items is in the food
- *     log under that meal slot — the same rule the coach card has always used
- *     (utils/coachCard.js), so the two can never disagree about a meal.
+ *   · A meal counts as LOGGED once ANYTHING is in the food log under that
+ *     meal slot: one of its planned items, or something else eaten instead
+ *     (a plate photo logged "instead of the plan", or the chat). The coach
+ *     card (utils/coachCard.js) uses the same rule, so the two never disagree.
+ *     (Live test, 5 Oct: a swap logged under Breakfast left Breakfast "Missed"
+ *     on the card, so the member logged it twice.)
  *   · Next up is the EARLIEST meal that is not logged. A meal whose time went
  *     by more than MISSED_AFTER_MIN ago is "missed", and still next up: the
  *     member can log it late. The app never skips a meal on their behalf.
@@ -63,12 +66,13 @@ export function untilText(t, nowMin) {
  */
 export function planMeals({ mealPlans = [], food = [], nowMin = 0 }) {
   const logged = new Set((food || []).map(f => key(f.meal, f.name)));
+  const slots  = new Set((food || []).map(f => String(f.meal || '').toLowerCase()).filter(Boolean));
   const meals = (mealPlans || [])
     .filter(mp => (mp.items || []).length)
     .map((mp, i) => {
       const done = mp.items.filter(it => logged.has(key(mp.meal, it.name)));
       const min = toMin(mp.time);
-      const isLogged = done.length > 0;
+      const isLogged = done.length > 0 || slots.has(String(mp.meal || '').toLowerCase());
       return {
         meal: mp.meal, time: mp.time || null, items: mp.items,
         kcal: mealKcal(mp.items),
