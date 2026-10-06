@@ -2775,7 +2775,7 @@ function normaliseMealPlan(raw) {
       // describing the unclamped one.
       per_100g.net_carbs = Math.max(0, +(per_100g.total_carbs - per_100g.fiber).toFixed(1));
       return { name, grams,
-               qty_text: it.qty_text ? String(it.qty_text).slice(0, 40) : `${grams} g`,
+               qty_text: it.qty_text ? String(it.qty_text).slice(0, 160) : `${grams} g`,  // was 40: cut notes mid-word
                per_100g };
     }).filter(Boolean);
     const mode = String(m.mode || '').toLowerCase() === 'append' ? 'append' : 'replace';

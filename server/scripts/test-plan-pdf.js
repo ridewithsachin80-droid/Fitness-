@@ -72,13 +72,16 @@ const pages = (buf) => (buf.toString('latin1').match(/\/Type \/Page /g) || []).l
   await pool.query(`INSERT INTO patient_profiles (user_id) VALUES ($1), ($2)`, [member, nobody]);
   const today = getISTDate();
   const it = (name, grams, k, q) => ({ name, grams, qty_text: q, kcal_100g: k, protein_100g: 5, carbs_100g: 10, fat_100g: 3 });
-  const draft = DP.normaliseDraft({ title: 'Low carb vegetarian', eating_window: '12:00-20:00', targets: { kcal: 1500, protein: 110, carbs: 80, fat: 78 },
+  const draft = DP.normaliseDraft({ title: 'Low carb vegetarian', eating_window: '12:00-20:00', targets: { kcal: 1500, protein: 110, carbs: 130, fat: 78 },
     timetable: [{ time: '06:00', what: 'Wake, 500 ml warm water' }],
     meals: [
       { meal: 'Meal 1', time: '12:00', items: [it('Curd', 200, 60, '1 katori'), it('Moong dal', 100, 105)],
         rotation: { mon: it('Palak paneer', 150, 180), tue: it('Paneer bhurji', 150, 265), wed: it('Tofu stir fry', 150, 160), thu: it('Methi paneer', 150, 250),
                     fri: it('Rajma', 150, 140), sat: it('Soya chunk curry', 150, 170), sun: it('Paneer tikka', 150, 260) } },
-      { meal: 'Meal 2', time: '16:00', items: [it('Whey protein', 30, 400, '1 scoop'), it('Guava 🍐', 150, 68)] }],
+      { meal: 'Meal 2', time: '16:00', items: [it('Whey protein', 30, 400, '1 scoop'), it('Guava 🍐', 150, 68),
+        // Live PDF, 6 Oct: grams added twice, and a note cut at 40 characters.
+        it('Idli', 50, 134, '1 idli (50 g)'), it('Raw vegetable bowl', 200, 25, '200 g, with 1 teaspoon olive oil + lemon'),
+        it('Soppina palya', 100, 23, '100 g. A different soppu each day - you choose which: palak, dantu, sabsige or menthya')] }],
     avoid: ['sugar', 'maida'], cautions: ['See your doctor for a BP check.'],
     adjustments: [{ for: 'Glucose', note: 'SECRET-ADJUSTMENT carbs kept low' }] });
   const flags = [{ kind: 'lab', test: 'Fasting Glucose', status: 'high', text: 'Fasting Glucose is high: 132 mg/dL', source: 'Lab result', date: DP.addDays(today, -20), stale: false }];
@@ -114,11 +117,17 @@ const pages = (buf) => (buf.toString('latin1').match(/\/Type \/Page /g) || []).l
     ck('two or three A4 pages, numbered', pages(r.buf) >= 2 && pages(r.buf) <= 3 && /Page 1 of \d/.test(t), pages(r.buf));
     ck('title, who it is for and from whom, version and start date', /Low carb vegetarian/.test(t) && /For Padmini Ravi - from coach Sachin - version 1 - from \d+ \w{3} \d{4}/.test(t), t.slice(0, 300));
     ck('the member\'s Kannada letters are dropped cleanly, not as garbage', !/[^\x09\x0A\x0D\x20-\xFF]/.test(t) && /Padmini Ravi/.test(t));
-    ck('the four targets', /1,500/.test(t) && /110 g/.test(t) && /80 g/.test(t) && /78 g/.test(t));
+    ck('the four targets', /1,500/.test(t) && /110 g/.test(t) && /130 g/.test(t) && /78 g/.test(t));
     ck('each meal with its time', /12:00 PM Meal 1/.test(t) && /4:00 PM Meal 2/.test(t));
     ck('foods with the household measure, grams and kcal', /Curd\n1 katori \(200 g\)\n120 kcal/.test(t) && /Whey protein\n1 scoop \(30 g\)\n120 kcal/.test(t), t.slice(t.indexOf('Curd') - 5, t.indexOf('Curd') + 60));
     ck('the dishes that change by day, each with its day', /Mon: Palak paneer\n150 g\n270 kcal/.test(t) && /Sun: Paneer tikka/.test(t));
     ck('the emoji in a food name is dropped, the name kept', /\nGuava\n/.test(t));
+    ck('a measure that already gives the weight is not given it twice ("1 idli (50 g)")', /\n1 idli \(50 g\)\n/.test(t) && !/\(50 g\) \(50 g\)/.test(t));
+    ck('"200 g, with 1 teaspoon olive oil + lemon" gets no extra "(200 g)"', /200 g, with 1 teaspoon olive oil \+ lemon 50 kcal/.test(t.replace(/\n/g, ' ')) && !/lemon \(200 g\)/.test(t.replace(/\n/g, ' ')), t.slice(t.indexOf('Raw vegetable'), t.indexOf('Raw vegetable') + 80));
+    ck('a measure with no weight still gets one ("1 scoop (30 g)")', /1 scoop \(30 g\)/.test(t));
+    ck('a long note is kept whole, not cut at 40 characters', /you choose which: palak, dantu, sabsige/.test(t.replace(/\n/g, ' ')) && /or menthya/.test(t.replace(/\n/g, ' ')), t.slice(t.indexOf('Soppina'), t.indexOf('Soppina') + 160));
+    const stored = (await pool.query(`SELECT qty_text FROM diet_plan_items WHERE plan_id=$1 AND name='Soppina palya' LIMIT 1`, [planId])).rows[0]?.qty_text;
+    ck('and the database keeps it whole too (real Postgres column)', stored === '100 g. A different soppu each day - you choose which: palak, dantu, sabsige or menthya', stored);
     ck('the eating window, timetable and avoid list', /Eating window: 12:00-20:00/.test(t) && /6:00 AM\nWake, 500 ml warm water/.test(t) && /sugar, maida/.test(t));
     ck('the lab caution and the coach\'s caution', /Fasting Glucose is high: 132 mg\/dL/.test(t) && /BP check/.test(t));
     ck('not the coach\'s brief', !/SECRET-BRIEF/.test(t));
@@ -133,8 +142,8 @@ const pages = (buf) => (buf.toString('latin1').match(/\/Type \/Page /g) || []).l
     ck('and the prep list by day', /Prep list/.test(t) && /Monday\nPalak paneer, 150 g \(Meal 1\)/.test(t) && /Every day:/.test(t));
     ck('it says the amounts are as eaten, and how raw rice and dal compare', /as eaten \(cooked weight\)/.test(t) && /a third to half/.test(t));
     const g = await fetch(`http://127.0.0.1:${port}/api/diet-plans/me/grocery`, { headers: { Authorization: 'Bearer ' + M } }).then(x => x.json());
-    ck('the app\'s grocery list is the same: alphabetical, summed over seven days', g.items.map(i => i.name).slice(0, 3).join() === 'Curd,Guava 🍐,Methi paneer' && g.items.find(i => i.name === 'Curd').grams === 1400 && g.items.find(i => i.name === 'Curd').days === 7, g.items.slice(0, 3));
-    ck('with the prep list by weekday', g.prep.byDay.length === 7 && /Palak paneer/.test(g.prep.byDay[0][0]) && g.prep.everyday.length === 4, g.prep);
+    ck('the app\'s grocery list is the same: alphabetical, summed over seven days', g.items.map(i => i.name).slice(0, 3).join() === 'Curd,Guava 🍐,Idli' && g.items.find(i => i.name === 'Curd').grams === 1400 && g.items.find(i => i.name === 'Curd').days === 7, g.items.slice(0, 3));
+    ck('with the prep list by weekday', g.prep.byDay.length === 7 && /Palak paneer/.test(g.prep.byDay[0][0]) && g.prep.everyday.length === 7, g.prep);
     ck('no plan: an empty list, and no PDF', (await fetch(`http://127.0.0.1:${port}/api/diet-plans/me/grocery`, { headers: { Authorization: 'Bearer ' + N } }).then(x => x.json())).items.length === 0
        && (await get('/api/diet-plans/me/pdf', N)).status === 404);
     ck('the coach\'s PDF of the approved plan is not marked DRAFT', !/DRAFT/.test(pdfText((await get(`/api/diet-plans/${planId}/pdf`, C)).buf)));
