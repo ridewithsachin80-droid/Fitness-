@@ -351,6 +351,10 @@ const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:5
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/weekly/brief/')) return ok({ questions: [{ key: 'stress', label: 'Stress' }, { key: 'plan', label: 'Sticking to the plan' }],
+      brief: { week_end: '2026-10-04', source: 'ai', text: 'Mrs. Venkataramana Reddy logged 5 of 7 days and averaged 1,400 kcal against 1,500; weight down 0.8 kg. Stress was high around a family wedding.\\nTry: ask how the week ahead looks; check protein on wedding days; send the plan PDF again.',
+        facts: { week_start: '2026-09-28', week_end: '2026-10-04', days_logged: 5, avg_kcal: 1400, weight_change: -0.8, workout_days: 2,
+                 checkin: { answers: { stress: 5, plan: 4 }, note: 'Wedding at home all week, ate out twice and could not track lunch properly at the function hall' } } } });
     if (u.includes('/swaps/member/')) return ok({ swaps: [
       { id: 1, food_name: 'Paneer-mushroom-capsicum masala with menthya soppu', alt_name: 'Soya chunk and capsicum curry with methi', alt_per_100g: { calories: 170 }, status: 'requested', source: 'member', note: 'I do not get paneer here every day, can I have soya instead please?' },
       { id: 2, food_name: 'Curd', alt_name: 'Unsweetened soy yogurt', alt_per_100g: { calories: 54 }, status: 'suggested', source: 'ai' },
@@ -517,6 +521,12 @@ const OVERFLOW_PAGES = [
   // Phase 6: the coach's swaps panel with long names.
   ['SwapsPanel', `import SP from './components/coach/SwapsPanel.jsx';
      const P = () => <div className="p-4"><SP memberId={1} memberName="Mrs. Venkataramana Reddy" /></div>;`],
+  // Phase 7: the check-in sheet and the coach's weekly brief.
+  ['CheckinSheet', `import CS from './components/checkin/CheckinSheet.jsx';
+     const Q = [['energy','Energy','Drained','Great'],['hunger','Hunger','Starving','Never hungry'],['sleep','Sleep','Poor','Deep'],['stress','Stress','Calm','Very high'],['plan','Sticking to the plan','Struggled','Easy']].map(([key,label,low,high]) => ({ key, label, low, high }));
+     const P = () => <div className="p-4"><p>Today</p><CS open onClose={() => {}} data={{ questions: Q, checkin: null }} /></div>;`],
+  ['WeeklyBrief', `import WB from './components/coach/WeeklyBrief.jsx';
+     const P = () => <div className="p-4"><WB memberId={1} /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
@@ -2603,6 +2613,66 @@ async function swapsTest() {
   ck('"Suggest more swaps (AI)" asks the server for this member', P.w.__posts.some(p => p.url === '/swaps/member/12/suggest'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 31. Phase 7 — weekly check-in, and the coach's weekly brief
+// ═══════════════════════════════════════════════════════════════════════════
+async function weeklyTest() {
+  console.log('\n[31] Weekly check-in and coach brief (Phase 7)');
+  const api = stub('api-weekly.js', `
+    window.__posts = []; window.__gets = [];
+    const Q = [{ key: 'energy', label: 'Energy', low: 'Drained', high: 'Great' }, { key: 'hunger', label: 'Hunger', low: 'Starving', high: 'Never hungry' },
+      { key: 'sleep', label: 'Sleep', low: 'Poor', high: 'Deep' }, { key: 'stress', label: 'Stress', low: 'Calm', high: 'Very high' },
+      { key: 'plan', label: 'Sticking to the plan', low: 'Struggled', high: 'Easy' }];
+    let done = null;
+    const brief = (src) => ({ brief: { week_end: '2026-10-04', source: src, text: 'Logged 5 of 7 days; stress was high (5/5) around a wedding.\\nTry: ask how the week ahead looks.',
+      facts: { week_start: '2026-09-28', week_end: '2026-10-04', days_logged: 5, avg_kcal: 1400, weight_change: -0.8, workout_days: 2,
+               checkin: { answers: { energy: 3, hunger: 2, sleep: 3, stress: 5, plan: 4 }, note: 'Wedding at home' } } }, questions: Q });
+    const get = async (url) => { window.__gets.push(url);
+      if (/\\/weekly\\/checkin$/.test(url)) return { data: { open: window.__open !== false, week_end: '2026-10-04', questions: Q, checkin: done } };
+      if (/\\/weekly\\/brief\\/12$/.test(url)) return { data: brief('ai') };
+      return { data: {} }; };
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (/\\/weekly\\/checkin$/.test(url)) { done = body; return { data: { ok: true } }; }
+      if (/\\/weekly\\/brief\\/12$/.test(url)) return { data: brief('template') };
+      return { data: {} }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const card = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import CheckinCard from './components/checkin/CheckinCard.jsx';
+    createRoot(document.getElementById('root')).render(<CheckinCard />);`, api);
+  const { w, errors } = run(card); await tick(300);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('on Sunday/Monday with no check-in, the card shows', errors.length === 0 && /How was your week\?/.test(q('checkin-card')?.textContent || ''), errors.join('|'));
+  const C = run(card, (win) => { win.__open = false; }); await tick(300);
+  ck('closed days: no card', !C.w.document.querySelector('[data-testid="checkin-card"]'));
+  q('checkin-card').click(); await tick(400);
+  const groups = [...d.querySelectorAll('[role=radiogroup]')];
+  ck('five questions, each 1 to 5 with words for each end', groups.length === 5 && groups.every(g => g.querySelectorAll('[role=radio]').length === 5) && /1 Calm · 5 Very high/.test(d.body.textContent));
+  ck('send is not possible until all five are answered', q('checkin-save').disabled === true && /0 of 5 answered/.test(q('checkin-save').textContent));
+  groups.forEach((g, i) => g.querySelectorAll('[role=radio]')[[2, 1, 2, 4, 3][i]].click()); await tick(100);
+  const note = q('checkin-note');
+  Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set.call(note, 'Wedding at home');
+  note.dispatchEvent(new w.Event('input', { bubbles: true })); await tick(50);
+  ck('the chosen answer is marked', groups[3].querySelectorAll('[role=radio]')[4].getAttribute('aria-checked') === 'true' && q('checkin-save').disabled === false);
+  q('checkin-save').click(); await tick(500);
+  const sent = w.__posts.find(p => /\/weekly\/checkin$/.test(p.url));
+  ck('it sends the five answers and the note', JSON.stringify(sent?.body.answers) === '{"energy":3,"hunger":2,"sleep":3,"stress":5,"plan":4}' && sent.body.note === 'Wedding at home', sent?.body);
+  ck('and the card goes away', !q('checkin-card'));
+
+  const br = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import WeeklyBrief from './components/coach/WeeklyBrief.jsx';
+    createRoot(document.getElementById('root')).render(<WeeklyBrief memberId={12} />);`, api);
+  const B = run(br); await tick(400);
+  const bq = (id) => B.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('the coach sees the week, the brief and that only they see it', B.errors.length === 0 && /Week brief · .*28 Sep.*4 Oct/.test(bq('weekly-brief').textContent) && /stress was high/.test(bq('brief-text').textContent) && /Only you see this/.test(bq('weekly-brief').textContent), B.errors.join('|'));
+  ck('the numbers under it: days, kcal, weight, workouts', /5\/7/.test(bq('brief-facts').textContent) && /1400/.test(bq('brief-facts').textContent) && /-0.8 kg/.test(bq('brief-facts').textContent));
+  const stress = [...bq('brief-checkin').querySelectorAll('span')].find(x => /Stress 5\/5/.test(x.textContent));
+  ck('the check-in answers, a worrying one marked, and the note', !!stress && /amber/.test(stress.className) && /Wedding at home/.test(bq('brief-checkin').textContent));
+  bq('brief-refresh').click(); await tick(300);
+  ck('Refresh writes it again; a brief without the AI says so', B.w.__posts.some(p => /\/weekly\/brief\/12$/.test(p.url)) && /The AI was unavailable/.test(bq('weekly-brief').textContent));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2756,6 +2826,7 @@ async function overflowTest() {
     await progressPhotosTest();
     await planPdfTest();
     await swapsTest();
+    await weeklyTest();
     await overflowTest();
     await cspTest();
   } catch (err) {
