@@ -30,6 +30,7 @@
  */
 
 const pool = require('../db/pool');
+const { withMemberLock } = require('../db/locks');
 const { getISTDate } = require('../utils/istDate');
 const { calcCompliance, protocolTotalFor } = require('./compliance');
 
@@ -105,8 +106,13 @@ async function applyParsed(userId, parsed, opts = {}) {
   const profile = profRows[0] || null;
   const slots   = await mealSlotsFor(profile, userId);
 
-  const { rows: logRows } = await pool.query(
-    `SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2`, [userId, istDate]);
+  // From here to the write below runs under the per-member lock (db/locks.js).
+  // This function reads the day, changes it in memory and writes the whole row
+  // back; two voice logs arriving together both read the same starting row and
+  // the second write erased the first. Nothing inside may use `pool`.
+  const { applied, food } = await withMemberLock(userId, async (db) => {
+  const { rows: logRows } = await db.query(
+    `SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2 FOR UPDATE`, [userId, istDate]);
   const cur = logRows[0] || {};
 
   // The pg driver returns JSONB as parsed JS, but a NULL column comes back as
@@ -213,7 +219,7 @@ async function applyParsed(userId, parsed, opts = {}) {
   // ── Write ─────────────────────────────────────────────────────────────────
   const compliance = calcCompliance(activities, acv, supplements, protocolTotalFor(profile));
 
-  await pool.query(
+  await db.query(
     `INSERT INTO daily_logs
        (patient_id, log_date, weight_kg, activities, acv,
         food_items, water_ml, supplements, sleep, compliance_pct, saved_at)
@@ -232,6 +238,8 @@ async function applyParsed(userId, parsed, opts = {}) {
      JSON.stringify(activities), JSON.stringify(acv),
      JSON.stringify(food), waterMl,
      JSON.stringify(supplements), JSON.stringify(sleep), compliance]);
+  return { applied, food };
+  });   // ← lock released; the day is committed
 
   // ── Body metrics ──────────────────────────────────────────────────────────
   // Scale-screenshot metrics go to lab history, which is where the coach's

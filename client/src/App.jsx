@@ -20,7 +20,7 @@ import DeviceConnect  from './pages/DeviceConnect';
 import Onboarding     from './components/Onboarding';
 import { onboardingDecision } from './utils/onboardingGate';
 import HandsFree from './components/HandsFree';
-import { refreshRequestBody, sessionLossReport } from './utils/session';
+import { refreshRequestBody, sessionLossReport, wasSignedOut } from './utils/session';
 
 // The primitive kit demo page. `import.meta.env.DEV` is a compile-time
 // constant, so in a production build this is `null` and Vite drops the page
@@ -69,6 +69,16 @@ export default function App() {
   // any interceptor can help. Sending the stored token here is what makes the
   // fallback reach the case it was written for.
   useEffect(() => {
+    // The last thing done on this phone was a deliberate sign-out. Do NOT
+    // restore from a cookie the sign-out could not clear (it was offline, or
+    // the request was cut short) — clear it now and show the login screen.
+    if (wasSignedOut()) {
+      try {
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+      } catch (_) { /* nothing more to do */ }
+      setRestored();
+      return;
+    }
     axios
       .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true })
       .then(({ data }) => {

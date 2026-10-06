@@ -6,6 +6,7 @@ const pool = require('../db/pool');
 // ReferenceError and returned 500.
 const { getISTDate } = require('../utils/istDate');
 const authMW = require('../middleware/auth');
+const { withMemberLock } = require('../db/locks');
 const roleCheck = require('../middleware/roleCheck');
 const { loadProgramDays } = require('./programs');
 const { composeMember, summarise, composeBrief } = require('../services/triage');
@@ -702,12 +703,25 @@ async function sendMemberNote(memberId, note, replyTo = null) {
     const e = new Error('You do not have a coach assigned yet'); e.code = 'NO_COACH'; throw e;
   }
 
-  const { rows } = await pool.query(
-    `INSERT INTO monitor_notes
-       (monitor_id, patient_id, note_date, note, flagged, from_member, reply_to, read_at)
-     VALUES ($1, $2, (NOW() AT TIME ZONE 'Asia/Kolkata')::date, $3, false, true, $4, NOW())
-     RETURNING *`,
-    [monitorId, memberId, text, threadId]);
+  // The same words from the same member within 30 seconds is a double tap or a
+  // retry, not a second message — the audit sent one reply twice at once and
+  // the coach's thread got two copies (and two pushes). Return the first.
+  const { rows, duplicate } = await withMemberLock(memberId, async (db) => {
+    const dup = await db.query(
+      `SELECT * FROM monitor_notes
+        WHERE patient_id = $1 AND from_member = true AND note = $2
+          AND created_at > NOW() - INTERVAL '30 seconds'
+        ORDER BY id DESC LIMIT 1`, [memberId, text]);
+    if (dup.rows.length) return { rows: dup.rows, duplicate: true };
+    const ins = await db.query(
+      `INSERT INTO monitor_notes
+         (monitor_id, patient_id, note_date, note, flagged, from_member, reply_to, read_at)
+       VALUES ($1, $2, (NOW() AT TIME ZONE 'Asia/Kolkata')::date, $3, false, true, $4, NOW())
+       RETURNING *`,
+      [monitorId, memberId, text, threadId]);
+    return { rows: ins.rows, duplicate: false };
+  });
+  if (duplicate) return rows[0];
 
   // Mark the note being answered as read — replying is reading
   if (threadId) {
@@ -1464,15 +1478,27 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
       else if (parseFloat(value) > parseFloat(ref_max))  status = 'high';
     }
 
-    const result = await pool.query(
-      `INSERT INTO lab_values
-         (patient_id, test_date, test_name, value, unit, ref_min, ref_max, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [req.params.id, test_date, test_name, value, unit, ref_min, ref_max, status]
-    );
+    // Same value for the same test and date within 30 seconds is a double tap:
+    // return the row that is already there. Two identical HbA1c rows otherwise
+    // show as two readings in the trend.
+    const { row, duplicate } = await withMemberLock(req.params.id, async (db) => {
+      const dup = await db.query(
+        `SELECT * FROM lab_values
+          WHERE patient_id = $1 AND test_date = $2 AND test_name = $3 AND value = $4::numeric
+            AND created_at > NOW() - INTERVAL '30 seconds'
+          ORDER BY id DESC LIMIT 1`,
+        [req.params.id, test_date, test_name, value]);
+      if (dup.rows.length) return { row: dup.rows[0], duplicate: true };
+      const ins = await db.query(
+        `INSERT INTO lab_values
+           (patient_id, test_date, test_name, value, unit, ref_min, ref_max, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [req.params.id, test_date, test_name, value, unit, ref_min, ref_max, status]);
+      return { row: ins.rows[0], duplicate: false };
+    });
 
-    res.status(201).json(result.rows[0]);
+    res.status(duplicate ? 200 : 201).json(row);
   } catch (err) {
     console.error('POST /patients/:id/labs error:', err);
     res.status(500).json({ error: 'Failed to add lab value' });
@@ -1494,15 +1520,37 @@ router.post('/:id/notes', authMW, roleCheck('monitor', 'admin'), requirePatientA
     // A note the coach already sent over WhatsApp is stored as read. The member
     // has the message; showing it again as an unread "action needed" card would
     // deliver it twice and make the coach look like they are nagging.
-    const result = await pool.query(
-      `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged,
-                                  delivered_via, read_at)
-       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6 IS NULL THEN NULL ELSE NOW() END)
-       RETURNING *`,
-      [req.user.id, req.params.id, note_date, note, flagged, via]
-    );
+    // TWO fixes from the audit, both reproduced on a real database first.
+    //
+    // 1. This INSERT failed EVERY time with "could not determine data type of
+    //    parameter $6": Postgres will not guess a type for a bare parameter
+    //    that is only compared with NULL. The Note tab showed "Failed to add
+    //    note" and the copy kept after a WhatsApp message was silently lost.
+    //    The explicit ::varchar casts are the whole fix. It shipped because no
+    //    test called this route — the suites inserted notes with their own SQL.
+    //
+    // 2. A double tap (or a retry after a slow response) stored the note twice.
+    //    The check and the insert run under the member lock, so the second
+    //    request finds the first one's row and returns it instead.
+    const { row, duplicate } = await withMemberLock(req.params.id, async (db) => {
+      const dup = await db.query(
+        `SELECT * FROM monitor_notes
+          WHERE monitor_id = $1 AND patient_id = $2 AND note_date = $3 AND note = $4
+            AND from_member IS NOT TRUE AND created_at > NOW() - INTERVAL '30 seconds'
+          ORDER BY id DESC LIMIT 1`,
+        [req.user.id, req.params.id, note_date, note]);
+      if (dup.rows.length) return { row: dup.rows[0], duplicate: true };
+      const ins = await db.query(
+        `INSERT INTO monitor_notes (monitor_id, patient_id, note_date, note, flagged,
+                                    delivered_via, read_at)
+         VALUES ($1, $2, $3, $4, $5, $6::varchar,
+                 CASE WHEN $6::varchar IS NULL THEN NULL ELSE NOW() END)
+         RETURNING *`,
+        [req.user.id, req.params.id, note_date, note, flagged === true, via]);
+      return { row: ins.rows[0], duplicate: false };
+    });
 
-    res.status(201).json(result.rows[0]);
+    res.status(duplicate ? 200 : 201).json(row);
   } catch (err) {
     console.error('POST /patients/:id/notes error:', err);
     res.status(500).json({ error: 'Failed to add note' });
@@ -2177,7 +2225,10 @@ router.patch('/:id/pin', authMW, roleCheck('monitor', 'admin'), requirePatientAc
   try {
     const hash = await bcrypt.hash(String(pin).trim(), 10);
     const result = await pool.query(
-      `UPDATE users SET password = $1 WHERE id = $2 AND role = 'patient' RETURNING id, name, phone`,
+      // token_version + 1 signs the member out everywhere (routes/auth.js). A coach
+      // resets a PIN when a phone is lost or shared; the old sessions must not survive it.
+      `UPDATE users SET password = $1, token_version = COALESCE(token_version, 0) + 1
+        WHERE id = $2 AND role = 'patient' RETURNING id, name, phone`,
       [hash, req.params.id]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Patient not found' });

@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS users (
   created_at   TIMESTAMPTZ  DEFAULT NOW()
 );
 
+-- Sessions that end when the credential changes (audit, Oct 2026).
+-- Refresh tokens carry this number; routes/auth.js refuses one whose number is
+-- behind the row's. Changing or resetting a PIN/password adds 1, which signs
+-- that account out on every device. Existing rows get 0 and existing tokens
+-- (which carry no number) count as 0, so nobody is signed out by this deploy.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0;
+
 -- ── MONITOR–PATIENT LINKS ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS monitor_patients (
   id           SERIAL PRIMARY KEY,

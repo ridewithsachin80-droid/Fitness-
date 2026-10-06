@@ -22,6 +22,16 @@ const { getISTDate } = require('../utils/istDate');
 // the same day scoring differently depending on whether the member typed it or
 // spoke it — with the coach's dashboard showing whichever landed last.
 const { calcCompliance } = require('../services/compliance');
+const { withMemberLock } = require('../db/locks');
+
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+/** A date that exists on the calendar. The regex alone let 2026-13-45 through
+ *  to Postgres, which answered with an error and the route with a 500. */
+function isRealDate(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
 
 // ── GET /api/logs/recent-foods ────────────────────────────────────────────────
 // Sprint 12: Returns the top 8 most-used foods from the member's last 30 logs.
@@ -80,7 +90,7 @@ router.get('/range/:from/:to', authMW, async (req, res) => {
     const { from, to } = req.params;
 
     // Validate date format
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    if (!isRealDate(from) || !isRealDate(to)) {
       return res.status(400).json({ error: 'Dates must be YYYY-MM-DD' });
     }
 
@@ -132,7 +142,7 @@ router.get('/:date', authMW, async (req, res) => {
     const { date } = req.params;
 
     // Validate date format
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!isRealDate(date)) {
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
     }
 
@@ -214,11 +224,41 @@ router.get('/:date', authMW, async (req, res) => {
 // ── POST /api/logs/:date ─────────────────────────────────────────────────────
 // Upsert (insert or update) the daily log for a patient.
 // Only the patient themselves can save their own log.
+//
+// Three things changed here after the audit, all reproduced against a real
+// database before being fixed:
+//
+//   1. THE BODY IS VALIDATED. food_items sent as text instead of a list was
+//      stored as-is, and from then on the admin overview returned 500 for
+//      everyone. Shapes are now checked and a bad day is refused with a 400.
+//
+//   2. ONE WRITER AT A TIME. The read-then-write below runs under the
+//      per-member lock (db/locks.js), so it cannot interleave with voice
+//      logging or a second save.
+//
+//   3. A SAVE FROM AN OUT-OF-DATE APP NO LONGER ERASES NEWER DATA. See
+//      mergeLiveDay in services/dayMerge.js for the rule and the reason.
+const DAY_FLOOR = '2020-01-01';   // nothing real is older than the product
+
+function dayShapeError(b) {
+  if (b.food_items !== undefined && b.food_items !== null) {
+    if (!Array.isArray(b.food_items)) return 'food_items must be a list';
+    if (b.food_items.length > 300) return 'That is too many food items for one day';
+    if (b.food_items.some(i => !isObj(i))) return 'Each food item must be an object';
+  }
+  for (const f of ['activities', 'acv', 'supplements', 'sleep']) {
+    if (b[f] !== undefined && b[f] !== null && !isObj(b[f])) return `${f} must be an object`;
+  }
+  if (b.notes !== undefined && b.notes !== null && typeof b.notes !== 'string') return 'notes must be text';
+  if (typeof b.notes === 'string' && b.notes.length > 4000) return 'Notes can be 4,000 characters at most';
+  return null;
+}
+
 router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
   try {
     const { date } = req.params;
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!isRealDate(date)) {
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
     }
 
@@ -227,116 +267,126 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     if (date > today) {
       return res.status(400).json({ error: 'Cannot log future dates' });
     }
+    if (date < DAY_FLOOR) {
+      return res.status(400).json({ error: 'That date is too far back' });
+    }
 
-    const {
-      weight_kg,
-      activities   = {},
-      acv          = {},
-      food_items   = [],
-      water_ml     = 0,
-      supplements  = {},
-      sleep        = {},
-      notes        = '',
-    } = req.body;
+    const body = isObj(req.body) ? req.body : {};
+    const shapeError = dayShapeError(body);
+    if (shapeError) return res.status(400).json({ error: shapeError });
 
+    // null and undefined both mean "empty". JSON.stringify(null) is the JSON
+    // value null, which is not SQL NULL and breaks jsonb_each() later.
+    const objOr = (v) => (isObj(v) ? v : {});
     // protocol_total: sent by client = number of assigned checkable items for this patient.
     // Allows server-side compliance to match the patient's actual custom protocol.
-    const { protocol_total } = req.body;
+    const { protocol_total } = body;
     // Clamp water — it reached the DB unvalidated, so a negative or absurd
     // value would corrupt the hydration bar and the coach's view of the day.
-    const safeWater = Math.min(20000, Math.max(0, parseInt(water_ml) || 0));
+    const safeWater = Math.min(20000, Math.max(0, parseInt(body.water_ml) || 0));
 
     // Clamp weight to the same range the client warns on, so a fat-fingered
     // entry can't poison weight trends and BMR/TDEE calculations.
-    const parsedWeight = parseFloat(weight_kg);
+    const parsedWeight = parseFloat(body.weight_kg);
     const safeWeight = Number.isFinite(parsedWeight) && parsedWeight >= 20 && parsedWeight <= 400
       ? parsedWeight
       : null;
 
-    const compliance_pct = calcCompliance(activities, acv, supplements, protocol_total || null);
+    const incoming = {
+      weight_kg:   safeWeight,
+      activities:  objOr(body.activities),
+      acv:         objOr(body.acv),
+      food_items:  Array.isArray(body.food_items) ? body.food_items : [],
+      water_ml:    safeWater,
+      supplements: objOr(body.supplements),
+      sleep:       objOr(body.sleep),
+      notes:       typeof body.notes === 'string' ? body.notes : '',
+    };
     const patientId = req.user.id;
+    const { mergeOfflineDay, mergeLiveDay, isStale } = require('../services/dayMerge');
 
-    // ── An offline copy arriving after newer edits (services/dayMerge.js) ──
-    // Only replays from the offline queue say offline_replay. If the day was
-    // written since the phone loaded it, merge food and keep the rest, rather
-    // than let a stale copy wipe what was logged meanwhile.
-    if (req.body.offline_replay === true) {
-      const { mergeOfflineDay, isStale } = require('../services/dayMerge');
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const { rows: [stored] } = await client.query(
-          `SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2 FOR UPDATE`, [patientId, date]);
-        if (isStale(stored, req.body.base_saved_at)) {
-          const m = mergeOfflineDay(stored, { ...req.body, weight_kg: safeWeight, water_ml: safeWater }, req.body.base_food_ids);
-          const { rows: [saved] } = await client.query(
-            `UPDATE daily_logs SET food_items = $3, saved_at = NOW()
-              WHERE patient_id = $1 AND log_date = $2 RETURNING *`,
-            [patientId, date, JSON.stringify(m.food_items)]);
-          await client.query('COMMIT');
-          const monitors = await pool.query(`SELECT monitor_id FROM monitor_patients WHERE patient_id = $1 AND active = true`, [patientId]);
-          for (const row of monitors.rows) {
-            req.io?.to(`monitor_${row.monitor_id}`).emit('log_updated', { patientId, date, compliance: saved.compliance_pct, weight_kg: saved.weight_kg });
-          }
-          return res.json({ ...saved, merged: true, kept_server: m.kept_server, food_added: m.added, food_removed: m.removed });
-        }
-        await client.query('COMMIT');
-      } catch (e) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw e;
-      } finally {
-        client.release();
+    const out = await withMemberLock(patientId, async (db) => {
+      const { rows: [stored] } = await db.query(
+        `SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2 FOR UPDATE`, [patientId, date]);
+      const stale = isStale(stored, body.base_saved_at);
+
+      // ── An offline copy arriving after newer edits (services/dayMerge.js) ──
+      // Only replays from the offline queue say offline_replay. If the day was
+      // written since the phone loaded it, merge food and keep the rest, rather
+      // than let a stale copy wipe what was logged meanwhile.
+      if (body.offline_replay === true && stale) {
+        const m = mergeOfflineDay(stored, { ...body, ...incoming }, body.base_food_ids);
+        const { rows: [saved] } = await db.query(
+          `UPDATE daily_logs SET food_items = $3, saved_at = NOW()
+            WHERE patient_id = $1 AND log_date = $2 RETURNING *`,
+          [patientId, date, JSON.stringify(m.food_items)]);
+        return { saved, extra: { merged: true, kept_server: m.kept_server, food_added: m.added, food_removed: m.removed } };
       }
-    }
 
-    const result = await pool.query(
-      `INSERT INTO daily_logs
-         (patient_id, log_date, weight_kg, activities, acv,
-          food_items, water_ml, supplements, sleep, notes,
-          compliance_pct, saved_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
-       ON CONFLICT (patient_id, log_date) DO UPDATE SET
-         weight_kg      = EXCLUDED.weight_kg,
-         activities     = EXCLUDED.activities,
-         acv            = EXCLUDED.acv,
-         food_items     = EXCLUDED.food_items,
-         water_ml       = EXCLUDED.water_ml,
-         supplements    = EXCLUDED.supplements,
-         sleep          = EXCLUDED.sleep,
-         notes          = EXCLUDED.notes,
-         compliance_pct = EXCLUDED.compliance_pct,
-         saved_at       = NOW()
-       RETURNING *`,
-      [
-        patientId,
-        date,
-        safeWeight,
-        JSON.stringify(activities),
-        JSON.stringify(acv),
-        JSON.stringify(food_items),
-        safeWater,
-        JSON.stringify(supplements),
-        JSON.stringify(sleep),
-        notes,
-        compliance_pct,
-      ]
-    );
+      // ── An online save from an app that is behind the server ──────────────
+      let doc = incoming, extra = {};
+      if (stale && isObj(body.base_fields)) {
+        const m = mergeLiveDay(stored, incoming, body.base_food_ids, body.base_fields);
+        doc = { ...incoming, ...m.doc, notes: typeof m.doc.notes === 'string' ? m.doc.notes : '' };
+        extra = { merged_live: true, kept_server: m.kept_server, food_added: m.food_added, food_removed: m.food_removed };
+      }
 
-    const saved = result.rows[0];
+      const compliance_pct = calcCompliance(doc.activities, doc.acv, doc.supplements, protocol_total || null);
+      const { rows: [saved] } = await db.query(
+        `INSERT INTO daily_logs
+           (patient_id, log_date, weight_kg, activities, acv,
+            food_items, water_ml, supplements, sleep, notes,
+            compliance_pct, saved_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+         ON CONFLICT (patient_id, log_date) DO UPDATE SET
+           weight_kg      = EXCLUDED.weight_kg,
+           activities     = EXCLUDED.activities,
+           acv            = EXCLUDED.acv,
+           food_items     = EXCLUDED.food_items,
+           water_ml       = EXCLUDED.water_ml,
+           supplements    = EXCLUDED.supplements,
+           sleep          = EXCLUDED.sleep,
+           notes          = EXCLUDED.notes,
+           compliance_pct = EXCLUDED.compliance_pct,
+           saved_at       = NOW()
+         RETURNING *`,
+        [
+          patientId,
+          date,
+          doc.weight_kg,
+          JSON.stringify(doc.activities),
+          JSON.stringify(doc.acv),
+          JSON.stringify(doc.food_items),
+          doc.water_ml,
+          JSON.stringify(doc.supplements),
+          JSON.stringify(doc.sleep),
+          doc.notes,
+          compliance_pct,
+        ]
+      );
+      return { saved, extra };
+    });
 
-    // Real-time: notify all monitors watching this patient
+    // Real-time: notify all monitors watching this patient. AFTER the lock is
+    // released — nothing below may hold a connection while asking for another.
     // NOTE: server emits to monitor_${monitorId} (the monitor's own ID),
     // NOT monitor_${patientId} — monitors join rooms keyed by their own userId.
-    const monitorRows = await pool.query(
-      `SELECT monitor_id FROM monitor_patients WHERE patient_id = $1 AND active = true`,
-      [patientId]
-    );
-    const payload = { patientId, date, compliance: compliance_pct, weight_kg: saved.weight_kg };
-    for (const row of monitorRows.rows) {
-      req.io.to(`monitor_${row.monitor_id}`).emit('log_updated', payload);
+    try {
+      const monitorRows = await pool.query(
+        `SELECT monitor_id FROM monitor_patients WHERE patient_id = $1 AND active = true`,
+        [patientId]
+      );
+      const payload = { patientId, date, compliance: out.saved.compliance_pct, weight_kg: out.saved.weight_kg };
+      for (const row of monitorRows.rows) {
+        req.io?.to(`monitor_${row.monitor_id}`).emit('log_updated', payload);
+      }
+    } catch (e) {
+      // The day is saved. A failed live update must not turn that into an error
+      // the member is shown (and would retry).
+      console.error('log_updated notify failed:', e.message);
     }
 
-    res.json(saved);
+    res.json({ ...out.saved, ...out.extra });
   } catch (err) {
     console.error('POST /logs/:date error:', err);
     res.status(500).json({ error: 'Failed to save log' });

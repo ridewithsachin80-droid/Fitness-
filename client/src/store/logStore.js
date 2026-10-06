@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { emptyLog, today } from '../constants';
 import api from '../api/client';
 import { saveLogWithFallback } from '../hooks/useOfflineQueue';
+import { mapServerLog, mapToServer, resolveSave } from '../utils/logSync';
+
+// Counts saves, so an answer can tell whether a newer save has started since.
+let saveSeq = 0;
 
 export const useLogStore = create((set, get) => ({
   date:     today(),
@@ -14,11 +18,19 @@ export const useLogStore = create((set, get) => ({
   queued:   false,
   error:    null,
 
+  // true from the member's first edit until that edit is safely saved (or
+  // queued). A background refresh never replaces a day that is dirty.
+  dirty:    false,
+  // true while the screen is meant to be showing TODAY (as opposed to a past
+  // day the member chose to look at). Lets the app move on at midnight.
+  followsToday: true,
+
   /** Switch to a different date and load its log from the API */
   setDate: async (date) => {
-    set({ date, loading: true, saved: false, queued: false, error: null });
+    set({ date, loading: true, saved: false, queued: false, error: null, dirty: false, followsToday: date === today() });
     try {
       const { data } = await api.get(`/logs/${date}`);
+      if (get().date !== date) return;            // the member has already moved on again
       set({
         log:      data ? mapServerLog(data) : emptyLog(),
         protocol: data?.protocol ?? null,
@@ -26,6 +38,7 @@ export const useLogStore = create((set, get) => ({
       });
     } catch (err) {
       console.error('Failed to load log for', date, err);
+      if (get().date !== date) return;
       set({ log: emptyLog(), protocol: null, loading: false, error: 'Failed to load log' });
     }
   },
@@ -36,99 +49,37 @@ export const useLogStore = create((set, get) => ({
       log: { ...s.log, [field]: value },
       saved: false,
       queued: false,
+      dirty: true,
     })),
 
   /** Save the current log — uses offline queue when no connection */
   saveLog: async () => {
     const { date, log, protocol } = get();
+    const seq = ++saveSeq;
     set({ saving: true, error: null });
     try {
       const payload = mapToServer(log, protocol);
       const result  = await saveLogWithFallback(date, payload);
-      if (result.queued) {
-        // Held on this device only. `saved` still goes true — the member's
-        // edit IS safe and the milestone/streak logic keys off it — but
-        // `queued` tells the UI to say "saved on this phone, will sync"
-        // rather than the flat "auto-saved ✓" it used to show for a write
-        // that had never reached the server.
-        set({ saving: false, saved: true, queued: true });
-      } else {
-        set({ saving: false, saved: true, queued: false, log: mapServerLog(result.data) });
-      }
+      // What happens next depends on what the member did while the save was in
+      // flight — see resolveSave in utils/logSync.js. In short: the server's
+      // copy replaces the screen only if nothing here has changed since.
+      const patch = resolveSave({ now: get(), sentDate: date, sentLog: log, isLatest: seq === saveSeq, result });
+      if (patch) set(patch);
     } catch (err) {
       console.error('Failed to save log:', err);
-      set({ saving: false, error: 'Save failed. Check your connection and try again.' });
+      if (seq === saveSeq) set({ saving: false, error: 'Save failed. Check your connection and try again.' });
     }
   },
 
-  /** Reload the current date's log (called after real-time update) */
+  /** Reload the current date's log (after a real-time update, an offline merge,
+   *  or the app coming back to the foreground). Never replaces unsaved edits. */
   reload: async () => {
     const { date } = get();
     try {
       const { data } = await api.get(`/logs/${date}`);
-      if (data) set({ log: mapServerLog(data) });
+      const s = get();
+      if (!data || s.date !== date || s.dirty || s.saving) return;
+      set({ log: mapServerLog(data), protocol: data.protocol ?? s.protocol });
     } catch (_) {}
   },
 }));
-
-// ── Field mapping helpers ────────────────────────────────────────────────────
-
-/** Map server response fields → client log shape */
-function mapServerLog(row) {
-  return {
-    weight:      row.weight_kg ? String(row.weight_kg) : '',
-    activities:  row.activities  ?? {},
-    acv:         row.acv         ?? {},
-    food:        row.food_items  ?? [],
-    water:       row.water_ml    ?? 0,
-    supplements: row.supplements ?? {},
-    sleep:       row.sleep       ?? { bedtime: '', waketime: '', quality: 0 },
-    notes:       row.notes       ?? '',
-    savedAt:     row.saved_at    ?? null,
-    // The food ids in the day as loaded. An offline copy sends them back, so
-    // the server can tell "deleted offline" from "added elsewhere".
-    baseFoodIds: (row.food_items ?? []).map(i => i?.id).filter(Boolean),
-  };
-}
-
-/** Compute total assignable checkable items from the member's protocol */
-function computeProtocolTotal(protocol) {
-  if (!protocol) return null;
-  const acts  = protocol.activities  ? protocol.activities.length
-              : protocol.custom_activities?.length ?? 6;
-  const acvs  = protocol.acv         ? protocol.acv.length
-              : protocol.custom_acv?.length ?? 3;
-  const supps = protocol.supplements ? protocol.supplements.length
-              : protocol.custom_supplements?.length ?? 7;
-  return acts + acvs + supps;
-}
-
-/** Map client log shape → server request body */
-function mapToServer(log, protocol) {
-  return {
-    weight_kg:      log.weight ? parseFloat(log.weight) : null,
-    activities:     log.activities,
-    acv:            log.acv,
-    // Explicitly preserve food_id and per_100g so Coach can display nutrition
-    // for foods added via the API search (Sprint 1+). Legacy items without
-    // per_100g fall back to getNutrition() in Coach.
-    food_items:     (log.food || []).map(item => ({
-      id:       item.id,
-      name:     item.name,
-      grams:    item.grams,
-      meal:     item.meal,
-      food_id:  item.food_id  || null,
-      per_100g: item.per_100g || null,
-    })),
-    water_ml:       log.water,
-    // What this phone last saw of the day. Used only if this save ends up
-    // replayed from the offline queue (server/services/dayMerge.js).
-    base_saved_at:  log.savedAt ?? null,
-    base_food_ids:  log.baseFoodIds ?? null,
-    supplements:    log.supplements,
-    sleep:          log.sleep,
-    notes:          log.notes,
-    // Send protocol total so server computes compliance against the right denominator
-    protocol_total: computeProtocolTotal(protocol),
-  };
-}

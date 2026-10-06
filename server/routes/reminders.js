@@ -103,11 +103,18 @@ router.get('/schedules', async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
 
   try {
+    // A coach used to get EVERY member's schedule, with names, including
+    // members of other coaches. Global schedules and their own members only.
+    const mine = req.user.role === 'admin' ? '' :
+      `WHERE rs.patient_id IS NULL OR rs.patient_id IN
+         (SELECT patient_id FROM monitor_patients WHERE monitor_id = $1 AND active = true)`;
     const result = await pool.query(
       `SELECT rs.*, u.name AS patient_name
        FROM reminder_schedules rs
        LEFT JOIN users u ON u.id = rs.patient_id
-       ORDER BY rs.patient_id NULLS FIRST, rs.type`
+       ${mine}
+       ORDER BY rs.patient_id NULLS FIRST, rs.type`,
+      req.user.role === 'admin' ? [] : [req.user.id]
     );
     res.json(result.rows);
   } catch (err) {
@@ -221,6 +228,14 @@ router.get('/subscriptions/:patientId', async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
 
   try {
+    // Same guard every other member-scoped coach route has; it was missing here,
+    // so any coach could list the devices of any member by id.
+    if (req.user.role === 'monitor') {
+      const link = await pool.query(
+        `SELECT 1 FROM monitor_patients WHERE monitor_id = $1 AND patient_id = $2 AND active = true`,
+        [req.user.id, parseInt(req.params.patientId) || 0]);
+      if (!link.rows.length) return res.status(403).json({ error: 'Member not assigned to you' });
+    }
     const { rows } = await pool.query(
       `SELECT id, device_name, active, created_at
        FROM push_subscriptions

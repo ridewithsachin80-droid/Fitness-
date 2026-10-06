@@ -111,18 +111,24 @@ async function callGeminiOnce(model, prompt) {
   };
 }
 
-// ── GET /api/foods/ai-test — PUBLIC diagnostic, no auth needed ───────────────
+// ── GET /api/foods/ai-test — ADMIN-ONLY diagnostic ───────────────────────────
 // Reports the live status of every configured provider, so a key/quota problem
 // on one shows up immediately without having to go through the full app flow.
-router.get('/ai-test', async (req, res) => {
+//
+// This was public. Anyone on the internet could call it in a loop: every call
+// made two paid AI requests (burning the quota members' logging depends on),
+// and the answer included the first 8 characters of both API keys plus the
+// provider's raw error body. It now needs an admin login, and reports only
+// whether each provider answered.
+router.get('/ai-test', authMW, require('../middleware/roleCheck')('admin'), async (req, res) => {
   const results = {};
 
   if (GROQ_API_KEY) {
     try {
-      const { text } = await callGroqOnce(GROQ_MODELS[0], 'Say hello in one word');
-      results.groq = { ok: true, response: text, model: GROQ_MODELS[0], keyPrefix: GROQ_API_KEY.slice(0, 8) + '...' };
+      await callGroqOnce(GROQ_MODELS[0], 'Say hello in one word');
+      results.groq = { ok: true, model: GROQ_MODELS[0] };
     } catch (err) {
-      results.groq = { ok: false, status: err.response?.status, detail: err.response?.data || err.message, model: GROQ_MODELS[0] };
+      results.groq = { ok: false, status: err.response?.status || null, model: GROQ_MODELS[0] };
     }
   } else {
     results.groq = { ok: false, error: 'GROQ_API_KEY not set' };
@@ -130,10 +136,10 @@ router.get('/ai-test', async (req, res) => {
 
   if (GEMINI_API_KEY) {
     try {
-      const { text } = await callGeminiOnce(GEMINI_MODEL, 'Say hello in one word');
-      results.gemini = { ok: true, response: text, model: GEMINI_MODEL, keyPrefix: GEMINI_API_KEY.slice(0, 8) + '...' };
+      await callGeminiOnce(GEMINI_MODEL, 'Say hello in one word');
+      results.gemini = { ok: true, model: GEMINI_MODEL };
     } catch (err) {
-      results.gemini = { ok: false, status: err.response?.status, detail: err.response?.data || err.message, model: GEMINI_MODEL };
+      results.gemini = { ok: false, status: err.response?.status || null, model: GEMINI_MODEL };
     }
   } else {
     results.gemini = { ok: false, error: 'GEMINI_API_KEY not set' };

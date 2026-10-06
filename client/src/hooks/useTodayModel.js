@@ -19,6 +19,7 @@
  */
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useLogStore }  from '../store/logStore';
+import { canRefresh } from '../utils/logSync';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { getMyProfile, getMyToday, getMyRead } from '../api/logs';
@@ -461,6 +462,24 @@ export default function useTodayModel() {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [saveLog, date]);
+
+  // Coming back to the app. A PWA stays open in the background for days, so
+  // "open" is not "freshly loaded": the day on screen may be hours old, with
+  // voice logs or a coach's correction it has never seen — or it may still be
+  // YESTERDAY, if the phone was last looked at before midnight. Refresh when
+  // the app is shown again, unless there is an unsaved edit to protect (the
+  // server merges that one when it is saved).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const st = useLogStore.getState();
+      if (!canRefresh(st, !!autoSaveRef.current)) return;
+      if (st.date === today()) st.reload();
+      else if (st.followsToday) st.setDate(today());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   const compliance = calcCompliance(log, activeActivities, activeACV, activeSupplements);
   const actDone    = activeActivities.filter(a => log.activities?.[a.id]).length;

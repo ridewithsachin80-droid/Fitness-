@@ -5,6 +5,8 @@ import {
   rememberMember,
   clearSession,
   markSeen,
+  markSignedOut,
+  clearSignedOut,
 } from '../utils/session';
 
 /**
@@ -33,6 +35,7 @@ export const useAuthStore = create((set) => ({
    */
   login: (token, user, refreshToken = null) => {
     if (refreshToken) storeRefreshToken(refreshToken);
+    clearSignedOut();   // a real sign-in ends any earlier "signed out on this phone"
     rememberMember(user);
     markSeen();
     set({ accessToken: token, user, isRestoring: false });
@@ -80,7 +83,23 @@ export const useAuthStore = create((set) => ({
     clearSession({ deliberate: reason === null });
 
     set({ accessToken: null, user: null, isRestoring: false });
-    window.location.href = '/login';
+
+    const go = () => { window.location.href = '/login'; };
+    if (reason !== null) { go(); return; }
+
+    // A deliberate sign-out must end the session on the SERVER, because the
+    // cookie that restores it cannot be cleared from here (utils/session.js
+    // explains what went wrong before). Wait for that briefly, then leave
+    // either way; the flag makes the next boot finish the job if it failed.
+    markSignedOut();
+    let left = false;
+    const leave = () => { if (!left) { left = true; go(); } };
+    try {
+      if (typeof fetch === 'function') {
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'include', keepalive: true }).then(leave, leave);
+        setTimeout(leave, 1500);
+      } else { leave(); }
+    } catch (_) { leave(); }
   },
 }));
 

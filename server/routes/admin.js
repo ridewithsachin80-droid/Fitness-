@@ -1,5 +1,6 @@
 const router  = require('express').Router();
 const pool    = require('../db/pool');
+const storage = require('../services/storage');
 const { hasContent, IST_TODAY } = require('../db/logPredicates');
 const bcrypt  = require('bcryptjs');
 const authMW  = require('../middleware/auth');
@@ -385,17 +386,37 @@ router.post('/assign', async (req, res) => {
     const bad = await coachAssignable(monitor_id);
     if (bad) return res.status(400).json({ error: bad });
 
-    // Remove any existing assignment first
-    await pool.query(
-      `UPDATE monitor_patients SET active=false WHERE patient_id=$1`,
-      [patient_id]
-    );
-    await pool.query(
-      `INSERT INTO monitor_patients (monitor_id, patient_id)
-       VALUES ($1,$2) ON CONFLICT (monitor_id, patient_id)
-       DO UPDATE SET active=true`,
-      [monitor_id, patient_id]
-    );
+    // ONE transaction, with the member's row locked. This was two separate
+    // statements: if the second failed the member was left with no coach, and
+    // two assigns arriving together left the member with TWO active coaches
+    // (the audit reproduced that). The row lock makes concurrent assigns for
+    // the same member take turns, so the last one wins cleanly.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const member = await client.query(
+        `SELECT id FROM users WHERE id = $1 AND role = 'patient' FOR UPDATE`, [patient_id]);
+      if (!member.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Member not found' });
+      }
+      await client.query(
+        `UPDATE monitor_patients SET active=false WHERE patient_id=$1 AND monitor_id <> $2`,
+        [patient_id, monitor_id]
+      );
+      await client.query(
+        `INSERT INTO monitor_patients (monitor_id, patient_id)
+         VALUES ($1,$2) ON CONFLICT (monitor_id, patient_id)
+         DO UPDATE SET active=true`,
+        [monitor_id, patient_id]
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
     // Audit: look up names for readable log entry
     const names = await pool.query(
       `SELECT id, name FROM users WHERE id = ANY($1)`,
@@ -437,7 +458,9 @@ router.put('/members/:id', async (req, res) => {
       }
       const pinHash = await bcrypt.hash(pin.trim(), 10);
       await client.query(
-        `UPDATE users SET name=$1, phone=$2, password=$3 WHERE id=$4 AND role='patient'`,
+        `UPDATE users SET name=$1, phone=$2, password=$3,
+                token_version = COALESCE(token_version, 0) + 1   -- a new PIN signs old sessions out
+          WHERE id=$4 AND role='patient'`,
         [name.trim(), phone.trim(), pinHash, id]
       );
     } else {
@@ -578,6 +601,33 @@ router.delete('/members/:id', async (req, res) => {
       });
     }
 
+    // The member's PHOTOS first. Deleting the user row cascades to the photo
+    // rows, but the pictures themselves live in R2 — and once the rows are gone
+    // nothing knows their keys, so the 12-month clean-up can never find them.
+    // "Deleted member and all their data" left their body photos in the bucket
+    // for good. Remove the objects while we still know where they are; if that
+    // cannot be done, delete nothing and say so (retrying is safe).
+    const photos = await pool.query(
+      `SELECT object_key FROM meal_photos     WHERE patient_id = $1 AND object_key IS NOT NULL
+       UNION ALL
+       SELECT object_key FROM progress_photos WHERE patient_id = $1 AND object_key IS NOT NULL`, [id]);
+    if (photos.rows.length) {
+      if (!storage.isConfigured()) {
+        return res.status(503).json({
+          error: `${member.name} has ${photos.rows.length} photo(s) in storage, and photo storage is not set up on this server, so they cannot be removed. Nothing was deleted.`,
+        });
+      }
+      for (const ph of photos.rows) {
+        try { await storage.deleteObject(ph.object_key); }
+        catch (e) {
+          console.error('member delete: photo removal failed:', e.message);
+          return res.status(502).json({
+            error: `Could not remove ${member.name}'s photos from storage just now, so nothing was deleted. Try again.`,
+          });
+        }
+      }
+    }
+
     // Audit BEFORE the delete. Afterwards the row is gone and the entry would
     // have to carry a name reconstructed from the request, which is the one
     // place it could be wrong.
@@ -592,36 +642,48 @@ router.delete('/members/:id', async (req, res) => {
   }
 });
 
-router.patch('/members/:id/toggle', async (req, res) => {
+// Enable / disable an account.
+//
+// This was `SET active = NOT active` — a blind flip. Three problems, all
+// reproduced by the audit:
+//   · a double tap on "Disable" flipped twice and left the member ENABLED
+//   · the members route had no role filter, so it would disable ANY id,
+//     including the admin's own — locking the only admin out of the app
+//   · an id that did not exist threw and returned 500
+//
+// The app now sends the state it wants ({ active: false }), which is safe to
+// send twice. A request with no body still flips, because a phone running the
+// previous bundle sends none — but the role filter and the self-protection
+// apply to it too.
+async function setActive(req, res, roles, auditAction, noun) {
+  const id = parseInt(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+  const want = typeof req.body?.active === 'boolean' ? req.body.active : null;
+  if (id === req.user.id && want !== true) {
+    return res.status(400).json({ error: 'You cannot disable your own account' });
+  }
   try {
     const result = await pool.query(
-      `UPDATE users SET active = NOT active WHERE id=$1 RETURNING id, name, active`,
-      [req.params.id]
+      `UPDATE users SET active = COALESCE($2::boolean, NOT active)
+        WHERE id = $1 AND role = ANY($3::text[]) RETURNING id, name, active`,
+      [id, want, roles]
     );
     const u = result.rows[0];
-    audit(req.user, 'member_toggled', u.id, u.name,
-      `${u.active ? 'Activated' : 'Deactivated'} member ${u.name}`);
+    if (!u) return res.status(404).json({ error: `${noun} not found` });
+    audit(req.user, auditAction, u.id, u.name,
+      `${u.active ? 'Activated' : 'Deactivated'} ${noun.toLowerCase() === 'coach' ? 'monitor' : 'member'} ${u.name}`);
     res.json(u);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('toggle error:', err.message);
+    res.status(500).json({ error: 'Could not update that account' });
   }
-});
+}
+
+router.patch('/members/:id/toggle', (req, res) => setActive(req, res, ['patient'], 'member_toggled', 'Member'));
 
 // ── PATCH /api/admin/monitors/:id/toggle ──────────────────────────────────────
-router.patch(['/coaches/:id/toggle', '/monitors/:id/toggle'], async (req, res) => {
-  try {
-    const result = await pool.query(
-      `UPDATE users SET active = NOT active WHERE id=$1 RETURNING id, name, active`,
-      [req.params.id]
-    );
-    const u = result.rows[0];
-    audit(req.user, 'coach_toggled', u.id, u.name,
-      `${u.active ? 'Activated' : 'Deactivated'} monitor ${u.name}`);
-    res.json(u);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+router.patch(['/coaches/:id/toggle', '/monitors/:id/toggle'],
+  (req, res) => setActive(req, res, ['monitor', 'admin'], 'coach_toggled', 'Coach'));
 
 // ── PATCH /api/admin/members/:id/pin ──────────────────────────────────────────
 // Admin: reset a member's login PIN directly from the admin dashboard.
@@ -633,7 +695,8 @@ router.patch('/members/:id/pin', async (req, res) => {
   try {
     const hash = await bcrypt.hash(String(pin).trim(), 10);
     const result = await pool.query(
-      `UPDATE users SET password=$1 WHERE id=$2 AND role='patient' RETURNING id, name`,
+      `UPDATE users SET password=$1, token_version = COALESCE(token_version, 0) + 1
+        WHERE id=$2 AND role='patient' RETURNING id, name`,
       [hash, req.params.id]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Member not found' });
