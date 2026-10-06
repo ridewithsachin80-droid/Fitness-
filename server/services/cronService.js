@@ -181,6 +181,15 @@ function start() {
 
   // Sunday 18:00 IST: weekly progress reports — the premium ritual. Deduped
   // per member per week inside the service; empty weeks produce nothing.
+  // Monday 07:00 IST (Phase 7): the coach's AI brief for every member's week
+  // that ended yesterday. Coach-only; nothing is sent to members.
+  cron.schedule('0 7 * * 1', async () => {
+    try {
+      const n = await require('./weeklyBrief').makeAllBriefs(require('../db/pool'), getISTDateStr());
+      if (n) console.log(`📝 Weekly coach briefs: ${n}`);
+    } catch (err) { console.error('Weekly brief error:', err.message); }
+  }, { timezone: 'Asia/Kolkata' });
+
   // 03:15 IST: plate photos past 90 days and progress photos past 12 months are deleted from storage.
   cron.schedule('15 3 * * *', async () => {
     try {

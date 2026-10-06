@@ -898,6 +898,31 @@ CREATE TABLE IF NOT EXISTS plan_swaps (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_plan_swaps_pair ON plan_swaps(patient_id, LOWER(food_name), LOWER(alt_name));
 CREATE INDEX IF NOT EXISTS idx_plan_swaps_pending ON plan_swaps(patient_id) WHERE status IN ('suggested','requested');
 
+-- ── WEEKLY CHECK-IN AND COACH BRIEF (Phase 7) ─────────────────────────────
+-- week_end is the Sunday that ends the week (Mon..Sun). A member answers on
+-- Sunday or Monday; a second answer for the same week replaces the first.
+CREATE TABLE IF NOT EXISTS weekly_checkins (
+  id          SERIAL PRIMARY KEY,
+  patient_id  INT REFERENCES users(id) ON DELETE CASCADE,
+  week_end    DATE NOT NULL,
+  answers     JSONB NOT NULL DEFAULT '{}',
+  note        VARCHAR(600),
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (patient_id, week_end)
+);
+-- The coach's AI brief for one member's week. Coach-only: never shown to the
+-- member. facts = the numbers the brief was written from.
+CREATE TABLE IF NOT EXISTS coach_briefs (
+  id          SERIAL PRIMARY KEY,
+  patient_id  INT REFERENCES users(id) ON DELETE CASCADE,
+  week_end    DATE NOT NULL,
+  facts       JSONB NOT NULL DEFAULT '{}',
+  text        TEXT,
+  source      VARCHAR(10) NOT NULL DEFAULT 'ai',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (patient_id, week_end)
+);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

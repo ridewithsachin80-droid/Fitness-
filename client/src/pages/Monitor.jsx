@@ -1,3 +1,4 @@
+import WeeklyBrief from '../components/coach/WeeklyBrief';
 import ProgressPhotos from '../components/progress/ProgressPhotos';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
@@ -930,6 +931,10 @@ export default function Coach() {
         </>)}
 
         {/* Their blood work, and what they were doing between tests */}
+        {tab === 'today' && (<>   {/* Phase 7: the AI's brief for the member's last full week, with their check-in */}
+        <Card><WeeklyBrief memberId={parseInt(memberId)} /></Card>
+        </>)}
+
         {tab === 'labs' && (<>   {/* Phase 4: progress photos, read-only for the coach */}
         <Card><ProgressPhotos memberId={parseInt(memberId)} /></Card>
         </>)}

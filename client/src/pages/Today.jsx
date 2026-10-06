@@ -18,6 +18,7 @@ import MilestoneModal from '../components/today/MilestoneModal';
 import RecoveryCard  from '../components/today/RecoveryCard';
 import NextUp        from '../components/today/NextUp';
 import ProgressPhotoCard from '../components/progress/ProgressPhotoCard';
+import CheckinCard from '../components/checkin/CheckinCard';
 import LogPlannedSheet from '../components/sheets/LogPlannedSheet';
 import PlatePhotoSheet from '../components/sheets/PlatePhotoSheet';
 import { FastingBar } from '../components/today/DayWidgets';
@@ -110,6 +111,8 @@ export default function Today() {
 
             {/* Phase 4: Sundays only, until this week's three photos are in. */}
             {isToday && <ProgressPhotoCard />}
+            {/* Phase 7: Sunday and Monday, until this week's check-in is in. */}
+            {isToday && <CheckinCard />}
 
             <TodaysPlan m={m} onOpen={openSheet} />
 
