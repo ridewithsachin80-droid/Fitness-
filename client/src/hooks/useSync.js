@@ -37,9 +37,31 @@ export function useSync(onLogUpdated, onWorkoutUpdated) {
     if (!socket || !socket.connected) {
       socket = io(import.meta.env.VITE_SOCKET_URL || '/', {
         withCredentials: true,
+        // The server puts a socket in a room only for the person its token
+        // proves it is. A function, not a value: it is called again on every
+        // reconnect, so a reconnect sends the CURRENT token.
+        auth: (cb) => cb({ token: useAuthStore.getState().accessToken || undefined }),
         transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
+        // Keep trying. This was 5 attempts: a phone that lost signal for a
+        // minute gave up for good and live updates stayed dead until a reload.
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 2000,
+        reconnectionDelayMax: 30000,
+      });
+
+      // The token had expired when the socket (re)connected. Any authenticated
+      // call runs the normal silent refresh; then hand the socket the new one.
+      let reauthing = false;
+      socket.on('auth_required', async () => {
+        if (reauthing) return;
+        reauthing = true;
+        try {
+          const { default: api } = await import('../api/client');
+          await api.get('/auth/me');
+          const token = useAuthStore.getState().accessToken;
+          if (token && socket) socket.emit('authenticate', token);
+        } catch (_) { /* signed out, or offline — nothing to join */ }
+        finally { reauthing = false; }
       });
 
       socket.on('connect', () => {

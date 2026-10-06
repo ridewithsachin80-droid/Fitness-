@@ -28,6 +28,22 @@ const cronService = require('./services/cronService');
 const app    = express();
 const server = http.createServer(app);
 
+// ── Real client addresses behind Railway's proxy ─────────────────────────────
+// Every request reaches this process from Railway's proxy, so without this
+// setting `req.ip` is the PROXY's address for everyone. The login rate limits
+// in routes/auth.js are keyed on req.ip — which made them one shared bucket:
+// ten wrong coach/admin passwords from anyone, anywhere, locked every coach
+// out for 15 minutes. `1` means "trust exactly one proxy hop", so req.ip
+// becomes the address that proxy saw. TRUST_PROXY overrides it if the hosting
+// ever changes (a number of hops, or false).
+{
+  const raw = process.env.TRUST_PROXY;
+  const value = raw === undefined || raw === ''
+    ? (process.env.NODE_ENV === 'production' ? 1 : false)
+    : (raw === 'false' ? false : raw === 'true' ? true : (Number.isNaN(Number(raw)) ? raw : Number(raw)));
+  app.set('trust proxy', value);
+}
+
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const io = new Server(server, {
   cors: { origin: process.env.CLIENT_URL, credentials: true },
@@ -128,9 +144,59 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // ── Socket.io rooms ───────────────────────────────────────────────────────────
+// A socket joins the room that belongs to WHO IT IS, proved by its token.
+//
+// It used to join whatever room it asked for: `join_monitor_room, 3` put any
+// connection — no login at all — into coach 3's feed, where every member save
+// is announced with their id, weight and compliance. The audit did exactly
+// that from an anonymous script and read a member's weight as they logged it.
+//
+// Identity now comes from the access token (sent by the app when it connects,
+// or the accessToken cookie for a phone still running the previous bundle).
+// The id a client sends with join_* is ignored. A connection with no valid
+// token is allowed to stay connected but is in no room and receives nothing;
+// it is told `auth_required` so the app can refresh its token and try again.
+//
+// Joining on connect also fixes a quieter bug: rooms are per connection, so
+// after any network drop the coach's reconnected socket was in no room and the
+// list stopped updating until the page was reloaded.
+const jwtLib = require('jsonwebtoken');
+
+function verifySocketToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const u = jwtLib.verify(token, process.env.JWT_SECRET);
+    return u && u.id && u.role ? { id: u.id, role: u.role } : null;
+  } catch (_) { return null; }
+}
+
+function socketUser(socket) {
+  const cookie = String(socket.handshake.headers?.cookie || '');
+  const m = cookie.match(/(?:^|;\s*)accessToken=([^;]+)/);
+  let fromCookie = null;
+  try { fromCookie = m ? decodeURIComponent(m[1]) : null; } catch (_) { /* malformed cookie */ }
+  return verifySocketToken(socket.handshake.auth?.token) || verifySocketToken(fromCookie);
+}
+
+function joinOwnRoom(socket) {
+  const u = socket.data.user;
+  if (!u) return false;
+  socket.join(u.role === 'patient' ? `user_${u.id}` : `monitor_${u.id}`);
+  return true;
+}
+
+io.use((socket, next) => { socket.data.user = socketUser(socket); next(); });
+
 io.on('connection', (socket) => {
-  socket.on('join_room',         (userId)    => socket.join(`user_${userId}`));
-  socket.on('join_monitor_room', (monitorId) => socket.join(`monitor_${monitorId}`));
+  joinOwnRoom(socket);
+  const onJoin = () => { if (!joinOwnRoom(socket)) socket.emit('auth_required'); };
+  socket.on('join_room',         onJoin);   // the id argument is deliberately ignored
+  socket.on('join_monitor_room', onJoin);
+  socket.on('authenticate', (token, ack) => {
+    const u = verifySocketToken(token);
+    if (u) { socket.data.user = u; joinOwnRoom(socket); }
+    if (typeof ack === 'function') ack({ ok: !!u });
+  });
   socket.on('disconnect', () => {});
 });
 

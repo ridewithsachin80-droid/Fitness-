@@ -40,6 +40,9 @@ const rateBuckets  = new Map();
  * A ceiling, not a security boundary. A stuck shortcut retrying in a loop
  * would otherwise fill the day's log with duplicates and burn AI credits.
  */
+/** Sentences being processed right now, so a duplicate can wait for the first. */
+const inFlight = new Map();
+
 function withinRateLimit(userId) {
   const now  = Date.now();
   const hour = 60 * 60 * 1000;
@@ -115,8 +118,38 @@ router.post('/', tokenAuth, async (req, res) => {
   if (text.length < 2) {
     return res.json({ ok: false, reply: 'I did not catch that. Try again.' });
   }
+  // ── The same sentence, again ──────────────────────────────────────────────
+  // A phone shortcut that times out waiting for the AI sends the request
+  // again, and a double tap sends it twice at once. Both used to be applied
+  // twice: two lunches, double the water. Voice has no preview in which the
+  // member could catch that.
+  //   · still being processed → wait for that answer and return it
+  //   · logged in the last 45 seconds → return that answer, apply nothing
+  // Saying the same thing a minute later is a genuine second log and goes through.
+  const dedupeKey = `${userId}|${text.toLowerCase()}`;
+  if (inFlight.has(dedupeKey)) {
+    const first = await inFlight.get(dedupeKey);
+    return res.json({ ...first, applied: null, duplicate: true });
+  }
+  // Registered BEFORE the first await below. Two requests that arrive in the
+  // same instant must not both get past the check above.
+  let settle;
+  inFlight.set(dedupeKey, new Promise((resolve) => { settle = resolve; }));
+  const finish = (status, out) => { inFlight.delete(dedupeKey); settle(out); return res.status(status).json(out); };
+
+  try {
+    const { rows: [recent] } = await pool.query(
+      `SELECT reply FROM quick_log_turns
+        WHERE patient_id = $1 AND LOWER(text) = LOWER($2) AND outcome = 'logged'
+          AND created_at > NOW() - INTERVAL '45 seconds'
+        ORDER BY id DESC LIMIT 1`, [userId, text]);
+    if (recent) return finish(200, { ok: true, reply: recent.reply, applied: null, duplicate: true });
+  } catch (err) {
+    console.error('quick-log duplicate check failed:', err.message);   // fall through and log it
+  }
+
   if (!withinRateLimit(userId)) {
-    return res.status(429).json({ ok: false, reply: 'Too many logs just now. Try again in a little while.' });
+    return finish(429, { ok: false, reply: 'Too many logs just now. Try again in a little while.' });
   }
 
   const istDate = getISTDate();
@@ -166,7 +199,7 @@ router.post('/', tokenAuth, async (req, res) => {
     console.error('quick-log turn not recorded:', err.message);
   }
 
-  return res.json({ ok: outcome === 'logged' || outcome === 'coach', reply, applied });
+  return finish(200, { ok: outcome === 'logged' || outcome === 'coach', reply, applied });
 });
 
 // ── POST /api/quick-log/token ───────────────────────────────────────────────

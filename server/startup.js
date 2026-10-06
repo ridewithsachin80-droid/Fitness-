@@ -55,6 +55,16 @@ async function seedUsers() {
     console.warn('   Set these in Railway environment variables before going to production.');
   }
 
+  // In production, with no ADMIN_PASSWORD set, this used to create the admin —
+  // or RESET an existing admin's password — to the default written in this
+  // file, on every boot. That default is in the repository. Skip instead: an
+  // existing admin keeps the password they have, and no new one is created.
+  if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
+    console.error('⛔ ADMIN_PASSWORD is not set — admin account NOT created or changed.');
+    console.error('   Set ADMIN_EMAIL and ADMIN_PASSWORD in Railway → Variables, then redeploy.');
+    return;
+  }
+
   const hash = await bcrypt.hash(adminPassword, 12);
 
   const client = await pool.connect();

@@ -77,7 +77,13 @@ const stubPool = {
     if (/member_portions/.test(sql))       return { rows: [], rowCount: 0 };
     return { rows: [], rowCount: 0 };
   },
-  connect: async () => ({ query: async () => ({ rows: [] }), release() {} }),
+  // A transaction client sees the SAME stub as pool.query. It used to answer
+  // every statement with no rows, which was fine while nothing under test
+  // wrote through a client — but a member's note is now inserted under the
+  // per-member lock (db/locks.js), i.e. through a client, and a stub that
+  // swallowed it made "a note row was actually written" fail for the wrong
+  // reason. BEGIN/COMMIT/the lock itself fall through to the default no-rows.
+  connect: async () => ({ query: (sql, params) => stubPool.query(sql, params), release() {} }),
   on() {}, end: async () => {},
 };
 if (!USE_REAL_DB) {

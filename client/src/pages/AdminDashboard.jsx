@@ -103,7 +103,10 @@ export default function AdminDashboard() {
 
   const toggleUser = async (id, type) => {
     const url = `/admin/${type}s/${id}/toggle`;
-    const { data } = await api.patch(url);
+    // Send the state we WANT, not "flip it". A double tap then asks for the
+    // same thing twice instead of disabling and immediately re-enabling.
+    const current = (type === 'member' ? members : coaches).find(x => x.id === id);
+    const { data } = await api.patch(url, current ? { active: !current.active } : undefined);
     if (type === 'member') {
       setMembers(prev => prev.map(m => m.id === id ? { ...m, active: data.active } : m));
     } else {

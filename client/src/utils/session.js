@@ -108,6 +108,24 @@ export function refreshRequestBody() {
   return stored ? { refreshToken: stored } : {};
 }
 
+// ── A deliberate sign-out, remembered ───────────────────────────────────────
+//
+// The session's primary credential is an httpOnly cookie, which JavaScript
+// cannot delete — only the server can, via POST /auth/logout. The "Sign out"
+// button on the member's Profile (and the admin's) never made that call: it
+// cleared this app's memory and reloaded, the boot code found the cookie still
+// there, and silently restored the session. Sign out, hand the phone to
+// someone else, and they were in.
+//
+// The store now calls the server. This flag covers the case where that call
+// cannot get through (no signal at the moment of signing out): boot sees it,
+// does NOT restore, and asks the server again to clear the cookie.
+const SIGNED_OUT_KEY = 'fl-signed-out';
+
+export function markSignedOut()  { writeRaw(SIGNED_OUT_KEY, '1'); }
+export function wasSignedOut()   { return readRaw(SIGNED_OUT_KEY) === '1'; }
+export function clearSignedOut() { removeRaw(SIGNED_OUT_KEY); }
+
 // ── Who was last signed in on this device ───────────────────────────────────
 
 /**

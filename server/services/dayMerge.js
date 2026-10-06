@@ -78,4 +78,91 @@ function mergeOfflineDay(stored, incoming, baseFoodIds) {
   return { food_items: [...kept, ...added].slice(0, 200), kept_server, added: added.length, removed: S.length - kept.length };
 }
 
-module.exports = { mergeOfflineDay, isStale, SCALARS };
+// ── A save from an app that is ONLINE but out of date ────────────────────────
+//
+// The audit reproduced this: the app is opened at 8am and left open. At 1pm the
+// coach corrects the weight, or lunch is logged by voice or on another phone.
+// At 3pm the member ticks "walk" in the still-open app, and its save — the
+// whole day as it looked at 8am, plus one tick — replaced the row. The coach's
+// weight and the lunch were gone, with nothing shown to anyone.
+//
+// The app now sends what the day looked like when it loaded it (base_fields).
+// That makes a three-way merge possible, which the offline rule above could
+// not do:
+//
+//   · a field the member CHANGED since loading  → the member's value (it is
+//     their newest edit)
+//   · a field the member did NOT touch          → whatever the server has now
+//   · ticks and sleep are merged per item, so a tick here and a tick by voice
+//     in the same group both survive
+//   · water is additive: +250 here and +250 by voice is +500, not +250
+//   · food is merged by item id, as offline; an item whose grams or meal the
+//     member edited here keeps their edit, and keeps the server's nutrition
+//
+// Only used when the stored day is newer than the one the app loaded AND the
+// app sent base_fields. An older app bundle sends none and is written as sent,
+// exactly as before. Offline replays keep Sachin's rule (mergeOfflineDay).
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const leaf  = (v) => (v === false || v == null || v === '' || v === 0) ? null : canon(v);
+const foodSig = (it) => `${Number(it?.grams) || 0}|${it?.meal || ''}`;
+const WATER_MAX = 20000;
+
+/**
+ * @param {object} stored       the database row as it is now
+ * @param {object} incoming     the day the app sent, POST /logs shape (already validated)
+ * @param {Array|null} baseFoodIds  ids of the food items in the day the app had loaded
+ * @param {object} base         base_fields: the scalar fields as the app had loaded them
+ * @returns {{ doc: object, kept_server: string[], food_added: number, food_removed: number }}
+ */
+function mergeLiveDay(stored, incoming, baseFoodIds, base) {
+  const B = isObj(base) ? base : {};
+  const doc = {};
+  const kept_server = [];
+
+  for (const f of ['weight_kg', 'notes']) {
+    const changed = canon(incoming?.[f]) !== canon(B[f]);
+    doc[f] = changed ? incoming?.[f] : stored?.[f];
+    if (!changed && canon(stored?.[f]) !== canon(incoming?.[f])) kept_server.push(LABELS[f]);
+  }
+
+  const wS = Number(stored?.water_ml) || 0, wI = Number(incoming?.water_ml) || 0, wB = Number(B.water_ml) || 0;
+  doc.water_ml = wI === wB ? wS : Math.min(WATER_MAX, Math.max(0, wS + (wI - wB)));
+  if (wI === wB && wS !== wI) kept_server.push(LABELS.water_ml);
+
+  for (const f of ['activities', 'acv', 'supplements', 'sleep']) {
+    const S = isObj(stored?.[f]) ? stored[f] : {}, I = isObj(incoming?.[f]) ? incoming[f] : {}, Bf = isObj(B[f]) ? B[f] : {};
+    const out = { ...S };
+    let tookServer = false;
+    for (const k of new Set([...Object.keys(Bf), ...Object.keys(I)])) {
+      if (leaf(I[k]) !== leaf(Bf[k])) { if (k in I) out[k] = I[k]; else delete out[k]; }
+      else if (leaf(S[k]) !== leaf(I[k])) tookServer = true;
+    }
+    for (const k of Object.keys(S)) if (!(k in I) && !(k in Bf) && leaf(S[k]) !== null) tookServer = true;
+    doc[f] = out;
+    if (tookServer) kept_server.push(LABELS[f]);
+  }
+
+  const Sf = Array.isArray(stored?.food_items) ? stored.food_items : [];
+  const If = Array.isArray(incoming?.food_items) ? incoming.food_items : [];
+  const baseIds = new Set((Array.isArray(baseFoodIds) ? baseFoodIds : []).filter(Boolean).map(String));
+  const baseSig = isObj(B.food) ? B.food : {};
+  const mine = new Map(If.filter(i => i && i.id).map(i => [String(i.id), i]));
+  const deleted = new Set([...baseIds].filter(id => !mine.has(id)));
+  const kept = [];
+  let removed = 0;
+  for (const it of Sf) {
+    const id = it && it.id ? String(it.id) : null;
+    if (id && deleted.has(id)) { removed++; continue; }
+    const m = id ? mine.get(id) : null;
+    if (m && baseSig[id] != null && foodSig(m) !== String(baseSig[id])) kept.push({ ...it, grams: m.grams, meal: m.meal });
+    else kept.push(it);
+  }
+  const storedIds = new Set(Sf.map(i => i?.id).filter(Boolean).map(String));
+  const added = If.filter(it => it && (it.id ? !storedIds.has(String(it.id)) : !kept.some(k => sameFood(k, it))))
+    .filter(it => !(it.id && baseIds.has(String(it.id))));
+  doc.food_items = [...kept, ...added].slice(0, 300);
+
+  return { doc, kept_server, food_added: added.length, food_removed: removed };
+}
+
+module.exports = { mergeOfflineDay, mergeLiveDay, isStale, SCALARS };

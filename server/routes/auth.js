@@ -36,8 +36,11 @@ const signTokens = (user) => ({
     process.env.JWT_SECRET,
     { expiresIn: ACCESS_DURATION }
   ),
+  // tv = the account's token_version when this was issued. /refresh refuses a
+  // token whose tv is behind the row, which is how a PIN or password change
+  // signs every other device out.
   refreshToken: jwt.sign(
-    { id: user.id },
+    { id: user.id, tv: user.token_version || 0 },
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: REFRESH_DURATION }
   ),
@@ -206,7 +209,8 @@ router.post('/send-otp', async (req, res) => {
     // sending a distinct 404 here would let an attacker enumerate which
     // phone numbers are registered. We just skip the actual SMS silently.
     if (result.rows.length) {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      // crypto, not Math.random: a login code must not come from a predictable generator.
+      const otp = require('crypto').randomInt(100000, 1000000).toString();
       const hash = await bcrypt.hash(otp, 10);
       const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
@@ -239,6 +243,11 @@ router.post('/verify-otp', async (req, res) => {
   const ip = getIp(req);
   if (!checkRateLimit(`verify-otp:${ip}`, 8, 15 * 60 * 1000)) {
     return res.status(429).json({ error: 'Too many attempts. Please wait 15 minutes and try again.' });
+  }
+  // Per number as well: the per-IP limit alone lets someone guessing from many
+  // addresses try the same code space against one phone.
+  if (!checkRateLimit(`verify-otp-phone:${phone}`, 8, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many attempts for this number. Please request a new OTP in 15 minutes.' });
   }
 
   try {
@@ -360,6 +369,14 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
+    // The credential has been changed or reset since this token was issued.
+    // Tokens from before this check existed carry no tv and count as 0, which
+    // matches every existing row — so nobody is signed out by the deploy.
+    if ((payload.tv || 0) !== (user.token_version || 0)) {
+      res.clearCookie('refreshToken');
+      return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+
     // ROTATE the refresh token, do not just mint a new access token.
     //
     // The cookie's maxAge was set once, at login, and never extended. A member
@@ -399,6 +416,14 @@ router.post('/logout', (req, res) => {
   // a signed-out browser kept a valid (if short-lived) credential in its jar.
   res.clearCookie('accessToken', opts);
   res.json({ message: 'Logged out successfully' });
+});
+
+// ── GET /api/auth/me ────────────────────────────────────────────────────────
+// Who the caller is, from their token. The app calls it when the live-update
+// socket says its token has expired: a 401 here runs the normal silent refresh,
+// and the socket is then re-authenticated with the new token.
+router.get('/me', authMW, (req, res) => {
+  res.json({ id: req.user.id, role: req.user.role, name: req.user.name });
 });
 
 // ── POST /api/auth/session-loss ─────────────────────────────────────────────
@@ -493,9 +518,16 @@ router.patch('/change-password', authMW, async (req, res) => {
     if (!isValid) return res.status(401).json({ error: 'Current password is incorrect' });
 
     const hash = await bcrypt.hash(newPassword, 12);
-    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hash, req.user.id]);
+    // token_version + 1 ends every other session for this account. This device
+    // gets a fresh pair straight away so the person changing it stays signed in.
+    const { rows: [fresh] } = await pool.query(
+      `UPDATE users SET password = $1, token_version = COALESCE(token_version, 0) + 1
+        WHERE id = $2 RETURNING *`, [hash, req.user.id]);
+    const { accessToken, refreshToken } = signTokens(fresh || user);
+    setRefreshCookie(res, refreshToken);
+    setAccessCookie(res, accessToken);
 
-    res.json({ message: 'Password changed successfully' });
+    res.json({ message: 'Password changed successfully', accessToken, refreshToken });
   } catch (err) {
     console.error('change-password error:', err.message);
     res.status(500).json({ error: 'Failed to change password' });
@@ -548,10 +580,17 @@ router.patch('/change-pin', authMW, roleCheck('patient'), async (req, res) => {
     if (!isValid) return res.status(401).json({ error: 'That current PIN is not right' });
 
     const hash = await bcrypt.hash(next, 10);   // same cost factor as the reset paths
-    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hash, req.user.id]);
+    // As for change-password: other devices are signed out, this one is not.
+    const { rows: [fresh] } = await pool.query(
+      `UPDATE users SET password = $1, token_version = COALESCE(token_version, 0) + 1
+        WHERE id = $2 RETURNING *`, [hash, req.user.id]);
     clearRateLimit(`change-pin:${ip}`);
+    const me = fresh || { id: req.user.id, role: req.user.role, name: req.user.name };
+    const { accessToken, refreshToken } = signTokens(me);
+    setRefreshCookie(res, refreshToken);
+    setAccessCookie(res, accessToken);
 
-    res.json({ message: 'PIN changed' });
+    res.json({ message: 'PIN changed', accessToken, refreshToken });
   } catch (err) {
     console.error('change-pin error:', err.message);
     res.status(500).json({ error: 'Could not change your PIN' });

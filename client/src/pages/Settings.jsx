@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+
+// Changing a PIN or password signs every OTHER device out. The server answers
+// with a fresh pair of tokens for this one; storing them is what keeps the
+// person who made the change signed in here.
+function keepFreshSession(data) {
+  if (data?.accessToken) useAuthStore.getState().setToken(data.accessToken, data.refreshToken || null);
+}
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import api from '../api/client';
 import { getSubscriptions, unsubscribePush, logout as apiLogout, changePassword, getNotifLog } from '../api/logs';
@@ -78,7 +85,7 @@ export default function Settings() {
     if (pwForm.next !== pwForm.confirm)  { setPwError('New passwords do not match'); return; }
     if (pwForm.next.length < 8)          { setPwError('New password must be at least 8 characters'); return; }
     setPwSaving(true); setPwError(''); setPwOk(false);
-    try { await changePassword(pwForm.current, pwForm.next); setPwOk(true); setPwForm({ current: '', next: '', confirm: '' }); }
+    try { const { data } = await changePassword(pwForm.current, pwForm.next); keepFreshSession(data); setPwOk(true); setPwForm({ current: '', next: '', confirm: '' }); }
     catch (e) { setPwError(e.response?.data?.error || 'Failed to change password'); }
     finally { setPwSaving(false); }
   };
@@ -605,7 +612,8 @@ function ChangePin() {
     if (next === current) { setError('That is already your PIN'); return; }
     setBusy(true);
     try {
-      await changeMyPin(current, next);
+      const { data } = await changeMyPin(current, next);
+      keepFreshSession(data);
       setDone(true);
       setCurrent(''); setNext(''); setConfirm('');
     } catch (err) {
