@@ -351,6 +351,9 @@ const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:5
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/diet-plans/me/grocery')) return ok({ plan: { id: 9, version: 2, title: 'Low carb vegetarian with intermittent fasting, 16:8' },
+      items: [{ name: 'Paneer-mushroom-capsicum masala with menthya soppu', grams: 8753.5, days: 7 }, { name: 'Curd', grams: 1400, days: 7 }],
+      prep: { everyday: ['Curd (Meal 1)'], byDay: [['Paneer-mushroom-capsicum masala with menthya soppu, 1250.5 g (Pre-workout evening snack)'], [], [], [], [], [], []] } });
     if (u.includes('/progress-photos/')) return ok({ week: '2026-10-04', weeks: [
       { week: '2026-10-04', photos: { front: { id: 9, url: null }, side: { id: 10, url: null } } },
       { week: '2026-09-06', photos: { front: { id: 1, url: null }, back: { id: 3, url: null } } }] });
@@ -504,6 +507,9 @@ const OVERFLOW_PAGES = [
      const P = () => <div className="p-4"><p>Today</p><PS open onClose={() => {}} /></div>;`],
   ['ProgressCompare', `import PC from './components/progress/ProgressPhotos.jsx';
      const P = () => <div className="p-4"><PC /></div>;`],
+  // Phase 5: the grocery list sheet.
+  ['GrocerySheet', `import GS from './components/plan/GrocerySheet.jsx';
+     const P = () => <div className="p-4"><p>Plan</p><GS open onClose={() => {}} /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
@@ -2457,6 +2463,65 @@ async function progressPhotosTest() {
   ck('no photos yet: a plain line, not an empty box', /No photos yet/.test(E.w.document.querySelector('[data-testid="pp-empty"]')?.textContent || ''));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 29. Phase 5 — plan as PDF, grocery list
+// ═══════════════════════════════════════════════════════════════════════════
+async function planPdfTest() {
+  console.log('\n[29] Plan as PDF and grocery list (Phase 5)');
+  const api = stub('api-pdf.js', `
+    window.__gets = [];
+    const item = (name, grams) => ({ name, grams, qty_text: grams + ' g', per_100g: { calories: 100 } });
+    const payload = { profile: { name: 'Padmini', macro_kcal: 1500 }, program: { program: null, days: [] },
+      meal_plan: { date: 'x', meals: [{ meal: 'Meal 1', time: '12:00', items: [item('Curd', 200)] }] },
+      diet_plan: { id: 9, version: 2, title: 'Low carb vegetarian', effective_from: '2026-10-03', targets: { kcal: 1500, protein: 110, carbs: 80, fat: 78 },
+        content: { avoid: [], cautions: [], lab_cautions: [] }, days: [0,1,2,3,4,5,6].map(() => [{ meal: 'Meal 1', time: '12:00', items: [item('Curd', 200)] }]) } };
+    const grocery = { plan: { id: 9, version: 2, title: 'Low carb vegetarian' },
+      items: [{ name: 'Curd', grams: 1400, days: 7 }, { name: 'Rajma', grams: 150, days: 1 }],
+      prep: { everyday: ['Curd (Meal 1)'], byDay: [['Rajma, 150 g (Meal 1)'], [], [], [], [], [], []] } };
+    const get = async (url, cfg) => { window.__gets.push({ url, cfg });
+      if (/\\/members\\/me\\/today$/.test(url)) return { data: payload };
+      if (/\\/diet-plans\\/me\\/grocery$/.test(url)) return { data: grocery };
+      if (/pdf$/.test(url)) return { data: new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Diet-Plan-Padmini-v2.pdf"' } };
+      return { data: {} }; };
+    export default { get, post: async () => ({ data: {} }), put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, Routes, Route } from 'react-router-dom';
+    import Plan from './pages/Plan.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Padmini', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/plan']}><Routes><Route path="/plan" element={<Plan />} /></Routes></MemoryRouter>);`, api);
+  const prep = (share) => (win) => {
+    win.__downloads = []; win.__shared = [];
+    win.URL.createObjectURL = () => 'blob:pdf'; win.URL.revokeObjectURL = () => {};
+    win.HTMLAnchorElement.prototype.click = function () { win.__downloads.push(this.download); };
+    if (share) { win.navigator.canShare = () => true; win.navigator.share = async (d) => { win.__shared.push(d); }; }
+  };
+  const { w, errors } = run(code, prep(false)); await tick(600);
+  w.__click('Nutrition'); await tick(200);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('Plan › Nutrition offers "Plan as PDF" and "Grocery list"', errors.length === 0 && !!q('plan-pdf') && !!q('plan-grocery'), errors.join('|'));
+  q('plan-pdf').click(); await tick(300);
+  const pdfGet = w.__gets.find(g => /\/diet-plans\/me\/pdf$/.test(g.url));
+  ck('the PDF is fetched with the login, as a file', !!pdfGet && pdfGet.cfg?.responseType === 'blob');
+  ck('on a computer it downloads, with the server\'s file name', w.__downloads[0] === 'FitLife-Diet-Plan-Padmini-v2.pdf', w.__downloads);
+  const S = run(code, prep(true)); await tick(600);
+  S.w.__click('Nutrition'); await tick(200);
+  S.w.document.querySelector('[data-testid="plan-pdf"]').click(); await tick(300);
+  ck('on a phone it opens the share sheet with the PDF (WhatsApp, Drive…)', S.w.__shared.length === 1 && S.w.__shared[0].files?.[0]?.name === 'FitLife-Diet-Plan-Padmini-v2.pdf' && !S.w.__downloads.length, S.w.__shared);
+
+  q('plan-grocery').click(); await tick(400);
+  const list = q('grocery-list');
+  ck('the grocery list shows the week\'s amounts', !!list && /Curd/.test(list.textContent) && /1\.4 kg/.test(list.textContent) && /150 g/.test(list.textContent) && /2 to buy/.test(list.textContent));
+  ck('with the note about cooked weight, and the prep list', /as eaten \(cooked weight\)/.test(list.textContent) && /Monday: Rajma, 150 g/.test(q('prep-list').textContent));
+  list.querySelector('input[type=checkbox]').click(); await tick(100);
+  ck('ticking an item crosses it off and is remembered for this plan version', /1 to buy/.test(q('grocery-list').textContent) && JSON.parse(w.localStorage.getItem('fitlife-grocery-9-v2') || '{}').Curd === true);
+  let copied = '';
+  w.navigator.clipboard = { writeText: async (t) => { copied = t; } };
+  q('grocery-share').click(); await tick(200);
+  ck('"Share the list" copies a plain list where the phone cannot share', /Grocery list — Low carb vegetarian/.test(copied) && /- Curd: 1\.4 kg/.test(copied) && /Copied/.test(q('grocery-note')?.textContent || ''), copied);
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2608,6 +2673,7 @@ async function overflowTest() {
     await coachDocAttachTest();
     await foodLogGroupsTest();
     await progressPhotosTest();
+    await planPdfTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

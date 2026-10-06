@@ -276,6 +276,38 @@ router.get('/me', roleCheck('patient'), async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// ── Phase 5: the plan as a PDF, and the grocery list. Declared before /:id. ──
+const PDFS = require('../services/planPdf');
+async function sendPdf(res, plan, { memberName, coachName, draft }) {
+  const buf = PDFS.planPdf(DP.memberView(plan), { memberName, coachName, draft });
+  res.set({ 'Content-Type': 'application/pdf', 'Content-Length': buf.length, 'Cache-Control': 'no-store',
+    'Content-Disposition': `attachment; filename="FitLife-Diet-Plan-${PDFS.safeName(memberName)}-v${plan.version}.pdf"` });
+  res.send(buf);
+}
+async function names(memberId) {
+  const { rows: [r] } = await pool.query(
+    `SELECT u.name, c.name AS coach FROM users u
+       LEFT JOIN monitor_patients mp ON mp.patient_id = u.id AND mp.active = true
+       LEFT JOIN users c ON c.id = mp.monitor_id
+      WHERE u.id = $1 LIMIT 1`, [memberId]);
+  return { memberName: r?.name || '', coachName: r?.coach || '' };
+}
+router.get('/me/pdf', roleCheck('patient'), async (req, res) => {
+  try {
+    const plan = await DP.planInForce(pool, req.user.id, getISTDate());
+    if (!plan) return res.status(404).json({ error: 'Your coach has not set a diet plan yet.' });
+    await sendPdf(res, plan, { ...(await names(req.user.id)), draft: false });
+  } catch (err) { fail(res, err); }
+});
+router.get('/me/grocery', roleCheck('patient'), async (req, res) => {
+  try {
+    const plan = await DP.planInForce(pool, req.user.id, getISTDate());
+    if (!plan) return res.json({ plan: null, items: [], prep: null });
+    res.json({ plan: { id: plan.id, version: plan.version, title: plan.title },
+      items: PDFS.groceryList(plan.days), prep: PDFS.prepList(plan.days) });
+  } catch (err) { fail(res, err); }
+});
+
 /**
  * Write a draft for a member from a brief (or change the open draft on an
  * instruction). The one way a draft is made by the AI: the Studio and the
@@ -390,6 +422,15 @@ async function ownedPlan(req, res) {
   if (!(await canAccess(req.user, plan.patient_id))) { res.status(403).json({ error: 'Member not assigned to you.' }); return null; }
   return plan;
 }
+
+// The coach's copy to send. A draft is marked DRAFT on every page.
+router.get('/:id/pdf', coachOnly, async (req, res) => {
+  try {
+    const plan = await ownedPlan(req, res);
+    if (!plan) return;
+    await sendPdf(res, plan, { ...(await names(plan.patient_id)), draft: plan.status === 'draft' });
+  } catch (err) { fail(res, err); }
+});
 
 router.get('/:id', coachOnly, async (req, res) => {
   try {
