@@ -80,6 +80,7 @@ app.use('/api/diet-plans',    require('./routes/dietPlans'));  // Diet Plan Stud
 app.use('/api/quick-log',     require('./routes/quickLog'));
 app.use('/api/plate',         require('./routes/platePhotos'));  // Phase 3: plate photo vs plan
 app.use('/api/progress-photos', require('./routes/progressPhotos'));  // Phase 4: weekly body photos
+app.use('/api/swaps',         require('./routes/swaps'));  // Phase 6: approved food swaps
 app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────

@@ -877,6 +877,27 @@ CREATE TABLE IF NOT EXISTS progress_photos (
 );
 CREATE INDEX IF NOT EXISTS idx_progress_photos_expiry ON progress_photos(delete_after);
 
+-- ── PLAN SWAPS (Phase 6) ──────────────────────────────────────────────────
+-- Alternatives a member may eat instead of a food in their diet plan. The AI
+-- suggests, or the member asks; the coach approves each one. Per member, by
+-- food name, so they carry over when the plan is revised (Sachin, 5 Oct 2026).
+-- status: suggested (AI, waiting) | requested (member asked) | approved | declined
+CREATE TABLE IF NOT EXISTS plan_swaps (
+  id           SERIAL PRIMARY KEY,
+  patient_id   INT REFERENCES users(id) ON DELETE CASCADE,
+  food_name    VARCHAR(100) NOT NULL,
+  alt_name     VARCHAR(100) NOT NULL,
+  alt_per_100g JSONB NOT NULL DEFAULT '{}',
+  status       VARCHAR(10) NOT NULL DEFAULT 'suggested' CHECK (status IN ('suggested','requested','approved','declined')),
+  source       VARCHAR(8)  NOT NULL DEFAULT 'ai' CHECK (source IN ('ai','member','coach')),
+  note         VARCHAR(300),
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  decided_at   TIMESTAMPTZ,
+  decided_by   INT REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_plan_swaps_pair ON plan_swaps(patient_id, LOWER(food_name), LOWER(alt_name));
+CREATE INDEX IF NOT EXISTS idx_plan_swaps_pending ON plan_swaps(patient_id) WHERE status IN ('suggested','requested');
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

@@ -50,7 +50,7 @@ function sleepMinutes(sleep) {
  */
 function composeMember(member, ctx) {
   const { logs = [], protocol = {}, daysSince = NEVER_LOGGED, todayDay = null, workoutLoggedToday = false,
-          streak = 0, unread = 0, todayStr, hour } = ctx;
+          streak = 0, unread = 0, todayStr, hour, swapRequests = 0 } = ctx;
   const byDate = new Map(logs.map(l => [String(l.log_date).slice(0, 10), l]));
   const today = byDate.get(todayStr) || null;
 
@@ -136,6 +136,8 @@ function composeMember(member, ctx) {
     bump(pct < 25 ? 'attention' : 'watch');
   }
   if (unread > 0) { reasons.push(`${unread} unread ${unread === 1 ? 'message' : 'messages'}`); bump('attention'); }
+  // Phase 6: a member waiting on a swap answer (Nutrition tab › Swaps).
+  if (swapRequests > 0) { reasons.push(`Asked for ${swapRequests === 1 ? 'a swap' : `${swapRequests} swaps`}`); bump('watch'); }
 
   // ── the good news, only when nothing is wrong ────────────────────────────
   const wins = [];

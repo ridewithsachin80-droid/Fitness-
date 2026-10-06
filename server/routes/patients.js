@@ -440,7 +440,7 @@ async function collectTriage(members) {
   const hour = triageHour();
   if (!members.length) return { rows: [], todayLogBy: new Map(), todayStr };
     const ids = members.map(m => m.id);
-    const [logsRes, profRes, lastRes, unreadRes, workoutRes, progRes] = await Promise.all([
+    const [logsRes, profRes, lastRes, unreadRes, workoutRes, progRes, swapRes] = await Promise.all([
       pool.query(
         `SELECT patient_id, log_date, weight_kg, food_items, water_ml, activities, acv, supplements, sleep, compliance_pct
          FROM daily_logs
@@ -462,7 +462,12 @@ async function collectTriage(members) {
       pool.query(
         `SELECT DISTINCT ON (patient_id) patient_id, id FROM workout_programs
          WHERE patient_id = ANY($1) AND active = true ORDER BY patient_id, id DESC`, [ids]),
+      // Phase 6: swap requests waiting for the coach. Never blocks triage.
+      pool.query(
+        `SELECT patient_id, COUNT(*)::int AS n FROM plan_swaps
+         WHERE patient_id = ANY($1) AND status = 'requested' GROUP BY patient_id`, [ids]).catch(() => ({ rows: [] })),
     ]);
+    const swapsBy = new Map((swapRes?.rows || []).map(r => [r.patient_id, r.n]));
 
     const logsBy   = new Map(); for (const l of logsRes.rows) { if (!logsBy.has(l.patient_id)) logsBy.set(l.patient_id, []); logsBy.get(l.patient_id).push(l); }
     const profBy   = new Map(profRes.rows.map(p => [p.user_id, p]));
@@ -492,6 +497,7 @@ async function collectTriage(members) {
         todayDay: todayDayBy.get(m.id) || null,
         workoutLoggedToday: workedBy.has(m.id),
         streak, unread: unreadBy.get(m.id) || 0, todayStr, hour,
+        swapRequests: swapsBy.get(m.id) || 0,
       });
     });
   return { rows, todayLogBy, todayStr };
