@@ -10,6 +10,7 @@
  * the member sees). This component only shows it and sends the coach's
  * choices back, so it never shows a state the server has not confirmed.
  */
+import SwapsPanel from './SwapsPanel';
 import { shareOrDownload } from '../../utils/shareFile';
 import { useCallback, useEffect, useState } from 'react';
 import api from '../../api/client';
@@ -397,6 +398,8 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                 {busy === 'pdf' ? 'Making PDF…' : 'PDF to send'}
               </Pressable>
             </div>
+            {/* Phase 6: the member's approved swaps, AI suggestions and requests. */}
+            <div className="mt-3"><SwapsPanel memberId={memberId} memberName={memberName} /></div>
           </div>
         ) : (
           <p className="text-caption text-mid">{first} has no diet plan yet.</p>

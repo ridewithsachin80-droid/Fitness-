@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Sheet, Pressable, Icon } from '../primitives';
 import { haptic } from '../../store/settingsStore';
-import { plannedRows, clock, itemKcal } from '../../lib/day';
+import { plannedRows, clock, itemKcal, swapGrams } from '../../lib/day';
+import api from '../../api/client';
 
 /**
  * LogPlannedSheet — "Log as planned" for one prescribed meal (Phase 2).
@@ -17,19 +18,40 @@ import { plannedRows, clock, itemKcal } from '../../lib/day';
 export default function LogPlannedSheet({ meal, onClose, m }) {
   const { log, update, terms } = m;
   const [choices, setChoices] = useState({});
+  // Phase 6: swaps the coach approved for this member, by food (lower case).
+  const [swaps, setSwaps] = useState({});
+  const [openSwap, setOpenSwap] = useState(null);       // item name whose swap list is open
+  const [ask, setAsk] = useState({ food: null, text: '', note: '' });
+  useEffect(() => {
+    if (!meal) return;
+    api.get('/swaps/me').then(({ data }) => setSwaps(data?.approved || {})).catch(() => setSwaps({}));
+  }, [meal]);
 
   // Fresh choices each time a meal is opened: planned grams, everything ticked.
   useEffect(() => {
     if (!meal) return;
     const init = {};
-    for (const it of meal.pending) init[it.name] = { on: true, grams: String(it.grams) };
-    setChoices(init);
+    for (const it of meal.pending) init[it.name] = { on: true, grams: String(it.grams), swap: null };
+    setChoices(init); setOpenSwap(null); setAsk({ food: null, text: '', note: '' });
   }, [meal]);
 
   if (!meal) return <Sheet open={false} onClose={onClose} title="" />;
 
   const { rows, kcal, changes } = plannedRows(meal, choices, log.food);
   const set = (name, patch) => setChoices(c => ({ ...c, [name]: { ...c[name], ...patch } }));
+  const pickSwap = (it, alt) => {
+    const g = alt ? swapGrams(it.grams, it.per_100g, alt.per_100g) : Number(it.grams);
+    set(it.name, { swap: alt ? { name: alt.name, per_100g: alt.per_100g } : null, grams: String(g || it.grams), on: true });
+    setOpenSwap(null);
+  };
+  const sendAsk = async () => {
+    const alt = ask.text.trim();
+    if (!alt) return;
+    try {
+      const { data } = await api.post('/swaps/request', { food_name: ask.food, alt_name: alt });
+      setAsk({ food: null, text: '', note: data?.message || 'Sent to your coach.' });
+    } catch (e) { setAsk(a => ({ ...a, note: e.response?.data?.error || 'Could not send that just now.' })); }
+  };
 
   const save = () => {
     if (!rows.length) return;
@@ -52,16 +74,18 @@ export default function LogPlannedSheet({ meal, onClose, m }) {
       <div className="space-y-2" data-testid="planned-items">
         {meal.pending.map(it => {
           const c = choices[it.name] || { on: true, grams: String(it.grams) };
-          const changed = c.on && parseFloat(c.grams) !== Number(it.grams);
+          const changed = c.on && (!!c.swap || parseFloat(c.grams) !== Number(it.grams));
+          const alts = swaps[String(it.name).toLowerCase()] || [];
           return (
-            <div key={it.name} className="flex items-center gap-3 rounded-2xl bg-charcoal px-3 py-2" style={{ minHeight: 56 }}>
+            <div key={it.name} className="rounded-2xl bg-charcoal">
+            <div className="flex items-center gap-3 px-3 py-2" style={{ minHeight: 56 }}>
               <label className="flex items-center gap-3 flex-1 min-w-0">
                 <input type="checkbox" checked={c.on} onChange={e => set(it.name, { on: e.target.checked })}
                   className="w-6 h-6 accent-gold flex-shrink-0" aria-label={`${it.name}: eaten`} />
                 <span className={`text-sm min-w-0 ${c.on ? 'text-white' : 'text-lo'}`}>
-                  {it.name}
+                  {c.swap ? c.swap.name : it.name}
                   <span className={`block text-caption ${changed ? 'text-gold-light' : 'text-mid'}`}>
-                    {!c.on ? 'skipped' : changed ? `planned ${Number(it.grams)} g` : `${itemKcal(it)} ${terms?.kcal || 'kcal'}`}
+                    {!c.on ? 'skipped' : c.swap ? `instead of ${it.name} · same kcal` : changed ? `planned ${Number(it.grams)} g` : `${itemKcal(it)} ${terms?.kcal || 'kcal'}`}
                   </span>
                 </span>
               </label>
@@ -71,8 +95,39 @@ export default function LogPlannedSheet({ meal, onClose, m }) {
                 className={`text-right text-base font-semibold rounded-xl px-2.5 border bg-transparent text-white tabular-nums disabled:opacity-40 ${changed ? 'border-gold' : 'border-white/[0.12]'}`} />
               <span className="text-caption text-mid">g</span>
             </div>
+            {/* Phase 6: swaps the coach approved, or ask for one. */}
+            <div className="px-3 pb-2 -mt-1 flex flex-wrap gap-x-3">
+              {alts.length > 0 && (
+                <button type="button" onClick={() => setOpenSwap(openSwap === it.name ? null : it.name)} style={{ minHeight: 32 }}
+                  className="text-caption font-semibold text-gold" data-testid="swap-toggle">{c.swap ? 'Change swap' : `Swap (${alts.length})`}</button>
+              )}
+              <button type="button" onClick={() => setAsk({ food: it.name, text: '', note: '' })} style={{ minHeight: 32 }}
+                className="text-caption text-lo underline" data-testid="swap-ask">Ask for a swap</button>
+            </div>
+            {openSwap === it.name && (
+              <div className="px-3 pb-2 flex flex-wrap gap-1.5" data-testid="swap-options">
+                {c.swap && <button type="button" onClick={() => pickSwap(it, null)} style={{ minHeight: 36 }} className="text-caption rounded-full border border-white/[0.12] px-3 text-white">Back to {it.name}</button>}
+                {alts.map(a => (
+                  <button key={a.id} type="button" onClick={() => pickSwap(it, a)} style={{ minHeight: 36 }}
+                    className="text-caption rounded-full border border-gold/50 px-3 text-white" data-testid="swap-option">
+                    {a.name} · {swapGrams(it.grams, it.per_100g, a.per_100g) || '?'} g
+                  </button>
+                ))}
+              </div>
+            )}
+            {ask.food === it.name && (
+              <div className="px-3 pb-2 flex gap-2" data-testid="swap-ask-form">
+                <input value={ask.text} onChange={e => setAsk(a => ({ ...a, text: e.target.value }))} placeholder={`Instead of ${it.name.toLowerCase()}…`}
+                  aria-label={`What would you like instead of ${it.name}?`} maxLength={100} style={{ minHeight: 40 }}
+                  className="flex-1 min-w-0 rounded-xl border border-white/[0.12] bg-transparent px-3 text-sm text-white" />
+                <button type="button" onClick={sendAsk} disabled={!ask.text.trim()} style={{ minHeight: 40 }}
+                  className="rounded-xl border border-gold text-gold text-caption font-bold px-3 disabled:opacity-40" data-testid="swap-ask-send">Ask coach</button>
+              </div>
+            )}
+            </div>
           );
         })}
+      {ask.note && <p className="text-caption text-mid" data-testid="swap-ask-note">{ask.note}</p>}
       </div>
 
       {changes.length > 0 && (

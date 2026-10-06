@@ -1041,6 +1041,23 @@ async function memberPlanLines(db, memberId, today, foodItems) {
         items.map(it => `${it.name} ${Number(it.grams)} g`).join(', '));
     }
     if (plan?.content?.avoid?.length) lines.push(`  Avoid: ${plan.content.avoid.join(', ')}`);
+    // Phase 6: swaps the coach has approved for this member. The chat may
+    // offer these, with the portion that keeps the calories, and nothing else.
+    try {
+      const { rows: sw } = await db.query(
+        `SELECT food_name, alt_name, alt_per_100g FROM plan_swaps WHERE patient_id=$1 AND status='approved' ORDER BY LOWER(food_name), LOWER(alt_name)`, [memberId]);
+      if (Array.isArray(sw) && sw.length) {
+        const { swapGrams } = require('./swaps');
+        const planned = new Map();
+        meals.forEach(m => (m.items || []).forEach(it => planned.set(String(it.name).toLowerCase(), it)));
+        const parts = sw.map(r => {
+          const it = planned.get(String(r.food_name).toLowerCase());
+          const g = it ? swapGrams(it.grams, it.per_100g, r.alt_per_100g) : null;
+          return `${r.food_name} -> ${r.alt_name}${g ? ` (${g} g)` : ''}`;
+        });
+        lines.push(`  Approved swaps (only these): ${parts.join('; ')}`);
+      }
+    } catch (_) { /* no swaps table yet, or none: the plan lines stand */ }
     return lines;
   } catch (err) {
     console.error('memberPlanLines failed:', err.message);

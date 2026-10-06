@@ -351,6 +351,10 @@ const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:5
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/swaps/member/')) return ok({ swaps: [
+      { id: 1, food_name: 'Paneer-mushroom-capsicum masala with menthya soppu', alt_name: 'Soya chunk and capsicum curry with methi', alt_per_100g: { calories: 170 }, status: 'requested', source: 'member', note: 'I do not get paneer here every day, can I have soya instead please?' },
+      { id: 2, food_name: 'Curd', alt_name: 'Unsweetened soy yogurt', alt_per_100g: { calories: 54 }, status: 'suggested', source: 'ai' },
+      { id: 3, food_name: 'Guava', alt_name: 'Banana', alt_per_100g: { calories: 89 }, status: 'approved', source: 'ai' }] });
     if (u.includes('/diet-plans/me/grocery')) return ok({ plan: { id: 9, version: 2, title: 'Low carb vegetarian with intermittent fasting, 16:8' },
       items: [{ name: 'Paneer-mushroom-capsicum masala with menthya soppu', grams: 8753.5, days: 7 }, { name: 'Curd', grams: 1400, days: 7 }],
       prep: { everyday: ['Curd (Meal 1)'], byDay: [['Paneer-mushroom-capsicum masala with menthya soppu, 1250.5 g (Pre-workout evening snack)'], [], [], [], [], [], []] } });
@@ -510,6 +514,9 @@ const OVERFLOW_PAGES = [
   // Phase 5: the grocery list sheet.
   ['GrocerySheet', `import GS from './components/plan/GrocerySheet.jsx';
      const P = () => <div className="p-4"><p>Plan</p><GS open onClose={() => {}} /></div>;`],
+  // Phase 6: the coach's swaps panel with long names.
+  ['SwapsPanel', `import SP from './components/coach/SwapsPanel.jsx';
+     const P = () => <div className="p-4"><SP memberId={1} memberName="Mrs. Venkataramana Reddy" /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
@@ -2522,6 +2529,80 @@ async function planPdfTest() {
   ck('"Share the list" copies a plain list where the phone cannot share', /Grocery list — Low carb vegetarian/.test(copied) && /- Curd: 1\.4 kg/.test(copied) && /Copied/.test(q('grocery-note')?.textContent || ''), copied);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 30. Phase 6 — swaps: the member picks or asks; the coach approves
+// ═══════════════════════════════════════════════════════════════════════════
+async function swapsTest() {
+  console.log('\n[30] Swaps (Phase 6)');
+  const api = stub('api-swaps.js', `
+    window.__posts = [];
+    let rows = [
+      { id: 1, food_name: 'Guava', alt_name: 'Papaya', alt_per_100g: { calories: 43 }, status: 'requested', source: 'member', note: 'guava not in season' },
+      { id: 2, food_name: 'Paneer', alt_name: 'Tofu', alt_per_100g: { calories: 76 }, status: 'suggested', source: 'ai' },
+      { id: 3, food_name: 'Guava', alt_name: 'Banana', alt_per_100g: { calories: 89 }, status: 'approved', source: 'ai' } ];
+    const get = async (url) => {
+      if (/\\/swaps\\/me$/.test(url)) return { data: { approved: { guava: [{ id: 3, name: 'Banana', per_100g: { calories: 89 } }] }, requests: [] } };
+      if (/\\/swaps\\/member\\/12$/.test(url)) return { data: { swaps: rows } };
+      return { data: {} }; };
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (/\\/swaps\\/request$/.test(url)) return { data: { status: 'requested', message: 'Sent to your coach. Until they say yes, keep to the plan.' } };
+      const m = /\\/swaps\\/(\\d+)\\/decide$/.exec(url);
+      if (m) { rows = rows.map(r => r.id === +m[1] ? { ...r, status: body.approve ? 'approved' : 'declined' } : r); return { data: { swaps: rows } }; }
+      return { data: { swaps: rows } }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const code = await bundle(`
+    import { useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import LogPlannedSheet from './components/sheets/LogPlannedSheet.jsx';
+    const meal = { meal: 'Meal 2', time: '16:00', items: [{ name: 'Guava', grams: 150, per_100g: { calories: 68 } }, { name: 'Almonds', grams: 20, per_100g: { calories: 579 } }] };
+    meal.pending = meal.items;
+    window.__updates = [];
+    function H() { const [food, setFood] = useState([]); const [open, setOpen] = useState(true);
+      return <LogPlannedSheet meal={open ? meal : null} onClose={() => setOpen(false)} m={{ log: { food }, terms: { kcal: 'kcal' }, update: (f, v) => { window.__updates.push(v); setFood(v); } }} />; }
+    createRoot(document.getElementById('root')).render(<H />);`, api);
+  const { w, errors } = run(code); await tick(500);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  const toggles = [...d.querySelectorAll('[data-testid="swap-toggle"]')];
+  ck('only a food with approved swaps offers "Swap"; every food offers "Ask for a swap"', errors.length === 0 && toggles.length === 1 && /Swap \(1\)/.test(toggles[0].textContent) && d.querySelectorAll('[data-testid="swap-ask"]').length === 2, errors.join('|'));
+  toggles[0].click(); await tick(100);
+  const opt = q('swap-option');
+  ck('the swap shows the grams that keep the calories: Banana · 115 g', !!opt && /Banana · 115 g/.test(opt.textContent), opt?.textContent);
+  opt.click(); await tick(100);
+  const grams = [...d.querySelectorAll('input[type=number]')][0];
+  ck('picking it changes the row to Banana, 115 g, "instead of Guava · same kcal"', /Banana/.test(d.body.textContent) && /instead of Guava · same kcal/.test(d.body.textContent) && grams.value === '115');
+  ck('and the change line says so before saving', /Banana 115 g instead of Guava/.test(q('planned-changes')?.textContent || ''), q('planned-changes')?.textContent);
+  q('planned-save').click(); await tick(500);
+  const up = w.__updates[0] || [];
+  ck('saving logs Banana 115 g under Meal 2, and the almonds as planned', up.length === 2 && up.find(r => r.name === 'Banana')?.grams === 115 && up.find(r => r.name === 'Banana').meal === 'Meal 2' && up.find(r => r.name === 'Almonds')?.grams === 20, up);
+
+  const A = run(code); await tick(500);
+  const ad = A.w.document;
+  [...ad.querySelectorAll('[data-testid="swap-ask"]')][1].click(); await tick(100);
+  const box = ad.querySelector('[data-testid="swap-ask-form"] input');
+  Object.getOwnPropertyDescriptor(A.w.HTMLInputElement.prototype, 'value').set.call(box, 'Cashews');
+  box.dispatchEvent(new A.w.Event('input', { bubbles: true })); await tick(50);
+  ad.querySelector('[data-testid="swap-ask-send"]').click(); await tick(200);
+  const req = A.w.__posts.find(p => /\/swaps\/request$/.test(p.url));
+  ck('"Ask for a swap" sends the food and what they would like instead', req?.body.food_name === 'Almonds' && req.body.alt_name === 'Cashews', req?.body);
+  ck('and says: sent to your coach, keep to the plan until then', /keep to the plan/.test(ad.querySelector('[data-testid="swap-ask-note"]')?.textContent || ''));
+
+  // ── Coach ───────────────────────────────────────────────────────────────────
+  const panel = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import SwapsPanel from './components/coach/SwapsPanel.jsx';
+    createRoot(document.getElementById('root')).render(<SwapsPanel memberId={12} memberName="Padmini Ravi" />);`, api);
+  const P = run(panel); await tick(400);
+  const pq = (id) => P.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('the coach sees the request first, with the member\'s note', P.errors.length === 0 && /Swaps · 1 asked/.test(pq('swaps-panel').textContent) && /Guava →\s*Papaya/.test(pq('swap-request').textContent) && /Padmini asked: "guava not in season"/.test(pq('swap-request').textContent));
+  ck('the AI\'s suggestion waits for approval; the approved one is listed', /Paneer →\s*Tofu/.test(pq('swap-suggested').textContent) && /Guava → Banana/.test(pq('swaps-approved').textContent));
+  pq('swap-request').querySelector('[data-testid="swap-approve"]').click(); await tick(200);
+  ck('Approve sends the decision and moves it to Approved', P.w.__posts.some(p => /\/swaps\/1\/decide$/.test(p.url) && p.body.approve === true) && /Guava → Papaya/.test(pq('swaps-approved').textContent) && !pq('swap-request'));
+  pq('swap-suggested').querySelector('[data-testid="swap-decline"]').click(); await tick(200);
+  ck('Decline removes the suggestion', P.w.__posts.some(p => /\/swaps\/2\/decide$/.test(p.url) && p.body.approve === false) && !pq('swap-suggested'));
+  pq('swaps-suggest').click(); await tick(200);
+  ck('"Suggest more swaps (AI)" asks the server for this member', P.w.__posts.some(p => p.url === '/swaps/member/12/suggest'));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2674,6 +2755,7 @@ async function overflowTest() {
     await foodLogGroupsTest();
     await progressPhotosTest();
     await planPdfTest();
+    await swapsTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

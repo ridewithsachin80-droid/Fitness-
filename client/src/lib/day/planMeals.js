@@ -105,6 +105,18 @@ export function planMeals({ mealPlans = [], food = [], nowMin = 0 }) {
  * @param {Array}  food     today's logged food (to avoid logging an item twice)
  * @returns {{ rows: Array, kcal: number, changes: string[] }}
  */
+/**
+ * Grams of an approved swap that carry the same kcal as the planned portion.
+ * The same sum as server/services/swaps.js swapGrams (tests hold both).
+ */
+export function swapGrams(grams, origPer100, altPer100) {
+  const ok = Number(origPer100?.calories) || 0, ak = Number(altPer100?.calories) || 0;
+  if (!(ok > 0) || !(ak > 0) || !(Number(grams) > 0)) return null;
+  const g = (Number(grams) * ok) / ak;
+  const r = g < 30 ? Math.round(g) : Math.round(g / 5) * 5;
+  return Math.min(2000, Math.max(5, r));
+}
+
 export function plannedRows(meal, choices = {}, food = []) {
   const already = new Set((food || []).map(f => key(f.meal, f.name)));
   const rows = [], changes = [];
@@ -114,6 +126,12 @@ export function plannedRows(meal, choices = {}, food = []) {
     const g = Math.min(2000, parseFloat(c.grams));
     if (!c.on) { changes.push(`${it.name} skipped`); continue; }
     if (!Number.isFinite(g) || g <= 0) { changes.push(`${it.name} skipped`); continue; }
+    // Phase 6: an approved swap logs the alternative instead, at its own grams.
+    if (c.swap?.name) {
+      changes.push(`${c.swap.name} ${g} g instead of ${it.name}`);
+      rows.push({ name: c.swap.name, grams: g, meal: meal.meal, food_id: null, per_100g: c.swap.per_100g || null });
+      continue;
+    }
     if (g !== Number(it.grams)) changes.push(`${it.name} ${g} g (plan ${Number(it.grams)} g)`);
     rows.push({ name: it.name, grams: g, meal: meal.meal, food_id: null, per_100g: it.per_100g || null });
   }
