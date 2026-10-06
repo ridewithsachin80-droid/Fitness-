@@ -1,8 +1,22 @@
-# Delivery: Phase 7 (weekly check-in and the coach's AI weekly brief) — 6 Oct 2026
+# Delivery: Phase 7 (weekly check-in and the coach's AI weekly brief) — 6 Oct 2026 (rev 2)
 
 Cumulative from the `main` ZIP of 3 Oct 2026: carries every earlier file too
 (Phases 1.3–6), unchanged since those deliveries. Upload to `test`, wait for
 green, try it on fitness-test.up.railway.app, then merge.
+
+## Rev 2 — diet plan PDF fixes (from Ragavendra's PDF, 6 Oct)
+
+- **Grams were added twice** when the household measure already gave them
+  ("1 idli (50 g) (50 g)", "200 g, with 1 teaspoon olive oil + lemon (200 g)").
+  Grams are now added only when the measure has no weight in it ("1 scoop (30 g)").
+- **Notes in the measure were cut at 40 characters** ("A different soppu each day -
+  you"). Now kept up to 160: `diet_plan_items.qty_text` widened to VARCHAR(160)
+  (safe on every boot, no table rewrite) and the coach-chat import no longer cuts
+  at 40. Plans already saved stay cut: revise or re-import them to restore the
+  full note.
+- Changed: `server/services/planPdf.js`, `server/services/dietPlan.js`,
+  `server/routes/aiChat.js`, `server/db/schema.sql`, `server/scripts/test-plan-pdf.js`.
+  3,284 checks green.
 
 ## Member: weekly check-in
 

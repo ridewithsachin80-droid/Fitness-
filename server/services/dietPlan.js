@@ -110,7 +110,7 @@ function normaliseItem(it) {
   };
   // compulsory: the coach's brief fixed this food and its amount ("200 g curd
   // daily"). Fit to target never changes its grams.
-  return { name, grams, qty_text: str(it.qty_text, 40) || `${grams} g`, per_100g,
+  return { name, grams, qty_text: str(it.qty_text, 160) || `${grams} g`, per_100g,
            compulsory: it.compulsory === true };
 }
 

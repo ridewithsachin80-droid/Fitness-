@@ -116,7 +116,13 @@ function planPdf(plan, { memberName = '', coachName = '', draft = false } = {}) 
   d.heading('Your meals');
   const meals = weekShape(plan.days || []);
   const cols = [{ width: W * 0.58 }, { width: W * 0.24 }, { width: W * 0.18, align: 'right' }];
-  const qty = (it) => (it.qty_text && it.qty_text !== `${Number(it.grams)} g` ? `${it.qty_text} (${Number(it.grams)} g)` : `${Number(it.grams)} g`);
+  // The household measure, with the grams added only when it does not already
+  // give a weight ("1 idli (50 g)" stays as it is, not "1 idli (50 g) (50 g)").
+  const qty = (it) => {
+    const g = `${Number(it.grams)} g`, t = String(it.qty_text || '').trim();
+    if (!t || t === g) return g;
+    return /\d+(\.\d+)?\s*(g|gm|gms|grams?|kg|ml)\b/i.test(t) ? t : `${t} (${g})`;
+  };
   for (const m of meals) {
     const time = m.time;
     d.ensure(40);
