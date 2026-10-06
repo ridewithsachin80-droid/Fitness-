@@ -181,11 +181,14 @@ function start() {
 
   // Sunday 18:00 IST: weekly progress reports — the premium ritual. Deduped
   // per member per week inside the service; empty weeks produce nothing.
-  // 03:15 IST: plate photos past their 90 days are deleted from storage.
+  // 03:15 IST: plate photos past 90 days and progress photos past 12 months are deleted from storage.
   cron.schedule('15 3 * * *', async () => {
     try {
       const n = await require('../routes/platePhotos').deleteExpiredPhotos();
       if (n) console.log(`🗑️  Deleted ${n} expired plate photo(s)`);
+      // Phase 4: progress photos past their 12 months.
+      const p = await require('../routes/progressPhotos').deleteExpiredProgressPhotos();
+      if (p) console.log(`🗑️  Deleted ${p} expired progress photo(s)`);
     } catch (err) { console.error('Plate photo cleanup error:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 

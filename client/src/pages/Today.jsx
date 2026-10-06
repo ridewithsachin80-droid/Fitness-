@@ -17,6 +17,7 @@ import CoachNotes    from '../components/today/CoachNotes';
 import MilestoneModal from '../components/today/MilestoneModal';
 import RecoveryCard  from '../components/today/RecoveryCard';
 import NextUp        from '../components/today/NextUp';
+import ProgressPhotoCard from '../components/progress/ProgressPhotoCard';
 import LogPlannedSheet from '../components/sheets/LogPlannedSheet';
 import PlatePhotoSheet from '../components/sheets/PlatePhotoSheet';
 import { FastingBar } from '../components/today/DayWidgets';
@@ -106,6 +107,9 @@ export default function Today() {
               <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
                 onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat()} />
             )}
+
+            {/* Phase 4: Sundays only, until this week's three photos are in. */}
+            {isToday && <ProgressPhotoCard />}
 
             <TodaysPlan m={m} onOpen={openSheet} />
 
