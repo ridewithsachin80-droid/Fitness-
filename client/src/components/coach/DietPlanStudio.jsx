@@ -10,6 +10,7 @@
  * the member sees). This component only shows it and sends the coach's
  * choices back, so it never shows a state the server has not confirmed.
  */
+import { shareOrDownload } from '../../utils/shareFile';
 import { useCallback, useEffect, useState } from 'react';
 import api from '../../api/client';
 import { Card, SectionTitle } from '../UI';
@@ -385,10 +386,17 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
             {data.upcoming && (
               <p className="text-caption text-gold mt-1">Version {data.upcoming.version} takes over on {formatDate(data.upcoming.effective_from)}.</p>
             )}
-            <Pressable variant="secondary" className="w-full mt-2" disabled={!!busy}
-              onPress={() => run('revise', () => api.post(`/diet-plans/member/${memberId}/revise`))}>
-              {busy === 'revise' ? 'Opening…' : 'Revise this plan'}
-            </Pressable>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <Pressable variant="secondary" className="w-full" disabled={!!busy}
+                onPress={() => run('revise', () => api.post(`/diet-plans/member/${memberId}/revise`))}>
+                {busy === 'revise' ? 'Opening…' : 'Revise this plan'}
+              </Pressable>
+              {/* Phase 5: the PDF to send on WhatsApp (share sheet on a phone). */}
+              <Pressable variant="secondary" className="w-full" disabled={!!busy} data-testid="studio-pdf"
+                onPress={async () => { setBusy('pdf'); try { await shareOrDownload(`/diet-plans/${inForce.id}/pdf`, { title: inForce.title }); } catch (e) { setError('Could not make the PDF just now.'); } finally { setBusy(''); } }}>
+                {busy === 'pdf' ? 'Making PDF…' : 'PDF to send'}
+              </Pressable>
+            </div>
           </div>
         ) : (
           <p className="text-caption text-mid">{first} has no diet plan yet.</p>

@@ -1,3 +1,5 @@
+import GrocerySheet from '../components/plan/GrocerySheet';
+import { shareOrDownload } from '../utils/shareFile';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyToday } from '../api/logs';
@@ -115,6 +117,16 @@ export default function Plan() {
     ? (shownDay === todayIdx && meals.length ? meals.map(mp => ({ meal: mp.meal, time: mp.time, items: mp.items })) : (dietPlan.days?.[shownDay] || []))
     : [];
   const planCautions = [...(dietPlan?.content?.lab_cautions || []), ...(dietPlan?.content?.cautions || [])];
+  // Phase 5: the plan as a PDF, and the week's grocery list.
+  const [groceryOpen, setGroceryOpen] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfNote, setPdfNote] = useState('');
+  const getPdf = async () => {
+    haptic(10); setPdfBusy(true); setPdfNote('');
+    try { await shareOrDownload('/diet-plans/me/pdf', { title: 'My FitLife diet plan' }); }
+    catch (e) { setPdfNote('Could not make the PDF just now. Try again.'); }
+    finally { setPdfBusy(false); }
+  };
 
   const mealKcal = (items = []) => Math.round(items.reduce((a, it) => a + ((it.per_100g?.calories || 0) * (it.grams || 0) / 100), 0));
   const goToday = (sheet) => navigate(sheet ? `/?open=${sheet}` : '/');
@@ -229,6 +241,14 @@ export default function Plan() {
                 ))}
               </div>
               {dietPlan.content?.eating_window && <p className="text-caption text-mid mt-2">Eating window {dietPlan.content.eating_window} · fast outside it</p>}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <button type="button" onClick={getPdf} disabled={pdfBusy} data-testid="plan-pdf" style={{ minHeight: 44 }}
+                  className="rounded-2xl border border-gold/50 text-gold text-sm font-bold disabled:opacity-50">{pdfBusy ? 'Making PDF…' : 'Plan as PDF'}</button>
+                <button type="button" onClick={() => { haptic(10); setGroceryOpen(true); }} data-testid="plan-grocery" style={{ minHeight: 44 }}
+                  className="rounded-2xl border border-white/[0.12] text-white text-sm font-semibold">Grocery list</button>
+              </div>
+              {pdfNote && <p className="text-caption text-red-300 mt-2">{pdfNote}</p>}
+              <GrocerySheet open={groceryOpen} onClose={() => setGroceryOpen(false)} />
             </Section>
 
             <Section eyebrow="Meals" title={shownDay === todayIdx ? 'Today' : WD[shownDay]}>
