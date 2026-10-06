@@ -119,3 +119,37 @@ export function plannedRows(meal, choices = {}, food = []) {
   }
   return { rows, kcal: mealKcal(rows), changes };
 }
+
+/**
+ * Which meal slot food goes under when the member did not say ("2 chapati,
+ * paneer 150 g" at 7 pm). Before, it always went to the FIRST slot, so a
+ * dinner logged by chat landed under Breakfast (live test, 5 Oct, 19:14).
+ *
+ *   1. A prescribed meal timed within 2½ hours of now, and still to log, whose
+ *      name is one of the member's slots: that meal. (Logged at 19:14 with
+ *      Dinner planned for 19:30 -> Dinner.)
+ *   2. Otherwise by the clock and the slot names: breakfast before 11:00,
+ *      lunch 11:00–15:59, snack 16:00–18:59 if there is one, dinner after.
+ *   3. Slots with other names: spread across 6 am to 10 pm, in order.
+ */
+export function defaultMealSlot({ mealSlots = [], mealPlans = [], food = [], nowMin = istMinutes() } = {}) {
+  const slots = (mealSlots || []).filter(Boolean);
+  if (!slots.length) return 'Meal 1';
+  const find = (name) => slots.find(s => s.toLowerCase() === String(name || '').toLowerCase());
+
+  const { meals } = planMeals({ mealPlans, food, nowMin });
+  const near = meals
+    .filter(m => !m.logged && m._min != null && Math.abs(m._min - nowMin) <= 150 && find(m.meal))
+    .sort((a, b) => Math.abs(a._min - nowMin) - Math.abs(b._min - nowMin))[0];
+  if (near) return find(near.meal);
+
+  const named = (re) => slots.find(s => re.test(s));
+  const breakfast = named(/breakfast|morning|tiffin|thindi/i), lunch = named(/lunch|oota/i);
+  const snack = named(/snack|evening|tea/i), dinner = named(/dinner|supper|night|raatri/i);
+  const h = nowMin / 60;
+  const byName = h < 11 ? breakfast : h < 16 ? lunch : h < 19 ? (snack || dinner) : dinner;
+  if (byName) return byName;
+
+  const i = Math.floor((Math.min(Math.max(nowMin, 360), 1319) - 360) / (960 / slots.length));
+  return slots[Math.min(slots.length - 1, Math.max(0, i))];
+}

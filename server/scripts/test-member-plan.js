@@ -135,6 +135,24 @@ const PLAN = () => ({
     ck('India time is used whatever the phone is set to (06:30 UTC is 12:00 IST)', day.istMinutes(new Date('2026-10-04T06:30:00Z')) === 720, day.istMinutes(new Date('2026-10-04T06:30:00Z')));
   }
 
+  console.log('\n[0b] which meal chat food goes under when the member does not say (no database)');
+  {
+    const slots = ['Breakfast', 'Lunch', 'Dinner'];
+    const plan = [{ meal: 'Breakfast', time: '10:30', items: [{ name: 'Idli', grams: 100 }] },
+                  { meal: 'Lunch', time: '13:30', items: [{ name: 'Rice', grams: 100 }] },
+                  { meal: 'Dinner', time: '19:30', items: [{ name: 'Roti', grams: 60 }] }];
+    const logged = [{ name: 'Idli', grams: 100, meal: 'Breakfast' }, { name: 'Rice', grams: 100, meal: 'Lunch' }];
+    ck('live test, 5 Oct 19:14: Dinner due at 19:30 -> Dinner, not Breakfast', day.defaultMealSlot({ mealSlots: slots, mealPlans: plan, food: logged, nowMin: at(19, 14) }) === 'Dinner');
+    ck('a planned meal already logged is not chosen again', day.defaultMealSlot({ mealSlots: slots, mealPlans: plan, food: logged, nowMin: at(13, 40) }) === 'Lunch'
+       && day.defaultMealSlot({ mealSlots: slots, mealPlans: plan.slice(0, 2), food: logged, nowMin: at(13, 40) }) === 'Lunch');
+    ck('no plan: by the clock and the slot names', day.defaultMealSlot({ mealSlots: slots, nowMin: at(8, 0) }) === 'Breakfast'
+       && day.defaultMealSlot({ mealSlots: slots, nowMin: at(13, 0) }) === 'Lunch' && day.defaultMealSlot({ mealSlots: slots, nowMin: at(20, 0) }) === 'Dinner');
+    ck('a Snack slot is used in the evening when there is one', day.defaultMealSlot({ mealSlots: ['Breakfast', 'Lunch', 'Snacks', 'Dinner'], nowMin: at(17, 0) }) === 'Snacks');
+    ck('slots called Meal 1-3 are spread over the day', day.defaultMealSlot({ mealSlots: ['Meal 1', 'Meal 2', 'Meal 3'], nowMin: at(7, 0) }) === 'Meal 1'
+       && day.defaultMealSlot({ mealSlots: ['Meal 1', 'Meal 2', 'Meal 3'], nowMin: at(20, 30) }) === 'Meal 3');
+    ck('a plan meal far from now does not pull food (breakfast missed, 19:14 -> Dinner)', day.defaultMealSlot({ mealSlots: slots, mealPlans: plan, food: [], nowMin: at(19, 14) }) === 'Dinner');
+  }
+
   console.log('\n[1] log as planned (no database)');
   {
     const meal = day.planMeals({ mealPlans, food: [], nowMin: at(16, 0) }).meals[1];

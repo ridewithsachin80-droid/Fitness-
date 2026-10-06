@@ -1,3 +1,4 @@
+import ProgressPhotos from '../components/progress/ProgressPhotos';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -929,6 +930,10 @@ export default function Coach() {
         </>)}
 
         {/* Their blood work, and what they were doing between tests */}
+        {tab === 'labs' && (<>   {/* Phase 4: progress photos, read-only for the coach */}
+        <Card><ProgressPhotos memberId={parseInt(memberId)} /></Card>
+        </>)}
+
         {tab === 'labs' && (<>   {/* Lab Results */}
         <Card>
           <SectionTitle icon="🩸">Lab Results</SectionTitle>

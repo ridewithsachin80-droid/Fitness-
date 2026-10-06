@@ -17,6 +17,7 @@ import CoachNotes    from '../components/today/CoachNotes';
 import MilestoneModal from '../components/today/MilestoneModal';
 import RecoveryCard  from '../components/today/RecoveryCard';
 import NextUp        from '../components/today/NextUp';
+import ProgressPhotoCard from '../components/progress/ProgressPhotoCard';
 import LogPlannedSheet from '../components/sheets/LogPlannedSheet';
 import PlatePhotoSheet from '../components/sheets/PlatePhotoSheet';
 import { FastingBar } from '../components/today/DayWidgets';
@@ -107,6 +108,9 @@ export default function Today() {
                 onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat()} />
             )}
 
+            {/* Phase 4: Sundays only, until this week's three photos are in. */}
+            {isToday && <ProgressPhotoCard />}
+
             <TodaysPlan m={m} onOpen={openSheet} />
 
             {/* Sprint 11c: only for members whose tracker has synced — otherwise renders nothing. */}
@@ -132,7 +136,7 @@ export default function Today() {
             {/* The conversation. Its composer is docked above the nav (portaled
                 from inside AIChatLog), so it is reachable from anywhere on the page. */}
             <Card>
-              <AIChatLog />
+              <AIChatLog mealPlans={m.mealPlans} />
             </Card>
 
             <CoachNotes m={m} />

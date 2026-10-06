@@ -860,6 +860,23 @@ CREATE INDEX IF NOT EXISTS idx_meal_photos_patient_date ON meal_photos(patient_i
 CREATE INDEX IF NOT EXISTS idx_meal_photos_flagged ON meal_photos(log_date) WHERE flagged = true AND coach_seen_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_meal_photos_expiry ON meal_photos(delete_after) WHERE object_key IS NOT NULL;
 
+-- ── PROGRESS PHOTOS (Phase 4) ─────────────────────────────────────────────
+-- Weekly body photos: front, side, back. Private R2 storage (object_key);
+-- the member and their coach can see them, through links that expire.
+-- Deleted automatically after 12 months (Sachin, 5 Oct 2026). week_date is
+-- the Sunday of the week the photo belongs to; a retake replaces that pose.
+CREATE TABLE IF NOT EXISTS progress_photos (
+  id           SERIAL PRIMARY KEY,
+  patient_id   INT REFERENCES users(id) ON DELETE CASCADE,
+  week_date    DATE NOT NULL,
+  pose         VARCHAR(8) NOT NULL CHECK (pose IN ('front','side','back')),
+  object_key   TEXT NOT NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  delete_after TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '12 months'),
+  UNIQUE (patient_id, week_date, pose)
+);
+CREATE INDEX IF NOT EXISTS idx_progress_photos_expiry ON progress_photos(delete_after);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

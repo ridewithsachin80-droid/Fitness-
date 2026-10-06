@@ -79,6 +79,7 @@ app.use('/api/diet-plans',    require('./routes/dietPlans'));  // Diet Plan Stud
 // login session. A separate path also avoids any route-ordering subtlety.
 app.use('/api/quick-log',     require('./routes/quickLog'));
 app.use('/api/plate',         require('./routes/platePhotos'));  // Phase 3: plate photo vs plan
+app.use('/api/progress-photos', require('./routes/progressPhotos'));  // Phase 4: weekly body photos
 app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────

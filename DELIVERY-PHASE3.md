@@ -1,9 +1,21 @@
-# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026 (rev 4)
+# Delivery: Phase 3 (plate photo vs plan) + offline merge — 5 Oct 2026 (rev 5)
 
 Cumulative from the `main` ZIP of 3 Oct 2026: it carries every earlier file too
 (Phase 1.3, Phase 2, safety/food, imports/CSP), unchanged since those were
 deployed. Upload to `test`, wait for green, try it on fitness-test.up.railway.app,
 then merge.
+
+## Rev 5 — chat food landing under Breakfast in the evening (5 Oct, 19:14)
+
+When a member typed food without saying which meal, the chat put it under the
+FIRST meal slot (Breakfast), whatever the time. Now it goes under the meal due
+now: a planned meal within 2½ hours that is still to log (19:14 with Dinner at
+19:30 -> Dinner), else by the clock and slot names (breakfast before 11:00,
+lunch to 16:00, snack to 19:00 if there is one, dinner after). The preview shows
+that meal before Apply, so what the member sees is what is logged.
+Changed: `client/src/lib/day/planMeals.js`, `client/src/components/AIChatLog.jsx`,
+`client/src/pages/Today.jsx`, `server/scripts/test-member-plan.js`,
+`server/scripts/test-layout-contracts.js`. 3,068 checks green.
 
 ## Rev 4 — food that was counted but not shown (5 Oct, 13:54)
 

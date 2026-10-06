@@ -613,7 +613,8 @@ ck('Apply stamps lastAppliedAt; the model refreshes the workout summary from it,
    /markApplied\(\)/.test(chat) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
 ck('openChat() closes any open sheet so the composer is reachable', /if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
 ck('Today renders the thread inside the page, inside a Card, not as a trailing overlay',
-   /<Card>\s*<AIChatLog \/>\s*<\/Card>/.test(todayPage) && !/<MemberBottomNav \/>\s*<AIChatLog \/>/.test(todayPage));
+   // Props are allowed (Phase 3 passes today's meals); the placement is the rule.
+   /<Card>\s*<AIChatLog(\s[^>]*)?\s*\/>\s*<\/Card>/.test(todayPage) && !/<MemberBottomNav \/>\s*<AIChatLog/.test(todayPage));
 ck('the viewport meta asks Android to resize the layout viewport for the keyboard',
    /interactive-widget=resizes-content/.test(fs.readFileSync(path.join(CLIENT, '../index.html'), 'utf8')));
 ck('the keyboard inset hook exists for iOS (visualViewport delta)', /visualViewport/.test(read('../src/hooks/useKeyboardInset.js')));

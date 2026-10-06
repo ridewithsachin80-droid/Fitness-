@@ -5,6 +5,7 @@
  * Accessible via /progress (member route).
  */
 
+import ProgressPhotos from '../components/progress/ProgressPhotos';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -468,6 +469,8 @@ export default function Progress() {
 
       <div className="max-w-md mx-auto px-4 pt-4 pb-20 space-y-3">
 
+        {/* Phase 4: weekly progress photos, first week against the latest. */}
+        <Card><ProgressPhotos /></Card>
         {/* Quick stats */}
         <div className="grid grid-cols-2 gap-2">
           <StatBox

@@ -351,6 +351,9 @@ const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:5
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/progress-photos/')) return ok({ week: '2026-10-04', weeks: [
+      { week: '2026-10-04', photos: { front: { id: 9, url: null }, side: { id: 10, url: null } } },
+      { week: '2026-09-06', photos: { front: { id: 1, url: null }, back: { id: 3, url: null } } }] });
     if (u.includes('/plate/off-plan')) return ok({ items: [{ id: 5, member_id: 1, name: 'Mrs. Venkataramana Reddy Lakshmi', phone: '9876543210', meal: 'Pre-workout evening snack', outcome: 'extra',
       extras: [{ name: 'Masala peanuts with sev and a squeeze of lemon', grams: 45, kcal: 252 }, { name: 'Gulab jamun', grams: 80, kcal: 304 }], extras_kcal: 556,
       differences: ['less Paneer-mushroom-capsicum masala with menthya soppu (900 g of 1250.5 g)', 'Curd skipped'], at: '2026-10-05T10:42:00Z', day_kcal: 12971, target_kcal: 1500, photo_url: null }] });
@@ -496,6 +499,11 @@ const OVERFLOW_PAGES = [
      const P = () => <div className="p-4"><p>Today</p><PS job={job} onClose={() => {}} onRetake={() => {}} m={{ log: { food: [] }, terms: { kcal: 'kcal' }, update: () => {} }} /></div>;`],
   ['OffPlanTab', `import TF from './components/coach/TriageFeed.jsx';
      const P = () => { setTimeout(() => document.querySelector('[data-testid="triage-tab-offplan"]')?.click(), 400); return <div className="p-4"><TF /></div>; };`],
+  // Phase 4: the progress photo sheet and the two-week compare.
+  ['ProgressSheet', `import PS from './components/progress/ProgressPhotoSheet.jsx';
+     const P = () => <div className="p-4"><p>Today</p><PS open onClose={() => {}} /></div>;`],
+  ['ProgressCompare', `import PC from './components/progress/ProgressPhotos.jsx';
+     const P = () => <div className="p-4"><PC /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
@@ -2364,6 +2372,91 @@ async function foodLogGroupsTest() {
   ck('an item under Snack can be deleted, and the total drops with it (347)', !w.__items.some(i => i.id === 'b') && /347 kcal/.test(txt()), [w.__items.map(i => i.id), txt().match(/\d+ kcal/g)]);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 28. Phase 4 — progress photos: the Sunday card, this week's sheet, compare
+// ═══════════════════════════════════════════════════════════════════════════
+async function progressPhotosTest() {
+  console.log('\n[28] Progress photos (Phase 4)');
+  const api = stub('api-pp.js', `
+    window.__calls = []; window.__posts = []; window.__deletes = [];
+    const u = (w, p) => 'https://r2.example/progress/' + w + '/' + p + '.jpg?X-Amz-Signature=x';
+    const weeks = () => window.__ppWeeks || [];
+    const get = async (url) => { window.__calls.push(url);
+      if (/\\/progress-photos\\/(me|member\\/\\d+)$/.test(url)) return { data: { week: '2026-10-04', weeks: weeks() } };
+      return { data: {} }; };
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      const list = weeks(); let w = list.find(x => x.week === '2026-10-04');
+      if (!w) { w = { week: '2026-10-04', photos: {} }; list.unshift(w); window.__ppWeeks = list; }
+      w.photos[body.pose] = { id: 100 + Object.keys(w.photos).length, url: u('2026-10-04', body.pose) };
+      return { data: { id: 1, week: '2026-10-04', pose: body.pose } }; };
+    const del = async (url) => { window.__deletes.push(url); const id = +url.split('/').pop();
+      for (const w of weeks()) for (const k of Object.keys(w.photos)) if (w.photos[k].id === id) delete w.photos[k];
+      return { data: { ok: true } }; };
+    export default { get, post, put: post, patch: post, delete: del };`);
+  const prep = (weeks) => (win) => {
+    win.__ppWeeks = weeks;
+    win.confirm = () => true;
+    win.HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
+    win.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/jpeg;base64,UFA=';
+    win.Image = class { set src(v) { this._s = v; setTimeout(() => this.onload && this.onload(), 0); } get src() { return this._s; } get width() { return 3000; } get height() { return 4000; } };
+  };
+  const card = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import ProgressPhotoCard, { isSundayIST } from './components/progress/ProgressPhotoCard.jsx';
+    window.__isSun = isSundayIST;
+    // 4 Oct 2026 is a Sunday; 05:00 IST on Monday 5 Oct is still Sunday 23:30 UTC.
+    createRoot(document.getElementById('root')).render(<ProgressPhotoCard now={new Date(window.__now || '2026-10-04T06:00:00Z')} />);`, api);
+
+  const S = run(card, (w) => { prep([{ week: '2026-10-04', photos: { front: { id: 1, url: 'x' } } }])(w); }); await tick(300);
+  const sq = (id) => S.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('Sundays are worked out in India time (Sunday 23:30 UTC is already Monday in India)', S.w.__isSun(new Date('2026-10-04T06:00:00Z')) === true && S.w.__isSun(new Date('2026-10-04T19:00:00Z')) === false);
+  ck('on Sunday with 1 of 3 taken, the card says so', S.errors.length === 0 && /Progress photos · 1 of 3 done/.test(sq('pp-card')?.textContent || ''), S.errors.join('|'));
+  const M = run(card, (w) => { prep([])(w); w.__now = '2026-10-05T06:00:00Z'; }); await tick(300);
+  ck('on a weekday there is no card, and nothing is even loaded', !M.w.document.querySelector('[data-testid="pp-card"]') && M.w.__calls.length === 0);
+  const D = run(card, (w) => prep([{ week: '2026-10-04', photos: { front: { id: 1 }, side: { id: 2 }, back: { id: 3 } } }])(w)); await tick(300);
+  ck('with all three in, the card goes away', !D.w.document.querySelector('[data-testid="pp-card"]'));
+
+  // ── This week's sheet ───────────────────────────────────────────────────────
+  sq('pp-card').click(); await tick(400);
+  const d = S.w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('the sheet shows three tiles and the count', !!q('pp-tiles') && ['front', 'side', 'back'].every(p => q(`pp-tile-${p}`)) && /This week: 1 of 3/.test(d.body.textContent));
+  ck('an empty pose shows the outline guide and "Add"; a taken one shows the photo and "Retake"', !!q('pp-tile-side').querySelector('svg') && /Add/.test(q('pp-tile-side').textContent) && !!q('pp-tile-front').querySelector('img') && /Retake/.test(q('pp-tile-front').textContent));
+  ck('it says who sees them and for how long', /Only you and your coach see these, and they are deleted after 12 months/.test(d.body.textContent));
+  const fileIn = q('pp-tile-side').querySelector('input[type=file]');
+  ck('camera or gallery: no forced camera', fileIn && !fileIn.hasAttribute('capture') && fileIn.getAttribute('accept') === 'image/*');
+  Object.defineProperty(fileIn, 'files', { value: [new S.w.File([new Uint8Array([1, 2])], 's.jpg', { type: 'image/jpeg' })], configurable: true });
+  fileIn.dispatchEvent(new S.w.Event('change', { bubbles: true })); await tick(500);
+  const up = S.w.__posts[0];
+  ck('adding a side photo uploads it, downscaled, as "side"', up?.url === '/progress-photos' && up.body.pose === 'side' && up.body.image === 'UFA=', up);
+  ck('and the tile now shows it, 2 of 3', !!q('pp-tile-side').querySelector('img') && /This week: 2 of 3/.test(d.body.textContent));
+  q('pp-delete-front').click(); await tick(400);
+  ck('Delete asks, then removes that photo', S.w.__deletes[0] === '/progress-photos/1' && !q('pp-tile-front').querySelector('img'), S.w.__deletes);
+
+  // ── Compare ─────────────────────────────────────────────────────────────────
+  const cmp = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import ProgressPhotos from './components/progress/ProgressPhotos.jsx';
+    createRoot(document.getElementById('root')).render(<ProgressPhotos memberId={window.__coach ? 12 : null} />);`, api);
+  const weeks = [
+    { week: '2026-10-04', photos: { front: { id: 9, url: 'https://r2.example/new-front.jpg' }, side: { id: 10, url: 'https://r2.example/new-side.jpg' } } },
+    { week: '2026-09-27', photos: { front: { id: 7, url: 'https://r2.example/mid-front.jpg' } } },
+    { week: '2026-09-06', photos: { front: { id: 1, url: 'https://r2.example/first-front.jpg' }, side: { id: 2, url: 'https://r2.example/first-side.jpg' } } }];
+  const P = run(cmp, prep(weeks)); await tick(400);
+  const pq = (id) => P.w.document.querySelector(`[data-testid="${id}"]`);
+  const src = (side) => pq(`pp-side-${side}`)?.querySelector('img')?.getAttribute('src');
+  ck('the compare starts on the first week against the latest, front', P.errors.length === 0 && src('a') === 'https://r2.example/first-front.jpg' && src('b') === 'https://r2.example/new-front.jpg', [src('a'), src('b')]);
+  [...P.w.document.querySelectorAll('[role=tab]')].find(b => b.textContent === 'Side').click(); await tick(100);
+  ck('switching to Side shows both side photos', src('a') === 'https://r2.example/first-side.jpg' && src('b') === 'https://r2.example/new-side.jpg');
+  const selA = P.w.document.querySelector('select[aria-label="Earlier week"]');
+  selA.value = '2026-09-27'; selA.dispatchEvent(new P.w.Event('change', { bubbles: true })); await tick(100);
+  ck('a week with no side photo says so instead of showing nothing', /No side photo that week/.test(pq('pp-side-a').textContent));
+  ck('the member gets a "This week" button; the read-out says who sees them', !!pq('pp-open') && /Private to you and your coach/.test(pq('pp-compare').textContent));
+  const C = run(cmp, (w) => { prep(weeks)(w); w.__coach = true; }); await tick(400);
+  ck('the coach\'s view reads that member\'s photos and has no upload button', C.w.__calls.some(u => u === '/progress-photos/member/12') && !C.w.document.querySelector('[data-testid="pp-open"]') && /Private to the member and you/.test(C.w.document.body.textContent));
+  const E = run(cmp, prep([])); await tick(300);
+  ck('no photos yet: a plain line, not an empty box', /No photos yet/.test(E.w.document.querySelector('[data-testid="pp-empty"]')?.textContent || ''));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2514,6 +2607,7 @@ async function overflowTest() {
     await platePhotoTest();
     await coachDocAttachTest();
     await foodLogGroupsTest();
+    await progressPhotosTest();
     await overflowTest();
     await cspTest();
   } catch (err) {
