@@ -116,7 +116,7 @@ export default function Onboarding({ onDone } = {}) {
   // ── 1. Who ──────────────────────────────────────────────────────────────
   if (step === 0) return (
     <Screen step={0} total={TOTAL}>
-      <Question eyebrow="Welcome to FitLife" title="Who\u2019s using FitLife?" sub="We adjust the words, the detail and the text size to suit you." />
+      <Question eyebrow="Welcome to FitLife" title="Who’s using FitLife?" sub="We adjust the words, the detail and the text size to suit you." />
       <div className="space-y-2" data-testid="onb-modes">
         {AGE_MODES.map(m => {
           const on = ageMode === m.id;
@@ -192,7 +192,7 @@ export default function Onboarding({ onDone } = {}) {
   const primary = GOAL_OPTIONS.find(g => g.id === goals[0]);
   return (
     <Screen step={3} total={TOTAL}>
-      <Question eyebrow="You\u2019re set" title={`Let\u2019s ${primary ? primary.label.toLowerCase() : 'get going'}, together.`}
+      <Question eyebrow="You’re set" title={`Let’s ${primary ? primary.label.toLowerCase() : 'get going'}, together.`}
         sub={goals.length > 1 ? `Also: ${goals.slice(1).map(id => GOAL_OPTIONS.find(g => g.id === id)?.label.toLowerCase()).join(', ')}.` : null} />
 
       <Eyebrow className="mb-2">Pick an avatar</Eyebrow>
@@ -209,11 +209,11 @@ export default function Onboarding({ onDone } = {}) {
           <span className="w-7 h-7 rounded-full bg-gold/[0.14] text-gold flex items-center justify-center"><Icon name="spark" size={14} /></span>
           <span className="text-sm font-bold text-white">This is how you log — one message a day</span>
         </div>
-        <p className="text-body-sm text-mid leading-relaxed">Say it the way you\u2019d tell a friend. I\u2019ll fill weight, food, water, walks and sleep from it and you tap Apply.</p>
+        <p className="text-body-sm text-mid leading-relaxed">Say it the way you’d tell a friend. I’ll fill weight, food, water, walks and sleep from it and you tap Apply.</p>
         <button type="button" onClick={() => done(true)} disabled={saving} data-testid="onb-send-sample"
           className="mt-3 w-full text-left rounded-xl bg-surface border border-hair px-3 py-2.5 text-body-sm text-white italic active:scale-[0.99] transition-transform disabled:opacity-50">
-          \u201C{SAMPLE_MESSAGE}\u201D
-          <span className="block not-italic text-caption font-bold text-gold mt-1">Try this message \u203A</span>
+          “{SAMPLE_MESSAGE}”
+          <span className="block not-italic text-caption font-bold text-gold mt-1">Try this message ›</span>
         </button>
       </div>
 

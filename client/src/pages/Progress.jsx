@@ -16,6 +16,7 @@ import {
 import { HeroNumber, Segmented, Eyebrow, Icon, EmptyState } from '../components/primitives';
 import { calcFoodMacros } from '../lib/day';
 import { haptic } from '../store/settingsStore';
+import { firstName } from '../utils/personName';
 import { useAuthStore }  from '../store/authStore';
 import { getLogRange, getMyProfile }   from '../api/logs';
 import { Card, SectionTitle, PageLoader, MemberBottomNav } from '../components/UI';
@@ -31,6 +32,22 @@ function nDaysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString().split('T')[0];
+}
+
+// Chart colours for this page. Carbs and fat were two near-identical yellows
+// (#fbbf24 and #d9b451): the lines could not be told apart. These three are
+// checked for separation, including for colour-blind readers, on the card colour.
+const MACRO = { kcal: '#B08A4A', pro: '#5895DC', carb: '#B38F1F', fat: '#D9608F' };
+// The chart pop-up, dark like the card it sits on (the library's default is a white box).
+const TIP = {
+  contentStyle: { fontSize: 11, borderRadius: 10, background: '#1A1C20', border: '1px solid rgba(255,255,255,0.14)', color: '#FFFFFF', padding: '6px 10px' },
+  labelStyle: { color: '#9EA3B0', marginBottom: 2 },
+  itemStyle: { color: '#FFFFFF', padding: 0 },
+};
+/** "1716.00" is 1716 and "26.10" is 26.1; anything that is not a plain number is left alone. */
+function tidyNumber(v) {
+  const t = String(v ?? '').trim();
+  return /^-?\d+(\.\d+)?$/.test(t) ? String(Number(t)) : t;
 }
 
 function shortDate(str) {
@@ -348,9 +365,14 @@ export default function Progress() {
     d.setDate(d.getDate() - 1);
   }
 
-  // 30-day compliance average
-  const avg30 = last30.length
-    ? Math.round(last30.reduce((s, l) => s + (l.compliance_pct || 0), 0) / last30.length)
+  // 30-day compliance average: the same 30 calendar days the grid below shows
+  // (today and the 29 before). This used to average the last 30 LOGS, which
+  // for someone logging twice a week reached back months, so "30-day
+  // compliance" read 6% here and 0% on Profile for the same member.
+  const from30 = (() => { const s = new Date(today() + 'T12:00:00'); s.setDate(s.getDate() - 29); return istDate(s); })();
+  const in30 = sorted.filter(l => l.log_date >= from30);
+  const avg30 = in30.length
+    ? Math.round(in30.reduce((s, l) => s + (l.compliance_pct || 0), 0) / in30.length)
     : 0;
 
   // Total days logged in 90 days
@@ -399,7 +421,7 @@ export default function Progress() {
           <div className="flex items-end justify-between gap-3 mt-2">
             <div className="min-w-0">
               <Eyebrow tone="gold">Progress</Eyebrow>
-              <h1 className="font-display text-num font-medium text-white leading-tight mt-1 truncate">{user?.name ? `${user.name.split(' ')[0]}\u2019s` : 'Your'} journey</h1>
+              <h1 className="font-display text-num font-medium text-white leading-tight mt-1 truncate">{firstName(user?.name) ? `${firstName(user.name)}\u2019s` : 'Your'} journey</h1>
             </div>
             <Segmented size="sm" name="range" value={range} onChange={setRange} className="w-[168px] flex-shrink-0"
               options={[{ id: '7', label: '7d' }, { id: '30', label: '30d' }, { id: '90', label: '90d' }]} />
@@ -532,7 +554,9 @@ export default function Progress() {
             {streak < 3 && avg30 < 50 && (
               <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
                 <span className="text-lg">💪</span>
-                <span>Every day counts. Log today and start your streak!</span>
+                <span>{streak >= 1
+                  ? `Every day counts. Log today to keep your ${streak}-day streak going.`
+                  : 'Every day counts. Log today and start your streak!'}</span>
               </div>
             )}
           </div>
@@ -547,10 +571,12 @@ export default function Progress() {
                 <div key={i} className="flex items-center justify-between py-2 border-b border-hair last:border-0">
                   <div>
                     <span className="text-sm font-medium text-white">{l.test_name}</span>
-                    {l.unit && <span className="text-xs text-lo ml-1">{l.unit}</span>}
+                    {/* "Muscle Mass %" already says its unit: not "Muscle Mass % %". */}
+                    {l.unit && !String(l.test_name || '').trim().toLowerCase().endsWith(String(l.unit).trim().toLowerCase())
+                      && <span className="text-xs text-lo ml-1">{l.unit}</span>}
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-bold text-blue-400">{l.value}</span>
+                    <span className="text-sm font-bold text-blue-400">{tidyNumber(l.value)}</span>
                     <div className="text-xs text-lo">{new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</div>
                   </div>
                 </div>
@@ -565,18 +591,14 @@ export default function Progress() {
         {tab === 'nutrition' && (<>
         {/* Sprint 12: 7-day nutrition trend */}
         {nutritionTrend.length <= 1 && (
-          <ChartEmpty icon="🥗" title="7-Day Nutrition Trend"
+          <ChartEmpty icon="🥗" title="Nutrition Trend"
             need="Log food on two days to see how your macros move." />
         )}
         {nutritionTrend.length > 1 && (
           <Card>
-            <SectionTitle icon="🥗">7-Day Nutrition Trend</SectionTitle>
-            <div className="flex gap-3 text-xs mb-3 flex-wrap">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-400 inline-block"/>Calories</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block"/>Protein</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"/>Carbs</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"/>Fat</span>
-            </div>
+            <SectionTitle icon="🥗">Nutrition Trend</SectionTitle>
+            {/* These are the last logged days, not the last calendar week: say so. */}
+            <p className="text-caption text-lo -mt-2 mb-3" data-testid="nutrition-trend-span">Your last {nutritionTrend.length} logged days</p>
             {/* Calories bar */}
             <p className="text-xs text-lo font-medium mb-1">Calories (kcal)</p>
             <ResponsiveContainer width="100%" height={90}>
@@ -584,27 +606,34 @@ export default function Progress() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']}
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }} />
+                <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                  contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle} />
                 {profile?.macros?.kcal && (
                   <ReferenceLine y={profile.macros.kcal} stroke="#e0c98a" strokeDasharray="3 3" />
                 )}
-                <Bar dataKey="kcal" fill="#B08A4A" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="kcal" fill={MACRO.kcal} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
 
             {/* Macros line chart */}
-            <p className="text-xs text-lo font-medium mt-3 mb-1">Protein · Carbs · Fat (g)</p>
+            <div className="flex items-center justify-between gap-2 mt-3 mb-1 flex-wrap" data-testid="macro-legend">
+              <p className="text-xs text-lo font-medium">Grams a day</p>
+              <div className="flex gap-3 text-xs text-mid">
+                {[['Protein', MACRO.pro], ['Carbs', MACRO.carb], ['Fat', MACRO.fat]].map(([label, c]) => (
+                  <span key={label} className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: c }} />{label}</span>
+                ))}
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height={110}>
               <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e7e5e4' }}
-                  formatter={(v, name) => [`${v}g`, name.charAt(0).toUpperCase() + name.slice(1)]} />
-                <Line type="monotone" dataKey="pro"  stroke="#8FA8C8" strokeWidth={2} dot={{ r: 3, fill: '#8FA8C8' }} />
-                <Line type="monotone" dataKey="carb" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3, fill: '#fbbf24' }} />
-                <Line type="monotone" dataKey="fat"  stroke="#d9b451" strokeWidth={2} dot={{ r: 3, fill: '#d9b451' }} />
+                <Tooltip contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle}
+                  cursor={{ stroke: 'rgba(255,255,255,0.18)' }} formatter={(v, name) => [`${v} g`, name]} />
+                <Line type="monotone" name="Protein" dataKey="pro"  stroke={MACRO.pro}  strokeWidth={2} dot={{ r: 3, fill: MACRO.pro,  strokeWidth: 0 }} />
+                <Line type="monotone" name="Carbs"   dataKey="carb" stroke={MACRO.carb} strokeWidth={2} dot={{ r: 3, fill: MACRO.carb, strokeWidth: 0 }} />
+                <Line type="monotone" name="Fat"     dataKey="fat"  stroke={MACRO.fat}  strokeWidth={2} dot={{ r: 3, fill: MACRO.fat,  strokeWidth: 0 }} />
               </ComposedChart>
             </ResponsiveContainer>
 
@@ -617,10 +646,10 @@ export default function Progress() {
               return (
                 <div className="flex gap-3 text-xs mt-2 px-1 pt-2 border-t border-hair flex-wrap">
                   <span className="text-lo">Avg/day:</span>
-                  <span className="font-bold text-orange-300">{Math.round(avg.kcal/n)} kcal</span>
-                  <span className="text-blue-300">P {(avg.pro/n).toFixed(1)}g</span>
-                  <span className="text-amber-400">C {(avg.carb/n).toFixed(1)}g</span>
-                  <span className="text-amber-400">F {(avg.fat/n).toFixed(1)}g</span>
+                  <span className="font-bold text-white tabular-nums">{Math.round(avg.kcal/n)} kcal</span>
+                  {[['P', avg.pro, MACRO.pro], ['C', avg.carb, MACRO.carb], ['F', avg.fat, MACRO.fat]].map(([k, v, c]) => (
+                    <span key={k} className="flex items-center gap-1 text-mid tabular-nums"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: c }} />{k} {(v/n).toFixed(1)} g</span>
+                  ))}
                 </div>
               );
             })()}
@@ -660,14 +689,14 @@ export default function Progress() {
           <StatBox
             value={`${streak} ${plural(streak, 'day')}`}
             label="Logging Streak"
-            sub={streak >= 7 ? 'Best run this month' : streak >= 3 ? 'Keep going' : 'Start today'}
+            sub={streak >= 7 ? 'Best run this month' : streak >= 3 ? 'Keep going' : streak >= 1 ? 'Good start' : 'Start today'}
             tone={streak >= 3 ? 'good' : null}
           />
           <StatBox
-            value={`${avg30}%`}
+            value={in30.length ? `${avg30}%` : '—'}
             label="30-day Compliance"
-            sub={avg30 >= 75 ? 'Strong' : avg30 >= 50 ? 'Steady' : 'Room to improve'}
-            tone={avg30 >= 75 ? 'good' : avg30 >= 50 ? null : 'warn'}
+            sub={!in30.length ? 'Nothing logged in 30 days' : avg30 >= 75 ? 'Strong' : avg30 >= 50 ? 'Steady' : 'Room to improve'}
+            tone={!in30.length ? null : avg30 >= 75 ? 'good' : avg30 >= 50 ? null : 'warn'}
           />
           <StatBox
             value={daysLogged}
@@ -683,7 +712,7 @@ export default function Progress() {
         <Card>
           <div className="flex items-baseline justify-between mb-3">
             <Eyebrow>Last 30 days</Eyebrow>
-            <span className="text-caption text-mid"><span className="font-bold text-white tabular-nums">{avg30}%</span> average</span>
+            <span className="text-caption text-mid"><span className="font-bold text-white tabular-nums">{in30.length ? `${avg30}%` : '—'}</span> average</span>
           </div>
           {(() => {
             const byDate = new Map(sorted.map(l => [l.log_date, l]));

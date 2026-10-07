@@ -104,7 +104,9 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
             ))}
           </div>
 
-          {/* Volume trend — simple bars, no chart library needed */}
+          {/* Volume trend — simple bars, no chart library needed. Only when some
+              weight was lifted: a walking-only month drew a heading over a blank. */}
+          {withKcal.some(x => Number(x.volume_kg) > 0) && (<>
           <p className="text-tiny font-bold tracking-wider text-dim mb-1.5">
             Volume per session
           </p>
@@ -119,6 +121,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
               );
             })}
           </div>
+          </>)}
 
           {/* Recent sessions */}
           <p className="text-tiny font-bold tracking-wider text-dim mb-1.5">

@@ -434,7 +434,11 @@ export default function Coach() {
       ? +(profile.start_weight - latestW).toFixed(1) : null;
     const flaggedNotes = notes.filter(n => n.flagged);
 
+    // The viewport line is what makes this readable on a phone: without it
+    // Android drew the page 980 px wide and shrank it to fit, so the report
+    // was a postage stamp in the corner of the screen.
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>FitLife Report — ${profile.name}</title>
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
@@ -445,7 +449,7 @@ export default function Coach() {
       .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px}
       .stat{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px}
       .stat .val{font-size:20px;font-weight:700;color:#15803d}
-      .stat .lbl{font-size:11px;color:#4ade80;margin-top:2px}
+      .stat .lbl{font-size:11px;color:#166534;margin-top:2px}
       table{width:100%;border-collapse:collapse;font-size:12px}
       th{background:#f5f5f4;padding:6px 8px;text-align:left;font-weight:600;color:#57534e;border-bottom:2px solid #e7e5e4}
       td{padding:5px 8px;border-bottom:1px solid #f5f5f4}
@@ -455,6 +459,8 @@ export default function Coach() {
       .flag{background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:8px;border-left:3px solid #ef4444;margin-bottom:8px}
       .note-item{padding:8px 12px;border-radius:8px;background:#f5f5f4;margin-bottom:6px;font-size:12px}
       .footer{margin-top:32px;padding-top:12px;border-top:1px solid #e7e5e4;color:#a8a29e;font-size:11px;display:flex;justify-content:space-between}
+      @media screen and (max-width:640px){body{padding:16px;font-size:14px}h1{font-size:20px}.meta{font-size:12px;line-height:1.7}
+        table{font-size:12px}th,td{padding:5px 4px}.tablewrap{overflow-x:auto}.footer{font-size:11px}}
       @media print{body{padding:20px}@page{margin:1.5cm}}
     </style></head><body>
     <h1>${profile.name}</h1>

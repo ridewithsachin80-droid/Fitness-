@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { firstName } from '../utils/personName';
 import axios from 'axios';
 import { useAuthStore, takeLogoutReason } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -316,7 +317,7 @@ export default function Login() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-mid">Welcome back</p>
-                  <p className="font-display text-lg font-medium text-white leading-tight truncate">{remembered.name.split(' ')[0]}</p>
+                  <p className="font-display text-lg font-medium text-white leading-tight truncate">{firstName(remembered.name, remembered.name)}</p>
                 </div>
                 <button onClick={notMe} style={{ minHeight: 36 }}
                   className="mt-1 text-xs text-lo underline underline-offset-2">

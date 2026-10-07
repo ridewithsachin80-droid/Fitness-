@@ -63,7 +63,20 @@ const GLYPH = {
   '👥': 'M8 11a3 3 0 100-6 3 3 0 000 6zM3 19c0-3 2-5 5-5s5 2 5 5M16 6a3 3 0 010 6M17 14c2 0 4 2 4 5', // people
   '✨': 'M12 4l1.5 4.5L18 10l-4.5 1.5L12 16l-1.5-4.5L6 10l4.5-1.5L12 4z', // spark
   '🍽': 'M7 3v8M5 3v4a2 2 0 004 0V3M16 3c-1.5 2-2 4-2 6h4V3M16 9v11M7 11v9', // cutlery
-  '⏰': 'M12 5a7 7 0 100 14 7 7 0 000-14zm0 3v4l3 2',       // clock
+  '⏰': 'M12 5a7 7 0 100 14 7 7 0 000-14zm0 3v4l3 2',       // clock  // Added 7 Oct: these thirteen were falling back to the dash on a phone.
+  '🧠': 'M12 6a2 2 0 100-4 2 2 0 000 4zM6 9h12M12 9v6M9 21l3-6 3 6', // figure (muscle coverage)
+  '🎙️': 'M12 4a3 3 0 00-3 3v4a3 3 0 006 0V7a3 3 0 00-3-3zM6 11a6 6 0 0012 0M12 17v3M9 20h6', // microphone
+  '📅': 'M5 6h14v14H5zM5 10h14M9 3v4M15 3v4', // calendar
+  '🥣': 'M4 12h16a8 8 0 01-16 0zM9 8a3 3 0 016 0', // bowl
+  '💧': 'M12 3s6 7 6 11a6 6 0 01-12 0c0-4 6-11 6-11z', // water drop
+  '🏥': 'M5 5h14v14H5zM12 8v8M8 12h8', // health
+  '⚙️': 'M12 9a3 3 0 100 6 3 3 0 000-6zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1', // gear
+  '👤': 'M12 12a4 4 0 100-8 4 4 0 000 8zM5 20c0-3.5 3-6 7-6s7 2.5 7 6', // person
+  '🔑': 'M8 19a4 4 0 100-8 4 4 0 000 8zM11 12l9-9M17 6l3 3M14 9l2 2', // key
+  '🔐': 'M6 11h12v9H6zM9 11V8a3 3 0 016 0v3', // lock
+  '🎨': 'M12 4a8 8 0 100 16 8 8 0 000-16zM12 4v16M12 8h6.9M12 12h8M12 16h6.9', // appearance
+  '😊': 'M12 4a8 8 0 100 16 8 8 0 000-16zM9 14c1 1.5 5 1.5 6 0M9 10h.01M15 10h.01', // face
+  '🛡️': 'M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-3z', // shield
 };
 
 function SectionGlyph({ name }) {

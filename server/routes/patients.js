@@ -190,8 +190,11 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
             WHERE mp.patient_id = u.id AND mp.active = true LIMIT 1) AS monitor_name,
            (SELECT COUNT(*) FROM daily_logs WHERE patient_id = u.id) AS total_logs,
            (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS current_weight,
+           -- Today (India) and the 29 days before: the same 30 calendar days the
+           -- member's Progress grid shows, so the two screens give one figure.
            (SELECT AVG(compliance_pct) FROM daily_logs
-            WHERE patient_id = u.id AND log_date >= NOW() - INTERVAL '30 days') AS avg_compliance_30
+            WHERE patient_id = u.id
+              AND log_date >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 29) AS avg_compliance_30
          FROM users u
          JOIN patient_profiles pp ON pp.user_id = u.id
          WHERE u.id = $1`,

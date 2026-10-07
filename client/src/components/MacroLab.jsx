@@ -142,7 +142,10 @@ export default function MacroLab({ memberId, onChanged }) {
           <div className={`rounded-xl px-3 py-2.5 border text-caption leading-relaxed ${
             adh.verdict ? STATUS_STYLE.difference : STATUS_STYLE.no_difference}`}>
             {adh.verdict || 'No meaningful difference in how well they sustain either split.'}
-            <p className="text-eyebrow text-lo mt-1.5">{adh.note}</p>
+            {/* With no verdict the server's note IS that sentence: once is enough. */}
+            {adh.note && adh.note !== (adh.verdict || 'No meaningful difference in how well they sustain either split.') && (
+              <p className="text-eyebrow text-lo mt-1.5">{adh.note}</p>
+            )}
           </div>
         </div>
       )}

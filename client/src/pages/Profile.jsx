@@ -625,12 +625,7 @@ export default function Profile() {
               <span className="flex-1 text-sm font-semibold text-white">Settings<span className="block text-caption text-mid font-normal">Reminders, text size, voice, meal slots</span></span>
               <Icon name="chevron-right" size={14} className="text-ghost" />
             </button>
-            <button type="button" onClick={() => { haptic(8); navigate('/devices'); }}
-              style={{ minHeight: 48 }} className="w-full flex items-center gap-3 text-left py-2 border-b border-hair">
-              <span className="w-8 h-8 rounded-full bg-white/[0.05] text-mid flex items-center justify-center"><Icon name="phone" size={15} /></span>
-              <span className="flex-1 text-sm font-semibold text-white">Connected devices</span>
-              <Icon name="chevron-right" size={14} className="text-ghost" />
-            </button>
+            {/* Connected devices has its own section just above: one row, not two. */}
             <button type="button" onClick={() => { haptic(8); logout(); }} data-testid="account-signout"
               style={{ minHeight: 48 }} className="w-full flex items-center gap-3 text-left py-2">
               <span className="w-8 h-8 rounded-full bg-red-400/[0.08] text-red-400 flex items-center justify-center"><Icon name="logout" size={15} /></span>

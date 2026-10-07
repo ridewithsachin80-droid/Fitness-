@@ -1,3 +1,4 @@
+import { firstName } from './personName';
 import { plural } from '../constants';
 /**
  * personalMessage.js — send a member a message from the coach's own number.
@@ -50,7 +51,9 @@ export function smsLink(phone, text) {
   return `sms:+${n}${isIOS ? '&' : '?'}body=${encodeURIComponent(text)}`;
 }
 
-const first = name => String(name || '').trim().split(/\s+/)[0] || 'there';
+// The app's one name rule (utils/personName): "Mrs. Padmini" is Padmini, not
+// "Mrs." — this text goes out on WhatsApp under the coach's own name.
+const first = name => firstName(name, 'there');
 
 /**
  * The app's own address, taken from wherever the coach is currently running it.

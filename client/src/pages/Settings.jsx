@@ -234,6 +234,10 @@ export default function Settings() {
           </div>
         </Card>
 
+        {/* Member-only: the age group changes the member's wording, the avatar sits on
+            their greeting, and meal slots shape their own food log. A coach or admin
+            has none of these, and was shown all three. */}
+        {user?.role === 'patient' && (<>
         {/* ── Age mode ───────────────────────────────────────────── */}
         <Card>
           <SectionTitle icon="👤" tooltip="Changes terminology, text size, and which features are shown">Who is using this app?</SectionTitle>
@@ -287,6 +291,7 @@ export default function Settings() {
             ))}
           </div>
         </Card>
+        </>)}
 
 
         {/* Members only — a coach has no day to log by voice. */}
@@ -386,7 +391,8 @@ export default function Settings() {
           {/* Permission state first. "No active subscriptions" told a blocked
               member nothing about WHY nothing ever arrives, and gave them no
               way back — so the evening recap just silently never came. */}
-          <PushStatus />
+          <PushStatus onRegistered={() => getSubscriptions()
+            .then(r => setSubs(Array.isArray(r.data) ? r.data : [])).catch(() => {})} />
 
           {loading ? <p className="text-xs text-lo py-2">Loading…</p> : subs.length === 0 ? (
             <div className="text-center py-4">
@@ -479,26 +485,51 @@ export default function Settings() {
 //   denied      — the browser is blocking us; only site settings can undo it,
 //                 so say so plainly instead of leaving them guessing
 //   unsupported — iOS Safari outside an installed PWA, mostly
-function PushStatus() {
+function PushStatus({ onRegistered }) {
   const [perm, setPerm] = useState(() => pushPermission());
   const [busy, setBusy] = useState(false);
+  // 'checking' | 'ok' | 'failed'. "Allowed by the browser" is not "registered
+  // with FitLife": only the member's Today screen ever registered a phone, so a
+  // coach or admin read "Notifications are on for this device" directly above
+  // "No devices registered yet", and nothing could ever arrive. Opening this
+  // card now registers the phone (safe to repeat) and says so if it could not.
+  const [reg, setReg] = useState('checking');
+
+  const register = async () => {
+    setReg('checking');
+    const ok = await registerPushSubscription().catch(() => false);
+    setReg(ok ? 'ok' : 'failed');
+    if (ok) onRegistered?.();
+  };
+  useEffect(() => { if (perm === 'granted') register(); }, [perm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enable = async () => {
     setBusy(true);
     try {
       const p = await Notification.requestPermission();
-      setPerm(p);
-      if (p === 'granted') await registerPushSubscription();
+      setPerm(p);            // 'granted' runs register() through the effect above
     } catch (_) { /* leave state as-is */ }
     finally { setBusy(false); }
   };
 
   if (perm === 'granted') {
+    if (reg === 'failed') {
+      return (
+        <div className="mb-3 rounded-xl px-3 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]" data-testid="push-not-registered">
+          <p className="text-xs font-semibold text-amber-300">Allowed, but this phone is not registered</p>
+          <p className="text-caption text-mid mt-1 leading-relaxed">
+            Your browser allows notifications, but FitLife could not register this phone, so nothing will arrive here yet.
+          </p>
+          <button onClick={register} style={{ minHeight: 36 }}
+            className="mt-2 text-caption font-bold text-gold border border-gold rounded-lg px-3">Try again</button>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2
-        border border-gold/20 bg-gold/[0.06]">
+        border border-gold/20 bg-gold/[0.06]" data-testid="push-on">
         <span className="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0" />
-        <p className="text-caption text-gold-light">Notifications are on for this device.</p>
+        <p className="text-caption text-gold-light">{reg === 'checking' ? 'Registering this phone…' : 'Notifications are on for this device.'}</p>
       </div>
     );
   }

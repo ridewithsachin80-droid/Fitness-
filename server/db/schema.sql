@@ -959,6 +959,12 @@ CREATE TABLE IF NOT EXISTS voice_samples (
   UNIQUE (patient_id, phrase_id)
 );
 
+-- Voice pilot: why an engine gave no answer for a recording (HTTP status and
+-- the provider's message; never the key). Without it "no answer" could not
+-- be told apart from "busy", "key missing" or "audio type not accepted".
+ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS gemini_error  VARCHAR(200);
+ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS whisper_error VARCHAR(200);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

@@ -377,7 +377,7 @@ function MemberCard({ member: p, todayStr, onClick }) {
               )}
             </>
           ) : (
-            <span className="text-xs text-ghost">No weight</span>
+            <div className="text-xs text-ghost">No weight</div>
           )}
           <div className={`mt-1.5 text-xs font-bold px-2 py-0.5 rounded-full inline-block ${badge.bg} ${badge.text}`}>
             {badge.label}

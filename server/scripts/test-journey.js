@@ -106,6 +106,21 @@ const IST = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0
   ck('macro targets present', r.data.macros?.kcal === 1800, r.data.macros);
   ck('today_energy block present', !!r.data.today_energy, Object.keys(r.data));
 
+  // 30-day compliance on Profile: today (India) and the 29 days before — the
+  // same 30 calendar days the Progress grid shows. Live, 7 Oct: Profile said
+  // 0% and Progress 6% for one member, because the two used different windows.
+  {
+    const ist = (n) => `((NOW() AT TIME ZONE 'Asia/Kolkata')::date - ${n})`;
+    ck('no logs in 30 days: no figure, not 0%', r.data.avg_compliance === null, r.data.avg_compliance);
+    await pool.query(`INSERT INTO daily_logs (patient_id, log_date, compliance_pct) VALUES ($1, ${ist(29)}, 70), ($1, ${ist(30)}, 10), ($1, ${ist(45)}, 100)`, [member.id]);
+    let p2 = await call('GET', '/api/patients/me', mTok);
+    ck('the day 29 days ago counts; 30 and 45 days ago do not (70, not 60 or 40)', p2.data.avg_compliance === 70, p2.data.avg_compliance);
+    await pool.query(`UPDATE daily_logs SET compliance_pct = 0 WHERE patient_id=$1 AND log_date = ${ist(29)}`, [member.id]);
+    p2 = await call('GET', '/api/patients/me', mTok);
+    ck('logged days that scored 0 give 0%, a real figure', p2.data.avg_compliance === 0, p2.data.avg_compliance);
+    await pool.query(`DELETE FROM daily_logs WHERE patient_id=$1`, [member.id]);
+  }
+
   // ══ 3. MORNING WEIGHT ══════════════════════════════════════════════════════
   step('3. MORNING WEIGHT');
   r = await call('POST', `/api/logs/${today}`, mTok, { weight_kg: 83.0 });

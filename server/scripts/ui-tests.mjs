@@ -736,7 +736,7 @@ async function todayTest() {
   ck('the old cards are gone: no day strip, no coach card, no deficit chip, no dots card', !q('day-strip') && !q('coach-card') && !q('balance-chip'));
   ck('Move: the coach\'s program day with exercise count and Start workout', /Push ·/.test(q('plan-move').textContent) && /2 exercises/.test(q('plan-move').textContent) && /Start workout/.test(q('plan-move').textContent), q('plan-move').textContent);
   ck('Eat: 666 / 1,800 kcal and 37 / 120 g protein', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent) && /37/.test(q('plan-eat').textContent) && /120 g protein/.test(q('plan-eat').textContent), q('plan-eat').textContent);
-  ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /1 meal plan pending/.test(q('plan-eat').textContent) && /1,373 kcal under target/.test(q('plan-balance').textContent), q('plan-eat').textContent);
+  ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /\d of \d meals? logged/.test(q('plan-eat').textContent) && !/meal plans? pending/.test(q('plan-eat').textContent) && /1,373 kcal under target/.test(q('plan-balance').textContent), q('plan-eat').textContent);
   ck('Eat: View meal plan is the action while a plan is pending', /View meal plan/.test(q('plan-eat').textContent));
   ck('Eat: nutrients N/31 inline', /\/31 nutrients/.test(q('chip-nutrition').textContent));
   ck('Recover: 1.5 / 3.0 L and 7h 45m inline', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent) && /7h 45m/.test(q('chip-sleep').textContent));
@@ -1079,6 +1079,7 @@ async function progressTest() {
     // 20 logged days out of the last 30: weight drifting 84.0 → 82.4, compliance
     // alternating, food on the last 3 days. Day -3, -5 and -9 are missing on purpose.
     const skip = new Set([3, 5, 9, 12, 15, 17, 19, 22, 25, 27]);
+    if (window.__streak2) skip.add(2);          // logged today and yesterday only: a 2-day streak
     const logs = [];
     for (let i = 29; i >= 0; i--) {
       if (skip.has(i)) continue;
@@ -1092,7 +1093,9 @@ async function progressTest() {
     // the 90-day request also gets one old point so 90d differs from 30d
     const routes = [
       [/^\\/logs\\/range\\//, () => [{ log_date: istDaysAgo(60), weight_kg: '86.0', compliance_pct: 80, food_items: [] }, ...logs]],
-      [/^\\/members\\/me$/, () => ({ start_weight: '88', target_weight: '78', height_cm: '172', labs: [] })],
+      [/^\\/members\\/me$/, () => ({ start_weight: '88', target_weight: '78', height_cm: '172', labs: [
+        { test_name: 'Muscle Mass %', unit: '%', value: '70.20', test_date: istDaysAgo(40) },
+        { test_name: 'BMR', unit: 'Cal', value: '1716.00', test_date: istDaysAgo(40) }] })],
       [/^\\/members\\/me\\/weekly-report$/, () => ({ report: null, history: [] })],
       [/^\\/workouts\\/summary$/, () => ({ sessions: [] })],
       [/^\\/workouts\\/logged-exercises$/, () => []],
@@ -1158,12 +1161,38 @@ async function progressTest() {
   const pageSrc = fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8');
   ck('Training holds the training trends; Nutrition the nutrition trend and a way to the diet plan',
      /tab === 'training' && \(<>[\s\S]*?Training Trends[\s\S]*?<StrengthProgress \/>[\s\S]*?<MuscleCoverage \/>/.test(pageSrc)
-     && /tab === 'nutrition' && \(<>[\s\S]*?7-Day Nutrition Trend[\s\S]*?progress-to-plan/.test(pageSrc));
+     && /tab === 'nutrition' && \(<>[\s\S]*?Nutrition Trend[\s\S]*?progress-to-plan/.test(pageSrc));
   ck('each section appears exactly once on the page', ['<ProgressPhotos />', '<WeeklyReportCard />', 'Log History', 'Your Journey', 'Latest Lab Values', '<StrengthProgress />'].every(x => pageSrc.split(x).length === 2));
   groupTab('Training').click(); await tick(200);
   ck('switching to Training shows Training and hides the Reports grid', groupTab('Training').getAttribute('aria-selected') === 'true' && !q('heat-grid'));
   ck('nutrition trend gets its macros from lib/day (no hand-copied reduce)', !/const macros = items\.reduce/.test(fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8')));
   ck('no error escaped', errors.length === 0, errors.join('|'));
+
+  // ── 7 Oct review (from Sachin's Android screenshots) ──────────────────────
+  {
+    const skipSet = new Set([3, 5, 9, 12, 15, 17, 19, 22, 25, 27]); const vals = [];
+    for (let i = 29; i >= 0; i--) if (!skipSet.has(i)) vals.push(i % 3 === 0 ? 90 : i % 3 === 1 ? 60 : 30);
+    const want = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+    const withOld = Math.round((vals.reduce((a, b) => a + b, 0) + 80) / (vals.length + 1));
+    groupTab('Reports').click(); await tick(200);
+    const shown = (d.body.textContent.match(/(\d+)% average/) || [])[1];
+    ck('"30-day" compliance is the 30 days the grid shows: the 60-day-old log is not in it', want !== withOld && Number(shown) === want, { shown, want, withOld });
+    ck('a 3-day streak says "Keep going"', /3 days/.test(d.body.textContent) && /Keep going/.test(d.body.textContent));
+    groupTab('Body').click(); await tick(200);
+    const bt = d.body.textContent;
+    ck('lab values: "Muscle Mass %" does not get a second %, and 70.20 / 1716.00 read 70.2 / 1716', /Muscle Mass %70\.2(?!0)/.test(bt) && !/Muscle Mass %\s*%/.test(bt) && /BMR\s*Cal\s*1716(?!\.)/.test(bt), bt.slice(bt.indexOf('Muscle Mass'), bt.indexOf('Muscle Mass') + 60));
+    groupTab('Nutrition').click(); await tick(200);
+    const sw = [...(q('macro-legend')?.querySelectorAll('span[style]') || [])].map(x => x.style.background || x.style.backgroundColor);
+    ck('nutrition chart: Protein, Carbs and Fat each have their own colour (carbs and fat were both yellow)', sw.length === 3 && new Set(sw).size === 3 && /Protein/.test(q('macro-legend').textContent) && /Fat/.test(q('macro-legend').textContent), sw);
+    ck('and the chart says what it covers: "Your last N logged days", not "7-Day"', /^Your last \d+ logged days$/.test(q('nutrition-trend-span')?.textContent || '') && !/7-Day/.test(d.body.textContent), q('nutrition-trend-span')?.textContent);
+    ck('chart pop-ups are dark, not the library\'s white box', /const TIP = \{[\s\S]*?background: '#1A1C20'/.test(pageSrc) && !/border: '1px solid #e7e5e4'/.test(pageSrc));
+
+    const S2 = run(code, (win) => { win.__streak2 = true; }); await tick(900);
+    const tab2 = [...S2.w.document.querySelectorAll('[role=tab]')].find(t => t.textContent.trim() === 'Reports');
+    tab2.click(); await tick(200);
+    const t2 = S2.w.document.body.textContent;
+    ck('a 2-day streak says "Good start", never "Start today"', S2.errors.length === 0 && /2 days/.test(t2) && /Good start/.test(t2) && !/Start today/.test(t2), S2.errors.join('|'));
+  }
 
   // One real-browser screenshot at 360 so a human can look at it.
   try {
@@ -1390,6 +1419,7 @@ async function profileTest() {
   ck('goal headline from the primary goal and the weights: "Lose 10 kg · 4.4 kg to go"', q('profile-goal') && /Lose 10 kg · 4\.4 kg to go/.test(q('profile-goal').textContent), q('profile-goal')?.textContent.slice(0, 80));
   ck('secondary goals shown as chips (Sleep better, More energy)', q('profile-goals') && /Sleep better/.test(q('profile-goals').textContent) && /More energy/.test(q('profile-goals').textContent) && !/Lose weight/.test(q('profile-goals').textContent));
   ck('journey line: start 88 → goal 78, 56% there', /56% there/.test(q('profile-goal').textContent) && /88 kg/.test(q('profile-goal').textContent) && /78 kg/.test(q('profile-goal').textContent));
+  ck('"Connected devices" is listed once (its own section), not again under Account', (d.body.textContent.match(/Connected devices/g) || []).length === 1, (d.body.textContent.match(/Connected devices/g) || []).length);
   ck('sections in order: My plan → Health insights → Devices → Account', ['section-plan', 'section-insights', 'section-devices', 'section-account'].map(id => q(id)).every(Boolean) &&
      q('section-plan').compareDocumentPosition(q('section-insights')) & 4 && q('section-insights').compareDocumentPosition(q('section-devices')) & 4 && q('section-devices').compareDocumentPosition(q('section-account')) & 4);
   ck('My plan shows the macro targets, water target and diet notes', /1600|1,600/.test(q('section-plan').textContent) && /3\.0|3000/.test(q('section-plan').textContent) && /No fried food/.test(q('section-plan').textContent));
@@ -2715,11 +2745,17 @@ async function voicePilotTest() {
       { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false } ];
     const get = async (url, cfg) => {
       if (/\\/voice-pilot\\/me$/.test(url)) return { data: window.__invited === false ? { invited: false } : { invited: true, consented, phrases: phrases() } };
-      if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [{ patient_id: 12, name: 'Padmini', consented_at: 'x', recorded: 1 }], phrases: 22 } };
+      if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [{ patient_id: 12, name: 'Padmini', active: true, consented_at: 'x', recorded: 1 },
+        ...(window.__partial ? [{ patient_id: 16, name: 'Mrs. Padmini', active: false, recorded: 0 }] : [])], phrases: 22 } };
+      // The first real run: one engine gave no answer for some recordings.
+      if (/\\/voice-pilot\\/results$/.test(url) && window.__partial) return { data: { overall: { gemini: 57, whisper: 69, samples: 7, scored: 7, gemini_answered: 5, whisper_answered: 7 },
+        phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: null, whisper: 100, gemini_answered: 0, whisper_answered: 1 },
+                  { id: 'k02', say: 'Breakfast-ge ondu plate upma, ondu cup coffee', samples: 2, gemini: 50, whisper: 50, gemini_answered: 1, whisper_answered: 2 }],
+        samples: [{ id: 1, phrase_id: 'k01', name: 'Padmini', gemini: null, gemini_problem: '429: Quota exceeded', whisper: 'Vedete eradu idli', whisper_problem: null, audio_url: 'https://x.r2.cloudflarestorage.com/a.webm' }] } };
       if (/\\/voice-pilot\\/results$/.test(url)) return { data: { overall: { gemini: 100, whisper: 67, samples: 1 },
         phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: 100, whisper: 67 }],
         samples: [{ id: 1, phrase_id: 'k01', name: 'Padmini', gemini: 'Belagge eradu idli', whisper: 'Belage eradu idly', audio_url: 'https://x.r2.cloudflarestorage.com/a.webm' }] } };
-      if (/\\/admin\\/members$/.test(url)) return { data: [{ id: 12, name: 'Padmini' }, { id: 13, name: 'Ravi' }] };
+      if (/\\/admin\\/members$/.test(url)) return { data: [{ id: 12, name: 'Padmini', active: true }, { id: 13, name: 'Ravi', active: true }, { id: 15, name: 'Old Account', active: false }] };
       if (/^\\/members$/.test(url)) { window.__coachList = true; return { data: [{ id: 12, name: 'Padmini' }, { id: 14, name: 'Coach Member' }] }; }
       if (/results\\.csv$/.test(url)) { window.__csvCfg = cfg; return { data: new Blob(['member,line_id'], { type: 'text/csv' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Voice-Pilot-2026-10-07.csv"' } }; }
       return { data: {} }; };
@@ -2771,7 +2807,7 @@ async function voicePilotTest() {
     createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, api);
   const P = run(panel, prep()); await tick(400);
   const pq = (id) => P.w.document.querySelector(`[data-testid="${id}"]`);
-  ck('the coach sees both engines\' overall scores', P.errors.length === 0 && /Gemini 100% · Whisper 67% · 1 recordings/.test(pq('vp-overall')?.textContent || ''), P.errors.join('|'));
+  ck('the coach sees both engines\' overall scores', P.errors.length === 0 && /Gemini 100% · Whisper 67% · 1 recording$/.test((pq('vp-overall')?.textContent || '').trim()), P.errors.join('|'));
   ck('who is in the test and how far they got; the invite list leaves them out', /Padmini/.test(pq('vp-members').textContent) && /1 recorded/.test(pq('vp-members').textContent)
      && ![...P.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Padmini'));
   const sel = P.w.document.querySelector('select'); sel.value = '13'; sel.dispatchEvent(new P.w.Event('change', { bubbles: true })); await tick(50);
@@ -2785,6 +2821,17 @@ async function voicePilotTest() {
   pq('vp-download').click(); await tick(300);
   ck('it fetches the CSV with the login, as a file, and saves it with the server\'s name', P.w.__csvCfg?.responseType === 'blob' && P.w.__downloads[0] === 'FitLife-Voice-Pilot-2026-10-07.csv', [P.w.__csvCfg, P.w.__downloads]);
 
+  // 7 Oct: the first real run showed "Gemini 80%" when Gemini had answered 5 of 7.
+  const PP = run(panel, (win) => { prep()(win); win.__partial = true; }); await tick(400);
+  const ppq = (id) => PP.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('the headline counts no-answers as misses and says how many were answered', PP.errors.length === 0 && /Gemini 57% \(answered 5 of 7\) · Whisper 69% · 7 recordings$/.test((ppq('vp-overall')?.textContent || '').trim()), [PP.errors.join('|'), ppq('vp-overall')?.textContent]);
+  const prow = [...PP.w.document.querySelectorAll('[data-testid="vp-row"]')];
+  ck('a line an engine never answered reads "no answer"; a partly answered one says "1 of 2"', /no answer/.test(prow[0].children[1].textContent) && /100%/.test(prow[0].children[2].textContent) && /50%\s*1 of 2/.test(prow[1].children[1].textContent) && !/of 2/.test(prow[1].children[2].textContent), prow.map(x => x.textContent));
+  prow[0].click(); await tick(100);
+  ck('opened, the recording says why: "no answer — 429: Quota exceeded"', /Gemini: no answer — 429: Quota exceeded/.test(ppq('vp-sample').textContent) && /Whisper: Vedete eradu idli/.test(ppq('vp-sample').textContent), ppq('vp-sample')?.textContent);
+  ck('a switched-off account is not offered in the invite list, and one already listed reads "account off"', ![...PP.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Old Account')
+     && [...PP.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Ravi') && /Mrs\. Padmini\s*account off/.test(ppq('vp-members').textContent), ppq('vp-members')?.textContent);
+
   // On the coach's home: folded, and the invite list is the coach's own members.
   const coachPanel = await bundle(`
     import { createRoot } from 'react-dom/client';
@@ -2797,6 +2844,155 @@ async function voicePilotTest() {
   ck('for a coach it starts folded, with the scores still on the header', CP.errors.length === 0 && !!cq('vp-toggle') && !cq('vp-invite') && /Gemini 100%/.test(cq('vp-overall')?.textContent || ''), CP.errors.join('|'));
   cq('vp-toggle').click(); await tick(100);
   ck('opened: Download results is there, and the invite list is the coach\'s own members', !!cq('vp-download') && CP.w.__coachList === true && [...CP.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Coach Member'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 33. Review of 7 Oct — what Sachin's Android screenshots showed
+// ═══════════════════════════════════════════════════════════════════════════
+async function reviewFixesTest() {
+  console.log('\n[33] Review fixes (7 Oct, from the Android screenshots)');
+  const api = stub('api-review.js', `
+    window.__posts = [];
+    const get = async (url) => {
+      if (/\\/adherence$/.test(url)) return { data: { enough: true, logged_days: 30, verdict: null,
+        note: 'No meaningful difference in how well they sustain either split.',
+        groups: [{ label: 'Lower carb', mean_carb_pct: 25, days: 15, on_target_pct: 0, mean_kcal: 809 }, { label: 'Higher carb', mean_carb_pct: 34, days: 15, on_target_pct: 13, mean_kcal: 809 }] } };
+      if (/\\/trial$/.test(url)) return { data: { trial: null } };
+      if (/\\/workouts\\/summary/.test(url)) return { data: { sessions: window.__sessions || [] } };
+      if (/subscriptions/.test(url)) return { data: [] };
+      return { data: [] }; };
+    const post = async (url, body) => { window.__posts.push({ url, body }); return { data: { ok: true } }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+
+  // 1. "Hi Mrs.," — one name rule everywhere a coach writes to a member.
+  const msg = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { combinedGapMessage } from './utils/personalMessage.js';
+    import MemberActionSheet from './components/coach/MemberActionSheet.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 1, name: 'Sachin', role: 'admin' }, isRestoring: false });
+    window.__m = [combinedGapMessage({ name: 'Mrs. Padmini' }, []), combinedGapMessage({ name: 'T V Sharada' }, ['dormant'], 20), combinedGapMessage({ name: '' }, [])];
+    createRoot(document.getElementById('root')).render(<MemberActionSheet open onClose={() => {}} member={{ id: 5, name: 'Mrs. Padmini', phone: '9845028460' }} initialTab="push" />);`, api);
+  const M = run(msg); await tick(400);
+  ck('the WhatsApp message greets Mrs. Padmini as Padmini, not "Mrs."', /^Hi Padmini, /.test(M.w.__m[0]) && !/Hi Mrs/.test(M.w.__m[0]), M.w.__m[0]);
+  ck('T V Sharada is Sharada; no name at all is "there"', /^Hi Sharada, /.test(M.w.__m[1]) && /^Hi there, /.test(M.w.__m[2]), M.w.__m);
+  const ta = M.w.document.querySelector('textarea');
+  ck('the push message starts "Hi Padmini, " and the sheet is headed with her name', M.errors.length === 0 && ta?.value === 'Hi Padmini, ' && /Padmini/.test(M.w.document.body.textContent) && !/Mrs\.(?! Padmini)/.test(M.w.document.body.textContent), [M.errors.join('|'), ta?.value]);
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+  ck('no screen takes "the first word" of a name any more', ['components/coach/MemberActionSheet.jsx', 'components/coach/SwapsPanel.jsx', 'utils/personalMessage.js', 'pages/Progress.jsx', 'pages/Login.jsx']
+     .every(f => !/\.split\((' '|" "|\/\\s\+\/)\)\[0\]/.test(srcOf(f)) && /personName/.test(srcOf(f))));
+
+  // 2. Raw "’" shown as text. In screen markup a \u code is NOT turned
+  // into the character (only inside {'…'} or {`…`} is). Read every screen with
+  // a real parser, so this cannot come back anywhere.
+  {
+    const req = createRequire(import.meta.url);
+    const { parse } = req('@babel/parser');
+    const bad = [];
+    const walk = (node, file) => {
+      if (!node || typeof node.type !== 'string') return;
+      if (node.type === 'JSXText' && /\\u[0-9a-fA-F]{4}/.test(node.value)) bad.push(`${file}:${node.loc.start.line} text`);
+      if (node.type === 'JSXAttribute' && node.value?.type === 'StringLiteral' && /\\u[0-9a-fA-F]{4}/.test(node.value.extra?.raw || '')) bad.push(`${file}:${node.loc.start.line} ${node.name.name}=`);
+      for (const k of Object.keys(node)) {
+        if (k === 'loc' || k === 'extra') continue;
+        const v = node[k];
+        if (Array.isArray(v)) v.forEach(x => walk(x, file)); else if (v && typeof v === 'object') walk(v, file);
+      }
+    };
+    let files = 0;
+    const all = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? all(path.join(dir, e.name)) : /\.jsx$/.test(e.name) ? [path.join(dir, e.name)] : []);
+    for (const f of all(CLIENT_SRC)) { files++; walk(parse(fs.readFileSync(f, 'utf8'), { sourceType: 'module', plugins: ['jsx'] }).program, path.relative(CLIENT_SRC, f)); }
+    ck(`no screen shows a raw \\u code as text (${files} screens read with a parser)`, files > 80 && bad.length === 0, bad);
+    const probe = []; const keep = bad.length;
+    walk(parse(`const A = () => <p title="Who\\u2019s">isn\\u2019t {'fine\\u2019'}</p>;`, { sourceType: 'module', plugins: ['jsx'] }).program, 'probe');
+    ck('and that check does catch one when it is there (text and attribute, not the {\'…\'} form)', bad.length - keep === 2, bad.slice(keep));
+  }
+
+  // 3. The chat input bar was see-through on Android.
+  {
+    const css = fs.readFileSync(path.join(CLIENT_SRC, 'index.css'), 'utf8');
+    const m = css.match(/\.glass-solid\s*\{[^}]*background:\s*rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/);
+    ck('the chat bar has a near-solid background of its own, declared after .glass', !!m && Number(m[1]) >= 0.9 && css.indexOf('.glass-solid') > css.indexOf('.glass {'), m?.[0]);
+    ck('and the chat bar uses it', /className="glass glass-solid [^"]*" data-testid="composer-bar"/.test(srcOf('components/AIChatLog.jsx')));
+    try {
+      const puppeteerCore = (await import('puppeteer-core')).default;
+      const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+      const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+      const built = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+      const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+      try {
+        const page = await browser.newPage();
+        await page.setContent(`<!doctype html><html><head><style>${built}</style></head><body style="background:#121316"><p style="color:#fff">text under the bar</p><div class="fade-up" style="position:fixed;left:0;right:0;top:0"><div id="bar" class="glass glass-solid">bar</div><div id="plain" class="glass">plain</div></div></body></html>`);
+        const bg = await page.evaluate(() => ({ bar: getComputedStyle(document.getElementById('bar')).backgroundColor, plain: getComputedStyle(document.getElementById('plain')).backgroundColor }));
+        const alpha = (c) => { const x = c.match(/rgba?\(([^)]+)\)/)[1].split(',').map(Number); return x.length === 4 ? x[3] : 1; };
+        ck('in real Chrome, with the built stylesheet: the bar is at least 90% solid; plain glass is under 10%', alpha(bg.bar) >= 0.9 && alpha(bg.plain) < 0.1, bg);
+      } finally { await browser.close(); }
+    } catch (e) { console.log('  – browser not installed, the chat bar was NOT checked in Chrome (' + String(e.message).slice(0, 60) + ')'); }
+  }
+
+  // 5. Macro Lab said the same sentence twice.
+  const ml = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import MacroLab from './components/MacroLab.jsx';
+    createRoot(document.getElementById('root')).render(<MacroLab memberId={5} />);`, api);
+  const L = run(ml); await tick(500);
+  const said = (L.w.document.body.textContent.match(/No meaningful difference in how well they sustain either split\./g) || []).length;
+  ck('Macro Lab: "No meaningful difference…" is said once', L.errors.length === 0 && said === 1, [L.errors.join('|'), said]);
+
+  // 6, 20. Settings as a coach: no member-only cards; a phone the browser allows but FitLife could not register says so.
+  const st = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Settings from './pages/Settings.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: window.__role || 'monitor' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter><Settings /></MemoryRouter>);`, api);
+  const allowPush = (win) => {
+    win.Notification = { permission: 'granted', requestPermission: async () => 'granted' };
+    win.PushManager = function PushManager() {};
+    Object.defineProperty(win.navigator, 'serviceWorker', { configurable: true, value: { ready: new Promise(() => {}) } });
+  };
+  const C = run(st, allowPush); await tick(600);
+  const ct = C.w.document.body.textContent;
+  ck('a coach\'s Settings has no "Who is using this app?", "My avatar" or "Meal slots"', C.errors.length === 0 && !/Who is using this app\?/.test(ct) && !/My avatar/.test(ct) && !/Meal slots/.test(ct) && /Appearance/.test(ct) && /Push Notifications/.test(ct), C.errors.join('|'));
+  ck('allowed by the browser but not registered: it says so, with "Try again", not "Notifications are on"', !!C.w.document.querySelector('[data-testid="push-not-registered"]') && /this phone is not registered/.test(ct) && /Try again/.test(ct) && !/Notifications are on for this device/.test(ct), ct.slice(ct.indexOf('Push Notifications'), ct.indexOf('Push Notifications') + 200));
+  const Mb = run(st, (win) => { win.__role = 'patient'; }); await tick(600);
+  ck('a member still has all three', /Who is using this app\?/.test(Mb.w.document.body.textContent) && /My avatar/.test(Mb.w.document.body.textContent) && /Meal slots/.test(Mb.w.document.body.textContent));
+
+  // 11. The printed report on a phone.
+  ck('the print report tells the phone its width (it was drawn desktop-wide and shrunk)', /<meta name="viewport" content="width=device-width,initial-scale=1">\s*\n\s*<title>FitLife Report/.test(srcOf('pages/Monitor.jsx')) && /@media screen and \(max-width:640px\)/.test(srcOf('pages/Monitor.jsx')));
+
+  // 13. Section icons: a title whose icon is not in the set shows a dash.
+  {
+    const ui = srcOf('components/UI.jsx');
+    const set = ui.slice(ui.indexOf('const GLYPH = {'), ui.indexOf('function SectionGlyph'));
+    const have = new Set([...set.matchAll(/^\s*'([^']+)':/gm)].map(x => x[1]));
+    const missing = [];
+    const all = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? all(path.join(dir, e.name)) : /\.jsx$/.test(e.name) ? [path.join(dir, e.name)] : []);
+    let titles = 0;
+    for (const f of all(CLIENT_SRC)) for (const mm of fs.readFileSync(f, 'utf8').matchAll(/<SectionTitle[^>]*?icon="([^"]+)"/g)) { titles++; if (!have.has(mm[1])) missing.push(`${path.relative(CLIENT_SRC, f)} ${mm[1]}`); }
+    ck(`every section title's icon is in the icon set (${titles} titles; 13 were showing a dash)`, titles > 40 && missing.length === 0, missing);
+  }
+  const icons = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { SectionTitle } from './components/UI.jsx';
+    createRoot(document.getElementById('root')).render(<div>{['📅', '💧', '👤', '🔐', '🎨', '😊', '🛡️', '🧠'].map(i => <SectionTitle key={i} icon={i}>x</SectionTitle>)}<SectionTitle icon="🦄">unknown</SectionTitle></div>);`);
+  const I = run(icons); await tick(200);
+  ck('the new icons draw (8 checked), and an unknown one still falls back to the dash', I.errors.length === 0 && I.w.document.querySelectorAll('svg').length === 8 && I.w.document.querySelectorAll('span.h-px').length === 1, [I.errors.join('|'), I.w.document.querySelectorAll('svg').length]);
+
+  // 18. Training summary: no heading over a blank when nothing was lifted.
+  const ts = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import TrainingSummary from './components/TrainingSummary.jsx';
+    createRoot(document.getElementById('root')).render(<TrainingSummary bodyWeightKg={80} />);`, api);
+  const walk = (date) => ({ date, session_date: date, volume_kg: 0, set_count: 0, cardio: [{ type: 'walking', duration_min: 30, distance_km: 2.5 }], cardio_min: 30, kcal: 102 });
+  const T0 = run(ts, (win) => { win.__sessions = [walk('2026-09-09'), walk('2026-09-10')]; }); await tick(500);
+  const T1 = run(ts, (win) => { win.__sessions = [walk('2026-09-09'), { ...walk('2026-09-10'), volume_kg: 1200, set_count: 6 }]; }); await tick(500);
+  ck('walking only: sessions are listed with no "Volume per session" block', T0.errors.length === 0 && /Recent sessions/.test(T0.w.document.body.textContent) && !/Volume per session/.test(T0.w.document.body.textContent), [T0.errors.join('|'), T0.w.document.body.textContent.slice(0, 200)]);
+  ck('with weights lifted it is there', /Volume per session/.test(T1.w.document.body.textContent), T1.w.document.body.textContent.slice(0, 200));
+
+  // 16. Coach member list: "No weight" on its own line.
+  ck('coach list: "No weight" is a line of its own above the % pill', /<div className="text-xs text-ghost">No weight<\/div>/.test(srcOf('pages/PatientList.jsx')));
 }
 
 async function overflowTest() {
@@ -2954,6 +3150,7 @@ async function overflowTest() {
     await swapsTest();
     await weeklyTest();
     await voicePilotTest();
+    await reviewFixesTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

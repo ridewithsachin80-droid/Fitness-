@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { firstName } from '../../utils/personName';
 import api from '../../api/client';
 import { Eyebrow, Pressable } from '../primitives';
 import { haptic } from '../../store/settingsStore';
@@ -16,7 +17,7 @@ export default function SwapsPanel({ memberId, memberName = '' }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [add, setAdd] = useState({ food: '', alt: '' });
-  const first = (memberName || '').split(' ')[0] || 'The member';
+  const first = firstName(memberName, 'The member');
 
   const load = () => api.get(`/swaps/member/${memberId}`).then(({ data }) => setRows(data.swaps || [])).catch(() => setRows([]));
   useEffect(() => { load(); }, [memberId]); // eslint-disable-line react-hooks/exhaustive-deps
