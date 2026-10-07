@@ -136,6 +136,20 @@ input[type='number'] { -moz-appearance: textfield; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
+/* The chat input bar. .glass alone is 3.5% white and relies on the blur behind
+   it — but the bar slides in with an opacity animation (.fade-up), and Chrome
+   then gives its blur nothing to blur: on Android the page text showed straight
+   through the bar's icons. A near-solid surface reads the same with or without
+   the blur. Also used where a browser has no backdrop-filter at all. */
+.glass-solid {
+  background: rgba(26,28,32,0.97);
+}
+
+/* Charts: tapping one on a phone drew the browser's white focus box around the
+   whole plot. The chart is not a control; the tooltip is the feedback. */
+.recharts-wrapper, .recharts-wrapper:focus, .recharts-wrapper *:focus,
+.recharts-surface, .recharts-surface:focus { outline: none; }
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ENHANCED UX — large text, accessibility

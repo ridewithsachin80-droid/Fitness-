@@ -91,28 +91,76 @@ async function whisper(audio, mimeType, env = process.env) {
   return String(r.data?.text || '').trim().slice(0, 1000);
 }
 
-/** Both engines, side by side. A failed engine gives null, never stops the other. */
+/**
+ * Why an engine gave nothing, in a few words, safe to store and show: the HTTP
+ * status and the provider's own message. Never the request (it carries the key).
+ */
+function reason(err) {
+  const status = err?.response?.status || err?.code || 'error';
+  const msg = err?.response?.data?.error?.message || err?.response?.data?.error || err?.message || '';
+  return `${status}: ${String(typeof msg === 'string' ? msg : JSON.stringify(msg))}`
+    .replace(/key=[^&\s"']+/gi, 'key=…').replace(/Bearer\s+\S+/gi, 'Bearer …')
+    .replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+/** Worth one more try: no reply at all, a timeout, "slow down" (429) or the provider's own fault (5xx). */
+const passing = (err) => { const st = err?.response?.status; return !st || st === 429 || st >= 500; };
+const RETRY_MS = () => Number(process.env.VOICE_PILOT_RETRY_MS ?? 800);
+
+async function once(name, keyName, fn, audio, mimeType) {
+  if (!process.env[keyName]) return { text: null, error: `${keyName} is not set` };
+  try { return { text: await fn(audio, mimeType), error: null }; }
+  catch (e1) {
+    if (passing(e1)) {
+      await new Promise(r => setTimeout(r, RETRY_MS()));
+      try { return { text: await fn(audio, mimeType), error: null }; }
+      catch (e2) { console.error(`voice pilot: ${name} gave no answer (after a retry):`, reason(e2)); return { text: null, error: reason(e2) }; }
+    }
+    console.error(`voice pilot: ${name} gave no answer:`, reason(e1));
+    return { text: null, error: reason(e1) };
+  }
+}
+
+/**
+ * Both engines, side by side. A failed engine gives null and never stops the
+ * other; `errors` says why (stored with the recording, shown to the coach and
+ * in the downloaded file), because "no answer" with no reason cannot be fixed.
+ */
 async function transcribeBoth(audio, mimeType) {
-  const [g, w] = await Promise.allSettled([gemini(audio, mimeType), whisper(audio, mimeType)]);
-  return { gemini: g.status === 'fulfilled' ? g.value : null, whisper: w.status === 'fulfilled' ? w.value : null };
+  const [g, w] = await Promise.all([
+    once('gemini', 'GEMINI_API_KEY', gemini, audio, mimeType),
+    once('whisper', 'GROQ_API_KEY', whisper, audio, mimeType),
+  ]);
+  return { gemini: g.text, whisper: w.text, errors: { gemini: g.error, whisper: w.error } };
 }
 
 /**
  * Pilot results, per phrase: how often each engine heard the key words.
  * rows: voice_samples rows. Pure.
+ *
+ * A recording an engine gave NO answer for counts as 0, not as missing. The
+ * first version left those out of the average, and the first real run read
+ * "Gemini 80% · Whisper 69%" when Gemini had answered only 5 of 7 recordings:
+ * counted honestly it was 57%. An engine that does not answer has not
+ * understood the member. `*_answered` says how many it did answer.
+ * An engine with no answers at all (its key is not set) has no score: null.
  */
 function summarise(rows) {
-  const by = new Map(PHRASES.map(p => [p.id, { ...p, samples: 0, gemini: [], whisper: [] }]));
-  for (const r of rows || []) {
-    const p = by.get(r.phrase_id); if (!p) continue;
-    p.samples++;
-    if (r.gemini_score != null) p.gemini.push(Number(r.gemini_score));
-    if (r.whisper_score != null) p.whisper.push(Number(r.whisper_score));
-  }
-  const avg = (a) => (a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 100) : null);
-  const phrases = [...by.values()].map(p => ({ id: p.id, say: p.say, means: p.means, free: !!p.free, samples: p.samples, gemini: avg(p.gemini), whisper: avg(p.whisper) }));
-  const all = (k) => avg((rows || []).map(r => r[`${k}_score`]).filter(v => v != null).map(Number));
-  return { phrases, overall: { gemini: all('gemini'), whisper: all('whisper'), samples: (rows || []).length } };
+  const all = rows || [];
+  const did = (r, k) => (`${k}_text` in r ? r[`${k}_text`] != null : r[`${k}_score`] != null);
+  const pct = (list, k) => {
+    if (!list.length || !list.some(r => did(r, k))) return null;
+    return Math.round((list.reduce((x, r) => x + (did(r, k) ? Number(r[`${k}_score`]) || 0 : 0), 0) / list.length) * 100);
+  };
+  const phrases = PHRASES.map(p => {
+    const mine = all.filter(r => r.phrase_id === p.id);
+    return { id: p.id, say: p.say, means: p.means, free: !!p.free, samples: mine.length,
+      gemini: p.free ? null : pct(mine, 'gemini'), whisper: p.free ? null : pct(mine, 'whisper'),
+      gemini_answered: mine.filter(r => did(r, 'gemini')).length, whisper_answered: mine.filter(r => did(r, 'whisper')).length };
+  });
+  const free = new Set(PHRASES.filter(p => p.free).map(p => p.id));
+  const scored = all.filter(r => !free.has(r.phrase_id) && PHRASES.some(p => p.id === r.phrase_id));
+  return { phrases, overall: { gemini: pct(scored, 'gemini'), whisper: pct(scored, 'whisper'), samples: all.length, scored: scored.length,
+    gemini_answered: all.filter(r => did(r, 'gemini')).length, whisper_answered: all.filter(r => did(r, 'whisper')).length } };
 }
 
 /**
@@ -130,7 +178,9 @@ function resultsCsv(rows, { now = new Date() } = {}) {
     return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const audio = (m) => (/mp4|m4a|aac/.test(m || '') ? 'mp4 (usually iPhone)' : /webm|ogg/.test(m || '') ? 'webm (usually Android)' : (m || ''));
-  const head = ['member', 'line_id', 'line', 'meaning', 'own_words', 'gemini_heard', 'whisper_heard', 'gemini_score', 'whisper_score', 'seconds', 'audio_type', 'recorded_at'];
+  const head = ['member', 'line_id', 'line', 'meaning', 'own_words', 'gemini_heard', 'whisper_heard', 'gemini_score', 'whisper_score', 'seconds', 'audio_type', 'recorded_at', 'gemini_problem', 'whisper_problem'];
+  // A scored line an engine did not answer is a miss (0%), the same as in the panel.
+  const sc = (r, k, isFree) => (isFree ? '' : r[`${k}_text`] == null ? 'no answer' : Math.round((Number(r[`${k}_score`]) || 0) * 100) + '%');
   const lines = [head.join(',')];
   const byPhrase = new Map(PHRASES.map((p, i) => [p.id, { p, i }]));
   const sorted = [...(rows || [])].sort((a, b) => (byPhrase.get(a.phrase_id)?.i ?? 99) - (byPhrase.get(b.phrase_id)?.i ?? 99) || code.get(a.patient_id).localeCompare(code.get(b.patient_id), undefined, { numeric: true }));
@@ -138,13 +188,13 @@ function resultsCsv(rows, { now = new Date() } = {}) {
     const p = byPhrase.get(r.phrase_id)?.p;
     lines.push([code.get(r.patient_id), r.phrase_id, p?.say || '', p?.means || '', p?.free ? 'yes' : 'no',
       r.gemini_text, r.whisper_text,
-      r.gemini_score == null ? '' : Math.round(Number(r.gemini_score) * 100) + '%',
-      r.whisper_score == null ? '' : Math.round(Number(r.whisper_score) * 100) + '%',
+      sc(r, 'gemini', !!p?.free), sc(r, 'whisper', !!p?.free),
       r.duration_ms ? (Number(r.duration_ms) / 1000).toFixed(1) : '', audio(r.mime_type),
-      r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : ''].map(cell).join(','));
+      r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '',
+      r.gemini_text == null ? (r.gemini_error || 'no answer') : '', r.whisper_text == null ? (r.whisper_error || 'no answer') : ''].map(cell).join(','));
   }
   // Excel opens UTF-8 correctly only with the byte-order mark.
   return '\ufeff' + lines.join('\r\n') + '\r\n';
 }
 
-module.exports = { PHRASES, score, transcribeBoth, summarise, resultsCsv, PROMPT, WHISPER_PROMPT, norm };
+module.exports = { PHRASES, score, transcribeBoth, summarise, resultsCsv, reason, PROMPT, WHISPER_PROMPT, norm };

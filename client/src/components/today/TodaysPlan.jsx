@@ -80,6 +80,7 @@ export default function TodaysPlan({ m, onOpen }) {
 
   // ── Eat ─────────────────────────────────────────────────────────────────
   const pendingMeals = coachRows?.pendingMeals || [];
+  const mealCount = coachRows?.mealCount ?? pendingMeals.length;
   const eatState = kcalIn > 0 && kcalTarget ? `${Math.round((kcalIn / kcalTarget) * 100)}% of target` : null;
   const eatDetail = (
     <span className="tabular-nums">
@@ -112,7 +113,8 @@ export default function TodaysPlan({ m, onOpen }) {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
           {pendingMeals.length > 0 && (
             <Tap onPress={() => onOpen('food')} testId="plan-meals">
-              <Icon name="clock" size={12} />{pendingMeals.length} {plural(pendingMeals.length, 'meal plan')} pending
+              {/* The Next up card says "0 of 3 logged"; "3 meal plans pending" sounded like three plans. */}
+              <Icon name="clock" size={12} />{mealCount - pendingMeals.length} of {mealCount} {plural(mealCount, 'meal')} logged
             </Tap>
           )}
           {balance != null && (

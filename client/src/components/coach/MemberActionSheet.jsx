@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { firstName } from '../../utils/personName';
 import api from '../../api/client';
 import { Sheet, Segmented, Pressable, Eyebrow } from '../primitives';
 import MessageMember from '../MessageMember';
@@ -63,7 +64,7 @@ function NoteTab({ memberId, onAdded, onClose }) {
 
 function PushTab({ member, onClose }) {
   const [title, setTitle] = useState('FitLife');
-  const [body, setBody] = useState(`Hi ${(member?.name || '').split(' ')[0]}, `);
+  const [body, setBody] = useState(`Hi ${firstName(member?.name, 'there')}, `);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
   const [error, setError] = useState('');
@@ -105,7 +106,8 @@ export default function MemberActionSheet({ open, onClose, member, initialTab = 
   useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
   const options = [{ id: 'note', label: 'Note' }, { id: 'message', label: 'Message' }];
   if (role === 'admin') options.push({ id: 'push', label: 'Push' });
-  const first = (member?.name || '').split(' ')[0];
+  // "Mrs. Padmini" is Padmini, "T V Sharada" is Sharada: the app's one name rule.
+  const first = firstName(member?.name);
   return (
     <Sheet open={open} onClose={onClose} eyebrow={first || 'Member'}
       title={tab === 'note' ? 'Add a note' : tab === 'message' ? 'Send a message' : 'Send a push'}>

@@ -11,6 +11,14 @@ import { shareOrDownload } from '../../utils/shareFile';
  * key words; play any recording with both transcripts side by side.
  */
 const pct = (v) => (v == null ? '—' : `${v}%`);
+// One engine's headline: its score over every scored recording (no answer is a
+// miss), and how many recordings it answered when that is not all of them.
+const engine = (name, score, answered, total) => {
+  const a = answered ?? total;
+  if (!total) return `${name} —`;
+  if (!a || score == null) return `${name}: no answers`;
+  return `${name} ${pct(score)}${a < total ? ` (answered ${a} of ${total})` : ''}`;
+};
 export default function VoicePilotPanel({ collapsible = false }) {
   const role = useAuthStore(s => s.user?.role);
   // On the coach's home it starts folded, so it never pushes the day's work down.
@@ -51,20 +59,24 @@ export default function VoicePilotPanel({ collapsible = false }) {
 
   return (
     <div className="rounded-2xl border border-hair bg-surface px-4 py-3 mt-3 space-y-3" data-testid="vp-panel">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
         {collapsible ? (
           <button type="button" onClick={() => { haptic(8); setOpen(o => !o); }} style={{ minHeight: 36 }} aria-expanded={open} data-testid="vp-toggle"
             className="flex items-center gap-1 text-left"><Eyebrow>Kannada voice test</Eyebrow><span className="text-caption text-lo">{open ? '▾' : '▸'}</span></button>
         ) : <Eyebrow>Kannada voice test</Eyebrow>}
-        {res?.overall && <span className="text-caption text-mid" data-testid="vp-overall">Gemini {pct(res.overall.gemini)} · Whisper {pct(res.overall.whisper)} · {res.overall.samples} recordings</span>}
+        {res?.overall && (
+          <span className="text-caption text-mid text-right min-w-0" data-testid="vp-overall">
+            {engine('Gemini', res.overall.gemini, res.overall.gemini_answered, res.overall.samples)} · {engine('Whisper', res.overall.whisper, res.overall.whisper_answered, res.overall.samples)} · {res.overall.samples} {res.overall.samples === 1 ? 'recording' : 'recordings'}
+          </span>
+        )}
       </div>
       {open && (<>
-      <p className="text-caption text-mid leading-snug">Invite 5 to 10 members. Each reads out {res?.phrases?.length || 22} lines; both speech engines write down what they heard, and the score is how many key words each caught.</p>
+      <p className="text-caption text-mid leading-snug">Invite 5 to 10 members. Each reads out {res?.phrases?.length || 22} lines; both speech engines write down what they heard, and the score is how many key words each caught. A recording an engine did not answer counts as a miss.</p>
       <div className="flex gap-2">
         <select value={pick} onChange={e => setPick(e.target.value)} aria-label="Member to invite" style={{ minHeight: 40 }}
           className="flex-1 min-w-0 rounded-xl bg-charcoal border border-white/[0.12] text-caption text-white px-2">
           <option value="">Choose a member…</option>
-          {all.filter(m => !invitedIds.has(m.id)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          {all.filter(m => m.active !== false && !invitedIds.has(m.id)).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
         <button type="button" onClick={invite} disabled={!pick} style={{ minHeight: 40 }} data-testid="vp-invite"
           className="rounded-xl border border-gold text-gold text-caption font-bold px-3 disabled:opacity-40">Invite</button>
@@ -73,9 +85,9 @@ export default function VoicePilotPanel({ collapsible = false }) {
       {members.length > 0 && (
         <ul className="space-y-1" data-testid="vp-members">
           {members.map(m => (
-            <li key={m.patient_id} className="flex items-center justify-between gap-2 text-caption">
-              <span className="text-white min-w-0 truncate">{m.name}</span>
-              <span className="text-mid whitespace-nowrap">{m.withdrawn_at ? 'stopped' : !m.consented_at ? 'invited' : `${m.recorded} recorded`}</span>
+            <li key={m.patient_id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-caption">
+              <span className={`min-w-0 truncate ${m.active === false ? 'text-lo' : 'text-white'}`}>{m.name}</span>
+              <span className="text-mid whitespace-nowrap text-right">{m.active === false ? 'account off' : m.withdrawn_at ? 'stopped' : !m.consented_at ? 'invited' : `${m.recorded} recorded`}</span>
               <button type="button" onClick={() => remove(m)} className="text-lo hover:text-white" style={{ minWidth: 32, minHeight: 32 }} aria-label={`Remove ${m.name}`}>×</button>
             </li>
           ))}
@@ -98,16 +110,27 @@ export default function VoicePilotPanel({ collapsible = false }) {
                 <Fragment key={p.id}>
                   <tr className="border-t border-hair cursor-pointer" onClick={() => setOpenPhrase(openPhrase === p.id ? null : p.id)} data-testid="vp-row">
                     <td className="py-1.5 pr-2 text-white">{p.say}<span className="block text-lo">{p.samples} {p.samples === 1 ? 'recording' : 'recordings'}</span></td>
-                    <td className={`py-1.5 px-1 text-right tabular-nums ${p.gemini != null && p.gemini >= (p.whisper ?? -1) ? 'text-gold font-bold' : 'text-white'}`}>{p.free ? 'read' : pct(p.gemini)}</td>
-                    <td className={`py-1.5 px-1 text-right tabular-nums ${p.whisper != null && p.whisper > (p.gemini ?? -1) ? 'text-gold font-bold' : 'text-white'}`}>{p.free ? 'read' : pct(p.whisper)}</td>
+                    {['gemini', 'whisper'].map(k => {
+                      const other = k === 'gemini' ? p.whisper : p.gemini, mine = p[k], answered = p[`${k}_answered`] ?? p.samples;
+                      const best = mine != null && mine > (other ?? -1);   // a tie highlights neither
+                      return (
+                        <td key={k} className={`py-1.5 px-1 text-right tabular-nums align-top ${best ? 'text-gold font-bold' : 'text-white'}`}>
+                          {p.free ? (answered ? 'read' : <span className="text-lo font-normal whitespace-nowrap">no answer</span>) : mine == null ? <span className="text-lo font-normal whitespace-nowrap">no answer</span> : pct(mine)}
+                          {!p.free && mine != null && answered < p.samples && <span className="block text-lo font-normal">{answered} of {p.samples}</span>}
+                        </td>
+                      );
+                    })}
                   </tr>
                   {openPhrase === p.id && samples(p.id).map(s => (
                     <tr key={`s${s.id}`}><td colSpan={3} className="pb-2">
                       <div className="rounded-xl bg-charcoal px-2 py-2 space-y-1" data-testid="vp-sample">
                         <p className="text-white font-semibold">{s.name}</p>
                         {s.audio_url && <audio controls preload="none" src={s.audio_url} className="w-full" />}
-                        <p className="text-mid">Gemini: <span className="text-white">{s.gemini ?? '(no answer)'}</span></p>
-                        <p className="text-mid">Whisper: <span className="text-white">{s.whisper ?? '(no answer)'}</span></p>
+                        {[['Gemini', s.gemini, s.gemini_problem], ['Whisper', s.whisper, s.whisper_problem]].map(([label, text, problem]) => (
+                          <p key={label} className="text-mid break-words">{label}: {text != null
+                            ? <span className="text-white">{text || '(heard nothing)'}</span>
+                            : <span className="text-amber-300">no answer{problem && problem !== 'no answer' ? ` — ${problem}` : ''}</span>}</p>
+                        ))}
                       </div>
                     </td></tr>
                   ))}

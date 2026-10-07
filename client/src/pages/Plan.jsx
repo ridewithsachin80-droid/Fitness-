@@ -219,7 +219,7 @@ export default function Plan() {
                   );
                 })}
                 {!scheduled && (
-                  <p className="text-caption text-lo mt-2">This program isn\u2019t tied to weekdays — pick any day in the Workout sheet. Days: {days.map(d => d.day_label).join(' · ')}</p>
+                  <p className="text-caption text-lo mt-2">This program isn’t tied to weekdays — pick any day in the Workout sheet. Days: {days.map(d => d.day_label).join(' · ')}</p>
                 )}
               </div>
             ) : (
@@ -322,7 +322,7 @@ export default function Plan() {
                     </div>
                   ))}
                 </div>
-              ) : <p className="text-sm text-mid">Your coach hasn\u2019t set calorie and macro targets yet.</p>}
+              ) : <p className="text-sm text-mid">Your coach hasn’t set calorie and macro targets yet.</p>}
               {fasting && <p className="text-caption text-mid mt-2">Eating window {fmtTime(fasting.end)} → {fmtTime(fasting.start)} · fast outside it</p>}
             </Section>
             <Section eyebrow="Meal plan" title={meals.length ? `${meals.length} ${plural(meals.length, 'meal')} prescribed` : 'No meal plan'}>

@@ -52,7 +52,7 @@ router.get('/members', coachOnly, async (req, res) => {
   try {
     const m = mine(req.user);
     const { rows } = await pool.query(
-      `SELECT p.patient_id, u.name, p.invited_at, p.consented_at, p.withdrawn_at,
+      `SELECT p.patient_id, u.name, u.active, p.invited_at, p.consented_at, p.withdrawn_at,
               (SELECT COUNT(*)::int FROM voice_samples s WHERE s.patient_id = p.patient_id) AS recorded
          FROM voice_pilot_members p JOIN users u ON u.id = p.patient_id
         WHERE 1=1 ${m.sql.replace('$1', `$${m.args.length}`)} ORDER BY u.name`, m.args);
@@ -65,8 +65,11 @@ router.post('/invite', coachOnly, async (req, res) => {
     const memberId = parseInt(req.body?.member_id);
     if (!Number.isInteger(memberId)) return res.status(400).json({ error: 'Which member?' });
     if (!(await canAccess(req.user, memberId))) return res.status(403).json({ error: 'Member not assigned to you.' });
-    const { rows: [u] } = await pool.query(`SELECT role FROM users WHERE id=$1`, [memberId]);
+    const { rows: [u] } = await pool.query(`SELECT role, active FROM users WHERE id=$1`, [memberId]);
     if (u?.role !== 'patient') return res.status(400).json({ error: 'Only members can be invited.' });
+    // A switched-off account cannot sign in, so it can never record: inviting
+    // it only put a second "Mrs. Padmini" in the list.
+    if (u.active === false) return res.status(400).json({ error: 'That account is switched off. Switch it on first, or invite their active account.' });
     await pool.query(
       `INSERT INTO voice_pilot_members (patient_id, invited_by) VALUES ($1,$2)
        ON CONFLICT (patient_id) DO UPDATE SET withdrawn_at = NULL, invited_by = $2, invited_at = NOW(),
@@ -90,11 +93,12 @@ router.get('/results', coachOnly, async (req, res) => {
   try {
     const m = mine(req.user, 's');
     const { rows } = await pool.query(
-      `SELECT s.id, s.patient_id, u.name, s.phrase_id, s.object_key, s.duration_ms, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.created_at
+      `SELECT s.id, s.patient_id, u.name, s.phrase_id, s.object_key, s.duration_ms, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.gemini_error, s.whisper_error, s.created_at
          FROM voice_samples s JOIN users u ON u.id = s.patient_id
         WHERE 1=1 ${m.sql.replace('$1', `$${m.args.length}`)} ORDER BY s.phrase_id, u.name`, m.args);
     res.json({ ...V.summarise(rows), samples: rows.map(r => ({ id: r.id, member_id: r.patient_id, name: r.name, phrase_id: r.phrase_id,
       duration_ms: r.duration_ms, gemini: r.gemini_text, whisper: r.whisper_text, gemini_score: r.gemini_score, whisper_score: r.whisper_score,
+      gemini_problem: r.gemini_text == null ? (r.gemini_error || 'no answer') : null, whisper_problem: r.whisper_text == null ? (r.whisper_error || 'no answer') : null,
       audio_url: link(r.object_key), at: r.created_at })) });
   } catch (err) { fail(res, err); }
 });
@@ -104,7 +108,7 @@ router.get('/results.csv', coachOnly, async (req, res) => {
   try {
     const m = mine(req.user, 's');
     const { rows } = await pool.query(
-      `SELECT s.patient_id, s.phrase_id, s.duration_ms, s.mime_type, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.created_at
+      `SELECT s.patient_id, s.phrase_id, s.duration_ms, s.mime_type, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.gemini_error, s.whisper_error, s.created_at
          FROM voice_samples s WHERE 1=1 ${m.sql.replace('$1', `$${m.args.length}`)}`, m.args);
     const day = new Date().toISOString().slice(0, 10);
     res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
@@ -155,13 +159,15 @@ router.post('/sample', member, async (req, res) => {
     const t = await V.transcribeBoth(audio, mt);
     const { rows: [old] } = await pool.query(`SELECT object_key FROM voice_samples WHERE patient_id=$1 AND phrase_id=$2`, [req.user.id, phrase.id]);
     await pool.query(
-      `INSERT INTO voice_samples (patient_id, phrase_id, object_key, mime_type, duration_ms, gemini_text, whisper_text, gemini_score, whisper_score)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO voice_samples (patient_id, phrase_id, object_key, mime_type, duration_ms, gemini_text, whisper_text, gemini_score, whisper_score, gemini_error, whisper_error)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (patient_id, phrase_id) DO UPDATE SET object_key=EXCLUDED.object_key, mime_type=EXCLUDED.mime_type, duration_ms=EXCLUDED.duration_ms,
          gemini_text=EXCLUDED.gemini_text, whisper_text=EXCLUDED.whisper_text, gemini_score=EXCLUDED.gemini_score, whisper_score=EXCLUDED.whisper_score,
+         gemini_error=EXCLUDED.gemini_error, whisper_error=EXCLUDED.whisper_error,
          created_at=NOW(), delete_after=NOW() + INTERVAL '90 days'`,
       [req.user.id, phrase.id, key, mt, Math.min(60000, Math.max(0, parseInt(req.body?.duration_ms) || 0)) || null,
-       t.gemini, t.whisper, t.gemini == null ? null : V.score(phrase.id, t.gemini), t.whisper == null ? null : V.score(phrase.id, t.whisper)]);
+       t.gemini, t.whisper, t.gemini == null ? null : V.score(phrase.id, t.gemini), t.whisper == null ? null : V.score(phrase.id, t.whisper),
+       t.gemini == null ? (t.errors?.gemini || null) : null, t.whisper == null ? (t.errors?.whisper || null) : null]);
     if (old?.object_key && old.object_key !== key) storage.deleteObject(old.object_key).catch(() => {});
     res.json({ ok: true, heard: t.gemini || t.whisper || null });
   } catch (err) { fail(res, err); }

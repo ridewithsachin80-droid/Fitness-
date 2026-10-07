@@ -39,6 +39,8 @@ export function coachCardRows({ coachPlan, macrosKcal, sets, cardio, food, mealP
   const pendingMeals = (mealPlans || []).filter(mp => !slotsLogged.has(String(mp.meal || '').toLowerCase()));
 
   return {
+    // How many meals the plan has today, for "1 of 3 meals logged".
+    mealCount: (mealPlans || []).length,
     workout: !!coachPlan?.todayDay && !workoutDone,
     // Rest day only for a program that is actually weekday-scheduled — an
     // unscheduled "Core Workout" has no todayDay by accident, not by design.

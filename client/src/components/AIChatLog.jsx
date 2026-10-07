@@ -1333,7 +1333,7 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
       <div data-testid="composer" className="fixed left-0 right-0 z-[45] pointer-events-none fade-up"
         style={{ bottom: `calc(${(composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
       <div className="max-w-md mx-auto px-3 pointer-events-auto">
-      <div className="glass rounded-2xl shadow-float px-3 pt-2 pb-2">
+      <div className="glass glass-solid rounded-2xl shadow-float px-3 pt-2 pb-2" data-testid="composer-bar">
         {vc.card}
         {/* Sprint 5b.1: two rows. The text gets the full width and grows to
             five lines (a dictated day is often three), the tools sit
