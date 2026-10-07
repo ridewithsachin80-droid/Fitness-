@@ -142,7 +142,7 @@ export default function Today() {
             {/* The conversation. Its composer is docked above the nav (portaled
                 from inside AIChatLog), so it is reachable from anywhere on the page. */}
             <Card>
-              <AIChatLog mealPlans={m.mealPlans} />
+              <AIChatLog mealPlans={m.mealPlans} onLogPlanned={m.openPlanned} />
             </Card>
 
             <CoachNotes m={m} />

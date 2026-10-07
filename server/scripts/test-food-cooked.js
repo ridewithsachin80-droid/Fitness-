@@ -57,6 +57,11 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
       const touched = (await pool.query(`SELECT 1 FROM foods WHERE name = 'Rice, Cooked (Brown)'`)).rows.length > 0;
       if (!touched) {
         ck('"brown rice" finds the RAW grain at 362 kcal', (await cost('brown rice')).kcal100 === 362, await cost('brown rice'));
+        // 7 Oct 2026 audit: the same mistake elsewhere in the table.
+        for (const [q, k] of [['chana', 360], ['urad dal', 347], ['chana dal', 372], ['whole moong', 347], ['lobia', 323], ['pasta', 348], ['noodles', 364], ['idiyappam', 350], ['red rice', 350], ['corn', 357]]) {
+          const c = await cost(q);
+          ck(`"${q}" finds a dry or wrong row at ${k} kcal`, c.kcal100 === k, c);
+        }
       } else {
         ck('(fixes already applied in this database; skipped)', true);
       }
@@ -68,9 +73,15 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     const f1 = await applyFoodFixes(pool);
     const al1 = (await pool.query(`SELECT name_aliases FROM foods WHERE name = 'Rice, Cooked (White)'`)).rows[0].name_aliases;
     ck('the first run keeps an alias the coach had already added', al1.includes('sona masoori') && al1.includes('rice'), al1);
-    ck('the first run renames the raw rows, adds two cooked rows, sets the rice aliases', f1.renamed === 3 && f1.added === 2 && f1.aliased === 1, f1);
+    ck('the first run renames 9 dry rows, adds 13 cooked rows, sets the rice and corn aliases', f1.renamed === 9 && f1.added === 13 && f1.aliased === 2, f1);
     const expect = [['brown rice', 123], ['Brown Rice', 123], ['white rice', 130], ['rice', 130], ['plain rice', 130], ['anna', 130],
-                    ['boiled rice', 123], ['kusubalakki', 123], ['cooked rice', 130], ['moong dal', 105], ['toor dal', 116], ['dal', 116]];
+                    ['boiled rice', 123], ['kusubalakki', 123], ['cooked rice', 130], ['moong dal', 105], ['toor dal', 116], ['dal', 116],
+                    // 7 Oct 2026: pulses, pasta, noodles, idiyappam, red rice, corn. With the Kannada names.
+                    ['chana', 164], ['Chana', 164], ['kadale', 164], ['chickpeas', 164], ['kabuli chana', 164],
+                    ['urad dal', 105], ['uddina bele', 105], ['chana dal', 129], ['kadale bele', 129],
+                    ['whole moong', 105], ['hesaru', 105], ['green gram', 105], ['lobia', 116], ['alasande', 116],
+                    ['pasta', 158], ['spaghetti', 158], ['noodles', 138], ['rice noodles', 108],
+                    ['idiyappam', 140], ['shavige', 140], ['red rice', 123], ['corn', 86], ['rajma', 127]];
     for (const [q, k] of expect) {
       const c = await cost(q);
       ck(`"${q}" is costed as cooked: ${k} kcal per 100 g`, c.kcal100 === k && c.source && c.source !== 'ai', c);
@@ -82,6 +93,16 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('"moong dal raw" is not forced to cooked', (await cost('moong dal raw')).kcal100 !== 105, await cost('moong dal raw'));
     ck('"rice flour" is still rice flour', (await cost('rice flour')).kcal100 === 366, await cost('rice flour'));
     ck('"poha" is cooked poha (as before)', (await cost('poha')).kcal100 === 140, await cost('poha'));
+    const ch = await cost('chana', 150);
+    ck('so 150 g of chana is about 246 kcal, not 540', Math.round(150 * ch.kcal100 / 100) === 246);
+    ck('foods people weigh dry are left alone: oats 374, soya chunks 336, ragi 328', (await cost('oats')).kcal100 === 374 && (await cost('soya chunks')).kcal100 === 336 && (await cost('ragi')).kcal100 === 328);
+    ck('"cornflakes" is still cornflakes, "sweet corn" still sweet corn', (await cost('cornflakes')).kcal100 === 357 && (await cost('sweet corn')).kcal100 === 86);
+    ck('the dry rows are still there under their full names', (await cost('Chana (Bengal Gram, Whole)')).kcal100 === 360 && (await cost('Pasta (Whole Wheat, Dry)')).kcal100 === 348 && (await cost('Rice Vermicelli (Idiyappam)')).kcal100 === 350);
+    const locals = (await pool.query(`SELECT name, name_local FROM foods WHERE name IN ('Rajma (Kidney Beans, Raw)', 'Rice Flakes (Poha)', 'Rice Vermicelli (Idiyappam)', 'Pasta (Whole Wheat, Dry)', 'Noodles (Rice, Dry)', 'Rice, Raw (Red)')`)).rows;
+    ck('and their everyday names now say raw or dry, so a search list cannot mistake them for the dish', locals.length === 6 && locals.every(r => /\((raw|dry|dry flakes)\)$/.test(r.name_local)), locals);
+    ck('every cooked row has calories, protein, carbs and fat that add up (within 12%)', (await pool.query(`SELECT name, per_100g FROM foods WHERE source = 'manual' AND name ~ 'Cooked'`)).rows
+       .every(r => { const n = r.per_100g; const k = 4 * n.protein + 4 * n.total_carbs + 9 * n.fat; return n.calories > 0 && Math.abs(k - n.calories) / n.calories < 0.12; }),
+       (await pool.query(`SELECT name, per_100g FROM foods WHERE source = 'manual' AND name ~ 'Cooked'`)).rows.map(r => [r.name, r.per_100g.calories, Math.round(4 * r.per_100g.protein + 4 * r.per_100g.total_carbs + 9 * r.per_100g.fat)]));
 
     console.log('\n[3] safe to run on every boot');
     const f2 = await applyFoodFixes(pool);
@@ -92,6 +113,8 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('an alias added later is kept too, with no duplicates', al.includes('jeera rice') && al.includes('sona masoori') && al.includes('rice') && new Set(al).size === al.length, al);
     const dup = (await pool.query(`SELECT COUNT(*)::int AS n FROM foods WHERE name = 'Rice, Cooked (Brown)'`)).rows[0].n;
     ck('cooked brown rice exists exactly once', dup === 1, dup);
+    const dups = (await pool.query(`SELECT name, COUNT(*)::int AS n FROM foods WHERE source = 'manual' GROUP BY name HAVING COUNT(*) > 1`)).rows;
+    ck('no cooked row was added twice', dups.length === 0, dups);
   } finally {
     await pool.query(`DELETE FROM foods WHERE id > $1`, [before]);
     await pool.end();

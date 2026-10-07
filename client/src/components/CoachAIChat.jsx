@@ -18,7 +18,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { create } from 'zustand';
+import { useCoachAI } from '../store/coachAIStore';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { haptic } from '../store/settingsStore';
@@ -27,11 +27,9 @@ import { plural } from '../constants';
 import DaySummary from './DaySummary';
 import { markMorningNudgeSent } from '../api/logs';
 
-export const useCoachAI = create((set) => ({
-  open: false,
-  openChat:  () => set({ open: true }),
-  closeChat: () => set({ open: false }),
-}));
+// The open/closed flag lives in store/coachAIStore.js so the bottom bar can open
+// the chat without importing this whole screen. Re-exported: old imports work.
+export { useCoachAI };
 
 const SUGGESTION_CHIPS = [
   'Set water target 4L for ',
@@ -315,36 +313,10 @@ function FoodEditCard({ food, onSaved }) {
   );
 }
 
-export function CoachAIFab({ bottomOffset = 40 }) {
-  const openChat = useCoachAI(s => s.openChat);
-  const open     = useCoachAI(s => s.open);
-  if (open) return null;
-  return (
-    <button
-      onClick={openChat}
-      aria-label="Coach AI"
-      // Flush to the right edge on purpose — it is thumb-reachable there and
-      // never scrolls away. But a radial gradient with a rounded left side read
-      // as an orb someone had cut in half, so it now presents as a deliberate
-      // tab: flat gold, a hairline down the open edge, and a drawn glyph
-      // instead of whatever spark the phone's emoji font supplies.
-      className="fixed z-40 flex items-center justify-center bg-gold
-        shadow-[0_2px_14px_rgba(212,175,55,0.28)] active:scale-95 transition-transform"
-      style={{
-        right: 0,
-        bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))`,
-        width: 44, height: 54,
-        borderTopLeftRadius: 14, borderBottomLeftRadius: 14,
-        boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.22), 0 2px 14px rgba(212,175,55,0.28)',
-      }}>
-      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#121316"
-        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5z" />
-        <path d="M18.5 4v3M20 5.5h-3" />
-      </svg>
-    </button>
-  );
-}
+// The floating edge tab that used to open this chat (CoachAIFab) is gone: on a
+// phone it sat over the right edge of whatever was underneath (Refresh, Draft
+// the plan, a member's weight). Coach AI is now the centre button of the bottom
+// bar, the same place the member app has its AI button. See BottomNav in UI.jsx.
 
 /**
  * @param {object}  [contextMember]  { id, name } when mounted on a member's

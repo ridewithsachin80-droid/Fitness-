@@ -5,12 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { adminResetPin, adminSendPush, getAuditLog, adminDeleteMember, markMessagesRead } from '../api/logs';
-import { Card, SectionTitle, PageLoader } from '../components/UI';
+import { Card, SectionTitle, PageLoader, BottomNav } from '../components/UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural } from '../constants';
 import AdminReminders from '../components/AdminReminders';
 import MessageMember from '../components/MessageMember';
 import TodaysGaps from '../components/TodaysGaps';
-import CoachAIChat, { CoachAIFab, useCoachAI } from '../components/CoachAIChat';
+import CoachAIChat, { useCoachAI } from '../components/CoachAIChat';
 import EvalSamples from '../components/EvalSamples';
 // Sprint 12c: the modals live in components/admin/ (see each file's header)
 import { StatCard, Modal, Field, assignableCoaches } from '../components/admin/AdminAtoms';
@@ -754,7 +754,9 @@ export default function AdminDashboard() {
         onClose={() => setMsgMember(null)}
       />
 
-      <CoachAIFab />
+      {/* The same bottom bar as every other coach screen: Members · Admin · Coach AI
+          · Settings. This page had no bar at all, only the floating AI tab. */}
+      <BottomNav role={user?.role} />
     </div>
   );
 }

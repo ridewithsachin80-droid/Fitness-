@@ -133,6 +133,13 @@ async function transcribeBoth(audio, mimeType) {
   return { gemini: g.text, whisper: w.text, errors: { gemini: g.error, whisper: w.error } };
 }
 
+/** One engine only, for trying a stored recording again. engine: 'gemini' | 'whisper'. */
+async function transcribeOne(engine, audio, mimeType) {
+  if (engine === 'gemini') return once('gemini', 'GEMINI_API_KEY', gemini, audio, mimeType);
+  if (engine === 'whisper') return once('whisper', 'GROQ_API_KEY', whisper, audio, mimeType);
+  return { text: null, error: 'unknown engine' };
+}
+
 /**
  * Pilot results, per phrase: how often each engine heard the key words.
  * rows: voice_samples rows. Pure.
@@ -197,4 +204,4 @@ function resultsCsv(rows, { now = new Date() } = {}) {
   return '\ufeff' + lines.join('\r\n') + '\r\n';
 }
 
-module.exports = { PHRASES, score, transcribeBoth, summarise, resultsCsv, reason, PROMPT, WHISPER_PROMPT, norm };
+module.exports = { PHRASES, score, transcribeBoth, transcribeOne, summarise, resultsCsv, reason, PROMPT, WHISPER_PROMPT, norm };

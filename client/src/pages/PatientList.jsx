@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { getMembers, markMessagesRead }  from '../api/logs';
 import { today, formatDate, plural } from '../constants';
 import { Card, SectionTitle, OfflineBanner, PageLoader, BottomNav } from '../components/UI';
-import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
+import CoachAIChat from '../components/CoachAIChat';
 import TodaysGaps from '../components/TodaysGaps';
 import TriageFeed from '../components/coach/TriageFeed';
 import MorningNudges from '../components/MorningNudges';
@@ -317,7 +317,6 @@ export default function MemberList() {
 
       {/* Coach AI — manage protocols & messages by chat */}
       <CoachAIChat onApplied={load} />
-      <CoachAIFab bottomOffset={88} />
     </div>
   );
 }

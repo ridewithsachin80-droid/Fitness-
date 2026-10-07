@@ -44,6 +44,17 @@ export default function VoicePilotPanel({ collapsible = false }) {
     try { await shareOrDownload('/voice-pilot/results.csv', { filename: 'FitLife-Voice-Pilot.csv', title: 'FitLife voice test results', type: 'text/csv' }); setDl(''); }
     catch (e) { setDl('Could not make the file just now. Try again.'); }
   };
+  // Ask the engines again for stored recordings they did not answer.
+  const [retry, setRetry] = useState('');
+  const tryAgain = async () => {
+    haptic(10); setRetry('busy');
+    try {
+      const { data } = await api.post('/voice-pilot/results/retry', {}, { timeout: 180000 });
+      setRetry(!data.asked ? 'Nothing was waiting for an answer.'
+        : `${data.fixed} of ${data.asked} answered this time.${data.still ? ` ${data.problems?.[0] || 'The rest still gave no answer.'}` : ''}${data.more ? ' More are waiting: tap again.' : ''}`);
+      load();
+    } catch (e) { setRetry(e.response?.data?.error || 'Could not try again just now.'); }
+  };
   const invite = async () => {
     if (!pick) return;
     haptic(10); setMsg('');
@@ -101,6 +112,16 @@ export default function VoicePilotPanel({ collapsible = false }) {
           {dl && dl !== 'busy' && <p className="text-caption text-red-300">{dl}</p>}
         </>
       )}
+      {res?.overall?.samples > 0 && (res.overall.gemini_answered < res.overall.samples || res.overall.whisper_answered < res.overall.samples) && (
+        <div data-testid="vp-retry-box">
+          <button type="button" onClick={tryAgain} disabled={retry === 'busy'} style={{ minHeight: 44 }} data-testid="vp-retry"
+            className="w-full rounded-xl border border-white/[0.16] text-white text-sm font-semibold disabled:opacity-50">
+            {retry === 'busy' ? 'Asking again… this can take a minute' : 'Try the unanswered recordings again'}
+          </button>
+          <p className="text-caption text-lo leading-snug mt-1">Uses the stored recordings: members do not need to record again.</p>
+        </div>
+      )}
+      {retry && retry !== 'busy' && <p className="text-caption text-mid" data-testid="vp-retry-result">{retry}</p>}
       {res?.phrases?.some(p => p.samples) && (
         <div className="overflow-x-auto" data-testid="vp-results">
           <table className="w-full text-caption">

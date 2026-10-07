@@ -7,6 +7,7 @@
  *     DELETE /api/voice-pilot/invite/:id       stop the invitation and delete their recordings
  *     GET    /api/voice-pilot/results          per phrase, each engine's hit rate; every sample with both transcripts
  *     GET    /api/voice-pilot/results.csv      the same as one file to send on: members as codes, no names, no audio
+ *     POST   /api/voice-pilot/results/retry    ask an engine again for the stored recordings it did not answer
  *   Member:
  *     GET    /api/voice-pilot/me               invited?, consented?, phrases and what is recorded
  *     POST   /api/voice-pilot/consent
@@ -100,6 +101,44 @@ router.get('/results', coachOnly, async (req, res) => {
       duration_ms: r.duration_ms, gemini: r.gemini_text, whisper: r.whisper_text, gemini_score: r.gemini_score, whisper_score: r.whisper_score,
       gemini_problem: r.gemini_text == null ? (r.gemini_error || 'no answer') : null, whisper_problem: r.whisper_text == null ? (r.whisper_error || 'no answer') : null,
       audio_url: link(r.object_key), at: r.created_at })) });
+  } catch (err) { fail(res, err); }
+});
+
+// Ask again for recordings an engine gave no answer for. The audio is already
+// stored, so the member does not have to record the line a second time: the
+// first real run lost 2 of 7 Gemini answers to a passing failure. One engine
+// call at a time (the likely cause is "slow down"), at most 20 a tap.
+router.post('/results/retry', coachOnly, async (req, res) => {
+  try {
+    const m = mine(req.user, 's');
+    const { rows } = await pool.query(
+      `SELECT s.id, s.phrase_id, s.object_key, s.mime_type, s.gemini_text, s.whisper_text
+         FROM voice_samples s
+        WHERE s.object_key IS NOT NULL AND (s.gemini_text IS NULL OR s.whisper_text IS NULL)
+          ${m.sql.replace('$1', `$${m.args.length}`)}
+        ORDER BY s.created_at LIMIT 21`, m.args);
+    const batch = rows.slice(0, 20);
+    let asked = 0, fixed = 0; const problems = [];
+    for (const r of batch) {
+      let audio;
+      try { const buf = await storage.getObject(r.object_key); audio = buf ? buf.toString('base64') : null; }
+      catch (e) { audio = null; }
+      if (!audio) { problems.push('The recording could not be read from storage.'); continue; }
+      for (const engine of ['gemini', 'whisper']) {
+        if (r[`${engine}_text`] != null) continue;
+        asked++;
+        const t = await V.transcribeOne(engine, audio, r.mime_type || 'audio/webm');
+        if (t.text != null) {
+          fixed++;
+          await pool.query(`UPDATE voice_samples SET ${engine}_text=$1, ${engine}_score=$2, ${engine}_error=NULL WHERE id=$3`,
+            [t.text, V.score(r.phrase_id, t.text), r.id]);
+        } else {
+          problems.push(`${engine === 'gemini' ? 'Gemini' : 'Whisper'}: ${t.error || 'no answer'}`);
+          await pool.query(`UPDATE voice_samples SET ${engine}_error=$1 WHERE id=$2`, [t.error || null, r.id]);
+        }
+      }
+    }
+    res.json({ ok: true, asked, fixed, still: asked - fixed, more: rows.length > batch.length, problems: [...new Set(problems)].slice(0, 3) });
   } catch (err) { fail(res, err); }
 });
 

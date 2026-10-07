@@ -26,7 +26,7 @@ import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
 import LabResults from '../components/LabResults';
 import MuscleCoverage from '../components/MuscleCoverage';
-import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
+import CoachAIChat from '../components/CoachAIChat';
 import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS, plural } from '../constants';
 import { useSync } from '../hooks/useSync';
@@ -1378,7 +1378,6 @@ export default function Coach() {
         contextMember={{ id: parseInt(memberId), name: profile?.name }}
         onApplied={() => { load({ quiet: true }); setStudioKey(k => k + 1); }}
       />
-      <CoachAIFab bottomOffset={88} />
     </div>
   );
 }

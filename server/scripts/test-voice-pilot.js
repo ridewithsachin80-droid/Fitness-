@@ -212,6 +212,35 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('no audio, no links in the file', !/r2|http|X-Amz/i.test(f.text));
     ck('another coach gets only the header (none of these members)', (await get(O)).text.replace(/^\ufeff/, '').trim().split('\r\n').length === 1);
     ck('a member cannot download it', (await get(M)).status === 403);
+
+    // Phase 8c: ask an engine again for a stored recording it did not answer.
+    {
+      const state = async () => (await pool.query(`SELECT gemini_text, whisper_text, whisper_score, whisper_error FROM voice_samples WHERE phrase_id='k15'`)).rows[0];
+      ck('a member cannot use "try again"', (await call('POST', '/api/voice-pilot/results/retry', M)).status === 403);
+      let c0 = { ...calls };
+      let r = await call('POST', '/api/voice-pilot/results/retry', O);
+      ck('another coach\'s "try again" touches none of these recordings', r.status === 200 && r.data.asked === 0 && calls.whisper === c0.whisper, r.data);
+      down.whisper = true; c0 = { ...calls };
+      r = await call('POST', '/api/voice-pilot/results/retry', C);
+      down.whisper = false;
+      ck('engine still down: 1 asked, 0 answered, the reason returned and stored, nothing invented', r.data.asked === 1 && r.data.fixed === 0 && r.data.still === 1 && /^Whisper: 500: /.test(r.data.problems[0]) && !/SECRET/.test(JSON.stringify(r.data))
+         && (await state()).whisper_text === null && /^500: /.test((await state()).whisper_error), r.data);
+      ck('only the engine that gave no answer was asked (Gemini already had one)', calls.gemini === c0.gemini && calls.whisper - c0.whisper === 2, [c0, calls]);
+      const audioBefore = [...R2.objects.keys()].length;
+      // This time Whisper hears two of the line's three key words (masala, dose; no chutney).
+      const usual = heard.whisper; heard.whisper = 'Ondu masala dose';
+      r = await call('POST', '/api/voice-pilot/results/retry', C);
+      heard.whisper = usual;
+      const st = await state();
+      ck('engine back: the stored recording is read again and answered, with no new recording', r.data.asked === 1 && r.data.fixed === 1 && r.data.still === 0 && r.data.more === false && st.whisper_text === 'Ondu masala dose' && st.whisper_error === null && [...R2.objects.keys()].length === audioBefore, [r.data, st]);
+      ck('the new answer is scored like any other (2 of 3 key words: 0.67)', st.whisper_score !== null && Number(st.whisper_score) === 0.67 && V.score('k15', 'Ondu masala dose') === 0.67, st);
+      ck('Gemini\'s existing answer was left alone', st.gemini_text === '=cmd(1)');
+      const o2 = (await call('GET', '/api/voice-pilot/results', C)).data.overall;
+      ck('and the headline now counts it as answered (2 of 2)', o2.whisper_answered === 2 && o2.gemini_answered === 2, o2);
+      c0 = { ...calls };
+      r = await call('POST', '/api/voice-pilot/results/retry', C);
+      ck('with nothing unanswered, "try again" asks nobody', r.data.asked === 0 && calls.gemini === c0.gemini && calls.whisper === c0.whisper, r.data);
+    }
   }
 
   console.log('\n[4] stopping, removing, 90 days');

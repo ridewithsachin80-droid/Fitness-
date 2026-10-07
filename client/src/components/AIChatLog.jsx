@@ -29,7 +29,8 @@ import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { today, plural } from '../constants';
-import { resolveProtocolItems, defaultMealSlot } from '../lib/day';
+import { resolveProtocolItems, defaultMealSlot, isMealPlanQuestion } from '../lib/day';
+import LogPlannedButton from './chat/LogPlannedButton';
 import { useAIChat, undoSnap, workoutUndoSnap } from '../store/aiChatStore';
 import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CHIPS, GroupHeader, ToggleChip } from './chat/ChatAtoms';
 
@@ -52,7 +53,7 @@ function deriveProtocolItemsCompat(protocol) {
   return { activities: r.activeActivities, acv: r.activeACV, supplements: r.activeSupplements };
 }
 
-export default function AIChatLog({ mealPlans = [] } = {}) {
+export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
   // Where food goes when the member does not say which meal: shown on the
   // preview, and used on apply, so what they see is what is logged.
@@ -410,6 +411,9 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
         // member makes below can be paired with the question that caused it.
         evalSource: 'member_parse',
         evalMessage: text,
+        // A meal-plan question with nothing to apply: the answer offers "Log <next meal> as planned".
+        planAsk: isMealPlanQuestion(text) && data.weight_kg == null && !(data.foods || []).length
+          && !(data.workouts || []).length && !(data.corrections || []).length,
         parsed: {
           weight_kg:    data.weight_kg,
           weightOn:     data.weight_kg != null,
@@ -889,6 +893,8 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
                   {m.summary
                     ? <DaySummary s={m.summary} />
                     : <p className="leading-relaxed whitespace-pre-line">{m.text}</p>}
+
+                  {m.planAsk && <LogPlannedButton mealPlans={mealPlans} food={todayFood} onLogPlanned={onLogPlanned} />}
 
                   {/* Lab report draft — nothing is saved until confirmed. A
                       misread decimal on a blood test is a different order of

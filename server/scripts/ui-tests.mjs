@@ -2995,6 +2995,200 @@ async function reviewFixesTest() {
   ck('coach list: "No weight" is a line of its own above the % pill', /<div className="text-xs text-ghost">No weight<\/div>/.test(srcOf('pages/PatientList.jsx')));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 34. Phase 8c — Coach AI in the bottom bar; Studio draft PDF and missing
+//     targets; "Log as planned" from the member chat; voice "try again"
+// ═══════════════════════════════════════════════════════════════════════════
+async function phase8cTest() {
+  console.log('\n[34] Coach AI in the bottom bar, Studio follow-ups, chat "Log as planned", voice retry (Phase 8c)');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+  const noApi = stub('api-8c-none.js', `const get = async () => ({ data: {} }); const post = async () => ({ data: { ok: true } }); export default { get, post, put: post, patch: post, delete: post };`);
+
+  // ── A. The coach bottom bar ────────────────────────────────────────────────
+  const nav = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, useLocation } from 'react-router-dom';
+    import { BottomNav } from './components/UI.jsx';
+    import { useCoachAI } from './store/coachAIStore.js';
+    import { useCoachAI as viaChat } from './components/CoachAIChat.jsx';
+    window.__ai = useCoachAI; window.__same = useCoachAI === viaChat;
+    const Where = () => { window.__path = useLocation().pathname; return null; };
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__start]}><Where /><BottomNav role={window.__role} /></MemoryRouter>);`, noApi);
+  const at = (role, start) => run(nav, (win) => { win.__role = role; win.__start = start; });
+  const A = at('admin', '/coach/5'); await tick(300);
+  const navBtns = (W) => [...W.w.document.querySelectorAll('[data-testid="coach-nav"] button')].map(b => b.getAttribute('aria-label') || b.textContent.trim());
+  ck('admin bar, in order: Members, Admin, Coach AI, Settings', A.errors.length === 0 && navBtns(A).join(',') === 'Members,Admin,Coach AI,Settings', [A.errors.join('|'), navBtns(A)]);
+  ck('the chat is closed until the button is tapped', A.w.__ai.getState().open === false);
+  A.w.document.querySelector('[data-testid="coach-ai-orb"]').click(); await tick(150);
+  ck('on a member page the button opens the chat and stays on that page', A.w.__ai.getState().open === true && A.w.__path === '/coach/5');
+  ck('the bar and the chat screen share one open/closed flag', A.w.__same === true);
+  const C = at('monitor', '/settings'); await tick(300);
+  ck('coach bar: Members, Coach AI, Settings (no Admin)', navBtns(C).join(',') === 'Members,Coach AI,Settings', navBtns(C));
+  C.w.document.querySelector('[data-testid="coach-ai-orb"]').click(); await tick(200);
+  ck('from Settings (no chat there) the button goes to the coach home with the chat open', C.w.__ai.getState().open === true && C.w.__path === '/coach', [C.w.__ai.getState().open, C.w.__path]);
+  const D = at('admin', '/admin'); await tick(300);
+  D.w.document.querySelector('[data-testid="coach-ai-orb"]').click(); await tick(150);
+  ck('on the admin dashboard it opens in place, and Admin is the marked tab', D.w.__path === '/admin' && D.w.__ai.getState().open === true && D.w.document.querySelector('[aria-current="page"]')?.textContent.trim() === 'Admin');
+  {
+    const all = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? all(path.join(dir, e.name)) : /\.jsx?$/.test(e.name) ? [path.join(dir, e.name)] : []);
+    const fab = all(CLIENT_SRC).filter(f => /<CoachAIFab|export function CoachAIFab|import[^;]*CoachAIFab/.test(fs.readFileSync(f, 'utf8'))).map(f => path.relative(CLIENT_SRC, f));
+    ck('the floating edge button is gone from every screen', fab.length === 0, fab);
+    ck('the admin dashboard, coach home and member page all carry the bar', ['pages/AdminDashboard.jsx', 'pages/PatientList.jsx', 'pages/Monitor.jsx'].every(f => /<BottomNav role=\{user\?\.role\} \/>/.test(srcOf(f)) && /<CoachAIChat/.test(srcOf(f))));
+  }
+  try {
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+    const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    try {
+      const out = [];
+      for (const [role, width] of [['admin', 320], ['admin', 360], ['monitor', 320], ['monitor', 390]]) {
+        const page = await browser.newPage();
+        await page.setViewport({ width, height: 640, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+        await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+        await page.evaluate((r) => { window.__role = r; window.__start = '/coach'; }, role);
+        await page.addScriptTag({ content: nav });
+        await new Promise(r => setTimeout(r, 700));
+        out.push(await page.evaluate(() => {
+          const o = document.querySelector('[data-testid="coach-ai-orb"]').getBoundingClientRect(), b = document.querySelector('[data-testid="coach-nav"] .glass').getBoundingClientRect();
+          const tabs = [...document.querySelectorAll('[data-testid="coach-nav"] button:not([data-testid])')].map(x => { const r = x.getBoundingClientRect(), t = x.querySelector('span').getBoundingClientRect(); return { h: r.height, clipped: t.width > r.width + 0.5 }; });
+          return { off: Math.abs((o.x + o.width / 2) - (b.x + b.width / 2)), orb: o.width, sw: document.documentElement.scrollWidth, vw: window.innerWidth, tabs };
+        }));
+        await page.close();
+      }
+      ck('in real Chrome at 320 to 390 px, coach and admin: the button is dead centre, 56 px, nothing scrolls sideways', out.every(o => o.off <= 1 && o.orb === 56 && o.sw <= o.vw + 1), out);
+      ck('every tab is at least 44 px tall and its label fits (admin at 320 px is the tight one)', out.every(o => o.tabs.every(t => t.h >= 44 && !t.clipped)), out.map(o => o.tabs));
+    } finally { await browser.close(); await new Promise(r => server.close(r)); }
+  } catch (e) { console.log('  – browser not installed, the bottom bar was NOT measured in Chrome (' + String(e.message).slice(0, 60) + ')'); }
+
+  // ── B. Studio: missing carb/fat targets, and the draft PDF ──────────────────
+  const studioApi = stub('api-8c-studio.js', `
+    window.__patches = []; window.__gets = [];
+    const item = (id, name, grams, kcal) => ({ id, name, grams, qty_text: grams + ' g', compulsory: false, per_100g: { calories: kcal, total_carbs: 5 } });
+    const day = () => [{ meal: 'Breakfast', time: '10:30', items: [item(1, 'Curd', 75, 56), item(2, 'Paneer', 75, 265)] }];
+    const T = () => (window.__targets || { kcal: 1400, protein: 110, carbs: null, fat: null });
+    const draft = () => ({ id: 41, patient_id: 12, version: 3, status: 'draft', title: 'Low-carb plan', targets: T(), flags: [],
+      content: { avoid: [], cautions: [], adjustments: [], lab_cautions: [] }, checks: [], days: [day(), day(), day(), day(), day(), day(), day()], diff: null, compared_to_version: null });
+    const inForce = () => ({ id: 40, version: 2, title: 'Low-carb plan', effective_from: '2026-10-05', targets: T() });
+    const get = async (url, cfg) => { window.__gets.push({ url, cfg });
+      if (/\\/diet-plans\\/member\\/12$/.test(url)) return { data: { today: '2026-10-07', member_targets: window.__mt === undefined ? { kcal: 1500, protein: 100, carbs: 80, fat: 87 } : window.__mt,
+        in_force: window.__inforce ? inForce() : null, upcoming: null, draft: window.__inforce ? null : draft(), history: [] } };
+      if (/pdf$/.test(url)) return { data: new Blob(['%PDF-1.4 draft'], { type: 'application/pdf' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Diet-Plan-Raghavendra-v3-DRAFT.pdf"' } };
+      if (/\\/swaps\\//.test(url)) return { data: { swaps: [], requests: [], suggestions: [] } };
+      return { data: {} }; };
+    const patch = async (url, body) => { window.__patches.push({ url, body }); window.__targets = body.targets; return { data: { plan: draft() } }; };
+    const post = async () => ({ data: {} });
+    export default { get, post, put: post, patch, delete: post };`);
+  const studio = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import DietPlanStudio from './components/coach/DietPlanStudio.jsx';
+    createRoot(document.getElementById('root')).render(<DietPlanStudio memberId={12} memberName="Raghavendra" />);`, studioApi);
+  const dl = (win) => { win.__downloads = []; win.URL.createObjectURL = () => 'blob:pdf'; win.URL.revokeObjectURL = () => {}; win.HTMLAnchorElement.prototype.click = function () { win.__downloads.push(this.download); }; };
+  const S = run(studio, dl); await tick(500);
+  const sq = (id) => S.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('a draft with no carb or fat target says what that costs', S.errors.length === 0 && /No carb or fat target on this plan\./.test(sq('targets-missing')?.textContent || '') && /carb check cannot run/.test(sq('targets-missing').textContent) && /Raghavendra will see "—"/.test(sq('targets-missing').textContent), [S.errors.join('|'), sq('targets-missing')?.textContent]);
+  ck('and offers the member\'s own targets in one tap, by number', /Raghavendra's own daily targets are 80 g carbs and 87 g fat\./.test(sq('targets-missing').textContent) && /^Use 80 g carbs, 87 g fat$/.test(sq('targets-fill')?.textContent.trim() || ''), sq('targets-missing')?.textContent);
+  ck('nothing is filled in until that tap', S.w.__patches.length === 0);
+  sq('targets-fill').click(); await tick(500);
+  ck('the tap saves carbs 80 and fat 87, and leaves the plan\'s own calories and protein (1400, 110; the member\'s are 1500, 100)', S.w.__patches.length === 1 && JSON.stringify(S.w.__patches[0].body.targets) === '{"kcal":1400,"protein":110,"carbs":80,"fat":87}', S.w.__patches);
+  ck('the plan is re-read and the note is gone', !sq('targets-missing') && S.w.__gets.filter(g => /diet-plans\/member\/12$/.test(g.url)).length === 2);
+  const S2 = run(studio, (win) => { dl(win); win.__mt = { kcal: 1500, protein: 100, carbs: 80, fat: null }; }); await tick(500);
+  ck('if the member has only a carb target, only carbs is offered', /^Use 80 g carbs$/.test(S2.w.document.querySelector('[data-testid="targets-fill"]')?.textContent.trim() || '') && /own daily target is 80 g carbs\./.test(S2.w.document.querySelector('[data-testid="targets-missing"]').textContent), S2.w.document.querySelector('[data-testid="targets-missing"]')?.textContent);
+  const S3 = run(studio, (win) => { dl(win); win.__mt = { kcal: null, protein: null, carbs: null, fat: null }; }); await tick(500);
+  ck('if the member has neither, it says to type them in (no button)', !S3.w.document.querySelector('[data-testid="targets-fill"]') && /Type them in above and save/.test(S3.w.document.querySelector('[data-testid="targets-missing"]')?.textContent || ''));
+  const S4 = run(studio, (win) => { dl(win); win.__targets = { kcal: 1500, protein: 100, carbs: 80, fat: 87 }; }); await tick(500);
+  ck('a draft with all four targets shows no note', S4.errors.length === 0 && !S4.w.document.querySelector('[data-testid="targets-missing"]'));
+  S4.w.document.querySelector('[data-testid="draft-pdf"]').click(); await tick(400);
+  const pdfGet = S4.w.__gets.find(g => /\/diet-plans\/41\/pdf$/.test(g.url));
+  ck('"PDF of this draft" fetches that draft as a file and saves it (the server marks it DRAFT)', !!pdfGet && pdfGet.cfg?.responseType === 'blob' && S4.w.__downloads[0] === 'FitLife-Diet-Plan-Raghavendra-v3-DRAFT.pdf' && /marked DRAFT/.test(S4.w.document.querySelector('[data-testid="draft-pdf"]').textContent), [pdfGet?.cfg, S4.w.__downloads]);
+  const S5 = run(studio, (win) => { dl(win); win.__inforce = true; }); await tick(500);
+  ck('a plan in force with no carb or fat target says so, and points to Revise', /no carb or fat target/.test(S5.w.document.querySelector('[data-testid="inforce-targets-missing"]')?.textContent || '') && /Revise this plan/.test(S5.w.document.querySelector('[data-testid="inforce-targets-missing"]').textContent), S5.errors.join('|'));
+  const S6 = run(studio, (win) => { dl(win); win.__inforce = true; win.__targets = { kcal: 1500, protein: 100, carbs: 80, fat: 87 }; }); await tick(500);
+  ck('and one with all four says nothing', S6.errors.length === 0 && !S6.w.document.querySelector('[data-testid="inforce-targets-missing"]'));
+
+  // ── C. Member chat: "Log <next meal> as planned" under a meal-plan answer ────
+  const chatApi = stub('api-8c-chat.js', `
+    window.__posts = [];
+    const get = async () => ({ data: {} });
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (url === '/ai-chat/parse') return /idli/.test(body.message)
+        ? { data: { reply: 'Got it: 2 idli.', foods: [{ name: 'Idli', grams: 80, meal: 'Breakfast', per_100g: { calories: 134 } }], totals: {} } }
+        : { data: { reply: 'Today: Breakfast (not logged) curd and paneer. Lunch (not logged) ragi mudde and saaru.', foods: [], totals: {} } };
+      return { data: {} }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const chat = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import AIChatLog from './components/AIChatLog.jsx';
+    import { useAIChat } from './store/aiChatStore.js';
+    import { useLogStore } from './store/logStore.js';
+    import { isMealPlanQuestion } from './lib/day/index.js';
+    window.__q = isMealPlanQuestion; window.__chat = useAIChat; window.__log = useLogStore; window.__planned = [];
+    const per = (k) => ({ calories: k });
+    const mealPlans = [{ meal: 'Lunch', time: '13:30', items: [{ name: 'Ragi mudde', grams: 45, per_100g: per(331) }] },
+                       { meal: 'Breakfast', time: '10:30', items: [{ name: 'Curd', grams: 75, per_100g: per(56) }, { name: 'Paneer', grams: 75, per_100g: per(265) }] }];
+    createRoot(document.getElementById('root')).render(<AIChatLog mealPlans={window.__noPlan ? [] : mealPlans} onLogPlanned={window.__noHandler ? null : (m) => window.__planned.push(m)} />);
+    useAIChat.getState().openChat();`, chatApi);
+  const X = run(chat); await tick(500);
+  const xd = X.w.document;
+  const say = async (W, text) => {
+    const t = W.w.document.querySelector('[data-testid="composer-input"]');
+    Object.getOwnPropertyDescriptor(W.w.HTMLTextAreaElement.prototype, 'value').set.call(t, text);
+    t.dispatchEvent(new W.w.Event('input', { bubbles: true })); await tick(60);
+    t.dispatchEvent(new W.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
+  };
+  ck('which messages are meal-plan questions (and which are logging)', ["what is today's meal plan?", 'what do I eat next', "What's for dinner", 'aaj kya khana hai', 'show my diet plan'].every(X.w.__q)
+     && !['I ate 2 idli and sambar', 'weight 82.5', 'I had lunch as per meal plan', 'plan my week', '2 chapati 1 bowl dal for lunch'].some(X.w.__q));
+  await say(X, "what's today's meal plan?");
+  const btn = () => [...xd.querySelectorAll('[data-testid="chat-log-planned"]')];
+  ck('after the meal-plan answer: one button for the next unlogged meal, by time (Breakfast, not Lunch)', X.errors.length === 0 && btn().length === 1 && btn()[0].textContent.trim() === 'Log Breakfast as planned', [X.errors.join('|'), btn().map(b => b.textContent)]);
+  btn()[0].click(); await tick(200);
+  ck('tapping it opens the same sheet as the Next up card, for that meal, and puts the chat bar away', X.w.__planned.length === 1 && X.w.__planned[0].meal === 'Breakfast' && X.w.__planned[0].items.length === 2 && X.w.__chat.getState().composerOpen === false, X.w.__planned);
+  X.w.__log.setState(st => ({ log: { ...(st.log || {}), food: [{ name: 'Curd', grams: 75, meal: 'Breakfast' }] } })); await tick(200);
+  ck('once Breakfast is logged, the same button now offers Lunch (worked out live, never stale)', btn().length === 1 && btn()[0].textContent.trim() === 'Log Lunch as planned', btn().map(b => b.textContent));
+  X.w.__log.setState(st => ({ log: { ...st.log, food: [{ name: 'Curd', grams: 75, meal: 'Breakfast' }, { name: 'Ragi mudde', grams: 45, meal: 'Lunch' }] } })); await tick(200);
+  ck('with every planned meal logged there is no button', btn().length === 0);
+  const Y = run(chat); await tick(500);
+  await say(Y, 'I ate 2 idli for breakfast');
+  ck('a message that logs food gets its usual card and no "Log as planned" button', /Got it: 2 idli/.test(Y.w.document.body.textContent) && !Y.w.document.querySelector('[data-testid="chat-log-planned"]'));
+  const Z = run(chat, (win) => { win.__noPlan = true; }); await tick(500);
+  await say(Z, "what's today's meal plan?");
+  ck('a member with no plan gets the answer and no button', /Today: Breakfast/.test(Z.w.document.body.textContent) && !Z.w.document.querySelector('[data-testid="chat-log-planned"]'));
+  ck('Today hands the chat the same opener the Next up card uses', /<AIChatLog mealPlans=\{m\.mealPlans\} onLogPlanned=\{m\.openPlanned\} \/>/.test(srcOf('pages/Today.jsx')) && /onLog=\{m\.openPlanned\}/.test(srcOf('pages/Today.jsx')));
+
+  // ── D. Voice test: try the unanswered recordings again ──────────────────────
+  const vpApi = stub('api-8c-vp.js', `
+    window.__posts = []; let fixed = false;
+    const res = () => ({ overall: { gemini: fixed ? 100 : 50, whisper: 100, samples: 2, scored: 2, gemini_answered: fixed ? 2 : 1, whisper_answered: 2 },
+      phrases: [{ id: 'k01', say: 'Belagge eradu idli', samples: 2, gemini: fixed ? 100 : 50, whisper: 100, gemini_answered: fixed ? 2 : 1, whisper_answered: 2 }], samples: [] });
+    const get = async (url) => {
+      if (/voice-pilot\\/members$/.test(url)) return { data: { members: [], phrases: 22 } };
+      if (/voice-pilot\\/results$/.test(url)) return { data: res() };
+      return { data: [] }; };
+    const post = async (url, body) => { window.__posts.push(url);
+      if (/results\\/retry$/.test(url)) { if (window.__stillDown) return { data: { ok: true, asked: 1, fixed: 0, still: 1, more: false, problems: ['Gemini: 429: Resource has been exhausted'] } }; fixed = true; return { data: { ok: true, asked: 1, fixed: 1, still: 0, more: false, problems: [] } }; }
+      return { data: { ok: true } }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const vp = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 1, name: 'Admin', role: 'admin' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, vpApi);
+  const V1 = run(vp); await tick(400);
+  const vq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('with a recording an engine did not answer, the panel offers "Try the unanswered recordings again"', V1.errors.length === 0 && !!vq(V1, 'vp-retry') && /members do not need to record again/.test(vq(V1, 'vp-retry-box').textContent), V1.errors.join('|'));
+  vq(V1, 'vp-retry').click(); await tick(500);
+  ck('the tap asks the server, says how many answered, and re-reads the scores', V1.w.__posts.includes('/voice-pilot/results/retry') && /^1 of 1 answered this time\.$/.test(vq(V1, 'vp-retry-result')?.textContent.trim() || '') && /Gemini 100% · Whisper 100%/.test(vq(V1, 'vp-overall').textContent), [vq(V1, 'vp-retry-result')?.textContent, vq(V1, 'vp-overall')?.textContent]);
+  ck('and with nothing left unanswered the button goes away', !vq(V1, 'vp-retry'));
+  const V2 = run(vp, (win) => { win.__stillDown = true; }); await tick(400);
+  vq(V2, 'vp-retry').click(); await tick(500);
+  ck('if the engine still fails it says why, and the button stays', /0 of 1 answered this time\. Gemini: 429: Resource has been exhausted/.test(vq(V2, 'vp-retry-result')?.textContent || '') && !!vq(V2, 'vp-retry'), vq(V2, 'vp-retry-result')?.textContent);
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -3151,6 +3345,7 @@ async function overflowTest() {
     await weeklyTest();
     await voicePilotTest();
     await reviewFixesTest();
+    await phase8cTest();
     await overflowTest();
     await cspTest();
   } catch (err) {
