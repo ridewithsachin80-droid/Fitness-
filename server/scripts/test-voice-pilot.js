@@ -137,6 +137,24 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     const ms = (await call('GET', '/api/voice-pilot/members', C)).data.members;
     ck('the coach\'s list: who agreed and how many recorded', ms.length === 1 && ms[0].name === 'Padmini' && ms[0].consented_at && ms[0].recorded === 2, ms);
     ck('another coach\'s list is empty', (await call('GET', '/api/voice-pilot/members', O)).data.members.length === 0);
+
+    // The file to send on.
+    await pool.query(`UPDATE voice_samples SET gemini_text = '=cmd(1)' WHERE phrase_id='k15'`);
+    const get = async (t) => { const x = await fetch(`http://127.0.0.1:${port}/api/voice-pilot/results.csv`, { headers: { Authorization: 'Bearer ' + t } });
+      const buf = Buffer.from(await x.arrayBuffer());
+      return { status: x.status, type: x.headers.get('content-type'), disp: x.headers.get('content-disposition'), bytes: buf, text: buf.toString('utf8') }; };
+    const f = await get(C);
+    const rows = f.text.replace(/^\ufeff/, '').trim().split('\r\n');
+    ck('Download results: a CSV file, named with the date', f.status === 200 && /^text\/csv/.test(f.type) && /attachment; filename="FitLife-Voice-Pilot-\d{4}-\d{2}-\d{2}\.csv"/.test(f.disp), [f.status, f.type, f.disp]);
+    ck('it opens in Excel with Kannada and quotes intact (UTF-8 mark at the start)', f.bytes[0] === 0xEF && f.bytes[1] === 0xBB && f.bytes[2] === 0xBF);
+    ck('a header and one row per recording', rows[0] === 'member,line_id,line,meaning,own_words,gemini_heard,whisper_heard,gemini_score,whisper_score,seconds,audio_type,recorded_at' && rows.length === 3, rows);
+    ck('members as codes, never names', /^M1,k01,/.test(rows[1]) && !/Padmini/.test(f.text));
+    ck('both transcripts and both scores', rows[1].includes(heard.gemini) && rows[1].includes(',100%,67%,') , rows[1]);
+    ck('the phone\'s audio type, said plainly', /webm \(usually Android\)/.test(rows[1]) && /mp4 \(usually iPhone\)/.test(f.text));
+    ck('a transcript a spreadsheet would run as a formula is made plain text', f.text.includes(",'=cmd(1),") && !/,=cmd/.test(f.text), rows[2]);
+    ck('no audio, no links in the file', !/r2|http|X-Amz/i.test(f.text));
+    ck('another coach gets only the header (none of these members)', (await get(O)).text.replace(/^\ufeff/, '').trim().split('\r\n').length === 1);
+    ck('a member cannot download it', (await get(M)).status === 403);
   }
 
   console.log('\n[4] stopping, removing, 90 days');

@@ -2,6 +2,8 @@ import { Fragment, useEffect, useState } from 'react';
 import api from '../../api/client';
 import { Eyebrow } from '../primitives';
 import { haptic } from '../../store/settingsStore';
+import { useAuthStore } from '../../store/authStore';
+import { shareOrDownload } from '../../utils/shareFile';
 
 /**
  * VoicePilotPanel — Phase 8, on the admin dashboard. Invite members to the
@@ -9,7 +11,11 @@ import { haptic } from '../../store/settingsStore';
  * key words; play any recording with both transcripts side by side.
  */
 const pct = (v) => (v == null ? '—' : `${v}%`);
-export default function VoicePilotPanel() {
+export default function VoicePilotPanel({ collapsible = false }) {
+  const role = useAuthStore(s => s.user?.role);
+  // On the coach's home it starts folded, so it never pushes the day's work down.
+  const [open, setOpen] = useState(!collapsible);
+  const [dl, setDl] = useState('');
   const [members, setMembers] = useState([]);
   const [all, setAll] = useState([]);
   const [res, setRes] = useState(null);
@@ -22,8 +28,14 @@ export default function VoicePilotPanel() {
   };
   useEffect(() => {
     load();
-    api.get('/admin/members').then(({ data }) => setAll(Array.isArray(data) ? data : data?.members || [])).catch(() => setAll([]));
-  }, []);
+    // Admin can invite any member; a coach, their own members.
+    api.get(role === 'admin' ? '/admin/members' : '/members').then(({ data }) => setAll(Array.isArray(data) ? data : data?.members || [])).catch(() => setAll([]));
+  }, [role]); // eslint-disable-line react-hooks/exhaustive-deps
+  const download = async () => {
+    haptic(10); setDl('busy');
+    try { await shareOrDownload('/voice-pilot/results.csv', { filename: 'FitLife-Voice-Pilot.csv', title: 'FitLife voice test results', type: 'text/csv' }); setDl(''); }
+    catch (e) { setDl('Could not make the file just now. Try again.'); }
+  };
   const invite = async () => {
     if (!pick) return;
     haptic(10); setMsg('');
@@ -40,9 +52,13 @@ export default function VoicePilotPanel() {
   return (
     <div className="rounded-2xl border border-hair bg-surface px-4 py-3 mt-3 space-y-3" data-testid="vp-panel">
       <div className="flex items-baseline justify-between gap-2">
-        <Eyebrow>Kannada voice test</Eyebrow>
+        {collapsible ? (
+          <button type="button" onClick={() => { haptic(8); setOpen(o => !o); }} style={{ minHeight: 36 }} aria-expanded={open} data-testid="vp-toggle"
+            className="flex items-center gap-1 text-left"><Eyebrow>Kannada voice test</Eyebrow><span className="text-caption text-lo">{open ? '▾' : '▸'}</span></button>
+        ) : <Eyebrow>Kannada voice test</Eyebrow>}
         {res?.overall && <span className="text-caption text-mid" data-testid="vp-overall">Gemini {pct(res.overall.gemini)} · Whisper {pct(res.overall.whisper)} · {res.overall.samples} recordings</span>}
       </div>
+      {open && (<>
       <p className="text-caption text-mid leading-snug">Invite 5 to 10 members. Each reads out {res?.phrases?.length || 22} lines; both speech engines write down what they heard, and the score is how many key words each caught.</p>
       <div className="flex gap-2">
         <select value={pick} onChange={e => setPick(e.target.value)} aria-label="Member to invite" style={{ minHeight: 40 }}
@@ -64,6 +80,14 @@ export default function VoicePilotPanel() {
             </li>
           ))}
         </ul>
+      )}
+      {res?.overall?.samples > 0 && (
+        <>
+          <button type="button" onClick={download} disabled={dl === 'busy'} style={{ minHeight: 44 }} data-testid="vp-download"
+            className="w-full rounded-xl border border-gold text-gold text-sm font-bold disabled:opacity-50">{dl === 'busy' ? 'Making the file…' : 'Download results'}</button>
+          <p className="text-caption text-lo leading-snug">One file, every recording: what each engine heard and its score. Members show as M1, M2…, no names, no audio. Check the "own words" lines for anything private before you send it on.</p>
+          {dl && dl !== 'busy' && <p className="text-caption text-red-300">{dl}</p>}
+        </>
       )}
       {res?.phrases?.some(p => p.samples) && (
         <div className="overflow-x-auto" data-testid="vp-results">
@@ -93,6 +117,7 @@ export default function VoicePilotPanel() {
           </table>
         </div>
       )}
+      </>)}
     </div>
   );
 }

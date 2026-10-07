@@ -1,3 +1,4 @@
+import VoicePilotPanel from '../components/voicepilot/VoicePilotPanel';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -208,6 +209,8 @@ export default function MemberList() {
       {/* Sprint 8: who needs me, one line and one action each — first thing on the screen. */}
       <div className="max-w-md mx-auto px-4 pt-4">
         <TriageFeed />
+        {/* Phase 8: the Kannada voice test, folded until opened. */}
+        <VoicePilotPanel collapsible />
       </div>
 
       <div className="max-w-md mx-auto px-4 pt-4">

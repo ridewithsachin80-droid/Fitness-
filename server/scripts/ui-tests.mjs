@@ -2713,13 +2713,15 @@ async function voicePilotTest() {
     const phrases = () => [
       { id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', means: 'This morning I ate two idli and a bowl of sambar', recorded: !!window.__k01, heard: window.__k01 || null },
       { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false } ];
-    const get = async (url) => {
+    const get = async (url, cfg) => {
       if (/\\/voice-pilot\\/me$/.test(url)) return { data: window.__invited === false ? { invited: false } : { invited: true, consented, phrases: phrases() } };
       if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [{ patient_id: 12, name: 'Padmini', consented_at: 'x', recorded: 1 }], phrases: 22 } };
       if (/\\/voice-pilot\\/results$/.test(url)) return { data: { overall: { gemini: 100, whisper: 67, samples: 1 },
         phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: 100, whisper: 67 }],
         samples: [{ id: 1, phrase_id: 'k01', name: 'Padmini', gemini: 'Belagge eradu idli', whisper: 'Belage eradu idly', audio_url: 'https://x.r2.cloudflarestorage.com/a.webm' }] } };
       if (/\\/admin\\/members$/.test(url)) return { data: [{ id: 12, name: 'Padmini' }, { id: 13, name: 'Ravi' }] };
+      if (/^\\/members$/.test(url)) { window.__coachList = true; return { data: [{ id: 12, name: 'Padmini' }, { id: 14, name: 'Coach Member' }] }; }
+      if (/results\\.csv$/.test(url)) { window.__csvCfg = cfg; return { data: new Blob(['member,line_id'], { type: 'text/csv' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Voice-Pilot-2026-10-07.csv"' } }; }
       return { data: {} }; };
     const post = async (url, body) => { window.__posts.push({ url, body });
       if (/consent$/.test(url)) consented = true;
@@ -2764,6 +2766,8 @@ async function voicePilotTest() {
   const panel = await bundle(`
     import { createRoot } from 'react-dom/client';
     import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 1, name: 'Admin', role: 'admin' }, isRestoring: false });
     createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, api);
   const P = run(panel, prep()); await tick(400);
   const pq = (id) => P.w.document.querySelector(`[data-testid="${id}"]`);
@@ -2776,6 +2780,23 @@ async function voicePilotTest() {
   pq('vp-row').click(); await tick(100);
   const s = pq('vp-sample');
   ck('a line opens to each recording: player, Gemini and Whisper side by side', !!s && !!s.querySelector('audio') && /Gemini: Belagge eradu idli/.test(s.textContent) && /Whisper: Belage eradu idly/.test(s.textContent));
+  ck('"Download results" says what is in the file: codes, no names, no audio; check own words', /M1, M2…, no names, no audio/.test(pq('vp-panel').textContent) && /own words/.test(pq('vp-panel').textContent));
+  P.w.__downloads = []; P.w.HTMLAnchorElement.prototype.click = function () { P.w.__downloads.push(this.download); };
+  pq('vp-download').click(); await tick(300);
+  ck('it fetches the CSV with the login, as a file, and saves it with the server\'s name', P.w.__csvCfg?.responseType === 'blob' && P.w.__downloads[0] === 'FitLife-Voice-Pilot-2026-10-07.csv', [P.w.__csvCfg, P.w.__downloads]);
+
+  // On the coach's home: folded, and the invite list is the coach's own members.
+  const coachPanel = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: 'monitor' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<VoicePilotPanel collapsible />);`, api);
+  const CP = run(coachPanel, prep()); await tick(400);
+  const cq = (id) => CP.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('for a coach it starts folded, with the scores still on the header', CP.errors.length === 0 && !!cq('vp-toggle') && !cq('vp-invite') && /Gemini 100%/.test(cq('vp-overall')?.textContent || ''), CP.errors.join('|'));
+  cq('vp-toggle').click(); await tick(100);
+  ck('opened: Download results is there, and the invite list is the coach\'s own members', !!cq('vp-download') && CP.w.__coachList === true && [...CP.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Coach Member'));
 }
 
 async function overflowTest() {

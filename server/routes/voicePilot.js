@@ -6,6 +6,7 @@
  *     POST   /api/voice-pilot/invite           { member_id }
  *     DELETE /api/voice-pilot/invite/:id       stop the invitation and delete their recordings
  *     GET    /api/voice-pilot/results          per phrase, each engine's hit rate; every sample with both transcripts
+ *     GET    /api/voice-pilot/results.csv      the same as one file to send on: members as codes, no names, no audio
  *   Member:
  *     GET    /api/voice-pilot/me               invited?, consented?, phrases and what is recorded
  *     POST   /api/voice-pilot/consent
@@ -95,6 +96,20 @@ router.get('/results', coachOnly, async (req, res) => {
     res.json({ ...V.summarise(rows), samples: rows.map(r => ({ id: r.id, member_id: r.patient_id, name: r.name, phrase_id: r.phrase_id,
       duration_ms: r.duration_ms, gemini: r.gemini_text, whisper: r.whisper_text, gemini_score: r.gemini_score, whisper_score: r.whisper_score,
       audio_url: link(r.object_key), at: r.created_at })) });
+  } catch (err) { fail(res, err); }
+});
+
+// One file to send on: every recording, members as codes, no names, no audio.
+router.get('/results.csv', coachOnly, async (req, res) => {
+  try {
+    const m = mine(req.user, 's');
+    const { rows } = await pool.query(
+      `SELECT s.patient_id, s.phrase_id, s.duration_ms, s.mime_type, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.created_at
+         FROM voice_samples s WHERE 1=1 ${m.sql.replace('$1', `$${m.args.length}`)}`, m.args);
+    const day = new Date().toISOString().slice(0, 10);
+    res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
+      'Content-Disposition': `attachment; filename="FitLife-Voice-Pilot-${day}.csv"` });
+    res.send(V.resultsCsv(rows));
   } catch (err) { fail(res, err); }
 });
 
