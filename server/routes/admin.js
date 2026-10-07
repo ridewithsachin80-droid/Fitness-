@@ -610,7 +610,9 @@ router.delete('/members/:id', async (req, res) => {
     const photos = await pool.query(
       `SELECT object_key FROM meal_photos     WHERE patient_id = $1 AND object_key IS NOT NULL
        UNION ALL
-       SELECT object_key FROM progress_photos WHERE patient_id = $1 AND object_key IS NOT NULL`, [id]);
+       SELECT object_key FROM progress_photos WHERE patient_id = $1 AND object_key IS NOT NULL
+       UNION ALL
+       SELECT object_key FROM voice_samples   WHERE patient_id = $1 AND object_key IS NOT NULL`, [id]);
     if (photos.rows.length) {
       if (!storage.isConfigured()) {
         return res.status(503).json({

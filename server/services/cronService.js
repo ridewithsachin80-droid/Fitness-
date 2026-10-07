@@ -198,6 +198,9 @@ function start() {
       // Phase 4: progress photos past their 12 months.
       const p = await require('../routes/progressPhotos').deleteExpiredProgressPhotos();
       if (p) console.log(`🗑️  Deleted ${p} expired progress photo(s)`);
+      // Phase 8: voice pilot recordings past their 90 days.
+      const v = await require('../routes/voicePilot').deleteExpiredSamples();
+      if (v) console.log(`🗑️  Deleted ${v} expired voice pilot recording(s)`);
     } catch (err) { console.error('Plate photo cleanup error:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 

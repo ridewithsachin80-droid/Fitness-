@@ -22,6 +22,9 @@ const PHOTO_HOSTS = ['https://*.r2.cloudflarestorage.com'];
 function cspDirectives() {
   const d = helmet.contentSecurityPolicy.getDefaultDirectives();
   d['img-src'] = [...new Set([...(d['img-src'] || ["'self'", 'data:']), 'blob:', ...PHOTO_HOSTS])];
+  // Voice pilot (Phase 8): the coach plays members' recordings from R2, and a
+  // member plays back their own take before sending it (blob:).
+  d['media-src'] = ["'self'", 'blob:', ...PHOTO_HOSTS];
   return d;
 }
 
