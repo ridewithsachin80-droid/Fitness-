@@ -1,9 +1,26 @@
-# Delivery: Phase 8, part 2 — Kannada-English voice pilot — 7 Oct 2026
+# Delivery: Phase 8, part 2 — Kannada-English voice pilot — 7 Oct 2026 (rev 2)
 
 Built on the `main` ZIP uploaded on 6 Oct 2026. This zip holds the files
 changed against that upload, so it also carries Phase 8 part 1 (Progress in
 four groups). Upload to `test`, wait for green, try it on
 fitness-test.up.railway.app, then merge.
+
+## Rev 2 — Download results, for coach and admin
+
+- **"Download results"** in the voice test panel: one CSV file, one row per
+  recording: member as a code (M1, M2…, the same in every download), the line
+  and its meaning, whether it was an own-words line, what Gemini heard, what
+  Whisper heard, both scores, length, audio type (usually iPhone / Android),
+  time. No names, no audio, no links. Opens correctly in Excel (UTF-8 mark);
+  a transcript starting with = + - @ is made plain text, so a spreadsheet never
+  runs it. On a phone it opens the share sheet; on a computer it downloads.
+- **Coaches have the panel too,** on their home screen under Needs attention,
+  folded until opened (the scores show on its header). A coach invites from
+  and sees results for their own members only; admin sees everyone.
+- New route `GET /api/voice-pilot/results.csv`. Changed:
+  `server/services/voicePilot.js`, `server/routes/voicePilot.js`,
+  `client/src/components/voicepilot/VoicePilotPanel.jsx`,
+  `client/src/pages/PatientList.jsx`, the two test files. 3,465 checks green.
 
 ## What it does
 

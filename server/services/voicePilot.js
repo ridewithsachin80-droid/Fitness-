@@ -115,4 +115,36 @@ function summarise(rows) {
   return { phrases, overall: { gemini: all('gemini'), whisper: all('whisper'), samples: (rows || []).length } };
 }
 
-module.exports = { PHRASES, score, transcribeBoth, summarise, PROMPT, WHISPER_PROMPT, norm };
+/**
+ * The pilot results as a CSV file for Sachin to send on. One row per
+ * recording. Members appear as codes (M1, M2…), never by name; the codes are
+ * the same in every download (ordered by member id). Audio is not included.
+ * Cells that a spreadsheet would run as a formula (= + - @) are made plain text.
+ */
+function resultsCsv(rows, { now = new Date() } = {}) {
+  const ids = [...new Set((rows || []).map(r => r.patient_id))].sort((a, b) => a - b);
+  const code = new Map(ids.map((id, i) => [id, `M${i + 1}`]));
+  const cell = (v) => {
+    let t = v == null ? '' : String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+    return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const audio = (m) => (/mp4|m4a|aac/.test(m || '') ? 'mp4 (usually iPhone)' : /webm|ogg/.test(m || '') ? 'webm (usually Android)' : (m || ''));
+  const head = ['member', 'line_id', 'line', 'meaning', 'own_words', 'gemini_heard', 'whisper_heard', 'gemini_score', 'whisper_score', 'seconds', 'audio_type', 'recorded_at'];
+  const lines = [head.join(',')];
+  const byPhrase = new Map(PHRASES.map((p, i) => [p.id, { p, i }]));
+  const sorted = [...(rows || [])].sort((a, b) => (byPhrase.get(a.phrase_id)?.i ?? 99) - (byPhrase.get(b.phrase_id)?.i ?? 99) || code.get(a.patient_id).localeCompare(code.get(b.patient_id), undefined, { numeric: true }));
+  for (const r of sorted) {
+    const p = byPhrase.get(r.phrase_id)?.p;
+    lines.push([code.get(r.patient_id), r.phrase_id, p?.say || '', p?.means || '', p?.free ? 'yes' : 'no',
+      r.gemini_text, r.whisper_text,
+      r.gemini_score == null ? '' : Math.round(Number(r.gemini_score) * 100) + '%',
+      r.whisper_score == null ? '' : Math.round(Number(r.whisper_score) * 100) + '%',
+      r.duration_ms ? (Number(r.duration_ms) / 1000).toFixed(1) : '', audio(r.mime_type),
+      r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : ''].map(cell).join(','));
+  }
+  // Excel opens UTF-8 correctly only with the byte-order mark.
+  return '\ufeff' + lines.join('\r\n') + '\r\n';
+}
+
+module.exports = { PHRASES, score, transcribeBoth, summarise, resultsCsv, PROMPT, WHISPER_PROMPT, norm };
