@@ -7,7 +7,7 @@
 
 import ProgressPhotos from '../components/progress/ProgressPhotos';
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AreaChart, Area, BarChart, Bar, ComposedChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -270,6 +270,12 @@ export default function Progress() {
   const [labs,    setLabs]    = useState([]);
   const [selectedLog, setSelectedLog] = useState(null); // Sprint 11: past log viewer
   const [range, setRange] = useState('30');             // Sprint 5: 7 / 30 / 90 day chart window
+  // Phase 8: which group is open. Kept in the address (?tab=) so Back and a
+  // refresh return to it, and other screens can link straight to one.
+  const [params, setParams] = useSearchParams();
+  const TABS = ['body', 'nutrition', 'training', 'reports'];
+  const tab = TABS.includes(params.get('tab')) ? params.get('tab') : 'body';
+  const pickTab = (t) => { haptic(8); setParams(p => { const n = new URLSearchParams(p); n.set('tab', t); return n; }, { replace: true }); };
 
   useEffect(() => {
     const from = nDaysAgo(90);
@@ -469,9 +475,17 @@ export default function Progress() {
 
       <div className="max-w-md mx-auto px-4 pt-4 pb-20 space-y-3">
 
+        {/* Phase 8: Progress in four groups. The weight and its trend stay above
+            them on every tab: it is the number members open this page for. */}
+        <div data-testid="progress-tabs" className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-charcoal/95 backdrop-blur" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
+          <Segmented size="sm" name="progress-tab" value={tab} onChange={pickTab}
+            options={[{ id: 'body', label: 'Body' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'training', label: 'Training' }, { id: 'reports', label: 'Reports' }]} />
+        </div>
+
+        {tab === 'body' && (<>
         {/* Phase 4: weekly progress photos, first week against the latest. */}
         <Card><ProgressPhotos /></Card>
-        {/* Quick stats */}
+
         <div className="grid grid-cols-2 gap-2">
           <StatBox
             value={bmi || '—'}
@@ -480,79 +494,75 @@ export default function Progress() {
             tone={bmi && bmi >= 18.5 && bmi < 25 ? 'good' : null}
           />
           <StatBox
-            value={`${streak} ${plural(streak, 'day')}`}
-            label="Logging Streak"
-            sub={streak >= 7 ? 'Best run this month' : streak >= 3 ? 'Keep going' : 'Start today'}
-            tone={streak >= 3 ? 'good' : null}
-          />
-          <StatBox
-            value={`${avg30}%`}
-            label="30-day Compliance"
-            sub={avg30 >= 75 ? 'Strong' : avg30 >= 50 ? 'Steady' : 'Room to improve'}
-            tone={avg30 >= 75 ? 'good' : avg30 >= 50 ? null : 'warn'}
-          />
-          <StatBox
-            value={daysLogged}
-            label="Days Logged"
-            sub="last 90 days"
+            value={latestW && targetW ? `${Math.max(0, Math.round((latestW - targetW) * 10) / 10)} kg` : '—'}
+            label="To goal"
+            sub={targetW ? `goal ${targetW} kg` : 'Your coach sets your goal'}
+            tone={latestW && targetW && latestW <= targetW ? 'good' : null}
           />
         </div>
 
-        {/* Weekly report — the AI's Sunday narrative. Renders nothing until one exists. */}
-        <WeeklyReportCard />
-
-        {/* 30 days as a calendar. Each cell is a day, tinted by compliance;
-            tap one to open that day's full log (the same PastLogModal the
-            history list uses). Replaces the bar chart: a grid says which
-            weekdays slip, a bar chart only says that something did. */}
+        {/* Motivational summary */}
         <Card>
-          <div className="flex items-baseline justify-between mb-3">
-            <Eyebrow>Last 30 days</Eyebrow>
-            <span className="text-caption text-mid"><span className="font-bold text-white tabular-nums">{avg30}%</span> average</span>
-          </div>
-          {(() => {
-            const byDate = new Map(sorted.map(l => [l.log_date, l]));
-            const cells = [];
-            const start = new Date(today() + 'T12:00:00'); start.setDate(start.getDate() - 29);
-            // pad to the week start so columns are weekdays (Mon first)
-            const pad = (start.getDay() + 6) % 7;
-            for (let i = 0; i < pad; i++) cells.push(null);
-            for (let i = 0; i < 30; i++) {
-              const d = new Date(start); d.setDate(start.getDate() + i);
-              const key = istDate(d);
-              cells.push({ key, log: byDate.get(key) || null, day: d.getDate() });
-            }
-            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-ghost'
-              : pct >= 75 ? 'bg-gold/[0.55] text-charcoal' : pct >= 50 ? 'bg-gold/[0.28] text-white' : pct > 0 ? 'bg-gold/[0.12] text-mid' : 'bg-white/[0.06] text-lo';
-            return (
-              <div data-testid="heat-grid">
-                <div className="grid grid-cols-7 gap-1.5 text-center text-tiny text-lo mb-1.5">
-                  {['M','T','W','T','F','S','S'].map((w, i) => <span key={i}>{w}</span>)}
-                </div>
-                <div className="grid grid-cols-7 gap-1.5">
-                  {cells.map((c, i) => c === null
-                    ? <span key={'p' + i} />
-                    : (
-                      <button key={c.key} type="button" data-testid="heat-cell" data-date={c.key}
-                        onClick={() => { if (c.log) { haptic(8); setSelectedLog(c.log); } }}
-                        aria-label={`${c.key}: ${c.log ? (c.log.compliance_pct ?? 0) + '%' : 'not logged'}`}
-                        className={`aspect-square rounded-lg text-caption font-semibold tabular-nums flex items-center justify-center transition-transform active:scale-95 ${tone(c.log ? (c.log.compliance_pct ?? 0) : null)}`}>
-                        {c.day}
-                      </button>
-                    ))}
-                </div>
-                <div className="flex items-center justify-between text-tiny text-lo mt-2">
-                  <span>Not logged</span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded bg-white/[0.06]" /><span className="w-3 h-3 rounded bg-gold/[0.12]" /><span className="w-3 h-3 rounded bg-gold/[0.28]" /><span className="w-3 h-3 rounded bg-gold/[0.55]" />
-                  </span>
-                  <span>75%+</span>
-                </div>
+          <SectionTitle icon="🌟">Your Journey</SectionTitle>
+          <div className="space-y-2 text-sm text-mid">
+            {streak >= 7 && (
+              <div className="flex items-center gap-2 bg-orange-400/[0.08] px-3 py-2 rounded-xl">
+                <span className="text-lg">🔥</span>
+                <span><strong>{streak}-day streak!</strong> You're building an unstoppable habit.</span>
               </div>
-            );
-          })()}
+            )}
+            {lostKg !== null && lostKg >= 1 && (
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl">
+                <span className="text-lg">🏆</span>
+                <span><strong>{lostKg} kg lost</strong> since you started. Keep going!</span>
+              </div>
+            )}
+            {avg30 >= 80 && (
+              <div className="flex items-center gap-2 bg-blue-400/[0.08] px-3 py-2 rounded-xl">
+                <span className="text-lg">⭐</span>
+                <span><strong>{avg30}% compliance</strong> over 30 days — outstanding consistency.</span>
+              </div>
+            )}
+            {journeyPct !== null && journeyPct >= 25 && (
+              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
+                <span className="text-lg">🎯</span>
+                <span><strong>{journeyPct}%</strong> of the way to your {targetW} kg goal!</span>
+              </div>
+            )}
+            {streak < 3 && avg30 < 50 && (
+              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
+                <span className="text-lg">💪</span>
+                <span>Every day counts. Log today and start your streak!</span>
+              </div>
+            )}
+          </div>
         </Card>
 
+        {/* Lab highlights */}
+        {labHighlights.length > 0 && (
+          <Card>
+            <SectionTitle icon="🧪">Latest Lab Values</SectionTitle>
+            <div className="space-y-2 mt-1">
+              {labHighlights.map((l, i) => (
+                <div key={i} className="flex items-center justify-between py-2 border-b border-hair last:border-0">
+                  <div>
+                    <span className="text-sm font-medium text-white">{l.test_name}</span>
+                    {l.unit && <span className="text-xs text-lo ml-1">{l.unit}</span>}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-blue-400">{l.value}</span>
+                    <div className="text-xs text-lo">{new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-lo mt-2 italic">Ask your coach to add new lab results.</p>
+          </Card>
+        )}
+
+        </>)}
+
+        {tab === 'nutrition' && (<>
         {/* Sprint 12: 7-day nutrition trend */}
         {nutritionTrend.length <= 1 && (
           <ChartEmpty icon="🥗" title="7-Day Nutrition Trend"
@@ -617,27 +627,106 @@ export default function Progress() {
           </Card>
         )}
 
-        {/* Lab highlights */}
-        {labHighlights.length > 0 && (
-          <Card>
-            <SectionTitle icon="🧪">Latest Lab Values</SectionTitle>
-            <div className="space-y-2 mt-1">
-              {labHighlights.map((l, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-hair last:border-0">
-                  <div>
-                    <span className="text-sm font-medium text-white">{l.test_name}</span>
-                    {l.unit && <span className="text-xs text-lo ml-1">{l.unit}</span>}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-blue-400">{l.value}</span>
-                    <div className="text-xs text-lo">{new Date(String(l.test_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN')}</div>
-                  </div>
+
+        <button type="button" onClick={() => { haptic(8); navigate('/plan'); }} data-testid="progress-to-plan"
+          className="w-full rounded-2xl border border-white/[0.12] bg-surface px-4 text-left text-sm text-white flex items-center justify-between" style={{ minHeight: 48 }}>
+          Your diet plan, PDF and grocery list <Icon name="chevron-right" size={16} className="text-lo" />
+        </button>
+        </>)}
+
+        {tab === 'training' && (<>
+        {/* Training trends — volume lifted, cardio and calories over time.
+            Progress previously showed only weight and compliance. */}
+        <Card>
+          <SectionTitle icon="🔥">Training Trends</SectionTitle>
+          <div className="mt-2">
+            <TrainingSummary
+              bodyWeightKg={latestW || parseFloat(profile?.start_weight) || 0}
+            />
+          </div>
+        </Card>
+
+        <StrengthProgress />
+
+        <MuscleCoverage />
+        </>)}
+
+        {tab === 'reports' && (<>
+        {/* Weekly report — the AI's Sunday narrative. Renders nothing until one exists. */}
+        <WeeklyReportCard />
+
+        {/* Quick stats */}
+        <div className="grid grid-cols-2 gap-2">
+          <StatBox
+            value={`${streak} ${plural(streak, 'day')}`}
+            label="Logging Streak"
+            sub={streak >= 7 ? 'Best run this month' : streak >= 3 ? 'Keep going' : 'Start today'}
+            tone={streak >= 3 ? 'good' : null}
+          />
+          <StatBox
+            value={`${avg30}%`}
+            label="30-day Compliance"
+            sub={avg30 >= 75 ? 'Strong' : avg30 >= 50 ? 'Steady' : 'Room to improve'}
+            tone={avg30 >= 75 ? 'good' : avg30 >= 50 ? null : 'warn'}
+          />
+          <StatBox
+            value={daysLogged}
+            label="Days Logged"
+            sub="last 90 days"
+          />
+        </div>
+
+        {/* 30 days as a calendar. Each cell is a day, tinted by compliance;
+            tap one to open that day's full log (the same PastLogModal the
+            history list uses). Replaces the bar chart: a grid says which
+            weekdays slip, a bar chart only says that something did. */}
+        <Card>
+          <div className="flex items-baseline justify-between mb-3">
+            <Eyebrow>Last 30 days</Eyebrow>
+            <span className="text-caption text-mid"><span className="font-bold text-white tabular-nums">{avg30}%</span> average</span>
+          </div>
+          {(() => {
+            const byDate = new Map(sorted.map(l => [l.log_date, l]));
+            const cells = [];
+            const start = new Date(today() + 'T12:00:00'); start.setDate(start.getDate() - 29);
+            // pad to the week start so columns are weekdays (Mon first)
+            const pad = (start.getDay() + 6) % 7;
+            for (let i = 0; i < pad; i++) cells.push(null);
+            for (let i = 0; i < 30; i++) {
+              const d = new Date(start); d.setDate(start.getDate() + i);
+              const key = istDate(d);
+              cells.push({ key, log: byDate.get(key) || null, day: d.getDate() });
+            }
+            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-ghost'
+              : pct >= 75 ? 'bg-gold/[0.55] text-charcoal' : pct >= 50 ? 'bg-gold/[0.28] text-white' : pct > 0 ? 'bg-gold/[0.12] text-mid' : 'bg-white/[0.06] text-lo';
+            return (
+              <div data-testid="heat-grid">
+                <div className="grid grid-cols-7 gap-1.5 text-center text-tiny text-lo mb-1.5">
+                  {['M','T','W','T','F','S','S'].map((w, i) => <span key={i}>{w}</span>)}
                 </div>
-              ))}
-            </div>
-            <p className="text-xs text-lo mt-2 italic">Ask your coach to add new lab results.</p>
-          </Card>
-        )}
+                <div className="grid grid-cols-7 gap-1.5">
+                  {cells.map((c, i) => c === null
+                    ? <span key={'p' + i} />
+                    : (
+                      <button key={c.key} type="button" data-testid="heat-cell" data-date={c.key}
+                        onClick={() => { if (c.log) { haptic(8); setSelectedLog(c.log); } }}
+                        aria-label={`${c.key}: ${c.log ? (c.log.compliance_pct ?? 0) + '%' : 'not logged'}`}
+                        className={`aspect-square rounded-lg text-caption font-semibold tabular-nums flex items-center justify-center transition-transform active:scale-95 ${tone(c.log ? (c.log.compliance_pct ?? 0) : null)}`}>
+                        {c.day}
+                      </button>
+                    ))}
+                </div>
+                <div className="flex items-center justify-between text-tiny text-lo mt-2">
+                  <span>Not logged</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-white/[0.06]" /><span className="w-3 h-3 rounded bg-gold/[0.12]" /><span className="w-3 h-3 rounded bg-gold/[0.28]" /><span className="w-3 h-3 rounded bg-gold/[0.55]" />
+                  </span>
+                  <span>75%+</span>
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
 
         {/* Sprint 11: Log history — last 30 logs */}
         {sorted.length > 0 && (
@@ -681,57 +770,7 @@ export default function Progress() {
           </Card>
         )}
 
-        {/* Motivational summary */}
-        <Card>
-          <SectionTitle icon="🌟">Your Journey</SectionTitle>
-          <div className="space-y-2 text-sm text-mid">
-            {streak >= 7 && (
-              <div className="flex items-center gap-2 bg-orange-400/[0.08] px-3 py-2 rounded-xl">
-                <span className="text-lg">🔥</span>
-                <span><strong>{streak}-day streak!</strong> You're building an unstoppable habit.</span>
-              </div>
-            )}
-            {lostKg !== null && lostKg >= 1 && (
-              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl">
-                <span className="text-lg">🏆</span>
-                <span><strong>{lostKg} kg lost</strong> since you started. Keep going!</span>
-              </div>
-            )}
-            {avg30 >= 80 && (
-              <div className="flex items-center gap-2 bg-blue-400/[0.08] px-3 py-2 rounded-xl">
-                <span className="text-lg">⭐</span>
-                <span><strong>{avg30}% compliance</strong> over 30 days — outstanding consistency.</span>
-              </div>
-            )}
-            {journeyPct !== null && journeyPct >= 25 && (
-              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
-                <span className="text-lg">🎯</span>
-                <span><strong>{journeyPct}%</strong> of the way to your {targetW} kg goal!</span>
-              </div>
-            )}
-            {streak < 3 && avg30 < 50 && (
-              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
-                <span className="text-lg">💪</span>
-                <span>Every day counts. Log today and start your streak!</span>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* Training trends — volume lifted, cardio and calories over time.
-            Progress previously showed only weight and compliance. */}
-        <Card>
-          <SectionTitle icon="🔥">Training Trends</SectionTitle>
-          <div className="mt-2">
-            <TrainingSummary
-              bodyWeightKg={latestW || parseFloat(profile?.start_weight) || 0}
-            />
-          </div>
-        </Card>
-
-        <StrengthProgress />
-
-        <MuscleCoverage />
+        </>)}
 
       </div>
 
