@@ -1,4 +1,5 @@
 import StorageCheck from '../components/admin/StorageCheck';
+import VoicePilotPanel from '../components/voicepilot/VoicePilotPanel';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -174,6 +175,8 @@ export default function AdminDashboard() {
           </button>
           {/* Phase 3: one tap proves R2 photo storage works on this environment. */}
           <StorageCheck />
+          {/* Phase 8: the Kannada voice test. */}
+          <VoicePilotPanel />
         </div>
       </div>
 

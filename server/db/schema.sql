@@ -930,6 +930,35 @@ CREATE TABLE IF NOT EXISTS coach_briefs (
   UNIQUE (patient_id, week_end)
 );
 
+-- ── KANNADA VOICE PILOT (Phase 8) ─────────────────────────────────────────
+-- Members the coach invites record a fixed set of Kannada-English logging
+-- phrases. Each recording is transcribed by both engines (Gemini with a
+-- Kannada-aware prompt, and Whisper) so the coach can see which understands
+-- members better. Audio is private R2 storage, deleted after 90 days or at
+-- once if the member withdraws. Nothing here touches the member's food log.
+CREATE TABLE IF NOT EXISTS voice_pilot_members (
+  patient_id    INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  invited_by    INT REFERENCES users(id) ON DELETE SET NULL,
+  invited_at    TIMESTAMPTZ DEFAULT NOW(),
+  consented_at  TIMESTAMPTZ,
+  withdrawn_at  TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS voice_samples (
+  id             SERIAL PRIMARY KEY,
+  patient_id     INT REFERENCES users(id) ON DELETE CASCADE,
+  phrase_id      VARCHAR(10) NOT NULL,
+  object_key     TEXT,
+  mime_type      VARCHAR(40),
+  duration_ms    INT,
+  gemini_text    TEXT,
+  whisper_text   TEXT,
+  gemini_score   REAL,
+  whisper_score  REAL,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  delete_after   TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '90 days'),
+  UNIQUE (patient_id, phrase_id)
+);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

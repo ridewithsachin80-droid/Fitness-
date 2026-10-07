@@ -351,6 +351,12 @@ const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:5
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/voice-pilot/me')) return ok({ invited: true, consented: true, phrases: [
+      { id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', means: 'A bowl of kosambari and bisi bele bath', recorded: true, heard: 'Ondu bowl kosambari mattu bisi bele bath, swalpa majjige kooda kudide nenne raatri ele gante aada mele' },
+      { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false }] });
+    if (u.includes('/voice-pilot/members')) return ok({ members: [{ patient_id: 1, name: 'Mrs. Venkataramana Reddy Lakshmi', consented_at: 'x', recorded: 18 }], phrases: 22 });
+    if (u.includes('/voice-pilot/results')) return ok({ overall: { gemini: 84, whisper: 71, samples: 120 },
+      phrases: [{ id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', samples: 6, gemini: 92, whisper: 58 }], samples: [] });
     if (u.includes('/weekly/brief/')) return ok({ questions: [{ key: 'stress', label: 'Stress' }, { key: 'plan', label: 'Sticking to the plan' }],
       brief: { week_end: '2026-10-04', source: 'ai', text: 'Mrs. Venkataramana Reddy logged 5 of 7 days and averaged 1,400 kcal against 1,500; weight down 0.8 kg. Stress was high around a family wedding.\\nTry: ask how the week ahead looks; check protein on wedding days; send the plan PDF again.',
         facts: { week_start: '2026-09-28', week_end: '2026-10-04', days_logged: 5, avg_kcal: 1400, weight_change: -0.8, workout_days: 2,
@@ -527,6 +533,11 @@ const OVERFLOW_PAGES = [
      const P = () => <div className="p-4"><p>Today</p><CS open onClose={() => {}} data={{ questions: Q, checkin: null }} /></div>;`],
   ['WeeklyBrief', `import WB from './components/coach/WeeklyBrief.jsx';
      const P = () => <div className="p-4"><WB memberId={1} /></div>;`],
+  // Phase 8: the voice pilot sheet and the coach's results panel.
+  ['VoicePilotSheet', `import VS from './components/voicepilot/VoicePilotSheet.jsx';
+     const P = () => <div className="p-4"><p>Today</p><VS open onClose={() => {}} /></div>;`],
+  ['VoicePilotPanel', `import VP from './components/voicepilot/VoicePilotPanel.jsx';
+     const P = () => <div className="p-4"><VP /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
@@ -2172,6 +2183,7 @@ async function cspTest() {
     ck('images from any other site are still blocked', imgs.violations.some(v => /img-src .*example\.com/.test(v)), imgs.violations);
     const hdr = (await page.goto(origin + '/login', { waitUntil: 'domcontentloaded' }).catch(() => null))?.headers()?.['content-security-policy'] || '';
     ck('scripts are still the site\'s own files only', /script-src 'self'(;|$)/.test(hdr) && !/script-src[^;]*unsafe-inline/.test(hdr), hdr);
+    ck('voice recordings can play: audio from blob: (own take) and the R2 host (coach)', /media-src 'self' blob: https:\/\/\*\.r2\.cloudflarestorage\.com/.test(hdr), hdr);
   } finally {
     await browser.close().catch(() => {});
     server.close();
@@ -2690,6 +2702,82 @@ async function weeklyTest() {
   ck('Refresh writes it again; a brief without the AI says so', B.w.__posts.some(p => /\/weekly\/brief\/12$/.test(p.url)) && /The AI was unavailable/.test(bq('weekly-brief').textContent));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 32. Phase 8 — Kannada voice pilot: the member records, the coach compares
+// ═══════════════════════════════════════════════════════════════════════════
+async function voicePilotTest() {
+  console.log('\n[32] Kannada voice pilot (Phase 8)');
+  const api = stub('api-vp.js', `
+    window.__posts = []; window.__dels = [];
+    let consented = !!window.__consented;
+    const phrases = () => [
+      { id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', means: 'This morning I ate two idli and a bowl of sambar', recorded: !!window.__k01, heard: window.__k01 || null },
+      { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false } ];
+    const get = async (url) => {
+      if (/\\/voice-pilot\\/me$/.test(url)) return { data: window.__invited === false ? { invited: false } : { invited: true, consented, phrases: phrases() } };
+      if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [{ patient_id: 12, name: 'Padmini', consented_at: 'x', recorded: 1 }], phrases: 22 } };
+      if (/\\/voice-pilot\\/results$/.test(url)) return { data: { overall: { gemini: 100, whisper: 67, samples: 1 },
+        phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: 100, whisper: 67 }],
+        samples: [{ id: 1, phrase_id: 'k01', name: 'Padmini', gemini: 'Belagge eradu idli', whisper: 'Belage eradu idly', audio_url: 'https://x.r2.cloudflarestorage.com/a.webm' }] } };
+      if (/\\/admin\\/members$/.test(url)) return { data: [{ id: 12, name: 'Padmini' }, { id: 13, name: 'Ravi' }] };
+      return { data: {} }; };
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (/consent$/.test(url)) consented = true;
+      if (/sample$/.test(url)) { window.__k01 = 'Belagge eradu idli mattu ondu bowl sambar thinde'; return { data: { ok: true, heard: window.__k01 } }; }
+      return { data: { ok: true } }; };
+    const del = async (url) => { window.__dels.push(url); return { data: { ok: true } }; };
+    export default { get, post, put: post, patch: post, delete: del };`);
+  const prep = (opts = {}) => (win) => {
+    Object.assign(win, opts);
+    win.confirm = () => true;
+    win.URL.createObjectURL = () => 'blob:take'; win.URL.revokeObjectURL = () => {};
+    win.navigator.mediaDevices = { getUserMedia: async () => ({ getTracks: () => [{ stop() { win.__trackStopped = true; } }] }) };
+    win.MediaRecorder = class { constructor() { this.state = 'inactive'; this.mimeType = 'audio/webm;codecs=opus'; }
+      start() { this.state = 'recording'; } stop() { this.state = 'inactive'; this.ondataavailable({ data: new win.Blob(['voice'], { type: 'audio/webm' }) }); this.onstop(); } };
+  };
+  const card = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import VoicePilotCard from './components/voicepilot/VoicePilotCard.jsx';
+    createRoot(document.getElementById('root')).render(<VoicePilotCard />);`, api);
+  const N = run(card, prep({ __invited: false })); await tick(300);
+  ck('a member who was not invited sees nothing', N.errors.length === 0 && !N.w.document.querySelector('[data-testid="vp-card"]'));
+  const { w, errors } = run(card, prep()); await tick(300);
+  const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  ck('an invited member sees the card', errors.length === 0 && /Kannada voice test/.test(q('vp-card')?.textContent || ''), errors.join('|'));
+  q('vp-card').click(); await tick(400);
+  ck('first they read what is recorded, who hears it, 90 days, nothing logged, stop any time', !!q('vp-consent') && /Only your coach hears the recordings/.test(q('vp-consent').textContent)
+     && /deleted after 90 days/.test(q('vp-consent').textContent) && /Nothing you record is added to your food log/.test(q('vp-consent').textContent) && /stop at any time/.test(q('vp-consent').textContent));
+  q('vp-agree').click(); await tick(300);
+  ck('agreeing is sent, then the lines show with what they mean', w.__posts.some(p => /consent$/.test(p.url)) && !!q('vp-phrases') && /This morning I ate two idli/.test(q('vp-phrases').textContent));
+  q('vp-phrase-k01').click(); await tick(100);
+  q('vp-rec-k01').querySelector('[data-testid="vp-record"]').click(); await tick(100);
+  ck('Record starts, and the button becomes Stop', /Stop/.test(q('vp-rec-k01').querySelector('[data-testid="vp-record"]').textContent));
+  q('vp-rec-k01').querySelector('[data-testid="vp-record"]').click(); await tick(200);
+  ck('stopping lets them play the take back before sending, and releases the microphone', !!q('vp-playback') && w.__trackStopped === true);
+  q('vp-send').click(); await tick(500);
+  const sent = w.__posts.find(p => /\/voice-pilot\/sample$/.test(p.url));
+  ck('Send uploads that line\'s recording, as audio with its type', sent?.body.phrase_id === 'k01' && sent.body.mimeType === 'audio/webm' && typeof sent.body.audio === 'string' && sent.body.audio.length > 0, sent?.body && { ...sent.body, audio: '…' });
+  ck('the line is ticked, with what was heard', /Heard: “Belagge eradu idli/.test(q('vp-phrases').textContent));
+  q('vp-withdraw').click(); await tick(300);
+  ck('"Stop and delete my recordings" asks, then sends it', w.__posts.some(p => /withdraw$/.test(p.url)));
+
+  const panel = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+    createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, api);
+  const P = run(panel, prep()); await tick(400);
+  const pq = (id) => P.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('the coach sees both engines\' overall scores', P.errors.length === 0 && /Gemini 100% · Whisper 67% · 1 recordings/.test(pq('vp-overall')?.textContent || ''), P.errors.join('|'));
+  ck('who is in the test and how far they got; the invite list leaves them out', /Padmini/.test(pq('vp-members').textContent) && /1 recorded/.test(pq('vp-members').textContent)
+     && ![...P.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Padmini'));
+  const sel = P.w.document.querySelector('select'); sel.value = '13'; sel.dispatchEvent(new P.w.Event('change', { bubbles: true })); await tick(50);
+  pq('vp-invite').click(); await tick(200);
+  ck('Invite sends that member', P.w.__posts.some(p => /\/voice-pilot\/invite$/.test(p.url) && p.body.member_id === 13));
+  pq('vp-row').click(); await tick(100);
+  const s = pq('vp-sample');
+  ck('a line opens to each recording: player, Gemini and Whisper side by side', !!s && !!s.querySelector('audio') && /Gemini: Belagge eradu idli/.test(s.textContent) && /Whisper: Belage eradu idly/.test(s.textContent));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -2844,6 +2932,7 @@ async function overflowTest() {
     await planPdfTest();
     await swapsTest();
     await weeklyTest();
+    await voicePilotTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

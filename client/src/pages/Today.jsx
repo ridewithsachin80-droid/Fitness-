@@ -19,6 +19,7 @@ import RecoveryCard  from '../components/today/RecoveryCard';
 import NextUp        from '../components/today/NextUp';
 import ProgressPhotoCard from '../components/progress/ProgressPhotoCard';
 import CheckinCard from '../components/checkin/CheckinCard';
+import VoicePilotCard from '../components/voicepilot/VoicePilotCard';
 import LogPlannedSheet from '../components/sheets/LogPlannedSheet';
 import PlatePhotoSheet from '../components/sheets/PlatePhotoSheet';
 import { FastingBar } from '../components/today/DayWidgets';
@@ -113,6 +114,8 @@ export default function Today() {
             {isToday && <ProgressPhotoCard />}
             {/* Phase 7: Sunday and Monday, until this week's check-in is in. */}
             {isToday && <CheckinCard />}
+            {/* Phase 8: only for members invited to the Kannada voice test. */}
+            {isToday && <VoicePilotCard />}
 
             <TodaysPlan m={m} onOpen={openSheet} />
 
