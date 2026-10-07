@@ -1115,14 +1115,24 @@ async function progressTest() {
   ck('the weight chart slot renders (not the empty-state text) when there are two+ weigh-ins',
      q('weight-chart') && !/weigh-in/.test(q('weight-chart').textContent));
 
-  const tabs = [...d.querySelectorAll('[role=tab]')];
+  // Phase 8: the page also has Body / Nutrition / Training / Reports tabs; the
+  // range control is the three tabs named 7d, 30d, 90d.
+  const allTabs = [...d.querySelectorAll('[role=tab]')];
+  const tabs = allTabs.filter(t => /^(7|30|90)d$/.test(t.textContent.trim()));
+  const groupTab = (name) => allTabs.find(t => t.textContent.trim() === name);
   ck('7 / 30 / 90 segmented control is present', tabs.length === 3 && tabs.map(t => t.textContent.trim()).join(',') === '7d,30d,90d');
+  ck('Phase 8: Body, Nutrition, Training and Reports tabs, Body open first',
+     ['Body', 'Nutrition', 'Training', 'Reports'].every(n => groupTab(n)) && groupTab('Body').getAttribute('aria-selected') === 'true'
+     && !!q('journey') && !q('heat-grid'), allTabs.map(t => t.textContent.trim()));
   tabs[2].click(); await tick(200);
   ck('90d widens the window: the change now includes the 86.0 point (↓ 3.6 kg over 90 days)',
      /over 90 days/.test(q('progress-hero').textContent) && /3\.6/.test(q('progress-hero').textContent), q('progress-hero').textContent);
   tabs[0].click(); await tick(200);
   ck('7d narrows it (change over 7 days is small)', /over 7 days/.test(q('progress-hero').textContent) && /0\.[0-9]/.test(q('progress-hero').textContent), q('progress-hero').textContent);
 
+  // The 30-day grid lives under Reports.
+  groupTab('Reports').click(); await tick(200);
+  ck('Reports holds the 30-day grid; the weight hero stays above every tab', !!q('heat-grid') && !!q('progress-hero'));
   const grid = q('heat-grid');
   const cells = grid ? [...grid.querySelectorAll('[data-testid="heat-cell"]')] : [];
   ck('30-day grid has exactly 30 day cells in 7 weekday columns', cells.length === 30 && /grid-cols-7/.test(grid.innerHTML));
@@ -1134,6 +1144,13 @@ async function progressTest() {
   logged.click(); await tick(200);
   ck('tapping a logged cell opens that day\'s full log', d.querySelector('.fixed.inset-0') != null && /Compliance|compliance/.test(html()));
   ck('no purple/blue header leftovers on the page', !/#0d0b18|text-blue-200/.test(h));
+  const pageSrc = fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8');
+  ck('Training holds the training trends; Nutrition the nutrition trend and a way to the diet plan',
+     /tab === 'training' && \(<>[\s\S]*?Training Trends[\s\S]*?<StrengthProgress \/>[\s\S]*?<MuscleCoverage \/>/.test(pageSrc)
+     && /tab === 'nutrition' && \(<>[\s\S]*?7-Day Nutrition Trend[\s\S]*?progress-to-plan/.test(pageSrc));
+  ck('each section appears exactly once on the page', ['<ProgressPhotos />', '<WeeklyReportCard />', 'Log History', 'Your Journey', 'Latest Lab Values', '<StrengthProgress />'].every(x => pageSrc.split(x).length === 2));
+  groupTab('Training').click(); await tick(200);
+  ck('switching to Training shows Training and hides the Reports grid', groupTab('Training').getAttribute('aria-selected') === 'true' && !q('heat-grid'));
   ck('nutrition trend gets its macros from lib/day (no hand-copied reduce)', !/const macros = items\.reduce/.test(fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8')));
   ck('no error escaped', errors.length === 0, errors.join('|'));
 
