@@ -212,6 +212,10 @@ router.get('/:date', authMW, async (req, res) => {
       start_weight:  profile.start_weight  || null,
       // Sprint 15: per-member water target (ml) — set by monitor in patient profile
       water_target:  profile.water_target  || 3000,
+      // The member's own sleep target, "HH:MM" 24-hour. null = the house
+      // default (the client's lib/day/sleep.js decides what that is).
+      sleep_bed:     profile.sleep_bed     || null,
+      sleep_wake:    profile.sleep_wake    || null,
     };
 
     res.json(log ? { ...log, protocol } : { protocol });

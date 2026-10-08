@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, SectionTitle, BackButton } from '../components/UI';
+import { BackButton } from '../components/UI';
 import { useAuthStore } from '../store/authStore';
 import { haptic } from '../store/settingsStore';
-import useHealthConnect from '../hooks/useHealthConnect';
+import useHealthConnect, { healthConnectSupported } from '../hooks/useHealthConnect';
 import useBluetoothTracker from '../hooks/useBluetoothTracker';
 import { getTrackerStatus, syncOAuthProvider, disconnectTracker, getOAuthUrl } from '../api/trackers';
 
@@ -121,6 +121,32 @@ const TRACKERS = [
   },
 ];
 
+/*
+ * Connection methods this app cannot use, and what to say about each.
+ *
+ * Health Connect is an Android SDK with no web API, and the Android wrapper is
+ * a Trusted Web Activity that cannot pass a native object to the page (see
+ * hooks/useHealthConnect.js). HealthKit is native-iOS only. A device that
+ * needs either one is shown as not supported, with the reason — never with a
+ * Connect button that can only fail.
+ */
+const UNSUPPORTED_NOTE = {
+  healthconnect: 'Needs Android Health Connect, which FitLife cannot read yet.',
+  healthkit:     'Needs Apple HealthKit, which only a native iPhone app can read. FitLife cannot.',
+};
+/** null when the device can be connected; otherwise the sentence to show. */
+function unsupportedNote(tracker, hcSupported) {
+  if (tracker.protocol === 'healthconnect') return hcSupported ? null : UNSUPPORTED_NOTE.healthconnect;
+  if (tracker.protocol === 'healthkit')     return UNSUPPORTED_NOTE.healthkit;
+  return null;
+}
+
+/** "HART PRO, Garmin, Samsung and Ultrahuman" — built from the catalogue, so it cannot drift from it. */
+const HC_DEVICE_NAMES = (() => {
+  const names = TRACKERS.filter(t => t.protocol === 'healthconnect').map(t => t.name);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+})();
+
 const PROTOCOL_LABELS = {
   bluetooth:     { label: 'Bluetooth', icon: '📶' },
   healthconnect: { label: 'Health Connect', icon: '🔗' },
@@ -143,172 +169,14 @@ function HartRingIcon({ size = 36 }) {
   );
 }
 
-/* ─── Connection modal ─────────────────────────────────────────────────────── */
-function ConnectModal({ tracker, onClose, onConnected }) {
-  const [step, setStep] = useState('idle'); // idle | scanning | pairing | success | error
-  const [progress, setProgress] = useState(0);
-
-  const startConnect = () => {
-    setStep('scanning');
-    setProgress(0);
-    haptic(25);
-
-    // Simulate scanning → pairing → success
-    let p = 0;
-    const interval = setInterval(() => {
-      p += Math.random() * 18 + 4;
-      if (p >= 60 && step !== 'pairing') setStep('pairing');
-      if (p >= 100) {
-        clearInterval(interval);
-        setProgress(100);
-        setTimeout(() => {
-          setStep('success');
-          haptic(40);
-        }, 300);
-        return;
-      }
-      setProgress(Math.min(p, 99));
-    }, 180);
-  };
-
-  const handleDone = () => {
-    onConnected(tracker.id);
-    onClose();
-  };
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 100,
-      background: 'rgba(0,0,0,0.8)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{
-        width: '100%', maxWidth: 480,
-        background: '#131317',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '24px 24px 0 0',
-        padding: '24px 20px 36px',
-      }}>
-        {/* Handle */}
-        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)', margin: '0 auto 20px' }} />
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 16,
-            background: tracker.bg,
-            border: `1.5px solid ${tracker.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 26,
-            boxShadow: `0 0 20px ${tracker.glow}`,
-          }}>
-            {tracker.id === 'hart' ? <HartRingIcon size={30} /> : tracker.emoji}
-          </div>
-          <div>
-            <p style={{ color: '#ededf0', fontWeight: 700, fontSize: 18, margin: 0 }}>{tracker.name}</p>
-            <p style={{ color: '#6a6a78', fontSize: 13, margin: 0 }}>{tracker.subtitle}</p>
-          </div>
-        </div>
-
-        {/* Metrics chips */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 24 }}>
-          {tracker.metrics.map(m => (
-            <span key={m} style={{
-              fontSize: 11, fontWeight: 600, color: tracker.color,
-              background: tracker.bg, border: `1px solid ${tracker.border}`,
-              borderRadius: 20, padding: '3px 10px',
-            }}>{m}</span>
-          ))}
-        </div>
-
-        {/* Protocol */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24,
-          padding: '10px 14px', borderRadius: 12,
-          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-        }}>
-          <span style={{ fontSize: 16 }}>{PROTOCOL_LABELS[tracker.protocol].icon}</span>
-          <div>
-            <p style={{ color: '#8e8e9a', fontSize: 11, margin: 0 }}>Connection method</p>
-            <p style={{ color: '#d8d8de', fontSize: 13, fontWeight: 600, margin: 0 }}>{PROTOCOL_LABELS[tracker.protocol].label}</p>
-          </div>
-        </div>
-
-        {/* States */}
-        {step === 'idle' && (
-          <button onClick={startConnect} style={{
-            width: '100%', padding: '15px', borderRadius: 16,
-            background: tracker.color, border: 'none', cursor: 'pointer',
-            color: '#fff', fontWeight: 700, fontSize: 16,
-            boxShadow: `0 4px 20px ${tracker.glow}`,
-          }}>
-            Connect {tracker.name}
-          </button>
-        )}
-
-        {(step === 'scanning' || step === 'pairing') && (
-          <div>
-            <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }}>
-              <p style={{ color: '#d8d8de', fontSize: 14, margin: 0, fontWeight: 600 }}>
-                {step === 'scanning' ? '🔍 Scanning for device…' : '🤝 Pairing…'}
-              </p>
-              <p style={{ color: tracker.color, fontSize: 13, fontWeight: 700, margin: 0 }}>{Math.round(progress)}%</p>
-            </div>
-            <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', borderRadius: 3,
-                background: `linear-gradient(90deg, ${tracker.color}, ${tracker.color}bb)`,
-                width: `${progress}%`, transition: 'width 0.2s ease',
-                boxShadow: `0 0 12px ${tracker.glow}`,
-              }} />
-            </div>
-            <p style={{ color: '#4e4e5c', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
-              {step === 'scanning' ? 'Make sure your device is nearby and in pairing mode' : 'Establishing secure connection…'}
-            </p>
-          </div>
-        )}
-
-        {step === 'success' && (
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%', margin: '0 auto 16px',
-              background: tracker.bg, border: `2px solid ${tracker.border}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 30,
-              boxShadow: `0 0 30px ${tracker.glow}`,
-              animation: 'pulse 1.5s ease-in-out',
-            }}>✅</div>
-            <p style={{ color: '#ededf0', fontWeight: 700, fontSize: 17, margin: '0 0 6px' }}>Connected!</p>
-            <p style={{ color: '#6a6a78', fontSize: 13, margin: '0 0 24px' }}>
-              {tracker.name} is now syncing with your fitness data
-            </p>
-            <button onClick={handleDone} style={{
-              width: '100%', padding: '14px', borderRadius: 16,
-              background: tracker.color, border: 'none', cursor: 'pointer',
-              color: '#fff', fontWeight: 700, fontSize: 15,
-            }}>Done</button>
-          </div>
-        )}
-
-        {step !== 'success' && (
-          <button onClick={onClose} style={{
-            width: '100%', marginTop: 12, padding: '12px', borderRadius: 14,
-            background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
-            color: '#6a6a78', fontWeight: 600, fontSize: 14, cursor: 'pointer',
-          }}>Cancel</button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ─── Main page ────────────────────────────────────────────────────────────── */
 export default function DeviceConnect() {
   const navigate   = useNavigate();
   const [searchParams] = useSearchParams();
   const { user }   = useAuthStore();
   const hc         = useHealthConnect();
+  // False on every phone today: nothing provides the bridge. Read once per render.
+  const hcSupported = healthConnectSupported();
   const ble        = useBluetoothTracker();
 
   // Which providers are confirmed connected server-side
@@ -321,7 +189,6 @@ export default function DeviceConnect() {
   const [oauthAvailable,  setOauthAvailable]  = useState({});
   // Local optimistic state (union of server + just-connected)
   const [localConnected,  setLocalConnected]  = useState(new Set());
-  const [activeModal,     setActiveModal]     = useState(null);
   const [search,          setSearch]          = useState('');
   const [syncingId,       setSyncingId]       = useState(null);
   const [toast,           setToast]           = useState(null);
@@ -407,15 +274,13 @@ export default function DeviceConnect() {
       return;
     }
 
-    if (tracker.protocol === 'healthconnect') {
-      // Web Health Connect — reads from Android Health Connect
-      hc.sync();
-      return;
-    }
+    // A device this app cannot reach never starts a connection. The card has
+    // no Connect button for it; this is the same answer for any other caller.
+    const blocked = unsupportedNote(tracker, hcSupported);
+    if (blocked) { showToast(blocked, 'error'); return; }
 
-    if (tracker.protocol === 'healthkit') {
-      // Apple HealthKit requires native app — show info modal
-      setActiveModal({ ...tracker, infoOnly: true });
+    if (tracker.protocol === 'healthconnect') {
+      hc.sync();
       return;
     }
 
@@ -570,7 +435,28 @@ export default function DeviceConnect() {
           />
         </div>
 
-        {/* ── Health Connect status banner ── */}
+        {/* ── Health Connect ──
+            With a bridge: the sync banner. Without one (every phone today):
+            a plain statement of what cannot sync and what still works. It
+            used to read "Tap to sync Samsung, Garmin, Fitbit data" and answer
+            the tap with an error. */}
+        {!hcSupported && (
+          <div data-testid="hc-unsupported" style={{
+            marginBottom: 16, padding: '14px 16px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.09)',
+            borderRadius: 16,
+          }}>
+            <p style={{ color: '#ededf0', fontWeight: 700, fontSize: 14, margin: 0 }}>
+              Android Health Connect is not supported yet
+            </p>
+            <p style={{ color: '#8e8e9a', fontSize: 13, margin: '6px 0 0', lineHeight: 1.5 }}>
+              FitLife cannot read Health Connect, so {HC_DEVICE_NAMES} cannot sync here for now.
+              You can still log your sleep and workouts yourself on Today.
+            </p>
+          </div>
+        )}
+        {hcSupported && (
         <div
           onClick={() => !hcActive && hc.sync()}
           style={{
@@ -590,7 +476,7 @@ export default function DeviceConnect() {
             <p style={{ color: '#8e8e9a', fontSize: 12, margin: '2px 0 0' }}>
               {hcActive
                 ? `${hc.status.charAt(0).toUpperCase() + hc.status.slice(1)}…`
-                : 'Tap to sync Samsung, Garmin, Fitbit data'}
+                : 'Tap to sync Samsung, Garmin and ring data'}
             </p>
           </div>
           <span style={{
@@ -601,6 +487,7 @@ export default function DeviceConnect() {
             borderRadius: 20, padding: '3px 10px', flexShrink: 0,
           }}>{hcActive ? 'Syncing' : 'Sync Now'}</span>
         </div>
+        )}
 
         {/* ── Connected devices ── */}
         {connectedTrackers.length > 0 && (
@@ -619,6 +506,7 @@ export default function DeviceConnect() {
                   onSyncNow={() => handleSyncNow(tracker.id)}
                   onDisconnect={() => handleDisconnect(tracker.id)}
                   oauthAvailable={oauthAvailable}
+                  unsupported={unsupportedNote(tracker, hcSupported)}
                 />
               ))}
             </div>
@@ -643,6 +531,7 @@ export default function DeviceConnect() {
                   onDisconnect={() => {}}
                   onConnect={() => handleConnect(tracker.id)}
                   oauthAvailable={oauthAvailable}
+                  unsupported={unsupportedNote(tracker, hcSupported)}
                 />
               ))}
             </div>
@@ -655,25 +544,6 @@ export default function DeviceConnect() {
             <p style={{ fontSize: 32, margin: '0 0 12px' }}>🔍</p>
             <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px', color: '#6a6a78' }}>No results</p>
             <p style={{ fontSize: 13, margin: 0 }}>Try searching by brand name or type</p>
-          </div>
-        )}
-
-        {/* ── Sync settings ── */}
-        {localConnected.size > 0 && (
-          <div style={{ marginTop: 20 }}>
-            <Card>
-              <SectionTitle icon="⚙️">Sync Settings</SectionTitle>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {[
-                  { label: 'Auto-sync when app opens', sub: 'Pull latest data on launch', on: true },
-                  { label: 'Background sync', sub: 'Sync every 30 minutes', on: true },
-                  { label: 'Sync on Wi-Fi only', sub: 'Reduces mobile data usage', on: false },
-                  { label: 'Heart rate alerts', sub: 'Notify on abnormal readings', on: true },
-                ].map(({ label, sub, on }) => (
-                  <SyncToggleRow key={label} label={label} sub={sub} defaultOn={on} />
-                ))}
-              </div>
-            </Card>
           </div>
         )}
 
@@ -690,40 +560,6 @@ export default function DeviceConnect() {
         </div>
       </div>
 
-      {/* ── Apple HealthKit info modal ── */}
-      {activeModal?.infoOnly && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-        }} onClick={() => setActiveModal(null)}>
-          <div style={{
-            width: '100%', maxWidth: 480,
-            background: '#131317', border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '24px 24px 0 0', padding: '24px 20px 40px',
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)', margin: '0 auto 20px' }} />
-            <p style={{ fontSize: 28, textAlign: 'center', margin: '0 0 12px' }}>🍎</p>
-            <h3 style={{ color: '#ededf0', fontWeight: 700, fontSize: 18, textAlign: 'center', margin: '0 0 10px' }}>Apple Watch / HealthKit</h3>
-            <p style={{ color: '#8e8e9a', fontSize: 14, textAlign: 'center', lineHeight: 1.6, margin: '0 0 20px' }}>
-              Apple HealthKit requires a native iOS app and cannot be accessed from a web browser due to Apple's security restrictions.
-            </p>
-            <div style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
-              <p style={{ color: '#fb923c', fontSize: 13, fontWeight: 600, margin: '0 0 6px' }}>Workaround options:</p>
-              <p style={{ color: '#8e8e9a', fontSize: 12, margin: 0, lineHeight: 1.6 }}>
-                1. Export your Apple Health data as CSV and upload it manually.<br/>
-                2. Use the Apple Health ↔ Google Fit bridge app, then sync via Health Connect.
-              </p>
-            </div>
-            <button onClick={() => setActiveModal(null)} style={{
-              width: '100%', padding: '13px', borderRadius: 14,
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-              color: '#d8d8de', fontWeight: 600, fontSize: 14, cursor: 'pointer',
-            }}>Got it</button>
-          </div>
-        </div>
-      )}
-
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
@@ -734,7 +570,7 @@ export default function DeviceConnect() {
 
 
 /* ─── Tracker card ─────────────────────────────────────────────────────────── */
-function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConnect, onDisconnect, onSyncNow, oauthAvailable = {} }) {
+function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConnect, onDisconnect, onSyncNow, oauthAvailable = {}, unsupported = null }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -770,8 +606,11 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
               // Unconfigured OAuth provider takes priority over any static badge —
               // the user should know this before tapping, not after a failed redirect.
               const notSetUp = tracker.protocol === 'oauth' && oauthAvailable[tracker.id] === false;
-              const badge = notSetUp ? 'Setup pending' : tracker.badge;
-              const badgeColor = notSetUp ? '#6a6a78' : tracker.badgeColor;
+              // "Not supported yet" outranks everything: a "Popular" or "New"
+              // badge on a device that cannot connect is an advert for a dead end.
+              const blocked = !!unsupported && !isConnected;
+              const badge = blocked ? 'Not supported yet' : notSetUp ? 'Setup pending' : tracker.badge;
+              const badgeColor = (blocked || notSetUp) ? '#8e8e9a' : tracker.badgeColor;
               return badge && (
                 <span style={{
                   fontSize: 9, fontWeight: 800, color: badgeColor,
@@ -852,8 +691,14 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
                 color: '#ef4444', fontWeight: 700, fontSize: 13, cursor: 'pointer',
               }}>Disconnect</button>
             </div>
+          ) : unsupported ? (
+            <p data-testid={`tracker-unsupported-${tracker.id}`} style={{
+              margin: 0, padding: '11px 12px', borderRadius: 12,
+              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              color: '#8e8e9a', fontSize: 13, lineHeight: 1.5,
+            }}>{unsupported}</p>
           ) : (
-            <button onClick={e => { e.stopPropagation(); onConnect(); }} style={{
+            <button data-testid={`tracker-connect-${tracker.id}`} onClick={e => { e.stopPropagation(); onConnect(); }} style={{
               width: '100%', padding: '11px', borderRadius: 12,
               background: `linear-gradient(135deg, ${tracker.color}dd, ${tracker.color}99)`,
               border: 'none', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
@@ -864,29 +709,6 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ─── Inline sync toggle ───────────────────────────────────────────────────── */
-function SyncToggleRow({ label, sub, defaultOn }) {
-  const [on, setOn] = useState(defaultOn);
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-      <div>
-        <p style={{ color: '#d8d8de', fontSize: 13, fontWeight: 600, margin: 0 }}>{label}</p>
-        <p style={{ color: '#4e4e5c', fontSize: 11, margin: '2px 0 0' }}>{sub}</p>
-      </div>
-      <button onClick={() => { setOn(v => !v); haptic(15); }} style={{
-        width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
-        background: on ? '#D4AF37' : 'rgba(255,255,255,0.1)',
-        position: 'relative', flexShrink: 0, transition: 'background 0.2s',
-      }}>
-        <div style={{
-          width: 20, height: 20, borderRadius: 10, background: '#fff',
-          position: 'absolute', top: 3, left: on ? 21 : 3, transition: 'left 0.2s',
-        }} />
-      </button>
     </div>
   );
 }

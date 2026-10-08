@@ -127,6 +127,31 @@ console.log('\n[6] sleep');
   ck('missing either time → null',    day.sleepMinutes('22:30', '') === null && day.sleepMinutes(null, '06:00') === null);
   ck('formatSleep 465 → "7h 45m"',    day.formatSleep(465) === '7h 45m');
   ck('formatSleep null → ""',         day.formatSleep(null) === '');
+
+  // The sleep TARGET. It was a constant — 10:00 PM, 6:30 AM, "8 h" — for every
+  // member, and wrong for its own times.
+  const dflt = day.sleepTarget(null);
+  ck('no times set → the standard 10:00 PM → 6:30 AM, marked as the default',
+     dflt.bed === '22:00' && dflt.wake === '06:30' && dflt.bedLabel === '10:00 PM' && dflt.wakeLabel === '6:30 AM' && dflt.isDefault === true, dflt);
+  ck('…and its length is worked out: 510 minutes, shown as 8.5 h (it was labelled 8)', dflt.minutes === 510 && dflt.hoursLabel === '8.5 h', dflt);
+  const own = day.sleepTarget({ sleep_bed: '23:30', sleep_wake: '05:30' });
+  ck('a member with their own times gets those: 11:30 PM → 5:30 AM, 6 h, not the default',
+     own.bedLabel === '11:30 PM' && own.wakeLabel === '5:30 AM' && own.minutes === 360 && own.hoursLabel === '6 h' && own.isDefault === false, own);
+  const shift = day.sleepTarget({ sleep_bed: '08:00', sleep_wake: '15:20' });
+  ck('a night-shift worker sleeping 8:00 AM → 3:20 PM: 7 h 20 min', shift.bedLabel === '8:00 AM' && shift.wakeLabel === '3:20 PM' && shift.hoursLabel === '7 h 20 min', shift);
+  ck('midnight reads as 12:00 AM', day.sleepTarget({ sleep_bed: '00:00', sleep_wake: '07:00' }).bedLabel === '12:00 AM');
+  ck('only one of the two set → the whole default, never half of each',
+     [{ sleep_bed: '23:30' }, { sleep_wake: '05:30' }, { sleep_bed: '23:30', sleep_wake: null }].every(x => { const t = day.sleepTarget(x); return t.isDefault && t.bed === '22:00' && t.wake === '06:30'; }));
+  ck('a time that is not a time → the default', [{ sleep_bed: '25:00', sleep_wake: '06:00' }, { sleep_bed: 'late', sleep_wake: '06:00' }, { sleep_bed: '', sleep_wake: '' }].every(x => day.sleepTarget(x).isDefault));
+  ck('"22:15:00" from the database is read as 22:15', day.sleepTarget({ sleep_bed: '22:15:00', sleep_wake: '06:15:00' }).bed === '22:15');
+  ck('formatHours: 480 → "8 h", 510 → "8.5 h", 500 → "8 h 20 min", null → ""',
+     day.formatHours(480) === '8 h' && day.formatHours(510) === '8.5 h' && day.formatHours(500) === '8 h 20 min' && day.formatHours(null) === '');
+  {
+    const src = (f) => require('fs').readFileSync(require('path').join(__dirname, '../../client/src', f), 'utf8');
+    const planSrc = src('pages/Plan.jsx'), sheetSrc = src('components/sheets/SleepSheet.jsx');
+    ck('no screen carries its own sleep times or hours any more',
+       ![planSrc, sheetSrc].some(x => /10:00 PM|6:30 AM|8 hrs|hours: 8/.test(x)) && /sleepTarget\(protocol\)/.test(planSrc) && /sleepTarget\(protocol\)/.test(sheetSrc));
+  }
   ck('tone bands: 7–9h great, <6h short, else ok',
      day.sleepTone(465) === 'great' && day.sleepTone(330) === 'short' && day.sleepTone(390) === 'ok' && day.sleepTone(600) === 'ok');
 }
@@ -255,8 +280,29 @@ console.log('\n[7f] recovery');
   const s3 = day.recoverySummary(week({ sleep: { minutes: 300 } }), { today: T });
   ck('under six hours of sleep → protect tonight', s3 && /5h 00m of sleep is under six hours/.test(s3.insight), s3 && s3.insight);
   const s4 = day.recoverySummary(week({}), { today: T });
-  ck('a normal day on a high-recovery baseline → green light', s4 && /green light/i.test(s4.insight), s4 && s4.insight);
+  ck('a normal day on a high-recovery baseline → "ready for today\'s plan", and never told to do more',
+     s4 && /Recovery is high \(70\)\. You are ready for today's plan — no need to add to it\./.test(s4.insight), s4 && s4.insight);
   ck('averages come from the prior days, not today', s4.avgs.restingHr === 55 && s4.avgs.steps === 8000);
+  // Brief finding 5: a good reading must never tell anyone to train harder.
+  // The tracker does not know it is a rest day, or what the coach prescribed.
+  const s5 = day.recoverySummary(week({ recovery: { score: 50, hrv_rmssd_milli: 60, resting_heart_rate: 55 }, sleep: { minutes: 500 } }), { today: T });
+  ck('an hour more sleep than usual → says so, and that the plan should feel easier (not "train hard")',
+     s5 && /8h 20m — a better night than your average\. Today's plan should feel easier\./.test(s5.insight), s5 && s5.insight);
+  const goodDays = [s4, s5,
+    day.recoverySummary(week({ recovery: { score: 95, hrv_rmssd_milli: 90, resting_heart_rate: 48 }, sleep: { minutes: 560 } }), { today: T }),
+    day.recoverySummary(week({ recovery: { score: 70, hrv_rmssd_milli: 60, resting_heart_rate: 50 } }), { today: T })];
+  ck('no good-day line says "hard", "green light" or "push" in any wording',
+     goodDays.every(x => x && x.insight && !/hard|green light|push|go for it|max/i.test(x.insight)), goodDays.map(x => x && x.insight));
+  const mixed = day.recoverySummary(week({ recovery: { score: 80, hrv_rmssd_milli: 60, resting_heart_rate: 55 }, sleep: { minutes: 300 } }), { today: T });
+  ck('a high score with five hours of sleep → the warning wins, not the good number', mixed && /under six hours/.test(mixed.insight), mixed && mixed.insight);
+  const mixed2 = day.recoverySummary(week({ recovery: { score: 80, hrv_rmssd_milli: 40, resting_heart_rate: 55 }, sleep: { minutes: 520 } }), { today: T });
+  ck('a great night with HRV well down → "keep today gentle" wins', mixed2 && /Keep today gentle/.test(mixed2.insight), mixed2 && mixed2.insight);
+  // "Your week's average" needs a week's worth of something. Two days is not one.
+  const three = day.recoverySummary(week({ recovery: { score: 50, hrv_rmssd_milli: 60, resting_heart_rate: 61 }, sleep: { minutes: 500 } }).slice(0, 3), { today: T });
+  ck('with only two earlier days there is no "average", so nothing is compared with one',
+     day.MIN_BASELINE_DAYS === 3 && three && three.avgs.restingHr === null && three.avgs.sleepMinutes === null && three.insight === null, three && [three.avgs, three.insight]);
+  const four = day.recoverySummary(week({ recovery: { score: 50, hrv_rmssd_milli: 60, resting_heart_rate: 61 } }).slice(0, 4), { today: T });
+  ck('with three earlier days the comparison is made', four && four.avgs.restingHr === 55 && /6 above your week/.test(four.insight), four && [four.avgs, four.insight]);
   const yOnly = day.recoverySummary(week({}).slice(1), { today: T });
   ck('yesterday counts as current and is flagged as such', yOnly && yOnly.isToday === false && yOnly.latest.date === Y);
 }

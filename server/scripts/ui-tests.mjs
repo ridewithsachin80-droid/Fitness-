@@ -3189,6 +3189,250 @@ async function phase8cTest() {
   ck('if the engine still fails it says why, and the button stays', /0 of 1 answered this time\. Gemini: 429: Resource has been exhausted/.test(vq(V2, 'vp-retry-result')?.textContent || '') && !!vq(V2, 'vp-retry'), vq(V2, 'vp-retry-result')?.textContent);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 35. Honest states (7 Oct): Health Connect, per-member sleep target,
+//     nutrient gaps that are not just blanks in the food table
+// ═══════════════════════════════════════════════════════════════════════════
+async function honestStatesTest() {
+  console.log('\n[35] Honest states: Health Connect, the member\'s own sleep target, nutrient gaps');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+
+  // ── A. Connected devices ───────────────────────────────────────────────────
+  const devApi = stub('api-honest-devices.js', `
+    window.__posts = [];
+    const get = async (url) => /trackers\\/status/.test(url)
+      ? { data: { connections: window.__conns || [], available: { fitbit: true, whoop: false, polar: true } } } : { data: {} };
+    const post = async (url, body) => { window.__posts.push({ url, body }); return { data: {} }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const dev = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DeviceConnect from './pages/DeviceConnect.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/devices']}><DeviceConnect /></MemoryRouter>);`, devApi);
+  const card = (W, name) => [...W.w.document.querySelectorAll('p')].find(p => p.textContent === name)?.closest('div[style*="cursor: pointer"]');
+  const dq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  const text = (W) => W.w.document.body.textContent;
+
+  const D = run(dev); await tick(400);
+  const note = dq(D, 'hc-unsupported');
+  ck('with no bridge to Health Connect (every phone today) the page says so, plainly',
+     D.errors.length === 0 && /Android Health Connect is not supported yet/.test(note?.textContent || ''), [D.errors.join('|'), note?.textContent]);
+  ck('…names the devices it means, from the catalogue: HART PRO, Garmin, Samsung and Ultrahuman',
+     /so HART PRO, Garmin, Samsung and Ultrahuman cannot sync here for now\./.test(note?.textContent || ''), note?.textContent);
+  ck('…and says what still works', /You can still log your sleep and workouts yourself on Today\./.test(note?.textContent || ''));
+  ck('there is no "Tap to sync" and no "Sync Now" to tap', !/Tap to sync|Sync Now/.test(text(D)), text(D).slice(0, 200));
+  const badges = [...D.w.document.querySelectorAll('span')].filter(s => s.textContent === 'Not supported yet').length;
+  ck('five devices are marked "Not supported yet": the four that need Health Connect, and Apple Watch', badges === 5, badges);
+  ck('"Popular", "New" and "Beta" no longer sit on devices that cannot connect', !/Popular|\bNew\b|Beta/.test(text(D)), text(D).match(/Popular|\bNew\b|Beta/g));
+  card(D, 'Garmin').click(); await tick(100);
+  ck('opening Garmin shows the reason and NO Connect button',
+     dq(D, 'tracker-unsupported-garmin')?.textContent === 'Needs Android Health Connect, which FitLife cannot read yet.' && !dq(D, 'tracker-connect-garmin') && !/Connect Garmin/.test(text(D)), dq(D, 'tracker-unsupported-garmin')?.textContent);
+  card(D, 'Apple Watch').click(); await tick(100);
+  ck('Apple Watch: the reason (a native iPhone app is needed), no Connect button, no workaround that leads nowhere',
+     /only a native iPhone app can read\. FitLife cannot\./.test(dq(D, 'tracker-unsupported-apple')?.textContent || '') && !dq(D, 'tracker-connect-apple') && !/Workaround|CSV|bridge app/.test(text(D)), dq(D, 'tracker-unsupported-apple')?.textContent);
+  card(D, 'Fitbit').click(); await tick(100);
+  ck('a device that CAN connect (Fitbit, by account login) keeps its Connect button and no "not supported" mark',
+     /Connect Fitbit/.test(dq(D, 'tracker-connect-fitbit')?.textContent || '') && !dq(D, 'tracker-unsupported-fitbit'));
+  ck('WHOOP, whose login is not set up on the server, still says "Setup pending"', /Setup pending/.test(card(D, 'WHOOP')?.textContent || ''), card(D, 'WHOOP')?.textContent);
+
+  const D2 = run(dev, (win) => { win.__conns = [{ provider: 'fitbit' }]; }); await tick(400);
+  ck('with a device connected there are no switches that do nothing ("Background sync", "Heart rate alerts")',
+     D2.errors.length === 0 && /Connected \(1\)/.test(text(D2)) && !/Sync Settings|Background sync|Heart rate alerts|Wi-Fi only/.test(text(D2)), text(D2).match(/Sync Settings|Background sync|Heart rate alerts/g));
+  {
+    const page = srcOf('pages/DeviceConnect.jsx'), hook = srcOf('hooks/useHealthConnect.js');
+    ck('the pretend "Scanning… Pairing… Connected!" dialog is gone from the code', !/Scanning for device|Pairing…|Connected!|Simulate scanning/.test(page));
+    ck('nobody is told to switch to Chrome on Android 14 any more', !/Use Chrome on Android/.test(hook) && !/Use Chrome on Android/.test(page));
+  }
+
+  // The day a native shell provides the bridge, the same page offers the sync.
+  const D3 = run(dev, (win) => { win.__asked = 0; win.HealthConnect = { requestPermission: async () => { win.__asked++; return []; }, readRecords: async () => ({ records: [] }) }; }); await tick(400);
+  ck('WITH a bridge: the sync banner is back and the "not supported" note is not shown',
+     D3.errors.length === 0 && !dq(D3, 'hc-unsupported') && /Android Health Connect/.test(text(D3)) && /Tap to sync Samsung, Garmin and ring data/.test(text(D3)), text(D3).slice(0, 160));
+  card(D3, 'Garmin').click(); await tick(100);
+  ck('…Garmin gets its Connect button, and tapping it asks Health Connect for permission', !!dq(D3, 'tracker-connect-garmin') && !dq(D3, 'tracker-unsupported-garmin'));
+  dq(D3, 'tracker-connect-garmin').click(); await tick(300);
+  ck('…(permission was actually requested)', D3.w.__asked === 1, D3.w.__asked);
+  card(D3, 'Apple Watch').click(); await tick(100);
+  ck('…Apple Watch is still not supported: that needs a different bridge', !!dq(D3, 'tracker-unsupported-apple') && !dq(D3, 'tracker-connect-apple'));
+
+  // ── B. The member's Plan and sleep sheet ──────────────────────────────────
+  const planApi = stub('api-honest-plan.js', `
+    const payload = () => ({
+      profile: { name: 'Asha Rao', monitor_name: 'Sachin', macros: { kcal: 1800, pro: 120, carb: 150, fat: 60 }, water_target: 3000,
+                 activities: ['walk'], acv: [], supplements: [], ...(window.__sleep || {}) },
+      meal_plan: { date: 'x', meals: [] }, program: { program: null, days: [] } });
+    const get = async (url) => ({ data: /\\/members\\/me\\/today$/.test(url) ? payload() : {} });
+    const post = async () => ({ data: {} });
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const plan = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Plan from './pages/Plan.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/plan']}><Plan /></MemoryRouter>);`, planApi);
+  const P = run(plan); await tick(600);
+  const rec = (W) => W.w.document.querySelector('[data-testid="plan-today-recover"]')?.textContent || '';
+  const main = (W) => W.w.document.querySelector('[data-testid="plan-main"]')?.textContent || '';
+  ck('Plan, nobody has set this member\'s sleep: the standard 10:00 PM → 6:30 AM, and its real length, 8.5 h',
+     P.errors.length === 0 && /10:00 PM → 6:30 AM/.test(rec(P)) && /8\.5 h/.test(rec(P)), [P.errors.join('|'), rec(P)]);
+  ck('…the heading says 8.5 h sleep, not the old "8 h"', /3\.0 L water · 8\.5 h sleep/.test(main(P)) && !/ 8 h sleep/.test(main(P)), main(P).slice(0, 200));
+  const P2 = run(plan, (win) => { win.__sleep = { sleep_bed: '23:30', sleep_wake: '05:30' }; }); await tick(600);
+  ck('Plan, coach set 23:30 and 05:30: the member sees 11:30 PM → 5:30 AM and 6 h, not the standard times',
+     P2.errors.length === 0 && /11:30 PM → 5:30 AM/.test(rec(P2)) && /6 h/.test(rec(P2)) && !/10:00 PM/.test(main(P2)) && /3\.0 L water · 6 h sleep/.test(main(P2)), rec(P2));
+  [...P2.w.document.querySelectorAll('[role=tab]')][3].click(); await tick(150);
+  const recov = P2.w.document.querySelector('[data-testid="plan-recovery"]')?.textContent || '';
+  ck('…and the same on the Recovery view', /11:30 PM → 5:30 AM/.test(recov) && /6 h/.test(recov) && /6 h sleep · 3\.0 L water/.test(main(P2)), recov);
+  const P3 = run(plan, (win) => { win.__sleep = { sleep_bed: '08:00', sleep_wake: '15:20' }; }); await tick(600);
+  ck('a night-shift member: 8:00 AM → 3:20 PM, 7 h 20 min', /8:00 AM → 3:20 PM/.test(rec(P3)) && /7 h 20 min/.test(rec(P3)), rec(P3));
+
+  const sheet = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import SleepSheet from './components/sheets/SleepSheet.jsx';
+    const m = { log: { sleep: window.__night || {} }, update: () => {}, terms: { sleep: 'Sleep' }, protocol: window.__protocol || null };
+    createRoot(document.getElementById('root')).render(<SleepSheet open onClose={() => {}} m={m} />);`, planApi);
+  const dlg = (W) => W.w.document.querySelector('[role="dialog"]');
+  const S1 = run(sheet); await tick(300);
+  ck('sleep sheet, standard times: titled "10:00 PM → 6:30 AM", with "Sleep target · 8.5 h" above it',
+     S1.errors.length === 0 && dlg(S1)?.getAttribute('aria-label') === '10:00 PM → 6:30 AM' && /Sleep target · 8\.5 h/.test(dlg(S1).textContent) && !/8 hrs/.test(dlg(S1).textContent), [S1.errors.join('|'), dlg(S1)?.getAttribute('aria-label')]);
+  const S2 = run(sheet, (win) => { win.__protocol = { sleep_bed: '23:30', sleep_wake: '05:30' }; win.__night = { bedtime: '23:45', waketime: '05:30' }; }); await tick(300);
+  ck('sleep sheet, this member\'s own times: "11:30 PM → 5:30 AM", "Sleep target · 6 h"; the night logged still shows its own 5h 45m',
+     dlg(S2)?.getAttribute('aria-label') === '11:30 PM → 5:30 AM' && /Sleep target · 6 h/.test(dlg(S2).textContent) && /5h 45m/.test(S2.w.document.querySelector('[data-testid="sleep-duration"]')?.textContent || ''), dlg(S2)?.textContent.slice(0, 120));
+
+  // ── C. The coach sets it ───────────────────────────────────────────────────
+  const stApi = stub('api-honest-sleep.js', `
+    window.__patches = [];
+    const patch = async (url, body) => { window.__patches.push({ url, body });
+      if (window.__fail) { const e = new Error('400'); e.response = { status: 400, data: { error: window.__fail } }; throw e; }
+      return { data: { user_id: 12, sleep_bed: body.sleep_bed, sleep_wake: body.sleep_wake } }; };
+    const get = async () => ({ data: {} });
+    export default { get, post: get, put: get, patch, delete: get };`);
+  const st = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import SleepTargetCard from './components/coach/SleepTargetCard.jsx';
+    createRoot(document.getElementById('root')).render(
+      <SleepTargetCard memberId={12} profile={window.__profile || { name: 'Mrs. Padmini Rao' }} onSaved={() => { window.__saved = (window.__saved || 0) + 1; }} />);`, stApi);
+  const C = run(st); await tick(300);
+  const cq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  const setV = (W, el, v) => { Object.getOwnPropertyDescriptor(W.w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new W.w.Event('input', { bubbles: true })); el.dispatchEvent(new W.w.Event('change', { bubbles: true })); };
+  ck('coach card, nothing set: "10:00 PM → 6:30 AM · 8.5 h", and it says these are the standard times',
+     C.errors.length === 0 && cq(C, 'sleep-target-times')?.textContent === '10:00 PM → 6:30 AM · 8.5 h' && cq(C, 'sleep-target-note')?.textContent === "The standard times. Set Padmini's own if they keep different hours.", [C.errors.join('|'), cq(C, 'sleep-target-times')?.textContent, cq(C, 'sleep-target-note')?.textContent]);
+  ck('the form is closed until "Change"', !cq(C, 'sleep-target-form') && !!cq(C, 'sleep-target-edit'));
+  cq(C, 'sleep-target-edit').click(); await tick(100);
+  ck('"Change" opens two time fields filled with the current times, and says what they add up to',
+     cq(C, 'sleep-target-bed')?.value === '22:00' && cq(C, 'sleep-target-wake')?.value === '06:30' && cq(C, 'sleep-target-preview')?.textContent === 'That is 8.5 h of sleep.', [cq(C, 'sleep-target-bed')?.value, cq(C, 'sleep-target-preview')?.textContent]);
+  ck('on the standard times there is nothing to "go back" to', !cq(C, 'sleep-target-reset'));
+  setV(C, cq(C, 'sleep-target-bed'), '23:00'); setV(C, cq(C, 'sleep-target-wake'), '02:00'); await tick(100);
+  ck('11 PM to 2 AM: it says that is 3 h and to check AM and PM, and Save is off',
+     /That is 3 h of sleep\. A target should be between 4 and 12 hours\. Check AM and PM\./.test(cq(C, 'sleep-target-preview')?.textContent || '') && cq(C, 'sleep-target-save').disabled === true, cq(C, 'sleep-target-preview')?.textContent);
+  cq(C, 'sleep-target-save').click(); await tick(150);
+  ck('…and tapping it sends nothing', C.w.__patches.length === 0, C.w.__patches);
+  setV(C, cq(C, 'sleep-target-bed'), '23:30'); setV(C, cq(C, 'sleep-target-wake'), '05:30'); await tick(100);
+  ck('11:30 PM to 5:30 AM: "That is 6 h of sleep.", Save is on', cq(C, 'sleep-target-preview')?.textContent === 'That is 6 h of sleep.' && cq(C, 'sleep-target-save').disabled === false);
+  cq(C, 'sleep-target-save').click(); await tick(300);
+  ck('Save sends exactly the two times for that member', C.w.__patches.length === 1 && C.w.__patches[0].url === '/members/12/profile' && JSON.stringify(C.w.__patches[0].body) === '{"sleep_bed":"23:30","sleep_wake":"05:30"}', C.w.__patches);
+  ck('the card then shows 11:30 PM → 5:30 AM · 6 h, says it is set for Padmini, closes the form and tells the page',
+     cq(C, 'sleep-target-times')?.textContent === '11:30 PM → 5:30 AM · 6 h' && cq(C, 'sleep-target-note')?.textContent === 'Set for Padmini. This is what their Plan shows.' && !cq(C, 'sleep-target-form') && C.w.__saved === 1, [cq(C, 'sleep-target-times')?.textContent, cq(C, 'sleep-target-note')?.textContent, C.w.__saved]);
+  cq(C, 'sleep-target-edit').click(); await tick(100);
+  ck('now there is a way back to the standard times', /Go back to the standard times/.test(cq(C, 'sleep-target-reset')?.textContent || ''));
+  cq(C, 'sleep-target-reset').click(); await tick(300);
+  ck('…which clears both times and shows the standard ones again', JSON.stringify(C.w.__patches[1]?.body) === '{"sleep_bed":null,"sleep_wake":null}' && cq(C, 'sleep-target-times')?.textContent === '10:00 PM → 6:30 AM · 8.5 h', [C.w.__patches[1], cq(C, 'sleep-target-times')?.textContent]);
+
+  const C2 = run(st, (win) => { win.__profile = { name: 'Raghavendra', sleep_bed: '21:45', sleep_wake: '04:45' }; win.__fail = 'Bedtime and wake time should each be a time like 22:30'; }); await tick(300);
+  ck('a member who already has their own times: shown from the profile (9:45 PM → 4:45 AM · 7 h)', cq(C2, 'sleep-target-times')?.textContent === '9:45 PM → 4:45 AM · 7 h', cq(C2, 'sleep-target-times')?.textContent);
+  cq(C2, 'sleep-target-edit').click(); await tick(100);
+  setV(C2, cq(C2, 'sleep-target-bed'), '22:00'); await tick(80);
+  cq(C2, 'sleep-target-save').click(); await tick(300);
+  ck('if the server refuses, its reason is shown, the form stays open and the card keeps the old times',
+     cq(C2, 'sleep-target-error')?.textContent === 'Bedtime and wake time should each be a time like 22:30' && !!cq(C2, 'sleep-target-form') && cq(C2, 'sleep-target-times')?.textContent === '9:45 PM → 4:45 AM · 7 h' && !C2.w.__saved, [cq(C2, 'sleep-target-error')?.textContent, cq(C2, 'sleep-target-times')?.textContent]);
+  cq(C2, 'sleep-target-cancel').click(); await tick(100);
+  ck('Cancel closes the form and clears the error', !cq(C2, 'sleep-target-form') && !cq(C2, 'sleep-target-error'));
+  ck('the card is on the coach\'s member page, in the Training tab', /\{tab === 'training' && \(<>\s*\{\/\* Sleep target \*\/\}\s*<Card>\s*<SleepTargetCard memberId=\{parseInt\(memberId\)\} profile=\{profile\}/.test(srcOf('pages/Monitor.jsx')));
+
+  // ── D. Nutrient gaps ───────────────────────────────────────────────────────
+  const miApi = stub('api-honest-micro.js', `
+    const base = () => ({ confidence: 'insufficient', reason: '3 of 14 days of weight logged', observed_tdee: null, weight_days: 3, food_days: 12, food_coverage_pct: 80,
+      micro_gaps: window.__gaps === undefined ? [{ nutrient: 'fiber', avg: 14, rda: 30, pct: 47, coverage: 92 }, { nutrient: 'iron', avg: 9, rda: 18, pct: 50, coverage: 88 }] : window.__gaps,
+      micro_unknown: window.__unknown === undefined ? [{ nutrient: 'vit_e', coverage: 0 }, { nutrient: 'zinc', coverage: 11 }, { nutrient: 'folate', coverage: 11 }] : window.__unknown });
+    const get = async (url) => ({ data: /adaptive$/.test(url) ? base() : null });
+    export default { get, post: get, put: get, patch: get, delete: get };`);
+  const mi = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import MetabolicInsight from './components/MetabolicInsight.jsx';
+    createRoot(document.getElementById('root')).render(window.__coach ? <MetabolicInsight memberId={12} canApply /> : <MetabolicInsight />);`, miApi);
+  const mq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  const MC = run(mi, (win) => { win.__coach = true; }); await tick(400);
+  ck('coach: the real gaps are listed (fibre 47%, iron 50%) and zinc is not among them',
+     MC.errors.length === 0 && /Fibre.*47%/.test(mq(MC, 'micro-gap-fiber')?.textContent || '') && /Iron.*50%/.test(mq(MC, 'micro-gap-iron')?.textContent || '') && !mq(MC, 'micro-gap-zinc'), [MC.errors.join('|'), mq(MC, 'micro-block')?.textContent]);
+  ck('coach: what the food data cannot answer is named, in words: Vitamin E, Zinc, Folate',
+     /^Cannot be judged from the food logged: Vitamin E, Zinc, Folate\. Too\s+little of it carries a figure for these\.$/.test((mq(MC, 'micro-unknown')?.textContent || '').trim()), mq(MC, 'micro-unknown')?.textContent);
+  ck('the caption says the figures are from food only and supplements are not counted',
+     /Averages across 12 logged days, from food only\. Supplements are not counted\. Against adult reference intakes\./.test(mq(MC, 'micro-caption')?.textContent || ''), mq(MC, 'micro-caption')?.textContent);
+  const MM = run(mi); await tick(400);
+  ck('member: the same two gaps and the same caption', MM.errors.length === 0 && !!mq(MM, 'micro-gap-fiber') && !!mq(MM, 'micro-gap-iron') && /Supplements are not counted/.test(mq(MM, 'micro-caption')?.textContent || ''), MM.errors.join('|'));
+  ck('member: no list of nutrients the food table lacks (that is the coach\'s to fix, not theirs)', !mq(MM, 'micro-unknown') && !/Zinc|Vitamin E|Folate/.test(mq(MM, 'micro-block')?.textContent || ''));
+  const MM2 = run(mi, (win) => { win.__gaps = []; }); await tick(400);
+  ck('member with no real gaps: no nutrient section at all (it used to list six invented ones)', MM2.errors.length === 0 && !mq(MM2, 'micro-block') && !/Consistently under target/.test(MM2.w.document.body.textContent));
+  const MC2 = run(mi, (win) => { win.__coach = true; win.__gaps = []; }); await tick(400);
+  ck('coach with no real gaps: no "under target" heading, but still told what cannot be judged', !/Consistently under target/.test(MC2.w.document.body.textContent) && !!mq(MC2, 'micro-unknown'));
+  const MC3 = run(mi, (win) => { win.__coach = true; win.__gaps = []; win.__unknown = []; }); await tick(400);
+  ck('nothing low and nothing unknown: no section', MC3.errors.length === 0 && !mq(MC3, 'micro-block'));
+
+  // ── E. In real Chrome at phone widths ──────────────────────────────────────
+  try {
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root" style="padding:16px"></div></body></html>`;
+    const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    try {
+      const out = [];
+      for (const width of [320, 360, 390]) {
+        // the coach's card with the form open and the longest warning showing
+        let page = await browser.newPage();
+        await page.setViewport({ width, height: 700, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+        await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+        await page.evaluate(() => { window.__profile = { name: 'Raghavendra Krishnamurthy', sleep_bed: '21:45', sleep_wake: '04:45' }; });
+        await page.addScriptTag({ content: st });
+        await new Promise(r => setTimeout(r, 500));
+        await page.click('[data-testid="sleep-target-edit"]');
+        await page.evaluate(() => { const set = (id, v) => { const el = document.querySelector(`[data-testid="${id}"]`); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); }; set('sleep-target-bed', '23:00'); set('sleep-target-wake', '02:00'); });
+        await new Promise(r => setTimeout(r, 300));
+        const card = await page.evaluate(() => {
+          const h = (id) => document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().height || 0;
+          const within = [...document.querySelectorAll('[data-testid="sleep-target"] *')].every(e => { const r = e.getBoundingClientRect(); return r.right <= window.innerWidth + 0.5 && r.left >= -0.5; });
+          return { sw: document.documentElement.scrollWidth, vw: window.innerWidth, save: h('sleep-target-save'), cancel: h('sleep-target-cancel'), reset: h('sleep-target-reset'), bed: h('sleep-target-bed'), within };
+        });
+        await page.close();
+        // the devices page, every card opened
+        page = await browser.newPage();
+        await page.setViewport({ width, height: 700, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+        await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+        await page.evaluate(() => { document.getElementById('root').style.padding = '0'; });
+        await page.addScriptTag({ content: dev });
+        await new Promise(r => setTimeout(r, 600));
+        await page.evaluate(() => { document.querySelectorAll('div[style*="cursor: pointer"]').forEach(d => d.click()); });
+        await new Promise(r => setTimeout(r, 300));
+        const devices = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: window.innerWidth,
+          note: !!document.querySelector('[data-testid="hc-unsupported"]'), notes: document.querySelectorAll('[data-testid^="tracker-unsupported-"]').length,
+          clipped: [...document.querySelectorAll('[data-testid^="tracker-unsupported-"], [data-testid="hc-unsupported"]')].some(e => e.scrollWidth > e.clientWidth + 1) }));
+        await page.close();
+        out.push({ width, card, devices });
+      }
+      ck('in real Chrome at 320, 360 and 390 px: the coach\'s sleep card with its form and warning open stays inside the screen',
+         out.every(o => o.card.sw <= o.card.vw + 1 && o.card.within), out.map(o => o.card));
+      ck('…Save, Cancel, "go back" and the time fields are all at least 44 px tall', out.every(o => o.card.save >= 44 && o.card.cancel >= 44 && o.card.reset >= 44 && o.card.bed >= 44), out.map(o => o.card));
+      ck('…the devices page with every card open does not scroll sideways, and all five reasons are readable in full',
+         out.every(o => o.devices.sw <= o.devices.vw + 1 && o.devices.note && o.devices.notes === 5 && !o.devices.clipped), out.map(o => o.devices));
+    } finally { await browser.close(); await new Promise(r => server.close(r)); }
+  } catch (e) { console.log('  – browser not installed, the sleep card and devices page were NOT measured in Chrome (' + String(e.message).slice(0, 60) + ')'); }
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -3346,6 +3590,7 @@ async function overflowTest() {
     await voicePilotTest();
     await reviewFixesTest();
     await phase8cTest();
+    await honestStatesTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

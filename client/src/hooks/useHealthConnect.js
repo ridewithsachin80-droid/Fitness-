@@ -1,15 +1,27 @@
 /**
  * useHealthConnect.js
  *
- * React hook that wraps the Android Web Health Connect API.
- * Reads steps, heart rate, sleep, SpO₂, HRV, and calories from
- * Health Connect (which Samsung, Garmin, Fitbit, etc. all write into),
- * then POSTs the data to our backend.
+ * Reads steps, heart rate, sleep, SpO₂, HRV and calories from Android Health
+ * Connect (which Samsung, Garmin, FITTR and others write into) and POSTs them
+ * to our backend — WHEN a bridge to Health Connect exists.
  *
- * Docs: https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started
+ * ── It does not exist today, and this file must not pretend otherwise ────────
  *
- * Flow:
- *   1. Check availability  (Android 14+ / Chrome on Android)
+ * Health Connect is an Android SDK. There is no web API for it: no browser,
+ * Chrome included, defines `window.HealthConnect`, and the Android wrapper in
+ * android/ is a Trusted Web Activity, which cannot hand a web page a native
+ * object. So `healthConnectSupported()` is false for every member on every
+ * phone, and the screen has to say so instead of offering a Sync button.
+ *
+ * This hook used to answer a tap with "not available in this browser. Use
+ * Chrome on Android 14+", which sent members off to change browsers for
+ * something no browser can do.
+ *
+ * The reading code below is kept for the day a native shell injects
+ * `window.HealthConnect` with this shape. Until then nothing calls it.
+ *
+ * Flow, once a bridge exists:
+ *   1. Check the bridge is there
  *   2. Request permissions
  *   3. Read records
  *   4. POST to /api/trackers/healthconnect/sync
@@ -30,6 +42,15 @@ const READ_PERMISSIONS = [
   { accessType: 'read', recordType: 'Distance' },
 ];
 
+/** True only when a native shell has injected the Health Connect bridge. */
+export function healthConnectSupported() {
+  return typeof window !== 'undefined' && !!window.HealthConnect;
+}
+
+/** What the screen says when it is not. One wording, used everywhere. */
+export const HEALTH_CONNECT_UNSUPPORTED =
+  'FitLife cannot read Android Health Connect yet, so this device cannot sync here.';
+
 /* How far back to look (24 h) */
 function timeRange() {
   const end   = new Date();
@@ -42,10 +63,8 @@ export default function useHealthConnect() {
   const [error,    setError]    = useState(null);
   const [metrics,  setMetrics]  = useState(null);
 
-  /* Check whether the Web Health Connect API exists in this browser */
-  const isAvailable = useCallback(() => {
-    return typeof window !== 'undefined' && !!window.HealthConnect;
-  }, []);
+  /* Is there a bridge to Health Connect at all? See the note at the top. */
+  const isAvailable = useCallback(() => healthConnectSupported(), []);
 
   const sync = useCallback(async () => {
     setStatus('checking');
@@ -54,7 +73,7 @@ export default function useHealthConnect() {
     /* ── 1. Availability ─────────────────────────────────── */
     if (!isAvailable()) {
       setStatus('unavailable');
-      setError('Android Health Connect is not available in this browser. Use Chrome on Android 14+.');
+      setError(HEALTH_CONNECT_UNSUPPORTED);
       return null;
     }
 

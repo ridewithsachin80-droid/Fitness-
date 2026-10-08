@@ -308,6 +308,13 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_whatsapp  BOOLEAN D
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_sms       BOOLEAN DEFAULT false;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_opted_out BOOLEAN DEFAULT false;
 
+-- A member's own sleep target, set by the coach: bedtime and wake time as
+-- 24-hour "HH:MM". Both NULL = the house default (10:00 PM to 6:30 AM). The
+-- hours are never stored — they are worked out from the two times, because the
+-- old hard-coded label said "8 h" beside times that are eight and a half apart.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_bed  VARCHAR(5);
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_wake VARCHAR(5);
+
 -- Delivery log. Needed to answer "did she actually get it?", to stop paying
 -- for a channel that silently fails, and to prove consent was honoured.
 CREATE TABLE IF NOT EXISTS message_log (

@@ -1,12 +1,18 @@
 import { Sheet, Pressable } from '../primitives';
-import { sleepMinutes, sleepTone } from '../../lib/day';
+import { sleepMinutes, sleepTone, sleepTarget } from '../../lib/day';
 
 export default function SleepSheet({ open, onClose, m }) {
-  const { log, update, terms } = m;
+  const { log, update, terms, protocol } = m;
+  // This member's own target (set by the coach), with the hours worked out
+  // from the times. The title used to be one fixed string for every member,
+  // and its hours did not match its own two times. The times are the title
+  // and the hours sit in the eyebrow: a sheet title is cut off with "…" when
+  // it is too long for a small phone, and the hours were the part that went.
+  const target = sleepTarget(protocol);
   const mins = sleepMinutes(log.sleep?.bedtime, log.sleep?.waketime);
   const tone = sleepTone(mins);
   return (
-    <Sheet open={open} onClose={onClose} eyebrow={terms.sleep} title="Target 10:00 PM → 6:30 AM (8 hrs)"
+    <Sheet open={open} onClose={onClose} eyebrow={`${terms.sleep} target · ${target.hoursLabel}`} title={`${target.bedLabel} → ${target.wakeLabel}`}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <div className="flex gap-2 pt-1">
         <div className="flex-1 min-w-0">

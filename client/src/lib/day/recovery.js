@@ -34,6 +34,13 @@ export function normaliseTrackerDay(day = {}) {
   };
 }
 
+/**
+ * How many earlier days a "your average" needs before anything is compared
+ * with it. Two days is not an average, and the card's own words say "your
+ * week's average".
+ */
+export const MIN_BASELINE_DAYS = 3;
+
 const hasAny = (d) => ['restingHr', 'hrv', 'recovery', 'sleepMinutes', 'sleepScore', 'steps'].some(k => d[k] != null);
 
 /**
@@ -51,18 +58,23 @@ export function recoverySummary(days = [], { today }) {
   if (latest.date !== today && latest.date !== yStr) return null;
 
   const prior = norm.slice(1);
-  const avg = (k) => { const xs = prior.map(d => d[k]).filter(v => v != null); return xs.length >= 2 ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
+  const avg = (k) => { const xs = prior.map(d => d[k]).filter(v => v != null); return xs.length >= MIN_BASELINE_DAYS ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
   const avgs = { restingHr: avg('restingHr'), hrv: avg('hrv'), sleepMinutes: avg('sleepMinutes'), steps: avg('steps'), recovery: avg('recovery') };
 
   // One insight, in priority order. Each needs both a value and a baseline.
+  //
+  // The cautions come first, so a good number never outranks a warning one.
+  // And a good number never tells anyone to train harder: the tracker does
+  // not know today is a rest day, what the coach prescribed, or what a
+  // doctor said. It can say the body looks ready; the plan decides the rest.
   let insight = null;
   const fmtH = (m) => `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, '0')}m`;
   if (latest.recovery != null && latest.recovery < 34) insight = `Recovery is low (${Math.round(latest.recovery)}). A lighter day and an early night will do more than a hard session.`;
   else if (latest.restingHr != null && avgs.restingHr != null && latest.restingHr - avgs.restingHr >= 4) insight = `Resting heart rate is ${Math.round(latest.restingHr - avgs.restingHr)} above your week's average — that is often a poor night or the start of a cold. Go easy.`;
   else if (latest.hrv != null && avgs.hrv != null && latest.hrv < avgs.hrv * 0.8) insight = `HRV is well below your usual — your body is still recovering from something. Keep today gentle.`;
   else if (latest.sleepMinutes != null && latest.sleepMinutes < 360) insight = `${fmtH(latest.sleepMinutes)} of sleep is under six hours. Protect tonight's.`;
-  else if (latest.sleepMinutes != null && avgs.sleepMinutes != null && latest.sleepMinutes >= avgs.sleepMinutes + 45) insight = `${fmtH(latest.sleepMinutes)} — a better night than your average. Good day to train hard.`;
-  else if (latest.recovery != null && latest.recovery >= 67) insight = `Recovery is high (${Math.round(latest.recovery)}). Green light for a hard session.`;
+  else if (latest.sleepMinutes != null && avgs.sleepMinutes != null && latest.sleepMinutes >= avgs.sleepMinutes + 45) insight = `${fmtH(latest.sleepMinutes)} — a better night than your average. Today's plan should feel easier.`;
+  else if (latest.recovery != null && latest.recovery >= 67) insight = `Recovery is high (${Math.round(latest.recovery)}). You are ready for today's plan — no need to add to it.`;
   else if (latest.steps != null && avgs.steps != null && latest.steps < avgs.steps * 0.5 && latest.date === today) insight = `Only ${latest.steps.toLocaleString('en-IN')} steps so far — a walk after your next meal closes most of the gap.`;
   else if (latest.restingHr != null && avgs.restingHr != null && avgs.restingHr - latest.restingHr >= 3) insight = `Resting heart rate is ${Math.round(avgs.restingHr - latest.restingHr)} below your week's average — fitness is doing its job.`;
 

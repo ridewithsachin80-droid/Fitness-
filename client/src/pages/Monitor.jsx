@@ -22,6 +22,7 @@ import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
 import TrainingSummary from '../components/TrainingSummary';
 import MetabolicInsight from '../components/MetabolicInsight';
 import DietPlanStudio from '../components/coach/DietPlanStudio';
+import SleepTargetCard from '../components/coach/SleepTargetCard';
 import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
 import LabResults from '../components/LabResults';
@@ -1014,6 +1015,14 @@ export default function Coach() {
 
         {tab === 'training' && (<>   {/* Muscle Coverage */}
         <MuscleCoverage memberId={parseInt(memberId)} refreshTick={workoutTick} />
+        </>)}
+
+        {/* The member's own bedtime and wake time. Every member used to be shown
+            the same hard-coded target; the coach now sets it here. */}
+        {tab === 'training' && (<>   {/* Sleep target */}
+        <Card>
+          <SleepTargetCard memberId={parseInt(memberId)} profile={profile} onSaved={() => load({ quiet: true })} />
+        </Card>
         </>)}
 
         {/* Lab values */}
