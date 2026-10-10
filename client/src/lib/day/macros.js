@@ -31,6 +31,66 @@ export function calcFoodMacros(foodItems = []) {
   }, { kcal: 0, pro: 0, carb: 0, fat: 0 });
 }
 
+// ── A member's own label (10 Oct 2026) ──────────────────────────────────────
+// A member logging protein oats (24 g protein per 100 g on the pack) got plain
+// oats (13.2 g) from the shared food table, with no way to say so. They can
+// now type the pack's protein, carbs and fat; calories follow from them the
+// way a nutrition label works them out: 4 kcal per gram of protein and of
+// carbohydrate, 9 per gram of fat. The server applies the same rule
+// (services/memberFoods.js), so the number the member sees is the one stored.
+
+export const KCAL_PER_GRAM = Object.freeze({ protein: 4, carbs: 4, fat: 9 });
+
+/** Calories from the three macros, rounded to a whole number. */
+export function kcalFromMacros({ protein = 0, carbs = 0, fat = 0 } = {}) {
+  const g = (v) => Math.max(0, Number(v) || 0);
+  return Math.round(g(protein) * KCAL_PER_GRAM.protein + g(carbs) * KCAL_PER_GRAM.carbs + g(fat) * KCAL_PER_GRAM.fat);
+}
+
+/** Carbs as the app counts them everywhere: net when known, else total. */
+export const carbsOf = (p) => ((p?.net_carbs != null ? p.net_carbs : p?.total_carbs) || 0);
+
+const one = (v) => Math.round(v * 10) / 10;
+
+/**
+ * What the member typed → per-100 g macros and calories, or why not.
+ *
+ * @param entry  { protein, carbs, fat } as typed; a blank box counts as 0
+ * @param mode   'per100' (as printed on the pack) or 'portion' (for the
+ *               grams being logged, e.g. home food the member weighed)
+ * @param grams  the portion, used only in 'portion' mode
+ * @returns { ok: true, per100: { protein, carbs, fat, calories } } or { ok: false, error }
+ */
+export function labelFromEntry(entry = {}, { mode = 'per100', grams = 100 } = {}) {
+  const raw = ['protein', 'carbs', 'fat'].map(k => String(entry[k] ?? '').trim());
+  const nums = raw.map(s => (s === '' ? 0 : Number(s)));
+  if (nums.some(n => !Number.isFinite(n) || n < 0)) return { ok: false, error: 'Numbers only — 0 or more.' };
+  if (nums.every(n => n === 0)) return { ok: false, error: 'Enter at least one of protein, carbs or fat.' };
+  const portion = Number(grams) || 0;
+  if (mode === 'portion' && portion <= 0) return { ok: false, error: 'Set the grams first.' };
+  const scale = mode === 'portion' ? 100 / portion : 1;
+  const [protein, carbs, fat] = nums.map(n => one(n * scale));
+  if (protein + carbs + fat > 100.5) {
+    return { ok: false, error: mode === 'portion'
+      ? `That is more than ${portion} g of protein, carbs and fat in a ${portion} g portion. Check the numbers.`
+      : 'Protein, carbs and fat can’t add up to more than 100 g in 100 g of food. Check the pack.' };
+  }
+  return { ok: true, per100: { protein, carbs, fat, calories: kcalFromMacros({ protein, carbs, fat }) } };
+}
+
+/** A food's per-100 g data with the member's label applied. Fibre, vitamins
+ *  and minerals are kept from the food it replaces — the pack rarely lists
+ *  them, and a blank would read as zero. */
+export function withLabel(per100g, label) {
+  return { ...(per100g || {}), protein: label.protein, total_carbs: label.carbs, net_carbs: label.carbs,
+           fat: label.fat, calories: label.calories };
+}
+
+/** "P 18 g · C 60 g · F 9 g" — whole grams, for summaries. */
+export function macroLine({ pro = 0, carb = 0, fat = 0 } = {}) {
+  return `P ${Math.round(pro)} g · C ${Math.round(carb)} g · F ${Math.round(fat)} g`;
+}
+
 export const MICRO_VITAMINS = ['vit_a','vit_b1','vit_b2','vit_b3','vit_b5','vit_b6','vit_b12','vit_c','vit_d','vit_e','vit_k','folate','biotin','choline'];
 export const MICRO_MINERALS = ['calcium','iron','magnesium','phosphorus','potassium','sodium','zinc','copper','manganese','selenium'];
 export const MICRO_SPECIALS = ['fiber','omega3_ala','omega3_epa','omega3_dha','omega6','lycopene','beta_glucan'];

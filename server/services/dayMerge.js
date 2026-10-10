@@ -97,7 +97,8 @@ function mergeOfflineDay(stored, incoming, baseFoodIds) {
 //     in the same group both survive
 //   · water is additive: +250 here and +250 by voice is +500, not +250
 //   · food is merged by item id, as offline; an item whose grams or meal the
-//     member edited here keeps their edit, and keeps the server's nutrition
+//     member edited here keeps their edit, and keeps the server's nutrition —
+//     unless they edited the macros here too, then their numbers win
 //
 // Only used when the stored day is newer than the one the app loaded AND the
 // app sent base_fields. An older app bundle sends none and is written as sent,
@@ -105,6 +106,9 @@ function mergeOfflineDay(stored, incoming, baseFoodIds) {
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const leaf  = (v) => (v === false || v == null || v === '' || v === 0) ? null : canon(v);
 const foodSig = (it) => `${Number(it?.grams) || 0}|${it?.meal || ''}`;
+// Same string as client/src/utils/logSync.js macroSig: kcal:protein:carbs:fat per 100 g.
+const macroSig = (it) => { const p = it?.per_100g || {};
+  return [p.calories, p.protein, p.net_carbs ?? p.total_carbs, p.fat].map(v => Number(v) || 0).join(':'); };
 const WATER_MAX = 20000;
 
 /**
@@ -146,6 +150,9 @@ function mergeLiveDay(stored, incoming, baseFoodIds, base) {
   const If = Array.isArray(incoming?.food_items) ? incoming.food_items : [];
   const baseIds = new Set((Array.isArray(baseFoodIds) ? baseFoodIds : []).filter(Boolean).map(String));
   const baseSig = isObj(B.food) ? B.food : {};
+  // Sent by apps from 10 Oct 2026 on. An older app sends none, and nothing
+  // about macros is taken from it — exactly as before.
+  const baseMac = isObj(B.food_macros) ? B.food_macros : {};
   const mine = new Map(If.filter(i => i && i.id).map(i => [String(i.id), i]));
   const deleted = new Set([...baseIds].filter(id => !mine.has(id)));
   const kept = [];
@@ -154,8 +161,13 @@ function mergeLiveDay(stored, incoming, baseFoodIds, base) {
     const id = it && it.id ? String(it.id) : null;
     if (id && deleted.has(id)) { removed++; continue; }
     const m = id ? mine.get(id) : null;
-    if (m && baseSig[id] != null && foodSig(m) !== String(baseSig[id])) kept.push({ ...it, grams: m.grams, meal: m.meal });
-    else kept.push(it);
+    let out = it;
+    if (m && baseSig[id] != null && foodSig(m) !== String(baseSig[id])) out = { ...out, grams: m.grams, meal: m.meal };
+    // The member changed this item's macros here: their numbers, and the label mark.
+    if (m && baseMac[id] != null && macroSig(m) !== String(baseMac[id])) {
+      out = { ...out, per_100g: m.per_100g, ...(m.label ? { label: true } : {}) };
+    }
+    kept.push(out);
   }
   const storedIds = new Set(Sf.map(i => i?.id).filter(Boolean).map(String));
   const added = If.filter(it => it && (it.id ? !storedIds.has(String(it.id)) : !kept.some(k => sameFood(k, it))))
@@ -165,4 +177,4 @@ function mergeLiveDay(stored, incoming, baseFoodIds, base) {
   return { doc, kept_server, food_added: added.length, food_removed: removed };
 }
 
-module.exports = { mergeOfflineDay, mergeLiveDay, isStale, SCALARS };
+module.exports = { mergeOfflineDay, mergeLiveDay, isStale, SCALARS, macroSig };

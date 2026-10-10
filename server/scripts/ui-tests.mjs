@@ -351,6 +351,8 @@ const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:5
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/member-foods')) return ok([{ id: 1, name: 'Yogabar High Protein Rolled Oats with Almonds and Cranberries', updated_at: '2026-10-10T08:00:00Z',
+      per_100g: { calories: 1386, protein: 24.5, total_carbs: 55.5, net_carbs: 55.5, fat: 17.8 } }]);
     if (u.includes('/voice-pilot/me')) return ok({ invited: true, consented: true, phrases: [
       { id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', means: 'A bowl of kosambari and bisi bele bath', recorded: true, heard: 'Ondu bowl kosambari mattu bisi bele bath, swalpa majjige kooda kudide nenne raatri ele gante aada mele' },
       { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false }] });
@@ -540,6 +542,26 @@ const OVERFLOW_PAGES = [
      const P = () => <div className="p-4"><VP /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
+  // 10 Oct 2026: macros eaten (plan and no plan), the macro editor in the
+  // food log and from the chat preview, and the coach's list of labels.
+  ['TodaysPlan+Macros', `import TP from './components/today/TodaysPlan.jsx'; import EM from './components/today/EatenMacros.jsx';
+     const m = { log: { water: 2500, activities: {}, acv: {}, supplements: {} }, protocol: { water_target: 3500 }, coachPlan: null, coachRows: { pendingMeals: [], mealCount: 4 },
+       workoutSummary: { count: 0, cardio: [] }, workoutKcal: 0, kcalIn: 12345, kcalTarget: 18000, balance: 1234, micro: { hasData: true, met: 22, total: 31 },
+       eaten: { kcal: 12345, pro: 1234.4, carb: 2345.6, fat: 999.9 }, macroTargets: { kcal: 18000, pro: 1200, carb: 3000, fat: 900 },
+       sleepText: '10h 45m', sleepMins: 645, terms: { kcal: 'kcal' }, activeActivities: [], activeACV: [], activeSupplements: [], protocolDone: 0, protocolTotal: 0 };
+     const P = () => <div className="p-4"><TP m={m} onOpen={() => {}} /><EM eaten={m.eaten} isToday={false} /></div>;`],
+  ['FoodLog+MacroEditor', `import FL from './components/FoodLog.jsx';
+     const items = [{ id: 1, name: 'Yogabar High Protein Rolled Oats with Almonds and Cranberries', grams: 1250, meal: 'Breakfast', label: true,
+       per_100g: { calories: 386, protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8 } }];
+     const P = () => { setTimeout(() => document.querySelector('[data-testid="food-edit-macros"]')?.click(), 300);
+       return <div className="p-4"><FL items={items} onChange={() => {}} calorieTarget={null} /></div>; };`],
+  ['ChatMacroSheet', `import CM from './components/chat/ChatFoodMacros.jsx';
+     const f = { name: 'Yogabar High Protein Rolled Oats with Almonds and Cranberries', grams: 1250, food_id: 4, label: true,
+       per_100g: { calories: 386, protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8 }, macros: { cal: 4825, pro: 300, carb: 687.5, fat: 97.5 } };
+     const P = () => { setTimeout(() => document.querySelector('[data-testid="chat-edit-macros"]')?.click(), 300);
+       return <div className="p-4"><button className="w-full flex justify-between"><span>row</span><CM f={f} onSave={() => {}} /></button></div>; };`],
+  ['MemberLabelsCard', `import MLC from './components/coach/MemberLabelsCard.jsx';
+     const P = () => <div className="p-4"><MLC memberId={1} memberName="Mrs. Venkataramana Reddy" /></div>;`],
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
      const P = () => { setTimeout(() => document.querySelector('[data-testid="plan-fit"]')?.click(), 250);
        return <div className="p-4"><S memberId={1} memberName="Mrs. Venkataramana Reddy" /></div>; };`],
@@ -735,7 +757,8 @@ async function todayTest() {
   ck('Today\'s Plan renders one section with Move, Eat and Recover rows', !!plan && ['plan-move', 'plan-eat', 'plan-recover'].every(id => plan.querySelector(`[data-testid="${id}"]`)));
   ck('the old cards are gone: no day strip, no coach card, no deficit chip, no dots card', !q('day-strip') && !q('coach-card') && !q('balance-chip'));
   ck('Move: the coach\'s program day with exercise count and Start workout', /Push ·/.test(q('plan-move').textContent) && /2 exercises/.test(q('plan-move').textContent) && /Start workout/.test(q('plan-move').textContent), q('plan-move').textContent);
-  ck('Eat: 666 / 1,800 kcal and 37 / 120 g protein', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent) && /37/.test(q('plan-eat').textContent) && /120 g protein/.test(q('plan-eat').textContent), q('plan-eat').textContent);
+  ck('Eat: 666 / 1,800 kcal, then protein 37 / 120 g, carbs 59 / 150 g, fat 34 / 60 g (10 Oct 2026: all three, not protein alone)', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent)
+     && /Protein37 \/ 120 g/.test(q('plan-macros-pro').textContent) && /Carbs59 \/ 150 g/.test(q('plan-macros-carb').textContent) && /Fat34 \/ 60 g/.test(q('plan-macros-fat').textContent), q('plan-eat').textContent);
   ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /\d of \d meals? logged/.test(q('plan-eat').textContent) && !/meal plans? pending/.test(q('plan-eat').textContent) && /1,373 kcal under target/.test(q('plan-balance').textContent), q('plan-eat').textContent);
   ck('Eat: View meal plan is the action while a plan is pending', /View meal plan/.test(q('plan-eat').textContent));
   ck('Eat: nutrients N/31 inline', /\/31 nutrients/.test(q('chip-nutrition').textContent));
@@ -3433,6 +3456,204 @@ async function honestStatesTest() {
   } catch (e) { console.log('  – browser not installed, the sleep card and devices page were NOT measured in Chrome (' + String(e.message).slice(0, 60) + ')'); }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 36. Macros eaten, for every member; a member's own macros for a food
+//     (10 Oct 2026: "show calories and macros of what is consumed, plan or no
+//     plan; edit macros and calories adjust")
+// ═══════════════════════════════════════════════════════════════════════════
+async function macrosEatenTest() {
+  console.log('\n[36] macros eaten (plan and no plan) and editing a food\'s macros');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+  const typeIn = async (W, el, value) => {
+    Object.getOwnPropertyDescriptor(W.w.HTMLInputElement.prototype, 'value').set.call(el, value);
+    el.dispatchEvent(new W.w.Event('input', { bubbles: true })); await tick(40);
+  };
+  const mount = (stubSrc, name) => bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DailyLog from './pages/DailyLog.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    import { useLogStore } from './store/logStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    window.__logStore = useLogStore;
+    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, stub(name, stubSrc));
+
+  // The member's saved labels come back from GET /member-foods, as the server would return them.
+  const withLabels = TODAY_API_STUB.replace("const routes = [", "const routes = [\n      [/^\\/member-foods$/, () => (window.__labels || [])],");
+  try {
+  // ── A. A member WITH targets ──────────────────────────────────────────────
+  const A = run(await mount(withLabels, 'api-36-plan.js')); await tick(900);
+  const d = A.w.document;
+  const q = (id, root = d) => root.querySelector(`[data-testid="${id}"]`);
+  const qa = (id, root = d) => [...root.querySelectorAll(`[data-testid="${id}"]`)];
+  ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
+  ck('Eat row: protein, carbs and fat each eaten against the coach\'s target, with a bar each',
+     ['pro', 'carb', 'fat'].every(k => q(`plan-macros-${k}`)?.querySelector('.h-1')) && /37 \/ 120 g/.test(q('plan-macros-pro').textContent), q('plan-macros')?.textContent);
+  const meals = qa('meal-macros').map(e => e.textContent);
+  ck('timeline: each meal shows its macros under the foods (Breakfast P 10 · C 52 · F 4; Lunch P 27 · C 8 · F 30)',
+     meals[0] === 'P 10 g · C 52 g · F 4 g' && meals[1] === 'P 27 g · C 8 g · F 30 g', meals);
+
+  q('plan-eat-action').click(); await tick(500);
+  const dlg = () => d.querySelector('[role=dialog]');
+  ck('food sheet with targets: the macro bars (as before), not the no-target card', /Macro Targets/.test(dlg()?.textContent || '') && !q('eaten-card'), dlg()?.textContent.slice(0, 80));
+  ck('each food shows kcal · P · C · F in the simple view', qa('food-macros').length === 3 && /390 kcal · P27g · C7\.5g · F30g/.test(qa('food-macros')[2].textContent), qa('food-macros').map(e => e.textContent));
+  ck('each meal header shows P, C and F in the simple view too (it showed kcal only)', /P 9\.8g/.test(dlg().textContent) && /C 51\.6g/.test(dlg().textContent) && /F 4\.0g/.test(dlg().textContent));
+  ck('every logged food has "Edit macros"', qa('food-edit-macros').length === 3);
+
+  // Paneer bhurji: the member's pack says 25 g protein per 100 g
+  qa('food-edit-macros')[2].click(); await tick(200);
+  const ed = () => q('macro-editor');
+  ck('the editor opens under that food with its numbers per 100 g (18 / 5 / 20)', !!ed() && q('macro-in-protein').value === '18' && q('macro-in-carbs').value === '5' && q('macro-in-fat').value === '20',
+     ed() && [q('macro-in-protein').value, q('macro-in-carbs').value, q('macro-in-fat').value]);
+  ck('calories are worked out from the macros: 4×18 + 4×5 + 9×20 = 272 per 100 g, 408 for 150 g', /272 kcal per 100 g/.test(q('macro-kcal').textContent) && /408 kcal for your 150 g/.test(q('macro-kcal').textContent), q('macro-kcal').textContent);
+  await typeIn(A, q('macro-in-protein'), '25');
+  ck('typing protein 25 moves the calories at once: 300 per 100 g, 450 for 150 g', /300 kcal per 100 g/.test(q('macro-kcal').textContent) && /450 kcal for your 150 g/.test(q('macro-kcal').textContent), q('macro-kcal').textContent);
+  [...ed().querySelectorAll('[role=tab]')][1].click(); await tick(80);
+  ck('"For 150 g" converts what is typed to the portion (25 → 37.5, 20 → 30)', q('macro-in-protein').value === '37.5' && q('macro-in-fat').value === '30' && /300 kcal per 100 g/.test(q('macro-kcal').textContent), [q('macro-in-protein').value, q('macro-in-fat').value]);
+  [...ed().querySelectorAll('[role=tab]')][0].click(); await tick(80);
+  ck('and back to per 100 g (37.5 → 25)', q('macro-in-protein').value === '25');
+  ck('"Use these every time" is on by default and names the food', q('macro-remember').checked && /every time I log Paneer bhurji/.test(ed().textContent));
+  const putsBefore = A.w.__posts.filter(p => p.url === '/member-foods').length;
+  q('macro-save').click(); await tick(300);
+  const put = A.w.__posts.filter(p => p.url === '/member-foods').pop();
+  ck('Save sends the member\'s label: name, the food\'s numbers with protein 25 and calories 300', A.w.__posts.filter(p => p.url === '/member-foods').length === putsBefore + 1
+     && put.body.name === 'Paneer bhurji' && put.body.per_100g.protein === 25 && put.body.per_100g.calories === 300 && put.body.per_100g.net_carbs === 5, put?.body);
+  const item = A.w.__logStore.getState().log.food.find(f => f.id === 3);
+  ck('the logged food now carries the new numbers and the label mark', item.per_100g.protein === 25 && item.per_100g.calories === 300 && item.label === true, item);
+  ck('the row says "your label" and shows 450 kcal · P37.5g', qa('food-label-tag').length === 1 && /450 kcal · P37\.5g/.test(qa('food-macros')[2]?.textContent || ''), qa('food-macros').map(e => e.textContent));
+  ck('the editor closed', !ed());
+
+  // A number that cannot be right
+  qa('food-edit-macros')[0].click(); await tick(150);
+  await typeIn(A, q('macro-in-fat'), '200');
+  ck('more than 100 g in 100 g: said while typing, no calories shown', /can.t add up to more than 100 g/.test(q('macro-error-live')?.textContent || ''), q('macro-kcal').textContent);
+  const n0 = A.w.__posts.length;
+  q('macro-save').click(); await tick(150);
+  ck('and Save refuses it, sending nothing', /more than 100 g/.test(q('macro-error')?.textContent || '') && A.w.__posts.length === n0 && !!ed());
+  await typeIn(A, q('macro-in-fat'), '1');
+  q('macro-remember').click(); await tick(40);
+  const n1 = A.w.__posts.filter(p => p.url === '/member-foods').length;
+  q('macro-save').click(); await tick(200);
+  const idli = A.w.__logStore.getState().log.food.find(f => f.id === 1);
+  ck('with "every time" unticked: just this entry changes, no label saved', A.w.__posts.filter(p => p.url === '/member-foods').length === n1 && idli.per_100g.fat === 1 && idli.label === true, idli.per_100g);
+  ck('Cancel on a fresh editor changes nothing', await (async () => { qa('food-edit-macros')[1].click(); await tick(100); await typeIn(A, q('macro-in-protein'), '40'); q('macro-cancel').click(); await tick(100);
+     return !ed() && A.w.__logStore.getState().log.food.find(f => f.id === 2).per_100g.protein === 2.8; })());
+
+  // Today's numbers follow the edit
+  const closeBtn = [...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Done'); closeBtn?.click(); await tick(500);
+  ck('Today\'s Eat row follows the edit: protein 37 → 47 (paneer 27 → 37.5 g)', /47 \/ 120 g/.test(q('plan-macros-pro')?.textContent || ''), q('plan-macros-pro')?.textContent);
+
+  // The label is offered in the search next time (the sheet re-mounts and reloads the labels)
+  A.w.__labels = [{ id: 1, name: 'Paneer bhurji', per_100g: put.body.per_100g, base_food_id: null }];
+  q('plan-eat-action').click(); await tick(500);
+  [...dlg().querySelectorAll('button')].find(b => /Add food item/.test(b.textContent)).click(); await tick(150);
+  await typeIn(A, dlg().querySelector('input[placeholder="Food name…"]'), 'paneer'); await tick(500);
+  const sug = q('suggest-label');
+  ck('typing "paneer" offers the member\'s own label first, marked "your label"', !!sug && /Paneer bhurji/.test(sug.closest('button').textContent), dlg().textContent.slice(0, 200));
+  if (sug) {
+    sug.closest('button').click(); await tick(150);
+    await typeIn(A, dlg().querySelector('input[placeholder="Weight in grams"]'), '100');
+    [...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Add').click(); await tick(200);
+  }
+  const added = A.w.__logStore.getState().log.food.at(-1);
+  ck('added with the label\'s numbers and mark (never pointing at a shared food row it is not)', added.name === 'Paneer bhurji' && added.per_100g.protein === 25 && added.label === true && added.food_id === null, added);
+
+  } catch (e) { ck('section A ran to the end', false, e.message); }
+  try {
+  // ── B. A member with NO targets ───────────────────────────────────────────
+  const noPlan = withLabels.replace('macros: { kcal: 1800, pro: 120, carb: 150, fat: 60 },', 'macros: null,');
+  ck('(fixture: the no-plan member really has no targets)', noPlan !== TODAY_API_STUB);
+  const B = run(await mount(noPlan, 'api-36-noplan.js')); await tick(900);
+  const bd = B.w.document; const bq = (id) => bd.querySelector(`[data-testid="${id}"]`);
+  ck('mounts', B.errors.length === 0, B.errors.join('|'));
+  ck('Eat row: calories alone, no "/ target"', /666/.test(bq('plan-eat').textContent) && !/666 \//.test(bq('plan-eat').textContent.replace(/\s+/g, ' ')), bq('plan-eat').textContent);
+  ck('Eat row: protein 37 g, carbs 59 g, fat 34 g — eaten numbers, no invented target, no bars',
+     /^Protein37 g$/.test(bq('plan-macros-pro').textContent) && /^Carbs59 g$/.test(bq('plan-macros-carb').textContent) && /^Fat34 g$/.test(bq('plan-macros-fat').textContent) && !bq('plan-macros').querySelector('.h-1'),
+     ['pro', 'carb', 'fat'].map(k => bq(`plan-macros-${k}`)?.textContent));
+  ck('timeline meals show their macros too', bd.querySelectorAll('[data-testid="meal-macros"]').length === 2);
+  bq('plan-eat-action').click(); await tick(500);
+  ck('food sheet: an "Eaten today" card with 666 kcal and the three macros, saying there are no targets yet',
+     /Eaten today/.test(bq('eaten-card')?.textContent || '') && /666/.test(bq('eaten-kcal').textContent) && /37 g/.test(bq('eaten-card').textContent) && /No targets from your coach yet/.test(bq('eaten-no-targets').textContent) && !/Macro Targets/.test(bd.body.textContent), bq('eaten-card')?.textContent);
+  ck('each food still shows kcal · P · C · F (the line was hidden with no calorie target), without the target dot',
+     bd.querySelectorAll('[data-testid="food-macros"]').length === 3 && [...bd.querySelectorAll('[data-testid="food-macros"]')].every(e => e.children.length === 1), [...bd.querySelectorAll('[data-testid="food-macros"]')].map(e => e.textContent));
+
+  } catch (e) { ck('section B ran to the end', false, e.message); }
+  try {
+  // ── C. The AI chat preview: fix the numbers before logging ───────────────
+  const chatApi = stub('api-36-chat.js', `
+    window.__posts = [];
+    const get = async () => ({ data: {} });
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (url === '/ai-chat/parse') return { data: { reply: 'Got it: oats.', foods: [{ name: 'Oats', grams: 100, meal: 'Breakfast', food_id: 77, source: 'db-verified', ai_grams: 100,
+        per_100g: { calories: 374, protein: 13.2, total_carbs: 67.7, net_carbs: 57.6, fat: 7.6, fiber: 10.1 }, macros: { cal: 374, pro: 13.2, carb: 67.7, fat: 7.6 } }], totals: {} } };
+      return { data: { ok: true } }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const chat = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import AIChatLog from './components/AIChatLog.jsx';
+    import { useAIChat } from './store/aiChatStore.js';
+    import { useLogStore } from './store/logStore.js';
+    window.__log = useLogStore;
+    useLogStore.setState(st => ({ log: { ...(st.log || {}), food: [], activities: {}, acv: {}, supplements: {}, water: 0, sleep: {} } }));
+    createRoot(document.getElementById('root')).render(<AIChatLog mealPlans={[]} />);
+    useAIChat.getState().openChat();`, chatApi);
+  const C = run(chat); await tick(500);
+  const cd = C.w.document; const cq = (id) => cd.querySelector(`[data-testid="${id}"]`);
+  const t = cd.querySelector('[data-testid="composer-input"]');
+  Object.getOwnPropertyDescriptor(C.w.HTMLTextAreaElement.prototype, 'value').set.call(t, '100g oats');
+  t.dispatchEvent(new C.w.Event('input', { bubbles: true })); await tick(60);
+  t.dispatchEvent(new C.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
+  const row = () => cq('chat-edit-macros')?.closest('button');
+  ck('the preview row shows 374 kcal, P 13.2 and "Edit macros" (the screenshot that started this)', C.errors.length === 0 && /374 kcal/.test(row()?.textContent || '') && /P 13\.2/.test(row().textContent) && cq('chat-edit-macros').textContent === 'Edit macros', [C.errors.join('|'), row()?.textContent]);
+  const onBefore = /line-through/.test(row().innerHTML);
+  cq('chat-edit-macros').click(); await tick(300);
+  ck('tapping it opens the editor in a sheet, and does NOT untick the food', !!cq('macro-editor') && cd.querySelector('[role=dialog]') && /Oats · 100 g/.test(cd.querySelector('[role=dialog]').textContent) && /line-through/.test(row().innerHTML) === onBefore);
+  await typeIn(C, cq('macro-in-protein'), '24');
+  await typeIn(C, cq('macro-in-carbs'), '55');
+  await typeIn(C, cq('macro-in-fat'), '7.8');
+  ck('typing inside the sheet does not untick the food either', /line-through/.test(row().innerHTML) === onBefore);
+  ck('calories: 386 per 100 g (4×24 + 4×55 + 9×7.8)', /386 kcal per 100 g/.test(cq('macro-kcal').textContent), cq('macro-kcal').textContent);
+  cq('macro-save').click(); await tick(1200);   // the sheet's exit animation
+  const cput = C.w.__posts.find(p => p.url === '/member-foods');
+  ck('saved as the member\'s label for "Oats", linked to food 77, fibre kept', !!cput && cput.body.name === 'Oats' && cput.body.food_id === 77 && cput.body.per_100g.protein === 24 && cput.body.per_100g.fiber === 10.1, cput?.body);
+  ck('the row now reads 386 kcal · P 24 · C 55 · F 7.8 and "Your label · edit"; sheet closed',
+     /386 kcal/.test(row().textContent) && /P 24 · C 55 · F 7\.8/.test(row().textContent) && cq('chat-edit-macros').textContent === 'Your label · edit' && !cq('macro-editor'), row()?.textContent);
+  ck('the food is still ticked to log', /line-through/.test(row().innerHTML) === onBefore && !/line-through/.test(row().innerHTML));
+  const applyBtn = [...cd.querySelectorAll('button')].find(b => /^Apply 1 item/.test(b.textContent.trim()));
+  ck('Apply offers the one food', !!applyBtn);
+  applyBtn?.click(); await tick(400);
+  const daySave = C.w.__posts.filter(p => /^\/logs\/\d{4}-\d{2}-\d{2}$/.test(p.url)).pop();
+  const logged = (daySave?.body?.food_items || []).at(-1);
+  ck('applied: the day saved to the server has Oats with 24 g protein per 100 g, 386 kcal, marked as the member\'s label',
+     logged?.name === 'Oats' && logged.per_100g.protein === 24 && logged.per_100g.calories === 386 && logged.label === true && logged.food_id === 77, logged);
+  ck('after applying there is no edit link on the row (the entry is in the log; edit it there)', !cq('chat-edit-macros'));
+
+  } catch (e) { ck('section C ran to the end', false, e.message); }
+  try {
+  // ── D. The coach sees the labels ─────────────────────────────────────────
+  const coachApi = stub('api-36-coach.js', `
+    const get = async (url) => ({ data: /member-foods\\/member\\/7$/.test(url) ? [
+      { id: 1, name: 'Oats', per_100g: { calories: 386, protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8 }, updated_at: '2026-10-10T08:00:00Z' }] : [] });
+    export default { get, post: get, put: get, patch: get, delete: get };`);
+  const coach = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import MLC from './components/coach/MemberLabelsCard.jsx';
+    import DayDetail from './components/coach/DayDetail.jsx';
+    const log = { log_date: '2026-10-10', food_items: [{ id: 1, name: 'Oats', grams: 50, meal: 'Breakfast', label: true, per_100g: { calories: 386, protein: 24, total_carbs: 55, fat: 7.8 } },
+      { id: 2, name: 'Banana', grams: 100, meal: 'Breakfast', per_100g: { calories: 89, protein: 1.1, total_carbs: 23, fat: 0.3 } }], activities: {}, acv: {}, supplements: {} };
+    createRoot(document.getElementById('root')).render(<div><MLC memberId={7} memberName="Asha Rao" /><MLC memberId={8} memberName="Ravi" />
+      <DayDetail activeLog={log} activeDate="2026-10-10" memberId={7} workoutTick={0} data={{ profile: { meal_slots: ['Breakfast'] } }} /></div>);`, coachApi);
+  const D = run(coach); await tick(500);
+  const dd = D.w.document;
+  const cards = [...dd.querySelectorAll('[data-testid="member-labels"]')];
+  ck('coach: "Asha\'s own food labels" lists Oats — P 24 · C 55 · F 7.8 g per 100 g, 386 kcal, the date',
+     D.errors.length === 0 && /Asha's own food labels/.test(cards[0].textContent) && /per 100 g · P 24 · C 55 · F 7\.8 g/.test(cards[0].textContent) && /386/.test(cards[0].textContent) && /10 Oct/.test(cards[0].textContent), [D.errors.join('|'), cards[0]?.textContent]);
+  ck('coach: a member with none gets a sentence saying what will appear', /None yet\. When Ravi types the protein, carbs and fat from a pack/.test(cards[1].textContent), cards[1]?.textContent);
+  ck('coach: in the day\'s full log, the label food is marked "member\'s own label" (and only that one)', dd.querySelectorAll('[data-testid="coach-label-tag"]').length === 1, dd.querySelectorAll('[data-testid="coach-label-tag"]').length);
+  ck('the card is on the coach\'s Nutrition tab', /\{tab === 'nutrition' && \(<>[^\n]*\n\s*<Card><MemberLabelsCard memberId=\{parseInt\(memberId\)\}/.test(srcOf('pages/Monitor.jsx')));
+  } catch (e) { ck('section D ran to the end', false, e.message); }
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -3591,6 +3812,7 @@ async function overflowTest() {
     await reviewFixesTest();
     await phase8cTest();
     await honestStatesTest();
+    await macrosEatenTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

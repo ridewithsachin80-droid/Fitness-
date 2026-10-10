@@ -308,6 +308,48 @@ console.log('\n[7f] recovery');
 }
 
 // ── 8. The page and Profile import from lib/day — no private copies left ────
+console.log('\n[7g] a member\'s own label: protein, carbs, fat → calories (10 Oct 2026)');
+{
+  const { kcalFromMacros, labelFromEntry, withLabel, macroLine, carbsOf, KCAL_PER_GRAM } = day;
+  ck('4 kcal per g protein and carbs, 9 per g fat', KCAL_PER_GRAM.protein === 4 && KCAL_PER_GRAM.carbs === 4 && KCAL_PER_GRAM.fat === 9);
+  ck('protein oats 24 / 55 / 7.8 → 386 kcal', kcalFromMacros({ protein: 24, carbs: 55, fat: 7.8 }) === 386, kcalFromMacros({ protein: 24, carbs: 55, fat: 7.8 }));
+  ck('typed text and blanks are read as numbers / zero', kcalFromMacros({ protein: '10', carbs: '', fat: undefined }) === 40);
+  ck('a negative never lowers the calories', kcalFromMacros({ protein: -5, carbs: 10, fat: 0 }) === 40);
+
+  const a = labelFromEntry({ protein: '24', carbs: '55', fat: '7.8' });
+  ck('per 100 g as on the pack: kept as typed, calories worked out', a.ok && eq(a.per100, { protein: 24, carbs: 55, fat: 7.8, calories: 386 }), a);
+  const b = labelFromEntry({ protein: '12', carbs: '27.5', fat: '3.9' }, { mode: 'portion', grams: 50 });
+  ck('for a 50 g portion: scaled to per 100 g (12 g in 50 g → 24 g in 100 g)', b.ok && eq(b.per100, { protein: 24, carbs: 55, fat: 7.8, calories: 386 }), b);
+  const c = labelFromEntry({ protein: '24', carbs: '', fat: '' });
+  ck('blank boxes count as 0', c.ok && c.per100.carbs === 0 && c.per100.fat === 0 && c.per100.calories === 96, c);
+  ck('nothing typed → asks for at least one', /at least one/.test(labelFromEntry({ protein: '', carbs: '', fat: '' }).error));
+  ck('a letter → "Numbers only"', /Numbers only/.test(labelFromEntry({ protein: '2x', carbs: '1', fat: '1' }).error));
+  ck('a negative → "Numbers only — 0 or more"', /0 or more/.test(labelFromEntry({ protein: '-1', carbs: '1', fat: '1' }).error));
+  ck('more than 100 g of macros per 100 g → refused, pointing at the pack', /more than 100 g in 100 g/.test(labelFromEntry({ protein: 60, carbs: 40, fat: 1 }).error));
+  ck('exactly 100 g of fat (ghee) is fine: 900 kcal', labelFromEntry({ protein: 0, carbs: 0, fat: 100 }).per100?.calories === 900);
+  ck('portion mode: 30 g of macros in a 20 g portion → refused, in portion words',
+     /more than 20 g of protein, carbs and fat in a 20 g portion/.test(labelFromEntry({ protein: 10, carbs: 10, fat: 10 }, { mode: 'portion', grams: 20 }).error));
+  ck('portion mode with no grams → asks for the grams first', /grams first/.test(labelFromEntry({ protein: 1 }, { mode: 'portion', grams: 0 }).error));
+  ck('per-100 g rounding to one decimal (10 g in 30 g → 33.3)', labelFromEntry({ protein: 10 }, { mode: 'portion', grams: 30 }).per100?.protein === 33.3);
+
+  const plain = { calories: 374, protein: 13.2, total_carbs: 67.7, net_carbs: 57.6, fat: 7.6, fiber: 10.1, iron: 3.8 };
+  const w = withLabel(plain, a.per100);
+  ck('withLabel: the four numbers replaced; carbs written to net and total alike', w.calories === 386 && w.protein === 24 && w.net_carbs === 55 && w.total_carbs === 55 && w.fat === 7.8, w);
+  ck('withLabel: fibre and iron kept from the food it replaces', w.fiber === 10.1 && w.iron === 3.8);
+  ck('withLabel: the original object is not changed', plain.protein === 13.2);
+  ck('withLabel on a food with no data at all', eq(withLabel(null, a.per100), { protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8, calories: 386 }));
+  ck('the day totals use the label: 50 g → 193 kcal, 12 g protein', (() => { const t = day.calcFoodMacros([{ name: 'oats', grams: 50, per_100g: w }]); return t.kcal === 193 && near(t.pro, 12) && near(t.carb, 27.5); })());
+  ck('carbsOf: net first, then total, then 0', carbsOf({ net_carbs: 5, total_carbs: 9 }) === 5 && carbsOf({ total_carbs: 9 }) === 9 && carbsOf(null) === 0);
+  ck('macroLine: whole grams', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }) === 'P 18 g · C 60 g · F 9 g', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }));
+  const L = importClient('utils/logSync.js');
+  const body = L.mapToServer({ food: [{ id: 9, name: 'Oats', grams: 50, meal: 'Breakfast', food_id: 4, per_100g: w, label: true }, { id: 10, name: 'Tea', grams: 100 }] }, null);
+  ck('the day save keeps the label mark and the edited numbers (it was dropped before — caught by the UI test)', body.food_items[0].label === true && body.food_items[0].per_100g.protein === 24 && !('label' in body.food_items[1]), body.food_items);
+  const base = L.baseOf({ food_items: [{ id: 9, grams: 50, meal: 'Breakfast', per_100g: w }] });
+  ck('the day as loaded records each item\'s macros, so an edit survives a merge', base.food_macros['9'] === '386:24:55:7.8' && L.EMPTY_BASE.food_macros && Object.keys(L.EMPTY_BASE.food_macros).length === 0, base.food_macros);
+  const server = require('fs').readFileSync(require('path').join(__dirname, '../services/memberFoods.js'), 'utf8');
+  ck('the server uses the same 4/4/9', /protein: 4, carbs: 4, fat: 9/.test(server));
+}
+
 console.log('\n[8] no mirrored copies');
 {
   const fs = require('fs'), path = require('path');

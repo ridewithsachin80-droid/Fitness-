@@ -23,6 +23,7 @@ import TrainingSummary from '../components/TrainingSummary';
 import MetabolicInsight from '../components/MetabolicInsight';
 import DietPlanStudio from '../components/coach/DietPlanStudio';
 import SleepTargetCard from '../components/coach/SleepTargetCard';
+import MemberLabelsCard from '../components/coach/MemberLabelsCard';
 import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
 import LabResults from '../components/LabResults';
@@ -964,6 +965,9 @@ export default function Coach() {
             <MacroLab memberId={parseInt(memberId)} onChanged={() => load({ quiet: true })} />
           </div>
         </Card>
+        </>)}
+        {tab === 'nutrition' && (<>   {/* The member's own food labels (10 Oct 2026) */}
+        <Card><MemberLabelsCard memberId={parseInt(memberId)} memberName={data?.profile?.name || ''} /></Card>
         </>)}
 
         {/* Training summary — volume, cardio and calories the member logged.

@@ -39,6 +39,7 @@ export { useAIChat };
 import DaySummary from './DaySummary';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
 import { rollbackCard } from '../utils/chatCard';
+import ChatFoodMacros, { foodWithLabel } from './chat/ChatFoodMacros';
 
 // ── Speech recognition ───────────────────────────────────────────────────────
 const SpeechRecognition =
@@ -472,6 +473,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     }));
   }, [patchParsed]);
 
+  // The member's own macros for a preview food (10 Oct 2026, chat/ChatFoodMacros).
+  const setMacros = (mi, idx, per) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => (i === idx ? foodWithLabel(f, per) : f)) }));
   const toggleListItem = (mi, key, idx) =>
     patchParsed(mi, p => ({
       ...p,
@@ -692,6 +695,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                   : defaultMealSlot({ mealSlots, mealPlans, food: cur.food || [] }),
         food_id:  f.food_id || null,
         per_100g: f.per_100g && (f.per_100g.calories || 0) > 0 ? f.per_100g : null,
+        ...(f.label ? { label: true } : {}),
       }));
       newLog.food = [...(newLog.food || cur.food || []), ...newItems];
       updateLog('food', newLog.food);
@@ -1174,12 +1178,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                                       )}
                                     </div>
                                   </div>
-                                  <div className="text-right flex-shrink-0">
-                                    <p className="text-body-sm font-bold text-orange-400">{f.macros?.cal ?? 0} kcal</p>
-                                    <p className="text-eyebrow text-mid">
-                                      P {f.macros?.pro ?? 0} · C {f.macros?.carb ?? 0} · F {f.macros?.fat ?? 0}
-                                    </p>
-                                  </div>
+                                  <ChatFoodMacros f={f} disabled={m.applied} onSave={per => setMacros(mi, fi, per)} />
                                 </div>
                               </button>
                             ))}

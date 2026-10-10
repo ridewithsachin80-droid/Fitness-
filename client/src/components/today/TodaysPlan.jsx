@@ -2,6 +2,7 @@ import { Icon, Eyebrow } from '../primitives';
 import { haptic } from '../../store/settingsStore';
 import { plural } from '../../constants';
 import { AUTO_TICK_IDS } from '../../lib/day';
+import { MacroCells } from './EatenMacros';
 
 /**
  * TodaysPlan — Move · Eat · Recover. One section, three rows, three answers
@@ -55,7 +56,7 @@ function Tap({ onPress, testId, children, className = '' }) {
 
 export default function TodaysPlan({ m, onOpen }) {
   const { log, protocol, coachPlan, coachRows, workoutSummary, workoutKcal, kcalIn, kcalTarget,
-          proteinIn, proteinTarget, balance, micro, sleepText, sleepMins, terms,
+          eaten, macroTargets, balance, micro, sleepText, sleepMins, terms,
           activeActivities, activeACV, activeSupplements, protocolDone, protocolTotal } = m;
 
   // ── Move ────────────────────────────────────────────────────────────────
@@ -86,7 +87,6 @@ export default function TodaysPlan({ m, onOpen }) {
     <span className="tabular-nums">
       <span className="font-display font-semibold text-base">{kcalIn.toLocaleString('en-IN')}</span>
       {kcalTarget && <span className="text-lo"> / {kcalTarget.toLocaleString('en-IN')}</span>} <span className="text-lo">{terms.kcal}</span>
-      {proteinTarget && (<><span className="text-ghost"> · </span><span className="font-display font-semibold text-base">{proteinIn}</span><span className="text-lo"> / {proteinTarget} g protein</span></>)}
     </span>
   );
   const eatAction = pendingMeals.length ? 'View meal plan' : 'Log food';
@@ -110,6 +110,8 @@ export default function TodaysPlan({ m, onOpen }) {
 
       <Row n="2" icon="food" title="Eat" state={eatState} detail={eatDetail} action={eatAction}
         onAction={() => onOpen('food')} testId="plan-eat">
+        {/* Protein, carbs and fat eaten — shown with or without a plan (10 Oct 2026). */}
+        <div className="mt-2"><MacroCells eaten={eaten} targets={macroTargets} testId="plan-macros" /></div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
           {pendingMeals.length > 0 && (
             <Tap onPress={() => onOpen('food')} testId="plan-meals">
