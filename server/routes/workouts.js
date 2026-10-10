@@ -154,7 +154,7 @@ router.get('/', async (req, res) => {
 
   try {
     const sessionRes = await pool.query(
-      `SELECT id, session_date, duration_min, notes, cardio
+      `SELECT id, session_date, duration_min, notes, cardio, pending_exercises
        FROM workout_sessions
        WHERE patient_id = $1 AND session_date = $2
        ORDER BY id DESC LIMIT 1`,
@@ -188,6 +188,22 @@ router.get('/', async (req, res) => {
         set_number: row.set_number, reps: row.reps, weight_kg: parseFloat(row.weight_kg),
       });
     }
+
+    // Exercises the member had on the list with no set done yet (fix, 10 Oct
+    // 2026, WKT-012): a program day pulled in and not started used to vanish
+    // on reopening, because only completed sets are stored.
+    const pending = (Array.isArray(session.pending_exercises) ? session.pending_exercises : [])
+      .filter(p => p && p.exercise_id && !byExercise.has(Number(p.exercise_id)));
+    if (pending.length) {
+      const { rows: named } = await pool.query(
+        `SELECT id, name, muscle_group FROM exercises WHERE id = ANY($1::int[])`, [pending.map(p => Number(p.exercise_id))]);
+      const byId = new Map(named.map(r => [r.id, r]));
+      for (const p of pending) {
+        const ex = byId.get(Number(p.exercise_id));
+        if (ex) byExercise.set(ex.id, { exercise_id: ex.id, exercise_name: ex.name, muscle_group: ex.muscle_group, sets: [], ...(p.from_program ? { fromProgram: true } : {}) });
+      }
+    }
+    delete session.pending_exercises;
 
     res.json({ session, exercises: [...byExercise.values()], cardio: session.cardio || [] });
   } catch (err) {
@@ -231,15 +247,31 @@ router.post('/', async (req, res) => {
     // constraint, so two concurrent saves for the same day (e.g. a network
     // retry firing twice) can't create duplicate session rows the way a
     // separate SELECT-then-INSERT-or-UPDATE could.
+    // notes: a save that does not send them keeps the ones stored (fix, 10
+    // Oct 2026, WKT-011). The workout sheet never sent notes, so every set it
+    // saved erased the session notes the AI chat had written. Sending
+    // notes: null or '' still clears them on purpose.
+    const keepNotes = notes === undefined;
+    // Exercises on the list with no completed set, kept so the list survives
+    // reopening (WKT-012). In the order the member had them.
+    const pendingIds = [];
+    for (const ex of (Array.isArray(exercises) ? exercises : [])) {
+      const id = parseInt(ex && ex.exercise_id);
+      if (!id || pendingIds.some(p => p.exercise_id === id)) continue;
+      const done = (Array.isArray(ex.sets) ? ex.sets : []).some(st => parseInt(st && st.reps) > 0);
+      if (!done) pendingIds.push({ exercise_id: id, ...(ex.fromProgram ? { from_program: true } : {}) });
+    }
     const upserted = await client.query(
-      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes, cardio)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes, cardio, pending_exercises)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (patient_id, session_date)
        DO UPDATE SET duration_min = EXCLUDED.duration_min,
-                     notes        = EXCLUDED.notes,
-                     cardio       = EXCLUDED.cardio
+                     notes        = CASE WHEN $7::boolean THEN workout_sessions.notes ELSE EXCLUDED.notes END,
+                     cardio       = EXCLUDED.cardio,
+                     pending_exercises = EXCLUDED.pending_exercises
        RETURNING id`,
-      [patientId, date, duration_min || null, notes || null, JSON.stringify(cleanCardio)]
+      [patientId, date, duration_min || null, notes || null, JSON.stringify(cleanCardio),
+       JSON.stringify(pendingIds.slice(0, 40)), keepNotes]
     );
     const sessionId = upserted.rows[0].id;
 

@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { haptic } from '../store/settingsStore';
 import useHealthConnect, { healthConnectSupported } from '../hooks/useHealthConnect';
 import useBluetoothTracker from '../hooks/useBluetoothTracker';
-import { getTrackerStatus, syncOAuthProvider, disconnectTracker, getOAuthUrl } from '../api/trackers';
+import { getTrackerStatus, syncOAuthProvider, disconnectTracker, getOAuthUrl, renewSessionCookie } from '../api/trackers';
 
 /* ─── Tracker catalogue ────────────────────────────────────────────────────── */
 const TRACKERS = [
@@ -292,7 +292,10 @@ export default function DeviceConnect() {
         showToast(`${tracker.name} integration isn't set up yet — ask your admin to enable it.`, 'error');
         return;
       }
-      // Redirect to OAuth flow (fitbit / whoop / polar)
+      // Redirect to OAuth flow (fitbit / whoop / polar). Renew the session
+      // cookie first — the redirect is signed in by it alone (UI-012).
+      try { await renewSessionCookie(); }
+      catch { showToast('Your sign-in has run out — please sign in again, then connect.', 'error'); return; }
       window.location.href = getOAuthUrl(id);
       return;
     }

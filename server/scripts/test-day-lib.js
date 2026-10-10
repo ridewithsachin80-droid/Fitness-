@@ -341,6 +341,13 @@ console.log('\n[7g] a member\'s own label: protein, carbs, fat → calories (10 
   ck('the day totals use the label: 50 g → 193 kcal, 12 g protein', (() => { const t = day.calcFoodMacros([{ name: 'oats', grams: 50, per_100g: w }]); return t.kcal === 193 && near(t.pro, 12) && near(t.carb, 27.5); })());
   ck('carbsOf: net first, then total, then 0', carbsOf({ net_carbs: 5, total_carbs: 9 }) === 5 && carbsOf({ total_carbs: 9 }) === 9 && carbsOf(null) === 0);
   ck('macroLine: whole grams', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }) === 'P 18 g · C 60 g · F 9 g', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }));
+  const WS = importClient('utils/workoutSession.js');
+  ck('WKT-012: only exercises with a done set count as logged (a not-started program day is not "Logged · 3 exercises")',
+     WS.doneExercises([{ exercise_id: 1, sets: [] }, { exercise_id: 2, sets: [{ reps: '', weight_kg: '' }] }, { exercise_id: 3, sets: [{ reps: 8, weight_kg: 40 }] }]).map(e => e.exercise_id).join() === '3'
+     && WS.doneExercises(null).length === 0);
+  const todaySrc = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/hooks/useTodayModel.js'), 'utf8');
+  const viewerSrc = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/components/WorkoutSessionViewer.jsx'), 'utf8');
+  ck('…and Today\'s Move row and the coach\'s session view use it', /count: doneExercises\(data\?\.exercises\)\.length/.test(todaySrc) && /exercises: doneExercises\(data\.exercises\)/.test(viewerSrc));
   const L = importClient('utils/logSync.js');
   const body = L.mapToServer({ food: [{ id: 9, name: 'Oats', grams: 50, meal: 'Breakfast', food_id: 4, per_100g: w, label: true }, { id: 10, name: 'Tea', grams: 100 }] }, null);
   ck('the day save keeps the label mark and the edited numbers (it was dropped before — caught by the UI test)', body.food_items[0].label === true && body.food_items[0].per_100g.protein === 24 && !('label' in body.food_items[1]), body.food_items);

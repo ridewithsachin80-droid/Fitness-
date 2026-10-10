@@ -86,3 +86,13 @@ export function switchCounts(session = [], day) {
     keptWithData: kept.filter(ex => ex.fromProgram && !dayIds.has(ex.exercise_id)).length,
   };
 }
+
+/**
+ * Exercises with at least one completed set. Since 10 Oct 2026 the day's
+ * workout also lists exercises not started yet (a program day pulled in), so
+ * anything that COUNTS what was done — Today's "Logged · N exercises", the
+ * coach's session view — must count these, not the whole list.
+ */
+export function doneExercises(exercises = []) {
+  return (Array.isArray(exercises) ? exercises : []).filter(ex => (ex?.sets || []).some(s => Number(s?.reps) > 0));
+}

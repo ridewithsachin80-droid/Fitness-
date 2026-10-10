@@ -11,6 +11,7 @@
  */
 import { useState, useEffect } from 'react';
 import { getWorkout } from '../api/workouts';
+import { doneExercises } from '../utils/workoutSession';
 
 export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }) {
   const [data, setData]       = useState(null);
@@ -20,7 +21,8 @@ export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }
     let cancelled = false;
     setLoading(true);
     getWorkout(date, memberId)
-      .then(({ data }) => !cancelled && setData(data))
+      // Only what was done: exercises not started yet are on the member's list, not the coach's record (WKT-012).
+      .then(({ data }) => !cancelled && setData(data ? { ...data, exercises: doneExercises(data.exercises) } : data))
       .catch(() => !cancelled && setData(null))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };

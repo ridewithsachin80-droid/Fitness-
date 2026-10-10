@@ -259,6 +259,27 @@ const MON = '2026-09-07', WED = '2026-09-09', SUN = '2026-09-13';
     ck('a FAILED send still counts as today\'s message — otherwise a member without a push subscription is retried forever',
        afterFailed === before, { before, afterFailed });
 
+    // MSG-003 (10 Oct 2026): the member's WhatsApp switch. Stub the WhatsApp
+    // sender to record who it was called for, as it would be once the
+    // WhatsApp keys are set.
+    console.log('\nWhatsApp switch (MSG-003)');
+    {
+      const M = require('../services/messaging');
+      const real = M.sendWhatsApp, waTo = [];
+      M.sendWhatsApp = async (phone) => { waTo.push(phone); return { ok: true }; };
+      try {
+        const on  = await mk('Ravi On',  '9000000081');
+        const off = await mk('Uma Off',  '9000000082');
+        await pool.query(`INSERT INTO patient_profiles (user_id, notify_whatsapp) VALUES ($1, false)
+                          ON CONFLICT (user_id) DO UPDATE SET notify_whatsapp = false`, [off]);
+        await D.sendMorningNudges(today);
+        ck('a member with WhatsApp on gets it on WhatsApp', waTo.includes('9000000081'), waTo);
+        ck('a member who turned WhatsApp OFF is never sent a WhatsApp', !waTo.includes('9000000082'), waTo);
+        const offRow = (await pool.query(`SELECT * FROM notifications_log WHERE user_id=$1 AND type='morning_nudge'`, [off])).rows;
+        ck('…they still get the morning message, tried by push (recorded)', offRow.length === 1, offRow);
+      } finally { M.sendWhatsApp = real; }
+    }
+
     // A member with no data at all must not crash the loop, and must not be
     // sent an empty greeting.
     const c = await mk('Bujju S', '9000000013');

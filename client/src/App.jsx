@@ -139,8 +139,12 @@ export default function App() {
         if (cancelled) return;
         setServerOnboarded(data.onboarding_done === true);
         // Mirror the member's saved mode so font size and terminology follow
-        // them onto this device.
-        if (data.onboarding_done && data.age_mode) {
+        // them onto a NEW device — only when this device has not been set up.
+        // It ran on every launch and reset text size, nutrition display, age
+        // group and avatar to the setup answers, undoing the member's own
+        // choices in Settings (fix, 10 Oct 2026, SET-006). Those choices live
+        // on the device, so the device keeps them.
+        if (data.onboarding_done && data.age_mode && !useSettingsStore.getState().onboardingDone) {
           useSettingsStore.getState().finishOnboarding(data.age_mode);
           if (Number.isInteger(data.avatar_idx)) {
             useSettingsStore.getState().setAvatarIdx(data.avatar_idx);

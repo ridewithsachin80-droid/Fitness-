@@ -38,7 +38,7 @@ import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CH
 export { useAIChat };
 import DaySummary from './DaySummary';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
-import { rollbackCard } from '../utils/chatCard';
+import { rollbackCard, logTarget } from '../utils/chatCard';
 import ChatFoodMacros, { foodWithLabel } from './chat/ChatFoodMacros';
 
 // ── Speech recognition ───────────────────────────────────────────────────────
@@ -59,6 +59,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // Where food goes when the member does not say which meal: shown on the
   // preview, and used on apply, so what they see is what is logged.
   const todayFood = useLogStore(s => s.log?.food);
+  const viewDate = useLogStore(s => s.date);   // Apply writes to the day on screen; the button says which
   const autoSlot = defaultMealSlot({ mealSlots, mealPlans, food: todayFood || [] });
 
   // Conversation state comes from the store (see useAIChat above) so it
@@ -516,7 +517,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       const prevSession = existing?.session || null;
       const prevExercises = (existing?.exercises || []).map(ex => ({
         exercise_id: ex.exercise_id,
-        sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })),
+        sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })), ...(ex.fromProgram ? { fromProgram: true } : {}),
       }));
 
       // Snapshot for Undo
@@ -628,6 +629,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       supplements: cur.supplements, water: cur.water, sleep: cur.sleep,
       food: cur.food,
     };
+    undoRef.owner = mi; workoutUndoRef.current = null;   // Undo belongs to THIS card only (AIC-011, 10 Oct)
 
     const newLog = { ...cur };
 
@@ -774,6 +776,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     setMessages(prev => {
       const next = [...prev];
       next[mi] = { ...next[mi], applied: true, workoutSaveFailed: workoutsOn.length > 0 && !workoutResult.ok, pending: computePending(newLog) };
+      next.forEach((x, i) => { if (i !== mi && x.applied) next[i] = { ...x, superseded: true }; });   // older cards lose Undo/Edit
       return next;
     });
     useAIChat.getState().markApplied();
@@ -785,7 +788,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // card again, editable, so the member can fix a value and re-apply.
   const rollback = useCallback((mi, { reopen }) => {
     const snap = undoRef.current;
-    if (!snap) return;
+    if (!snap || undoRef.owner !== mi) return;
     const { updateLog, saveLog } = useLogStore.getState();
     Object.entries(snap).forEach(([field, val]) => updateLog(field, val));
     undoRef.current = null;
@@ -1228,7 +1231,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                             <p className="text-eyebrow text-lo px-1">
                               {m.parsed.workouts.some(w => w.on && w.sets?.length)
                                 ? 'Sets and reps go straight into your Workout log.'
-                                : "Saved to today's session · add exact sets & reps in the Workout section anytime."}
+                                : `Saved to ${logTarget(viewDate, today(), 'session')} · add exact sets & reps in the Workout section anytime.`}
                             </p>
                           </div>
                         </div>
@@ -1245,7 +1248,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                         <button onClick={() => applyAll(mi)}
                           style={{ minHeight: 48 }}
                           className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
-                          Apply {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
+                          Apply {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to {logTarget(viewDate, today())}
                         </button>
                       )}
 
@@ -1257,7 +1260,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                             <p className={`text-body-sm font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-gold-light'}`}>
                               {m.workoutSaveFailed ? '⚠ Applied — workout not saved' : '✓ Applied & saved'}
                             </p>
-                            <div className="flex items-center gap-3">
+                            {!m.superseded && <div className="flex items-center gap-3">
                               <button onClick={() => editApplied(mi)}
                                 style={{ minHeight: 32 }}
                                 className="text-caption font-semibold text-gold hover:text-gold-light transition-colors">
@@ -1268,7 +1271,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                                 className="text-caption font-semibold text-mid hover:text-white underline underline-offset-2 transition-colors">
                                 Undo
                               </button>
-                            </div>
+                            </div>}
                           </div>
                           {m.workoutSaveFailed && (
                             <p className="text-caption text-amber-300 leading-relaxed">
@@ -1283,7 +1286,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                             <p className="text-caption text-mid">Everything's logged for today — great job! 🎉</p>
                           )}
                           <p className="text-eyebrow text-lo leading-relaxed">
-                            Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.
+                            {m.superseded ? 'You logged more after this, so Undo is gone here. To change it, just tell me (e.g. "remove the dal").' : 'Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.'}
                           </p>
                         </div>
                       )}

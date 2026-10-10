@@ -1094,3 +1094,8 @@ CREATE TABLE IF NOT EXISTS member_foods (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (patient_id, name_key)
 );
+
+-- Exercises on a day's workout list with no completed set yet, so a program
+-- day pulled in and not started is still listed on reopening (10 Oct 2026).
+-- Only completed sets live in session_sets; this holds the rest, in order.
+ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS pending_exercises JSONB NOT NULL DEFAULT '[]';

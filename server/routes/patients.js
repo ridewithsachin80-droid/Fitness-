@@ -1516,11 +1516,8 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
       return res.status(400).json({ error: 'test_date, test_name, and value are required' });
     }
 
-    let status = 'normal';
-    if (ref_min !== undefined && ref_max !== undefined) {
-      if (parseFloat(value) < parseFloat(ref_min))       status = 'low';
-      else if (parseFloat(value) > parseFloat(ref_max))  status = 'high';
-    }
+    // Same rule as the member's own entry: either limit alone counts (LAB-004).
+    const status = classify(value, ref_min, ref_max);
 
     // Same value for the same test and date within 30 seconds is a double tap:
     // return the row that is already there. Two identical HbA1c rows otherwise
@@ -1538,7 +1535,7 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
            (patient_id, test_date, test_name, value, unit, ref_min, ref_max, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [req.params.id, test_date, test_name, value, unit, ref_min, ref_max, status]);
+        [req.params.id, test_date, test_name, value, unit, finiteOrNull(ref_min), finiteOrNull(ref_max), status]);
       return { row: ins.rows[0], duplicate: false };
     });
 
@@ -1674,11 +1671,14 @@ function finiteOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// One printed limit is enough (fix, 10 Oct 2026, LAB-004): "Ref max 200"
+// with no minimum used to save a value of 250 as normal.
 function classify(value, refMin, refMax) {
-  if (refMin == null || refMax == null) return 'normal';
   const v = parseFloat(value);
-  if (v < parseFloat(refMin)) return 'low';
-  if (v > parseFloat(refMax)) return 'high';
+  const lo = finiteOrNull(refMin), hi = finiteOrNull(refMax);
+  if (!Number.isFinite(v)) return 'normal';
+  if (lo != null && v < lo) return 'low';
+  if (hi != null && v > hi) return 'high';
   return 'normal';
 }
 
@@ -2324,4 +2324,5 @@ router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), requirePatien
 });
 
 module.exports = router;
+module.exports.classifyLab = classify;   // for tests (LAB-004)
 module.exports.sendMemberNote = sendMemberNote;

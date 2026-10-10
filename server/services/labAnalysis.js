@@ -125,11 +125,22 @@ function direction(name, from, to) {
   return delta > 0 ? 'rose' : 'fell';
 }
 
+// One limit is enough (fix, 10 Oct 2026, LAB-004). Reports print many ranges
+// one-sided — cholesterol "< 200", HDL "> 40" — and a value over a printed
+// maximum was never flagged because both limits were required.
 function rangeState(v, min, max) {
-  if (min == null || max == null) return null;
-  if (v < min) return 'low';
-  if (v > max) return 'high';
+  if (min == null && max == null) return null;
+  if (min != null && v < min) return 'low';
+  if (max != null && v > max) return 'high';
   return 'normal';
+}
+
+/** The printed range in words: "13–17", "≤ 200", "≥ 40", or null. */
+function refText(min, max) {
+  if (min != null && max != null) return `${min}–${max}`;
+  if (max != null) return `≤ ${max}`;
+  if (min != null) return `≥ ${min}`;
+  return null;
 }
 
 /**
@@ -160,7 +171,7 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
       flags.push({
         test_name: latest.test_name, value: num(latest.value), unit: latest.unit,
         state, test_date: latest.test_date,
-        ref: latest.ref_min != null ? `${latest.ref_min}–${latest.ref_max}` : null,
+        ref: refText(latest.ref_min, latest.ref_max),
       });
     }
 
@@ -191,7 +202,7 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
       from_state: rangeState(from, prev.ref_min != null ? num(prev.ref_min) : null,
                                    prev.ref_max != null ? num(prev.ref_max) : null),
       to_state: state,
-      ref: latest.ref_min != null ? `${latest.ref_min}–${latest.ref_max}` : null,
+      ref: refText(latest.ref_min, latest.ref_max),
       from_date: prev.test_date,
       to_date: latest.test_date,
       interval_days: gapDays,
@@ -211,4 +222,4 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
   };
 }
 
-module.exports = { analyseLabs, windowContext, MIN_INTERVAL_DAYS };
+module.exports = { analyseLabs, windowContext, MIN_INTERVAL_DAYS, rangeState, refText };

@@ -759,7 +759,7 @@ async function todayTest() {
   ck('Move: the coach\'s program day with exercise count and Start workout', /Push ·/.test(q('plan-move').textContent) && /2 exercises/.test(q('plan-move').textContent) && /Start workout/.test(q('plan-move').textContent), q('plan-move').textContent);
   ck('Eat: 666 / 1,800 kcal, then protein 37 / 120 g, carbs 59 / 150 g, fat 34 / 60 g (10 Oct 2026: all three, not protein alone)', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent)
      && /Protein37 \/ 120 g/.test(q('plan-macros-pro').textContent) && /Carbs59 \/ 150 g/.test(q('plan-macros-carb').textContent) && /Fat34 \/ 60 g/.test(q('plan-macros-fat').textContent), q('plan-eat').textContent);
-  ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /\d of \d meals? logged/.test(q('plan-eat').textContent) && !/meal plans? pending/.test(q('plan-eat').textContent) && /1,373 kcal under target/.test(q('plan-balance').textContent), q('plan-eat').textContent);
+  ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /\d of \d meals? logged/.test(q('plan-eat').textContent) && !/meal plans? pending/.test(q('plan-eat').textContent) && /1,373 kcal below estimated burn/.test(q('plan-balance').textContent), q('plan-eat').textContent);
   ck('Eat: View meal plan is the action while a plan is pending', /View meal plan/.test(q('plan-eat').textContent));
   ck('Eat: nutrients N/31 inline', /\/31 nutrients/.test(q('chip-nutrition').textContent));
   ck('Recover: 1.5 / 3.0 L and 7h 45m inline', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent) && /7h 45m/.test(q('chip-sleep').textContent));
@@ -1375,6 +1375,7 @@ async function onboardingTest() {
   const num = (id) => q(id).querySelector('[data-testid="goal-order"]')?.textContent;
   ck('goals are MULTI-select and numbered in the order tapped (sleep 1, lose 2, energy 3)', num('goal-sleep') === '1' && num('goal-lose') === '2' && num('goal-energy') === '3' && !num('goal-gain'), [num('goal-sleep'), num('goal-lose'), num('goal-energy')]);
   ck('the main goal is called out as the first picked', /Main goal:/.test(q('onb-primary').textContent) && /Sleep better/.test(q('onb-primary').textContent));
+  ck('ONB-005: the hint says what tapping does — unpick, tap again to put it last (it promised "tap to reorder")', /to change the order, tap a goal to unpick it and tap it again — it goes to the end/.test(q('onb-primary').textContent) && !/tap to reorder/.test(q('onb-primary').textContent), q('onb-primary').textContent);
   q('goal-sleep').click(); await tick(50);
   ck('tapping a picked goal removes it and the numbers close up (lose 1, energy 2)', num('goal-lose') === '1' && num('goal-energy') === '2' && !num('goal-sleep') && /Lose weight/.test(q('onb-primary').textContent));
   q('goal-sleep').click(); await tick(50);
@@ -3654,6 +3655,254 @@ async function macrosEatenTest() {
   } catch (e) { ck('section D ran to the end', false, e.message); }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 37. Known fixes (10 Oct 2026) — the "expected to fail" cases of
+//     FitLife-Test-Cases-v2.xlsx whose fix is on a screen
+// ═══════════════════════════════════════════════════════════════════════════
+async function knownFixesTest() {
+  console.log('\n[37] known fixes — past-day saves, chat undo/day, voice routes, workout, labs, plan tab, coach buttons, reminders, devices');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+  const typeIn = (W, el, v, proto = 'HTMLInputElement') => {
+    Object.getOwnPropertyDescriptor(W.w[proto].prototype, 'value').set.call(el, v);
+    el.dispatchEvent(new W.w.Event('input', { bubbles: true }));
+  };
+  const btn = (doc, re) => [...doc.querySelectorAll('button')].find(b => re.test(b.textContent.trim()));
+
+  // ── A. Today: a past day saves; the chat says which day; spoken "open …" works
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter, useNavigate } from 'react-router-dom';
+      import DailyLog from './pages/DailyLog.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      import { useLogStore } from './store/logStore.js';
+      import { useAIChat } from './components/AIChatLog.jsx';
+      import { matchCommand } from './utils/voiceCommands.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+      window.__logStore = useLogStore; window.__aiChat = useAIChat; window.__match = matchCommand;
+      function Nav() { window.__nav = useNavigate(); return null; }
+      createRoot(document.getElementById('root')).render(<MemoryRouter><Nav /><DailyLog /></MemoryRouter>);`, stub('api-37-today.js', TODAY_API_STUB));
+    const A = run(code); await tick(900);
+    const d = A.w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+    const T = A.w.__todayStr, Y = new Date(new Date(T + 'T12:00:00').getTime() - 86400000).toISOString().slice(0, 10);
+    ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
+
+    // VOI-013: spoken navigation goes to pages that exist, and Today opens the sheet even when already on screen
+    ck('"open workout" and "open food" go to /?open=workout and /?open=food (there is no /workout or /food page)',
+       A.w.__match('open workout').route === '/?open=workout' && A.w.__match('open food').route === '/?open=food' && A.w.__match('show progress').route === '/progress');
+    A.w.__nav('/?open=food'); await tick(500);
+    const dlg = () => d.querySelector('[role=dialog]');
+    ck('navigating to /?open=food while Today is on screen opens the food sheet (it was read only once, on first load)', /What did you eat\?/.test(dlg()?.textContent || ''), dlg()?.textContent.slice(0, 60));
+    btn(dlg(), /^Done$/).click(); await tick(500);
+    A.w.__nav('/?open=workout'); await tick(500);
+    ck('…and /?open=workout opens the workout sheet', /Workout/.test(dlg()?.textContent || ''));
+    A.w.document.dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Escape' })); await tick(500);
+
+    // TOD-018 / MAC-025: an edit on yesterday's page is saved to yesterday
+    d.querySelector('[aria-label="Previous day"]').click(); await tick(700);
+    ck('(on yesterday\'s page)', A.w.__logStore.getState().date === Y, A.w.__logStore.getState().date);
+    q('chip-water').click(); await tick(300);
+    d.querySelector('[data-testid="water-add-250"]').click(); await tick(100);
+    btn(dlg(), /^Done$/).click();
+    await tick(4600);
+    const ySave = A.w.__posts.filter(p => p.url === `/logs/${Y}`).pop();
+    ck('adding water on yesterday\'s page is saved to yesterday after the usual 4 seconds (it never was)', !!ySave && ySave.body.water_ml === 250, A.w.__posts.map(p => p.url));
+
+    // AIC-029: the Apply button names the day it writes to
+    A.w.__aiChat.getState().openChat(); await tick(400);
+    const t = d.querySelector('[data-testid="composer-input"]');
+    typeIn(A, t, 'drank 500ml water', 'HTMLTextAreaElement'); await tick(60);
+    t.dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(700);
+    const apply = btn(d, /^Apply \d+ items? to /);
+    ck('on yesterday\'s page the chat button says "Apply 3 items to yesterday\'s log" (it said "today\'s log" and wrote to yesterday)', /to yesterday's log$/.test(apply?.textContent.trim() || ''), apply?.textContent);
+  } catch (e) { ck('section A ran to the end', false, e.message); }
+
+  // ── B. AIC-011: Undo belongs to the card that made the change
+  try {
+    const chatApi = stub('api-37-chat.js', `
+      window.__posts = [];
+      const get = async () => ({ data: {} });
+      const food = (name, kcal) => ({ name, grams: 100, meal: 'Breakfast', per_100g: { calories: kcal }, macros: { cal: kcal } });
+      const post = async (url, body) => { window.__posts.push({ url, body });
+        if (url === '/ai-chat/parse') return { data: { reply: 'Got it.', foods: [/idli/.test(body.message) ? food('Idli', 130) : food('Dosa', 170)], totals: {} } };
+        // The day save answers with the day as saved, as the server does.
+        if (/^\\/logs\\//.test(url)) return { data: { ...body, saved_at: new Date().toISOString() } };
+        return { data: {} }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const chat = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import AIChatLog from './components/AIChatLog.jsx';
+      import { useAIChat } from './store/aiChatStore.js';
+      import { useLogStore } from './store/logStore.js';
+      window.__log = useLogStore;
+      useLogStore.setState(st => ({ log: { ...(st.log || {}), food: [], activities: {}, acv: {}, supplements: {}, water: 0, sleep: {} } }));
+      createRoot(document.getElementById('root')).render(<AIChatLog mealPlans={[]} />);
+      useAIChat.getState().openChat();`, chatApi);
+    const B = run(chat); await tick(500);
+    const bd = B.w.document;
+    const say = async (text) => { const t = bd.querySelector('[data-testid="composer-input"]'); typeIn(B, t, text, 'HTMLTextAreaElement'); await tick(60);
+      t.dispatchEvent(new B.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600); };
+    const foods = () => (B.w.__log.getState().log.food || []).map(f => f.name);
+    await say('2 idli'); btn(bd, /^Apply 1 item/).click(); await tick(400);
+    await say('1 dosa'); btn(bd, /^Apply 1 item/).click(); await tick(400);
+    const undos = [...bd.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Undo');
+    ck('after two applies only the LATEST card offers Undo / Edit', undos.length === 1 && [...bd.querySelectorAll('button')].filter(b => /Edit$/.test(b.textContent.trim())).length === 1, undos.length);
+    ck('the older card says why and what to do instead', /You logged more after this, so Undo is gone here\. To change it, just tell me/.test(bd.body.textContent));
+    ck('(both foods are logged)', foods().join() === 'Idli,Dosa', foods());
+    undos[0].click(); await tick(300);
+    ck('Undo on the latest card removes only its own food (Dosa); Idli stays', foods().join() === 'Idli', foods());
+  } catch (e) { ck('section B ran to the end', false, e.message); }
+
+  // ── C. WKT-011 / WKT-012: the workout sheet sends its notes and remembers program exercises
+  try {
+    const api = stub('api-37-workout.js', `
+      window.__posts = [];
+      const get = async (url) => {
+        if (/^\\/workouts$/.test(url)) return { data: { session: { duration_min: 20, notes: '20 min walk · felt strong' }, exercises: [], cardio: [] } };
+        if (/^\\/programs\\/active/.test(url)) return { data: { program: { id: 1, name: 'Foundation' }, days: [{ day_number: 1, day_label: 'Push', exercises: [{ exercise_id: 7, exercise_name: 'Bench press', target_sets: 3, target_reps_min: 8, target_reps_max: 12 }] }] } };
+        return { data: [] }; };
+      export default { get, post: async (u, b) => { window.__posts.push({ u, b }); return { data: {} }; }, put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import WorkoutLog from './components/WorkoutLog.jsx';
+      import { today } from './constants.js';
+      createRoot(document.getElementById('root')).render(<WorkoutLog date={today()} />);`, api);
+    const C = run(code); await tick(900);
+    btn(C.w.document, /Push$/).click(); await tick(4600);
+    const save = C.w.__posts.filter(p => p.u === '/workouts').pop();
+    ck('after pulling in a program day, the save carries the session notes it loaded (it sent none, which erased them)', save?.b?.notes === '20 min walk · felt strong', save?.b);
+    ck('…and marks the program exercise, so the server keeps it listed until a set is done', save?.b?.exercises?.[0]?.exercise_id === 7 && save.b.exercises[0].fromProgram === true, save?.b?.exercises);
+  } catch (e) { ck('section C ran to the end', false, e.message); }
+
+  // ── D. LAB-005: the arrow follows the number, the colour says good or bad
+  try {
+    const api = stub('api-37-labs.js', `
+      const analysis = { comparisons: [
+        { test_name: 'Vitamin D', unit: 'ng/mL', from: 20, to: 35, direction: 'improved', interval_days: 60, from_date: '2026-07-01', to_date: '2026-09-01' },
+        { test_name: 'LDL', unit: 'mg/dL', from: 150, to: 120, direction: 'improved', interval_days: 60, from_date: '2026-07-01', to_date: '2026-09-01' },
+        { test_name: 'Fasting Glucose', unit: 'mg/dL', from: 95, to: 110, direction: 'worsened', interval_days: 60, from_date: '2026-07-01', to_date: '2026-09-01' },
+      ], out_of_range: [] };
+      const get = async (url) => /lab-analysis$/.test(url) ? { data: analysis } : { data: { labs: [] } };
+      export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import LabResults from './components/LabResults.jsx';
+      createRoot(document.getElementById('root')).render(<MemoryRouter><LabResults /></MemoryRouter>);`, api);
+    const D = run(code); await tick(700);
+    const m = [...D.w.document.querySelectorAll('[data-testid="lab-marker"]')].map(x => x.textContent);
+    ck('vitamin D rising 20 → 35 (good) reads "↑ from 20" (it read "↓")', m.some(x => /Vitamin D/.test(x) && /↑ from 20/.test(x)), m);
+    ck('LDL falling 150 → 120 (good) reads "↓ from 150"; glucose rising (bad) reads "↑ from 95"', m.some(x => /LDL/.test(x) && /↓ from 150/.test(x)) && m.some(x => /Glucose/.test(x) && /↑ from 95/.test(x)), m);
+    const tone = (name) => [...D.w.document.querySelectorAll('[data-testid="lab-marker"]')].find(x => x.textContent.includes(name)).lastElementChild.className;
+    ck('good moves are gold, bad moves amber, whichever way the number went', /gold-light/.test(tone('Vitamin D')) && /gold-light/.test(tone('LDL')) && /amber/.test(tone('Glucose')));
+  } catch (e) { ck('section D ran to the end', false, e.message); }
+
+  // ── E. PRG-007: the link from Progress opens Plan on Nutrition
+  try {
+    const api = stub('api-37-plan.js', `const get = async () => ({ data: { profile: {}, program: null, meal_plan: null } }); export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import Plan from './pages/Plan.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__entry]}><Plan /></MemoryRouter>);`, api);
+    const sel = (W) => [...W.w.document.querySelectorAll('[role=tab]')].find(t => t.getAttribute('aria-selected') === 'true')?.textContent;
+    const E1 = run(code, (win) => { win.__entry = '/plan?tab=nutrition'; }); await tick(600);
+    const E2 = run(code, (win) => { win.__entry = '/plan'; }); await tick(600);
+    const E3 = run(code, (win) => { win.__entry = '/plan?tab=nonsense'; }); await tick(600);
+    ck('/plan?tab=nutrition opens on the Nutrition tab; /plan and an unknown tab open on Today', sel(E1) === 'Nutrition' && sel(E2) === 'Today' && sel(E3) === 'Today', [sel(E1), sel(E2), sel(E3)]);
+    ck('Progress\'s "Your diet plan, PDF and grocery list" links to /plan?tab=nutrition', /navigate\('\/plan\?tab=nutrition'\); \}\} data-testid="progress-to-plan"/.test(srcOf('pages/Progress.jsx')));
+  } catch (e) { ck('section E ran to the end', false, e.message); }
+
+  // ── F. CMP-010 / CMP-011: the coach's Log Weight and program buttons open something
+  try {
+    const api = stub('api-37-coach.js', `
+      import { istDaysAgo } from '${CONSTANTS_JS}';
+      window.__calls = []; window.__posts = [];
+      const T = istDaysAgo(0);
+      const member = { profile: { id: 12, name: 'Daya Kumar', phone: '9000000012', meal_slots: ['Breakfast', 'Lunch', 'Dinner'], macros: { kcal: 1700, pro: 115 }, activities: [], acv: [], supplements: [], conditions: [] },
+        logs: [{ log_date: T, weight_kg: '81.2', food_items: [], water_ml: 0, activities: {}, acv: {}, supplements: {}, sleep: {}, compliance_pct: 0, notes: '' }], labs: [], notes: [] };
+      const get = async (url) => { window.__calls.push(url); if (/\\/members\\/12$/.test(url)) return { data: member }; if (/\\/logs\\/range/.test(url)) return { data: member.logs };
+        if (/\\/workouts/.test(url)) return { data: { exercises: [], cardio: [], session: null, sessions: [] } }; if (/programs\\/active/.test(url)) return { data: { program: null, days: [] } }; if (/templates/.test(url)) return { data: [] }; return { data: {} }; };
+      const post = async (url, body) => { window.__posts.push({ url, body }); return { data: { log: { log_date: body.date, weight_kg: body.weight_kg } } }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter, Routes, Route } from 'react-router-dom';
+      import Monitor from './pages/Monitor.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: 'admin' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/coach/12']}><Routes><Route path="/coach/:memberId" element={<Monitor />} /></Routes></MemoryRouter>);`, api);
+    const F = run(code); await tick(900);
+    const fd = F.w.document;
+    btn(fd, /Log Weight$/).click(); await tick(200);
+    ck('"⚖️ Log Weight" opens the weight form for this member (it did nothing)', /Save Weight/.test(fd.body.textContent) && /Daya Kumar/.test(fd.body.textContent));
+    typeIn(F, fd.querySelector('input[placeholder="e.g. 84.5"]'), '81.2'); await tick(50);
+    btn(fd, /^Save Weight$/).click(); await tick(300);
+    const wp = F.w.__posts.find(p => p.url === '/members/12/weight');
+    ck('saving sends the weight for the member and date', wp && wp.body.weight_kg === 81.2 && /^\d{4}-\d{2}-\d{2}$/.test(wp.body.date), wp);
+    await tick(1200);
+    [...fd.querySelectorAll('[role=tab]')].find(t => t.textContent === 'Training').click(); await tick(400);
+    btn(fd, /^\+ Create$/).click(); await tick(400);
+    ck('Training → "+ Create" opens the program builder (it did nothing)', /Daya Kumar's Program/.test(fd.body.textContent), F.errors.join('|'));
+  } catch (e) { ck('section F ran to the end', false, e.message); }
+
+  // ── G. ADM-017: each reminder editor is titled for its own type
+  try {
+    const api = stub('api-37-rem.js', `const get = async (url) => ({ data: /members|patients/.test(url) ? [] : [] }); const post = async () => ({ data: {} }); export default { get, post, put: post, patch: post, delete: post };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import AdminReminders from './components/AdminReminders.jsx';
+      createRoot(document.getElementById('root')).render(<AdminReminders />);`, api);
+    const G = run(code); await tick(600);
+    const gd = G.w.document;
+    const openFor = async (label) => {
+      const card = [...gd.querySelectorAll('div')].find(x => x.textContent.trim() === label && x.children.length === 0)?.parentElement;
+      card?.querySelector('button')?.click(); await tick(200);
+      const h = gd.querySelector('h3')?.textContent.trim();
+      btn(gd, /^Cancel$/)?.click(); await tick(100);
+      return h;
+    };
+    const wTitle = await openFor('⚖️ Weight'), aTitle = await openFor('🍎 ACV'), waterTitle = await openFor('💧 Water');
+    ck('Weight → "⚖️ Weight Reminders", ACV → "🍎 ACV Reminders", Water unchanged (Weight and ACV both said "🏃 Activity Reminders")',
+       wTitle === '⚖️ Weight Reminders' && aTitle === '🍎 ACV Reminders' && waterTitle === '💧 Water Reminders', [wTitle, aTitle, waterTitle, G.errors.join('|')]);
+  } catch (e) { ck('section G ran to the end', false, e.message); }
+
+  // ── H. UI-012: the session is renewed before leaving for a tracker's sign-in
+  try {
+    const mkApi = (ok) => stub(`api-37-dev-${ok}.js`, `
+      window.__posts = [];
+      const get = async (url) => /trackers\\/status/.test(url) ? { data: { connections: [], available: { fitbit: true, whoop: true, polar: true } } } : { data: {} };
+      const post = async (url, body) => { window.__posts.push(url);
+        if (url === '/auth/refresh') { if (${ok}) return { data: { accessToken: 'new' } }; throw Object.assign(new Error('401'), { response: { status: 401 } }); }
+        return { data: {} }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const mk = async (ok) => run(await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import DeviceConnect from './pages/DeviceConnect.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, accessToken: 'old', isRestoring: false });
+      window.__auth = useAuthStore;
+      createRoot(document.getElementById('root')).render(<MemoryRouter><DeviceConnect /></MemoryRouter>);`, mkApi(ok)));
+    const openCard = (W) => [...W.w.document.querySelectorAll('p')].find(p => p.textContent === 'Fitbit')?.closest('div[style*="cursor: pointer"]')?.click();
+    const H1 = await mk(true); await tick(600); openCard(H1); await tick(100);
+    H1.w.document.querySelector('[data-testid="tracker-connect-fitbit"]').click(); await tick(300);
+    ck('"Connect Fitbit" renews the sign-in first (the redirect is signed in by the cookie alone, which lapses after ~15 min)',
+       H1.w.__posts[0] === '/auth/refresh' && H1.w.__auth.getState().accessToken === 'new', [H1.w.__posts, H1.w.__auth.getState().accessToken]);
+    const H2 = await mk(false); await tick(600); openCard(H2); await tick(100);
+    H2.w.document.querySelector('[data-testid="tracker-connect-fitbit"]').click(); await tick(300);
+    ck('if the sign-in has run out, it says so in words instead of showing {"error":"Token expired"}', /Your sign-in has run out — please sign in again, then connect\./.test(H2.w.document.body.textContent));
+  } catch (e) { ck('section H ran to the end', false, e.message); }
+
+  // ── I. The rest, read from the source
+  ck('UI-014: the Connected Devices tile names what connects (Fitbit, WHOOP and Polar), not Garmin/Apple Watch', />Fitbit, WHOOP and Polar<\/p>/.test(srcOf('pages/Settings.jsx')) && !/HART, Garmin, Apple Watch/.test(srcOf('pages/Settings.jsx')));
+  ck('ADM-022: the admin NO LOG badge uses India\'s date, not UTC', /const today = istToday\(\);/.test(srcOf('pages/AdminDashboard.jsx')) && !/new Date\(\)\.toISOString\(\)\.split\('T'\)\[0\]/.test(srcOf('pages/AdminDashboard.jsx')));
+  ck('ADM-021: food ✏️/🗑 are hidden-until-hover only on devices with a mouse', /\[@media\(hover:hover\)\]:opacity-0 \[@media\(hover:hover\)\]:group-hover:opacity-100/.test(srcOf('pages/AdminFoods.jsx')) && !/"flex gap-1 opacity-0 group-hover/.test(srcOf('pages/AdminFoods.jsx')));
+  ck('SET-006: the server\'s setup answers seed a device only once — Settings choices are not reset on every launch', /if \(data\.onboarding_done && data\.age_mode && !useSettingsStore\.getState\(\)\.onboardingDone\)/.test(srcOf('App.jsx')));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -3813,6 +4062,7 @@ async function overflowTest() {
     await phase8cTest();
     await honestStatesTest();
     await macrosEatenTest();
+    await knownFixesTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

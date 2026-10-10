@@ -195,12 +195,17 @@ export default function WorkoutLog({ date }) {
       saveWorkout({
         date,
         duration_min: durationMin ? parseInt(durationMin) : null,
-        exercises: exercisesInSession.map(ex => ({ exercise_id: ex.exercise_id, sets: ex.sets })),
+        // fromProgram rides along so a program day that is not started yet is
+        // still listed — and still swappable — after reopening (WKT-012).
+        exercises: exercisesInSession.map(ex => ({ exercise_id: ex.exercise_id, sets: ex.sets, ...(ex.fromProgram ? { fromProgram: true } : {}) })),
+        // Sent so a save never erases the session notes (WKT-011). The server
+        // also keeps them when an older app sends none.
+        notes: sessionNotes || null,
         cardio,
       }).catch(() => {});
     }, 4000);
     return () => clearTimeout(saveRef.current);
-  }, [exercisesInSession, durationMin, date, cardio]);
+  }, [exercisesInSession, durationMin, date, cardio, sessionNotes]);
 
   // ── Exercise search ─────────────────────────────────────────────────────────
   const runSearch = useCallback(async (q) => {

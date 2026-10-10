@@ -657,7 +657,7 @@ export default function Progress() {
         )}
 
 
-        <button type="button" onClick={() => { haptic(8); navigate('/plan'); }} data-testid="progress-to-plan"
+        <button type="button" onClick={() => { haptic(8); navigate('/plan?tab=nutrition'); }} data-testid="progress-to-plan"
           className="w-full rounded-2xl border border-white/[0.12] bg-surface px-4 text-left text-sm text-white flex items-center justify-between" style={{ minHeight: 48 }}>
           Your diet plan, PDF and grocery list <Icon name="chevron-right" size={16} className="text-lo" />
         </button>

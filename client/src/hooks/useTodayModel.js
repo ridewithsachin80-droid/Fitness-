@@ -18,6 +18,8 @@
  * `sheet`.
  */
 import { useEffect, useCallback, useState, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { doneExercises } from '../utils/workoutSession';
 import { useLogStore }  from '../store/logStore';
 import { canRefresh } from '../utils/logSync';
 import { useAuthStore } from '../store/authStore';
@@ -245,14 +247,20 @@ export default function useTodayModel() {
   // PWA app shortcuts: long-press icon → /?open=ai or /?open=weight.
   // Handled once on mount, then the param is stripped so a refresh doesn't
   // re-trigger it.
+  //
+  // Read from the ROUTER's location, not once on mount (fix, 10 Oct 2026,
+  // VOI-013): hands-free "open workout" navigates to /?open=workout while
+  // Today is already on screen, and a mount-only read never saw it.
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
-    const open = new URLSearchParams(window.location.search).get('open');
+    const open = new URLSearchParams(location.search).get('open');
     if (!open) return;
     if (open === 'ai') useAIChat.getState().openChat();
     // Sprint 6: the Plan screen deep-links to any sheet (/?open=workout …)
     if (['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition'].includes(open)) setHeroPanel(open);
-    window.history.replaceState({}, '', window.location.pathname);
-  }, []);
+    navigate(location.pathname, { replace: true });
+  }, [location.search]);
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });
   // Bumped whenever the AI applies a day, so WorkoutLog remounts and picks up
   // anything the AI just wrote (otherwise an open sheet shows stale data).
@@ -302,7 +310,8 @@ export default function useTodayModel() {
       .then(({ data }) => {
         if (cancelled) return;
         setWorkoutSummary({
-          count: (data?.exercises || []).length,
+          // Done exercises only: the list can also hold ones not started yet (WKT-012).
+          count: doneExercises(data?.exercises).length,
           duration: data?.session?.duration_min || null,
           // Raw sets + cardio feed the shared calorie model (volume-based for
           // strength, MET × time for cardio)
@@ -418,11 +427,17 @@ export default function useTodayModel() {
     return () => clearTimeout(t);
   }, [chipInfo]);
 
+  // A past day the member is looking at is saved like today (fix, 10 Oct
+  // 2026: edits on yesterday's page were never sent — the guard here was
+  // `date === today()`). What must hold is that the store still shows the day
+  // the edit was made on; flushPendingSave runs before every date change, so
+  // a timer can only find another day here if something skipped it.
+  const stillOn = (d) => useLogStore.getState().date === d;
   const triggerAutoSave = useCallback(() => {
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = setTimeout(async () => {
       autoSaveRef.current = null;
-      if (date === today()) {
+      if (stillOn(date)) {
         try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
       }
     }, 4000);
@@ -439,7 +454,7 @@ export default function useTodayModel() {
     if (!autoSaveRef.current) return;
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = null;
-    if (date === today()) {
+    if (stillOn(date)) {
       try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
     }
   }, [saveLog, date]);
@@ -449,7 +464,7 @@ export default function useTodayModel() {
   // seconds of edits aren't silently lost.
   useEffect(() => {
     const flush = () => {
-      if (autoSaveRef.current && date === today()) {
+      if (autoSaveRef.current && stillOn(date)) {
         clearTimeout(autoSaveRef.current);
         saveLog().catch(() => {});
       }

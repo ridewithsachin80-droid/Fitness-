@@ -1,7 +1,7 @@
 import GrocerySheet from '../components/plan/GrocerySheet';
 import { shareOrDownload } from '../utils/shareFile';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getMyToday } from '../api/logs';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
@@ -76,7 +76,10 @@ export default function Plan() {
   const { user } = useAuthStore();
   const terms = useTerms();
   const mealSlots = useSettingsStore(s => s.mealSlots);
-  const [view, setView] = useState('today');
+  // /plan?tab=nutrition opens a tab directly (fix, 10 Oct 2026, PRG-007):
+  // Progress's "Your diet plan, PDF and grocery list" landed on Today.
+  const [params] = useSearchParams();
+  const [view, setView] = useState(() => (['today', 'week', 'nutrition', 'recovery'].includes(params.get('tab')) ? params.get('tab') : 'today'));
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 

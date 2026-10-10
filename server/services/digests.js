@@ -461,9 +461,15 @@ async function sendMorningNudges(istDate) {
     // This one IS the schedule, chosen deliberately, so it is exempt.
     let ok = false, channel = null, reason = null;
 
-    const wa = await sendWhatsApp(m.phone, 'morning',
-      buildMorningParams({ name: m.name, yesterday: yesterdayFacts, todayDay, scheduled }));
-    if (wa.ok) { ok = true; channel = 'whatsapp'; }
+    // Only to members who leave WhatsApp on (fix, 10 Oct 2026, MSG-003): the
+    // switch in their settings was read above but never checked here, so a
+    // member who turned WhatsApp off would still get it there once the
+    // WhatsApp keys are set.
+    if (prefs.whatsapp) {
+      const wa = await sendWhatsApp(m.phone, 'morning',
+        buildMorningParams({ name: m.name, yesterday: yesterdayFacts, todayDay, scheduled }));
+      if (wa.ok) { ok = true; channel = 'whatsapp'; }
+    }
 
     // Falls through whenever WhatsApp is not configured yet (before Meta
     // approval lands) or a single send fails. Members keep getting the message

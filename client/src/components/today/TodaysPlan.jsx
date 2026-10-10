@@ -121,7 +121,9 @@ export default function TodaysPlan({ m, onOpen }) {
           )}
           {balance != null && (
             <span className={`text-caption tabular-nums ${balance > 0 ? 'text-amber-300' : 'text-mid'}`} data-testid="plan-balance">
-              {balance > 0 ? `${balance.toLocaleString('en-IN')} kcal over target` : `${Math.abs(balance).toLocaleString('en-IN')} kcal under target`}
+              {/* Against the estimated day's burn (BMR × 1.2 + workout), not the coach's
+                  target — it said "target" and was a different number (MAC-014, 10 Oct 2026). */}
+              {balance > 0 ? `${balance.toLocaleString('en-IN')} kcal above estimated burn` : `${Math.abs(balance).toLocaleString('en-IN')} kcal below estimated burn`}
             </span>
           )}
           {/* Sprint 11: the day's remaining macros, turned into a meal. */}
