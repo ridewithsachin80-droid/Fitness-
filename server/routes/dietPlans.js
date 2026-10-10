@@ -382,6 +382,13 @@ router.get('/member/:memberId', coachOnly, async (req, res) => {
          FROM diet_plans WHERE patient_id=$1 ORDER BY version DESC`, [memberId]);
     const inForce = await DP.planInForce(pool, memberId, today);
     const draftRow = rows.find(r => r.status === 'draft');
+    // The member's own daily targets (what Today counts against). A plan
+    // imported from a PDF that names only calories and protein has no carb or
+    // fat target: the carb check cannot run and the member's plan shows "—".
+    // The Studio offers these in one tap; nothing is filled in silently.
+    const { rows: [mp] } = await pool.query(
+      `SELECT macro_kcal, macro_pro, macro_carb, macro_fat FROM patient_profiles WHERE user_id=$1`, [memberId]);
+    const num = (v) => (v == null ? null : Number(v));
     // Upcoming = approved, not started yet, and approved after the plan now
     // in force (an older scheduled version that has since been overruled by a
     // newer approval will never take over, so it is not "upcoming").
@@ -390,6 +397,7 @@ router.get('/member/:memberId', coachOnly, async (req, res) => {
       .sort((a, b) => a.effective_from.localeCompare(b.effective_from))[0] || null;
     res.json({
       today,
+      member_targets: { kcal: num(mp?.macro_kcal), protein: num(mp?.macro_pro), carbs: num(mp?.macro_carb), fat: num(mp?.macro_fat) },
       in_force: inForce,
       upcoming,
       draft: draftRow ? await present(await DP.loadPlan(pool, draftRow.id), today) : null,

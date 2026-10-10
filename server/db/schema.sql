@@ -308,6 +308,13 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_whatsapp  BOOLEAN D
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_sms       BOOLEAN DEFAULT false;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_opted_out BOOLEAN DEFAULT false;
 
+-- A member's own sleep target, set by the coach: bedtime and wake time as
+-- 24-hour "HH:MM". Both NULL = the house default (10:00 PM to 6:30 AM). The
+-- hours are never stored — they are worked out from the two times, because the
+-- old hard-coded label said "8 h" beside times that are eight and a half apart.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_bed  VARCHAR(5);
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_wake VARCHAR(5);
+
 -- Delivery log. Needed to answer "did she actually get it?", to stop paying
 -- for a channel that silently fails, and to prove consent was honoured.
 CREATE TABLE IF NOT EXISTS message_log (
@@ -1069,3 +1076,21 @@ ALTER TABLE diet_plan_items ADD COLUMN IF NOT EXISTS compulsory BOOLEAN NOT NULL
 -- day - you choose"). 40 characters cut those mid-word. Widening a VARCHAR
 -- never rewrites the table and is safe to repeat on every boot.
 ALTER TABLE diet_plan_items ALTER COLUMN qty_text TYPE VARCHAR(160);
+
+-- A member's own label for a food (10 Oct 2026). The shared foods table is
+-- one row per food for everyone; plain oats really is ~13 g protein per 100 g,
+-- and a member eating a protein-added brand (24 g) must not change it for
+-- every other member. Their label lives here, per member, keyed by the food's
+-- name in lower case, and wins over the shared row only for them. Calories
+-- are worked out from the macros (4/4/9) by services/memberFoods.js.
+CREATE TABLE IF NOT EXISTS member_foods (
+  id            SERIAL PRIMARY KEY,
+  patient_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name          VARCHAR(100) NOT NULL,
+  name_key      VARCHAR(100) NOT NULL,
+  per_100g      JSONB NOT NULL,
+  base_food_id  INT REFERENCES foods(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (patient_id, name_key)
+);

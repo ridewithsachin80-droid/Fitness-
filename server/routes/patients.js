@@ -1346,16 +1346,57 @@ router.post('/', authMW, roleCheck('admin'), async (req, res) => {
   }
 });
 
+/**
+ * Reads sleep_bed / sleep_wake off a request body.
+ *   neither present            → {}            (nothing to change)
+ *   both null or ''            → both null     (back to the house default)
+ *   both valid "HH:MM", 4–12 h → the two times
+ *   anything else              → { error }
+ */
+function sleepTargetFrom(body) {
+  const has = k => body[k] !== undefined;
+  if (!has('sleep_bed') && !has('sleep_wake')) return {};
+  const blank = v => v === null || v === '';
+  if (!has('sleep_bed') || !has('sleep_wake')) {
+    return { error: 'Send the bedtime and the wake time together' };
+  }
+  if (blank(body.sleep_bed) && blank(body.sleep_wake)) return { sleep_bed: null, sleep_wake: null };
+  const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const bed = String(body.sleep_bed || '').slice(0, 5), wake = String(body.sleep_wake || '').slice(0, 5);
+  if (!HHMM.test(bed) || !HHMM.test(wake)) {
+    return { error: 'Bedtime and wake time should each be a time like 22:30' };
+  }
+  const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  let mins = toMin(wake) - toMin(bed);
+  if (mins <= 0) mins += 24 * 60;
+  if (mins < 4 * 60 || mins > 12 * 60) {
+    return { error: 'That is ' + (Math.round(mins / 6) / 10) + ' hours of sleep. A target should be between 4 and 12 hours — check AM and PM.' };
+  }
+  return { sleep_bed: bed, sleep_wake: wake };
+}
+
 // ── PATCH /api/patients/:id/profile ───────────────────────────────────────────
 // Monitor/admin: update patient profile fields.
 router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatientAccess, async (req, res) => {
   try {
-    const allowed = ['height_cm', 'start_weight', 'target_weight', 'conditions', 'diet_notes', 'water_target'];
+    const allowed = ['height_cm', 'start_weight', 'target_weight', 'conditions', 'diet_notes', 'water_target',
+                     'sleep_bed', 'sleep_wake'];
     const updates = [];
     const values  = [];
     let idx = 1;
 
+    // The sleep target is two times that only mean something together. Both
+    // or neither: both as 24-hour "HH:MM", or both null to go back to the
+    // house default. A target under 4 or over 12 hours is a slipped AM/PM,
+    // and the member would be shown it as their plan.
+    const sleep = sleepTargetFrom(req.body || {});
+    if (sleep.error) return res.status(400).json({ error: sleep.error });
+
     for (const field of allowed) {
+      if (field === 'sleep_bed' || field === 'sleep_wake') {
+        if (field in sleep) { updates.push(`${field} = $${idx++}`); values.push(sleep[field]); }
+        continue;
+      }
       if (req.body[field] !== undefined) {
         updates.push(`${field} = $${idx++}`);
         values.push(

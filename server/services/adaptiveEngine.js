@@ -10,8 +10,9 @@
  * the same principle behind adaptive-TDEE tools, and it is statistically
  * sound given enough days.
  *
- * DOES: report micronutrient gaps over a window, which is plain arithmetic on
- * logged food, and suggest targets from body weight and goal.
+ * DOES: report micronutrient gaps over a window, and suggest targets from body
+ * weight and goal. A gap is reported only where the logged food actually
+ * carries a figure for that nutrient — see "Unknown is not zero" below.
  *
  * DOES NOT: claim to know which macro split "suits" a member. That is where
  * this class of feature is usually oversold. Observational self-logged data
@@ -40,6 +41,46 @@ const KCAL_PER_KG = 7700;          // energy in a kilogram of body mass
 const MIN_DAYS_WEIGHT = 14;        // below this, weight noise swamps the trend
 const MIN_DAYS_FOOD = 10;
 
+// ── Unknown is not zero ──────────────────────────────────────────────────────
+//
+// Every food in this app carries all its nutrient fields, and a nutrient the
+// source had no figure for is stored as 0 (services/nutrients.js, and the seed
+// scripts' `?? 0`). So a 0 on a food means one of two different things:
+// "this food has none" or "nobody recorded it".
+//
+// The gap report used to read every 0 as "has none". Measured on the seeded
+// table (573 foods): zinc has a figure on 29 of them, folate on 35, vitamin E
+// on 54, vitamin A on 63. Every member was therefore told they were
+// "consistently under target" for zinc, folate and vitamin E whatever they
+// ate — and because the list keeps only the six lowest, those invented gaps
+// pushed the real ones (fibre, iron) off it.
+//
+// The rule now, per food and per nutrient:
+//
+//   · a value above 0 is a figure.
+//   · a 0 is a real zero only for the four nutrients that whole food groups
+//     genuinely lack — fibre (animal foods, oils, sugar), B12 (every plant
+//     food), vitamin C (grains, pulses, meat, dairy) and vitamin D (most
+//     foods) — and only on a food that carries mineral figures at all, which
+//     is what tells a row from a composition table from a macros-only guess.
+//   · for everything else a 0 is "no figure": calcium, iron, magnesium,
+//     potassium, zinc, folate and vitamin E are in practically every whole
+//     food, and vitamin A and omega-3 are recorded too patchily to tell.
+//   · refined oil and sugar are the exception — they really do carry no
+//     minerals — so their zeros count as figures for the minerals and folate.
+//
+// Coverage is the share of the window's calories that came from food with a
+// figure for the nutrient. Below MIN_COVERAGE nothing is claimed either way
+// and the nutrient is listed as "cannot be judged". At or above it, the part
+// with no figure is assumed to be as rich as the part with one (intake ÷
+// coverage) rather than assumed to be empty.
+const REAL_ZERO      = new Set(['fiber', 'vit_b12', 'vit_c', 'vit_d']);
+const NO_MINERALS_IN_REFINED = new Set(['calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'folate']);
+const PROFILE_KEYS   = ['calcium', 'iron', 'magnesium', 'potassium'];
+const MIN_COVERAGE   = 0.7;        // share of calories with a figure, per nutrient
+const MIN_DAYS_MICRO = 5;          // "consistently" needs more than a day or two
+const GAP_BELOW_PCT  = 70;
+
 // Per-day RDA reference for the gap report. Adult values; the coach can
 // override per member via rda_overrides, which the client already supports.
 const RDA = {
@@ -51,24 +92,48 @@ const RDA = {
 
 const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 
-/** Nutrition for one day's food_items, using the per_100g carried on each. */
+/** A row that carries mineral figures — a composition-table food, not a macros-only guess. */
+function isProfiled(p) {
+  return PROFILE_KEYS.filter(k => num(p[k]) > 0).length >= 2;
+}
+
+/** Refined oil, ghee, sugar: nothing but fat or carbohydrate, and genuinely no minerals. */
+function isRefinedFatOrSugar(p) {
+  const fat = num(p.fat), carbs = num(p.total_carbs), protein = num(p.protein);
+  return fat >= 95 || num(p.sugar) >= 95 || (carbs >= 98 && protein < 1 && fat < 1);
+}
+
+/** Does this food carry a figure for this nutrient? See "Unknown is not zero". */
+function hasFigure(p, k) {
+  if (num(p[k]) > 0) return true;
+  if (REAL_ZERO.has(k)) return isProfiled(p) || isRefinedFatOrSugar(p);
+  return NO_MINERALS_IN_REFINED.has(k) && isRefinedFatOrSugar(p);
+}
+
+/**
+ * Nutrition for one day's food_items, using the per_100g carried on each.
+ * `known[k]` is the calories that came from food with a figure for nutrient k.
+ */
 function dayNutrition(foodItems = []) {
   const t = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
   const micros = {};
+  const known = {};
   for (const it of foodItems) {
     const p = it?.per_100g;
     if (!p) continue;
     const f = (num(it.grams) || 0) / 100;
-    t.kcal    += num(p.calories) * f;
+    const kcal = num(p.calories) * f;
+    t.kcal    += kcal;
     t.protein += num(p.protein) * f;
     t.carbs   += num(p.total_carbs) * f;
     t.fat     += num(p.fat) * f;
     for (const k of Object.keys(RDA)) {
       if (k === 'protein') continue;
       micros[k] = (micros[k] || 0) + num(p[k]) * f;
+      if (hasFigure(p, k)) known[k] = (known[k] || 0) + kcal;
     }
   }
-  return { ...t, micros };
+  return { ...t, micros, known };
 }
 
 /** Centred moving average; window must be odd. Ends use what's available. */
@@ -179,18 +244,33 @@ function analyse(logs = [], opts = {}) {
     ? Math.round(((observedTDEE - predictedTDEE) / predictedTDEE) * 100) : null;
 
   // ── micronutrient gaps ───────────────────────────────────────────────────
-  const microAvg = {};
-  for (const k of Object.keys(RDA)) {
-    if (k === 'protein') continue;
-    microAvg[k] = foodDays
-      ? perDay.reduce((s, d) => s + (d.micros[k] || 0), 0) / foodDays : 0;
-  }
-  const gaps = Object.entries(RDA)
+  // See "Unknown is not zero" at the top of this file.
+  const totalKcal = perDay.reduce((s, d) => s + d.kcal, 0);
+  const microRows = Object.entries(RDA)
     .filter(([k, rda]) => k !== 'protein' && rda)
-    .map(([k, rda]) => ({ nutrient: k, avg: +microAvg[k].toFixed(1), rda, pct: Math.round((microAvg[k] / rda) * 100) }))
-    .filter(g => g.pct < 70)
+    .map(([k, rda]) => {
+      const counted  = foodDays ? perDay.reduce((s, d) => s + (d.micros[k] || 0), 0) / foodDays : 0;
+      const coverage = totalKcal > 0
+        ? Math.min(1, perDay.reduce((s, d) => s + (d.known[k] || 0), 0) / totalKcal) : 0;
+      // The part with no figure is assumed as rich as the part with one.
+      const estimate = coverage >= MIN_COVERAGE ? counted / coverage : null;
+      return { nutrient: k, rda, counted, coverage, estimate };
+    });
+
+  const enoughFoodDays = foodDays >= MIN_DAYS_MICRO;
+  const gaps = !enoughFoodDays ? [] : microRows
+    .filter(r => r.estimate != null)
+    .map(r => ({ nutrient: r.nutrient, avg: +r.estimate.toFixed(1), rda: r.rda,
+                 pct: Math.round((r.estimate / r.rda) * 100), coverage: Math.round(r.coverage * 100) }))
+    .filter(g => g.pct < GAP_BELOW_PCT)
     .sort((a, b) => a.pct - b.pct)
     .slice(0, 6);
+  // Named, never silently dropped: the coach should see what the food data
+  // cannot answer, and which nutrients the table needs figures for.
+  const unknown = !enoughFoodDays ? [] : microRows
+    .filter(r => r.estimate == null)
+    .map(r => ({ nutrient: r.nutrient, coverage: Math.round(r.coverage * 100) }))
+    .sort((a, b) => a.coverage - b.coverage);
 
   // ── targets ──────────────────────────────────────────────────────────────
   const bw = smoothedLatest || latestWeight || null;
@@ -235,8 +315,11 @@ function analyse(logs = [], opts = {}) {
     confidence,
     reason,
     micro_gaps: gaps,
+    micro_unknown: unknown,
+    // null once there are enough days; otherwise why nothing is claimed yet.
+    micro_reason: enoughFoodDays ? null : `${foodDays} of ${MIN_DAYS_MICRO} days of food logged`,
     targets,
   };
 }
 
-module.exports = { analyse, dayNutrition, smooth, regress, KCAL_PER_KG, RDA };
+module.exports = { analyse, dayNutrition, hasFigure, smooth, regress, KCAL_PER_KG, RDA, MIN_COVERAGE, MIN_DAYS_MICRO };

@@ -163,6 +163,7 @@ async function callAI(prompt, opts = {}) {
 // Nutrition shape lives in services/nutrients.js — one implementation for
 // every path a food can enter by. See that file for why.
 const { normaliseNutrients } = require('../services/nutrients');
+const MemberFoods = require('../services/memberFoods');
 
 
 // ── Context sanitiser ────────────────────────────────────────────────────────
@@ -685,6 +686,7 @@ function guessCategory(name) {
 async function learnFoods(foods) {
   for (const f of foods) {
     if (f.food_id) continue;                       // already known
+    if (f.label || f.source === 'member') continue; // one member's label is theirs, not everyone's
     if (f.warning) continue;                       // suspect per-serving values
     const cal = parseFloat(f.per_100g?.calories) || 0;
     if (cal <= 0 || cal > 920) continue;           // implausible energy density
@@ -844,7 +846,7 @@ function needsCookingFat(foods) {
 }
 
 // ── DB enrichment for foods ──────────────────────────────────────────────────
-async function enrichFromDB(foods) {
+async function enrichFromDB(foods, patientId = null) {
   const out = [];
   for (const f of foods) {
     let food_id = null;
@@ -933,6 +935,20 @@ async function enrichFromDB(foods) {
       }
     } catch (e) {
       console.error('ai-chat DB enrich failed for', f.name, e.message);
+    }
+    // The member's own label wins over the shared row and the AI, for them
+    // only (10 Oct 2026, services/memberFoods.js). The shared row's typical
+    // serving is still used. No plausibility warnings on it: the member read
+    // these numbers off the pack.
+    if (patientId) {
+      try {
+        const label = await MemberFoods.findLabel(patientId, f.name);
+        if (label) {
+          out.push({ ...f, food_id: label.base_food_id || food_id, per_100g: normaliseNutrients(label.per_100g),
+                     source: 'member', label: true, default_grams: defaultGrams });
+          continue;
+        }
+      } catch (e) { console.error('ai-chat member label lookup failed for', f.name, e.message); }
     }
     // Both checks, in order: a per-serving label is the more specific
     // diagnosis, so it wins if both would fire.
@@ -1484,7 +1500,7 @@ Return ONLY raw JSON, no markdown fences:
         per_100g:   f.per_100g || {},
       }));
 
-    const foods = await enrichFromDB(validFoods);
+    const foods = await enrichFromDB(validFoods, req.user?.role === 'patient' ? req.user.id : null);
 
     // Feed anything new back into the food database. Not awaited — the member
     // gets their preview immediately and the learning happens behind it.
@@ -1989,7 +2005,7 @@ async function parseMemberMessage({ userId, message, context }) {
         per_100g: f.per_100g || {},
       }));
 
-    let foods = await enrichFromDB(validFoods);
+    let foods = await enrichFromDB(validFoods, userId);
 
     // Feed anything new back into the food database. Not awaited — the member
     // gets their preview immediately and the learning happens behind it.
