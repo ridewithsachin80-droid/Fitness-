@@ -109,7 +109,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                                   <div key={i} className="px-3 py-2 flex items-start justify-between gap-2 border-t border-white/[0.04]">
                                     <div className="min-w-0">
                                       <div className="text-sm font-medium text-white truncate">{f.name}</div>
-                                      <div className="text-xs text-lo">{f.grams}g</div>
+                                      <div className="text-xs text-lo">{f.grams}g{f.label && <span className="text-gold-light" data-testid="coach-label-tag"> · member's own label</span>}</div>
                                     </div>
                                     {n && (
                                       <div className="flex gap-2.5 text-right flex-shrink-0">

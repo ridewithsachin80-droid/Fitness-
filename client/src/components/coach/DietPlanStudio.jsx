@@ -125,6 +125,10 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
     const patch    = (body) => api.patch(`/diet-plans/${draft.id}`, body);
     const canFit   = draft.checks.some(c => ['day_over', 'day_under', 'carbs_over'].includes(c.code));
     const dirtyTargets = TARGETS.some(([k]) => (targets[k] ?? '') !== (draft.targets[k] ?? ''));
+    // Carbs and fat only: a plan with no calorie target already gets its own warning.
+    const mt      = data.member_targets || {};
+    const missing = TARGETS.filter(([k]) => (k === 'carbs' || k === 'fat') && draft.targets[k] == null);
+    const fill    = missing.filter(([k]) => mt[k] != null && mt[k] > 0);
 
     return (
       <Card>
@@ -249,6 +253,28 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                 {busy === 'targets' ? 'Saving…' : 'Save targets and re-check'}
               </Pressable>
             )}
+            {/* A plan with no carb or fat target (usually one read from a PDF that
+                named only calories and protein). Say what that costs, and offer the
+                member's own targets in one tap. Never filled in silently: with a
+                carb target the carb check starts blocking approval. */}
+            {missing.length > 0 && !dirtyTargets && (
+              <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/[0.08] px-3 py-2.5" data-testid="targets-missing">
+                <p className="text-caption text-amber-200 leading-snug">
+                  No {missing.map(([k]) => (k === 'carbs' ? 'carb' : k)).join(' or ')} target on this plan.
+                  {missing.some(([k]) => k === 'carbs') ? ' The carb check cannot run without one, and ' : ' '}
+                  {first} will see "—" on their plan.
+                  {fill.length > 0 ? ` ${first}'s own daily ${fill.length === 1 ? 'target is' : 'targets are'} ${fill.map(([k]) => `${mt[k]} g ${k}`).join(' and ')}.` : ''}
+                </p>
+                {fill.length > 0 ? (
+                  <Pressable variant="secondary" className="w-full mt-2 text-sm" disabled={!!busy} data-testid="targets-fill"
+                    onPress={() => run('targets', () => patch({ targets: { ...draft.targets, ...Object.fromEntries(fill.map(([k]) => [k, mt[k]])) } }))}>
+                    {busy === 'targets' ? 'Saving…' : `Use ${fill.map(([k]) => `${mt[k]} g ${k}`).join(', ')}`}
+                  </Pressable>
+                ) : (
+                  <p className="text-caption text-mid mt-1">Type {missing.length === 1 ? 'it' : 'them'} in above and save.</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div>
@@ -363,6 +389,12 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
             })}>
             {busy === 'approve' ? 'Approving…' : `Approve and send to ${first}`}
           </Pressable>
+          {/* The draft as a PDF, to read or show before approving. The server
+              stamps DRAFT on every page, so it cannot pass for the real plan. */}
+          <Pressable variant="secondary" className="w-full" disabled={!!busy} data-testid="draft-pdf"
+            onPress={async () => { haptic(10); setBusy('pdf'); setError(''); try { await shareOrDownload(`/diet-plans/${draft.id}/pdf`, { title: `${draft.title} (draft)` }); } catch (e) { setError('Could not make the PDF just now.'); } finally { setBusy(''); } }}>
+            {busy === 'pdf' ? 'Making PDF…' : 'PDF of this draft (marked DRAFT)'}
+          </Pressable>
           <Pressable variant="danger" className="w-full" disabled={!!busy}
             onPress={() => run('discard', () => api.post(`/diet-plans/${draft.id}/discard`))}>
             {busy === 'discard' ? 'Discarding…' : 'Discard this draft'}
@@ -386,6 +418,11 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
             </p>
             {data.upcoming && (
               <p className="text-caption text-gold mt-1">Version {data.upcoming.version} takes over on {formatDate(data.upcoming.effective_from)}.</p>
+            )}
+            {(inForce.targets?.carbs == null || inForce.targets?.fat == null) && (
+              <p className="text-caption text-amber-300 mt-1" data-testid="inforce-targets-missing">
+                This plan has no {[inForce.targets?.carbs == null && 'carb', inForce.targets?.fat == null && 'fat'].filter(Boolean).join(' or ')} target, so {first} sees "—" for it. Tap Revise this plan to add one.
+              </p>
             )}
             <div className="grid grid-cols-2 gap-2 mt-2">
               <Pressable variant="secondary" className="w-full" disabled={!!busy}
