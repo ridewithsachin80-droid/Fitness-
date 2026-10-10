@@ -245,6 +245,16 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('another coach cannot open the draft by id', (await call('GET', `/api/diet-plans/${draftId}`, C2)).status === 403);
     ck('an empty brief is refused', (await call('POST', '/api/diet-plans/draft', C, { member_id: member, brief: 'hi' })).status === 400);
     ck('signed out is refused', (await call('GET', `/api/diet-plans/member/${member}`, null)).status === 401);
+    // Phase 8c: the member's own daily targets ride along, so the Studio can
+    // offer them when a plan has no carb or fat target. Read-only here.
+    {
+      const before = (await call('GET', `/api/diet-plans/member/${member}`, C)).data.member_targets;
+      ck('the Studio is told the member\'s own targets; not set reads as null, never 0', before && before.kcal === null && before.carbs === null && before.fat === null, before);
+      await pool.query(`UPDATE patient_profiles SET macro_kcal=1500, macro_pro=100, macro_carb=80, macro_fat=87 WHERE user_id=$1`, [member]);
+      const mt = (await call('GET', `/api/diet-plans/member/${member}`, C)).data.member_targets;
+      ck('once set: 1500 kcal, 100 g protein, 80 g carbs, 87 g fat, as numbers', JSON.stringify(mt) === '{"kcal":1500,"protein":100,"carbs":80,"fat":87}', mt);
+      await pool.query(`UPDATE patient_profiles SET macro_kcal=NULL, macro_pro=NULL, macro_carb=NULL, macro_fat=NULL WHERE user_id=$1`, [member]);
+    }
 
     aiMode = 'garbage';
     const g = await call('POST', '/api/diet-plans/draft', C, { member_id: member, brief: BRIEF });

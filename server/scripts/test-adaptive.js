@@ -12,7 +12,7 @@ if (!process.env.DATABASE_URL?.includes('localhost') && !process.env.ALLOW_TEST_
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'testsecret';
 const express = require('express'), jwt = require('jsonwebtoken'), cookieParser = require('cookie-parser');
 const pool = require('../db/pool');
-const { analyse, smooth, regress, KCAL_PER_KG } = require('../services/adaptiveEngine');
+const { analyse, smooth, regress, KCAL_PER_KG, hasFigure, MIN_COVERAGE, MIN_DAYS_MICRO } = require('../services/adaptiveEngine');
 
 const app = express(); app.use(express.json()); app.use(cookieParser());
 app.use((q, _r, n) => { q.io = { to: () => ({ emit: () => {} }) }; n(); });
@@ -103,6 +103,71 @@ function simulate({ days, trueTDEE, intake, startW, noise = 0.8, foodEvery = 1, 
   ck('each has a percentage under 70', gaps.every(g => g.pct < 70), gaps.map(g => g.pct));
   ck('worst gap listed first', gaps.every((g, i) => i === 0 || g.pct >= gaps[i - 1].pct), gaps.map(g => g.pct));
 
+  // ── Unknown is not zero ────────────────────────────────────────────────────
+  // A nutrient the food table has no figure for is stored as 0. The report
+  // used to read that 0 as "ate none", so every member was "consistently
+  // under target" for zinc, folate and vitamin E whatever they ate.
+  console.log('\n[7b] a nutrient with no figure is not a nutrient not eaten');
+  {
+    const days = (n, items) => Array.from({ length: n }, (_, i) => ({
+      log_date: new Date(Date.UTC(2026, 7, 1 + i)).toISOString().slice(0, 10), weight_kg: '80.0', food_items: items }));
+    // Composition-table rows: minerals carried, zinc/folate/vitamin E not.
+    const rice = { name: 'Rice',  grams: 300, per_100g: { calories: 130, protein: 2.7, total_carbs: 28, fat: 0.3, fiber: 0.4, calcium: 10, iron: 0.2, magnesium: 12, potassium: 35 } };
+    const dal  = { name: 'Dal',   grams: 200, per_100g: { calories: 116, protein: 9, total_carbs: 20, fat: 0.4, fiber: 8, calcium: 19, iron: 3.3, magnesium: 36, potassium: 369 } };
+    const ghee = { name: 'Ghee',  grams: 15,  per_100g: { calories: 900, protein: 0, total_carbs: 0, fat: 100 } };
+    const guess = { name: 'Dosa (macros only)', grams: 150, per_100g: { calories: 170, protein: 4, total_carbs: 29, fat: 4 } };
+    const byName = (list) => Object.fromEntries(list.map(g => [g.nutrient, g]));
+
+    const table = analyse(days(10, [rice, dal, ghee]));
+    const tg = byName(table.micro_gaps), tu = byName(table.micro_unknown);
+    ck('zinc, folate and vitamin E — never recorded on these foods — are NOT reported as gaps',
+       !tg.zinc && !tg.folate && !tg.vit_e, Object.keys(tg));
+    ck('they are named as "cannot be judged" instead, with how little of the food carries a figure',
+       tu.zinc && tu.folate && tu.vit_e && tu.vit_e.coverage === 0, table.micro_unknown);
+    ck('vitamin A and omega-3 too: recorded too patchily to tell a 0 from a blank', tu.vit_a && tu.omega3_ala && !tg.vit_a && !tg.omega3_ala, Object.keys(tu));
+    ck('a nutrient these foods do carry is still reported when it is low (calcium 68 mg of 1000 → 7%)',
+       tg.calcium && tg.calcium.pct === 7 && tg.calcium.coverage === 100, tg.calcium);
+    ck('B12 on real plant foods is a true zero and IS reported (0%), not hidden as unknown', tg.vit_b12 && tg.vit_b12.pct === 0 && !tu.vit_b12, [tg.vit_b12, tu.vit_b12]);
+    ck('ghee carries no minerals and that is a fact, so it does not lower the mineral coverage', tg.calcium.coverage === 100 && hasFigure(ghee.per_100g, 'iron') === true && hasFigure(ghee.per_100g, 'vit_e') === false);
+    ck('nothing is both a gap and unknown', table.micro_gaps.every(g => !tu[g.nutrient]));
+    ck('unknowns are listed least-covered first', table.micro_unknown.every((u, i) => i === 0 || u.coverage >= table.micro_unknown[i - 1].coverage), table.micro_unknown.map(u => u.coverage));
+
+    // A food with macros only says nothing about any micronutrient — not even
+    // the "real zero" ones. 150 g × 2 of it is 40% of the day's calories.
+    const mixed = analyse(days(10, [rice, dal, ghee, guess, guess]));
+    const mu = byName(mixed.micro_unknown);
+    ck('with 40% of calories from a macros-only food, coverage is 60%: below the bar, so NOTHING is claimed',
+       MIN_COVERAGE === 0.7 && mixed.micro_gaps.length === 0 && mu.calcium && mu.calcium.coverage === 60 && mu.vit_b12 && mu.vit_b12.coverage === 60, [mixed.micro_gaps, mixed.micro_unknown]);
+    ck('a macros-only food is not a "real zero" for B12 or fibre', hasFigure(guess.per_100g, 'vit_b12') === false && hasFigure(guess.per_100g, 'fiber') === false && hasFigure(rice.per_100g, 'vit_b12') === true);
+
+    // Exactly on the bar, and one step under it. Calories: table foods 700, guess 300 → 70%.
+    const tbl = { name: 'Table food', grams: 700, per_100g: { calories: 100, protein: 5, total_carbs: 15, fat: 2, fiber: 1, calcium: 20, iron: 1, magnesium: 20, potassium: 100 } };
+    const g300 = { name: 'Guess', grams: 300, per_100g: { calories: 100, protein: 5, total_carbs: 15, fat: 2 } };
+    const g310 = { ...g300, grams: 310 };
+    const onBar = byName(analyse(days(10, [tbl, g300])).micro_gaps);
+    ck('at exactly 70% coverage the nutrient is judged', onBar.calcium && onBar.calcium.coverage === 70, onBar.calcium);
+    // 140 mg calcium counted over 70% of the calories → assume the other 30% was as rich: 200 mg → 20% of 1000.
+    ck('…and the part with no figure is assumed as rich as the rest (140 mg counted → 200 mg → 20%), not empty (14%)', onBar.calcium.avg === 200 && onBar.calcium.pct === 20, onBar.calcium);
+    const under = analyse(days(10, [tbl, g310]));
+    ck('one step under 70% it is not judged', !byName(under.micro_gaps).calcium && byName(under.micro_unknown).calcium && byName(under.micro_unknown).calcium.coverage === 69, under.micro_unknown);
+
+    // A nutrient that is fine must not appear anywhere.
+    const rich = { name: 'Rich', grams: 1000, per_100g: { calories: 200, protein: 8, total_carbs: 30, fat: 5, fiber: 4, calcium: 120, iron: 2.5, magnesium: 45, potassium: 400, vit_c: 9, vit_b12: 0.3, vit_d: 90 } };
+    const fine = analyse(days(10, [rich]));
+    ck('enough of everything it carries → no gap and no "unknown" for those', ['fiber', 'calcium', 'iron', 'magnesium', 'potassium', 'vit_c', 'vit_b12', 'vit_d'].every(k => !byName(fine.micro_gaps)[k] && !byName(fine.micro_unknown)[k]), [fine.micro_gaps, fine.micro_unknown]);
+
+    // "Consistently" needs days.
+    const four = analyse(days(4, [rice, dal])), five = analyse(days(5, [rice, dal]));
+    ck('4 logged days: no gaps, no unknowns, and it says why', MIN_DAYS_MICRO === 5 && four.micro_gaps.length === 0 && four.micro_unknown.length === 0 && four.micro_reason === '4 of 5 days of food logged', [four.micro_gaps.length, four.micro_reason]);
+    ck('5 logged days: reported', five.micro_gaps.length > 0 && five.micro_reason === null, [five.micro_gaps.length, five.micro_reason]);
+    const none = analyse([]);
+    ck('no logs at all: empty lists, no crash', Array.isArray(none.micro_gaps) && none.micro_gaps.length === 0 && Array.isArray(none.micro_unknown) && none.micro_unknown.length === 0);
+
+    // The six lowest used to be six invented ones. Real gaps must not be crowded out.
+    const sixReal = table.micro_gaps.map(g => g.nutrient);
+    ck('the list of six holds only nutrients with figures', sixReal.length <= 6 && sixReal.every(k => !['zinc', 'folate', 'vit_e', 'vit_a', 'omega3_ala'].includes(k)), sixReal);
+  }
+
   console.log('\n[8] endpoints and access control');
   await pool.query('TRUNCATE users RESTART IDENTITY CASCADE');
   const { rows: [coach] } = await pool.query(`INSERT INTO users (name,phone,password,role,active) VALUES ('C','2001','x','monitor',true) RETURNING id`);
@@ -124,6 +189,9 @@ function simulate({ days, trueTDEE, intake, startW, noise = 0.8, foodEvery = 1, 
   let r = await call('/api/patients/me/adaptive', tok(pat.id, 'patient'));
   ck('member sees their own analysis', r.status === 200 && r.data.observed_tdee > 0, r.data.observed_tdee);
   ck('and it lands near the true 2400', Math.abs(r.data.observed_tdee - 2400) < 150, r.data.observed_tdee);
+  ck('the response carries the gaps WITH their coverage, and the list of what could not be judged',
+     r.data.micro_gaps.length > 0 && r.data.micro_gaps.every(g => g.coverage >= 70) && Array.isArray(r.data.micro_unknown)
+     && r.data.micro_unknown.some(u => u.nutrient === 'zinc') && !r.data.micro_gaps.some(g => g.nutrient === 'zinc'), [r.data.micro_gaps, r.data.micro_unknown]);
 
   r = await call(`/api/patients/${pat.id}/adaptive`, tok(coach.id, 'monitor'));
   ck('coach sees their assigned member', r.status === 200 && r.data.observed_tdee > 0, r.status);

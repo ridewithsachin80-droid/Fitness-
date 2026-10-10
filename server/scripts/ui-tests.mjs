@@ -351,6 +351,8 @@ const plateCheck = { photo_id: 1, meal: 'Pre-workout evening snack', time: '23:5
 export default {
   get: async (url) => {
     const u = String(url);
+    if (u.includes('/member-foods')) return ok([{ id: 1, name: 'Yogabar High Protein Rolled Oats with Almonds and Cranberries', updated_at: '2026-10-10T08:00:00Z',
+      per_100g: { calories: 1386, protein: 24.5, total_carbs: 55.5, net_carbs: 55.5, fat: 17.8 } }]);
     if (u.includes('/voice-pilot/me')) return ok({ invited: true, consented: true, phrases: [
       { id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', means: 'A bowl of kosambari and bisi bele bath', recorded: true, heard: 'Ondu bowl kosambari mattu bisi bele bath, swalpa majjige kooda kudide nenne raatri ele gante aada mele' },
       { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false }] });
@@ -540,6 +542,26 @@ const OVERFLOW_PAGES = [
      const P = () => <div className="p-4"><VP /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
+  // 10 Oct 2026: macros eaten (plan and no plan), the macro editor in the
+  // food log and from the chat preview, and the coach's list of labels.
+  ['TodaysPlan+Macros', `import TP from './components/today/TodaysPlan.jsx'; import EM from './components/today/EatenMacros.jsx';
+     const m = { log: { water: 2500, activities: {}, acv: {}, supplements: {} }, protocol: { water_target: 3500 }, coachPlan: null, coachRows: { pendingMeals: [], mealCount: 4 },
+       workoutSummary: { count: 0, cardio: [] }, workoutKcal: 0, kcalIn: 12345, kcalTarget: 18000, balance: 1234, micro: { hasData: true, met: 22, total: 31 },
+       eaten: { kcal: 12345, pro: 1234.4, carb: 2345.6, fat: 999.9 }, macroTargets: { kcal: 18000, pro: 1200, carb: 3000, fat: 900 },
+       sleepText: '10h 45m', sleepMins: 645, terms: { kcal: 'kcal' }, activeActivities: [], activeACV: [], activeSupplements: [], protocolDone: 0, protocolTotal: 0 };
+     const P = () => <div className="p-4"><TP m={m} onOpen={() => {}} /><EM eaten={m.eaten} isToday={false} /></div>;`],
+  ['FoodLog+MacroEditor', `import FL from './components/FoodLog.jsx';
+     const items = [{ id: 1, name: 'Yogabar High Protein Rolled Oats with Almonds and Cranberries', grams: 1250, meal: 'Breakfast', label: true,
+       per_100g: { calories: 386, protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8 } }];
+     const P = () => { setTimeout(() => document.querySelector('[data-testid="food-edit-macros"]')?.click(), 300);
+       return <div className="p-4"><FL items={items} onChange={() => {}} calorieTarget={null} /></div>; };`],
+  ['ChatMacroSheet', `import CM from './components/chat/ChatFoodMacros.jsx';
+     const f = { name: 'Yogabar High Protein Rolled Oats with Almonds and Cranberries', grams: 1250, food_id: 4, label: true,
+       per_100g: { calories: 386, protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8 }, macros: { cal: 4825, pro: 300, carb: 687.5, fat: 97.5 } };
+     const P = () => { setTimeout(() => document.querySelector('[data-testid="chat-edit-macros"]')?.click(), 300);
+       return <div className="p-4"><button className="w-full flex justify-between"><span>row</span><CM f={f} onSave={() => {}} /></button></div>; };`],
+  ['MemberLabelsCard', `import MLC from './components/coach/MemberLabelsCard.jsx';
+     const P = () => <div className="p-4"><MLC memberId={1} memberName="Mrs. Venkataramana Reddy" /></div>;`],
   ['DietStudio+Fit', `import S from './components/coach/DietPlanStudio.jsx';
      const P = () => { setTimeout(() => document.querySelector('[data-testid="plan-fit"]')?.click(), 250);
        return <div className="p-4"><S memberId={1} memberName="Mrs. Venkataramana Reddy" /></div>; };`],
@@ -735,7 +757,8 @@ async function todayTest() {
   ck('Today\'s Plan renders one section with Move, Eat and Recover rows', !!plan && ['plan-move', 'plan-eat', 'plan-recover'].every(id => plan.querySelector(`[data-testid="${id}"]`)));
   ck('the old cards are gone: no day strip, no coach card, no deficit chip, no dots card', !q('day-strip') && !q('coach-card') && !q('balance-chip'));
   ck('Move: the coach\'s program day with exercise count and Start workout', /Push ·/.test(q('plan-move').textContent) && /2 exercises/.test(q('plan-move').textContent) && /Start workout/.test(q('plan-move').textContent), q('plan-move').textContent);
-  ck('Eat: 666 / 1,800 kcal and 37 / 120 g protein', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent) && /37/.test(q('plan-eat').textContent) && /120 g protein/.test(q('plan-eat').textContent), q('plan-eat').textContent);
+  ck('Eat: 666 / 1,800 kcal, then protein 37 / 120 g, carbs 59 / 150 g, fat 34 / 60 g (10 Oct 2026: all three, not protein alone)', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent)
+     && /Protein37 \/ 120 g/.test(q('plan-macros-pro').textContent) && /Carbs59 \/ 150 g/.test(q('plan-macros-carb').textContent) && /Fat34 \/ 60 g/.test(q('plan-macros-fat').textContent), q('plan-eat').textContent);
   ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /\d of \d meals? logged/.test(q('plan-eat').textContent) && !/meal plans? pending/.test(q('plan-eat').textContent) && /1,373 kcal under target/.test(q('plan-balance').textContent), q('plan-eat').textContent);
   ck('Eat: View meal plan is the action while a plan is pending', /View meal plan/.test(q('plan-eat').textContent));
   ck('Eat: nutrients N/31 inline', /\/31 nutrients/.test(q('chip-nutrition').textContent));
@@ -2995,6 +3018,642 @@ async function reviewFixesTest() {
   ck('coach list: "No weight" is a line of its own above the % pill', /<div className="text-xs text-ghost">No weight<\/div>/.test(srcOf('pages/PatientList.jsx')));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 34. Phase 8c — Coach AI in the bottom bar; Studio draft PDF and missing
+//     targets; "Log as planned" from the member chat; voice "try again"
+// ═══════════════════════════════════════════════════════════════════════════
+async function phase8cTest() {
+  console.log('\n[34] Coach AI in the bottom bar, Studio follow-ups, chat "Log as planned", voice retry (Phase 8c)');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+  const noApi = stub('api-8c-none.js', `const get = async () => ({ data: {} }); const post = async () => ({ data: { ok: true } }); export default { get, post, put: post, patch: post, delete: post };`);
+
+  // ── A. The coach bottom bar ────────────────────────────────────────────────
+  const nav = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter, useLocation } from 'react-router-dom';
+    import { BottomNav } from './components/UI.jsx';
+    import { useCoachAI } from './store/coachAIStore.js';
+    import { useCoachAI as viaChat } from './components/CoachAIChat.jsx';
+    window.__ai = useCoachAI; window.__same = useCoachAI === viaChat;
+    const Where = () => { window.__path = useLocation().pathname; return null; };
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__start]}><Where /><BottomNav role={window.__role} /></MemoryRouter>);`, noApi);
+  const at = (role, start) => run(nav, (win) => { win.__role = role; win.__start = start; });
+  const A = at('admin', '/coach/5'); await tick(300);
+  const navBtns = (W) => [...W.w.document.querySelectorAll('[data-testid="coach-nav"] button')].map(b => b.getAttribute('aria-label') || b.textContent.trim());
+  ck('admin bar, in order: Members, Admin, Coach AI, Settings', A.errors.length === 0 && navBtns(A).join(',') === 'Members,Admin,Coach AI,Settings', [A.errors.join('|'), navBtns(A)]);
+  ck('the chat is closed until the button is tapped', A.w.__ai.getState().open === false);
+  A.w.document.querySelector('[data-testid="coach-ai-orb"]').click(); await tick(150);
+  ck('on a member page the button opens the chat and stays on that page', A.w.__ai.getState().open === true && A.w.__path === '/coach/5');
+  ck('the bar and the chat screen share one open/closed flag', A.w.__same === true);
+  const C = at('monitor', '/settings'); await tick(300);
+  ck('coach bar: Members, Coach AI, Settings (no Admin)', navBtns(C).join(',') === 'Members,Coach AI,Settings', navBtns(C));
+  C.w.document.querySelector('[data-testid="coach-ai-orb"]').click(); await tick(200);
+  ck('from Settings (no chat there) the button goes to the coach home with the chat open', C.w.__ai.getState().open === true && C.w.__path === '/coach', [C.w.__ai.getState().open, C.w.__path]);
+  const D = at('admin', '/admin'); await tick(300);
+  D.w.document.querySelector('[data-testid="coach-ai-orb"]').click(); await tick(150);
+  ck('on the admin dashboard it opens in place, and Admin is the marked tab', D.w.__path === '/admin' && D.w.__ai.getState().open === true && D.w.document.querySelector('[aria-current="page"]')?.textContent.trim() === 'Admin');
+  {
+    const all = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? all(path.join(dir, e.name)) : /\.jsx?$/.test(e.name) ? [path.join(dir, e.name)] : []);
+    const fab = all(CLIENT_SRC).filter(f => /<CoachAIFab|export function CoachAIFab|import[^;]*CoachAIFab/.test(fs.readFileSync(f, 'utf8'))).map(f => path.relative(CLIENT_SRC, f));
+    ck('the floating edge button is gone from every screen', fab.length === 0, fab);
+    ck('the admin dashboard, coach home and member page all carry the bar', ['pages/AdminDashboard.jsx', 'pages/PatientList.jsx', 'pages/Monitor.jsx'].every(f => /<BottomNav role=\{user\?\.role\} \/>/.test(srcOf(f)) && /<CoachAIChat/.test(srcOf(f))));
+  }
+  try {
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+    const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    try {
+      const out = [];
+      for (const [role, width] of [['admin', 320], ['admin', 360], ['monitor', 320], ['monitor', 390]]) {
+        const page = await browser.newPage();
+        await page.setViewport({ width, height: 640, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+        await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+        await page.evaluate((r) => { window.__role = r; window.__start = '/coach'; }, role);
+        await page.addScriptTag({ content: nav });
+        await new Promise(r => setTimeout(r, 700));
+        out.push(await page.evaluate(() => {
+          const o = document.querySelector('[data-testid="coach-ai-orb"]').getBoundingClientRect(), b = document.querySelector('[data-testid="coach-nav"] .glass').getBoundingClientRect();
+          const tabs = [...document.querySelectorAll('[data-testid="coach-nav"] button:not([data-testid])')].map(x => { const r = x.getBoundingClientRect(), t = x.querySelector('span').getBoundingClientRect(); return { h: r.height, clipped: t.width > r.width + 0.5 }; });
+          return { off: Math.abs((o.x + o.width / 2) - (b.x + b.width / 2)), orb: o.width, sw: document.documentElement.scrollWidth, vw: window.innerWidth, tabs };
+        }));
+        await page.close();
+      }
+      ck('in real Chrome at 320 to 390 px, coach and admin: the button is dead centre, 56 px, nothing scrolls sideways', out.every(o => o.off <= 1 && o.orb === 56 && o.sw <= o.vw + 1), out);
+      ck('every tab is at least 44 px tall and its label fits (admin at 320 px is the tight one)', out.every(o => o.tabs.every(t => t.h >= 44 && !t.clipped)), out.map(o => o.tabs));
+    } finally { await browser.close(); await new Promise(r => server.close(r)); }
+  } catch (e) { console.log('  – browser not installed, the bottom bar was NOT measured in Chrome (' + String(e.message).slice(0, 60) + ')'); }
+
+  // ── B. Studio: missing carb/fat targets, and the draft PDF ──────────────────
+  const studioApi = stub('api-8c-studio.js', `
+    window.__patches = []; window.__gets = [];
+    const item = (id, name, grams, kcal) => ({ id, name, grams, qty_text: grams + ' g', compulsory: false, per_100g: { calories: kcal, total_carbs: 5 } });
+    const day = () => [{ meal: 'Breakfast', time: '10:30', items: [item(1, 'Curd', 75, 56), item(2, 'Paneer', 75, 265)] }];
+    const T = () => (window.__targets || { kcal: 1400, protein: 110, carbs: null, fat: null });
+    const draft = () => ({ id: 41, patient_id: 12, version: 3, status: 'draft', title: 'Low-carb plan', targets: T(), flags: [],
+      content: { avoid: [], cautions: [], adjustments: [], lab_cautions: [] }, checks: [], days: [day(), day(), day(), day(), day(), day(), day()], diff: null, compared_to_version: null });
+    const inForce = () => ({ id: 40, version: 2, title: 'Low-carb plan', effective_from: '2026-10-05', targets: T() });
+    const get = async (url, cfg) => { window.__gets.push({ url, cfg });
+      if (/\\/diet-plans\\/member\\/12$/.test(url)) return { data: { today: '2026-10-07', member_targets: window.__mt === undefined ? { kcal: 1500, protein: 100, carbs: 80, fat: 87 } : window.__mt,
+        in_force: window.__inforce ? inForce() : null, upcoming: null, draft: window.__inforce ? null : draft(), history: [] } };
+      if (/pdf$/.test(url)) return { data: new Blob(['%PDF-1.4 draft'], { type: 'application/pdf' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Diet-Plan-Raghavendra-v3-DRAFT.pdf"' } };
+      if (/\\/swaps\\//.test(url)) return { data: { swaps: [], requests: [], suggestions: [] } };
+      return { data: {} }; };
+    const patch = async (url, body) => { window.__patches.push({ url, body }); window.__targets = body.targets; return { data: { plan: draft() } }; };
+    const post = async () => ({ data: {} });
+    export default { get, post, put: post, patch, delete: post };`);
+  const studio = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import DietPlanStudio from './components/coach/DietPlanStudio.jsx';
+    createRoot(document.getElementById('root')).render(<DietPlanStudio memberId={12} memberName="Raghavendra" />);`, studioApi);
+  const dl = (win) => { win.__downloads = []; win.URL.createObjectURL = () => 'blob:pdf'; win.URL.revokeObjectURL = () => {}; win.HTMLAnchorElement.prototype.click = function () { win.__downloads.push(this.download); }; };
+  const S = run(studio, dl); await tick(500);
+  const sq = (id) => S.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('a draft with no carb or fat target says what that costs', S.errors.length === 0 && /No carb or fat target on this plan\./.test(sq('targets-missing')?.textContent || '') && /carb check cannot run/.test(sq('targets-missing').textContent) && /Raghavendra will see "—"/.test(sq('targets-missing').textContent), [S.errors.join('|'), sq('targets-missing')?.textContent]);
+  ck('and offers the member\'s own targets in one tap, by number', /Raghavendra's own daily targets are 80 g carbs and 87 g fat\./.test(sq('targets-missing').textContent) && /^Use 80 g carbs, 87 g fat$/.test(sq('targets-fill')?.textContent.trim() || ''), sq('targets-missing')?.textContent);
+  ck('nothing is filled in until that tap', S.w.__patches.length === 0);
+  sq('targets-fill').click(); await tick(500);
+  ck('the tap saves carbs 80 and fat 87, and leaves the plan\'s own calories and protein (1400, 110; the member\'s are 1500, 100)', S.w.__patches.length === 1 && JSON.stringify(S.w.__patches[0].body.targets) === '{"kcal":1400,"protein":110,"carbs":80,"fat":87}', S.w.__patches);
+  ck('the plan is re-read and the note is gone', !sq('targets-missing') && S.w.__gets.filter(g => /diet-plans\/member\/12$/.test(g.url)).length === 2);
+  const S2 = run(studio, (win) => { dl(win); win.__mt = { kcal: 1500, protein: 100, carbs: 80, fat: null }; }); await tick(500);
+  ck('if the member has only a carb target, only carbs is offered', /^Use 80 g carbs$/.test(S2.w.document.querySelector('[data-testid="targets-fill"]')?.textContent.trim() || '') && /own daily target is 80 g carbs\./.test(S2.w.document.querySelector('[data-testid="targets-missing"]').textContent), S2.w.document.querySelector('[data-testid="targets-missing"]')?.textContent);
+  const S3 = run(studio, (win) => { dl(win); win.__mt = { kcal: null, protein: null, carbs: null, fat: null }; }); await tick(500);
+  ck('if the member has neither, it says to type them in (no button)', !S3.w.document.querySelector('[data-testid="targets-fill"]') && /Type them in above and save/.test(S3.w.document.querySelector('[data-testid="targets-missing"]')?.textContent || ''));
+  const S4 = run(studio, (win) => { dl(win); win.__targets = { kcal: 1500, protein: 100, carbs: 80, fat: 87 }; }); await tick(500);
+  ck('a draft with all four targets shows no note', S4.errors.length === 0 && !S4.w.document.querySelector('[data-testid="targets-missing"]'));
+  S4.w.document.querySelector('[data-testid="draft-pdf"]').click(); await tick(400);
+  const pdfGet = S4.w.__gets.find(g => /\/diet-plans\/41\/pdf$/.test(g.url));
+  ck('"PDF of this draft" fetches that draft as a file and saves it (the server marks it DRAFT)', !!pdfGet && pdfGet.cfg?.responseType === 'blob' && S4.w.__downloads[0] === 'FitLife-Diet-Plan-Raghavendra-v3-DRAFT.pdf' && /marked DRAFT/.test(S4.w.document.querySelector('[data-testid="draft-pdf"]').textContent), [pdfGet?.cfg, S4.w.__downloads]);
+  const S5 = run(studio, (win) => { dl(win); win.__inforce = true; }); await tick(500);
+  ck('a plan in force with no carb or fat target says so, and points to Revise', /no carb or fat target/.test(S5.w.document.querySelector('[data-testid="inforce-targets-missing"]')?.textContent || '') && /Revise this plan/.test(S5.w.document.querySelector('[data-testid="inforce-targets-missing"]').textContent), S5.errors.join('|'));
+  const S6 = run(studio, (win) => { dl(win); win.__inforce = true; win.__targets = { kcal: 1500, protein: 100, carbs: 80, fat: 87 }; }); await tick(500);
+  ck('and one with all four says nothing', S6.errors.length === 0 && !S6.w.document.querySelector('[data-testid="inforce-targets-missing"]'));
+
+  // ── C. Member chat: "Log <next meal> as planned" under a meal-plan answer ────
+  const chatApi = stub('api-8c-chat.js', `
+    window.__posts = [];
+    const get = async () => ({ data: {} });
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (url === '/ai-chat/parse') return /idli/.test(body.message)
+        ? { data: { reply: 'Got it: 2 idli.', foods: [{ name: 'Idli', grams: 80, meal: 'Breakfast', per_100g: { calories: 134 } }], totals: {} } }
+        : { data: { reply: 'Today: Breakfast (not logged) curd and paneer. Lunch (not logged) ragi mudde and saaru.', foods: [], totals: {} } };
+      return { data: {} }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const chat = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import AIChatLog from './components/AIChatLog.jsx';
+    import { useAIChat } from './store/aiChatStore.js';
+    import { useLogStore } from './store/logStore.js';
+    import { isMealPlanQuestion } from './lib/day/index.js';
+    window.__q = isMealPlanQuestion; window.__chat = useAIChat; window.__log = useLogStore; window.__planned = [];
+    const per = (k) => ({ calories: k });
+    const mealPlans = [{ meal: 'Lunch', time: '13:30', items: [{ name: 'Ragi mudde', grams: 45, per_100g: per(331) }] },
+                       { meal: 'Breakfast', time: '10:30', items: [{ name: 'Curd', grams: 75, per_100g: per(56) }, { name: 'Paneer', grams: 75, per_100g: per(265) }] }];
+    createRoot(document.getElementById('root')).render(<AIChatLog mealPlans={window.__noPlan ? [] : mealPlans} onLogPlanned={window.__noHandler ? null : (m) => window.__planned.push(m)} />);
+    useAIChat.getState().openChat();`, chatApi);
+  const X = run(chat); await tick(500);
+  const xd = X.w.document;
+  const say = async (W, text) => {
+    const t = W.w.document.querySelector('[data-testid="composer-input"]');
+    Object.getOwnPropertyDescriptor(W.w.HTMLTextAreaElement.prototype, 'value').set.call(t, text);
+    t.dispatchEvent(new W.w.Event('input', { bubbles: true })); await tick(60);
+    t.dispatchEvent(new W.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
+  };
+  ck('which messages are meal-plan questions (and which are logging)', ["what is today's meal plan?", 'what do I eat next', "What's for dinner", 'aaj kya khana hai', 'show my diet plan'].every(X.w.__q)
+     && !['I ate 2 idli and sambar', 'weight 82.5', 'I had lunch as per meal plan', 'plan my week', '2 chapati 1 bowl dal for lunch'].some(X.w.__q));
+  await say(X, "what's today's meal plan?");
+  const btn = () => [...xd.querySelectorAll('[data-testid="chat-log-planned"]')];
+  ck('after the meal-plan answer: one button for the next unlogged meal, by time (Breakfast, not Lunch)', X.errors.length === 0 && btn().length === 1 && btn()[0].textContent.trim() === 'Log Breakfast as planned', [X.errors.join('|'), btn().map(b => b.textContent)]);
+  btn()[0].click(); await tick(200);
+  ck('tapping it opens the same sheet as the Next up card, for that meal, and puts the chat bar away', X.w.__planned.length === 1 && X.w.__planned[0].meal === 'Breakfast' && X.w.__planned[0].items.length === 2 && X.w.__chat.getState().composerOpen === false, X.w.__planned);
+  X.w.__log.setState(st => ({ log: { ...(st.log || {}), food: [{ name: 'Curd', grams: 75, meal: 'Breakfast' }] } })); await tick(200);
+  ck('once Breakfast is logged, the same button now offers Lunch (worked out live, never stale)', btn().length === 1 && btn()[0].textContent.trim() === 'Log Lunch as planned', btn().map(b => b.textContent));
+  X.w.__log.setState(st => ({ log: { ...st.log, food: [{ name: 'Curd', grams: 75, meal: 'Breakfast' }, { name: 'Ragi mudde', grams: 45, meal: 'Lunch' }] } })); await tick(200);
+  ck('with every planned meal logged there is no button', btn().length === 0);
+  const Y = run(chat); await tick(500);
+  await say(Y, 'I ate 2 idli for breakfast');
+  ck('a message that logs food gets its usual card and no "Log as planned" button', /Got it: 2 idli/.test(Y.w.document.body.textContent) && !Y.w.document.querySelector('[data-testid="chat-log-planned"]'));
+  const Z = run(chat, (win) => { win.__noPlan = true; }); await tick(500);
+  await say(Z, "what's today's meal plan?");
+  ck('a member with no plan gets the answer and no button', /Today: Breakfast/.test(Z.w.document.body.textContent) && !Z.w.document.querySelector('[data-testid="chat-log-planned"]'));
+  ck('Today hands the chat the same opener the Next up card uses', /<AIChatLog mealPlans=\{m\.mealPlans\} onLogPlanned=\{m\.openPlanned\} \/>/.test(srcOf('pages/Today.jsx')) && /onLog=\{m\.openPlanned\}/.test(srcOf('pages/Today.jsx')));
+
+  // ── D. Voice test: try the unanswered recordings again ──────────────────────
+  const vpApi = stub('api-8c-vp.js', `
+    window.__posts = []; let fixed = false;
+    const res = () => ({ overall: { gemini: fixed ? 100 : 50, whisper: 100, samples: 2, scored: 2, gemini_answered: fixed ? 2 : 1, whisper_answered: 2 },
+      phrases: [{ id: 'k01', say: 'Belagge eradu idli', samples: 2, gemini: fixed ? 100 : 50, whisper: 100, gemini_answered: fixed ? 2 : 1, whisper_answered: 2 }], samples: [] });
+    const get = async (url) => {
+      if (/voice-pilot\\/members$/.test(url)) return { data: { members: [], phrases: 22 } };
+      if (/voice-pilot\\/results$/.test(url)) return { data: res() };
+      return { data: [] }; };
+    const post = async (url, body) => { window.__posts.push(url);
+      if (/results\\/retry$/.test(url)) { if (window.__stillDown) return { data: { ok: true, asked: 1, fixed: 0, still: 1, more: false, problems: ['Gemini: 429: Resource has been exhausted'] } }; fixed = true; return { data: { ok: true, asked: 1, fixed: 1, still: 0, more: false, problems: [] } }; }
+      return { data: { ok: true } }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const vp = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 1, name: 'Admin', role: 'admin' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, vpApi);
+  const V1 = run(vp); await tick(400);
+  const vq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  ck('with a recording an engine did not answer, the panel offers "Try the unanswered recordings again"', V1.errors.length === 0 && !!vq(V1, 'vp-retry') && /members do not need to record again/.test(vq(V1, 'vp-retry-box').textContent), V1.errors.join('|'));
+  vq(V1, 'vp-retry').click(); await tick(500);
+  ck('the tap asks the server, says how many answered, and re-reads the scores', V1.w.__posts.includes('/voice-pilot/results/retry') && /^1 of 1 answered this time\.$/.test(vq(V1, 'vp-retry-result')?.textContent.trim() || '') && /Gemini 100% · Whisper 100%/.test(vq(V1, 'vp-overall').textContent), [vq(V1, 'vp-retry-result')?.textContent, vq(V1, 'vp-overall')?.textContent]);
+  ck('and with nothing left unanswered the button goes away', !vq(V1, 'vp-retry'));
+  const V2 = run(vp, (win) => { win.__stillDown = true; }); await tick(400);
+  vq(V2, 'vp-retry').click(); await tick(500);
+  ck('if the engine still fails it says why, and the button stays', /0 of 1 answered this time\. Gemini: 429: Resource has been exhausted/.test(vq(V2, 'vp-retry-result')?.textContent || '') && !!vq(V2, 'vp-retry'), vq(V2, 'vp-retry-result')?.textContent);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 35. Honest states (7 Oct): Health Connect, per-member sleep target,
+//     nutrient gaps that are not just blanks in the food table
+// ═══════════════════════════════════════════════════════════════════════════
+async function honestStatesTest() {
+  console.log('\n[35] Honest states: Health Connect, the member\'s own sleep target, nutrient gaps');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+
+  // ── A. Connected devices ───────────────────────────────────────────────────
+  const devApi = stub('api-honest-devices.js', `
+    window.__posts = [];
+    const get = async (url) => /trackers\\/status/.test(url)
+      ? { data: { connections: window.__conns || [], available: { fitbit: true, whoop: false, polar: true } } } : { data: {} };
+    const post = async (url, body) => { window.__posts.push({ url, body }); return { data: {} }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const dev = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DeviceConnect from './pages/DeviceConnect.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/devices']}><DeviceConnect /></MemoryRouter>);`, devApi);
+  const card = (W, name) => [...W.w.document.querySelectorAll('p')].find(p => p.textContent === name)?.closest('div[style*="cursor: pointer"]');
+  const dq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  const text = (W) => W.w.document.body.textContent;
+
+  const D = run(dev); await tick(400);
+  const note = dq(D, 'hc-unsupported');
+  ck('with no bridge to Health Connect (every phone today) the page says so, plainly',
+     D.errors.length === 0 && /Android Health Connect is not supported yet/.test(note?.textContent || ''), [D.errors.join('|'), note?.textContent]);
+  ck('…names the devices it means, from the catalogue: HART PRO, Garmin, Samsung and Ultrahuman',
+     /so HART PRO, Garmin, Samsung and Ultrahuman cannot sync here for now\./.test(note?.textContent || ''), note?.textContent);
+  ck('…and says what still works', /You can still log your sleep and workouts yourself on Today\./.test(note?.textContent || ''));
+  ck('there is no "Tap to sync" and no "Sync Now" to tap', !/Tap to sync|Sync Now/.test(text(D)), text(D).slice(0, 200));
+  const badges = [...D.w.document.querySelectorAll('span')].filter(s => s.textContent === 'Not supported yet').length;
+  ck('five devices are marked "Not supported yet": the four that need Health Connect, and Apple Watch', badges === 5, badges);
+  ck('"Popular", "New" and "Beta" no longer sit on devices that cannot connect', !/Popular|\bNew\b|Beta/.test(text(D)), text(D).match(/Popular|\bNew\b|Beta/g));
+  card(D, 'Garmin').click(); await tick(100);
+  ck('opening Garmin shows the reason and NO Connect button',
+     dq(D, 'tracker-unsupported-garmin')?.textContent === 'Needs Android Health Connect, which FitLife cannot read yet.' && !dq(D, 'tracker-connect-garmin') && !/Connect Garmin/.test(text(D)), dq(D, 'tracker-unsupported-garmin')?.textContent);
+  card(D, 'Apple Watch').click(); await tick(100);
+  ck('Apple Watch: the reason (a native iPhone app is needed), no Connect button, no workaround that leads nowhere',
+     /only a native iPhone app can read\. FitLife cannot\./.test(dq(D, 'tracker-unsupported-apple')?.textContent || '') && !dq(D, 'tracker-connect-apple') && !/Workaround|CSV|bridge app/.test(text(D)), dq(D, 'tracker-unsupported-apple')?.textContent);
+  card(D, 'Fitbit').click(); await tick(100);
+  ck('a device that CAN connect (Fitbit, by account login) keeps its Connect button and no "not supported" mark',
+     /Connect Fitbit/.test(dq(D, 'tracker-connect-fitbit')?.textContent || '') && !dq(D, 'tracker-unsupported-fitbit'));
+  ck('WHOOP, whose login is not set up on the server, still says "Setup pending"', /Setup pending/.test(card(D, 'WHOOP')?.textContent || ''), card(D, 'WHOOP')?.textContent);
+
+  const D2 = run(dev, (win) => { win.__conns = [{ provider: 'fitbit' }]; }); await tick(400);
+  ck('with a device connected there are no switches that do nothing ("Background sync", "Heart rate alerts")',
+     D2.errors.length === 0 && /Connected \(1\)/.test(text(D2)) && !/Sync Settings|Background sync|Heart rate alerts|Wi-Fi only/.test(text(D2)), text(D2).match(/Sync Settings|Background sync|Heart rate alerts/g));
+  {
+    const page = srcOf('pages/DeviceConnect.jsx'), hook = srcOf('hooks/useHealthConnect.js');
+    ck('the pretend "Scanning… Pairing… Connected!" dialog is gone from the code', !/Scanning for device|Pairing…|Connected!|Simulate scanning/.test(page));
+    ck('nobody is told to switch to Chrome on Android 14 any more', !/Use Chrome on Android/.test(hook) && !/Use Chrome on Android/.test(page));
+  }
+
+  // The day a native shell provides the bridge, the same page offers the sync.
+  const D3 = run(dev, (win) => { win.__asked = 0; win.HealthConnect = { requestPermission: async () => { win.__asked++; return []; }, readRecords: async () => ({ records: [] }) }; }); await tick(400);
+  ck('WITH a bridge: the sync banner is back and the "not supported" note is not shown',
+     D3.errors.length === 0 && !dq(D3, 'hc-unsupported') && /Android Health Connect/.test(text(D3)) && /Tap to sync Samsung, Garmin and ring data/.test(text(D3)), text(D3).slice(0, 160));
+  card(D3, 'Garmin').click(); await tick(100);
+  ck('…Garmin gets its Connect button, and tapping it asks Health Connect for permission', !!dq(D3, 'tracker-connect-garmin') && !dq(D3, 'tracker-unsupported-garmin'));
+  dq(D3, 'tracker-connect-garmin').click(); await tick(300);
+  ck('…(permission was actually requested)', D3.w.__asked === 1, D3.w.__asked);
+  card(D3, 'Apple Watch').click(); await tick(100);
+  ck('…Apple Watch is still not supported: that needs a different bridge', !!dq(D3, 'tracker-unsupported-apple') && !dq(D3, 'tracker-connect-apple'));
+
+  // ── B. The member's Plan and sleep sheet ──────────────────────────────────
+  const planApi = stub('api-honest-plan.js', `
+    const payload = () => ({
+      profile: { name: 'Asha Rao', monitor_name: 'Sachin', macros: { kcal: 1800, pro: 120, carb: 150, fat: 60 }, water_target: 3000,
+                 activities: ['walk'], acv: [], supplements: [], ...(window.__sleep || {}) },
+      meal_plan: { date: 'x', meals: [] }, program: { program: null, days: [] } });
+    const get = async (url) => ({ data: /\\/members\\/me\\/today$/.test(url) ? payload() : {} });
+    const post = async () => ({ data: {} });
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const plan = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import Plan from './pages/Plan.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/plan']}><Plan /></MemoryRouter>);`, planApi);
+  const P = run(plan); await tick(600);
+  const rec = (W) => W.w.document.querySelector('[data-testid="plan-today-recover"]')?.textContent || '';
+  const main = (W) => W.w.document.querySelector('[data-testid="plan-main"]')?.textContent || '';
+  ck('Plan, nobody has set this member\'s sleep: the standard 10:00 PM → 6:30 AM, and its real length, 8.5 h',
+     P.errors.length === 0 && /10:00 PM → 6:30 AM/.test(rec(P)) && /8\.5 h/.test(rec(P)), [P.errors.join('|'), rec(P)]);
+  ck('…the heading says 8.5 h sleep, not the old "8 h"', /3\.0 L water · 8\.5 h sleep/.test(main(P)) && !/ 8 h sleep/.test(main(P)), main(P).slice(0, 200));
+  const P2 = run(plan, (win) => { win.__sleep = { sleep_bed: '23:30', sleep_wake: '05:30' }; }); await tick(600);
+  ck('Plan, coach set 23:30 and 05:30: the member sees 11:30 PM → 5:30 AM and 6 h, not the standard times',
+     P2.errors.length === 0 && /11:30 PM → 5:30 AM/.test(rec(P2)) && /6 h/.test(rec(P2)) && !/10:00 PM/.test(main(P2)) && /3\.0 L water · 6 h sleep/.test(main(P2)), rec(P2));
+  [...P2.w.document.querySelectorAll('[role=tab]')][3].click(); await tick(150);
+  const recov = P2.w.document.querySelector('[data-testid="plan-recovery"]')?.textContent || '';
+  ck('…and the same on the Recovery view', /11:30 PM → 5:30 AM/.test(recov) && /6 h/.test(recov) && /6 h sleep · 3\.0 L water/.test(main(P2)), recov);
+  const P3 = run(plan, (win) => { win.__sleep = { sleep_bed: '08:00', sleep_wake: '15:20' }; }); await tick(600);
+  ck('a night-shift member: 8:00 AM → 3:20 PM, 7 h 20 min', /8:00 AM → 3:20 PM/.test(rec(P3)) && /7 h 20 min/.test(rec(P3)), rec(P3));
+
+  const sheet = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import SleepSheet from './components/sheets/SleepSheet.jsx';
+    const m = { log: { sleep: window.__night || {} }, update: () => {}, terms: { sleep: 'Sleep' }, protocol: window.__protocol || null };
+    createRoot(document.getElementById('root')).render(<SleepSheet open onClose={() => {}} m={m} />);`, planApi);
+  const dlg = (W) => W.w.document.querySelector('[role="dialog"]');
+  const S1 = run(sheet); await tick(300);
+  ck('sleep sheet, standard times: titled "10:00 PM → 6:30 AM", with "Sleep target · 8.5 h" above it',
+     S1.errors.length === 0 && dlg(S1)?.getAttribute('aria-label') === '10:00 PM → 6:30 AM' && /Sleep target · 8\.5 h/.test(dlg(S1).textContent) && !/8 hrs/.test(dlg(S1).textContent), [S1.errors.join('|'), dlg(S1)?.getAttribute('aria-label')]);
+  const S2 = run(sheet, (win) => { win.__protocol = { sleep_bed: '23:30', sleep_wake: '05:30' }; win.__night = { bedtime: '23:45', waketime: '05:30' }; }); await tick(300);
+  ck('sleep sheet, this member\'s own times: "11:30 PM → 5:30 AM", "Sleep target · 6 h"; the night logged still shows its own 5h 45m',
+     dlg(S2)?.getAttribute('aria-label') === '11:30 PM → 5:30 AM' && /Sleep target · 6 h/.test(dlg(S2).textContent) && /5h 45m/.test(S2.w.document.querySelector('[data-testid="sleep-duration"]')?.textContent || ''), dlg(S2)?.textContent.slice(0, 120));
+
+  // ── C. The coach sets it ───────────────────────────────────────────────────
+  const stApi = stub('api-honest-sleep.js', `
+    window.__patches = [];
+    const patch = async (url, body) => { window.__patches.push({ url, body });
+      if (window.__fail) { const e = new Error('400'); e.response = { status: 400, data: { error: window.__fail } }; throw e; }
+      return { data: { user_id: 12, sleep_bed: body.sleep_bed, sleep_wake: body.sleep_wake } }; };
+    const get = async () => ({ data: {} });
+    export default { get, post: get, put: get, patch, delete: get };`);
+  const st = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import SleepTargetCard from './components/coach/SleepTargetCard.jsx';
+    createRoot(document.getElementById('root')).render(
+      <SleepTargetCard memberId={12} profile={window.__profile || { name: 'Mrs. Padmini Rao' }} onSaved={() => { window.__saved = (window.__saved || 0) + 1; }} />);`, stApi);
+  const C = run(st); await tick(300);
+  const cq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  const setV = (W, el, v) => { Object.getOwnPropertyDescriptor(W.w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new W.w.Event('input', { bubbles: true })); el.dispatchEvent(new W.w.Event('change', { bubbles: true })); };
+  ck('coach card, nothing set: "10:00 PM → 6:30 AM · 8.5 h", and it says these are the standard times',
+     C.errors.length === 0 && cq(C, 'sleep-target-times')?.textContent === '10:00 PM → 6:30 AM · 8.5 h' && cq(C, 'sleep-target-note')?.textContent === "The standard times. Set Padmini's own if they keep different hours.", [C.errors.join('|'), cq(C, 'sleep-target-times')?.textContent, cq(C, 'sleep-target-note')?.textContent]);
+  ck('the form is closed until "Change"', !cq(C, 'sleep-target-form') && !!cq(C, 'sleep-target-edit'));
+  cq(C, 'sleep-target-edit').click(); await tick(100);
+  ck('"Change" opens two time fields filled with the current times, and says what they add up to',
+     cq(C, 'sleep-target-bed')?.value === '22:00' && cq(C, 'sleep-target-wake')?.value === '06:30' && cq(C, 'sleep-target-preview')?.textContent === 'That is 8.5 h of sleep.', [cq(C, 'sleep-target-bed')?.value, cq(C, 'sleep-target-preview')?.textContent]);
+  ck('on the standard times there is nothing to "go back" to', !cq(C, 'sleep-target-reset'));
+  setV(C, cq(C, 'sleep-target-bed'), '23:00'); setV(C, cq(C, 'sleep-target-wake'), '02:00'); await tick(100);
+  ck('11 PM to 2 AM: it says that is 3 h and to check AM and PM, and Save is off',
+     /That is 3 h of sleep\. A target should be between 4 and 12 hours\. Check AM and PM\./.test(cq(C, 'sleep-target-preview')?.textContent || '') && cq(C, 'sleep-target-save').disabled === true, cq(C, 'sleep-target-preview')?.textContent);
+  cq(C, 'sleep-target-save').click(); await tick(150);
+  ck('…and tapping it sends nothing', C.w.__patches.length === 0, C.w.__patches);
+  setV(C, cq(C, 'sleep-target-bed'), '23:30'); setV(C, cq(C, 'sleep-target-wake'), '05:30'); await tick(100);
+  ck('11:30 PM to 5:30 AM: "That is 6 h of sleep.", Save is on', cq(C, 'sleep-target-preview')?.textContent === 'That is 6 h of sleep.' && cq(C, 'sleep-target-save').disabled === false);
+  cq(C, 'sleep-target-save').click(); await tick(300);
+  ck('Save sends exactly the two times for that member', C.w.__patches.length === 1 && C.w.__patches[0].url === '/members/12/profile' && JSON.stringify(C.w.__patches[0].body) === '{"sleep_bed":"23:30","sleep_wake":"05:30"}', C.w.__patches);
+  ck('the card then shows 11:30 PM → 5:30 AM · 6 h, says it is set for Padmini, closes the form and tells the page',
+     cq(C, 'sleep-target-times')?.textContent === '11:30 PM → 5:30 AM · 6 h' && cq(C, 'sleep-target-note')?.textContent === 'Set for Padmini. This is what their Plan shows.' && !cq(C, 'sleep-target-form') && C.w.__saved === 1, [cq(C, 'sleep-target-times')?.textContent, cq(C, 'sleep-target-note')?.textContent, C.w.__saved]);
+  cq(C, 'sleep-target-edit').click(); await tick(100);
+  ck('now there is a way back to the standard times', /Go back to the standard times/.test(cq(C, 'sleep-target-reset')?.textContent || ''));
+  cq(C, 'sleep-target-reset').click(); await tick(300);
+  ck('…which clears both times and shows the standard ones again', JSON.stringify(C.w.__patches[1]?.body) === '{"sleep_bed":null,"sleep_wake":null}' && cq(C, 'sleep-target-times')?.textContent === '10:00 PM → 6:30 AM · 8.5 h', [C.w.__patches[1], cq(C, 'sleep-target-times')?.textContent]);
+
+  const C2 = run(st, (win) => { win.__profile = { name: 'Raghavendra', sleep_bed: '21:45', sleep_wake: '04:45' }; win.__fail = 'Bedtime and wake time should each be a time like 22:30'; }); await tick(300);
+  ck('a member who already has their own times: shown from the profile (9:45 PM → 4:45 AM · 7 h)', cq(C2, 'sleep-target-times')?.textContent === '9:45 PM → 4:45 AM · 7 h', cq(C2, 'sleep-target-times')?.textContent);
+  cq(C2, 'sleep-target-edit').click(); await tick(100);
+  setV(C2, cq(C2, 'sleep-target-bed'), '22:00'); await tick(80);
+  cq(C2, 'sleep-target-save').click(); await tick(300);
+  ck('if the server refuses, its reason is shown, the form stays open and the card keeps the old times',
+     cq(C2, 'sleep-target-error')?.textContent === 'Bedtime and wake time should each be a time like 22:30' && !!cq(C2, 'sleep-target-form') && cq(C2, 'sleep-target-times')?.textContent === '9:45 PM → 4:45 AM · 7 h' && !C2.w.__saved, [cq(C2, 'sleep-target-error')?.textContent, cq(C2, 'sleep-target-times')?.textContent]);
+  cq(C2, 'sleep-target-cancel').click(); await tick(100);
+  ck('Cancel closes the form and clears the error', !cq(C2, 'sleep-target-form') && !cq(C2, 'sleep-target-error'));
+  ck('the card is on the coach\'s member page, in the Training tab', /\{tab === 'training' && \(<>\s*\{\/\* Sleep target \*\/\}\s*<Card>\s*<SleepTargetCard memberId=\{parseInt\(memberId\)\} profile=\{profile\}/.test(srcOf('pages/Monitor.jsx')));
+
+  // ── D. Nutrient gaps ───────────────────────────────────────────────────────
+  const miApi = stub('api-honest-micro.js', `
+    const base = () => ({ confidence: 'insufficient', reason: '3 of 14 days of weight logged', observed_tdee: null, weight_days: 3, food_days: 12, food_coverage_pct: 80,
+      micro_gaps: window.__gaps === undefined ? [{ nutrient: 'fiber', avg: 14, rda: 30, pct: 47, coverage: 92 }, { nutrient: 'iron', avg: 9, rda: 18, pct: 50, coverage: 88 }] : window.__gaps,
+      micro_unknown: window.__unknown === undefined ? [{ nutrient: 'vit_e', coverage: 0 }, { nutrient: 'zinc', coverage: 11 }, { nutrient: 'folate', coverage: 11 }] : window.__unknown });
+    const get = async (url) => ({ data: /adaptive$/.test(url) ? base() : null });
+    export default { get, post: get, put: get, patch: get, delete: get };`);
+  const mi = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import MetabolicInsight from './components/MetabolicInsight.jsx';
+    createRoot(document.getElementById('root')).render(window.__coach ? <MetabolicInsight memberId={12} canApply /> : <MetabolicInsight />);`, miApi);
+  const mq = (W, id) => W.w.document.querySelector(`[data-testid="${id}"]`);
+  const MC = run(mi, (win) => { win.__coach = true; }); await tick(400);
+  ck('coach: the real gaps are listed (fibre 47%, iron 50%) and zinc is not among them',
+     MC.errors.length === 0 && /Fibre.*47%/.test(mq(MC, 'micro-gap-fiber')?.textContent || '') && /Iron.*50%/.test(mq(MC, 'micro-gap-iron')?.textContent || '') && !mq(MC, 'micro-gap-zinc'), [MC.errors.join('|'), mq(MC, 'micro-block')?.textContent]);
+  ck('coach: what the food data cannot answer is named, in words: Vitamin E, Zinc, Folate',
+     /^Cannot be judged from the food logged: Vitamin E, Zinc, Folate\. Too\s+little of it carries a figure for these\.$/.test((mq(MC, 'micro-unknown')?.textContent || '').trim()), mq(MC, 'micro-unknown')?.textContent);
+  ck('the caption says the figures are from food only and supplements are not counted',
+     /Averages across 12 logged days, from food only\. Supplements are not counted\. Against adult reference intakes\./.test(mq(MC, 'micro-caption')?.textContent || ''), mq(MC, 'micro-caption')?.textContent);
+  const MM = run(mi); await tick(400);
+  ck('member: the same two gaps and the same caption', MM.errors.length === 0 && !!mq(MM, 'micro-gap-fiber') && !!mq(MM, 'micro-gap-iron') && /Supplements are not counted/.test(mq(MM, 'micro-caption')?.textContent || ''), MM.errors.join('|'));
+  ck('member: no list of nutrients the food table lacks (that is the coach\'s to fix, not theirs)', !mq(MM, 'micro-unknown') && !/Zinc|Vitamin E|Folate/.test(mq(MM, 'micro-block')?.textContent || ''));
+  const MM2 = run(mi, (win) => { win.__gaps = []; }); await tick(400);
+  ck('member with no real gaps: no nutrient section at all (it used to list six invented ones)', MM2.errors.length === 0 && !mq(MM2, 'micro-block') && !/Consistently under target/.test(MM2.w.document.body.textContent));
+  const MC2 = run(mi, (win) => { win.__coach = true; win.__gaps = []; }); await tick(400);
+  ck('coach with no real gaps: no "under target" heading, but still told what cannot be judged', !/Consistently under target/.test(MC2.w.document.body.textContent) && !!mq(MC2, 'micro-unknown'));
+  const MC3 = run(mi, (win) => { win.__coach = true; win.__gaps = []; win.__unknown = []; }); await tick(400);
+  ck('nothing low and nothing unknown: no section', MC3.errors.length === 0 && !mq(MC3, 'micro-block'));
+
+  // ── E. In real Chrome at phone widths ──────────────────────────────────────
+  try {
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root" style="padding:16px"></div></body></html>`;
+    const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    try {
+      const out = [];
+      for (const width of [320, 360, 390]) {
+        // the coach's card with the form open and the longest warning showing
+        let page = await browser.newPage();
+        await page.setViewport({ width, height: 700, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+        await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+        await page.evaluate(() => { window.__profile = { name: 'Raghavendra Krishnamurthy', sleep_bed: '21:45', sleep_wake: '04:45' }; });
+        await page.addScriptTag({ content: st });
+        await new Promise(r => setTimeout(r, 500));
+        await page.click('[data-testid="sleep-target-edit"]');
+        await page.evaluate(() => { const set = (id, v) => { const el = document.querySelector(`[data-testid="${id}"]`); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); }; set('sleep-target-bed', '23:00'); set('sleep-target-wake', '02:00'); });
+        await new Promise(r => setTimeout(r, 300));
+        const card = await page.evaluate(() => {
+          const h = (id) => document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().height || 0;
+          const within = [...document.querySelectorAll('[data-testid="sleep-target"] *')].every(e => { const r = e.getBoundingClientRect(); return r.right <= window.innerWidth + 0.5 && r.left >= -0.5; });
+          return { sw: document.documentElement.scrollWidth, vw: window.innerWidth, save: h('sleep-target-save'), cancel: h('sleep-target-cancel'), reset: h('sleep-target-reset'), bed: h('sleep-target-bed'), within };
+        });
+        await page.close();
+        // the devices page, every card opened
+        page = await browser.newPage();
+        await page.setViewport({ width, height: 700, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+        await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+        await page.evaluate(() => { document.getElementById('root').style.padding = '0'; });
+        await page.addScriptTag({ content: dev });
+        await new Promise(r => setTimeout(r, 600));
+        await page.evaluate(() => { document.querySelectorAll('div[style*="cursor: pointer"]').forEach(d => d.click()); });
+        await new Promise(r => setTimeout(r, 300));
+        const devices = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: window.innerWidth,
+          note: !!document.querySelector('[data-testid="hc-unsupported"]'), notes: document.querySelectorAll('[data-testid^="tracker-unsupported-"]').length,
+          clipped: [...document.querySelectorAll('[data-testid^="tracker-unsupported-"], [data-testid="hc-unsupported"]')].some(e => e.scrollWidth > e.clientWidth + 1) }));
+        await page.close();
+        out.push({ width, card, devices });
+      }
+      ck('in real Chrome at 320, 360 and 390 px: the coach\'s sleep card with its form and warning open stays inside the screen',
+         out.every(o => o.card.sw <= o.card.vw + 1 && o.card.within), out.map(o => o.card));
+      ck('…Save, Cancel, "go back" and the time fields are all at least 44 px tall', out.every(o => o.card.save >= 44 && o.card.cancel >= 44 && o.card.reset >= 44 && o.card.bed >= 44), out.map(o => o.card));
+      ck('…the devices page with every card open does not scroll sideways, and all five reasons are readable in full',
+         out.every(o => o.devices.sw <= o.devices.vw + 1 && o.devices.note && o.devices.notes === 5 && !o.devices.clipped), out.map(o => o.devices));
+    } finally { await browser.close(); await new Promise(r => server.close(r)); }
+  } catch (e) { console.log('  – browser not installed, the sleep card and devices page were NOT measured in Chrome (' + String(e.message).slice(0, 60) + ')'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 36. Macros eaten, for every member; a member's own macros for a food
+//     (10 Oct 2026: "show calories and macros of what is consumed, plan or no
+//     plan; edit macros and calories adjust")
+// ═══════════════════════════════════════════════════════════════════════════
+async function macrosEatenTest() {
+  console.log('\n[36] macros eaten (plan and no plan) and editing a food\'s macros');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+  const typeIn = async (W, el, value) => {
+    Object.getOwnPropertyDescriptor(W.w.HTMLInputElement.prototype, 'value').set.call(el, value);
+    el.dispatchEvent(new W.w.Event('input', { bubbles: true })); await tick(40);
+  };
+  const mount = (stubSrc, name) => bundle(`
+    import { createRoot } from 'react-dom/client';
+    import { MemoryRouter } from 'react-router-dom';
+    import DailyLog from './pages/DailyLog.jsx';
+    import { useAuthStore } from './store/authStore.js';
+    import { useLogStore } from './store/logStore.js';
+    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+    window.__logStore = useLogStore;
+    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, stub(name, stubSrc));
+
+  // The member's saved labels come back from GET /member-foods, as the server would return them.
+  const withLabels = TODAY_API_STUB.replace("const routes = [", "const routes = [\n      [/^\\/member-foods$/, () => (window.__labels || [])],");
+  try {
+  // ── A. A member WITH targets ──────────────────────────────────────────────
+  const A = run(await mount(withLabels, 'api-36-plan.js')); await tick(900);
+  const d = A.w.document;
+  const q = (id, root = d) => root.querySelector(`[data-testid="${id}"]`);
+  const qa = (id, root = d) => [...root.querySelectorAll(`[data-testid="${id}"]`)];
+  ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
+  ck('Eat row: protein, carbs and fat each eaten against the coach\'s target, with a bar each',
+     ['pro', 'carb', 'fat'].every(k => q(`plan-macros-${k}`)?.querySelector('.h-1')) && /37 \/ 120 g/.test(q('plan-macros-pro').textContent), q('plan-macros')?.textContent);
+  const meals = qa('meal-macros').map(e => e.textContent);
+  ck('timeline: each meal shows its macros under the foods (Breakfast P 10 · C 52 · F 4; Lunch P 27 · C 8 · F 30)',
+     meals[0] === 'P 10 g · C 52 g · F 4 g' && meals[1] === 'P 27 g · C 8 g · F 30 g', meals);
+
+  q('plan-eat-action').click(); await tick(500);
+  const dlg = () => d.querySelector('[role=dialog]');
+  ck('food sheet with targets: the macro bars (as before), not the no-target card', /Macro Targets/.test(dlg()?.textContent || '') && !q('eaten-card'), dlg()?.textContent.slice(0, 80));
+  ck('each food shows kcal · P · C · F in the simple view', qa('food-macros').length === 3 && /390 kcal · P27g · C7\.5g · F30g/.test(qa('food-macros')[2].textContent), qa('food-macros').map(e => e.textContent));
+  ck('each meal header shows P, C and F in the simple view too (it showed kcal only)', /P 9\.8g/.test(dlg().textContent) && /C 51\.6g/.test(dlg().textContent) && /F 4\.0g/.test(dlg().textContent));
+  ck('every logged food has "Edit macros"', qa('food-edit-macros').length === 3);
+
+  // Paneer bhurji: the member's pack says 25 g protein per 100 g
+  qa('food-edit-macros')[2].click(); await tick(200);
+  const ed = () => q('macro-editor');
+  ck('the editor opens under that food with its numbers per 100 g (18 / 5 / 20)', !!ed() && q('macro-in-protein').value === '18' && q('macro-in-carbs').value === '5' && q('macro-in-fat').value === '20',
+     ed() && [q('macro-in-protein').value, q('macro-in-carbs').value, q('macro-in-fat').value]);
+  ck('calories are worked out from the macros: 4×18 + 4×5 + 9×20 = 272 per 100 g, 408 for 150 g', /272 kcal per 100 g/.test(q('macro-kcal').textContent) && /408 kcal for your 150 g/.test(q('macro-kcal').textContent), q('macro-kcal').textContent);
+  await typeIn(A, q('macro-in-protein'), '25');
+  ck('typing protein 25 moves the calories at once: 300 per 100 g, 450 for 150 g', /300 kcal per 100 g/.test(q('macro-kcal').textContent) && /450 kcal for your 150 g/.test(q('macro-kcal').textContent), q('macro-kcal').textContent);
+  [...ed().querySelectorAll('[role=tab]')][1].click(); await tick(80);
+  ck('"For 150 g" converts what is typed to the portion (25 → 37.5, 20 → 30)', q('macro-in-protein').value === '37.5' && q('macro-in-fat').value === '30' && /300 kcal per 100 g/.test(q('macro-kcal').textContent), [q('macro-in-protein').value, q('macro-in-fat').value]);
+  [...ed().querySelectorAll('[role=tab]')][0].click(); await tick(80);
+  ck('and back to per 100 g (37.5 → 25)', q('macro-in-protein').value === '25');
+  ck('"Use these every time" is on by default and names the food', q('macro-remember').checked && /every time I log Paneer bhurji/.test(ed().textContent));
+  const putsBefore = A.w.__posts.filter(p => p.url === '/member-foods').length;
+  q('macro-save').click(); await tick(300);
+  const put = A.w.__posts.filter(p => p.url === '/member-foods').pop();
+  ck('Save sends the member\'s label: name, the food\'s numbers with protein 25 and calories 300', A.w.__posts.filter(p => p.url === '/member-foods').length === putsBefore + 1
+     && put.body.name === 'Paneer bhurji' && put.body.per_100g.protein === 25 && put.body.per_100g.calories === 300 && put.body.per_100g.net_carbs === 5, put?.body);
+  const item = A.w.__logStore.getState().log.food.find(f => f.id === 3);
+  ck('the logged food now carries the new numbers and the label mark', item.per_100g.protein === 25 && item.per_100g.calories === 300 && item.label === true, item);
+  ck('the row says "your label" and shows 450 kcal · P37.5g', qa('food-label-tag').length === 1 && /450 kcal · P37\.5g/.test(qa('food-macros')[2]?.textContent || ''), qa('food-macros').map(e => e.textContent));
+  ck('the editor closed', !ed());
+
+  // A number that cannot be right
+  qa('food-edit-macros')[0].click(); await tick(150);
+  await typeIn(A, q('macro-in-fat'), '200');
+  ck('more than 100 g in 100 g: said while typing, no calories shown', /can.t add up to more than 100 g/.test(q('macro-error-live')?.textContent || ''), q('macro-kcal').textContent);
+  const n0 = A.w.__posts.length;
+  q('macro-save').click(); await tick(150);
+  ck('and Save refuses it, sending nothing', /more than 100 g/.test(q('macro-error')?.textContent || '') && A.w.__posts.length === n0 && !!ed());
+  await typeIn(A, q('macro-in-fat'), '1');
+  q('macro-remember').click(); await tick(40);
+  const n1 = A.w.__posts.filter(p => p.url === '/member-foods').length;
+  q('macro-save').click(); await tick(200);
+  const idli = A.w.__logStore.getState().log.food.find(f => f.id === 1);
+  ck('with "every time" unticked: just this entry changes, no label saved', A.w.__posts.filter(p => p.url === '/member-foods').length === n1 && idli.per_100g.fat === 1 && idli.label === true, idli.per_100g);
+  ck('Cancel on a fresh editor changes nothing', await (async () => { qa('food-edit-macros')[1].click(); await tick(100); await typeIn(A, q('macro-in-protein'), '40'); q('macro-cancel').click(); await tick(100);
+     return !ed() && A.w.__logStore.getState().log.food.find(f => f.id === 2).per_100g.protein === 2.8; })());
+
+  // Today's numbers follow the edit
+  const closeBtn = [...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Done'); closeBtn?.click(); await tick(500);
+  ck('Today\'s Eat row follows the edit: protein 37 → 47 (paneer 27 → 37.5 g)', /47 \/ 120 g/.test(q('plan-macros-pro')?.textContent || ''), q('plan-macros-pro')?.textContent);
+
+  // The label is offered in the search next time (the sheet re-mounts and reloads the labels)
+  A.w.__labels = [{ id: 1, name: 'Paneer bhurji', per_100g: put.body.per_100g, base_food_id: null }];
+  q('plan-eat-action').click(); await tick(500);
+  [...dlg().querySelectorAll('button')].find(b => /Add food item/.test(b.textContent)).click(); await tick(150);
+  await typeIn(A, dlg().querySelector('input[placeholder="Food name…"]'), 'paneer'); await tick(500);
+  const sug = q('suggest-label');
+  ck('typing "paneer" offers the member\'s own label first, marked "your label"', !!sug && /Paneer bhurji/.test(sug.closest('button').textContent), dlg().textContent.slice(0, 200));
+  if (sug) {
+    sug.closest('button').click(); await tick(150);
+    await typeIn(A, dlg().querySelector('input[placeholder="Weight in grams"]'), '100');
+    [...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Add').click(); await tick(200);
+  }
+  const added = A.w.__logStore.getState().log.food.at(-1);
+  ck('added with the label\'s numbers and mark (never pointing at a shared food row it is not)', added.name === 'Paneer bhurji' && added.per_100g.protein === 25 && added.label === true && added.food_id === null, added);
+
+  } catch (e) { ck('section A ran to the end', false, e.message); }
+  try {
+  // ── B. A member with NO targets ───────────────────────────────────────────
+  const noPlan = withLabels.replace('macros: { kcal: 1800, pro: 120, carb: 150, fat: 60 },', 'macros: null,');
+  ck('(fixture: the no-plan member really has no targets)', noPlan !== TODAY_API_STUB);
+  const B = run(await mount(noPlan, 'api-36-noplan.js')); await tick(900);
+  const bd = B.w.document; const bq = (id) => bd.querySelector(`[data-testid="${id}"]`);
+  ck('mounts', B.errors.length === 0, B.errors.join('|'));
+  ck('Eat row: calories alone, no "/ target"', /666/.test(bq('plan-eat').textContent) && !/666 \//.test(bq('plan-eat').textContent.replace(/\s+/g, ' ')), bq('plan-eat').textContent);
+  ck('Eat row: protein 37 g, carbs 59 g, fat 34 g — eaten numbers, no invented target, no bars',
+     /^Protein37 g$/.test(bq('plan-macros-pro').textContent) && /^Carbs59 g$/.test(bq('plan-macros-carb').textContent) && /^Fat34 g$/.test(bq('plan-macros-fat').textContent) && !bq('plan-macros').querySelector('.h-1'),
+     ['pro', 'carb', 'fat'].map(k => bq(`plan-macros-${k}`)?.textContent));
+  ck('timeline meals show their macros too', bd.querySelectorAll('[data-testid="meal-macros"]').length === 2);
+  bq('plan-eat-action').click(); await tick(500);
+  ck('food sheet: an "Eaten today" card with 666 kcal and the three macros, saying there are no targets yet',
+     /Eaten today/.test(bq('eaten-card')?.textContent || '') && /666/.test(bq('eaten-kcal').textContent) && /37 g/.test(bq('eaten-card').textContent) && /No targets from your coach yet/.test(bq('eaten-no-targets').textContent) && !/Macro Targets/.test(bd.body.textContent), bq('eaten-card')?.textContent);
+  ck('each food still shows kcal · P · C · F (the line was hidden with no calorie target), without the target dot',
+     bd.querySelectorAll('[data-testid="food-macros"]').length === 3 && [...bd.querySelectorAll('[data-testid="food-macros"]')].every(e => e.children.length === 1), [...bd.querySelectorAll('[data-testid="food-macros"]')].map(e => e.textContent));
+
+  } catch (e) { ck('section B ran to the end', false, e.message); }
+  try {
+  // ── C. The AI chat preview: fix the numbers before logging ───────────────
+  const chatApi = stub('api-36-chat.js', `
+    window.__posts = [];
+    const get = async () => ({ data: {} });
+    const post = async (url, body) => { window.__posts.push({ url, body });
+      if (url === '/ai-chat/parse') return { data: { reply: 'Got it: oats.', foods: [{ name: 'Oats', grams: 100, meal: 'Breakfast', food_id: 77, source: 'db-verified', ai_grams: 100,
+        per_100g: { calories: 374, protein: 13.2, total_carbs: 67.7, net_carbs: 57.6, fat: 7.6, fiber: 10.1 }, macros: { cal: 374, pro: 13.2, carb: 67.7, fat: 7.6 } }], totals: {} } };
+      return { data: { ok: true } }; };
+    export default { get, post, put: post, patch: post, delete: post };`);
+  const chat = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import AIChatLog from './components/AIChatLog.jsx';
+    import { useAIChat } from './store/aiChatStore.js';
+    import { useLogStore } from './store/logStore.js';
+    window.__log = useLogStore;
+    useLogStore.setState(st => ({ log: { ...(st.log || {}), food: [], activities: {}, acv: {}, supplements: {}, water: 0, sleep: {} } }));
+    createRoot(document.getElementById('root')).render(<AIChatLog mealPlans={[]} />);
+    useAIChat.getState().openChat();`, chatApi);
+  const C = run(chat); await tick(500);
+  const cd = C.w.document; const cq = (id) => cd.querySelector(`[data-testid="${id}"]`);
+  const t = cd.querySelector('[data-testid="composer-input"]');
+  Object.getOwnPropertyDescriptor(C.w.HTMLTextAreaElement.prototype, 'value').set.call(t, '100g oats');
+  t.dispatchEvent(new C.w.Event('input', { bubbles: true })); await tick(60);
+  t.dispatchEvent(new C.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
+  const row = () => cq('chat-edit-macros')?.closest('button');
+  ck('the preview row shows 374 kcal, P 13.2 and "Edit macros" (the screenshot that started this)', C.errors.length === 0 && /374 kcal/.test(row()?.textContent || '') && /P 13\.2/.test(row().textContent) && cq('chat-edit-macros').textContent === 'Edit macros', [C.errors.join('|'), row()?.textContent]);
+  const onBefore = /line-through/.test(row().innerHTML);
+  cq('chat-edit-macros').click(); await tick(300);
+  ck('tapping it opens the editor in a sheet, and does NOT untick the food', !!cq('macro-editor') && cd.querySelector('[role=dialog]') && /Oats · 100 g/.test(cd.querySelector('[role=dialog]').textContent) && /line-through/.test(row().innerHTML) === onBefore);
+  await typeIn(C, cq('macro-in-protein'), '24');
+  await typeIn(C, cq('macro-in-carbs'), '55');
+  await typeIn(C, cq('macro-in-fat'), '7.8');
+  ck('typing inside the sheet does not untick the food either', /line-through/.test(row().innerHTML) === onBefore);
+  ck('calories: 386 per 100 g (4×24 + 4×55 + 9×7.8)', /386 kcal per 100 g/.test(cq('macro-kcal').textContent), cq('macro-kcal').textContent);
+  cq('macro-save').click(); await tick(1200);   // the sheet's exit animation
+  const cput = C.w.__posts.find(p => p.url === '/member-foods');
+  ck('saved as the member\'s label for "Oats", linked to food 77, fibre kept', !!cput && cput.body.name === 'Oats' && cput.body.food_id === 77 && cput.body.per_100g.protein === 24 && cput.body.per_100g.fiber === 10.1, cput?.body);
+  ck('the row now reads 386 kcal · P 24 · C 55 · F 7.8 and "Your label · edit"; sheet closed',
+     /386 kcal/.test(row().textContent) && /P 24 · C 55 · F 7\.8/.test(row().textContent) && cq('chat-edit-macros').textContent === 'Your label · edit' && !cq('macro-editor'), row()?.textContent);
+  ck('the food is still ticked to log', /line-through/.test(row().innerHTML) === onBefore && !/line-through/.test(row().innerHTML));
+  const applyBtn = [...cd.querySelectorAll('button')].find(b => /^Apply 1 item/.test(b.textContent.trim()));
+  ck('Apply offers the one food', !!applyBtn);
+  applyBtn?.click(); await tick(400);
+  const daySave = C.w.__posts.filter(p => /^\/logs\/\d{4}-\d{2}-\d{2}$/.test(p.url)).pop();
+  const logged = (daySave?.body?.food_items || []).at(-1);
+  ck('applied: the day saved to the server has Oats with 24 g protein per 100 g, 386 kcal, marked as the member\'s label',
+     logged?.name === 'Oats' && logged.per_100g.protein === 24 && logged.per_100g.calories === 386 && logged.label === true && logged.food_id === 77, logged);
+  ck('after applying there is no edit link on the row (the entry is in the log; edit it there)', !cq('chat-edit-macros'));
+
+  } catch (e) { ck('section C ran to the end', false, e.message); }
+  try {
+  // ── D. The coach sees the labels ─────────────────────────────────────────
+  const coachApi = stub('api-36-coach.js', `
+    const get = async (url) => ({ data: /member-foods\\/member\\/7$/.test(url) ? [
+      { id: 1, name: 'Oats', per_100g: { calories: 386, protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8 }, updated_at: '2026-10-10T08:00:00Z' }] : [] });
+    export default { get, post: get, put: get, patch: get, delete: get };`);
+  const coach = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import MLC from './components/coach/MemberLabelsCard.jsx';
+    import DayDetail from './components/coach/DayDetail.jsx';
+    const log = { log_date: '2026-10-10', food_items: [{ id: 1, name: 'Oats', grams: 50, meal: 'Breakfast', label: true, per_100g: { calories: 386, protein: 24, total_carbs: 55, fat: 7.8 } },
+      { id: 2, name: 'Banana', grams: 100, meal: 'Breakfast', per_100g: { calories: 89, protein: 1.1, total_carbs: 23, fat: 0.3 } }], activities: {}, acv: {}, supplements: {} };
+    createRoot(document.getElementById('root')).render(<div><MLC memberId={7} memberName="Asha Rao" /><MLC memberId={8} memberName="Ravi" />
+      <DayDetail activeLog={log} activeDate="2026-10-10" memberId={7} workoutTick={0} data={{ profile: { meal_slots: ['Breakfast'] } }} /></div>);`, coachApi);
+  const D = run(coach); await tick(500);
+  const dd = D.w.document;
+  const cards = [...dd.querySelectorAll('[data-testid="member-labels"]')];
+  ck('coach: "Asha\'s own food labels" lists Oats — P 24 · C 55 · F 7.8 g per 100 g, 386 kcal, the date',
+     D.errors.length === 0 && /Asha's own food labels/.test(cards[0].textContent) && /per 100 g · P 24 · C 55 · F 7\.8 g/.test(cards[0].textContent) && /386/.test(cards[0].textContent) && /10 Oct/.test(cards[0].textContent), [D.errors.join('|'), cards[0]?.textContent]);
+  ck('coach: a member with none gets a sentence saying what will appear', /None yet\. When Ravi types the protein, carbs and fat from a pack/.test(cards[1].textContent), cards[1]?.textContent);
+  ck('coach: in the day\'s full log, the label food is marked "member\'s own label" (and only that one)', dd.querySelectorAll('[data-testid="coach-label-tag"]').length === 1, dd.querySelectorAll('[data-testid="coach-label-tag"]').length);
+  ck('the card is on the coach\'s Nutrition tab', /\{tab === 'nutrition' && \(<>[^\n]*\n\s*<Card><MemberLabelsCard memberId=\{parseInt\(memberId\)\}/.test(srcOf('pages/Monitor.jsx')));
+  } catch (e) { ck('section D ran to the end', false, e.message); }
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -3151,6 +3810,9 @@ async function overflowTest() {
     await weeklyTest();
     await voicePilotTest();
     await reviewFixesTest();
+    await phase8cTest();
+    await honestStatesTest();
+    await macrosEatenTest();
     await overflowTest();
     await cspTest();
   } catch (err) {

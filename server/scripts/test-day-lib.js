@@ -127,6 +127,31 @@ console.log('\n[6] sleep');
   ck('missing either time → null',    day.sleepMinutes('22:30', '') === null && day.sleepMinutes(null, '06:00') === null);
   ck('formatSleep 465 → "7h 45m"',    day.formatSleep(465) === '7h 45m');
   ck('formatSleep null → ""',         day.formatSleep(null) === '');
+
+  // The sleep TARGET. It was a constant — 10:00 PM, 6:30 AM, "8 h" — for every
+  // member, and wrong for its own times.
+  const dflt = day.sleepTarget(null);
+  ck('no times set → the standard 10:00 PM → 6:30 AM, marked as the default',
+     dflt.bed === '22:00' && dflt.wake === '06:30' && dflt.bedLabel === '10:00 PM' && dflt.wakeLabel === '6:30 AM' && dflt.isDefault === true, dflt);
+  ck('…and its length is worked out: 510 minutes, shown as 8.5 h (it was labelled 8)', dflt.minutes === 510 && dflt.hoursLabel === '8.5 h', dflt);
+  const own = day.sleepTarget({ sleep_bed: '23:30', sleep_wake: '05:30' });
+  ck('a member with their own times gets those: 11:30 PM → 5:30 AM, 6 h, not the default',
+     own.bedLabel === '11:30 PM' && own.wakeLabel === '5:30 AM' && own.minutes === 360 && own.hoursLabel === '6 h' && own.isDefault === false, own);
+  const shift = day.sleepTarget({ sleep_bed: '08:00', sleep_wake: '15:20' });
+  ck('a night-shift worker sleeping 8:00 AM → 3:20 PM: 7 h 20 min', shift.bedLabel === '8:00 AM' && shift.wakeLabel === '3:20 PM' && shift.hoursLabel === '7 h 20 min', shift);
+  ck('midnight reads as 12:00 AM', day.sleepTarget({ sleep_bed: '00:00', sleep_wake: '07:00' }).bedLabel === '12:00 AM');
+  ck('only one of the two set → the whole default, never half of each',
+     [{ sleep_bed: '23:30' }, { sleep_wake: '05:30' }, { sleep_bed: '23:30', sleep_wake: null }].every(x => { const t = day.sleepTarget(x); return t.isDefault && t.bed === '22:00' && t.wake === '06:30'; }));
+  ck('a time that is not a time → the default', [{ sleep_bed: '25:00', sleep_wake: '06:00' }, { sleep_bed: 'late', sleep_wake: '06:00' }, { sleep_bed: '', sleep_wake: '' }].every(x => day.sleepTarget(x).isDefault));
+  ck('"22:15:00" from the database is read as 22:15', day.sleepTarget({ sleep_bed: '22:15:00', sleep_wake: '06:15:00' }).bed === '22:15');
+  ck('formatHours: 480 → "8 h", 510 → "8.5 h", 500 → "8 h 20 min", null → ""',
+     day.formatHours(480) === '8 h' && day.formatHours(510) === '8.5 h' && day.formatHours(500) === '8 h 20 min' && day.formatHours(null) === '');
+  {
+    const src = (f) => require('fs').readFileSync(require('path').join(__dirname, '../../client/src', f), 'utf8');
+    const planSrc = src('pages/Plan.jsx'), sheetSrc = src('components/sheets/SleepSheet.jsx');
+    ck('no screen carries its own sleep times or hours any more',
+       ![planSrc, sheetSrc].some(x => /10:00 PM|6:30 AM|8 hrs|hours: 8/.test(x)) && /sleepTarget\(protocol\)/.test(planSrc) && /sleepTarget\(protocol\)/.test(sheetSrc));
+  }
   ck('tone bands: 7–9h great, <6h short, else ok',
      day.sleepTone(465) === 'great' && day.sleepTone(330) === 'short' && day.sleepTone(390) === 'ok' && day.sleepTone(600) === 'ok');
 }
@@ -255,13 +280,76 @@ console.log('\n[7f] recovery');
   const s3 = day.recoverySummary(week({ sleep: { minutes: 300 } }), { today: T });
   ck('under six hours of sleep → protect tonight', s3 && /5h 00m of sleep is under six hours/.test(s3.insight), s3 && s3.insight);
   const s4 = day.recoverySummary(week({}), { today: T });
-  ck('a normal day on a high-recovery baseline → green light', s4 && /green light/i.test(s4.insight), s4 && s4.insight);
+  ck('a normal day on a high-recovery baseline → "ready for today\'s plan", and never told to do more',
+     s4 && /Recovery is high \(70\)\. You are ready for today's plan — no need to add to it\./.test(s4.insight), s4 && s4.insight);
   ck('averages come from the prior days, not today', s4.avgs.restingHr === 55 && s4.avgs.steps === 8000);
+  // Brief finding 5: a good reading must never tell anyone to train harder.
+  // The tracker does not know it is a rest day, or what the coach prescribed.
+  const s5 = day.recoverySummary(week({ recovery: { score: 50, hrv_rmssd_milli: 60, resting_heart_rate: 55 }, sleep: { minutes: 500 } }), { today: T });
+  ck('an hour more sleep than usual → says so, and that the plan should feel easier (not "train hard")',
+     s5 && /8h 20m — a better night than your average\. Today's plan should feel easier\./.test(s5.insight), s5 && s5.insight);
+  const goodDays = [s4, s5,
+    day.recoverySummary(week({ recovery: { score: 95, hrv_rmssd_milli: 90, resting_heart_rate: 48 }, sleep: { minutes: 560 } }), { today: T }),
+    day.recoverySummary(week({ recovery: { score: 70, hrv_rmssd_milli: 60, resting_heart_rate: 50 } }), { today: T })];
+  ck('no good-day line says "hard", "green light" or "push" in any wording',
+     goodDays.every(x => x && x.insight && !/hard|green light|push|go for it|max/i.test(x.insight)), goodDays.map(x => x && x.insight));
+  const mixed = day.recoverySummary(week({ recovery: { score: 80, hrv_rmssd_milli: 60, resting_heart_rate: 55 }, sleep: { minutes: 300 } }), { today: T });
+  ck('a high score with five hours of sleep → the warning wins, not the good number', mixed && /under six hours/.test(mixed.insight), mixed && mixed.insight);
+  const mixed2 = day.recoverySummary(week({ recovery: { score: 80, hrv_rmssd_milli: 40, resting_heart_rate: 55 }, sleep: { minutes: 520 } }), { today: T });
+  ck('a great night with HRV well down → "keep today gentle" wins', mixed2 && /Keep today gentle/.test(mixed2.insight), mixed2 && mixed2.insight);
+  // "Your week's average" needs a week's worth of something. Two days is not one.
+  const three = day.recoverySummary(week({ recovery: { score: 50, hrv_rmssd_milli: 60, resting_heart_rate: 61 }, sleep: { minutes: 500 } }).slice(0, 3), { today: T });
+  ck('with only two earlier days there is no "average", so nothing is compared with one',
+     day.MIN_BASELINE_DAYS === 3 && three && three.avgs.restingHr === null && three.avgs.sleepMinutes === null && three.insight === null, three && [three.avgs, three.insight]);
+  const four = day.recoverySummary(week({ recovery: { score: 50, hrv_rmssd_milli: 60, resting_heart_rate: 61 } }).slice(0, 4), { today: T });
+  ck('with three earlier days the comparison is made', four && four.avgs.restingHr === 55 && /6 above your week/.test(four.insight), four && [four.avgs, four.insight]);
   const yOnly = day.recoverySummary(week({}).slice(1), { today: T });
   ck('yesterday counts as current and is flagged as such', yOnly && yOnly.isToday === false && yOnly.latest.date === Y);
 }
 
 // ── 8. The page and Profile import from lib/day — no private copies left ────
+console.log('\n[7g] a member\'s own label: protein, carbs, fat → calories (10 Oct 2026)');
+{
+  const { kcalFromMacros, labelFromEntry, withLabel, macroLine, carbsOf, KCAL_PER_GRAM } = day;
+  ck('4 kcal per g protein and carbs, 9 per g fat', KCAL_PER_GRAM.protein === 4 && KCAL_PER_GRAM.carbs === 4 && KCAL_PER_GRAM.fat === 9);
+  ck('protein oats 24 / 55 / 7.8 → 386 kcal', kcalFromMacros({ protein: 24, carbs: 55, fat: 7.8 }) === 386, kcalFromMacros({ protein: 24, carbs: 55, fat: 7.8 }));
+  ck('typed text and blanks are read as numbers / zero', kcalFromMacros({ protein: '10', carbs: '', fat: undefined }) === 40);
+  ck('a negative never lowers the calories', kcalFromMacros({ protein: -5, carbs: 10, fat: 0 }) === 40);
+
+  const a = labelFromEntry({ protein: '24', carbs: '55', fat: '7.8' });
+  ck('per 100 g as on the pack: kept as typed, calories worked out', a.ok && eq(a.per100, { protein: 24, carbs: 55, fat: 7.8, calories: 386 }), a);
+  const b = labelFromEntry({ protein: '12', carbs: '27.5', fat: '3.9' }, { mode: 'portion', grams: 50 });
+  ck('for a 50 g portion: scaled to per 100 g (12 g in 50 g → 24 g in 100 g)', b.ok && eq(b.per100, { protein: 24, carbs: 55, fat: 7.8, calories: 386 }), b);
+  const c = labelFromEntry({ protein: '24', carbs: '', fat: '' });
+  ck('blank boxes count as 0', c.ok && c.per100.carbs === 0 && c.per100.fat === 0 && c.per100.calories === 96, c);
+  ck('nothing typed → asks for at least one', /at least one/.test(labelFromEntry({ protein: '', carbs: '', fat: '' }).error));
+  ck('a letter → "Numbers only"', /Numbers only/.test(labelFromEntry({ protein: '2x', carbs: '1', fat: '1' }).error));
+  ck('a negative → "Numbers only — 0 or more"', /0 or more/.test(labelFromEntry({ protein: '-1', carbs: '1', fat: '1' }).error));
+  ck('more than 100 g of macros per 100 g → refused, pointing at the pack', /more than 100 g in 100 g/.test(labelFromEntry({ protein: 60, carbs: 40, fat: 1 }).error));
+  ck('exactly 100 g of fat (ghee) is fine: 900 kcal', labelFromEntry({ protein: 0, carbs: 0, fat: 100 }).per100?.calories === 900);
+  ck('portion mode: 30 g of macros in a 20 g portion → refused, in portion words',
+     /more than 20 g of protein, carbs and fat in a 20 g portion/.test(labelFromEntry({ protein: 10, carbs: 10, fat: 10 }, { mode: 'portion', grams: 20 }).error));
+  ck('portion mode with no grams → asks for the grams first', /grams first/.test(labelFromEntry({ protein: 1 }, { mode: 'portion', grams: 0 }).error));
+  ck('per-100 g rounding to one decimal (10 g in 30 g → 33.3)', labelFromEntry({ protein: 10 }, { mode: 'portion', grams: 30 }).per100?.protein === 33.3);
+
+  const plain = { calories: 374, protein: 13.2, total_carbs: 67.7, net_carbs: 57.6, fat: 7.6, fiber: 10.1, iron: 3.8 };
+  const w = withLabel(plain, a.per100);
+  ck('withLabel: the four numbers replaced; carbs written to net and total alike', w.calories === 386 && w.protein === 24 && w.net_carbs === 55 && w.total_carbs === 55 && w.fat === 7.8, w);
+  ck('withLabel: fibre and iron kept from the food it replaces', w.fiber === 10.1 && w.iron === 3.8);
+  ck('withLabel: the original object is not changed', plain.protein === 13.2);
+  ck('withLabel on a food with no data at all', eq(withLabel(null, a.per100), { protein: 24, total_carbs: 55, net_carbs: 55, fat: 7.8, calories: 386 }));
+  ck('the day totals use the label: 50 g → 193 kcal, 12 g protein', (() => { const t = day.calcFoodMacros([{ name: 'oats', grams: 50, per_100g: w }]); return t.kcal === 193 && near(t.pro, 12) && near(t.carb, 27.5); })());
+  ck('carbsOf: net first, then total, then 0', carbsOf({ net_carbs: 5, total_carbs: 9 }) === 5 && carbsOf({ total_carbs: 9 }) === 9 && carbsOf(null) === 0);
+  ck('macroLine: whole grams', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }) === 'P 18 g · C 60 g · F 9 g', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }));
+  const L = importClient('utils/logSync.js');
+  const body = L.mapToServer({ food: [{ id: 9, name: 'Oats', grams: 50, meal: 'Breakfast', food_id: 4, per_100g: w, label: true }, { id: 10, name: 'Tea', grams: 100 }] }, null);
+  ck('the day save keeps the label mark and the edited numbers (it was dropped before — caught by the UI test)', body.food_items[0].label === true && body.food_items[0].per_100g.protein === 24 && !('label' in body.food_items[1]), body.food_items);
+  const base = L.baseOf({ food_items: [{ id: 9, grams: 50, meal: 'Breakfast', per_100g: w }] });
+  ck('the day as loaded records each item\'s macros, so an edit survives a merge', base.food_macros['9'] === '386:24:55:7.8' && L.EMPTY_BASE.food_macros && Object.keys(L.EMPTY_BASE.food_macros).length === 0, base.food_macros);
+  const server = require('fs').readFileSync(require('path').join(__dirname, '../services/memberFoods.js'), 'utf8');
+  ck('the server uses the same 4/4/9', /protein: 4, carbs: 4, fat: 9/.test(server));
+}
+
 console.log('\n[8] no mirrored copies');
 {
   const fs = require('fs'), path = require('path');
