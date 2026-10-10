@@ -8,7 +8,7 @@ import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { OfflineBanner, MemberBottomNav } from '../components/UI';
 import { Eyebrow, Icon, Segmented, Skeleton, SkeletonCard, EmptyState } from '../components/primitives';
 import { WEEKDAYS, istWeekday, labelHasWeekday, isWeekdayScheduled, deriveTodayDay } from '../utils/programDay';
-import { resolveProtocolItems, AUTO_TICK_IDS, clock } from '../lib/day';
+import { resolveProtocolItems, AUTO_TICK_IDS, clock, sleepTarget } from '../lib/day';
 import { formatDate } from '../constants';
 import { plural } from '../constants';
 
@@ -27,7 +27,6 @@ import { plural } from '../constants';
  * days; the same payload Today uses, so the two screens cannot disagree.
  * No schema change.
  */
-const SLEEP_TARGET = { bed: '10:00 PM', wake: '6:30 AM', hours: 8 };
 
 function fmtTime(t) {
   if (!t) return '';
@@ -101,6 +100,9 @@ export default function Plan() {
     kcal: protocol.macro_kcal, pro: protocol.macro_pro, carb: protocol.macro_carb, fat: protocol.macro_fat,
   } : null);
   const waterL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
+  // The member's own bedtime and wake time when the coach has set them; the
+  // hours are worked out from the times, never typed in beside them.
+  const sleep = sleepTarget(protocol);
   const fasting = protocol?.fasting_start && protocol?.fasting_end ? { start: protocol.fasting_start, end: protocol.fasting_end } : null;
 
   // Phase 2: the approved diet plan (never a draft). When there is one, the
@@ -186,10 +188,10 @@ export default function Plan() {
               )}
             </Section>
 
-            <Section eyebrow="Recover" title={`${waterL} L water · ${SLEEP_TARGET.hours} h sleep`}>
+            <Section eyebrow="Recover" title={`${waterL} L water · ${sleep.hoursLabel} sleep`}>
               <div data-testid="plan-today-recover">
                 <Line icon="drop" title="Water" sub="Stop 1 hr before sleep · not during meals" right={`${waterL} L`} onPress={() => goToday('water')} />
-                <Line icon="moon" title={terms.sleep} sub={`${SLEEP_TARGET.bed} → ${SLEEP_TARGET.wake}`} right={`${SLEEP_TARGET.hours} h`} onPress={() => goToday('sleep')} />
+                <Line icon="moon" title={terms.sleep} sub={`${sleep.bedLabel} → ${sleep.wakeLabel}`} right={sleep.hoursLabel} onPress={() => goToday('sleep')} />
                 {activeSupplements.length > 0 && (
                   <Line icon="pill" title={terms.supplements} sub={activeSupplements.map(s => s.label).join(' · ')}
                     right={`${activeSupplements.length}`} onPress={() => goToday('protocol')} />
@@ -342,9 +344,9 @@ export default function Plan() {
 
         {data && view === 'recovery' && (
           <>
-            <Section eyebrow="Recovery" title={`${SLEEP_TARGET.hours} h sleep · ${waterL} L water`}>
+            <Section eyebrow="Recovery" title={`${sleep.hoursLabel} sleep · ${waterL} L water`}>
               <div data-testid="plan-recovery">
-                <Line icon="moon" title={terms.sleep} sub={`${SLEEP_TARGET.bed} → ${SLEEP_TARGET.wake}`} right={`${SLEEP_TARGET.hours} h`} />
+                <Line icon="moon" title={terms.sleep} sub={`${sleep.bedLabel} → ${sleep.wakeLabel}`} right={sleep.hoursLabel} />
                 <Line icon="drop" title="Water" sub="Stop 1 hr before sleep · not during meals" right={`${waterL} L`} />
                 {scheduled && (
                   <Line icon="calendar" title="Rest days" sub={WEEKDAYS.filter(wd => !days.some(d => labelHasWeekday(d.day_label, wd))).join(' · ') || 'None — every day has a session'} />

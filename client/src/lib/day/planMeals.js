@@ -59,6 +59,24 @@ export function untilText(t, nowMin) {
 }
 
 /**
+ * Is the member asking about their meal plan ("what's today's meal plan?",
+ * "what do I eat next?", "aaj kya khana hai")? The chat answers these from the
+ * coach's plan; when it does, it also offers "Log <next meal> as planned", so
+ * the answer is one tap from done instead of a second trip to the Next up card.
+ * Deliberately narrow: "I ate 2 idli" or "plan my week" must not match.
+ */
+export function isMealPlanQuestion(text) {
+  const t = String(text || '').toLowerCase().replace(/[\u2018\u2019]/g, "'");
+  if (/\b(i\s+(ate|had|have\s+eaten)|just\s+(ate|had))\b/.test(t)) return false;      // logging, not asking
+  return /\b(meal|diet|food)\s*plan\b/.test(t)
+    || /\bwhat\b.{0,30}\b(do|should|can|shall|must)\s+i\s+(eat|have)\b/.test(t)
+    || /\bwhat('s| is)\s+(for|my|today's)\s+(breakfast|lunch|dinner|snack|next\s+meal|meals?)\b/.test(t)
+    || /\b(my\s+)?next\s+meal\b/.test(t)
+    || /\btoday'?s\s+(meals?|menu|diet)\b/.test(t)
+    || /\b(aaj|abhi|ab)\b.{0,20}\bkya\s+kha(na|u|un|oon)\b/.test(t);
+}
+
+/**
  * @param {Array}  mealPlans [{ meal, time|null, items:[{name,grams,qty_text,per_100g}] }]
  * @param {Array}  food      today's logged food items [{ name, grams, meal }]
  * @param {number} nowMin    minutes since midnight (IST)

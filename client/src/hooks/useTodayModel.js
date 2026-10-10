@@ -561,6 +561,14 @@ export default function useTodayModel() {
   const macrosToday = calcFoodMacros(log.food || []);
   const proteinIn     = Math.round(macrosToday.pro);
   const proteinTarget = protocol?.macros?.pro || null;
+  // What has been eaten, all four numbers, for every member — with a diet
+  // plan or without one (10 Oct 2026). Calories are kcalIn so every place
+  // that shows the day's kcal agrees. Targets are null where the coach has
+  // not set them; the views then show the eaten number alone.
+  const eaten = { kcal: kcalIn, pro: macrosToday.pro, carb: macrosToday.carb, fat: macrosToday.fat };
+  const macroTargets = protocol?.macros
+    ? { kcal: protocol.macros.kcal || null, pro: protocol.macros.pro || null, carb: protocol.macros.carb || null, fat: protocol.macros.fat || null }
+    : null;
 
   const protocolDone  = actDone + acvDone + suppDone;
   const protocolTotal = activeActivities.length + activeACV.length + activeSupplements.length;
@@ -665,7 +673,7 @@ export default function useTodayModel() {
     actDone, acvDone, suppDone, protocolDone, protocolTotal, compliance,
     acvExpanded, setAcvExpanded,
     // numbers
-    weightKg, weightDelta, yesterdayWeight, kcalIn, kcalTarget, proteinIn, proteinTarget, bmr, balance,
+    weightKg, weightDelta, yesterdayWeight, kcalIn, kcalTarget, proteinIn, proteinTarget, eaten, macroTargets, bmr, balance,
     weekNumber, joinedAt,
     workoutKcal, workoutSummary, workoutRefreshKey, micro, sleepMins, sleepText,
     // AI read + pending

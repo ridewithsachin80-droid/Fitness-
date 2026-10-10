@@ -22,11 +22,13 @@ import WorkoutSessionViewer from '../components/WorkoutSessionViewer';
 import TrainingSummary from '../components/TrainingSummary';
 import MetabolicInsight from '../components/MetabolicInsight';
 import DietPlanStudio from '../components/coach/DietPlanStudio';
+import SleepTargetCard from '../components/coach/SleepTargetCard';
+import MemberLabelsCard from '../components/coach/MemberLabelsCard';
 import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
 import LabResults from '../components/LabResults';
 import MuscleCoverage from '../components/MuscleCoverage';
-import CoachAIChat, { CoachAIFab } from '../components/CoachAIChat';
+import CoachAIChat from '../components/CoachAIChat';
 import { getActiveProgram } from '../api/programs';
 import { formatDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, getNutrition, RDA_TARGETS, plural } from '../constants';
 import { useSync } from '../hooks/useSync';
@@ -964,6 +966,9 @@ export default function Coach() {
           </div>
         </Card>
         </>)}
+        {tab === 'nutrition' && (<>   {/* The member's own food labels (10 Oct 2026) */}
+        <Card><MemberLabelsCard memberId={parseInt(memberId)} memberName={data?.profile?.name || ''} /></Card>
+        </>)}
 
         {/* Training summary — volume, cardio and calories the member logged.
             Previously invisible to the coach despite being captured daily. */}
@@ -1014,6 +1019,14 @@ export default function Coach() {
 
         {tab === 'training' && (<>   {/* Muscle Coverage */}
         <MuscleCoverage memberId={parseInt(memberId)} refreshTick={workoutTick} />
+        </>)}
+
+        {/* The member's own bedtime and wake time. Every member used to be shown
+            the same hard-coded target; the coach now sets it here. */}
+        {tab === 'training' && (<>   {/* Sleep target */}
+        <Card>
+          <SleepTargetCard memberId={parseInt(memberId)} profile={profile} onSaved={() => load({ quiet: true })} />
+        </Card>
         </>)}
 
         {/* Lab values */}
@@ -1378,7 +1391,6 @@ export default function Coach() {
         contextMember={{ id: parseInt(memberId), name: profile?.name }}
         onApplied={() => { load({ quiet: true }); setStudioKey(k => k + 1); }}
       />
-      <CoachAIFab bottomOffset={88} />
     </div>
   );
 }

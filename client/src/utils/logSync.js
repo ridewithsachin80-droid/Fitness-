@@ -28,10 +28,13 @@
 
 /** What an empty day looks like to the server — the base for a day never saved. */
 export const EMPTY_BASE = Object.freeze({
-  weight_kg: null, water_ml: 0, activities: {}, acv: {}, supplements: {}, sleep: {}, notes: '', food: {},
+  weight_kg: null, water_ml: 0, activities: {}, acv: {}, supplements: {}, sleep: {}, notes: '', food: {}, food_macros: {},
 });
 
 const foodSig = (i) => `${Number(i?.grams) || 0}|${i?.meal || ''}`;
+// The numbers a member can edit on an item (10 Oct 2026): kcal, protein, carbs, fat per 100 g.
+export const macroSig = (i) => { const p = i?.per_100g || {};
+  return [p.calories, p.protein, p.net_carbs ?? p.total_carbs, p.fat].map(v => Number(v) || 0).join(':'); };
 
 /** The server's row, reduced to what a later save needs to send back as its base. */
 export function baseOf(row) {
@@ -47,6 +50,9 @@ export function baseOf(row) {
     // id → "grams|meal", so the server can tell an item the member edited here
     // from one that only changed on the server.
     food: Object.fromEntries(items.filter(i => i && i.id).map(i => [String(i.id), foodSig(i)])),
+    // id → "kcal:protein:carbs:fat", so a macro edit made here survives a
+    // save that has to merge with newer changes from the chat or another phone.
+    food_macros: Object.fromEntries(items.filter(i => i && i.id).map(i => [String(i.id), macroSig(i)])),
   };
 }
 
@@ -98,6 +104,9 @@ export function mapToServer(log, protocol) {
       meal:     item.meal,
       food_id:  item.food_id  || null,
       per_100g: item.per_100g || null,
+      // The member typed these numbers from their own pack (10 Oct 2026); the
+      // coach's day view marks the item so they know where the numbers came from.
+      ...(item.label ? { label: true } : {}),
     })),
     water_ml:       log.water,
     // What this phone last saw of the day: when it was saved, which food was in
