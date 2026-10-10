@@ -1,0 +1,250 @@
+// Integration test of the question branch over real HTTP: stub the pg pool with
+// Sachin-like data and stub axios (the AI transport) so callAI returns a
+// question flag on the first call and an answer on the second. Proves the full
+// wiring: parse → flag → day context (from the stubbed DB) → answer → response.
+if (/railway|rlwy\.net|amazonaws|prod/i.test(process.env.DATABASE_URL || '')) {
+  console.error('Refusing to run: DATABASE_URL points at a live database.');
+  process.exit(1);
+}
+const path = require('path');
+const http = require('http');
+process.env.DATABASE_URL = 'postgres://stub:stub@127.0.0.1:1/stub';
+process.env.JWT_SECRET = 'smoke-test-secret';
+process.env.NODE_ENV = 'test';
+process.env.GEMINI_API_KEY = 'stub-key';
+delete process.env.GROQ_API_KEY;
+const SERVER = path.resolve(__dirname, '..');
+
+// Stub pool with a today's log + profile targets
+const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); // IST-ish
+const dayRow = {
+  log_date: today, weight_kg: null, water_ml: 800,
+  sleep: null, activities: {}, acv: {}, supplements: {},
+  food_items: [
+    { name: 'Ghee', grams: 12, per_100g: { calories: 900, protein: 0, total_carbs: 0, fat: 99.5 } },
+    { name: 'Soppina Palya', grams: 200, per_100g: { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4 } },
+  ],
+};
+// With TEST_DATABASE_URL set, run against a real Postgres (schema.sql loaded,
+// member 214 seeded) — this catches SQL syntax and column-name errors a stub
+// pool waves through, which is exactly how two such bugs shipped on 26 Aug.
+const USE_REAL_DB = !!process.env.TEST_DATABASE_URL;
+if (USE_REAL_DB) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+
+// Seed today's data at run time rather than relying on rows seeded by hand on
+// some earlier day — "today" moves, and a fixture pinned to 27 Aug silently
+// stops exercising the code the morning after.
+async function seedToday(pool) {
+  const IST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  await pool.query(`INSERT INTO users (id,name,phone,role,password,active)
+    VALUES (214,'Sachin','9999999999','patient','x',true) ON CONFLICT (id) DO NOTHING`);
+  await pool.query(`INSERT INTO patient_profiles (user_id, macro_kcal, macro_pro, water_target, target_weight, start_weight)
+    VALUES (214,1800,120,3000,70,78.5)
+    ON CONFLICT (user_id) DO UPDATE SET macro_kcal=1800, macro_pro=120, water_target=3000`);
+  await pool.query(`DELETE FROM daily_logs WHERE patient_id=214 AND log_date >= $1::date - 7`, [IST]);
+  await pool.query(`INSERT INTO daily_logs (patient_id, log_date, water_ml, food_items) VALUES
+    (214, $1::date, 800,
+     '[{"name":"Ghee","grams":12,"per_100g":{"calories":900,"protein":0,"total_carbs":0,"fat":99.5}},
+       {"name":"Soppina Palya","grams":200,"per_100g":{"calories":23,"protein":2.9,"total_carbs":3.6,"fat":0.4}}]'),
+    (214, $1::date - 2, 2500,
+     '[{"name":"Chapati","grams":90,"per_100g":{"calories":297,"protein":8,"total_carbs":61,"fat":3.7}}]')`, [IST]);
+  await pool.query(`UPDATE daily_logs SET weight_kg=84.0 WHERE patient_id=214 AND log_date = $1::date - 2`, [IST]);
+}
+const poolPath = require.resolve(path.join(SERVER, 'db/pool.js'));
+// Recorded so the assertions can check WHAT was written, not just that the
+// request returned 200. A reply that says "sent" without a row is the exact
+// bug this feature exists to avoid.
+const dbWrites = [];
+let hasCoach = true;
+const stubPool = {
+  query: async (sql, params) => {
+    if (/FROM monitor_patients/.test(sql)) {
+      return hasCoach ? { rows: [{ monitor_id: 300 }], rowCount: 1 } : { rows: [], rowCount: 0 };
+    }
+    if (/INSERT INTO monitor_notes/.test(sql)) {
+      dbWrites.push({ sql, params });
+      return { rows: [{ id: 9001, note: params[2], from_member: true }], rowCount: 1 };
+    }
+    if (/SELECT name FROM users/.test(sql)) return { rows: [{ name: 'Sachin' }], rowCount: 1 };
+    if (/FROM daily_logs/.test(sql)) {
+      const twoDaysAgo = new Date(Date.now() + 5.5 * 3600e3 - 2 * 86400e3).toISOString().slice(0, 10);
+      const weekRow = { log_date: twoDaysAgo, weight_kg: '84.0', water_ml: 2500, sleep: null,
+        activities: {}, acv: {}, supplements: {},
+        food_items: [{ name: 'Chapati', grams: 90, per_100g: { calories: 297, protein: 8, total_carbs: 61, fat: 3.7 } }] };
+      return { rows: [dayRow, weekRow], rowCount: 2 };
+    }
+    if (/FROM patient_profiles/.test(sql)) return { rows: [{ macro_kcal: 1800, macro_pro: 120, macro_carb: null, macro_fat: null, water_target: 3000, target_weight: 70, start_weight: 78.5 }], rowCount: 1 };
+    if (/member_portions/.test(sql))       return { rows: [], rowCount: 0 };
+    return { rows: [], rowCount: 0 };
+  },
+  // A transaction client sees the SAME stub as pool.query. It used to answer
+  // every statement with no rows, which was fine while nothing under test
+  // wrote through a client — but a member's note is now inserted under the
+  // per-member lock (db/locks.js), i.e. through a client, and a stub that
+  // swallowed it made "a note row was actually written" fail for the wrong
+  // reason. BEGIN/COMMIT/the lock itself fall through to the default no-rows.
+  connect: async () => ({ query: (sql, params) => stubPool.query(sql, params), release() {} }),
+  on() {}, end: async () => {},
+};
+if (!USE_REAL_DB) {
+  require.cache[poolPath] = { id: poolPath, filename: poolPath, loaded: true, exports: stubPool, children: [], paths: [] };
+}
+
+// Stub axios: first generateContent call = parser (returns question flag),
+// second = answerer (echoes context numbers so we can assert data flowed).
+const axiosPath = require.resolve('axios', { paths: [SERVER] });
+require(axiosPath); // ensure it is in cache
+let aiCalls = 0; let capturedPrompts = [];
+const fake = async (url, body) => {
+  if (!/generativelanguage/.test(String(url))) throw new Error('unexpected url ' + url);
+  aiCalls++;
+  const prompt = body.contents[0].parts.map(p => p.text || '').join('');
+  capturedPrompts.push(prompt);
+  let text;
+  if (/Member's message: "make the dal 250 grams"/i.test(prompt)) {
+    text = JSON.stringify({ reply: 'Updated the dal to 250g.', question: null,
+      corrections: [
+        { name: 'Dal Tadka', grams: 250, meal: null },
+        { name: 'Hallucinated Biryani', grams: 500, meal: null },
+        { name: 'Ghee', grams: 99999, meal: null },
+      ],
+      weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [],
+      water_ml_add: null, sleep: null, foods: [], workouts: [] });
+  } else if (/Member's message: "ask my coach to assign my workout"/i.test(prompt)) {
+    text = JSON.stringify({ reply: '', question: null,
+      coach_message: 'Please assign my workout for today.',
+      weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [],
+      water_ml_add: null, sleep: null, foods: [], workouts: [] });
+  } else if (aiCalls === 1) {
+    text = JSON.stringify({ reply: '', question: 'how many calories have i consumed today?', weight_kg: null, activity_ids: [], acv_ids: [], supplement_ids: [], water_ml_add: null, sleep: null, foods: [], workouts: [] });
+  } else {
+    text = "You've eaten 154 kcal so far today, out of your 1800 kcal target — 1646 kcal left.";
+  }
+  return { data: { candidates: [{ content: { parts: [{ text }] } }] } };
+};
+const real = require.cache[axiosPath].exports;
+const stub = (...a) => fake(...a);
+stub.post = fake; stub.get = real.get; stub.create = real.create;
+stub.isAxiosError = real.isAxiosError; stub.default = stub;
+require.cache[axiosPath].exports = stub;
+
+const rl = http.Server.prototype.listen;
+http.Server.prototype.listen = function (...a) { const cb = a.find(x => typeof x === 'function'); cb && cb(); return this; };
+const { app } = require(path.join(SERVER, 'index.js'));
+http.Server.prototype.listen = rl;
+const jwt = require(path.join(SERVER, 'node_modules/jsonwebtoken'));
+const token = jwt.sign({ id: 214, role: 'patient', name: 'Sachin' }, 'smoke-test-secret');
+const server = app.listen(0); const port = server.address().port;
+
+const req = (body) => new Promise(r => {
+  const q = http.request({ host: '127.0.0.1', port, path: '/api/ai-chat/parse', method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token } },
+    res => { let d = ''; res.on('data', c => d += c); res.on('end', () => r({ code: res.statusCode, body: JSON.parse(d || '{}') })); });
+  q.end(JSON.stringify(body));
+});
+
+(async () => {
+  if (USE_REAL_DB) await seedToday(require(poolPath));
+  const { code, body } = await req({ message: 'how many calories have i consumed today?', context: { waterTargetMl: 3000 } });
+  let ok = true;
+  const t = (n, c) => { console.log((c ? '  ✓ ' : '  ✗ ') + n); if (!c) ok = false; };
+  t('200 response', code === 200);
+  t('question flag returned', body.question === true);
+  t('reply carries the answer', /154 kcal/.test(body.reply));
+  t('no loggable items leak into the preview', body.foods.length === 0 && body.weight_kg === null);
+  t('two AI calls made (parse + answer)', aiCalls === 2);
+  t('answer prompt contained real computed calories (154 kcal = 108 ghee + 46 palya)', /Calories eaten: 154 kcal/.test(capturedPrompts[1] || ''));
+  t('answer prompt contained the calorie target', /calorie target 1800 kcal/.test(capturedPrompts[1] || ''));
+  t('answer prompt contained week history (267 kcal chapati day, 84 kg)',
+    /267 kcal.*84(\.0)? kg/.test(capturedPrompts[1] || ''));
+
+  // ── Corrections scenario ────────────────────────────────────────────────────
+  const corr = await req({
+    message: 'make the dal 250 grams',
+    context: {
+      waterTargetMl: 3000,
+      lastFoods: [
+        { name: 'Dal Tadka', grams: 150, meal: 'Lunch' },
+        { name: 'Ghee', grams: 12, meal: 'Breakfast' },
+      ],
+      recent: [{ role: 'user', text: '1 katori dal tadka for lunch' },
+               { role: 'ai', text: 'Logged Dal Tadka 150g for Lunch.' }],
+    },
+  });
+  t('corrections: 200 response', corr.code === 200);
+  t('valid correction passes through', corr.body.corrections?.length >= 1
+      && corr.body.corrections[0].name === 'Dal Tadka' && corr.body.corrections[0].grams === 250);
+  t('hallucinated food name is whitelisted out',
+    !(corr.body.corrections || []).some(c => /biryani/i.test(c.name)));
+  t('implausible grams (99999) dropped',
+    !(corr.body.corrections || []).some(c => c.name === 'Ghee'));
+  t('parse prompt carried the logged-foods list',
+    /Dal Tadka · 150g · Lunch/.test(capturedPrompts[2] || ''));
+  // ── Training context in the answer snapshot ────────────────────────────────
+  // The snapshot carried food, water, weight, sleep and protocol and nothing
+  // about the assigned programme, so "what's my workout today?" was answered
+  // with "I don't have that" by an app that did have it.
+  t('answer prompt carries a training section',
+    /Workout programme:/.test(capturedPrompts[1] || ''));
+  t('with no programme assigned it says so rather than going silent',
+    /Workout programme: none assigned/.test(capturedPrompts[1] || ''));
+  t('and reports recent training separately from the programme',
+    /No workouts logged in the last 7 days/.test(capturedPrompts[1] || ''));
+  t('the prompt tells the model not to invent exercises',
+    /never\s+suggest one the coach has not programmed/i.test(capturedPrompts[1] || ''));
+
+  // ── Weekday scheduling, as a pure function ─────────────────────────────────
+  // Weekday scheduling lives in day_label text ("Push · Mon"), not a column.
+  // These dates are fixed calendar days, so the mapping is deterministic.
+  const { programDayForDate } = require(path.join(SERVER, 'routes/aiChat.js'));
+  const wkDays = [
+    { day_number: 1, day_label: 'Push · Mon', exercises: [] },
+    { day_number: 2, day_label: 'Pull · Wed', exercises: [] },
+    { day_number: 3, day_label: 'Legs · Fri', exercises: [] },
+  ];
+  t('Monday resolves to the Monday day',    programDayForDate(wkDays, '2026-09-07')?.day_number === 1);
+  t('Wednesday resolves to the Wednesday day', programDayForDate(wkDays, '2026-09-09')?.day_number === 2);
+  t('Sunday is a rest day, not day 1',      programDayForDate(wkDays, '2026-09-13') === null);
+  t('an unlabelled programme resolves to no day rather than guessing',
+    programDayForDate([{ day_number: 1, day_label: 'Day 1', exercises: [] }], '2026-09-07') === null);
+  t('no days at all is null, not a crash',  programDayForDate([], '2026-09-07') === null);
+  // "Mon" must not match inside another word — a label like "Monsoon Circuit"
+  // is not a Monday.
+  t('the weekday match is a word boundary, not a substring',
+    programDayForDate([{ day_number: 1, day_label: 'Monsoon Circuit', exercises: [] }], '2026-09-07') === null);
+
+  // ── Messages for the coach ─────────────────────────────────────────────────
+  // "ask my coach to assign my workout" was parsed as a log attempt and came
+  // back "Nothing new to log there" — twice, because the member rephrased and
+  // hit the same wall. The member->coach note path already existed; the chat
+  // simply never reached it.
+  t('the parse prompt tells the model to route coach messages',
+    /MESSAGE FOR THE COACH/.test(capturedPrompts[0] || ''));
+
+  const beforeWrites = dbWrites.length;
+  const cm = await req({ message: 'ask my coach to assign my workout', context: { waterTargetMl: 3000 } });
+  t('coach message: 200 response', cm.code === 200);
+  t('it is reported as sent', cm.body.sent_to_coach === true);
+  t('the reply quotes what was sent', /Sent to your coach/.test(cm.body.reply || ''));
+  t('nothing is logged as food or protocol', (cm.body.foods || []).length === 0
+      && (cm.body.activities || []).length === 0 && cm.body.weight_kg === null);
+  t('a note row was actually written', dbWrites.length === beforeWrites + 1);
+  t('written in the members own words, first person',
+    dbWrites[dbWrites.length - 1]?.params?.[2] === 'Please assign my workout for today.');
+  t('addressed to the assigned coach', dbWrites[dbWrites.length - 1]?.params?.[0] === 300);
+  t('and marked as coming FROM the member',
+    /from_member/.test(dbWrites[dbWrites.length - 1]?.sql || '')
+    && /true/.test(dbWrites[dbWrites.length - 1]?.sql || ''));
+
+  // A member with no coach assigned must be told, not told it was sent.
+  hasCoach = false;
+  const writesBeforeNoCoach = dbWrites.length;
+  const nc = await req({ message: 'ask my coach to assign my workout', context: { waterTargetMl: 3000 } });
+  t('no coach assigned: still a 200, not an error page', nc.code === 200);
+  t('no coach assigned: does NOT claim it was sent', nc.body.sent_to_coach === false);
+  t('no coach assigned: says why', /don't have a coach assigned/i.test(nc.body.reply || ''));
+  t('no coach assigned: nothing written', dbWrites.length === writesBeforeNoCoach);
+  hasCoach = true;
+
+  server.close(); process.exit(ok ? 0 : 1);
+})();
