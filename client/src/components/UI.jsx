@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { haptic } from '../store/settingsStore';
 import { useAIChat } from '../store/aiChatStore';
+import { useCoachAI } from '../store/coachAIStore';
 import { Icon } from './primitives';
 
 /**
@@ -330,9 +331,24 @@ export function MemberBottomNav() {
   );
 }
 
+/**
+ * The coach and admin bottom bar: Members · [Admin] · (Coach AI) · Settings.
+ *
+ * Coach AI used to be a gold tab floating on the right edge of the screen. On
+ * a phone it covered whatever ran to that edge. It is now the centre button of
+ * this bar, the same place the member app keeps its AI button, so it never sits
+ * on top of content and is always in the same spot.
+ *
+ * The button stays centred whether there are two tabs (coach) or three
+ * (admin): Settings sits alone on the right half, the rest share the left.
+ * The chat screen itself is mounted on the coach home, a member's page and the
+ * admin dashboard; from anywhere else (Settings) the button goes to the coach
+ * home, where the chat is already open on arrival.
+ */
 export function BottomNav({ role }) {
   const navigate = useNavigate?.() ?? null;
   const pathname = useLocation?.()?.pathname ?? '';
+  const openCoachAI = useCoachAI(s => s.openChat);
   const tabs = [
     { label: 'Members', path: '/coach', active: pathname.startsWith('/coach'), roles: ['monitor', 'admin'], icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -345,21 +361,41 @@ export function BottomNav({ role }) {
     )},
   ].filter(t => t.roles.includes(role));
   if (!navigate) return null;
+  const left = tabs.slice(0, -1), right = tabs.slice(-1);
+  const hasChatHere = pathname.startsWith('/coach') || pathname === '/admin';
+  const openChat = () => { haptic(20); openCoachAI(); if (!hasChatHere) navigate('/coach'); };
+  const renderTab = (tab) => (
+    <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
+      style={{ minHeight: 56, flex: 1 }} aria-current={tab.active ? 'page' : undefined}
+      className={`min-w-0 flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${tab.active ? 'text-gold' : 'text-lo hover:text-mid'}`}>
+      {tab.icon}
+      <span className="text-eyebrow font-semibold tracking-wide">{tab.label}</span>
+      {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
+    </button>
+  );
   return (
     <>
-      <div className="h-24" />
-      <div className="fixed bottom-0 left-0 right-0 z-40 pb-safe">
+      {/* The bar is ~64px plus 12px padding and the button is lifted 22px above
+          it: the same 104px the member bar reserves, so nothing hides under it. */}
+      <div style={{ height: 104 }} />
+      <div data-testid="coach-nav" className="fixed bottom-0 left-0 right-0 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-md mx-auto px-3 pb-3">
-          <div className="glass rounded-2xl shadow-float flex items-center">
-            {tabs.map(tab => (
-              <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
-                style={{ minHeight: 56, flex: 1 }}
-                className={`flex flex-col items-center gap-1 py-3.5 transition-all rounded-2xl ${tab.active ? 'text-gold' : 'text-lo hover:text-mid'}`}>
-                {tab.icon}
-                <span className="text-eyebrow font-semibold tracking-wide">{tab.label}</span>
-                {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
+          <div className="glass rounded-2xl shadow-float flex items-center relative">
+            <div className="flex flex-1 min-w-0">{left.map(renderTab)}</div>
+            <div style={{ width: 68, flexShrink: 0 }} className="flex items-start justify-center">
+              <button onClick={openChat} aria-label="Coach AI" data-testid="coach-ai-orb"
+                style={{ width: 56, height: 56, marginTop: -22 }}
+                className="orb-breathe rounded-full bg-gradient-to-br from-gold-light via-gold to-gold-dark
+                  flex items-center justify-center border-4 border-charcoal
+                  active:scale-90 transition-transform">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#121316"
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5z" />
+                  <path d="M18.5 4v3M20 5.5h-3" />
+                </svg>
               </button>
-            ))}
+            </div>
+            <div className="flex flex-1 min-w-0">{right.map(renderTab)}</div>
           </div>
         </div>
       </div>

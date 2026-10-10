@@ -215,31 +215,49 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
         </>
       )}
 
-      {/* Micronutrient gaps — plain arithmetic, always worth showing */}
-      {data.micro_gaps?.length > 0 && (
-        <div className="border-t border-white/[0.06] pt-3">
-          <p className="text-eyebrow font-bold tracking-wider text-lo mb-2">
-            Consistently under target
-          </p>
-          <div className="space-y-1.5">
-            {data.micro_gaps.map(g => (
-              <div key={g.nutrient} className="flex items-center gap-2">
-                <span className="text-caption text-white flex-1">
-                  {NUTRIENT_LABEL[g.nutrient] || g.nutrient}
-                </span>
-                <div className="w-20 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
-                  <div className="h-full rounded-full bg-amber-400"
-                    style={{ width: `${Math.min(100, g.pct)}%` }} />
+      {/* Micronutrient gaps. A gap is claimed only where the logged food
+          carries a figure for the nutrient; the server does that sorting
+          (adaptiveEngine, "Unknown is not zero"). What it could not judge is
+          named for the coach rather than shown as 0% or silently dropped. */}
+      {(() => {
+        const gaps    = data.micro_gaps || [];
+        const unknown = memberId ? (data.micro_unknown || []) : [];
+        if (!gaps.length && !unknown.length) return null;
+        return (
+          <div className="border-t border-white/[0.06] pt-3" data-testid="micro-block">
+            {gaps.length > 0 && (
+              <>
+                <p className="text-eyebrow font-bold tracking-wider text-lo mb-2">
+                  Consistently under target
+                </p>
+                <div className="space-y-1.5">
+                  {gaps.map(g => (
+                    <div key={g.nutrient} className="flex items-center gap-2" data-testid={`micro-gap-${g.nutrient}`}>
+                      <span className="text-caption text-white flex-1">
+                        {NUTRIENT_LABEL[g.nutrient] || g.nutrient}
+                      </span>
+                      <div className="w-20 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
+                        <div className="h-full rounded-full bg-amber-400"
+                          style={{ width: `${Math.min(100, g.pct)}%` }} />
+                      </div>
+                      <span className="text-caption font-bold text-amber-300 w-10 text-right">{g.pct}%</span>
+                    </div>
+                  ))}
                 </div>
-                <span className="text-caption font-bold text-amber-300 w-10 text-right">{g.pct}%</span>
-              </div>
-            ))}
+                <p className="text-eyebrow text-lo mt-2" data-testid="micro-caption">
+                  Averages across {data.food_days} logged days, from food only. Supplements are not counted. Against adult reference intakes.
+                </p>
+              </>
+            )}
+            {unknown.length > 0 && (
+              <p className="text-eyebrow text-lo mt-2" data-testid="micro-unknown">
+                Cannot be judged from the food logged: {unknown.map(u => NUTRIENT_LABEL[u.nutrient] || u.nutrient).join(', ')}. Too
+                little of it carries a figure for these.
+              </p>
+            )}
           </div>
-          <p className="text-eyebrow text-lo mt-2">
-            Averages across {data.food_days} logged days, against adult reference intakes.
-          </p>
-        </div>
-      )}
+        );
+      })()}
 
       {/* What all their natural variation implies, holding the other
           variables constant. Coach-only. */}

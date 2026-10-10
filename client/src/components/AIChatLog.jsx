@@ -29,7 +29,8 @@ import { useLogStore } from '../store/logStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { today, plural } from '../constants';
-import { resolveProtocolItems, defaultMealSlot } from '../lib/day';
+import { resolveProtocolItems, defaultMealSlot, isMealPlanQuestion } from '../lib/day';
+import LogPlannedButton from './chat/LogPlannedButton';
 import { useAIChat, undoSnap, workoutUndoSnap } from '../store/aiChatStore';
 import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CHIPS, GroupHeader, ToggleChip } from './chat/ChatAtoms';
 
@@ -38,6 +39,7 @@ export { useAIChat };
 import DaySummary from './DaySummary';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
 import { rollbackCard } from '../utils/chatCard';
+import ChatFoodMacros, { foodWithLabel } from './chat/ChatFoodMacros';
 
 // ── Speech recognition ───────────────────────────────────────────────────────
 const SpeechRecognition =
@@ -52,7 +54,7 @@ function deriveProtocolItemsCompat(protocol) {
   return { activities: r.activeActivities, acv: r.activeACV, supplements: r.activeSupplements };
 }
 
-export default function AIChatLog({ mealPlans = [] } = {}) {
+export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
   // Where food goes when the member does not say which meal: shown on the
   // preview, and used on apply, so what they see is what is logged.
@@ -410,6 +412,9 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
         // member makes below can be paired with the question that caused it.
         evalSource: 'member_parse',
         evalMessage: text,
+        // A meal-plan question with nothing to apply: the answer offers "Log <next meal> as planned".
+        planAsk: isMealPlanQuestion(text) && data.weight_kg == null && !(data.foods || []).length
+          && !(data.workouts || []).length && !(data.corrections || []).length,
         parsed: {
           weight_kg:    data.weight_kg,
           weightOn:     data.weight_kg != null,
@@ -468,6 +473,8 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
     }));
   }, [patchParsed]);
 
+  // The member's own macros for a preview food (10 Oct 2026, chat/ChatFoodMacros).
+  const setMacros = (mi, idx, per) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => (i === idx ? foodWithLabel(f, per) : f)) }));
   const toggleListItem = (mi, key, idx) =>
     patchParsed(mi, p => ({
       ...p,
@@ -688,6 +695,7 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
                   : defaultMealSlot({ mealSlots, mealPlans, food: cur.food || [] }),
         food_id:  f.food_id || null,
         per_100g: f.per_100g && (f.per_100g.calories || 0) > 0 ? f.per_100g : null,
+        ...(f.label ? { label: true } : {}),
       }));
       newLog.food = [...(newLog.food || cur.food || []), ...newItems];
       updateLog('food', newLog.food);
@@ -889,6 +897,8 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
                   {m.summary
                     ? <DaySummary s={m.summary} />
                     : <p className="leading-relaxed whitespace-pre-line">{m.text}</p>}
+
+                  {m.planAsk && <LogPlannedButton mealPlans={mealPlans} food={todayFood} onLogPlanned={onLogPlanned} />}
 
                   {/* Lab report draft — nothing is saved until confirmed. A
                       misread decimal on a blood test is a different order of
@@ -1168,12 +1178,7 @@ export default function AIChatLog({ mealPlans = [] } = {}) {
                                       )}
                                     </div>
                                   </div>
-                                  <div className="text-right flex-shrink-0">
-                                    <p className="text-body-sm font-bold text-orange-400">{f.macros?.cal ?? 0} kcal</p>
-                                    <p className="text-eyebrow text-mid">
-                                      P {f.macros?.pro ?? 0} · C {f.macros?.carb ?? 0} · F {f.macros?.fat ?? 0}
-                                    </p>
-                                  </div>
+                                  <ChatFoodMacros f={f} disabled={m.applied} onSave={per => setMacros(mi, fi, per)} />
                                 </div>
                               </button>
                             ))}

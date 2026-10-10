@@ -1,5 +1,5 @@
 import { groupByMeal } from '../../utils/coachView';
-import { foodKcal } from '../../lib/day';
+import { foodKcal, calcFoodMacros, macroLine } from '../../lib/day';
 import { Icon, EmptyState, Stagger } from '../primitives';
 import { haptic, useSettingsStore } from '../../store/settingsStore';
 import { plural } from '../../constants';
@@ -16,7 +16,7 @@ import { plural } from '../../constants';
  *
  * Empty day → an invitation, not a dash.
  */
-function Row({ icon, title, sub, value, onPress, testId, tone = 'default' }) {
+function Row({ icon, title, sub, macros, value, onPress, testId, tone = 'default' }) {
   const Tag = onPress ? 'button' : 'div';
   return (
     <Tag type={onPress ? 'button' : undefined} onClick={onPress ? () => { haptic(10); onPress(); } : undefined} data-testid={testId}
@@ -28,6 +28,7 @@ function Row({ icon, title, sub, value, onPress, testId, tone = 'default' }) {
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-white truncate">{title}</span>
         {sub && <span className="block text-caption text-mid truncate">{sub}</span>}
+        {macros && <span className="block text-caption text-lo tabular-nums truncate" data-testid="meal-macros">{macros}</span>}
       </span>
       {value != null && <span className="text-sm font-display font-semibold tabular-nums text-white flex-shrink-0">{value}</span>}
       {onPress && <Icon name="chevron-right" size={14} className="text-ghost flex-shrink-0" />}
@@ -53,9 +54,12 @@ export default function Timeline({ m, onOpen, onOpenChat, readOnly = false, meal
   for (const g of meals) {
     if (!g.items.length) continue;
     const kcal = foodKcal(g.items);
+    // Protein, carbs and fat for the meal, under the foods (10 Oct 2026).
+    const mac = calcFoodMacros(g.items);
     rows.push({
       key: 'meal:' + g.meal, icon: 'food', title: g.meal, sheet: 'food',
       sub: g.items.slice(0, 3).map(f => f.name).join(' · ') + (g.items.length > 3 ? ` +${g.items.length - 3} more` : ''),
+      macros: (mac.pro || mac.carb || mac.fat) ? macroLine(mac) : null,
       value: kcal ? `${kcal.toLocaleString('en-IN')} ${terms.kcal}` : `${g.items.length} ${plural(g.items.length, 'item')}`,
     });
   }
@@ -93,7 +97,7 @@ export default function Timeline({ m, onOpen, onOpenChat, readOnly = false, meal
   return (
     <Stagger data-testid="timeline">
       {rows.map(r => (
-        <Row key={r.key} icon={r.icon} tone={r.tone} title={r.title} sub={r.sub} value={r.value}
+        <Row key={r.key} icon={r.icon} tone={r.tone} title={r.title} sub={r.sub} macros={r.macros} value={r.value}
           testId={`row-${r.key.split(':')[0]}`} onPress={readOnly ? null : () => onOpen(r.sheet)} />
       ))}
     </Stagger>

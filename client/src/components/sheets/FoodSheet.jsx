@@ -1,6 +1,7 @@
 import { Sheet, Pressable } from '../primitives';
 import FoodLog from '../FoodLog';
 import { MacroProgress, PrescribedMeals } from '../today/DayWidgets';
+import EatenMacros from '../today/EatenMacros';
 
 /**
  * FoodSheet — the food log, with the coach's prescribed meals above it and the
@@ -9,7 +10,7 @@ import { MacroProgress, PrescribedMeals } from '../today/DayWidgets';
  * `snap="full"` — a food search with a keyboard needs the whole screen.
  */
 export default function FoodSheet({ open, onClose, m }) {
-  const { log, protocol, update, logMeal, loading, activeActivities, workoutKcal, weightKg, kcalTarget } = m;
+  const { log, protocol, update, logMeal, loading, activeActivities, workoutKcal, weightKg, kcalTarget, eaten, terms, isToday } = m;
   return (
     <Sheet open={open && !loading} onClose={onClose} snap="full" eyebrow="Food" title="What did you eat?"
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
@@ -26,6 +27,10 @@ export default function FoodSheet({ open, onClose, m }) {
             weightKg={weightKg}
           />
         </div>
+      )}
+      {/* No targets from the coach: the four eaten numbers on their own (10 Oct 2026). */}
+      {!protocol?.macros && eaten && (
+        <div className="mb-3"><EatenMacros eaten={eaten} terms={terms} isToday={isToday} /></div>
       )}
       {protocol?.meal_plan?.length > 0 && (
         <PrescribedMeals mealPlan={protocol.meal_plan} foodItems={log.food} onLogMeal={logMeal} />
