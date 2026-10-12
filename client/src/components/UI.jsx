@@ -246,7 +246,7 @@ export function StatPill({ value, label, color = 'stone', accent = false }) {
 }
 
 // ── Member Bottom Nav ────────────────────────────────────────────────────────
-export function MemberBottomNav() {
+export function MemberBottomNav({ showAIAction = true } = {}) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const composerOpen = useAIChat(s => s.composerOpen);
@@ -257,14 +257,14 @@ export function MemberBottomNav() {
     { label: 'You', path: '/profile', icon: 'user', active: ['/profile', '/settings', '/devices'].includes(pathname) },
   ];
   return <>
-    <div style={{ height: 146 }} />
+    <div style={{ height: showAIAction ? 146 : 88 }} />
     {!composerOpen && <nav className="fixed bottom-0 left-0 right-0 z-40 member-nav" data-testid="member-nav" aria-label="Member navigation"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="member-nav-inner">
-        <button type="button" className="member-ai-dock" data-testid="ai-orb" aria-label="Log with AI Chat" aria-pressed={false}
+        {showAIAction && <button type="button" className="member-ai-dock" data-testid="ai-orb" aria-label="Log with AI Chat" aria-pressed={false}
           onClick={() => { haptic(12); openChat(); if (pathname !== '/') navigate('/'); }}>
           <Icon name="spark" size={18} /> Log or ask FitLife <Icon name="mic" size={16} /><Icon name="camera" size={16} />
-        </button>
+        </button>}
         <div className="member-nav-links">{tabs.map(tab => <button type="button" key={tab.path}
           aria-current={tab.active ? 'page' : undefined} onClick={() => { haptic(8); navigate(tab.path); }}>
           <Icon name={tab.icon} size={20} />{tab.label}

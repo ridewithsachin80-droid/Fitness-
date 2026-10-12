@@ -10,6 +10,14 @@
  */
 import { create } from 'zustand';
 
+// Only the mounted assistant owns browser input actions. Registration is kept
+// outside persisted conversation state and released when its route unmounts.
+let entryAction = null;
+export function registerAIEntryAction(action) {
+  entryAction = action;
+  return () => { if (entryAction === action) entryAction = null; };
+}
+
 // ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
 //
 // The conversation lives HERE, not in component state. AIChatLog is mounted
@@ -33,7 +41,12 @@ export const useAIChat = create((set, get) => ({
   // (and focuses it); closeComposer() hides it. The thread stays on the page.
   composerOpen: false,
   entryMode: 'text',
-  openChat: (mode = 'text') => set((s) => ({ open: true, composerOpen: true, entryMode: typeof mode === 'string' ? mode : 'text', focusRequest: s.focusRequest + 1 })),
+  openChat: (mode = 'text') => {
+    const entryMode = ['text', 'voice', 'photo'].includes(mode) ? mode : 'text';
+    const open = () => set(s => ({ open: true, composerOpen: true, entryMode, focusRequest: s.focusRequest + 1 }));
+    if (entryAction) entryAction(entryMode, open);
+    else open();
+  },
   closeComposer: () => set({ composerOpen: false, composerFocused: false }),
   toggleComposer: () => set((s) => s.composerOpen
     ? { composerOpen: false, composerFocused: false }

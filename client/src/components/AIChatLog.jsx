@@ -4,6 +4,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import useAIEntryActions from '../hooks/useAIEntryActions';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import api from '../api/client';
 import { useLogStore } from '../store/logStore';
@@ -61,7 +62,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const parseFlight = useRef(false);
   const applyingRef = useRef(false);
   const [applying, setApplying] = useState(false);
-  const entryMode = useAIChat(s => s.entryMode);
   const logDate = useLogStore(s => s.date);
   const logLoading = useLogStore(s => s.loading);
   const logError = useLogStore(s => s.error);
@@ -112,24 +112,13 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
 
   useEffect(() => { useAIChat.getState().ensureFreshDay(today()); }, []);
 
-  // openChat() → bring the composer up: scroll the thread into view (the
-  // sheet, if any, is closed by useTodayModel on the same signal) and focus.
-  useEffect(() => {
-    if (!focusRequest) return undefined;
-    useAIChat.getState().ensureFreshDay(today());
-    const t = setTimeout(() => {
-      (bottomRef.current || threadRef.current)?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
-      if (useAIChat.getState().entryMode === 'text') inputRef.current?.focus({ preventScroll: true });
-      else overlayRef.current?.querySelector('button')?.focus({ preventScroll: true });
-    }, 120);
-    return () => clearTimeout(t);
-  }, [focusRequest]);
-
   // ── Voice input ────────────────────────────────────────────────────────────
   // Dictation lives in its own review card above the input (useVoiceComposer):
   // 3s of silence auto-stops into a Send button; the mic appends more takes.
   // The typing box below is untouched by voice.
   const vc = useVoiceComposer({ onSend: (t) => send(t) });
+  useAIEntryActions({ inputRef, fileRef, overlayRef, bottomRef, previousFocus, vc, focusRequest, composerOpen,
+    canPhoto: assistantReady && !photoBusy && !labBusy && !busy && !applying });
 
   // ── Photo food logging ─────────────────────────────────────────────────────
   // Phone photos are 3–8 MB; we downscale to 1280px and re-encode at 0.8 JPEG
@@ -833,7 +822,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
 
   useEffect(() => {
     if (!overlay || !composerOpen) return undefined;
-    previousFocus.current = document.activeElement;
+    if (!previousFocus.current) previousFocus.current = document.activeElement;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = e => {
@@ -849,7 +838,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       }
     };
     document.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKey); previousFocus.current?.focus?.(); };
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKey); previousFocus.current?.focus?.(); previousFocus.current = null; };
   }, [overlay, composerOpen]);
   useEffect(() => {
     if (!overlay || !composerOpen || typeof ResizeObserver === 'undefined') return undefined;
@@ -1322,9 +1311,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         <div className="member-assistant-head"><div><strong>FitLife AI</strong><p>Speak. Snap. Review. Save.</p></div>
           <button type="button" className="member-theme" onClick={() => useAIChat.getState().closeComposer()} aria-label="Close AI assistant"><Icon name="close" size={19} /></button></div>
         <div className="member-assistant-scroll" style={{ paddingBottom: composerHeight + kbInset }}>
-          {entryMode === 'photo' && <div className="member-ai-launch compact mb-4"><p>Take a photo or choose one from your gallery. AI identifies food and estimates the portion and macros for you.</p><button type="button" className="member-ai-dock mt-3" disabled={photoBusy || labBusy || !assistantReady}
-            onClick={() => fileRef.current?.click()}><Icon name="camera" size={18} /> Choose meal photo</button></div>}
-          {entryMode === 'voice' && <div className="member-ai-launch compact mb-4"><p>Tap the microphone below, describe your day and pause. Review what AI understood before saving.</p></div>}
           {thread}
         </div>
       </div>, document.body)) : thread}
@@ -1404,7 +1390,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
             style={{ display: 'none' }} />
           <button onClick={() => fileRef.current?.click()}
             disabled={photoBusy || busy || labBusy || applying || !assistantReady}
-            aria-label="Log food from a photo"
+            aria-label="Snap or upload a photo"
             style={{ minWidth: 40, minHeight: 40 }}
             className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
               photoBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold-light'

@@ -63,6 +63,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
   const [listening, setListening]       = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError]               = useState(null);
+  const [requesting, setRequesting]     = useState(false);
+  const startingRef = useRef(false);
+  const captureId = useRef(0);
 
   // Callbacks and lang go through a ref so recognition handlers never close
   // over stale props.
@@ -172,6 +175,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
 
   const stop = useCallback(async () => {
     if (!listeningRef.current) return;
+    const session = captureId.current;
     stoppingRef.current = true;
     listeningRef.current = false;
     setListening(false);
@@ -191,6 +195,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
     });
     try { recogRef.current?.stop(); } catch { /* not started */ }
     await recogFlushed;
+    if (session !== captureId.current) return;
 
     const recorder = recorderRef.current;
     const webSpeechText = finalTextRef.current;
@@ -215,6 +220,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
       const stopped = new Promise(resolve => { recorder.onstop = resolve; });
       recorder.stop();
       await stopped;
+      if (session !== captureId.current) return;
       releaseStream();
 
       const blob = new Blob(chunksRef.current, { type: mimeRef.current || 'audio/webm' });
@@ -242,16 +248,19 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
           langHint: optsRef.current.lang,
         }, { timeout: 30000 });
 
+        if (session !== captureId.current) return;
+
         const transcript = String(data?.transcript || '').trim();
         if (transcript) optsRef.current.onFinal?.(transcript);
         else if (webSpeechText) optsRef.current.onFinal?.(webSpeechText);
         else setError("Couldn't make out any words — try again a little closer to the mic");
       } catch {
+        if (session !== captureId.current) return;
         // Server or network failed — degrade to the on-device text if we have it.
         if (webSpeechText) optsRef.current.onFinal?.(webSpeechText);
         else setError("Couldn't reach the transcription service — check your connection");
       } finally {
-        setTranscribing(false);
+        if (session === captureId.current) setTranscribing(false);
       }
       return;
     }
@@ -263,7 +272,8 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = useCallback(async () => {
-    if (listeningRef.current) return;
+    if (listeningRef.current || startingRef.current) return;
+    const session = ++captureId.current;
     setError(null);
     finalTextRef.current = '';
     chunksRef.current = [];
@@ -273,6 +283,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
       setError('Voice input is not supported in this browser');
       return;
     }
+
+    startingRef.current = true;
+    setRequesting(true);
 
     if (hasRecorder) {
       try {
@@ -288,6 +301,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
             channelCount:     1,
           },
         });
+        // Closing the assistant while permission is pending must not start
+        // a microphone later, after the browser prompt is accepted.
+        if (session !== captureId.current) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
         const mime = pickMime();
         mimeRef.current = mime;
@@ -297,13 +313,16 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
         rec.ondataavailable = (e) => { if (e.data?.size) chunksRef.current.push(e.data); };
         rec.start(250);
       } catch (err) {
+        if (session !== captureId.current) return;
         recorderRef.current = null;
         releaseStream();
         if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+          startingRef.current = false; setRequesting(false);
           setError('Microphone blocked — allow mic access in your browser settings');
           return;   // permission refused: Web Speech would be blocked too
         }
         if (!SR) {
+          startingRef.current = false; setRequesting(false);
           setError("Couldn't start the microphone on this device");
           return;
         }
@@ -313,6 +332,8 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
       recorderRef.current = null;
     }
 
+    startingRef.current = false;
+    setRequesting(false);
     startRecognition();
     listeningRef.current = true;
     setListening(true);
@@ -322,6 +343,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
 
   // Discard the session: no transcription call, no onFinal. For the ✕ button.
   const cancel = useCallback(() => {
+    captureId.current++;
+    startingRef.current = false;
+    setRequesting(false);
     stoppingRef.current = true;
     listeningRef.current = false;
     setListening(false);
@@ -342,6 +366,8 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
 
   // Unmount: kill everything without firing callbacks.
   useEffect(() => () => {
+    captureId.current++;
+    startingRef.current = false;
     stoppingRef.current = true;
     listeningRef.current = false;
     clearTimeout(timerRef.current);
@@ -356,7 +382,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = 
     supported: !!(SR || hasRecorder),
     // Consumers can tell members the transcript improves after they stop:
     hasAccurateEngine: hasRecorder,
-    listening, transcribing, error, setError,
+    listening, requesting, transcribing, error, setError,
     start, stop, toggle, cancel,
   };
 }

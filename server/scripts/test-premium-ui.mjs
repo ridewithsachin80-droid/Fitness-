@@ -210,13 +210,33 @@ function photoShim(w) {
  w.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){}});
  w.HTMLCanvasElement.prototype.toDataURL=()=> 'data:image/jpeg;base64,QUJD';
 }
+function entryShim(w) {
+ photoShim(w);
+ w.__micRequests=0;w.__stoppedTracks=0;w.__recorderStarts=0;w.__pickerClicks=0;
+ const stream=()=>({getTracks:()=>[{stop(){w.__stoppedTracks++}}]});
+ Object.defineProperty(w.navigator,'mediaDevices',{value:{getUserMedia(){
+   w.__micRequests++;
+   if(w.__denyMic)return Promise.reject(Object.assign(new Error('denied'),{name:'NotAllowedError'}));
+   if(w.__deferMic)return new Promise(resolve=>{w.__grantMic=()=>resolve(stream())});
+   return Promise.resolve(stream());
+ }}});
+ w.MediaRecorder=class {static isTypeSupported(){return true} state='inactive'; start(){this.state='recording';w.__recorderStarts++} stop(){this.state='inactive';this.onstop?.()}};
+ const click=w.HTMLInputElement.prototype.click;
+ w.HTMLInputElement.prototype.click=function(){if(this.type==='file')w.__pickerClicks++;return click.call(this)};
+}
 async function premiumFlow() {
  const code=await bundle(ENTRY,stub('premium-api.js',PREM_API));
- const {w,errors}=run(code,photoShim),d=w.document;
+ const {w,errors}=run(code,entryShim),d=w.document;
  const q=id=>d.querySelector(`[data-testid="${id}"]`);
  const setVal=(el,v)=>{ const proto=el.tagName==='TEXTAREA'?w.HTMLTextAreaElement.prototype:el.tagName==='SELECT'?w.HTMLSelectElement.prototype:w.HTMLInputElement.prototype;
    Object.getOwnPropertyDescriptor(proto,'value').set.call(el,v);el.dispatchEvent(new w.Event(el.tagName==='SELECT'?'change':'input',{bubbles:true})); };
- await waitFor(()=>q('hero-weight')?.textContent.includes('82.4'),'loaded today');
+ await waitFor(()=>q('plan-eat')?.textContent.includes('666'),'loaded today');
+ ck('home starts with all secondary sections collapsed', ['home-plan-details','home-log-details','home-insight-details'].every(id=>q(id)?.dataset.open==='0')&&!q('hero-weight')&&!q('ai-orb'));
+ q('home-plan-details').querySelector('button').click();await tick(60);
+ ck('plan tools retain weight, micronutrients and meal ideas',q('hero-weight').textContent.includes('82.4')&&!!q('chip-nutrition')&&!!q('chip-mealidea'));
+ q('home-log-details').querySelector('button').click();q('home-insight-details').querySelector('button').click();await tick(100);
+ ck('entries, notes and coach messages remain available on demand',!!q('logged-section')&&!!d.querySelector('#section-notes')&&!!q('coach-note'));
+ q('home-log-details').querySelector('button').click();q('home-insight-details').querySelector('button').click();await tick(50);
  ck('existing log values load into the redesigned home', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent) && /1.50/.test(q('chip-water').textContent));
  await waitFor(()=>q('plan-move')?.textContent.includes('Push'),'program loaded');
  ck('daily overview retains workout, sleep, checklist and full plan', /Push/.test(q('plan-move').textContent)&&/7h 45m/.test(q('chip-sleep').textContent)&&/3 of 5/.test(q('plan-recover').textContent)&&d.body.textContent.includes('View your complete plan'), [q('plan-move').textContent,q('chip-sleep').textContent,q('plan-recover').textContent]);
@@ -232,8 +252,31 @@ async function premiumFlow() {
  q('plan-recover').click();await tick(180);q('chip-b12').click();await tick(50);
  ck('supplement checklist is preserved',w.__logStore.getState().log.supplements.b12===true);
  w.__click('Done');await tick(400);
- w.__aiChat.getState().openChat('photo');await tick(200);
- ck('photo launch opens focused dialog',!!d.querySelector('.member-assistant-overlay[role=dialog]')&&d.body.style.overflow==='hidden'&&d.body.textContent.includes('Choose meal photo'));
+ q('ai-type').click();
+ ck('Type focuses the text box in the original tap',d.activeElement===q('composer-input'));
+ d.querySelector('[aria-label="Close AI assistant"]').click();await tick(50);
+ q('ai-speak').focus();q('ai-speak').click();
+ ck('Speak requests the microphone in the original tap',w.__micRequests===1&&!!q('composer'));
+ await tick(80);
+ ck('Speak begins one recording without a second tap',w.__recorderStarts===1&&d.body.textContent.includes('Listening…'));
+ w.__aiChat.getState().openChat('voice');await tick(50);
+ ck('repeated Speak does not stop or duplicate recording',w.__micRequests===1&&w.__recorderStarts===1&&d.body.textContent.includes('Listening…'));
+ d.querySelector('[aria-label="Close AI assistant"]').click();await tick(50);
+ ck('closing the assistant releases the microphone',w.__stoppedTracks===1);
+ ck('closing AI restores focus to the launcher',d.activeElement===q('ai-speak'));
+ w.__denyMic=true;q('ai-speak').click();await tick(80);
+ ck('denied microphone shows recovery and leaves typing usable',d.body.textContent.includes('Microphone blocked')&&!q('composer-input').disabled);
+ d.querySelector('[aria-label="Close AI assistant"]').click();await tick(50);
+ w.__denyMic=false;w.__deferMic=true;q('ai-speak').click();await tick(30);
+ const starts=w.__recorderStarts;d.querySelector('[aria-label="Close AI assistant"]').click();await tick(30);
+ w.__grantMic();await tick(50);
+ ck('late permission grant cannot record after closing AI',w.__recorderStarts===starts&&w.__stoppedTracks===2&&!q('composer'));
+ w.__deferMic=false;
+ q('ai-snap').click();
+ ck('Snap opens the image picker in the original tap',w.__pickerClicks===1&&!!q('composer')&&q('ai-snap').textContent==='Snap');
+ await tick(80);
+ ck('an empty voice take does not clutter the next photo session',!d.body.textContent.includes('Heard this — check and send'));
+ ck('photo launch opens the AI dialog without another choose-photo screen',!!d.querySelector('.member-assistant-overlay[role=dialog]')&&d.body.style.overflow==='hidden'&&!d.body.textContent.includes('Choose meal photo'));
  const upload=q('composer').querySelector('input[accept="image/*"]');
  Object.defineProperty(upload,'files',{value:[new w.File(['meal'],'meal.jpg',{type:'image/jpeg'})], configurable:true});
  upload.dispatchEvent(new w.Event('change',{bubbles:true}));
@@ -284,13 +327,24 @@ async function premiumVisual(code) {
   const page=await browser.newPage();await page.setViewport({width,height:width>600?960:900,deviceScaleFactor:1.5});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.addScriptTag({content:code});
-  await page.waitForFunction(()=>document.querySelector('[data-testid="hero-weight"]')?.textContent.includes('82.4'));
+  await page.waitForFunction(()=>document.querySelector('[data-testid="plan-eat"]')?.textContent.includes('666'));
   await page.evaluate(t=>window.__settings.getState().setTheme(t),theme);
+  await new Promise(r=>setTimeout(r,400));
   const measure=()=>page.evaluate(()=>({vw:innerWidth,sw:document.documentElement.scrollWidth,bg:getComputedStyle(document.querySelector('.member-home')).backgroundColor}));
   let m=await measure();ck(`home ${theme} ${width}px has no horizontal overflow`,m.sw<=m.vw+1,m);
   ck(`theme ${theme} paints the expected background`,m.bg===(theme==='light'?'rgb(248, 247, 242)':'rgb(18, 26, 22)'),m);
-  if(width===390||width===1280) await page.screenshot({path:path.join(out,`home-${theme}-${width}.png`),fullPage:true});
-  await page.evaluate(()=>window.__aiChat.getState().openChat('photo'));await page.waitForSelector('.member-assistant-overlay');
+  if(width===390||width===1280) {
+    const fullHeight=await page.evaluate(()=>document.documentElement.scrollHeight);
+    await page.setViewport({width,height:fullHeight,deviceScaleFactor:1.5});await new Promise(r=>setTimeout(r,150));
+    await page.screenshot({path:path.join(out,`home-${theme}-${width}.png`),fullPage:true});
+    await page.setViewport({width,height:width>600?960:900,deviceScaleFactor:1.5});
+  }
+  await page.click('[data-testid="ai-type"]');
+  ck(`Type ${theme} ${width}px focuses immediately`,await page.evaluate(()=>document.activeElement===document.querySelector('[data-testid="composer-input"]')));
+  await page.click('[aria-label="Close AI assistant"]');await page.waitForSelector('.member-assistant-overlay',{hidden:true});
+  const [chooser]=await Promise.all([page.waitForFileChooser(),page.click('[data-testid="ai-snap"]')]);
+  ck(`Snap ${theme} ${width}px opens the browser picker on first tap`,!!chooser);await chooser.cancel();
+  await page.waitForSelector('.member-assistant-overlay');
   await page.evaluate(()=>{
     const foods=[{name:'Oats',grams:150,meal:'Breakfast',qty_text:'1 bowl · estimated',per_100g:{calories:374,protein:13.2,total_carbs:60,fat:7.8},macros:{cal:561,pro:19.8,carb:90,fat:11.7},on:true}];
     window.__aiChat.setState({messages:[{role:'ai',text:'I found oats in your meal. Review the portion and nutrition below.',parsed:{foods,activities:[],acv:[],supplements:[],workouts:[],corrections:[]}}]});

@@ -101,7 +101,7 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
       style={{ borderColor: `${accent}59` }}>
       {/* Header line: state + language toggle / discard */}
       <div className="flex items-center justify-between mb-1.5">
-        {voice.listening ? (
+        {voice.requesting ? <span className="text-caption text-mid">Allow microphone access to begin…</span> : voice.listening ? (
           <span className="text-caption text-red-400 font-medium flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
             {autoSend ? 'Listening… pause when done, I\'ll send it' : 'Listening… pause to finish, or tap the mic'}
@@ -200,7 +200,20 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
     </button>
   ) : null;
 
-  return { card, micButton, active };
+  // Launcher starts are idempotent; a second launch must never toggle off
+  // an active recording. The mic inside the composer still toggles normally.
+  const startRecording = () => {
+    if (voice.listening || voice.transcribing) return;
+    const next = startTake({ committed: committedRef.current, draft });
+    committedRef.current = next.committed;
+    if (draft === null) setDraft(next.draft);
+    voice.start();
+  };
+  const cancelCapture = () => {
+    voice.cancel();
+    if (!draft?.trim()) { committedRef.current = ''; setDraft(null); }
+  };
+  return { card, micButton, active, startRecording, cancelCapture };
 }
 
 export default useVoiceComposer;

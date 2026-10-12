@@ -31,7 +31,7 @@ import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutS
 
 /** Member home: one daily overview, three navigation destinations and an
  * on-demand AI workspace. All manual sheets and coach services share the
- * original useTodayModel; the complete plan remains one tap away. */
+ * original useTodayModel; the complete plan remains in Plan & tools. */
 export default function Today() {
   const m = useTodayModel();
   const navigate = useNavigate();
@@ -46,17 +46,20 @@ export default function Today() {
         <Greeting user={m.user} avatar={null} autoSaved={m.autoSaved} queued={m.queued} error={m.error}
           streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} weekNumber={m.weekNumber} date={m.date} />
         <PendingSync /><PushPrimer hasLogged={m.hasLoggedAnything} />
-        <DateNav date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
       </header>
       <main className="member-content">
         {loading ? <><SkeletonCard lines={3} /><SkeletonCard lines={4} /></> : <>
           <div className="member-stack">
             {isToday ? <AILauncher /> : <Card><p className="text-sm text-mid">You are viewing an earlier day. Manual edits stay on this date.</p><button type="button" className="member-link" onClick={m.goToday}>Return to today for AI logging <Icon name="arrow-right" size={16} /></button></Card>}
+          </div>
+          <section className="member-snapshot" aria-label="Daily summary">
+            <DateNav date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
+            <DailyEssentials m={m} onOpen={openSheet} />
+          </section>
+          <div className="member-details">
+            <Collapsible title="Plan & tools" summary={`${m.protocolDone} of ${m.protocolTotal} daily habits done`} icon="calendar" testId="home-plan-details">
             {isToday && m.mealPlans?.length > 0 && <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
               onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat('text')} />}
-            <section><div className="member-section-title">Your daily essentials <span className="text-caption text-lo">Tap to view or edit</span></div>
-              <DailyEssentials m={m} onOpen={openSheet} />
-            </section>
             <button type="button" className="member-weight" data-testid="hero-weight" onClick={() => openSheet('weight')}>
               <Icon name="scale" size={20} /><span>Weight</span><strong>{log.weight || '—'} <span className="text-caption text-lo">kg</span></strong>
               {m.weightDelta != null && <span className="weight-change">{m.weightDelta < 0 ? '↓' : '↑'} {Math.abs(m.weightDelta)} kg</span>}<small>Update</small>
@@ -67,8 +70,14 @@ export default function Today() {
               <button type="button" className="member-link" onClick={() => openSheet('nutrition')} data-testid="chip-nutrition"><Icon name="pill" size={18} /><span>Nutrition & micronutrients</span><Icon name="chevron-right" size={15} /></button>
               <button type="button" className="member-link" onClick={() => openSheet('mealidea')} data-testid="chip-mealidea"><Icon name="food" size={18} /><span>What could I eat next?</span><Icon name="chevron-right" size={15} /></button>
             </div>
-          </div>
-          <div className="member-stack">
+            </Collapsible>
+            <Collapsible title={isToday ? 'Logged today' : 'Logged that day'} summary="Your entries, notes & corrections" icon="note" testId="home-log-details">
+              <section data-testid="logged-section"><Timeline m={m} onOpen={openSheet} onOpenChat={() => openChat()} /></section>
+              <div id="section-notes"><NotesRow value={log.notes} onChange={v => m.update('notes', v)} label={terms.notes}
+                placeholder={ageMode === 'child' ? 'How did you feel today?' : 'Symptoms, energy, how you felt…'} /></div>
+            </Collapsible>
+            <Collapsible title="Insights & coach" summary={m.unreadNotes?.length ? `${m.unreadNotes.length} unread coach message${m.unreadNotes.length > 1 ? 's' : ''} · check-ins & recovery` : 'Your daily read, check-ins & recovery'} icon="spark" testId="home-insight-details">
+            <div className="member-stack">
             <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
               action={nextAction({ isToday, hour: istHour(), weight: log.weight, foodCount: (log.food || []).length,
                 waterMl: log.water || 0, waterTarget: protocol?.water_target || 3000, protocolDone: m.protocolDone, protocolTotal: m.protocolTotal,
@@ -77,16 +86,14 @@ export default function Today() {
             <CoachNotes m={m} />
             {isToday && <><ProgressPhotoCard /><CheckinCard /><VoicePilotCard /><RecoveryCard today={m.date} /></>}
             {!protocol && <Card><h2 className="font-display text-xl mb-2">Welcome to FitLife</h2><p className="text-sm text-mid">Your coach will set up your personalised plan. You can already log food, weight, water and sleep.</p></Card>}
-            <Card><Collapsible title={isToday ? 'Logged today' : 'Logged that day'} summary="Review your entries, make a correction" icon="note" defaultOpen>
-              <section data-testid="logged-section"><Timeline m={m} onOpen={openSheet} onOpenChat={() => openChat()} /></section>
-            </Collapsible><div id="section-notes"><NotesRow value={log.notes} onChange={v => m.update('notes', v)} label={terms.notes}
-              placeholder={ageMode === 'child' ? 'How did you feel today?' : 'Symptoms, energy, how you felt…'} /></div></Card>
+            </div>
+            </Collapsible>
+          </div>
             {protocol?.fasting && (() => {
               const isMinor = m.profileAge !== null && m.profileAge < 18;
               const hasRisk = ['pre_diabetic', 'insulin_resist', 'hypothyroid'].some(c => (protocol?.conditions || []).includes(c));
               return isMinor || hasRisk ? <Card><p className="text-sm text-warn">Fasting protocol — check with your doctor</p><p className="text-caption text-mid">{isMinor ? 'Fasting is not recommended for people under 18.' : 'Your health conditions may require a modified approach.'} Confirm your protocol is approved before following it.</p></Card> : <FastingBar fasting={protocol.fasting} />;
             })()}
-          </div>
         </>}
       </main>
       <AIChatLog mealPlans={m.mealPlans} onLogPlanned={m.openPlanned} overlay />
@@ -102,7 +109,7 @@ export default function Today() {
       <LogPlannedSheet meal={m.plannedMeal} onClose={m.closePlanned} m={m} />
       <PlatePhotoSheet job={m.plateJob} onClose={m.closePlate} onRetake={m.openPlate} m={m} />
 
-      <MemberBottomNav />
+      <MemberBottomNav showAIAction={false} />
       <InstallPrompt />
       <MilestoneModal milestone={m.milestone} onClose={() => { haptic(10); m.setMilestone(null); }} />
     </div>
