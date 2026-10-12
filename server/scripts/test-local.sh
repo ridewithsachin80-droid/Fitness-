@@ -273,8 +273,13 @@ else
       total_pass=$((total_pass + n))
     fi
   else
-    printf "  %-24s %s\n" "ui-tests" "✗ FAILED"
+    ui_status=$?
+    printf "  %-24s %s\n" "ui-tests" "✗ FAILED (exit $ui_status)"
     grep -E '✗|could not run' "$uilog" | head -8 | sed 's/^/        /'
+    # Uncaught exceptions, heap failures and signals do not necessarily include
+    # our assertion marker. Keep the actual failure visible in GitHub's log.
+    echo "        Last 40 lines of the UI process log:"
+    tail -40 "$uilog" | sed 's/^/        /'
     failed=$((failed + 1))
   fi
 fi
