@@ -570,8 +570,8 @@ ck('auto-derived protocol ticks are still additive only (tick, never untick)',
 // DayStrip.jsx / ProtocolDots.jsx / CoachCard.jsx stay on disk (deploy never
 // deletes) but Today must not import them.
 const plan = read('components/today/TodaysPlan.jsx');
-ck('Today renders TodaysPlan and no longer imports DayStrip, ProtocolDots or CoachCard',
-   /<TodaysPlan m=\{m\}/.test(todayPage) && !/DayStrip|ProtocolDots|CoachCard/.test(todayPage));
+ck('Today provides the AI launcher, daily essentials and full plan entry', /<AILauncher/.test(todayPage) && /<DailyEssentials/.test(todayPage) && /navigate\('\/plan'\)/.test(todayPage));
+
 ck('Today\'s Plan has exactly the three rows and every sheet a row can open is one of the seven',
    ['plan-move', 'plan-eat', 'plan-recover'].filter(id => new RegExp(`testId="${id}"`).test(plan)).length >= 2 &&
    ['workout', 'food', 'nutrition', 'water', 'sleep', 'protocol'].every(n => new RegExp(`onOpen\\('${n}'\\)`).test(plan)),
@@ -604,17 +604,17 @@ ck('the hero opens the weight sheet', /openSheet\('weight'\)/.test(todayPage));
 console.log('\n[10] AI thread on the page, composer docked');
 
 const chat = read('components/AIChatLog.jsx');
-ck('AIChatLog no longer renders a full-screen overlay', !/fixed inset-0/.test(chat) && !/if \(!open\) return null/.test(chat), 'overlay code still present');
-ck('the composer is portaled to <body> and fixed above the nav',
-   /createPortal\(/.test(chat) && /data-testid="composer"[^>]*className="fixed/.test(chat) && /COMPOSER_BOTTOM_PX/.test(chat));
+ck('AI workspace is an accessible on-demand dialog', /role="dialog" aria-modal="true"/.test(chat) && /overlay \? \(composerOpen && createPortal/.test(chat));
+
+ck('the composer is portaled to the body and fixed for keyboard support', /createPortal\(/.test(chat) && /data-testid="composer"/.test(chat) && /fixed left-0 right-0/.test(chat) && /kbInset/.test(chat));
+
 ck('openChat() is a focus counter, not a boolean (a second tap still brings the composer up)',
    /focusRequest: s\.focusRequest \+ 1/.test(read('../src/store/aiChatStore.js')));
 ck('Apply stamps lastAppliedAt; the model refreshes the workout summary from it, not from "overlay closed"',
    /markApplied\(\)/.test(chat) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
 ck('openChat() closes any open sheet so the composer is reachable', /if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
-ck('Today renders the thread inside the page, inside a Card, not as a trailing overlay',
-   // Props are allowed (Phase 3 passes today's meals); the placement is the rule.
-   /<Card>\s*<AIChatLog(\s[^>]*)?\s*\/>\s*<\/Card>/.test(todayPage) && !/<MemberBottomNav \/>\s*<AIChatLog/.test(todayPage));
+ck('Today mounts exactly one AI workspace with overlay enabled', (todayPage.match(/<AIChatLog/g) || []).length === 1 && /<AIChatLog[^>]*overlay/.test(todayPage));
+
 ck('the viewport meta asks Android to resize the layout viewport for the keyboard',
    /interactive-widget=resizes-content/.test(fs.readFileSync(path.join(CLIENT, '../index.html'), 'utf8')));
 ck('the keyboard inset hook exists for iOS (visualViewport delta)', /visualViewport/.test(read('../src/hooks/useKeyboardInset.js')));
@@ -625,21 +625,21 @@ ck('Enter sends, Shift+Enter is a new line', /e\.key === 'Enter' && !e\.shiftKey
 ck('the composer can be left without sending: × clears the draft, Escape steps away',
    /data-testid="composer-clear"/.test(chat) && /e\.key === 'Escape'/.test(chat) && /const clearDraft/.test(chat));
 // Sprint 5b.3: the bar is summoned by the orb, not permanent.
-ck('the composer renders only while composerOpen; the orb toggles it on Today',
-   /composerOpen && createPortal\(/.test(chat) && /toggleComposer/.test(read('components/UI.jsx')) && /data-testid="ai-orb"/.test(read('components/UI.jsx')));
+ck('the composer appears on request and the member dock opens it', /composerOpen && createPortal/.test(chat) && /openChat\(\)/.test(read('components/UI.jsx')) && /data-testid="ai-orb"/.test(read('components/UI.jsx')));
+
 ck('the bar has its own Close, and the thread offers "Tell me" while the bar is away',
    /data-testid="composer-close"/.test(chat) && /data-testid="thread-open-composer"/.test(chat));
-ck('Today reserves bottom space only while the bar is up', /composerOpen \? 'pb-32' : 'pb-6'/.test(todayPage));
+ck('AI transcript reserves measured space above its composer', /paddingBottom: composerHeight \+ kbInset/.test(chat) && /ResizeObserver/.test(chat));
+
 ck('the box re-measures on every text change (grows and shrinks)', /useEffect\(\(\) => \{ autoGrow\(inputRef\.current\); \}, \[input\]\)/.test(chat));
-ck('the bottom nav steps aside while composing', /composerFocused/.test(read('components/UI.jsx')) && /translate-y-\[120%\]/.test(read('components/UI.jsx')));
+ck('the bottom nav is hidden while the assistant is open', /!composerOpen && <nav/.test(read('components/UI.jsx')));
 
 // ── 11. Plan screen + navigation (Sprint 6) ─────────────────────────────────
 console.log('\n[11] Plan + nav');
 const ui = read('components/UI.jsx');
 const planPage = read('pages/Plan.jsx');
-ck('member nav tabs are Today · Plan · Progress · Profile, in that order, and Settings is not one of them (coach nav keeps its own)',
-   (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0, 4).join(',') === 'Today:/,Plan:/plan,Progress:/progress,Profile:/profile' && !/^Settings/.test(labels[4] || ''); })(),
-   [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1]));
+ck('member navigation has Today, Progress and You', (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0,3).join(',') === 'Today:/,Progress:/progress,You:/profile'; })());
+
 ck('/settings still resolves and Profile links to it (the screen moved, it did not vanish)',
    /path="\/settings"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')) && /navigate\('\/settings'\)/.test(read('pages/Profile.jsx')));
 ck('/plan is routed for members', /path="\/plan"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')));
@@ -785,7 +785,7 @@ const recCard = read('components/today/RecoveryCard.jsx');
 ck('recovery never estimates: every metric is null unless a provider reported it', /const num = \(v\) => \(v == null/.test(rec) && !/\?\? 0/.test(rec));
 ck('the card renders nothing without data for today or yesterday', /if \(!s\) return null;/.test(recCard) && /if \(latest\.date !== today && latest\.date !== yStr\) return null;/.test(rec));
 ck('the provider is named on the card', /s\.providers\.join/.test(recCard));
-ck('Today mounts it after the plan and only for today; the hero does not read it', /\{isToday && <RecoveryCard today=\{m\.date\} \/>\}/.test(todayPage) && !/RecoveryCard/.test(model));
+ck('Today retains recovery for the current day', /isToday && <><ProgressPhotoCard[\s\S]*?<RecoveryCard today=\{m\.date\}/.test(todayPage) && !/RecoveryCard/.test(model));
 
 // ── 22. House circuits (Sprint 11d) ─────────────────────────────────────────
 console.log('\n[22] House circuits');
