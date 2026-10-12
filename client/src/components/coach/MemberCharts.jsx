@@ -19,8 +19,8 @@ export default function MemberCharts({ weightData, complianceData, avg30, profil
             <ResponsiveContainer width="100%" height={160}>
               <LineChart data={weightData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTooltip />} />
                 {profile.start_weight && (
                   <ReferenceLine y={parseFloat(profile.start_weight)} stroke="#8C6D37"
@@ -55,9 +55,9 @@ export default function MemberCharts({ weightData, complianceData, avg30, profil
             <ResponsiveContainer width="100%" height={100}>
               <BarChart data={complianceData} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}
                 style={{ cursor: 'pointer' }}>
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false}
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false}
                   interval={Math.floor(complianceData.length / 5)} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   content={({ active, payload }) => active && payload?.length
                     ? <div className="bg-surface border border-hair rounded-xl px-2 py-1 shadow-sm text-xs">

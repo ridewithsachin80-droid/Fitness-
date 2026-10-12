@@ -48,12 +48,12 @@ export default function ChatFoodMacros({ f, disabled, onSave }) {
         P {f.macros?.pro ?? 0} · C {f.macros?.carb ?? 0} · F {f.macros?.fat ?? 0}
       </p>
       {!disabled && f.per_100g && (
-        <span role="button" tabIndex={0} onClick={openEditor} data-testid="chat-edit-macros"
+        <button type="button" onClick={openEditor} data-testid="chat-edit-macros"
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditor(e); } }}
-          style={{ minHeight: 30 }}
+          style={{ minHeight: 44 }}
           className="inline-flex items-center text-caption font-semibold text-gold px-1 -mr-1 rounded-md active:bg-gold/10">
           {f.label ? 'Your label · edit' : 'Edit macros'}
-        </span>
+        </button>
       )}
       <span onClick={stop} onKeyDown={stop} onPointerDown={stop}>
         <Sheet open={open} onClose={() => setOpen(false)} eyebrow="Edit macros" title={`${f.name} · ${f.grams} g`}>
