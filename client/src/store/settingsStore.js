@@ -2,10 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 // ── Theme / font helpers ──────────────────────────────────────────────────────
-// Dark-only now — no more light/system modes, which also removes the whole
-// class of "light-theme CSS override selector" bugs this app kept hitting.
-export function applyTheme() {
-  document.documentElement.setAttribute('data-theme', 'dark');
+export function applyTheme(theme) {
+  const selected = theme || useSettingsStore.getState().theme || 'light';
+  document.documentElement.setAttribute('data-theme', selected === 'dark' ? 'dark' : 'light');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = selected === 'dark' ? '#121a16' : '#f8f7f2';
 }
 
 export function applyFontSize(size) {
@@ -23,6 +24,8 @@ export const useSettingsStore = create(
     (set, get) => ({
       // 'child' | 'adult' | 'senior' | null (null triggers onboarding)
       ageMode: null,
+      theme: 'light',
+      setTheme: (theme) => { const value = theme === 'dark' ? 'dark' : 'light'; set({ theme: value }); applyTheme(value); },
       // 'normal' | 'large'
       fontSize: 'normal',
       // 'simple' | 'detailed'

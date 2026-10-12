@@ -32,12 +32,13 @@ export const useAIChat = create((set, get) => ({
   // Sprint 5b.3: the composer is summoned, not permanent. openChat() shows it
   // (and focuses it); closeComposer() hides it. The thread stays on the page.
   composerOpen: false,
-  openChat:  () => set((s) => ({ open: true, composerOpen: true, focusRequest: s.focusRequest + 1 })),
+  entryMode: 'text',
+  openChat: (mode = 'text') => set((s) => ({ open: true, composerOpen: true, entryMode: typeof mode === 'string' ? mode : 'text', focusRequest: s.focusRequest + 1 })),
   closeComposer: () => set({ composerOpen: false, composerFocused: false }),
   toggleComposer: () => set((s) => s.composerOpen
     ? { composerOpen: false, composerFocused: false }
     : { open: true, composerOpen: true, focusRequest: s.focusRequest + 1 }),
-  closeChat: () => set({ open: false }),
+  closeChat: () => set({ open: false, composerOpen: false, composerFocused: false }),
 
   // Bumped after every successful Apply. useTodayModel refreshes the workout
   // summary from it (it used to watch the overlay closing — there is no
@@ -68,12 +69,17 @@ export const useAIChat = create((set, get) => ({
   resetChat: () => {
     undoSnap.current = null;
     workoutUndoSnap.current = null;
-    set({ messages: [], input: '', dayKey: null });
+    set({ messages: [], input: '', dayKey: null, open: false, composerOpen: false, composerFocused: false });
   },
 
   /** Called when the panel opens; clears a conversation left over from a previous day. */
   ensureFreshDay: (todayKey) => {
-    if (get().dayKey && get().dayKey !== todayKey) get().resetChat();
+    if (get().dayKey && get().dayKey !== todayKey) {
+      const { composerOpen, entryMode } = get();
+      get().resetChat();
+      // A first tap after midnight should still open the freshly cleared chat.
+      set({ composerOpen, open: composerOpen, entryMode });
+    }
     set({ dayKey: todayKey });
   },
 }));

@@ -1,6 +1,10 @@
+import { useNavigate } from 'react-router-dom';
+import AILauncher from '../components/member/AILauncher';
+import DailyEssentials from '../components/member/DailyEssentials';
+import ThemeToggle from '../components/member/ThemeToggle';
 import useTodayModel from '../hooks/useTodayModel';
 import { Card, OfflineBanner, MemberBottomNav } from '../components/UI';
-import { HeroNumber, SkeletonCard, Skeleton, Eyebrow } from '../components/primitives';
+import { SkeletonCard, Icon, Collapsible } from '../components/primitives';
 import { haptic } from '../store/settingsStore';
 import AIChatLog from '../components/AIChatLog';
 import { useAIChat } from '../store/aiChatStore';
@@ -10,7 +14,6 @@ import PushPrimer    from '../components/PushPrimer';
 import Greeting      from '../components/today/Greeting';
 import DateNav       from '../components/today/DateNav';
 import AIRead        from '../components/today/AIRead';
-import TodaysPlan    from '../components/today/TodaysPlan';
 import NotesRow      from '../components/today/NotesRow';
 import Timeline      from '../components/today/Timeline';
 import CoachNotes    from '../components/today/CoachNotes';
@@ -26,150 +29,67 @@ import { FastingBar } from '../components/today/DayWidgets';
 import { nextAction, istHour } from '../lib/day';
 import { WeightSheet, WaterSheet, SleepSheet, ProtocolSheet, FoodSheet, WorkoutSheet, NutritionSheet, MealIdeaSheet } from '../components/sheets';
 
-/**
- * Today — the member's home screen (Sprint 3 → 5b).
- *
- * One scrolling surface, in reading order (Sprint 5b, "Today v2"):
- *   greeting + date · week N → the ONE number (weight) → today's read with one
- *   action → Today's Plan (Move · Eat · Recover, dots inside Recover)
- *   → the AI thread → logged today → streak → coach messages → fasting → notes
- * Today's Plan replaced the coach card, the four tiles, the deficit chip and
- * the dots card — one section instead of four competing for the same screen.
- * Every logging action is a bottom sheet (components/sheets/), never an
- * inline drawer that pushes the page around.
- *
- * Sprint 4: the AI is on the page. <AIChatLog /> renders the conversation as
- * the "Ask FitLife" card below the timeline and docks the composer (text, mic,
- * camera, lab report) above the bottom nav on every scroll position. The ✨
- * orb, Today's read, the timeline's empty state and the sheets' "Log with AI"
- * banners all call openChat(), which closes any sheet, scrolls the thread into
- * view and focuses the composer.
- *
- * All state and saving is in hooks/useTodayModel.js — this file only lays
- * things out. If a number looks wrong, the bug is in the hook or lib/day,
- * not here.
- */
+/** Member home: one daily overview, three navigation destinations and an
+ * on-demand AI workspace. All manual sheets and coach services share the
+ * original useTodayModel; the complete plan remains one tap away. */
 export default function Today() {
   const m = useTodayModel();
+  const navigate = useNavigate();
   const openChat = useAIChat(s => s.openChat);
-  const composerOpen = useAIChat(s => s.composerOpen);
   const { log, protocol, loading, isToday, sheet, openSheet, closeSheet, terms, ageMode } = m;
 
   return (
-    <div className="min-h-screen bg-charcoal font-sans">
+    <div className="min-h-screen bg-charcoal font-sans member-home">
       <OfflineBanner />
-
-      <header className="px-4 pt-8 pb-4 bg-gradient-to-b from-surface to-charcoal">
-        <div className="max-w-md mx-auto">
-          <Greeting user={m.user} avatar={m.avatar} autoSaved={m.autoSaved} queued={m.queued} error={m.error}
-            streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} weekNumber={m.weekNumber} date={m.date} />
-          <PendingSync />
-          <PushPrimer hasLogged={m.hasLoggedAnything} />
-          <DateNav date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
-
-          {/* The one number. Tap to log or correct it. */}
-          <button type="button" onClick={() => openSheet('weight')} data-testid="hero-weight"
-            className="w-full text-left mt-5 active:scale-[0.99] transition-transform">
-            {loading ? (
-              <Skeleton className="h-12 w-40" />
-            ) : log.weight ? (
-              <HeroNumber value={parseFloat(log.weight)} unit="kg" delta={m.weightDelta} deltaUnit=" kg"
-                label={m.weightDelta == null ? (isToday ? 'this morning' : 'that morning') : 'vs yesterday'} />
-            ) : (
-              <HeroNumber value="—" unit="kg" placeholder label={isToday ? 'Tap to log this morning\u2019s weight' : 'No weight logged'} />
-            )}
-          </button>
-        </div>
+      <header className="member-header">
+        <div className="member-brandbar"><span className="member-wordmark">FitLife<span /></span><ThemeToggle /></div>
+        <Greeting user={m.user} avatar={null} autoSaved={m.autoSaved} queued={m.queued} error={m.error}
+          streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} weekNumber={m.weekNumber} date={m.date} />
+        <PendingSync /><PushPrimer hasLogged={m.hasLoggedAnything} />
+        <DateNav date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
       </header>
-
-      <main className={`max-w-md mx-auto px-4 space-y-3 ${composerOpen ? 'pb-32' : 'pb-6'}`}>
-        {loading ? (
-          <>
-            <SkeletonCard lines={1} />
-            <Skeleton className="h-[72px]" />
-            <div className="flex gap-2"><Skeleton className="h-[74px] w-32 flex-shrink-0" /><Skeleton className="h-[74px] w-32 flex-shrink-0" /><Skeleton className="h-[74px] w-32 flex-shrink-0" /></div>
-            <SkeletonCard lines={3} />
-          </>
-        ) : (
-          <>
-            <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
-              action={nextAction({
-                isToday, hour: istHour(),
-                weight: log.weight, foodCount: (log.food || []).length,
-                waterMl: log.water || 0, waterTarget: protocol?.water_target || 3000,
-                protocolDone: m.protocolDone, protocolTotal: m.protocolTotal,
-                sleepSet: !!(log.sleep?.bedtime && log.sleep?.waketime),
-                workoutPlanned: !!m.coachPlan?.todayDay,
-                workoutLogged: (m.workoutSummary.count || 0) > 0 || (m.workoutSummary.cardio || []).length > 0,
-              })} />
-
-            {/* Phase 2: the next meal from the coach's diet plan, one tap to log.
-                Above Today's Plan: it is the one thing to do next. Today only. */}
-            {isToday && (m.mealPlans || []).length > 0 && (
-              <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
-                onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat()} />
-            )}
-
-            {/* Phase 4: Sundays only, until this week's three photos are in. */}
-            {isToday && <ProgressPhotoCard />}
-            {/* Phase 7: Sunday and Monday, until this week's check-in is in. */}
-            {isToday && <CheckinCard />}
-            {/* Phase 8: only for members invited to the Kannada voice test. */}
-            {isToday && <VoicePilotCard />}
-
-            <TodaysPlan m={m} onOpen={openSheet} />
-
-            {/* Sprint 11c: only for members whose tracker has synced — otherwise renders nothing. */}
-            {isToday && <RecoveryCard today={m.date} />}
-
-            {!protocol && (
-              <Card>
-                <div className="text-center py-3">
-                  <h2 className="font-display text-xl font-medium text-white mb-1">Welcome to FitLife</h2>
-                  <p className="text-sm text-mid leading-relaxed">
-                    Your coach will set up your personalised protocol shortly — activities, supplements, macros and water target will appear here.
-                  </p>
-                  <p className="text-caption text-lo mt-3">You can already log your weight, food and water.</p>
-                </div>
-              </Card>
-            )}
-
-            <section className="px-1 pt-2" data-testid="logged-section">
-              <Eyebrow className="mb-1">{isToday ? 'Logged today' : 'Logged that day'}</Eyebrow>
-              <Timeline m={m} onOpen={openSheet} onOpenChat={() => openChat()} />
+      <main className="member-content">
+        {loading ? <><SkeletonCard lines={3} /><SkeletonCard lines={4} /></> : <>
+          <div className="member-stack">
+            {isToday ? <AILauncher /> : <Card><p className="text-sm text-mid">You are viewing an earlier day. Manual edits stay on this date.</p><button type="button" className="member-link" onClick={m.goToday}>Return to today for AI logging <Icon name="arrow-right" size={16} /></button></Card>}
+            {isToday && m.mealPlans?.length > 0 && <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
+              onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat('text')} />}
+            <section><div className="member-section-title">Your daily essentials <span className="text-caption text-lo">Tap to view or edit</span></div>
+              <DailyEssentials m={m} onOpen={openSheet} />
             </section>
-
-            {/* The conversation. Its composer is docked above the nav (portaled
-                from inside AIChatLog), so it is reachable from anywhere on the page. */}
-            <Card>
-              <AIChatLog mealPlans={m.mealPlans} onLogPlanned={m.openPlanned} />
-            </Card>
-
+            <button type="button" className="member-weight" data-testid="hero-weight" onClick={() => openSheet('weight')}>
+              <Icon name="scale" size={20} /><span>Weight</span><strong>{log.weight || '—'} <span className="text-caption text-lo">kg</span></strong>
+              {m.weightDelta != null && <span className="weight-change">{m.weightDelta < 0 ? '↓' : '↑'} {Math.abs(m.weightDelta)} kg</span>}<small>Update</small>
+            </button>
+            <div className="member-links">
+              <button type="button" className="member-link" onClick={() => openSheet('protocol')} data-testid="plan-recover"><Icon name="check" size={18} /><span>Daily checklist <small>· {m.protocolDone} of {m.protocolTotal} done</small></span><Icon name="chevron-right" size={15} /></button>
+              <button type="button" className="member-link" onClick={() => navigate('/plan')}><Icon name="calendar" size={18} /><span>View your complete plan <small>· meals, training & recovery</small></span><Icon name="chevron-right" size={15} /></button>
+              <button type="button" className="member-link" onClick={() => openSheet('nutrition')} data-testid="chip-nutrition"><Icon name="pill" size={18} /><span>Nutrition & micronutrients</span><Icon name="chevron-right" size={15} /></button>
+              <button type="button" className="member-link" onClick={() => openSheet('mealidea')} data-testid="chip-mealidea"><Icon name="food" size={18} /><span>What could I eat next?</span><Icon name="chevron-right" size={15} /></button>
+            </div>
+          </div>
+          <div className="member-stack">
+            <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
+              action={nextAction({ isToday, hour: istHour(), weight: log.weight, foodCount: (log.food || []).length,
+                waterMl: log.water || 0, waterTarget: protocol?.water_target || 3000, protocolDone: m.protocolDone, protocolTotal: m.protocolTotal,
+                sleepSet: !!(log.sleep?.bedtime && log.sleep?.waketime), workoutPlanned: !!m.coachPlan?.todayDay,
+                workoutLogged: (m.workoutSummary.count || 0) > 0 || (m.workoutSummary.cardio || []).length > 0 })} />
             <CoachNotes m={m} />
-
+            {isToday && <><ProgressPhotoCard /><CheckinCard /><VoicePilotCard /><RecoveryCard today={m.date} /></>}
+            {!protocol && <Card><h2 className="font-display text-xl mb-2">Welcome to FitLife</h2><p className="text-sm text-mid">Your coach will set up your personalised plan. You can already log food, weight, water and sleep.</p></Card>}
+            <Card><Collapsible title={isToday ? 'Logged today' : 'Logged that day'} summary="Review your entries, make a correction" icon="note" defaultOpen>
+              <section data-testid="logged-section"><Timeline m={m} onOpen={openSheet} onOpenChat={() => openChat()} /></section>
+            </Collapsible><div id="section-notes"><NotesRow value={log.notes} onChange={v => m.update('notes', v)} label={terms.notes}
+              placeholder={ageMode === 'child' ? 'How did you feel today?' : 'Symptoms, energy, how you felt…'} /></div></Card>
             {protocol?.fasting && (() => {
               const isMinor = m.profileAge !== null && m.profileAge < 18;
               const hasRisk = ['pre_diabetic', 'insulin_resist', 'hypothyroid'].some(c => (protocol?.conditions || []).includes(c));
-              if (isMinor || hasRisk) {
-                return (
-                  <div className="bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3" role="note">
-                    <p className="text-xs font-bold text-amber-400 mb-1">Fasting protocol — check with your doctor</p>
-                    <p className="text-xs text-mid leading-relaxed">
-                      {isMinor ? 'Fasting is not recommended for people under 18.' : 'Your health conditions may require a modified fasting approach.'} Please confirm this protocol is approved by your doctor.
-                    </p>
-                  </div>
-                );
-              }
-              return <FastingBar fasting={protocol.fasting} />;
+              return isMinor || hasRisk ? <Card><p className="text-sm text-warn">Fasting protocol — check with your doctor</p><p className="text-caption text-mid">{isMinor ? 'Fasting is not recommended for people under 18.' : 'Your health conditions may require a modified approach.'} Confirm your protocol is approved before following it.</p></Card> : <FastingBar fasting={protocol.fasting} />;
             })()}
-
-            <div id="section-notes" className="px-1">
-              <NotesRow value={log.notes} onChange={v => m.update('notes', v)} label={terms.notes}
-                placeholder={ageMode === 'child' ? 'How did you feel today? What was fun?' : 'Symptoms, how you felt, energy levels, challenges…'} />
-            </div>
-          </>
-        )}
+          </div>
+        </>}
       </main>
+      <AIChatLog mealPlans={m.mealPlans} onLogPlanned={m.openPlanned} overlay />
 
       <WeightSheet    open={sheet === 'weight'}    onClose={closeSheet} m={m} />
       <WaterSheet     open={sheet === 'water'}     onClose={closeSheet} m={m} />

@@ -326,7 +326,7 @@ export default function Profile() {
 
 
         <section data-testid="section-plan">
-          <Eyebrow className="mb-2">My plan</Eyebrow>
+          <Collapsible title="My plan & daily targets" summary="Food, activity, recovery and coach instructions" icon="calendar">
           <div className="space-y-3">
         {/* Macro targets */}
         {p.macros && (
@@ -399,6 +399,7 @@ export default function Profile() {
         )}
 
           </div>
+        </Collapsible>
         </section>
 
         <section data-testid="section-insights">

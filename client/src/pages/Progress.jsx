@@ -40,9 +40,9 @@ function nDaysAgo(n) {
 const MACRO = { kcal: '#B08A4A', pro: '#5895DC', carb: '#B38F1F', fat: '#D9608F' };
 // The chart pop-up, dark like the card it sits on (the library's default is a white box).
 const TIP = {
-  contentStyle: { fontSize: 11, borderRadius: 10, background: '#1A1C20', border: '1px solid rgba(255,255,255,0.14)', color: '#FFFFFF', padding: '6px 10px' },
-  labelStyle: { color: '#9EA3B0', marginBottom: 2 },
-  itemStyle: { color: '#FFFFFF', padding: 0 },
+  contentStyle: { fontSize: 11, borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.14)', color: 'var(--text-hi)', padding: '6px 10px' },
+  labelStyle: { color: 'var(--text-mid)', marginBottom: 2 },
+  itemStyle: { color: 'var(--text-hi)', padding: 0 },
 };
 /** "1716.00" is 1716 and "26.10" is 26.1; anything that is not a plain number is left alone. */
 function tidyNumber(v) {
@@ -470,7 +470,7 @@ export default function Progress() {
                       <stop offset="100%" stopColor="#D4AF37" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false}
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false}
                     interval={Math.max(0, Math.floor(weightData.length / 4))} />
                   <YAxis domain={['auto', 'auto']} hide />
                   <Tooltip content={<WeightTip />} cursor={{ stroke: 'rgba(212,175,55,0.35)' }} />
@@ -499,9 +499,12 @@ export default function Progress() {
 
         {/* Phase 8: Progress in four groups. The weight and its trend stay above
             them on every tab: it is the number members open this page for. */}
-        <div data-testid="progress-tabs" className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-charcoal/95 backdrop-blur" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
-          <Segmented size="sm" name="progress-tab" value={tab} onChange={pickTab}
-            options={[{ id: 'body', label: 'Body' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'training', label: 'Training' }, { id: 'reports', label: 'Reports' }]} />
+        <div className="member-links" data-testid="progress-tabs">
+          <label className="member-link"><Icon name="trend" size={18} /><span className="flex-1">Explore your progress</span>
+            <select aria-label="Progress detail" value={tab} onChange={e => pickTab(e.target.value)} className="rounded-xl p-3 text-sm border border-hair max-w-[58%]">
+              <option value="body">Body & photos</option><option value="nutrition">Nutrition</option><option value="training">Training</option><option value="reports">Reports & history</option>
+            </select>
+          </label>
         </div>
 
         {tab === 'body' && (<>
@@ -604,8 +607,8 @@ export default function Progress() {
             <ResponsiveContainer width="100%" height={90}>
               <BarChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                   contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle} />
                 {profile?.macros?.kcal && (
@@ -627,8 +630,8 @@ export default function Progress() {
             <ResponsiveContainer width="100%" height={110}>
               <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle}
                   cursor={{ stroke: 'rgba(255,255,255,0.18)' }} formatter={(v, name) => [`${v} g`, name]} />
                 <Line type="monotone" name="Protein" dataKey="pro"  stroke={MACRO.pro}  strokeWidth={2} dot={{ r: 3, fill: MACRO.pro,  strokeWidth: 0 }} />
@@ -657,7 +660,7 @@ export default function Progress() {
         )}
 
 
-        <button type="button" onClick={() => { haptic(8); navigate('/plan?tab=nutrition'); }} data-testid="progress-to-plan"
+        <button type="button" onClick={() => { haptic(8); navigate('/plan'); }} data-testid="progress-to-plan"
           className="w-full rounded-2xl border border-white/[0.12] bg-surface px-4 text-left text-sm text-white flex items-center justify-between" style={{ minHeight: 48 }}>
           Your diet plan, PDF and grocery list <Icon name="chevron-right" size={16} className="text-lo" />
         </button>

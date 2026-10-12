@@ -58,6 +58,7 @@ export default function Settings() {
   const { user, logout } = useAuthStore();
   const {
     ageMode, setAgeMode,
+    theme, setTheme,
     fontSize, setFontSize,
     nutritionView, setNutritionView,
     guardianEmail, setGuardianEmail,
@@ -201,6 +202,10 @@ export default function Settings() {
         <Card>
           <SectionTitle icon="🎨">Appearance</SectionTitle>
 
+          <div className="flex gap-2 mb-5" aria-label="Colour theme">
+            {['light', 'dark'].map(value => <button key={value} type="button" onClick={() => setTheme(value)} aria-pressed={theme === value}
+              className={`flex-1 rounded-xl border py-3 text-sm capitalize ${theme === value ? 'border-gold bg-gold/10 text-gold' : 'border-hair text-mid'}`}>{value} mode</button>)}
+          </div>
           {/* Font size */}
           <div className="mb-4">
             <p className="text-xs text-faint mb-2 font-medium tracking-wider">Text size</p>
@@ -210,7 +215,7 @@ export default function Settings() {
                   style={{ minHeight: 52, flex: 1 }}
                   className={`rounded-xl border flex items-center justify-center gap-2 py-2 transition-all ${
                     fontSize === id ? 'border-gold/50 bg-gold/10' : 'border-hair bg-surface'}`}>
-                  <span style={{ fontSize: id === 'large' ? 20 : 14, fontWeight: 700, color: '#FFFFFF' }}>{sample}</span>
+                  <span style={{ fontSize: id === 'large' ? 20 : 14, fontWeight: 700, color: 'var(--text-hi)' }}>{sample}</span>
                   <span className="text-xs text-mid">{label}</span>
                 </button>
               ))}
@@ -319,10 +324,10 @@ export default function Settings() {
                 </svg>
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ color: '#FFFFFF', fontWeight: 700, fontSize: 15, margin: 0 }}>Connected Devices</p>
-                <p style={{ color: '#6a6a78', fontSize: 12, margin: '2px 0 0' }}>Fitbit, WHOOP and Polar</p>
+                <p style={{ color: 'var(--text-hi)', fontWeight: 700, fontSize: 15, margin: 0 }}>Connected Devices</p>
+                <p style={{ color: 'var(--text-lo)', fontSize: 12, margin: '2px 0 0' }}>HART, Garmin, Apple Watch, Samsung &amp; more</p>
               </div>
-              <span style={{ color: '#7E8596', fontSize: 18 }}>›</span>
+              <span style={{ color: 'var(--text-lo)', fontSize: 18 }}>›</span>
             </div>
           </Card>
         </button>
