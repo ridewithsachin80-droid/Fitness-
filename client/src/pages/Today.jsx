@@ -60,10 +60,6 @@ export default function Today() {
             <Collapsible title="Plan & tools" summary={`${m.protocolDone} of ${m.protocolTotal} daily habits done`} icon="calendar" testId="home-plan-details">
             {isToday && m.mealPlans?.length > 0 && <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
               onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat('text')} />}
-            <button type="button" className="member-weight" data-testid="hero-weight" onClick={() => openSheet('weight')}>
-              <Icon name="scale" size={20} /><span>Weight</span><strong>{log.weight || '—'} <span className="text-caption text-lo">kg</span></strong>
-              {m.weightDelta != null && <span className="weight-change">{m.weightDelta < 0 ? '↓' : '↑'} {Math.abs(m.weightDelta)} kg</span>}<small>Update</small>
-            </button>
             <div className="member-links">
               <button type="button" className="member-link" onClick={() => openSheet('protocol')} data-testid="plan-recover"><Icon name="check" size={18} /><span>Daily checklist <small>· {m.protocolDone} of {m.protocolTotal} done</small></span><Icon name="chevron-right" size={15} /></button>
               <button type="button" className="member-link" onClick={() => navigate('/plan')}><Icon name="calendar" size={18} /><span>View your complete plan <small>· meals, training & recovery</small></span><Icon name="chevron-right" size={15} /></button>

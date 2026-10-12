@@ -58,6 +58,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const [busy, setBusy]           = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef(null);
+  const galleryRef = useRef(null);
   const photoFlight = useRef(false);
   const parseFlight = useRef(false);
   const applyingRef = useRef(false);
@@ -1390,7 +1391,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
             style={{ display: 'none' }} />
           <button onClick={() => fileRef.current?.click()}
             disabled={photoBusy || busy || labBusy || applying || !assistantReady}
-            aria-label="Snap or upload a photo"
+            aria-label="Open camera" title="Snap"
             style={{ minWidth: 40, minHeight: 40 }}
             className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
               photoBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold-light'
@@ -1400,13 +1401,20 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
               <circle cx="12" cy="13" r="4" />
             </svg>
           </button>
-          <input ref={fileRef} type="file" accept="image/*"
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" data-testid="ai-camera-input"
             onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
             style={{ display: 'none' }} />
+          <button type="button" onClick={() => galleryRef.current?.click()} aria-label="Choose photo from gallery" title="Gallery"
+            disabled={photoBusy || busy || labBusy || applying || !assistantReady}
+            style={{ minWidth: 40, minHeight: 40 }} className="flex items-center justify-center rounded-full text-mid hover:text-gold-light flex-shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="8" cy="8" r="1" /><path d="m21 16-6-6-7 8-3-3-2 2" /></svg>
+          </button>
+          <input ref={galleryRef} type="file" accept="image/*" data-testid="ai-gallery-input"
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }} style={{ display: 'none' }} />
           {vc.micButton}
           <span className="flex-1" />
           {input.trim() && (
-            <span className="text-tiny text-lo tabular-nums mr-1" aria-hidden="true">{input.trim().length}</span>
+            <span className="hidden sm:block text-tiny text-lo tabular-nums mr-1" aria-hidden="true">{input.trim().length}</span>
           )}
           <button
             onClick={() => send()}

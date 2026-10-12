@@ -1,6 +1,6 @@
 import { Icon } from '../primitives';
 
-/** Four quiet, directly editable summaries. The sheets retain full detail. */
+/** Daily essentials and weight, directly editable from one quiet summary. */
 export default function DailyEssentials({ m, onOpen }) {
   const { log, kcalIn, kcalTarget, protocol, sleepText, coachPlan, workoutSummary } = m;
   const water = log.water || 0;
@@ -35,5 +35,13 @@ export default function DailyEssentials({ m, onOpen }) {
         <strong>{sleepText || 'Add sleep'}</strong>
       </button>
     </div>
+    <button type="button" className="member-snapshot-weight" data-testid="hero-weight" onClick={() => onOpen('weight')}
+      aria-label={log.weight ? `Weight: ${log.weight} kilograms. View or edit` : 'Add weight'}>
+      <span className="member-tile-label"><Icon name="scale" size={16} /> Weight</span>
+      <span className="member-weight-value"><strong>{log.weight || 'Add weight'}{log.weight && <small> kg</small>}</strong>
+        {log.weight && m.weightDelta != null && <span className="member-weight-change">{m.weightDelta === 0 ? 'No change' : `${m.weightDelta < 0 ? '↓' : '↑'} ${Math.abs(m.weightDelta)} kg`}</span>}
+      </span>
+      <Icon name="chevron-right" size={15} />
+    </button>
   </div>;
 }

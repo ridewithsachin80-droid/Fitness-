@@ -598,7 +598,7 @@ const sheetNames = ['weight', 'water', 'sleep', 'protocol', 'food', 'workout', '
 ck('all seven sheets are mounted from the single sheet value',
    sheetNames.every(n => new RegExp(`open=\\{sheet === '${n}'\\}\\s+onClose=\\{closeSheet\\}`).test(todayPage)),
    sheetNames.filter(n => !new RegExp(`open=\\{sheet === '${n}'\\}`).test(todayPage)));
-ck('the hero opens the weight sheet', /openSheet\('weight'\)/.test(todayPage));
+ck('the daily summary opens the weight sheet', /onOpen\('weight'\)/.test(read('components/member/DailyEssentials.jsx')));
 
 // ── 10. The AI is on the page (Sprint 4) ────────────────────────────────────
 console.log('\n[10] AI thread on the page, composer docked');

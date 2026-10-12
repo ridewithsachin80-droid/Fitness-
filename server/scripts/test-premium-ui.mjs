@@ -222,7 +222,7 @@ function entryShim(w) {
  }}});
  w.MediaRecorder=class {static isTypeSupported(){return true} state='inactive'; start(){this.state='recording';w.__recorderStarts++} stop(){this.state='inactive';this.onstop?.()}};
  const click=w.HTMLInputElement.prototype.click;
- w.HTMLInputElement.prototype.click=function(){if(this.type==='file')w.__pickerClicks++;return click.call(this)};
+ w.HTMLInputElement.prototype.click=function(){if(this.type==='file'){w.__pickerClicks++;w.__lastPicker=this;}return click.call(this)};
 }
 async function premiumFlow() {
  const code=await bundle(ENTRY,stub('premium-api.js',PREM_API));
@@ -231,9 +231,17 @@ async function premiumFlow() {
  const setVal=(el,v)=>{ const proto=el.tagName==='TEXTAREA'?w.HTMLTextAreaElement.prototype:el.tagName==='SELECT'?w.HTMLSelectElement.prototype:w.HTMLInputElement.prototype;
    Object.getOwnPropertyDescriptor(proto,'value').set.call(el,v);el.dispatchEvent(new w.Event(el.tagName==='SELECT'?'change':'input',{bubbles:true})); };
  await waitFor(()=>q('plan-eat')?.textContent.includes('666'),'loaded today');
- ck('home starts with all secondary sections collapsed', ['home-plan-details','home-log-details','home-insight-details'].every(id=>q(id)?.dataset.open==='0')&&!q('hero-weight')&&!q('ai-orb'));
+ ck('home starts with all secondary sections collapsed', ['home-plan-details','home-log-details','home-insight-details'].every(id=>q(id)?.dataset.open==='0')&&!q('ai-orb'));
+ ck('weight is visible inside the daily summary without opening a section',q('hero-weight').closest('[data-testid="daily-essentials"]')&&q('hero-weight').textContent.includes('82.4'));
+ q('hero-weight').click();await tick(160);
+ ck('summary weight opens the existing weight sheet',!!q('weight-input'));
+ setVal(q('weight-input'),'81.8');await tick(70);
+ ck('editing summary weight updates the original log and visible value',w.__logStore.getState().log.weight==='81.8'&&q('hero-weight').textContent.includes('81.8'));
+ setVal(q('weight-input'),'');await tick(50);
+ ck('missing weight has a direct Add weight action',q('hero-weight').textContent.includes('Add weight'));
+ setVal(q('weight-input'),'82.4');w.__click('Done');await tick(400);
  q('home-plan-details').querySelector('button').click();await tick(60);
- ck('plan tools retain weight, micronutrients and meal ideas',q('hero-weight').textContent.includes('82.4')&&!!q('chip-nutrition')&&!!q('chip-mealidea'));
+ ck('plan tools retain micronutrients and meal ideas without duplicate weight',!q('home-plan-details').querySelector('[data-testid="hero-weight"]')&&!!q('chip-nutrition')&&!!q('chip-mealidea'));
  q('home-log-details').querySelector('button').click();q('home-insight-details').querySelector('button').click();await tick(100);
  ck('entries, notes and coach messages remain available on demand',!!q('logged-section')&&!!d.querySelector('#section-notes')&&!!q('coach-note'));
  q('home-log-details').querySelector('button').click();q('home-insight-details').querySelector('button').click();await tick(50);
@@ -273,11 +281,18 @@ async function premiumFlow() {
  ck('late permission grant cannot record after closing AI',w.__recorderStarts===starts&&w.__stoppedTracks===2&&!q('composer'));
  w.__deferMic=false;
  q('ai-snap').click();
- ck('Snap opens the image picker in the original tap',w.__pickerClicks===1&&!!q('composer')&&q('ai-snap').textContent==='Snap');
+ ck('Snap requests rear camera capture in the original tap',w.__pickerClicks===1&&w.__lastPicker===q('ai-camera-input')&&w.__lastPicker.getAttribute('capture')==='environment'&&!!q('composer')&&q('ai-snap').textContent==='Snap');
  await tick(80);
  ck('an empty voice take does not clutter the next photo session',!d.body.textContent.includes('Heard this — check and send'));
  ck('photo launch opens the AI dialog without another choose-photo screen',!!d.querySelector('.member-assistant-overlay[role=dialog]')&&d.body.style.overflow==='hidden'&&!d.body.textContent.includes('Choose meal photo'));
- const upload=q('composer').querySelector('input[accept="image/*"]');
+ d.querySelector('[aria-label="Choose photo from gallery"]').click();
+ ck('gallery remains a separate picker without a camera capture hint',w.__lastPicker===q('ai-gallery-input')&&!w.__lastPicker.hasAttribute('capture'));
+ const gallery=q('ai-gallery-input');
+ Object.defineProperty(gallery,'files',{value:[],configurable:true});gallery.dispatchEvent(new w.Event('change',{bubbles:true}));await tick(30);
+ ck('cancelling a photo picker never calls AI',!w.__posts.some(p=>p.url==='/ai-chat/photo'));
+ d.querySelector('[aria-label="Open camera"]').click();
+ ck('camera button inside AI uses the same rear camera input',w.__lastPicker===q('ai-camera-input')&&w.__lastPicker.getAttribute('capture')==='environment');
+ const upload=q('ai-camera-input');
  Object.defineProperty(upload,'files',{value:[new w.File(['meal'],'meal.jpg',{type:'image/jpeg'})], configurable:true});
  upload.dispatchEvent(new w.Event('change',{bubbles:true}));
  await waitFor(()=>q('ai-food-review'),'photo analysis');
@@ -332,6 +347,7 @@ async function premiumVisual(code) {
   await new Promise(r=>setTimeout(r,400));
   const measure=()=>page.evaluate(()=>({vw:innerWidth,sw:document.documentElement.scrollWidth,bg:getComputedStyle(document.querySelector('.member-home')).backgroundColor}));
   let m=await measure();ck(`home ${theme} ${width}px has no horizontal overflow`,m.sw<=m.vw+1,m);
+  ck(`weight ${theme} ${width}px is visible in the summary`,await page.$eval('[data-testid="hero-weight"]',el=>el.getBoundingClientRect().height>=44&&!!el.closest('[data-testid="daily-essentials"]')));
   ck(`theme ${theme} paints the expected background`,m.bg===(theme==='light'?'rgb(248, 247, 242)':'rgb(18, 26, 22)'),m);
   if(width===390||width===1280) {
     const fullHeight=await page.evaluate(()=>document.documentElement.scrollHeight);
@@ -343,7 +359,9 @@ async function premiumVisual(code) {
   ck(`Type ${theme} ${width}px focuses immediately`,await page.evaluate(()=>document.activeElement===document.querySelector('[data-testid="composer-input"]')));
   await page.click('[aria-label="Close AI assistant"]');await page.waitForSelector('.member-assistant-overlay',{hidden:true});
   const [chooser]=await Promise.all([page.waitForFileChooser(),page.click('[data-testid="ai-snap"]')]);
-  ck(`Snap ${theme} ${width}px opens the browser picker on first tap`,!!chooser);await chooser.cancel();
+  ck(`Snap ${theme} ${width}px opens capture input with rear camera hint`,!!chooser&&await page.$eval('[data-testid="ai-camera-input"]',el=>el.getAttribute('capture')==='environment'));await chooser.cancel();
+  const [galleryChooser]=await Promise.all([page.waitForFileChooser(),page.click('[aria-label="Choose photo from gallery"]')]);
+  ck(`Gallery ${theme} ${width}px remains independently available`,!!galleryChooser&&await page.$eval('[data-testid="ai-gallery-input"]',el=>!el.hasAttribute('capture')));await galleryChooser.cancel();
   await page.waitForSelector('.member-assistant-overlay');
   await page.evaluate(()=>{
     const foods=[{name:'Oats',grams:150,meal:'Breakfast',qty_text:'1 bowl · estimated',per_100g:{calories:374,protein:13.2,total_carbs:60,fat:7.8},macros:{cal:561,pro:19.8,carb:90,fat:11.7},on:true}];
