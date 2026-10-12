@@ -33,9 +33,10 @@ export default {
       // line-height, and these replaced `text-[10px]`-style arbitrary values
       // that set font-size only. Same pixels, now with a name.
       fontSize: {
+        'nav-label': '10px', // compact labels in the coach/admin dock
         tiny:      '9px',     // badge counters, AUTO tags
-        eyebrow:   '10px',    // uppercase section eyebrows, hints under tiles
-        caption:   '11px',    // secondary labels
+        eyebrow:   '11px',    // uppercase section eyebrows, hints under tiles
+        caption:   '12px',    // secondary labels
         micro:     '11.5px',  // tile sub-labels
         note:      '12px',    // dense body copy in cards
         'body-sm': '13px',
@@ -46,46 +47,37 @@ export default {
       },
 
       colors: {
-        // ── Surfaces ──────────────────────────────────────────────────────
-        charcoal:        '#121316',   // page background — the brand black
-        'charcoal-deep': '#060609',   // bottom stop of header gradients
-        surface:         '#1A1C20',   // cards, sheets, nav
-        input:           '#1f1f26',   // form fields
-
-        // ── Text greys, brightest to darkest ─────────────────────────────
-        // (text-white is the top of the scale — no separate `hi` token, one
-        // name per colour.)
-        bright: '#ededf0',
-        soft:   '#d8d8de',
-        mid:    '#9EA3B0',   // secondary copy
-        mute:   '#8C93A3',   // tile sub-labels
-        lo:     '#7E8596',   // tertiary / placeholder
-        faint:  '#6a6a78',
-        dim:    '#5a5a68',
-        ghost:  '#4A4E5A',   // disabled, hairline text
-
-        // ── Brand gold ────────────────────────────────────────────────────
-        gold:         '#D4AF37',   // the ONE accent. Primary buttons, active state.
-        'gold-light': '#F0E2B6',   // gold text on dark, highlight stop
-        'gold-deep':  '#C5A059',   // pressed / hover gold, secondary gold text
-        'gold-dark':  '#8C6D37',   // shadow stop of the orb gradient
-
-        // ── Status ────────────────────────────────────────────────────────
-        // Semantic, not decorative. Green means "on target", amber "watch",
-        // red "off". These are Tailwind's 400 shades so existing amber-400 /
-        // red-400 / blue-400 classes are the same colour by definition.
-        ok:        '#34d399',
-        'ok-deep': '#10b981',
-        warn:      '#fbbf24',
-        danger:    '#f87171',
-        info:      '#60a5fa',
-
-        // ── Hairlines ─────────────────────────────────────────────────────
-        // rgba strings, so `/opacity` modifiers do not apply — these ARE the
-        // opacities. Use for border-* and divide-*.
-        hair:       'rgba(255,255,255,0.07)',
-        'hair-med': 'rgba(255,255,255,0.11)',
-        'hair-hi':  'rgba(255,255,255,0.18)',
+        'charcoal': 'rgb(var(--fit-base) / <alpha-value>)',
+        'charcoal-deep': 'rgb(var(--fit-base) / <alpha-value>)',
+        'surface': 'rgb(var(--fit-surface) / <alpha-value>)',
+        'input': 'rgb(var(--fit-input) / <alpha-value>)',
+        'white': 'rgb(var(--fit-ink) / <alpha-value>)',
+        'bright': 'rgb(var(--fit-ink) / <alpha-value>)',
+        'soft': 'rgb(var(--fit-soft) / <alpha-value>)',
+        'mid': 'rgb(var(--fit-mid) / <alpha-value>)',
+        'mute': 'rgb(var(--fit-mid) / <alpha-value>)',
+        'lo': 'rgb(var(--fit-lo) / <alpha-value>)',
+        'faint': 'rgb(var(--fit-lo) / <alpha-value>)',
+        'dim': 'rgb(var(--fit-lo) / <alpha-value>)',
+        'ghost': 'rgb(var(--fit-ghost) / <alpha-value>)',
+        'gold': 'rgb(var(--fit-accent) / <alpha-value>)',
+        'gold-light': 'rgb(var(--fit-accent) / <alpha-value>)',
+        'gold-deep': 'rgb(var(--fit-accent) / <alpha-value>)',
+        'gold-dark': 'rgb(var(--fit-accent) / <alpha-value>)',
+        'ok': 'rgb(var(--fit-ok) / <alpha-value>)',
+        'ok-deep': 'rgb(var(--fit-ok) / <alpha-value>)',
+        'warn': 'rgb(var(--fit-warn) / <alpha-value>)',
+        'danger': 'rgb(var(--fit-danger) / <alpha-value>)',
+        'info': 'rgb(var(--fit-info) / <alpha-value>)',
+        'hair': 'rgb(var(--fit-line) / <alpha-value>)',
+        'hair-med': 'rgb(var(--fit-line) / <alpha-value>)',
+        'hair-hi': 'rgb(var(--fit-line) / <alpha-value>)',
+        'green': { 300: 'rgb(var(--fit-ok) / <alpha-value>)', 400: 'rgb(var(--fit-ok) / <alpha-value>)' },
+        'emerald': { 300: 'rgb(var(--fit-ok) / <alpha-value>)', 400: 'rgb(var(--fit-ok) / <alpha-value>)' },
+        'red': { 300: 'rgb(var(--fit-danger) / <alpha-value>)', 400: 'rgb(var(--fit-danger) / <alpha-value>)' },
+        'amber': { 300: 'rgb(var(--fit-warn) / <alpha-value>)', 400: 'rgb(var(--fit-warn) / <alpha-value>)' },
+        'orange': { 300: 'rgb(var(--fit-warn) / <alpha-value>)', 400: 'rgb(var(--fit-warn) / <alpha-value>)' },
+        'blue': { 300: 'rgb(var(--fit-info) / <alpha-value>)', 400: 'rgb(var(--fit-info) / <alpha-value>)' },
       },
 
       borderRadius: {
@@ -97,11 +89,11 @@ export default {
         // sm / lg override Tailwind's defaults: the light-theme shadows were
         // invisible on charcoal, so index.css used to re-declare them. Now the
         // utility itself is dark-tuned.
-        'sm':          '0 2px 8px rgba(0,0,0,0.45)',
+        'sm':          '0 2px 8px rgba(0,0,0,0.06)',
         'lg':          '0 10px 40px rgba(0,0,0,0.65)',
         'card':        '0 0 0 1px rgba(255,255,255,0.07), 0 4px 24px rgba(0,0,0,0.55)',
         'card-raised': 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px rgba(255,255,255,0.07), 0 12px 32px rgba(0,0,0,0.6)',
-        'float':       '0 8px 40px rgba(0,0,0,0.75)',
+        'float':       '0 16px 50px rgba(0,0,0,0.18)',
         'glow':        '0 0 24px rgba(124,92,252,0.20)',
         'glow-gold':   '0 0 22px rgba(212,175,106,0.25)',
       },

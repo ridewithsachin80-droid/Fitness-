@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script src="/theme-init.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#f8f7f2" />
+    <meta name="description" content="FitLife — personalised health tracking" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FitLife" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <!-- Outfit: clean geometric body/UI face. Fraunces: characterful display serif,
+         used sparingly for the greeting and big hero numerals (compliance ring,
+         calorie totals) to give the app a more considered, premium feel. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&display=swap"
+      rel="stylesheet"
+    />
+    <title>FitLife</title>
+    <!-- Match the persisted appearance before React and the main styles load. -->
+    <style>
+      html, body { background: #f8f7f2; margin: 0; }
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #121a16; }
+      #boot-fallback { display: none; position: fixed; inset: 0; background: #121316;
+        color: #EDEDF0; font-family: system-ui, sans-serif; text-align: center;
+        padding: 40vh 24px 0; z-index: 9999; }
+      #boot-fallback p { color: #9EA3B0; font-size: 14px; margin: 0 0 20px; }
+      #boot-fallback button { background: #D4AF37; color: #121316; border: 0;
+        border-radius: 999px; padding: 12px 28px; font-size: 15px; font-weight: 600; }
+    </style>
+    <script type="module" crossorigin src="/assets/index-CTQhD7wH.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-vendor-DT990WCe.js">
+    <link rel="modulepreload" crossorigin href="/assets/store-vendor-CadFo8Xu.js">
+    <link rel="modulepreload" crossorigin href="/assets/socket-vendor-C040XL7Y.js">
+    <link rel="modulepreload" crossorigin href="/assets/chart-vendor-Bpt3v8it.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-Db8Tt5eE.css">
+  <link rel="manifest" href="/manifest.webmanifest"></head>
+  <body>
+    <div id="root"></div>
+    <div id="boot-fallback">
+      <p>FitLife couldn't load. This usually clears with a fresh start.</p>
+      <button type="button" id="boot-reload">Reload app</button>
+    </div>
+    <!-- Boot watchdog: a plain script file, not inline. The production
+         security policy (helmet) refuses inline scripts, so an inline
+         watchdog never ran on the live site. See public/boot-watchdog.js. -->
+    <script src="/boot-watchdog.js"></script>
+  </body>
+</html>

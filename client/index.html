@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script src="/theme-init.js"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#0b0b0e" />
+    <meta name="theme-color" content="#f8f7f2" />
     <meta name="description" content="FitLife — personalised health tracking" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -22,9 +23,10 @@
       rel="stylesheet"
     />
     <title>FitLife</title>
-    <!-- Inline so a failed CSS load can never flash white — the app is dark. -->
+    <!-- Match the persisted appearance before React and the main styles load. -->
     <style>
-      html, body { background: #121316; margin: 0; }
+      html, body { background: #f8f7f2; margin: 0; }
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #121a16; }
       #boot-fallback { display: none; position: fixed; inset: 0; background: #121316;
         color: #EDEDF0; font-family: system-ui, sans-serif; text-align: center;
         padding: 40vh 24px 0; z-index: 9999; }
