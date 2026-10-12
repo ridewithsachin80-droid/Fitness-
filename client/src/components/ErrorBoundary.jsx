@@ -45,7 +45,7 @@ export default class ErrorBoundary extends React.Component {
     if (!this.state.error) return this.props.children;
     return (
       <div style={{
-        minHeight: '100vh', background: '#121316', color: '#EDEDF0',
+        minHeight: '100vh', background: 'var(--bg-base)', color: '#EDEDF0',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', padding: 24, textAlign: 'center',
         fontFamily: 'Outfit, system-ui, sans-serif',
@@ -54,11 +54,11 @@ export default class ErrorBoundary extends React.Component {
         <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px' }}>
           Something went wrong
         </p>
-        <p style={{ fontSize: 13, color: '#9EA3B0', margin: '0 0 20px', maxWidth: 300 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '0 0 20px', maxWidth: 300 }}>
           Your logged data is safe on the server. Reloading usually fixes this.
         </p>
         <button onClick={this.recover} style={{
-          background: '#D4AF37', color: '#121316', border: 0, borderRadius: 999,
+          background: '#D4AF37', color: 'var(--bg-base)', border: 0, borderRadius: 999,
           padding: '12px 28px', fontSize: 15, fontWeight: 600,
         }}>
           Reload app

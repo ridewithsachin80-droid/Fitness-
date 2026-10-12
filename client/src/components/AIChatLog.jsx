@@ -1,25 +1,6 @@
-/**
- * AIChatLog.jsx  (v2 — full-day logging, premium layout)
- *
- * One message logs the whole day:
- *   "weight 82.5, morning walk done, 2 chapati and dal for lunch,
- *    acv before meal 2, 1 litre water, took b12 and d3, slept 10:30 to 6:30"
- *
- * The AI parses it into weight, activity/ACV/supplement checkboxes, water,
- * sleep and food items. The reply shows grouped preview cards — every item
- * is a toggle chip the member can untick if misheard — then ONE "Apply to
- * today's log" tap writes everything through the log store and saves.
- * After applying: success card with what's still pending today + Undo.
- *
- * Self-sufficient: reads/writes useLogStore directly (log, protocol,
- * updateLog, saveLog) — no prop drilling. Open state lives in its own tiny
- * store (useAIChat) so both the FoodLog banner and the floating ✨ button
- * on DailyLog open the same instance.
- *
- * Mount ONCE per page (DailyLog does this). Open from anywhere with:
- *   import { useAIChat } from '../store/aiChatStore';
- *   const openChat = useAIChat(s => s.openChat);
- */
+/** One review flow for typed, spoken and photographed member logs.
+ * The shared store keeps a draft across navigation. Today mounts this once
+ * as an on-demand workspace; existing manual sheets use the same log store. */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -37,11 +18,13 @@ import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CH
 // Re-exported so every existing `import { useAIChat } from './AIChatLog'` keeps working.
 export { useAIChat };
 import DaySummary from './DaySummary';
+import AIFoodReview from './chat/AIFoodReview';
+import { withFoodGrams, foodReviewError } from '../utils/aiFoodReview';
+import { Icon } from './primitives';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
-import { rollbackCard, logTarget } from '../utils/chatCard';
-import ChatFoodMacros, { foodWithLabel } from './chat/ChatFoodMacros';
+import { rollbackCard } from '../utils/chatCard';
+import { foodWithLabel } from './chat/ChatFoodMacros';
 
-// ── Speech recognition ───────────────────────────────────────────────────────
 const SpeechRecognition =
   typeof window !== 'undefined'
     ? window.SpeechRecognition || window.webkitSpeechRecognition
@@ -54,12 +37,11 @@ function deriveProtocolItemsCompat(protocol) {
   return { activities: r.activeActivities, acv: r.activeACV, supplements: r.activeSupplements };
 }
 
-export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) {
+export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay = false } = {}) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
   // Where food goes when the member does not say which meal: shown on the
   // preview, and used on apply, so what they see is what is logged.
   const todayFood = useLogStore(s => s.log?.food);
-  const viewDate = useLogStore(s => s.date);   // Apply writes to the day on screen; the button says which
   const autoSlot = defaultMealSlot({ mealSlots, mealPlans, food: todayFood || [] });
 
   // Conversation state comes from the store (see useAIChat above) so it
@@ -75,6 +57,19 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   const [busy, setBusy]           = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef(null);
+  const photoFlight = useRef(false);
+  const parseFlight = useRef(false);
+  const applyingRef = useRef(false);
+  const [applying, setApplying] = useState(false);
+  const entryMode = useAIChat(s => s.entryMode);
+  const logDate = useLogStore(s => s.date);
+  const logLoading = useLogStore(s => s.loading);
+  const logError = useLogStore(s => s.error);
+  const assistantReady = logDate === today() && !logLoading && logError !== 'Failed to load log';
+  const overlayRef = useRef(null);
+  const previousFocus = useRef(null);
+  const [composerHeight, setComposerHeight] = useState(220);
+
   const labRef  = useRef(null);
   const [labBusy, setLabBusy] = useState(false);
 
@@ -85,7 +80,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   const workoutUndoRef = workoutUndoSnap;  // module-level, see above
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
+    if (useAIChat.getState().composerOpen) bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [messages, busy]);
 
   const focusRequest = useAIChat(s => s.focusRequest);
@@ -115,9 +110,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     inputRef.current?.blur();
   };
 
-  // The thread is always on the page now, so a conversation carried over from
-  // a previous day must be dropped on mount — before it can be applied to
-  // today's log — not only when a panel opens.
   useEffect(() => { useAIChat.getState().ensureFreshDay(today()); }, []);
 
   // openChat() → bring the composer up: scroll the thread into view (the
@@ -127,7 +119,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     useAIChat.getState().ensureFreshDay(today());
     const t = setTimeout(() => {
       (bottomRef.current || threadRef.current)?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
-      inputRef.current?.focus({ preventScroll: true });
+      if (useAIChat.getState().entryMode === 'text') inputRef.current?.focus({ preventScroll: true });
+      else overlayRef.current?.querySelector('button')?.focus({ preventScroll: true });
     }, 120);
     return () => clearTimeout(t);
   }, [focusRequest]);
@@ -168,12 +161,16 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   const sendLabReportRef = useRef(null);
 
   const sendPhoto = useCallback(async (file, { silent = false } = {}) => {
-    if (!file || photoBusy) return;
+    if (!file || photoFlight.current) return;
+    photoFlight.current = true;
+    const requestDay = today();
+    const uploadId = 'photo-' + Date.now();
     setPhotoBusy(true);
     haptic(10);
-    if (!silent) setMessages(m => [...m, { role: 'user', text: '📷 Photo attached' }]);
+    if (!silent) setMessages(m => [...m, { role: 'user', text: 'Photo attached · AI will estimate your meal', uploadId }]);
     try {
       const base64 = await downscale(file);
+      setMessages(prev => prev.map(m => m.uploadId === uploadId ? { ...m, photoPreview: 'data:image/jpeg;base64,' + base64 } : m));
       const { data } = await api.post('/ai-chat/photo', {
         image: base64,
         mimeType: 'image/jpeg',
@@ -193,6 +190,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         // Eval set: what produced this card. A photo has no replayable text, so
         // it is tagged as such rather than stored as "photo attached" — a
         // sample whose question is not the real question scores nothing.
+        logDate: requestDay,
         evalSource: 'photo',
         evalMessage: null,
         parsed: {
@@ -214,6 +212,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       const msg = err.response?.data?.error || 'Could not analyse that photo — please try again.';
       setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
     } finally {
+      photoFlight.current = false;
       setPhotoBusy(false);
     }
   }, [photoBusy, mealSlots]);
@@ -348,7 +347,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       if (weightRow) {
         const { updateLog, saveLog } = useLogStore.getState();
         updateLog('weight', String(parseFloat(weightRow.value)));
-        saveLog().catch(() => {});
+        await saveLog();
       }
       haptic(30);
       setMessages(prev => {
@@ -366,7 +365,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // ── Send → parse ───────────────────────────────────────────────────────────
   const send = useCallback(async (textOverride) => {
     const text = (textOverride ?? input).trim();
-    if (!text || busy) return;
+    if (!text || parseFlight.current) return;
+    if (photoBusy || labBusy || applyingRef.current) { setInput(text); return; }
+    const requestDay = today();
+    parseFlight.current = true;
 
     setInput('');
     if (inputRef.current) inputRef.current.style.height = 'auto';   // collapse the grown textarea
@@ -411,6 +413,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         text: data.reply,
         // Eval set: the exact message that produced this card, so an edit the
         // member makes below can be paired with the question that caused it.
+        logDate: requestDay,
         evalSource: 'member_parse',
         evalMessage: text,
         // A meal-plan question with nothing to apply: the answer offers "Log <next meal> as planned".
@@ -426,6 +429,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
           waterOn:      data.water_ml_add != null,
           sleep:        data.sleep,
           sleepOn:      !!data.sleep,
+          notes: data.notes || '', notesOn: !!data.notes,
           foods:        (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
           corrections:  (data.corrections || []).map(c => ({ ...c, on: true })),
           workouts:     (data.workouts || []).map(w => ({ ...w, on: true })),
@@ -437,9 +441,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       const msg = err.response?.data?.error || 'Something went wrong — please try again.';
       setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
     } finally {
+      parseFlight.current = false;
       setBusy(false);
     }
-  }, [input, busy, mealSlots, messages]);
+  }, [input, busy, photoBusy, labBusy, mealSlots, messages]);
 
   // ── Toggle helpers on a message's parsed preview ───────────────────────────
   const patchParsed = useCallback((mi, patchFn) => {
@@ -453,25 +458,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   }, []);
 
   const setGrams = useCallback((mi, idx, value) => {
-    const g = Math.min(5000, Math.max(0, parseInt(value) || 0));
-    patchParsed(mi, p => ({
-      ...p,
-      foods: p.foods.map((f, i) => {
-        if (i !== idx) return f;
-        const factor = g / 100;
-        return {
-          ...f,
-          grams: g,
-          // Recompute this row's macros so the totals stay honest as they type
-          macros: {
-            cal:  Math.round((f.per_100g?.calories    || 0) * factor),
-            pro:  +((f.per_100g?.protein     || 0) * factor).toFixed(1),
-            carb: +((f.per_100g?.total_carbs || 0) * factor).toFixed(1),
-            fat:  +((f.per_100g?.fat         || 0) * factor).toFixed(1),
-          },
-        };
-      }),
-    }));
+    patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => i === idx ? withFoodGrams(f, value) : f) }));
   }, [patchParsed]);
 
   // The member's own macros for a preview food (10 Oct 2026, chat/ChatFoodMacros).
@@ -517,7 +504,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       const prevSession = existing?.session || null;
       const prevExercises = (existing?.exercises || []).map(ex => ({
         exercise_id: ex.exercise_id,
-        sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })), ...(ex.fromProgram ? { fromProgram: true } : {}),
+        sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })),
       }));
 
       // Snapshot for Undo
@@ -618,8 +605,17 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // ── Apply everything included to today's log ───────────────────────────────
   const applyAll = useCallback(async (mi) => {
     const msg = messages[mi];
-    if (!msg?.parsed || msg.applied) return;
+    if (!msg?.parsed || msg.applied || applyingRef.current) return;
     const p = msg.parsed;
+    const currentState = useLogStore.getState();
+    if (currentState.date !== today() || currentState.loading || currentState.error === 'Failed to load log' || (msg.logDate && msg.logDate !== today())) {
+      setMessages(prev => [...prev, { role: 'ai', error: true, text: 'Return to today and wait for your log to load before saving this review.' }]);
+      return;
+    }
+    if (foodReviewError(p.foods)) return;
+    applyingRef.current = true;
+    setApplying(true);
+    try {
 
     const { log: cur, updateLog, saveLog } = useLogStore.getState();
 
@@ -627,11 +623,15 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     undoRef.current = {
       weight: cur.weight, activities: cur.activities, acv: cur.acv,
       supplements: cur.supplements, water: cur.water, sleep: cur.sleep,
-      food: cur.food,
+      food: cur.food, notes: cur.notes,
     };
-    undoRef.owner = mi; workoutUndoRef.current = null;   // Undo belongs to THIS card only (AIC-011, 10 Oct)
 
     const newLog = { ...cur };
+
+    if (p.notesOn && p.notes?.trim()) {
+      newLog.notes = [cur.notes, p.notes.trim()].filter(Boolean).join('\n').slice(0, 4000);
+      updateLog('notes', newLog.notes);
+    }
 
     if (p.weightOn && p.weight_kg != null) {
       newLog.weight = String(p.weight_kg);
@@ -696,7 +696,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         meal:     (f.meal && mealSlots.includes(f.meal)) ? f.meal
                   : defaultMealSlot({ mealSlots, mealPlans, food: cur.food || [] }),
         food_id:  f.food_id || null,
-        per_100g: f.per_100g && (f.per_100g.calories || 0) > 0 ? f.per_100g : null,
+        per_100g: f.per_100g || null,
         ...(f.label ? { label: true } : {}),
       }));
       newLog.food = [...(newLog.food || cur.food || []), ...newItems];
@@ -721,7 +721,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     }
 
     haptic(30);
-    saveLog().catch(() => {});
+    await saveLog();
 
     // Teach the app this member's real portion sizes. Only rows they actually
     // corrected, and only where the AI gave a recognisable unit phrase.
@@ -733,17 +733,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         .catch(err => console.error('portion learning failed:', err));
     }
 
-    // ── Eval set (Sprint L1) ─────────────────────────────────────────────────
-    // Portion memory above only learns from foods that came with a recognisable
-    // unit phrase ("2 katori"). The eval set wants every edit, phrase or not —
-    // "Chicken Curry 300g → 180g" is exactly as much of a parsing error, and
-    // the replay tool has no way to find it otherwise.
-    //
-    // Two signals, both unambiguous:
-    //   · grams changed  → the model's portion was wrong
-    //   · item unticked  → the model logged something that was never said
-    // A meal-slot edit is NOT captured: the preview has no slot control, so a
-    // wrong slot cannot be observed here. Recording it would be a guess.
+    // Capture quantity corrections and excluded foods for the existing eval set.
     if (msg.evalMessage) {
       const edits = [
         ...p.foods
@@ -775,11 +765,11 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
 
     setMessages(prev => {
       const next = [...prev];
-      next[mi] = { ...next[mi], applied: true, workoutSaveFailed: workoutsOn.length > 0 && !workoutResult.ok, pending: computePending(newLog) };
-      next.forEach((x, i) => { if (i !== mi && x.applied) next[i] = { ...x, superseded: true }; });   // older cards lose Undo/Edit
+      next[mi] = { ...next[mi], applied: true, logSaveFailed: !!useLogStore.getState().error, queued: useLogStore.getState().queued, workoutSaveFailed: workoutsOn.length > 0 && !workoutResult.ok, pending: computePending(newLog) };
       return next;
     });
     useAIChat.getState().markApplied();
+    } finally { applyingRef.current = false; setApplying(false); }
   }, [messages, mealSlots, computePending, applyWorkouts]);
 
   // ── Undo / Edit last apply ─────────────────────────────────────────────────
@@ -788,7 +778,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // card again, editable, so the member can fix a value and re-apply.
   const rollback = useCallback((mi, { reopen }) => {
     const snap = undoRef.current;
-    if (!snap || undoRef.owner !== mi) return;
+    if (!snap) return;
     const { updateLog, saveLog } = useLogStore.getState();
     Object.entries(snap).forEach(([field, val]) => updateLog(field, val));
     undoRef.current = null;
@@ -837,14 +827,42 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     (p.sleepOn && p.sleep ? 1 : 0) +
     ((p.bodyMetricsOn && p.bodyMetrics?.length) ? 1 : 0) +
     (p.corrections || []).filter(c => c.on).length +
+    (p.notesOn && p.notes ? 1 : 0) +
     p.foods.filter(f => f.on).length +
     p.workouts.filter(w => w.on).length;
 
-  return (
-    <>
+  useEffect(() => {
+    if (!overlay || !composerOpen) return undefined;
+    previousFocus.current = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = e => {
+      const nested = e.target?.closest?.('[role="dialog"]');
+      if (nested && nested !== overlayRef.current) return;
+      if (e.key === 'Escape') { e.preventDefault(); useAIChat.getState().closeComposer(); }
+      if (e.key === 'Tab') {
+        const nodes = [...(overlayRef.current?.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[tabindex="0"]') || []),
+          ...document.querySelectorAll('.member-assistant-composer button:not(:disabled),.member-assistant-composer textarea:not(:disabled)')].filter(el => el.getClientRects().length);
+        if (!nodes.length) return;
+        if (e.shiftKey && document.activeElement === nodes[0]) { e.preventDefault(); nodes[nodes.length-1].focus(); }
+        else if (!e.shiftKey && document.activeElement === nodes[nodes.length-1]) { e.preventDefault(); nodes[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKey); previousFocus.current?.focus?.(); };
+  }, [overlay, composerOpen]);
+  useEffect(() => {
+    if (!overlay || !composerOpen || typeof ResizeObserver === 'undefined') return undefined;
+    const el = document.querySelector('[data-testid="composer-bar"]');
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => setComposerHeight(el.getBoundingClientRect().height + 40));
+    ro.observe(el); return () => ro.disconnect();
+  }, [overlay, composerOpen]);
+
+  const thread = (
     <section ref={threadRef} id="ai-thread" data-testid="ai-thread" aria-label="FitLife AI" className="scroll-mt-4">
       <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)] flex-shrink-0">✨</div>
+        <div className="w-8 h-8 rounded-full text-charcoal bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm  flex-shrink-0"><Icon name="spark" size={17} /></div>
         <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
           <p className="text-eyebrow text-lo leading-tight">Log your whole day in one message</p>
@@ -864,11 +882,11 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
 
         {messages.length === 0 && (
           <div className="bg-surface border border-hair rounded-2xl p-4">
-            <p className="text-sm font-semibold text-white mb-1.5">Hi! Tell me about your day 🌤</p>
+            <p className="text-sm font-semibold text-white mb-1.5">What would you like to log?</p>
             <p className="text-xs text-mid leading-relaxed mb-3">
               Weight, walks, meals, ACV, water, supplements, sleep — say it all in
-              one message and I'll fill your entire log. Review, then tap Apply.
-              Tap 📷 to log a meal from a photo, or 📄 to upload a lab report.
+              one message and I'll fill your entire log. Review, then tap Save.
+              Use the camera for a meal, or the document button for a lab report.
             </p>
             <div className="bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2.5">
               <p className="text-caption text-mid leading-relaxed italic">
@@ -884,6 +902,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
               <div className="max-w-[85%] bg-gold text-charcoal text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+                {m.photoPreview && <img src={m.photoPreview} alt="Your attached meal" className="max-h-40 w-full object-cover rounded-xl mb-2" />}
                 {m.text}
               </div>
             </div>
@@ -1141,62 +1160,21 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       {m.parsed.foods.length > 0 && (
                         <div>
                           <GroupHeader icon="🥗" title="Food" count={m.parsed.foods.filter(f => f.on).length} />
-                          <div className="space-y-1.5">
-                            {m.parsed.foods.map((f, fi) => (
-                              <button key={fi} onClick={() => toggleListItem(mi, 'foods', fi)}
-                                className={`w-full text-left bg-charcoal border rounded-xl px-3 py-2.5 transition-all active:scale-[0.99] ${
-                                  f.on ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-40'
-                                }`}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
-                                      f.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
-                                    }`}>✓</span>
-                                    <div className="min-w-0">
-                                      <p className={`text-body-sm font-semibold truncate ${f.on ? 'text-white' : 'text-mid line-through'}`}>
-                                        {f.name}
-                                      </p>
-                                      <div className="flex items-center gap-1.5 text-caption text-lo flex-wrap">
-                                        {f.qty_text ? <span>{f.qty_text} ·</span> : null}
-                                        {/* Editable: the portion guess is the biggest source of
-                                            error in the whole chain, and every correction teaches
-                                            the app this member's actual bowl and glass sizes. */}
-                                        <input
-                                          type="number" inputMode="numeric" value={f.grams}
-                                          onClick={e => e.stopPropagation()}
-                                          onChange={e => setGrams(mi, fi, e.target.value)}
-                                          disabled={m.applied}
-                                          style={{ width: 54, minHeight: 26 }}
-                                          className="bg-charcoal border border-white/[0.14] rounded-md px-1 text-center
-                                            text-caption text-white focus:outline-none focus:ring-1 focus:ring-gold/50"
-                                        />
-                                        <span>g · {(f.meal && mealSlots.includes(f.meal)) ? f.meal : autoSlot}</span>
-                                        {f.source === 'db-verified' && <span className="text-gold-light">· verified</span>}
-                                        {Number(f.grams) !== Number(f.ai_grams) && (
-                                          <span className="text-gold">· I'll remember this</span>
-                                        )}
-                                      </div>
-                                      {f.warning && (
-                                        <p className="text-eyebrow text-amber-300 leading-snug mt-0.5">⚠ {f.warning}</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <ChatFoodMacros f={f} disabled={m.applied} onSave={per => setMacros(mi, fi, per)} />
-                                </div>
-                              </button>
-                            ))}
-                            {m.parsed.totals && m.parsed.foods.filter(f => f.on).length > 1 && (
-                              <div className="flex items-center justify-between px-3 py-2 bg-gold/[0.10] border border-gold/25 rounded-xl">
-                                <span className="text-caption font-bold text-gold-light tracking-wider">Food total</span>
-                                <span className="text-body-sm font-bold text-white">
-                                  {m.parsed.foods.filter(f => f.on).reduce((s, f) => s + (f.macros?.cal || 0), 0)} kcal
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                          <AIFoodReview foods={m.parsed.foods} disabled={m.applied || applying}
+                            mealSlots={mealSlots} autoSlot={autoSlot}
+                            onToggle={fi => toggleListItem(mi, 'foods', fi)}
+                            onGrams={(fi, value) => setGrams(mi, fi, value)}
+                            onPatch={(fi, patch) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => i === fi ? { ...f, ...patch } : f) }))}
+                            onMacros={(fi, per) => setMacros(mi, fi, per)} />
                         </div>
                       )}
 
+                      {m.parsed.notes && <div className="bg-charcoal rounded-xl p-3">
+                        <label className="flex gap-2 items-center text-sm mb-2"><input type="checkbox" checked={!!m.parsed.notesOn} disabled={m.applied || applying}
+                          onChange={e => patchParsed(mi, p => ({ ...p, notesOn: e.target.checked }))} /> Daily notes & how you feel</label>
+                        <textarea aria-label="Review daily note" value={m.parsed.notes} disabled={m.applied || applying} maxLength={2000}
+                          onChange={e => patchParsed(mi, p => ({ ...p, notes: e.target.value }))} className="w-full text-sm rounded-lg p-2" />
+                      </div>}
                       {/* 💪 Workouts — now actually saved to the Workout section */}
                       {m.parsed.workouts.length > 0 && (
                         <div>
@@ -1231,7 +1209,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                             <p className="text-eyebrow text-lo px-1">
                               {m.parsed.workouts.some(w => w.on && w.sets?.length)
                                 ? 'Sets and reps go straight into your Workout log.'
-                                : `Saved to ${logTarget(viewDate, today(), 'session')} · add exact sets & reps in the Workout section anytime.`}
+                                : "Saved to today's session · add exact sets & reps in the Workout section anytime."}
                             </p>
                           </div>
                         </div>
@@ -1245,22 +1223,27 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       )}
 
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
-                        <button onClick={() => applyAll(mi)}
+                        <button onClick={() => applyAll(mi)} disabled={applying || !assistantReady || !!foodReviewError(m.parsed.foods)}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
-                          Apply {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to {logTarget(viewDate, today())}
+                          className="w-full rounded-xl text-sm font-bold bg-gold text-charcoal active:scale-[0.98] disabled:opacity-40 transition-all">
+                          {applying ? 'Saving…' : 'Save'} {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
                         </button>
                       )}
 
+                      {m.applied && m.logSaveFailed && <button type="button" className="w-full text-sm text-gold py-3" onClick={async () => {
+                        if (applyingRef.current) return; applyingRef.current = true; setApplying(true);
+                        try { await useLogStore.getState().saveLog(); setMessages(prev => prev.map((card, i) => i === mi ? { ...card, logSaveFailed: !!useLogStore.getState().error, queued: useLogStore.getState().queued } : card)); }
+                        finally { applyingRef.current = false; setApplying(false); }
+                      }} disabled={applying}>Retry saving these changes</button>}
                       {m.applied && (
                         <div className={`border rounded-xl px-3.5 py-3 space-y-2 ${
                           m.workoutSaveFailed ? 'bg-amber-500/[0.08] border-amber-500/25' : 'bg-ok-deep/[0.08] border-ok-deep/25'
                         }`}>
                           <div className="flex items-center justify-between">
                             <p className={`text-body-sm font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-gold-light'}`}>
-                              {m.workoutSaveFailed ? '⚠ Applied — workout not saved' : '✓ Applied & saved'}
+                              {m.logSaveFailed ? 'Changes kept on screen — save failed' : m.queued ? 'Saved on this device · waiting to sync' : m.workoutSaveFailed ? 'Daily log saved — workout needs attention' : 'Saved to your daily log'}
                             </p>
-                            {!m.superseded && <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3">
                               <button onClick={() => editApplied(mi)}
                                 style={{ minHeight: 32 }}
                                 className="text-caption font-semibold text-gold hover:text-gold-light transition-colors">
@@ -1271,11 +1254,11 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                                 className="text-caption font-semibold text-mid hover:text-white underline underline-offset-2 transition-colors">
                                 Undo
                               </button>
-                            </div>}
+                            </div>
                           </div>
                           {m.workoutSaveFailed && (
                             <p className="text-caption text-amber-300 leading-relaxed">
-                              Everything else saved, but the workout note couldn't be saved — check your connection and log it in the Workout section.
+                              The workout couldn't be saved. Check your connection and log it in the Workout section.
                             </p>
                           )}
                           {m.pending?.length > 0 ? (
@@ -1286,7 +1269,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                             <p className="text-caption text-mid">Everything's logged for today — great job! 🎉</p>
                           )}
                           <p className="text-eyebrow text-lo leading-relaxed">
-                            {m.superseded ? 'You logged more after this, so Undo is gone here. To change it, just tell me (e.g. "remove the dal").' : 'Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.'}
+                            Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.
                           </p>
                         </div>
                       )}
@@ -1331,6 +1314,20 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       )}
 
     </section>
+  );
+
+  return (<>
+    {overlay ? (composerOpen && createPortal(
+      <div className="member-assistant-overlay" role="dialog" aria-modal="true" aria-label="FitLife AI daily logging" ref={overlayRef}>
+        <div className="member-assistant-head"><div><strong>FitLife AI</strong><p>Speak. Snap. Review. Save.</p></div>
+          <button type="button" className="member-theme" onClick={() => useAIChat.getState().closeComposer()} aria-label="Close AI assistant"><Icon name="close" size={19} /></button></div>
+        <div className="member-assistant-scroll" style={{ paddingBottom: composerHeight + kbInset }}>
+          {entryMode === 'photo' && <div className="member-ai-launch compact mb-4"><p>Take a photo or choose one from your gallery. AI identifies food and estimates the portion and macros for you.</p><button type="button" className="member-ai-dock mt-3" disabled={photoBusy || labBusy || !assistantReady}
+            onClick={() => fileRef.current?.click()}><Icon name="camera" size={18} /> Choose meal photo</button></div>}
+          {entryMode === 'voice' && <div className="member-ai-launch compact mb-4"><p>Tap the microphone below, describe your day and pause. Review what AI understood before saving.</p></div>}
+          {thread}
+        </div>
+      </div>, document.body)) : thread}
 
     {/* ── Composer — docked above the bottom nav, on every scroll position ──
         Portaled to <body> so no transformed ancestor (Stagger, motion) can
@@ -1338,11 +1335,15 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         meta asks Chrome to resize the layout viewport, and useKeyboardInset
         covers iOS, which ignores that and needs the visualViewport delta. */}
     {typeof document !== 'undefined' && composerOpen && createPortal(
-      <div data-testid="composer" className="fixed left-0 right-0 z-[45] pointer-events-none fade-up"
-        style={{ bottom: `calc(${(composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
+      <div data-testid="composer" className={`fixed left-0 right-0 z-[45] pointer-events-none fade-up ${overlay ? 'member-assistant-composer' : ''}`}
+        style={{ bottom: `calc(${(overlay ? 8 : composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
       <div className="max-w-md mx-auto px-3 pointer-events-auto">
       <div className="glass glass-solid rounded-2xl shadow-float px-3 pt-2 pb-2" data-testid="composer-bar">
         {vc.card}
+        {(photoBusy || labBusy) && <p className="text-caption text-gold py-2" role="status">{photoBusy ? 'Analysing your photo and calculating nutrition…' : 'Reading your document…'}</p>}
+        {logError && <p className="text-caption text-danger pb-2" role="alert">{logError}</p>}
+        {!assistantReady && <p className="text-caption text-warn py-2">{logLoading ? 'Loading your daily log…' : 'Open Today before logging with AI. Your draft is kept.'}</p>}
+
         {/* Sprint 5b.1: two rows. The text gets the full width and grows to
             five lines (a dictated day is often three), the tools sit
             underneath — so "2 idli, sambar, 100g whey protein 1 scoop, walked
@@ -1386,7 +1387,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 9l7 7 7-7" /></svg>
           </button>
           <button onClick={() => labRef.current?.click()}
-            disabled={labBusy}
+            disabled={labBusy || photoBusy || busy || applying || !assistantReady}
             aria-label="Upload a lab report"
             style={{ minWidth: 40, minHeight: 40 }}
             className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
@@ -1402,7 +1403,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
             onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendLabReport(f); }}
             style={{ display: 'none' }} />
           <button onClick={() => fileRef.current?.click()}
-            disabled={photoBusy}
+            disabled={photoBusy || busy || labBusy || applying || !assistantReady}
             aria-label="Log food from a photo"
             style={{ minWidth: 40, minHeight: 40 }}
             className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
@@ -1413,7 +1414,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
               <circle cx="12" cy="13" r="4" />
             </svg>
           </button>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment"
+          <input ref={fileRef} type="file" accept="image/*"
             onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
             style={{ display: 'none' }} />
           {vc.micButton}
@@ -1423,7 +1424,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
           )}
           <button
             onClick={() => send()}
-            disabled={!input.trim() || busy}
+            disabled={!input.trim() || busy || photoBusy || labBusy || applying || !assistantReady}
             aria-label="Send"
             style={{ minWidth: 44, minHeight: 44 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${

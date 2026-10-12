@@ -24,7 +24,7 @@ export default function Greeting({ user, avatar, autoSaved, queued, error, strea
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
         <h1 className="font-display text-num font-medium leading-tight text-white flex items-center gap-2 min-w-0">
-          <span aria-hidden="true" className="text-2xl leading-none flex-shrink-0">{avatar}</span>
+          {avatar && <span aria-hidden="true" className="text-2xl leading-none flex-shrink-0">{avatar}</span>}
           <span className="min-w-0 break-words">{greetingFor(now.getHours())}, {firstName(user?.name)}</span>
         </h1>
         <p className="text-sm text-mid mt-1" data-testid="date-line">

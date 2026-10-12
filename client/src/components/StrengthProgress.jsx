@@ -65,7 +65,7 @@ function PRDot(props) {
   if (payload.isPR) {
     return (
       <g>
-        <circle cx={cx} cy={cy} r={6} fill="#d4af6a" stroke="#121316" strokeWidth={2} />
+        <circle cx={cx} cy={cy} r={6} fill="#d4af6a" stroke="var(--bg-base)" strokeWidth={2} />
         <text x={cx} y={cy - 12} textAnchor="middle" fontSize={10} fontWeight={700} fill="#d4af6a">PR</text>
       </g>
     );
