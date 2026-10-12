@@ -233,6 +233,9 @@ PARSING RULES:
    Amount ADDED, 0–6000. If they say "finished my water target", use ${ctx.waterTargetMl}.
 6. SLEEP — "slept 10:30 to 6:30"→bedtime "22:30", waketime "06:30" (24h HH:MM).
    Evening times without am/pm are PM for bedtime; morning times are AM for wake.
+6b. NOTES — when the member explicitly describes their mood, energy, symptoms or
+   challenges, return those statements in "notes" (maximum 2000 characters).
+   Keep their meaning, do not diagnose, do not invent details. Otherwise notes=null.
 7. FOOD — extract EVERY food with quantity. Indian portions:
    1 chapati/roti≈30g, 1 phulka≈25g, 1 paratha≈60g, 1 idli≈40g, 1 dosa≈80g,
    1 katori/bowl dal≈150g, 1 katori sabzi≈100g, 1 katori rice≈100g, 1 plate rice≈150g,
@@ -322,6 +325,7 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
   "reply": "Got it — weight 82.5, walk done, lunch logged at 290 kcal, 1L water.",
   "question": null,
   "coach_message": null,
+  "notes": null,
   "corrections": [],
   "weight_kg": 82.5,
   "activity_ids": ["walk"],
@@ -2078,7 +2082,8 @@ async function parseMemberMessage({ userId, message, context }) {
           .filter(st => st.reps > 0),
       }));
 
-    const nothingParsed = !weight_kg && !activities.length && !acv.length &&
+    const notes = typeof parsed.notes === 'string' ? parsed.notes.trim().slice(0, 2000) || null : null;
+    const nothingParsed = !notes && !weight_kg && !activities.length && !acv.length &&
       !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length && corrections.length === 0;
 
     return ({ 
@@ -2095,6 +2100,7 @@ async function parseMemberMessage({ userId, message, context }) {
       supplements,
       water_ml_add,
       sleep,
+      notes,
       foods,
       corrections,
       workouts,

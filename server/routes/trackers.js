@@ -13,7 +13,6 @@
 const express  = require('express');
 const router   = express.Router();
 const axios    = require('axios');
-const jwt      = require('jsonwebtoken');
 const auth     = require('../middleware/auth');
 const pool     = require('../db/pool');
 
@@ -144,11 +143,7 @@ router.get('/oauth/:provider', auth, (req, res) => {
   const cfg = PROVIDERS[provider];
   if (!cfg) return res.status(400).json({ error: 'Unknown provider' });
 
-  // Signed, short-lived state (10 Oct 2026). It was plain base64 of the user
-  // id, so anyone could craft a state naming another member and attach THEIR
-  // tracker account to that member's day. Now only a state this server
-  // issued, within 15 minutes, for this provider, is accepted.
-  const state    = jwt.sign({ userId: req.user.id, provider, k: 'tracker_oauth' }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  const state    = Buffer.from(JSON.stringify({ userId: req.user.id, provider })).toString('base64');
   const redirect = `${SERVER_URL}/api/trackers/oauth/${provider}/callback`;
 
   const url = new URL(cfg.authUrl);
@@ -176,11 +171,9 @@ router.get('/oauth/:provider/callback', async (req, res) => {
 
   let userId;
   try {
-    const st = jwt.verify(String(state || ''), process.env.JWT_SECRET);
-    if (st.k !== 'tracker_oauth' || st.provider !== provider || !st.userId) throw new Error('state mismatch');
-    userId = st.userId;
+    ({ userId } = JSON.parse(Buffer.from(state, 'base64').toString()));
   } catch {
-    return res.redirect(`${CLIENT_URL}/devices?error=oauth_state&provider=${encodeURIComponent(provider)}`);
+    return res.status(400).send('Invalid state');
   }
 
   const cfg      = PROVIDERS[provider];
