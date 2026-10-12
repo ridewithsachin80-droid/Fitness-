@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
+import { privateCacheKey, isPrivateApiRequest, clearPrivateApiCaches, PRIVATE_API_CACHE } from '../../client/src/utils/privateApiCache.js';
+if (!globalThis.crypto) globalThis.crypto = webcrypto;
+let passed = 0;
+function check(name, value) { assert.ok(value, name); passed++; console.log('  ✓ ' + name); }
+const request = token => new Request('https://example.test/api/logs/2026-10-12', { headers: token ? { authorization: 'Bearer ' + token } : {} });
+const a = request('member-a'), b = request('member-b');
+const ka = await privateCacheKey({ request: a }), kb = await privateCacheKey({ request: b });
+check('two sessions cannot share a private cache key', ka !== kb);
+check('the same session can reopen its cached day', ka === await privateCacheKey({ request: a }));
+check('access tokens are never embedded in cache URLs', !ka.includes('member-a') && !ka.includes('Bearer'));
+check('the original network URL is never modified', a.url === 'https://example.test/api/logs/2026-10-12');
+check('a rotated token receives a fresh partition', ka !== await privateCacheKey({ request: request('member-a-rotated') }));
+check('authenticated GETs can retain offline reads', isPrivateApiRequest({ request: a, url: new URL(a.url) }));
+check('anonymous requests cannot fall back to a member cache', !isPrivateApiRequest({ request: request(), url: new URL(a.url) }));
+check('authentication responses are never cached', !isPrivateApiRequest({ request: a, url: new URL('https://example.test/api/auth/session') }));
+await assert.rejects(() => privateCacheKey({ request: request() }));
+check('missing identity is rejected when constructing a key', true);
+const deleted = [];
+await clearPrivateApiCaches({ keys: async () => ['api-cache', 'api-logs-cache', PRIVATE_API_CACHE, 'workbox-precache-v2'], delete: async key => deleted.push(key) });
+check('sign-out clears both legacy caches and the private cache', deleted.length === 3 && deleted.includes(PRIVATE_API_CACHE));
+check('sign-out keeps the offline app shell available', !deleted.includes('workbox-precache-v2'));
+console.log(`Private API cache: ${passed} passed`);

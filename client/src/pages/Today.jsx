@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import AILauncher from '../components/member/AILauncher';
 import DailyEssentials from '../components/member/DailyEssentials';
 import ThemeToggle from '../components/member/ThemeToggle';
+import NotificationBell from '../components/NotificationBell';
 import useTodayModel from '../hooks/useTodayModel';
 import { Card, OfflineBanner, MemberBottomNav } from '../components/UI';
 import { SkeletonCard, Icon, Collapsible } from '../components/primitives';
@@ -36,28 +37,32 @@ export default function Today() {
   const m = useTodayModel();
   const navigate = useNavigate();
   const openChat = useAIChat(s => s.openChat);
+  const composerOpen = useAIChat(s => s.composerOpen);
   const { log, protocol, loading, isToday, sheet, openSheet, closeSheet, terms, ageMode } = m;
 
   return (
     <div className="min-h-screen bg-charcoal font-sans member-home">
       <OfflineBanner />
       <header className="member-header">
-        <div className="member-brandbar"><span className="member-wordmark">FitLife<span /></span><ThemeToggle /></div>
-        <Greeting user={m.user} avatar={null} autoSaved={m.autoSaved} queued={m.queued} error={m.error}
+        <div className="member-brandbar"><span className="member-wordmark">fitlife</span><div className="member-header-tools"><NotificationBell /><ThemeToggle /></div></div>
+        <Greeting compact user={m.user} avatar={null} autoSaved={m.autoSaved} queued={m.queued} saving={m.saving} error={m.error} onRetry={m.retrySave}
           streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} weekNumber={m.weekNumber} date={m.date} />
+        <h2 className="member-day-title">{isToday ? 'Your day.' : 'Your journal.'}</h2>
         <PendingSync /><PushPrimer hasLogged={m.hasLoggedAnything} />
       </header>
-      <main className="member-content">
+      <main className="member-content" data-testid="member-main">
         {loading ? <><SkeletonCard lines={3} /><SkeletonCard lines={4} /></> : <>
-          <div className="member-stack">
-            {isToday ? <AILauncher /> : <Card><p className="text-sm text-mid">You are viewing an earlier day. Manual edits stay on this date.</p><button type="button" className="member-link" onClick={m.goToday}>Return to today for AI logging <Icon name="arrow-right" size={16} /></button></Card>}
+          <div className="member-overview">
+            <section className="member-snapshot" aria-label="Daily summary">
+              <DateNav compact date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
+              <DailyEssentials m={m} onOpen={openSheet} />
+            </section>
+            <button type="button" className="member-plan-link" onClick={() => navigate('/plan')}>Today’s plan <Icon name="arrow-right" size={19} /></button>
+            {isToday ? <div className="member-home-logger"><AILauncher /></div> :
+              <button type="button" className="member-return-today" onClick={m.goToday}>Return to today for AI logging <Icon name="arrow-right" size={17} /></button>}
           </div>
-          <section className="member-snapshot" aria-label="Daily summary">
-            <DateNav date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
-            <DailyEssentials m={m} onOpen={openSheet} />
-          </section>
           <div className="member-details">
-            <Collapsible title="Plan & tools" summary={`${m.protocolDone} of ${m.protocolTotal} daily habits done`} icon="calendar" testId="home-plan-details">
+            <Collapsible defaultOpen={m.detailSection === 'plan'} title="Plan & tools" summary={`${m.protocolDone} of ${m.protocolTotal} daily habits done`} icon="calendar" testId="home-plan-details">
             {isToday && m.mealPlans?.length > 0 && <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
               onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat('text')} />}
             <div className="member-links">
@@ -67,12 +72,12 @@ export default function Today() {
               <button type="button" className="member-link" onClick={() => openSheet('mealidea')} data-testid="chip-mealidea"><Icon name="food" size={18} /><span>What could I eat next?</span><Icon name="chevron-right" size={15} /></button>
             </div>
             </Collapsible>
-            <Collapsible title={isToday ? 'Logged today' : 'Logged that day'} summary="Your entries, notes & corrections" icon="note" testId="home-log-details">
+            <Collapsible defaultOpen={m.detailSection === 'log'} title={isToday ? 'Logged today' : 'Logged that day'} summary="Your entries, notes & corrections" icon="note" testId="home-log-details">
               <section data-testid="logged-section"><Timeline m={m} onOpen={openSheet} onOpenChat={() => openChat()} /></section>
               <div id="section-notes"><NotesRow value={log.notes} onChange={v => m.update('notes', v)} label={terms.notes}
                 placeholder={ageMode === 'child' ? 'How did you feel today?' : 'Symptoms, energy, how you felt…'} /></div>
             </Collapsible>
-            <Collapsible title="Insights & coach" summary={m.unreadNotes?.length ? `${m.unreadNotes.length} unread coach message${m.unreadNotes.length > 1 ? 's' : ''} · check-ins & recovery` : 'Your daily read, check-ins & recovery'} icon="spark" testId="home-insight-details">
+            <Collapsible defaultOpen={m.detailSection === 'insights'} title="Insights & coach" summary={m.unreadNotes?.length ? `${m.unreadNotes.length} unread coach message${m.unreadNotes.length > 1 ? 's' : ''} · check-ins & recovery` : 'Your daily read, check-ins & recovery'} icon="spark" testId="home-insight-details">
             <div className="member-stack">
             <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
               action={nextAction({ isToday, hour: istHour(), weight: log.weight, foodCount: (log.food || []).length,
@@ -107,7 +112,7 @@ export default function Today() {
 
       <MemberBottomNav showAIAction={false} />
       <InstallPrompt />
-      <MilestoneModal milestone={m.milestone} onClose={() => { haptic(10); m.setMilestone(null); }} />
+      <MilestoneModal milestone={!sheet && !composerOpen ? m.milestone : null} onClose={() => { haptic(10); m.setMilestone(null); }} />
     </div>
   );
 }

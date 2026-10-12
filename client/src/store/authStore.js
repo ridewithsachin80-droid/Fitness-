@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clearPrivateApiCaches } from '../utils/privateApiCache';
 import { disconnectSocket } from '../hooks/useSync';
 import {
   storeRefreshToken,
@@ -84,7 +85,8 @@ export const useAuthStore = create((set) => ({
 
     set({ accessToken: null, user: null, isRestoring: false });
 
-    const go = () => { window.location.href = '/login'; };
+    const cleanup = clearPrivateApiCaches().catch(() => {});
+    const go = () => { cleanup.finally(() => { window.location.href = '/login'; }); };
     if (reason !== null) { go(); return; }
 
     // A deliberate sign-out must end the session on the SERVER, because the

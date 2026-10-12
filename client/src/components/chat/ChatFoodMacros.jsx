@@ -42,8 +42,8 @@ export default function ChatFoodMacros({ f, disabled, onSave }) {
   const stop = (e) => e.stopPropagation();
   const openEditor = (e) => { e.stopPropagation(); haptic(10); setOpen(true); };
   return (
-    <div className="text-right flex-shrink-0">
-      <p className="text-body-sm font-bold text-orange-400">{f.macros?.cal ?? 0} kcal</p>
+    <div className="chat-food-macros text-right flex-shrink-0">
+      <p className="chat-food-calories text-body-sm font-bold">{f.macros?.cal ?? 0} kcal</p>
       <p className="text-eyebrow text-mid">
         P {f.macros?.pro ?? 0} · C {f.macros?.carb ?? 0} · F {f.macros?.fat ?? 0}
       </p>

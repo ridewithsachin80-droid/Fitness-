@@ -2,6 +2,7 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 import { clientsClaim } from 'workbox-core';
+import { PRIVATE_API_CACHE, LEGACY_API_CACHES, privateCacheKey, isPrivateApiRequest } from './utils/privateApiCache';
 
 // Precache all Vite-built assets (injected by vite-plugin-pwa)
 precacheAndRoute(self.__WB_MANIFEST);
@@ -25,15 +26,18 @@ self.addEventListener('message', (event) => {
 // instead of waiting for every tab to close first.
 clientsClaim();
 
-// API routes: network first
+// Keep offline reads, partitioned by the authenticated session. Authentication
+// endpoints and requests without an access token are never runtime-cached.
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/logs'),
-  new NetworkFirst({ cacheName: 'api-logs-cache', networkTimeoutSeconds: 10 })
+  context => context.url.origin === self.location.origin && isPrivateApiRequest(context),
+  new NetworkFirst({ cacheName: PRIVATE_API_CACHE, networkTimeoutSeconds: 10,
+    plugins: [{ cacheKeyWillBeUsed: privateCacheKey,
+      cacheWillUpdate: async ({ response }) => response.status === 200 ? response : null }],
+  })
 );
-registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/'),
-  new NetworkFirst({ cacheName: 'api-cache', networkTimeoutSeconds: 5 })
-);
+self.addEventListener('activate', event => {
+  event.waitUntil(Promise.all(LEGACY_API_CACHES.map(name => caches.delete(name))));
+});
 
 // ── Push notification handler ─────────────────────────────────────────────────
 self.addEventListener('push', (event) => {

@@ -1,0 +1,50 @@
+FitLife premium update — overlay for Fitness--main/
+Baseline: 2ebbf01e35cdfcf9e71c7c68ec54ce58b7c65c4f
+Generated client/dist is excluded; rebuild with npm run build.
+No source-file deletions.
+
+client/index.html
+client/src/App.jsx
+client/src/components/AIChatLog.jsx
+client/src/components/UI.jsx
+client/src/components/VoiceComposer.jsx
+client/src/components/chat/AIAttachments.jsx
+client/src/components/chat/ChatFoodMacros.jsx
+client/src/components/food/portions.jsx
+client/src/components/member/AILauncher.jsx
+client/src/components/member/DailyEssentials.jsx
+client/src/components/member/member.css
+client/src/components/primitives/Icon.jsx
+client/src/components/today/DateNav.jsx
+client/src/components/today/Greeting.jsx
+client/src/hooks/useTodayModel.js
+client/src/index.css
+client/src/pages/MemberMore.jsx
+client/src/pages/Today.jsx
+client/src/store/authStore.js
+client/src/store/settingsStore.js
+client/src/sw.js
+client/src/utils/privateApiCache.js
+design-previews/FitLife-Built-Dark-Light.jpeg
+design-previews/README-PREMIUM.md
+design-previews/ai-review-dark.jpeg
+design-previews/ai-review-dark.png
+design-previews/ai-review-light.jpeg
+design-previews/ai-review-light.png
+design-previews/home-dark-1280.png
+design-previews/home-dark-390-viewport.jpeg
+design-previews/home-dark-390.png
+design-previews/home-light-1280.png
+design-previews/home-light-390-viewport.jpeg
+design-previews/home-light-390.png
+design-previews/more-dark.jpeg
+design-previews/more-light.jpeg
+docs/reviews/APPLY-PREMIUM-UPDATE.md
+docs/reviews/FitLife-UX-Review.html
+docs/reviews/UPDATED-FILES.txt
+docs/reviews/VALIDATION.json
+server/scripts/test-layout-contracts.js
+server/scripts/test-portion-defaults.mjs
+server/scripts/test-premium-ui.mjs
+server/scripts/test-private-api-cache.mjs
+server/scripts/ui-tests.mjs

@@ -254,7 +254,7 @@ export function MemberBottomNav({ showAIAction = true } = {}) {
   const tabs = [
     { label: 'Today', path: '/', icon: 'home', active: pathname === '/' || pathname === '/plan' },
     { label: 'Progress', path: '/progress', icon: 'trend', active: pathname === '/progress' },
-    { label: 'You', path: '/profile', icon: 'user', active: ['/profile', '/settings', '/devices'].includes(pathname) },
+    { label: 'More', path: '/more', icon: 'more', active: ['/more', '/profile', '/settings', '/devices'].includes(pathname) },
   ];
   return <>
     <div style={{ height: showAIAction ? 146 : 88 }} />

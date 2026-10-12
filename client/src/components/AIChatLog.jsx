@@ -20,6 +20,7 @@ import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CH
 export { useAIChat };
 import DaySummary from './DaySummary';
 import AIFoodReview from './chat/AIFoodReview';
+import AIAttachments from './chat/AIAttachments';
 import { withFoodGrams, foodReviewError } from '../utils/aiFoodReview';
 import { Icon } from './primitives';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
@@ -851,7 +852,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
 
   const thread = (
     <section ref={threadRef} id="ai-thread" data-testid="ai-thread" aria-label="FitLife AI" className="scroll-mt-4">
-      <div className="flex items-center gap-2.5 mb-3">
+      <div className="chat-thread-header flex items-center gap-2.5 mb-3">
         <div className="w-8 h-8 rounded-full text-charcoal bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm  flex-shrink-0"><Icon name="spark" size={17} /></div>
         <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
@@ -871,27 +872,18 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       <div className="space-y-4" data-testid="ai-messages">
 
         {messages.length === 0 && (
-          <div className="bg-surface border border-hair rounded-2xl p-4">
-            <p className="text-sm font-semibold text-white mb-1.5">What would you like to log?</p>
-            <p className="text-xs text-mid leading-relaxed mb-3">
-              Weight, walks, meals, ACV, water, supplements, sleep — say it all in
-              one message and I'll fill your entire log. Review, then tap Save.
-              Use the camera for a meal, or the document button for a lab report.
-            </p>
-            <div className="bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2.5">
-              <p className="text-caption text-mid leading-relaxed italic">
-                "weight 82.5, morning walk done, 2 chapati and dal for lunch,
-                acv before meal 2, drank 1 litre water, took my supplements,
-                slept 10:30 to 6:30"
-              </p>
-            </div>
+          <div className="member-ai-welcome">
+            <Icon name="spark" size={25} />
+            <h2>A little less effort.</h2>
+            <p>Meals, movement, water, sleep or weight. Tell me once; review and save.</p>
+            <p className="member-ai-example">Try “2 idlis and sambar for breakfast”.</p>
           </div>
         )}
 
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-gold text-charcoal text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="ai-user-bubble max-w-[85%] bg-gold text-charcoal text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
                 {m.photoPreview && <img src={m.photoPreview} alt="Your attached meal" className="max-h-40 w-full object-cover rounded-xl mb-2" />}
                 {m.text}
               </div>
@@ -899,7 +891,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           ) : (
             <div key={mi} className="flex justify-start">
               <div className="max-w-[94%] w-full">
-                <div className={`text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
+                <div className={`ai-reply text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
                   m.error
                     ? 'bg-red-500/[0.08] border-red-500/25 text-red-300'
                     : m.summary
@@ -1294,7 +1286,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       {messages.length === 0 && (
         <div className="-mx-4 px-4 mt-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }} data-testid="ai-suggestions">
           {SUGGESTION_CHIPS.map((chip, i) => (
-            <button key={i} onClick={() => send(chip)}
+            <button key={i} onClick={() => { setInput(chip); inputRef.current?.focus(); }}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
               className="text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-full px-3.5 py-1.5 text-mid transition-colors">
               {chip}
@@ -1309,7 +1301,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   return (<>
     {overlay ? (composerOpen && createPortal(
       <div className="member-assistant-overlay" role="dialog" aria-modal="true" aria-label="FitLife AI daily logging" ref={overlayRef}>
-        <div className="member-assistant-head"><div><strong>FitLife AI</strong><p>Speak. Snap. Review. Save.</p></div>
+        <div className="member-assistant-head"><div><strong>FitLife AI</strong><p>One place for your whole day.</p></div>
           <button type="button" className="member-theme" onClick={() => useAIChat.getState().closeComposer()} aria-label="Close AI assistant"><Icon name="close" size={19} /></button></div>
         <div className="member-assistant-scroll" style={{ paddingBottom: composerHeight + kbInset }}>
           {thread}
@@ -1352,7 +1344,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                 else useAIChat.getState().closeComposer();                    // nothing typed → put the bar away
               }
             }}
-            placeholder="Tell me about your day…"
+            placeholder="Ask or log anything…"
             aria-label="Tell FitLife about your day"
             data-testid="composer-input"
             style={{ maxHeight: 5 * 22 + 16 }}
@@ -1367,25 +1359,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           )}
         </div>
         <div className="flex items-center gap-1 mt-1.5">
-          <button type="button" onClick={() => { haptic(8); useAIChat.getState().closeComposer(); }}
-            aria-label="Close" data-testid="composer-close"
-            style={{ minWidth: 40, minHeight: 40 }}
-            className="flex items-center justify-center rounded-full text-mid hover:text-white transition-colors flex-shrink-0 -ml-1">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 9l7 7 7-7" /></svg>
-          </button>
-          <button onClick={() => labRef.current?.click()}
-            disabled={labBusy || photoBusy || busy || applying || !assistantReady}
-            aria-label="Upload a lab report"
-            style={{ minWidth: 40, minHeight: 40 }}
-            className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-              labBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold'
-            }`}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="9" y1="15" x2="15" y2="15" />
-            </svg>
-          </button>
+          <AIAttachments galleryRef={galleryRef} labRef={labRef} disabled={labBusy || photoBusy || busy || applying || !assistantReady} />
           <input ref={labRef} type="file" accept="application/pdf,image/*"
             onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendLabReport(f); }}
             style={{ display: 'none' }} />
@@ -1404,11 +1378,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           <input ref={fileRef} type="file" accept="image/*" capture="environment" data-testid="ai-camera-input"
             onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
             style={{ display: 'none' }} />
-          <button type="button" onClick={() => galleryRef.current?.click()} aria-label="Choose photo from gallery" title="Gallery"
-            disabled={photoBusy || busy || labBusy || applying || !assistantReady}
-            style={{ minWidth: 40, minHeight: 40 }} className="flex items-center justify-center rounded-full text-mid hover:text-gold-light flex-shrink-0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="8" cy="8" r="1" /><path d="m21 16-6-6-7 8-3-3-2 2" /></svg>
-          </button>
           <input ref={galleryRef} type="file" accept="image/*" data-testid="ai-gallery-input"
             onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }} style={{ display: 'none' }} />
           {vc.micButton}

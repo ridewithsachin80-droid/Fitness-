@@ -950,7 +950,7 @@ async function planTest() {
 
   // nav
   const navLabels = [...d.querySelectorAll('.member-nav-links button')].map(b => b.textContent.trim()).filter(Boolean);
-  ck('nav is Today · Plan · Progress · Profile — Settings is no longer a tab', navLabels.join(',') === 'Today,Progress,You', navLabels);
+  ck('nav is Today · Progress · More — full plan and profile remain available', navLabels.join(',') === 'Today,Progress,More', navLabels);
   ck('Plan belongs to Today in the simplified navigation', [...d.querySelectorAll('.member-nav-links button')].find(b => /Today/.test(b.textContent))?.getAttribute('aria-current') === 'page');
 
   // Today view
@@ -1329,6 +1329,7 @@ async function cachedReadTest() {
     createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
   const { w, errors } = run(code); await tick(900);
   const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  q('home-insight-details').querySelector('button').click(); await tick(100);
   ck('Today asks for the cached read once', errors.length === 0 && w.__calls.filter(u => /me\/read/.test(u)).length === 1, [errors.join('|'), w.__calls.filter(u => /me\/read/.test(u))]);
   ck('the cached sentence is what Today shows — the same words the member got by WhatsApp', /Yesterday: 1,650 kcal · 82\.7 kg/.test(q('ai-read').textContent), q('ai-read').textContent.slice(0, 120));
   // The action is time-gated in IST: before 09:00 a member who already logged
@@ -1386,7 +1387,8 @@ async function sprint11Test() {
   const { w, errors, html } = run(code); await tick(900);
   const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
   ck('Today mounts', errors.length === 0, errors.join('|'));
-  ck('the Eat row offers "What to eat"', !!q('chip-mealidea') && /What could I eat/.test(q('chip-mealidea').textContent));
+  q('home-plan-details').querySelector('button').click(); await tick(100);
+  ck('the plan tools offer "What to eat"', !!q('chip-mealidea') && /What could I eat/.test(q('chip-mealidea').textContent));
   q('chip-mealidea').click(); await tick(500);
   const dlg = d.querySelector('[role=dialog]');
   ck('it opens the meal-idea sheet and asks for the member\'s usual foods', !!dlg && w.__calls.some(u => /recent-foods/.test(u)));
@@ -1527,6 +1529,7 @@ async function sprint11cTest() {
     useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
     createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
   const A = run(todayCode); await tick(900);
+  A.w.document.querySelector('[data-testid="home-insight-details"] button').click(); await tick(200);
   ck('a member with no tracker sees no recovery card (nothing estimated)', A.errors.length === 0 && !A.w.document.querySelector('[data-testid="recovery-card"]') && A.w.__calls.some(u => /trackers\/data/.test(u)), A.errors.join('|'));
 
   const B = run(todayCode, (w) => {
@@ -1537,6 +1540,7 @@ async function sprint11cTest() {
   });
   await tick(900);
   const bd = B.w.document; const bq = (id) => bd.querySelector(`[data-testid="${id}"]`);
+  bq('home-insight-details').querySelector('button').click(); await tick(200);
   ck('with a synced tracker the recovery card renders: sleep, HRV, resting HR, steps, score', !!bq('recovery-card') && ['rec-sleep', 'rec-hrv', 'rec-rhr', 'rec-steps', 'rec-score'].every(id => bq(id)), B.errors.join('|'));
   ck('numbers are the device\'s (5h 30m, 58 ms, 62 bpm, 4,200, 30/100) with the provider named', /5h 30m/.test(bq('rec-sleep').textContent) && /62/.test(bq('rec-rhr').textContent) && /4,200/.test(bq('rec-steps').textContent) && /30/.test(bq('rec-score').textContent) && /whoop/.test(bq('recovery-card').textContent), bq('recovery-card').textContent.slice(0, 160));
   ck('deltas compare to the week (resting HR ↑ 7 vs week)', /↑ 7bpm vs week|↑ 7 vs week/.test(bq('rec-rhr').textContent.replace('bpm vs', 'bpm vs')) || /↑ 7/.test(bq('rec-rhr').textContent), bq('rec-rhr').textContent);
@@ -3064,6 +3068,9 @@ async function honestStatesTest() {
   ck('member with no real gaps: no nutrient section at all (it used to list six invented ones)', MM2.errors.length === 0 && !mq(MM2, 'micro-block') && !/Consistently under target/.test(MM2.w.document.body.textContent));
   const MC2 = run(mi, (win) => { win.__coach = true; win.__gaps = []; }); await tick(400);
   ck('coach with no real gaps: no "under target" heading, but still told what cannot be judged', !/Consistently under target/.test(MC2.w.document.body.textContent) && !!mq(MC2, 'micro-unknown'));
+  // The completed fixtures are no longer used. Release their React timers and
+  // DOMs before the last fixture and the multi-page Chromium pass.
+  RUN_WINDOWS.splice(0).forEach(win => win.close());
   const MC3 = run(mi, (win) => { win.__coach = true; win.__gaps = []; win.__unknown = []; }); await tick(400);
   ck('nothing low and nothing unknown: no section', MC3.errors.length === 0 && !mq(MC3, 'micro-block'));
 
@@ -3151,13 +3158,14 @@ async function macrosEatenTest() {
   const q = (id, root = d) => root.querySelector(`[data-testid="${id}"]`);
   const qa = (id, root = d) => [...root.querySelectorAll(`[data-testid="${id}"]`)];
   ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
-  ck('home shows all three eaten macros in a compact summary', /P 37 · C 59 · F 34 g/.test(q('plan-eat').textContent), q('plan-eat').textContent);
+  ck('home shows all three eaten macros in a compact summary', ['P 37 g', 'C 59 g', 'F 34 g'].every(v => q('plan-eat').textContent.includes(v)), q('plan-eat').textContent);
+  q('home-log-details').querySelector('button').click(); await tick(150);
   const meals = qa('meal-macros').map(e => e.textContent);
   ck('timeline: each meal shows its macros under the foods (Breakfast P 10 · C 52 · F 4; Lunch P 27 · C 8 · F 30)',
      meals[0] === 'P 10 g · C 52 g · F 4 g' && meals[1] === 'P 27 g · C 8 g · F 30 g', meals);
 
   q('plan-eat').click(); await tick(500);
-  const dlg = () => d.querySelector('[role=dialog]');
+  const dlg = () => d.querySelector('[role=dialog][aria-label="What did you eat?"]');
   ck('food sheet with targets: the macro bars (as before), not the no-target card', /Macro Targets/.test(dlg()?.textContent || '') && !q('eaten-card'), dlg()?.textContent.slice(0, 80));
   ck('each food shows kcal · P · C · F in the simple view', qa('food-macros').length === 3 && /390 kcal · P27g · C7\.5g · F30g/.test(qa('food-macros')[2].textContent), qa('food-macros').map(e => e.textContent));
   ck('each meal header shows P, C and F in the simple view too (it showed kcal only)', /P 9\.8g/.test(dlg().textContent) && /C 51\.6g/.test(dlg().textContent) && /F 4\.0g/.test(dlg().textContent));
@@ -3206,10 +3214,11 @@ async function macrosEatenTest() {
   const closeBtn = [...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Done'); closeBtn?.click(); await tick(500);
   ck('Today\'s Eat row follows the edit: protein 37 → 47 (paneer 27 → 37.5 g)', /P 47/.test(q('plan-eat')?.textContent || ''), q('plan-eat')?.textContent);
 
+  q('milestone')?.click(); await tick(50);
   // The label is offered in the search next time (the sheet re-mounts and reloads the labels)
   A.w.__labels = [{ id: 1, name: 'Paneer bhurji', per_100g: put.body.per_100g, base_food_id: null }];
   q('plan-eat').click(); await tick(500);
-  [...dlg().querySelectorAll('button')].find(b => /Add food item/.test(b.textContent)).click(); await tick(150);
+  [...dlg().querySelectorAll('button')].find(b => /Add food item/.test(b.textContent)).click(); await tick(450);
   await typeIn(A, dlg().querySelector('input[placeholder="Food name…"]'), 'paneer'); await tick(500);
   const sug = q('suggest-label');
   ck('typing "paneer" offers the member\'s own label first, marked "your label"', !!sug && /Paneer bhurji/.test(sug.closest('button').textContent), dlg().textContent.slice(0, 200));
@@ -3228,9 +3237,10 @@ async function macrosEatenTest() {
   ck('(fixture: the no-plan member really has no targets)', noPlan !== TODAY_API_STUB);
   const B = run(await mount(noPlan, 'api-36-noplan.js')); await tick(900);
   const bd = B.w.document; const bq = (id) => bd.querySelector(`[data-testid="${id}"]`);
+  bq('home-log-details').querySelector('button').click(); await tick(200);
   ck('mounts', B.errors.length === 0, B.errors.join('|'));
   ck('Eat row: calories alone, no "/ target"', /666/.test(bq('plan-eat').textContent) && !/666 \//.test(bq('plan-eat').textContent.replace(/\s+/g, ' ')), bq('plan-eat').textContent);
-  ck('without targets home still shows all eaten macros', /P 37 · C 59 · F 34 g/.test(bq('plan-eat').textContent));
+  ck('without targets home still shows all eaten macros', ['P 37 g', 'C 59 g', 'F 34 g'].every(v => bq('plan-eat').textContent.includes(v)));
   ck('timeline meals show their macros too', bd.querySelectorAll('[data-testid="meal-macros"]').length === 2);
   bq('plan-eat').click(); await tick(500);
   ck('food sheet: an "Eaten today" card with 666 kcal and the three macros, saying there are no targets yet',

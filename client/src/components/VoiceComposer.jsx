@@ -26,7 +26,7 @@ import {
   applyInterim, applyFinal, applyEdit, startTake, shouldAutoSend,
 } from '../utils/voiceComposer';
 
-export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }) {
+export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = true }) {
   // null → card hidden. '' → card open, nothing captured yet.
   const [draft, setDraft] = useState(null);
   // Transcript accepted from finished takes; interim results render after it.
@@ -98,7 +98,7 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
 
   const card = !active ? null : (
     <div className="mb-2 rounded-2xl border px-3 py-2.5 bg-surface"
-      style={{ borderColor: `${accent}59` }}>
+      style={{ borderColor: 'var(--border)' }}>
       {/* Header line: state + language toggle / discard */}
       <div className="flex items-center justify-between mb-1.5">
         {voice.requesting ? <span className="text-caption text-mid">Allow microphone access to begin…</span> : voice.listening ? (
@@ -180,14 +180,14 @@ export function useVoiceComposer({ onSend, accent = '#D4AF37', autoSend = true }
 
   const micButton = voice.supported ? (
     <button onClick={record} disabled={voice.transcribing}
-      style={{ minWidth: 40, minHeight: 40 }}
+      style={{ minWidth: 44, minHeight: 44 }}
       title={voice.listening ? 'Tap to stop' : active ? 'Add more by voice' : 'Speak your log'}
       className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
         voice.listening ? 'text-red-400 animate-pulse'
         : voice.transcribing ? 'animate-pulse'
         : 'text-mid hover:text-gold-light'
       }`}
-      {...(voice.transcribing ? { 'aria-label': 'Transcribing' } : {})}>
+      aria-label={voice.transcribing ? 'Transcribing' : voice.listening ? 'Stop recording' : 'Speak your log'}>
       {voice.transcribing ? (
         <span className="text-base leading-none">✨</span>
       ) : (

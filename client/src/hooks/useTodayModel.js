@@ -3,7 +3,7 @@
  * what it SHOWS.
  *
  * This is the container half of the old pages/DailyLog.jsx, moved here in
- * Sprint 3 line-for-line: the store wiring, every fetch, the 4-second
+ * Sprint 3 line-for-line: the store wiring, every fetch, the debounced
  * auto-save, the streak and milestone logic, the auto-derived protocol ticks,
  * the PWA shortcut handling. The comments inside are the original ones —
  * several record bugs that were hit and fixed (temporal-dead-zone effects,
@@ -55,16 +55,18 @@ export default function useTodayModel() {
 
   useEffect(() => { setDate(today()); }, []);
 
-  // Fetch yesterday's weight for trend delta shown after weight entry
+  // Compare with the day before the SELECTED entry, not always yesterday.
   const [yesterdayWeight, setYesterdayWeight] = useState(null);
   useEffect(() => {
-    // Was toISOString() — UTC — while today() is IST. For 5.5 hours a day
-    // those pointed at different dates and the trend delta silently vanished.
-    const yStr = istDaysAgo(1);
-    api.get(`/logs/${yStr}`).then(({ data }) => {
-      if (data?.weight_kg) setYesterdayWeight(parseFloat(data.weight_kg));
+    let cancelled = false;
+    setYesterdayWeight(null);
+    const previous = new Date(date + 'T12:00:00');
+    previous.setDate(previous.getDate() - 1);
+    api.get(`/logs/${istDate(previous)}`).then(({ data }) => {
+      if (!cancelled && data?.weight_kg) setYesterdayWeight(parseFloat(data.weight_kg));
     }).catch(() => {});
-  }, []);
+    return () => { cancelled = true; };
+  }, [date]);
 
   // Fetch coach notes + profile age once on mount
   const [coachNotes, setCoachNotes] = useState([]);
@@ -231,15 +233,29 @@ export default function useTodayModel() {
     } else { setWeightWarning(''); }
   };
 
-  // ── Auto-save (4-second debounce) ─────────────────────────────────────────
+  // ── Auto-save (1.5-second debounce) ─────────────────────────────────────────
   // Every field writes through here — this is now the ONLY save path (no more
-  // manual "Save Today's Log" button). 4s feels instant in practice while
-  // still coalescing rapid edits (e.g. dragging the water slider) into one
+  // manual "Save Today's Log" button). A short delay coalesces rapid edits
+  // (e.g. dragging the water slider) into one
   // request instead of firing on every pixel of movement.
   const autoSaveRef = useRef(null);
   const [autoSaved, setAutoSaved] = useState(false);
 
   // ── Premium hero state ─────────────────────────────────────────────────────
+  const [detailSection, setDetailSection] = useState(() => {
+    const section = new URLSearchParams(window.location.search).get('section');
+    return ['plan', 'log', 'insights'].includes(section) ? section : null;
+  });
+  const deepSection = useRef(detailSection);
+  useEffect(() => {
+    if (loading || !deepSection.current) return;
+    const name = deepSection.current === 'insights' ? 'insight' : deepSection.current;
+    const timer = setTimeout(() => {
+      document.querySelector(`[data-testid="home-${name}-details"]`)?.scrollIntoView?.({ block: 'start' });
+      deepSection.current = null;
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [loading]);
   const [heroPanel, setHeroPanel] = useState(null);   // 'weight'|'food'|'protocol'|'water'|'workout'|'sleep'
 
   // PWA app shortcuts: long-press icon → /?open=ai or /?open=weight.
@@ -250,7 +266,7 @@ export default function useTodayModel() {
     if (!open) return;
     if (open === 'ai') useAIChat.getState().openChat();
     // Sprint 6: the Plan screen deep-links to any sheet (/?open=workout …)
-    if (['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition'].includes(open)) setHeroPanel(open);
+    if (['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition', 'mealidea'].includes(open)) setHeroPanel(open);
     window.history.replaceState({}, '', window.location.pathname);
   }, []);
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });
@@ -418,39 +434,39 @@ export default function useTodayModel() {
     return () => clearTimeout(t);
   }, [chipInfo]);
 
+  const saveCurrentEntry = useCallback(async () => {
+    await saveLog();
+    const state = useLogStore.getState();
+    const persisted = !state.dirty && !state.error;
+    if (persisted) {
+      setAutoSaved(true);
+      setTimeout(() => setAutoSaved(false), 2500);
+    }
+    return persisted;
+  }, [saveLog]);
+
   const triggerAutoSave = useCallback(() => {
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = setTimeout(async () => {
       autoSaveRef.current = null;
-      if (date === today()) {
-        try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
-      }
-    }, 4000);
-  }, [saveLog, date]);
+      // Past-day edits are real edits too. saveLog captures the current date.
+      await saveCurrentEntry();
+    }, 1500);
+  }, [saveCurrentEntry]);
 
-  // Flush a pending debounced save NOW. Used before the date changes.
-  //
-  // Found by the Sprint 3 jsdom flow: tick a supplement, press ‹ within four
-  // seconds to look at yesterday. The timer fired after setDate had already
-  // swapped the store to yesterday's log, so saveLog() posted yesterday's data
-  // to yesterday and today's tick was gone. The member saw the tick, left,
-  // came back to find it missing. Saving before the store changes closes it.
+  // Flush before changing dates; a rejected save must keep the edited day open.
   const flushPendingSave = useCallback(async () => {
-    if (!autoSaveRef.current) return;
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = null;
-    if (date === today()) {
-      try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
-    }
-  }, [saveLog, date]);
+    if (!useLogStore.getState().dirty) return true;
+    return saveCurrentEntry();
+  }, [saveCurrentEntry]);
 
-  // Safety net: if the debounce hasn't fired yet and the user navigates away,
-  // switches tabs, or closes the app, flush an immediate save so the last few
-  // seconds of edits aren't silently lost.
   useEffect(() => {
     const flush = () => {
-      if (autoSaveRef.current && date === today()) {
+      if (autoSaveRef.current) {
         clearTimeout(autoSaveRef.current);
+        autoSaveRef.current = null;
         saveLog().catch(() => {});
       }
     };
@@ -458,10 +474,11 @@ export default function useTodayModel() {
     window.addEventListener('beforeunload', flush);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      flush();
       window.removeEventListener('beforeunload', flush);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [saveLog, date]);
+  }, [saveLog]);
 
   // Coming back to the app. A PWA stays open in the background for days, so
   // "open" is not "freshly loaded": the day on screen may be hours old, with
@@ -485,7 +502,7 @@ export default function useTodayModel() {
   const actDone    = activeActivities.filter(a => log.activities?.[a.id]).length;
   const acvDone    = activeACV.filter(a => log.acv?.[a.id]).length;
   const suppDone   = activeSupplements.filter(s => log.supplements?.[s.id]).length;
-  const update     = useCallback((field, val) => { updateLog(field, val); triggerAutoSave(); }, [updateLog, triggerAutoSave]);
+  const update     = useCallback((field, val) => { setAutoSaved(false); updateLog(field, val); triggerAutoSave(); }, [updateLog, triggerAutoSave]);
 
   // Keep the auto-derived protocol ticks in sync with the Workout log.
   // Writes only when the derived value actually differs, so this can't loop.
@@ -633,7 +650,7 @@ export default function useTodayModel() {
 
   // Date navigation, shared by the header arrows
   const goPrevDay = async () => {
-    await flushPendingSave();
+    if (!await flushPendingSave()) return;
     const d = new Date(date + 'T12:00:00');
     d.setDate(d.getDate() - 1);
     setDate(istDate(d));
@@ -642,13 +659,13 @@ export default function useTodayModel() {
   // today, so a member who went back five days to fix something and then
   // wanted day four was thrown to today and had to press '‹' four more times.
   const goNextDay = async () => {
-    await flushPendingSave();
+    if (!await flushPendingSave()) return;
     const d = new Date(`${date}T12:00:00`);   // midday: no DST/offset edge
     d.setDate(d.getDate() + 1);
     const next = istDate(d);
     setDate(next > today() ? today() : next);
   };
-  const goToday = async () => { await flushPendingSave(); setDate(today()); };
+  const goToday = async () => { if (await flushPendingSave()) setDate(today()); };
 
   const openSheet  = (key) => { setHeroPanel(key); haptic(10); };
   const closeSheet = () => setHeroPanel(null);
@@ -667,7 +684,7 @@ export default function useTodayModel() {
     // store
     date, isToday, log, protocol, loading, saving, saved, queued, error,
     update, setDate, goPrevDay, goNextDay, goToday,
-    autoSaved,
+    autoSaved, detailSection, setDetailSection, retrySave: flushPendingSave,
     // protocol items
     activeActivities, activeACV, activeSupplements,
     actDone, acvDone, suppDone, protocolDone, protocolTotal, compliance,

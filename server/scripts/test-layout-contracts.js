@@ -559,7 +559,7 @@ ck('DailyLog.jsx is a wrapper that renders Today (the route did not move)',
 ck('Today.jsx has no fetches and no store writes of its own — that is the hook\'s job',
    !/api\.(get|post)\(/.test(todayPage) && !/useEffect\(/.test(todayPage) && !/useState\(/.test(todayPage), 'Today.jsx has logic');
 ck('the model still handles the PWA shortcuts (?open=ai / ?open=weight)',
-   /get\('open'\)/.test(model) && /\['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition'\]\.includes\(open\)/.test(model) && /open === 'ai'/.test(model));
+   /get\('open'\)/.test(model) && /\['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition', 'mealidea'\]\.includes\(open\)/.test(model) && /open === 'ai'/.test(model));
 ck('the model still flushes the debounced save on tab hide / unload',
    /visibilitychange/.test(model) && /beforeunload/.test(model));
 ck('auto-derived protocol ticks are still additive only (tick, never untick)',
@@ -598,7 +598,7 @@ const sheetNames = ['weight', 'water', 'sleep', 'protocol', 'food', 'workout', '
 ck('all seven sheets are mounted from the single sheet value',
    sheetNames.every(n => new RegExp(`open=\\{sheet === '${n}'\\}\\s+onClose=\\{closeSheet\\}`).test(todayPage)),
    sheetNames.filter(n => !new RegExp(`open=\\{sheet === '${n}'\\}`).test(todayPage)));
-ck('the daily summary opens the weight sheet', /onOpen\('weight'\)/.test(read('components/member/DailyEssentials.jsx')));
+ck('the daily summary opens the weight sheet', /metric\('weight', 'scale', 'Weight'/.test(read('components/member/DailyEssentials.jsx')));
 
 // ── 10. The AI is on the page (Sprint 4) ────────────────────────────────────
 console.log('\n[10] AI thread on the page, composer docked');
@@ -627,8 +627,8 @@ ck('the composer can be left without sending: × clears the draft, Escape steps 
 // Sprint 5b.3: the bar is summoned by the orb, not permanent.
 ck('the composer appears on request and the member dock opens it', /composerOpen && createPortal/.test(chat) && /openChat\(\)/.test(read('components/UI.jsx')) && /data-testid="ai-orb"/.test(read('components/UI.jsx')));
 
-ck('the bar has its own Close, and the thread offers "Tell me" while the bar is away',
-   /data-testid="composer-close"/.test(chat) && /data-testid="thread-open-composer"/.test(chat));
+ck('the assistant has Close, and the thread offers Tell me while the bar is away',
+   /aria-label="Close AI assistant"/.test(chat) && /data-testid="thread-open-composer"/.test(chat));
 ck('AI transcript reserves measured space above its composer', /paddingBottom: composerHeight \+ kbInset/.test(chat) && /ResizeObserver/.test(chat));
 
 ck('the box re-measures on every text change (grows and shrinks)', /useEffect\(\(\) => \{ autoGrow\(inputRef\.current\); \}, \[input\]\)/.test(chat));
@@ -638,7 +638,7 @@ ck('the bottom nav is hidden while the assistant is open', /!composerOpen && <na
 console.log('\n[11] Plan + nav');
 const ui = read('components/UI.jsx');
 const planPage = read('pages/Plan.jsx');
-ck('member navigation has Today, Progress and You', (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0,3).join(',') === 'Today:/,Progress:/progress,You:/profile'; })());
+ck('member navigation has Today, Progress and More', (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0,3).join(',') === 'Today:/,Progress:/progress,More:/more'; })());
 
 ck('/settings still resolves and Profile links to it (the screen moved, it did not vanish)',
    /path="\/settings"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')) && /navigate\('\/settings'\)/.test(read('pages/Profile.jsx')));

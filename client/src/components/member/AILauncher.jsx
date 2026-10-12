@@ -1,16 +1,14 @@
 import { Icon } from '../primitives';
 import { useAIChat } from '../../store/aiChatStore';
 
-export default function AILauncher({ compact = false }) {
+/** Each control starts its input from the original tap; no intermediary menu. */
+export default function AILauncher() {
   const openChat = useAIChat(s => s.openChat);
-  return <section className={compact ? 'member-ai-launch compact' : 'member-ai-launch'} data-testid="ai-launcher">
-    <div className="member-ai-eyebrow"><Icon name="spark" size={17} /> FITLIFE INTELLIGENCE</div>
-    {!compact && <><h2>Your day.<br />All in one place.</h2>
-      <p>Log anything. Let AI take care of the details.</p></>}
+  return <section className="member-ai-launch" data-testid="ai-launcher" aria-label="Log anything with AI">
     <div className="member-ai-actions">
-      <button type="button" data-testid="ai-speak" onClick={() => openChat('voice')}><Icon name="mic" size={21} /><span>Speak</span></button>
-      <button type="button" data-testid="ai-snap" onClick={() => openChat('photo')}><Icon name="camera" size={21} /><span>Snap</span></button>
-      <button type="button" data-testid="ai-type" onClick={() => openChat('text')}><Icon name="chat" size={21} /><span>Type</span></button>
+      <button type="button" data-testid="ai-speak" onClick={() => openChat('voice')} aria-label="Speak to log with AI"><Icon name="mic" size={22} /><span>Speak</span></button>
+      <button type="button" data-testid="ai-snap" onClick={() => openChat('photo')} aria-label="Snap with camera"><Icon name="camera" size={22} /><span>Snap</span></button>
+      <button type="button" data-testid="ai-type" onClick={() => openChat('text')} aria-label="Type to log with AI"><Icon name="keyboard" size={22} /><span>Type</span></button>
     </div>
   </section>;
 }

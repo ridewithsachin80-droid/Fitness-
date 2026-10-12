@@ -6,7 +6,7 @@ export function applyTheme(theme) {
   const selected = theme || useSettingsStore.getState().theme || 'light';
   document.documentElement.setAttribute('data-theme', selected === 'dark' ? 'dark' : 'light');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = selected === 'dark' ? '#121a16' : '#f8f7f2';
+  if (meta) meta.content = selected === 'dark' ? '#141817' : '#f8f9f6';
 }
 
 export function applyFontSize(size) {

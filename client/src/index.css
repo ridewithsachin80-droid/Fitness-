@@ -15,10 +15,10 @@
    rendered near-white on the coach page). Sprint 0 replaced every such class
    in the JSX with a named token; `test-layout-contracts` [8] keeps it that way. */
 :root, [data-theme="dark"] {
-  --fit-base: 18 26 22; --fit-surface: 27 38 31; --fit-input: 21 31 25;
+  --fit-base: 20 24 23; --fit-surface: 28 34 32; --fit-input: 24 30 28;
   --fit-ink: 242 244 236; --fit-soft: 222 230 215; --fit-mid: 173 189 177;
   --fit-lo: 151 170 156; --fit-ghost: 121 143 127; --fit-line: 54 72 59;
-  --fit-accent: 193 213 168; --fit-ok: 110 215 163; --fit-warn: 234 190 118;
+  --fit-accent: 183 215 194; --fit-ok: 110 215 163; --fit-warn: 234 190 118;
   --fit-danger: 247 160 152; --fit-info: 149 190 238;
   --fit-on-accent: #142419; --fit-shadow: 0 18px 60px #00000016;
   --bg-base: rgb(var(--fit-base)); --bg-surface: rgb(var(--fit-surface));
@@ -29,10 +29,10 @@
   color-scheme: dark;
 }
 [data-theme="light"] {
-  --fit-base: 248 247 242; --fit-surface: 255 254 250; --fit-input: 242 244 237;
+  --fit-base: 248 249 246; --fit-surface: 255 255 253; --fit-input: 242 245 241;
   --fit-ink: 32 48 38; --fit-soft: 53 72 59; --fit-mid: 82 102 87;
   --fit-lo: 93 112 98; --fit-ghost: 108 127 113; --fit-line: 215 224 211;
-  --fit-accent: 35 87 62; --fit-ok: 24 113 72; --fit-warn: 137 86 22;
+  --fit-accent: 49 93 71; --fit-ok: 24 113 72; --fit-warn: 137 86 22;
   --fit-danger: 164 48 44; --fit-info: 42 91 153;
   --fit-on-accent: #fffef8; --fit-shadow: 0 18px 60px #243c1e08;
   color-scheme: light;

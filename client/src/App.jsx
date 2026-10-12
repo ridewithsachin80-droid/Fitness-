@@ -9,15 +9,16 @@ import { getMyOnboarding } from './api/logs';
 
 import Login          from './pages/Login';
 import DailyLog       from './pages/DailyLog';
-import Progress       from './pages/Progress';
-import Plan           from './pages/Plan';
-import Profile        from './pages/Profile';
-import Coach        from './pages/Monitor';
-import MemberList    from './pages/PatientList';
-import Settings       from './pages/Settings';
-import AdminDashboard from './pages/AdminDashboard';
-import AdminFoods     from './pages/AdminFoods';
-import DeviceConnect  from './pages/DeviceConnect';
+const Progress = lazy(() => import('./pages/Progress'));
+const Plan = lazy(() => import('./pages/Plan'));
+const Profile = lazy(() => import('./pages/Profile'));
+import MemberMore     from './pages/MemberMore';
+const Coach = lazy(() => import('./pages/Monitor'));
+const MemberList = lazy(() => import('./pages/PatientList'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminFoods = lazy(() => import('./pages/AdminFoods'));
+const DeviceConnect = lazy(() => import('./pages/DeviceConnect'));
 import Onboarding     from './components/Onboarding';
 import { onboardingDecision } from './utils/onboardingGate';
 import HandsFree from './components/HandsFree';
@@ -209,11 +210,13 @@ export default function App() {
           problem a member does. It renders nothing unless switched on. */}
       <HandsFree />
 
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center" role="status">Loading your space…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<PrivateRoute roles={['patient']}><DailyLog /></PrivateRoute>} />
         <Route path="/plan"     element={<PrivateRoute roles={['patient']}><Plan /></PrivateRoute>} />
         <Route path="/progress" element={<PrivateRoute roles={['patient']}><Progress /></PrivateRoute>} />
+        <Route path="/more" element={<PrivateRoute roles={['patient']}><MemberMore /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute roles={['patient']}><Profile /></PrivateRoute>} />
         <Route path="/coach" element={<PrivateRoute roles={['monitor','admin']}><MemberList /></PrivateRoute>} />
         <Route path="/coach/:memberId" element={<PrivateRoute roles={['monitor','admin']}><Coach /></PrivateRoute>} />
@@ -231,6 +234,7 @@ export default function App() {
           <Navigate to={!user ? '/login' : user.role === 'patient' ? '/' : user.role === 'admin' ? '/admin' : '/coach'} replace />
         } />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

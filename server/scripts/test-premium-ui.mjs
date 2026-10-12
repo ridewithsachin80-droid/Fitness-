@@ -262,6 +262,10 @@ async function premiumFlow() {
  w.__click('Done');await tick(400);
  q('ai-type').click();
  ck('Type focuses the text box in the original tap',d.activeElement===q('composer-input'));
+ const requestsBeforeSuggestion=w.__posts.length;
+ q('ai-suggestions').querySelector('button').click();await tick(40);
+ ck('an example fills an editable draft without logging sample data',q('composer-input').value.length>0&&w.__posts.length===requestsBeforeSuggestion&&d.activeElement===q('composer-input'));
+ q('composer-clear')?.click();await tick(40);
  d.querySelector('[aria-label="Close AI assistant"]').click();await tick(50);
  q('ai-speak').focus();q('ai-speak').click();
  ck('Speak requests the microphone in the original tap',w.__micRequests===1&&!!q('composer'));
@@ -285,6 +289,7 @@ async function premiumFlow() {
  await tick(80);
  ck('an empty voice take does not clutter the next photo session',!d.body.textContent.includes('Heard this — check and send'));
  ck('photo launch opens the AI dialog without another choose-photo screen',!!d.querySelector('.member-assistant-overlay[role=dialog]')&&d.body.style.overflow==='hidden'&&!d.body.textContent.includes('Choose meal photo'));
+ d.querySelector('[aria-label="More attachments"]').click();await tick(30);
  d.querySelector('[aria-label="Choose photo from gallery"]').click();
  ck('gallery remains a separate picker without a camera capture hint',w.__lastPicker===q('ai-gallery-input')&&!w.__lastPicker.hasAttribute('capture'));
  const gallery=q('ai-gallery-input');
@@ -327,8 +332,43 @@ async function premiumFlow() {
  ck('reopening keeps the conversation',!!q('ai-food-review'));
  w.__aiChat.setState({dayKey:'2000-01-01'});w.__aiChat.getState().ensureFreshDay(w.__todayStr);await tick(100);
  ck('a day change clears stale reviews while preserving the requested workspace',w.__aiChat.getState().composerOpen&&w.__aiChat.getState().messages.length===0);
+ // Selected-day persistence: regressions that would make members lose trust.
+ d.querySelector('[aria-label="Close AI assistant"]').click();await tick(40);
+ d.querySelector('[aria-label="Previous day"]').click();await tick(180);
+ const pastDate=w.__logStore.getState().date;
+ q('hero-weight').click();await tick(160);setVal(q('weight-input'),'82.6');await tick(70);
+ w.__click('Done');await tick(1800);
+ ck('past-day edits autosave to that date',w.__posts.some(p=>p.url==='/logs/'+pastDate&&p.body.weight_kg===82.6)&&!w.__logStore.getState().dirty);
+ q('hero-weight').click();await tick(160);setVal(q('weight-input'),'82.5');await tick(60);w.__click('Done');await tick(60);
+ w.__failSave=true;d.querySelector('[aria-label="Previous day"]').click();await tick(160);
+ ck('a failed save blocks changing date and preserves the edit',w.__logStore.getState().date===pastDate&&w.__logStore.getState().dirty&&w.__logStore.getState().log.weight==='82.5');
+ ck('failed autosave never displays a success message',!!d.querySelector('[role="alert"]')&&!d.body.textContent.includes('auto-saved ✓'));
+ w.__failSave=false;w.__click('Try saving again');await tick(180);
+ ck('manual retry saves the same entry without changing its date',!w.__logStore.getState().dirty&&w.__logStore.getState().date===pastDate);
+ d.querySelector('[aria-label="Previous day"]').click();await tick(160);
+ ck('weight comparison requests the day before the selected entry',w.__calls.some(p=>p==='/logs/'+new Date(new Date(w.__logStore.getState().date+'T12:00:00Z').getTime()-86400000).toISOString().slice(0,10)));
+ w.__logStore.setState({protocol:null,log:{...w.__logStore.getState().log,food:[],weight:'',water:0,sleep:{}}});await tick(80);
+ ck('empty day offers clear logging actions without a made-up calorie target',q('plan-eat').textContent.includes('kcal logged')&&!q('plan-eat').textContent.includes('1,800')&&q('hero-weight').textContent.includes('Add weight'));
  ck('no uncaught render errors',errors.length===0,errors);
  w.__testRoot.unmount();w.close();return code;
+}
+async function navigationFlow() {
+ const entry=ENTRY.replace("import {MemoryRouter} from 'react-router-dom';", "import {BrowserRouter,Routes,Route} from 'react-router-dom'; import MemberMore from './pages/MemberMore';")
+  .replace('<MemoryRouter><Today/></MemoryRouter>', '<BrowserRouter><Routes><Route path="/" element={<Today/>}/><Route path="/more" element={<MemberMore/>}/></Routes></BrowserRouter>');
+ const {w,errors}=run(await bundle(entry,stub('premium-navigation-api.js',PREM_API)),w=>w.history.replaceState({},'', '/more'));
+ const d=w.document,q=id=>d.querySelector(`[data-testid="${id}"]`);
+ const link=label=>[...d.querySelectorAll('a')].find(el=>el.textContent.includes(label));
+ await waitFor(()=>link('Food & saved meals'),'More directory');
+ ck('More retains all eleven feature destinations',d.querySelectorAll('.member-more-link').length===11&&link('Profile & health')?.getAttribute('href')==='/profile'&&link('Preferences')?.getAttribute('href')==='/settings');
+ link('Food & saved meals').click();await waitFor(()=>q('plan-eat')&&d.querySelector('[role="dialog"]'),'food deep link');
+ ck('More opens the existing food sheet directly',d.querySelector('[role="dialog"]').textContent.includes('Add food item'));
+ w.__click('Done');await tick(300);w.__click('More');await waitFor(()=>link('Coach & check-ins'),'return to More');
+ link('Coach & check-ins').click();await waitFor(()=>q('home-insight-details')?.dataset.open==='1','coach disclosure');
+ ck('More opens coach tools while keeping other sections collapsed',q('home-plan-details').dataset.open==='0'&&q('home-log-details').dataset.open==='0'&&!!q('ai-read'));
+ w.__click('More');await waitFor(()=>link('Your daily entries'),'return to More');
+ link('Your daily entries').click();await waitFor(()=>q('home-log-details')?.dataset.open==='1','entries disclosure');
+ ck('More opens the daily entries and correction tools',!!q('logged-section')&&q('home-insight-details').dataset.open==='0');
+ ck('navigation has no uncaught exceptions',errors.length===0,errors);w.__testRoot.unmount();w.close();
 }
 async function premiumVisual(code) {
  const puppeteer=(await import('puppeteer-core')).default,chromium=(await import('@sparticuz/chromium')).default;
@@ -348,8 +388,12 @@ async function premiumVisual(code) {
   const measure=()=>page.evaluate(()=>({vw:innerWidth,sw:document.documentElement.scrollWidth,bg:getComputedStyle(document.querySelector('.member-home')).backgroundColor}));
   let m=await measure();ck(`home ${theme} ${width}px has no horizontal overflow`,m.sw<=m.vw+1,m);
   ck(`weight ${theme} ${width}px is visible in the summary`,await page.$eval('[data-testid="hero-weight"]',el=>el.getBoundingClientRect().height>=44&&!!el.closest('[data-testid="daily-essentials"]')));
-  ck(`theme ${theme} paints the expected background`,m.bg===(theme==='light'?'rgb(248, 247, 242)':'rgb(18, 26, 22)'),m);
+  ck(`theme ${theme} paints the expected background`,m.bg===(theme==='light'?'rgb(248, 249, 246)':'rgb(20, 24, 23)'),m);
   if(width===390||width===1280) {
+    if(width===390) {
+      await page.setViewport({width,height:844,deviceScaleFactor:2});
+      await page.screenshot({path:path.join(out,`home-${theme}-${width}-viewport.png`),fullPage:false});
+    }
     const fullHeight=await page.evaluate(()=>document.documentElement.scrollHeight);
     await page.setViewport({width,height:fullHeight,deviceScaleFactor:1.5});await new Promise(r=>setTimeout(r,150));
     await page.screenshot({path:path.join(out,`home-${theme}-${width}.png`),fullPage:true});
@@ -360,6 +404,7 @@ async function premiumVisual(code) {
   await page.click('[aria-label="Close AI assistant"]');await page.waitForSelector('.member-assistant-overlay',{hidden:true});
   const [chooser]=await Promise.all([page.waitForFileChooser(),page.click('[data-testid="ai-snap"]')]);
   ck(`Snap ${theme} ${width}px opens capture input with rear camera hint`,!!chooser&&await page.$eval('[data-testid="ai-camera-input"]',el=>el.getAttribute('capture')==='environment'));await chooser.cancel();
+  await page.click('[aria-label="More attachments"]');
   const [galleryChooser]=await Promise.all([page.waitForFileChooser(),page.click('[aria-label="Choose photo from gallery"]')]);
   ck(`Gallery ${theme} ${width}px remains independently available`,!!galleryChooser&&await page.$eval('[data-testid="ai-gallery-input"]',el=>!el.hasAttribute('capture')));await galleryChooser.cancel();
   await page.waitForSelector('.member-assistant-overlay');
@@ -373,18 +418,22 @@ async function premiumVisual(code) {
   if(width===390)await page.screenshot({path:path.join(out,`ai-review-${theme}.png`),fullPage:false});
   await page.click('[data-testid="chat-edit-macros"]');await page.waitForSelector('[data-testid="macro-editor"]');
   m=await measure();ck(`macro sheet ${theme} ${width}px has no overflow`,m.sw<=m.vw+1,m);
+  if(width===320) {
+    await page.evaluate(()=>{document.documentElement.style.fontSize='20px'});
+    m=await measure();ck(`enlarged-text AI ${theme} 320px has no horizontal overflow`,m.sw<=m.vw+1,m);
+  }
   ck(`browser renders ${theme} ${width}px without exceptions`,errors.length===0,errors);await page.close();
  }}} finally {await browser.close();await new Promise(r=>server.close(r));}
 }
 export async function assertPremiumFlow() {
- const before=fail; const code=await premiumFlow(); if(fail>before)throw new Error('Premium flow assertions failed');return code;
+ const before=fail; const code=await premiumFlow(); await navigationFlow(); if(fail>before)throw new Error('Premium flow assertions failed');return code;
 }
 export async function assertPremiumVisual() {
  const code=await bundle(ENTRY,stub('premium-visual-api.js',PREM_API)); const before=fail;
  await premiumVisual(code);if(fail>before)throw new Error('Premium visual assertions failed');
 }
 if (path.resolve(process.argv[1] || '') === fileURLToPath(import.meta.url)) {
- try {const code=await premiumFlow();if(process.env.UI_BROWSER!=='0')await premiumVisual(code);
+ try {const code=await premiumFlow();await navigationFlow();if(process.env.UI_BROWSER!=='0')await premiumVisual(code);
  console.log(`\nPremium UI: ${pass} passed, ${fail} failed`);process.exit(fail?1:0);
  } catch(e){console.error(e);process.exit(1)}
 }
