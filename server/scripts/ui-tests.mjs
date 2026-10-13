@@ -28,23 +28,14 @@
 import { createRequire } from 'module';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
-// puppeteer-core and @sparticuz/chromium are loaded ON DEMAND, not imported.
-//
-// They are 78MB together, and this repo has no railway.json or nixpacks.toml —
-// so whether the deploy runs build.sh (which installs the server with
-// --omit=dev) or its own detected build is not something the code can
-// guarantee. 78MB of test-only weight that MIGHT ship on every deploy is not a
-// trade worth making for one check, so they are no longer dependencies at all.
-//
-//   cd server && npm run test:ui:install
-//
-// installs them without touching package.json.
+// Browser packages are locked server devDependencies, loaded only for browser checks.
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import { browserExecutable } from './lib/browser-executable.mjs';
+import { readBuiltCss } from './lib/built-css.mjs';
 
 const HERE       = path.dirname(fileURLToPath(import.meta.url));
 const ROOT       = path.resolve(HERE, '../..');
@@ -879,8 +870,7 @@ async function progressTest() {
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -980,8 +970,7 @@ async function planTest() {
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -2609,8 +2598,7 @@ async function reviewFixesTest() {
     try {
       const puppeteerCore = (await import('puppeteer-core')).default;
       const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-      const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-      const built = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+      const built = readBuiltCss(path.join(ROOT, 'client', 'dist'));
       const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
       try {
         const page = await browser.newPage();
@@ -2730,8 +2718,7 @@ async function phase8cTest() {
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -3079,8 +3066,7 @@ async function honestStatesTest() {
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root" style="padding:16px"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -3352,17 +3338,7 @@ async function overflowTest() {
   // a vacuous pass of exactly the kind this repo keeps producing.
   //
   // Reading from dist/ means the suite tests what a member actually downloads.
-  const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-  const cssFile = fs.existsSync(distDir)
-    ? fs.readdirSync(distDir).find(f => f.endsWith('.css'))
-    : null;
-  if (!cssFile) {
-    throw new Error(
-      'No built stylesheet found at client/dist/assets/*.css.\n' +
-      '  Run the client build first:  cd client && npm run build\n' +
-      '  Without it this check renders an unstyled page and proves nothing.');
-  }
-  const css = fs.readFileSync(path.join(distDir, cssFile), 'utf8');
+  const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
 
   // Served over http rather than page.setContent(). setContent leaves the page
   // on an opaque origin, where localStorage and IndexedDB throw SecurityError —

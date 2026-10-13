@@ -28,23 +28,14 @@
 import { createRequire } from 'module';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
-// puppeteer-core and @sparticuz/chromium are loaded ON DEMAND, not imported.
-//
-// They are 78MB together, and this repo has no railway.json or nixpacks.toml —
-// so whether the deploy runs build.sh (which installs the server with
-// --omit=dev) or its own detected build is not something the code can
-// guarantee. 78MB of test-only weight that MIGHT ship on every deploy is not a
-// trade worth making for one check, so they are no longer dependencies at all.
-//
-//   cd server && npm run test:ui:install
-//
-// installs them without touching package.json.
+// Browser packages are locked server devDependencies, loaded only for browser checks.
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import { browserExecutable } from './lib/browser-executable.mjs';
+import { readBuiltCss } from './lib/built-css.mjs';
 
 const HERE       = path.dirname(fileURLToPath(import.meta.url));
 const ROOT       = path.resolve(HERE, '../..');
@@ -373,7 +364,7 @@ async function navigationFlow() {
 }
 async function premiumVisual(code) {
  const puppeteer=(await import('puppeteer-core')).default,chromium=(await import('@sparticuz/chromium')).default;
- const assets=path.join(ROOT,'client/dist/assets');const css=fs.readdirSync(assets).filter(f=>f.endsWith('.css')).map(f=>fs.readFileSync(path.join(assets,f),'utf8')).join('\n');
+ const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
  const shell='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style></head><body><div id="root"></div></body></html>';
  const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(shell)});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
