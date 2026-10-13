@@ -195,7 +195,7 @@ fi
 # Split by whether the suite needs Postgres, which is just whether it carries
 # the localhost guard. Both lists run after DATABASE_URL is exported, so this is
 # for reading, not for wiring.
-LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
+LOGIC_SUITES="test-voice-phase2 test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-image-routing \
 test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic test-ci55-regressions"
 
@@ -204,7 +204,7 @@ test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-feat
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
 test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods test-known-fixes test-usual-foods"
 
-MODULE_SUITES="test-built-css test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser"
+MODULE_SUITES="test-logging-phase2 test-built-css test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser"
 RESULTS_DIR="${TEST_RESULTS_DIR:-$ROOT/../qa/results}"
 mkdir -p "$RESULTS_DIR"
 

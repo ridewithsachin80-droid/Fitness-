@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { normalizeVoiceLang } from '../utils/voiceLanguage';
 
 // ── Theme / font helpers ──────────────────────────────────────────────────────
 export function applyTheme(theme) {
@@ -54,10 +55,9 @@ export const useSettingsStore = create(
       setGuardianEmail: (email) => set({ guardianEmail: email }),
       setEmergencyContact: (contact) => set({ emergencyContact: contact }),
       setMealSlots: (slots) => set({ mealSlots: slots }),
-      // Web Speech live-preview language. The Gemini transcript auto-detects
-      // language regardless; this only tunes the on-screen preview.
+      // Used by live recognition and the recorded-audio transcription hint.
       voiceLang: 'en-IN',
-      setVoiceLang: (lang) => set({ voiceLang: lang === 'hi-IN' ? 'hi-IN' : 'en-IN' }),
+      setVoiceLang: (lang) => set({ voiceLang: normalizeVoiceLang(lang) }),
       setAvatarIdx: (idx) => set({ avatarIdx: idx }),
       finishOnboarding: (mode) => {
         set({ ageMode: mode, onboardingDone: true,
@@ -67,7 +67,13 @@ export const useSettingsStore = create(
         applyFontSize(mode === 'senior' ? 'large' : 'normal');
       },
     }),
-    { name: 'fitlife-settings-v2' }
+    {
+      name: 'fitlife-settings-v2',
+      // Validate on hydration too: old or edited storage cannot inject a locale.
+      merge: (stored, current) => ({
+        ...current, ...stored, voiceLang: normalizeVoiceLang(stored?.voiceLang),
+      }),
+    }
   )
 );
 

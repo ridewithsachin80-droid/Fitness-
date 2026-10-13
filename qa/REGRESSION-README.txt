@@ -1,44 +1,50 @@
-FITLIFE — TEST GATE #56 REPAIR
-
-Apply on top of test commit fc7003fc1baa94d61dc39143052c355f1309adda.
+FITLIFE — PHASE 2 REGRESSION
+Base: d7a2826b0ffc62cae8ea58c0a475b49331f6db24 on test.
 Target: https://fitness-test.up.railway.app/ (test only).
 
-Run https://github.com/ridewithsachin80-droid/Fitness-/actions/runs/38350096105
-passed all 20 logic/module suites and all 49 PostgreSQL suites (3,365 passing
-assertions). Only the UI suite failed. CI used the old workflow and tested
-before building. Uploaded dist contained three generations of CSS; the UI
-harness combined them or selected the first obsolete file in the directory.
+Phase 2 adds shared English/Hindi/Kannada speech preferences and request-specific
+recovery for AI text, photos and recorded audio. Home remains minimal. Existing
+AI reviews, quantities/macros, weight, tools, themes and P0 fixes remain.
 
-Repair
-- Both UI suites load local CSS referenced by dist/index.html, in HTML order.
-  Missing linked CSS fails explicitly. All layout/theme assertions remain.
-- npm test, npm run test:ui and npm run test:premium build the client first.
-  This works even when GitHub browser upload omits the hidden .github folder.
-- The corrected workflow relies on npm test to build and retains QA evidence.
-- A focused regression checks stale files, CSS order and missing build output.
-- No application functionality or visual design is changed in this repair.
-
-Verification
-1. npm install from the repository root; npm ci in server.
+REPEATABLE GATE
+1. Install from repository root, then npm ci in server.
 2. cd server; npm test
-   Uses disposable localhost PostgreSQL on port 5433. Never use a live DB URL.
-3. Require a green NEW run on the resulting test commit. Rerunning #56 tests
-   the old files. Then deploy the matching test revision.
-4. Run node server/scripts/test-deployment.mjs, then the workbook's signed-in
-   P0 member/coach/device cases with dedicated test accounts.
+   This builds the client first, creates an isolated localhost PostgreSQL on
+   port 5433 and runs all 73 registered suites. Never point fixture tests at
+   a live database. The existing database guard is retained.
+3. Require a new green GitHub Test gate on the Phase 2 commit.
+4. Deploy that test revision, then from repository root run:
+   node server/scripts/test-deployment.mjs
+5. Run the Excel Acceptance cases with disposable member/coach/admin accounts.
+   Start with P0; then run Phase 2 voice/recovery cases on Android and iPhone,
+   browser/PWA where applicable, both themes and enlarged text.
 
-Reproduction: premium UI failed 20 checks with the uploaded CSS directory.
-After changing stylesheet selection only, all 112 premium checks passed,
-with obsolete CSS files still present. npm test then successfully built the
-client before stopping at the local PostgreSQL prerequisite. The database
-suites passed on GitHub fc7003f; this repair changes only test tooling/docs.
-See the Excel workbook and QA evidence ZIP for the final regression results.
+NEW COVERAGE
+- test-logging-phase2.mjs: actual components/hooks/shared consumers, request
+  snapshots, retry/edit/newer drafts, native picker ownership, session/day
+  invalidation, bounded recordings, permission fallback and 320/390px layouts.
+- test-voice-phase2.js: authenticated Express route with synthetic providers,
+  language allowlist, regional/mixed speech prompts, fallback, payload bounds,
+  retry byte fidelity and member-facing errors.
+- All original 71 suites remain registered; layout/theme assertions unchanged.
+- Component-size regression caught during first build was fixed by extracting
+  request recovery and food voice status. No test threshold was relaxed.
 
-Physical camera and microphone are user-confirmed. Browser fixtures do not
-independently certify hardware or signed-in deployed member/coach workflows.
-Repository writes are unavailable to the assistant; this package is not pushed.
+EVIDENCE SCOPE
+Final local build passed. All 24 available suites passed: 2,085 assertion rows,
+zero failures (1,280 logic/component checks + 805 full UI checks including
+112 nested premium checks). The focused new suites account for 227 checks.
+The complete results are in the accompanying Excel and evidence ZIP.
+The complete local database gate is blocked by missing PostgreSQL. Baseline
+GitHub run 57 passed 71 suites / 4,174 assertions, including 49 database suites;
+this historical green result is not a Phase 2 CI pass.
 
-Upload server/ and qa/ into the repository root, preserving their paths.
-If hidden .github is omitted, the build-order correction still takes effect.
-For evidence uploads, also replace .github/workflows/test-gate.yml via GitHub's
-Edit button with the full supplied file. Do not add a wrapper folder.
+Read-only Railway smoke currently sees the previous frontend. Phase 2 is not
+pushed or deployed. Health/authenticated-access rejection checks do not replace
+signed-in member/coach acceptance. Earlier physical camera/mic confirmation is
+retained in report notes; repeat it after this voice change. Synthetic speech
+fixtures do not prove real recognition quality or Kannada accuracy.
+
+qa/manual-regression.tsv is the complete manual case checklist. The Excel also
+contains actual executed assertion rows, all registered suites and the source
+catalog, with local, baseline CI and deployed results distinguished.

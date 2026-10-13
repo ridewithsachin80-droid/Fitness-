@@ -1,390 +1,374 @@
 /**
- * useVoiceInput — one voice implementation for the whole app.
- *
- * Why two engines run at once:
- *   Web Speech (on-device) is instant but inaccurate for Indian English and
- *   Hinglish — food words like bhindi, rajma, katori come back mangled, and it
- *   truncates at the first pause. So it is used ONLY as live feedback while the
- *   member speaks. The actual transcript comes from recording the audio and
- *   sending it to Gemini (/ai-chat/voice-transcribe), the same pipeline photo
- *   logging already uses. If Gemini is unreachable, the Web Speech text is kept
- *   as the fallback — worst case equals the old behaviour, never worse.
- *
- * Support matrix:
- *   Chrome/Android:  live preview + Gemini transcript
- *   iOS Safari:      no Web Speech → recording + Gemini transcript (mic finally
- *                    works on iOS, previously the button was hidden)
- *   Neither API:     supported=false → consumers hide the mic button
- *
- * Contract:
- *   const v = useVoiceInput({ lang, onInterim, onFinal });
- *   v.supported / v.listening / v.transcribing / v.error / v.toggle()
- *
- *   onInterim(text) — fires while speaking (live preview, may be wrong)
- *   onFinal(text)   — fires once after stop, with the best transcript available.
- *   Consumers fill their input box from these; sending stays a manual tap.
+ * Shared one-tap dictation. On-device words are used immediately when present;
+ * recorded audio is the fallback. A failed take stays only in bounded memory
+ * until Retry, Discard, a new session, or unmount. It is never persisted.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api/client';
+import { useAuthStore } from '../store/authStore';
 import { transcriptionRoute } from '../utils/voiceComposer';
+import { normalizeVoiceLang } from '../utils/voiceLanguage';
+import { today } from '../constants';
 
-const SR = typeof window !== 'undefined'
-  ? window.SpeechRecognition || window.webkitSpeechRecognition
-  : null;
-
-const hasRecorder = typeof window !== 'undefined'
-  && !!(navigator.mediaDevices?.getUserMedia) && !!window.MediaRecorder;
-
-const MAX_SECONDS = 30;   // cost cap; a meal description fits comfortably
-const SILENCE_MS  = 3000; // auto-stop after this much quiet once speech was heard
-// RMS above this counts as voice. Tuned against browser noise suppression:
-// ambient room noise sits well under it, soft speech well over.
-const VOICE_RMS   = 0.035;
-
-// Human messages per Web Speech error code. 'no-speech' is handled at stop()
-// instead — in continuous mode it fires on every pause and must not abort.
+const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
+const hasRecorder = typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && !!window.MediaRecorder;
+const MAX_SECONDS = 30;
+export const MAX_RETAINED_AUDIO_BYTES = 4_000_000;
+const SILENCE_MS = 3000;
+const VOICE_RMS = 0.035;
+const MIC_BLOCKED = 'Microphone blocked — allow microphone access in your browser settings, then try again.';
 const SR_ERRORS = {
-  'not-allowed':         'Microphone blocked — allow mic access in your browser settings',
-  'service-not-allowed': 'Microphone blocked — allow mic access in your browser settings',
-  'audio-capture':       'No microphone found on this device',
+  'not-allowed': MIC_BLOCKED,
+  'service-not-allowed': MIC_BLOCKED,
+  'audio-capture': 'No microphone found. Connect one, or type your log.',
 };
 
+function authIdentity() {
+  const { user, sessionVersion } = useAuthStore.getState();
+  return `${sessionVersion}:${user?.role || ''}:${user?.id || ''}`;
+}
 function pickMime() {
-  const candidates = [
-    'audio/webm;codecs=opus',  // Chrome, Android
-    'audio/webm',
-    'audio/mp4',               // iOS Safari
-    'audio/ogg;codecs=opus',   // Firefox
-  ];
-  return candidates.find(m => window.MediaRecorder?.isTypeSupported?.(m)) || '';
+  return ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+    .find(mime => window.MediaRecorder?.isTypeSupported?.(mime)) || '';
 }
 
-export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, silenceMs = SILENCE_MS } = {}) {
-  const [listening, setListening]       = useState(false);
+export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, contextKey = '', silenceMs = SILENCE_MS } = {}) {
+  const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
-  const [error, setError]               = useState(null);
-  const [requesting, setRequesting]     = useState(false);
-  const startingRef = useRef(false);
-  const captureId = useRef(0);
-
-  // Callbacks and lang go through a ref so recognition handlers never close
-  // over stale props.
+  const [requesting, setRequesting] = useState(false);
+  const [canRetry, setCanRetry] = useState(false);
+  const [error, setError] = useState(null);
   const optsRef = useRef({});
-  optsRef.current = { lang, onInterim, onFinal, silenceMs };
-
-  const recogRef     = useRef(null);
-  const recorderRef  = useRef(null);
-  const streamRef    = useRef(null);
-  const chunksRef    = useRef([]);
-  const mimeRef      = useRef('');
-  const finalTextRef = useRef('');   // Web Speech accumulated finals (fallback text)
+  optsRef.current = { lang: normalizeVoiceLang(lang), onInterim, onFinal, onCancel, contextKey: String(contextKey), silenceMs };
+  const mountedRef = useRef(true);
+  const captureId = useRef(0);
+  const sessionRef = useRef(null);
+  const startingRef = useRef(false);
   const listeningRef = useRef(false);
-  const stoppingRef  = useRef(false);
-  const timerRef     = useRef(null);
-  const audioCtxRef  = useRef(null);
+  const processingRef = useRef(false);
+  const stoppingRef = useRef(false);
+  const recogRef = useRef(null);
+  const recorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
+  const chunkBytesRef = useRef(0);
+  const oversizedRef = useRef(false);
+  const finalTextRef = useRef('');
+  const failedTakeRef = useRef(null);
+  const requestRef = useRef(null);
+  const readerRef = useRef(null);
+  const timerRef = useRef(null);
+  const audioCtxRef = useRef(null);
   const silenceIvRef = useRef(null);
-  const heardRef     = useRef(false);   // arms the silence timer only after real speech
+  const heardRef = useRef(false);
   const lastVoiceRef = useRef(0);
+  const stopRef = useRef(null);
 
-  const releaseStream = () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
+  const current = session => mountedRef.current && session?.id === captureId.current && session.auth === authIdentity() && session.day === today() && session.context === optsRef.current.contextKey;
+  const releaseStream = (stream = streamRef.current) => {
+    stream?.getTracks().forEach(track => track.stop());
+    if (streamRef.current === stream) streamRef.current = null;
   };
-
   const stopSilenceWatch = () => {
     clearInterval(silenceIvRef.current);
     silenceIvRef.current = null;
-    try { audioCtxRef.current?.close(); } catch { /* already closed */ }
+    try { audioCtxRef.current?.close()?.catch?.(() => {}); } catch { /* already closed */ }
     audioCtxRef.current = null;
   };
+  const clearTake = () => { failedTakeRef.current = null; if (mountedRef.current) setCanRetry(false); };
 
-  // Auto-stop after a pause: sample mic energy a few times a second; once the
-  // member has actually spoken, N ms of quiet ends the session so the review
-  // card (with its Send button) appears without them hunting for the mic.
-  // Web Speech results feed lastVoiceRef too, so the timer works either way.
-  const startSilenceWatch = (stream, onSilence) => {
-    heardRef.current = false;
-    lastVoiceRef.current = Date.now();
-    const AC = window.AudioContext || window.webkitAudioContext;
-    let analyser = null, buf = null;
-    if (AC && stream) {
-      try {
-        const ctx = new AC();
-        audioCtxRef.current = ctx;
-        ctx.resume?.().catch(() => {});
-        const src = ctx.createMediaStreamSource(stream);
-        analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        src.connect(analyser);
-        buf = new Uint8Array(analyser.fftSize);
-      } catch { analyser = null; }
+  const cancel = useCallback(() => {
+    captureId.current++;
+    sessionRef.current = null;
+    startingRef.current = false;
+    listeningRef.current = false;
+    processingRef.current = false;
+    stoppingRef.current = true;
+    clearTimeout(timerRef.current);
+    stopSilenceWatch();
+    requestRef.current?.abort();
+    requestRef.current = null;
+    try { readerRef.current?.abort(); } catch { /* already read */ }
+    readerRef.current = null;
+    const recognition = recogRef.current;
+    recogRef.current = null;
+    if (recognition) {
+      recognition.onresult = recognition.onerror = recognition.onend = null;
+      try { recognition.abort(); } catch { /* inactive */ }
     }
-    silenceIvRef.current = setInterval(() => {
-      if (analyser) {
-        analyser.getByteTimeDomainData(buf);
-        let sum = 0;
-        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
-        if (Math.sqrt(sum / buf.length) > VOICE_RMS) {
-          heardRef.current = true;
-          lastVoiceRef.current = Date.now();
-        }
-      }
-      if (heardRef.current && Date.now() - lastVoiceRef.current > optsRef.current.silenceMs) {
-        onSilence();
-      }
-    }, 200);
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
+    if (recorder) {
+      recorder.ondataavailable = recorder.onerror = null;
+      try { if (recorder.state !== 'inactive') recorder.stop(); } catch { /* inactive */ }
+    }
+    chunksRef.current = [];
+    chunkBytesRef.current = 0;
+    finalTextRef.current = '';
+    clearTake();
+    releaseStream();
+    if (mountedRef.current) {
+      setListening(false); setRequesting(false); setTranscribing(false); setError(null);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const invalidateChangedContext = session => {
+    if (mountedRef.current && session?.id === captureId.current && !current(session)) {
+      cancel(); optsRef.current.onCancel?.();
+    }
   };
 
-  const startRecognition = useCallback(() => {
-    if (!SR) return;
-    const r = new SR();
-    recogRef.current = r;
-    r.lang = optsRef.current.lang;
-    r.continuous = true;        // do not cut off at the first pause
-    r.interimResults = true;    // live text while speaking — the box feels alive
-    r.maxAlternatives = 1;
-
-    r.onresult = (e) => {
-      let finals = '', interim = '';
-      for (let i = 0; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finals += t + ' ';
-        else interim += t;
+  const transcribe = useCallback(async (take, session) => {
+    if (!current(session)) { invalidateChangedContext(session); return; }
+    processingRef.current = true;
+    setTranscribing(true);
+    setError(null);
+    const controller = new AbortController();
+    requestRef.current = controller;
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        readerRef.current = reader;
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reader.onabort = () => reject(new Error('Recording read interrupted'));
+        reader.readAsDataURL(take.blob);
+      });
+      if (!current(session) || controller.signal.aborted) { invalidateChangedContext(session); return; }
+      const { data } = await api.post('/ai-chat/voice-transcribe', {
+        audio: base64, mimeType: take.blob.type || 'audio/webm', langHint: take.lang,
+      }, { timeout: 30000, signal: controller.signal });
+      if (!current(session) || controller.signal.aborted) { invalidateChangedContext(session); return; }
+      const transcript = String(data?.transcript || '').trim();
+      if (!transcript) {
+        failedTakeRef.current = take;
+        setCanRetry(true);
+        setError("Couldn't make out the words. Retry this recording, or discard it and speak closer to the microphone.");
+      } else {
+        clearTake();
+        optsRef.current.onFinal?.(transcript);
       }
-      finalTextRef.current = finals.trim();
-      heardRef.current = true;
-      lastVoiceRef.current = Date.now();
-      optsRef.current.onInterim?.((finals + interim).trim());
-    };
-    r.onerror = (e) => {
-      const msg = SR_ERRORS[e.error];
-      // A hard mic error with no recording running means voice is dead — stop.
-      if (msg && !recorderRef.current) { setError(msg); stop(); }
-      // Otherwise (no-speech, aborted, network): recording continues; Gemini
-      // will transcribe regardless, so the preview quietly going away is fine.
-    };
-    r.onend = () => {
-      // Android Chrome ends recognition spontaneously on silence. While the
-      // session is still live, restart so long descriptions are not truncated.
-      if (listeningRef.current && !stoppingRef.current) {
-        try { r.start(); } catch { /* already restarting */ }
-      }
-    };
-    try { r.start(); } catch { /* concurrent start — ignore */ }
-  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+    } catch (err) {
+      if (!current(session) || controller.signal.aborted) { invalidateChangedContext(session); return; }
+      failedTakeRef.current = take;
+      setCanRetry(true);
+      setError(err?.response?.status === 429
+        ? 'Voice is busy. Wait a moment, then retry this recording. Your words are kept here.'
+        : "Couldn't finish that recording. Check your connection, then retry. Your words are kept here.");
+    } finally {
+      if (requestRef.current === controller) { requestRef.current = null; readerRef.current = null; }
+      if (current(session)) { processingRef.current = false; setTranscribing(false); }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stop = useCallback(async () => {
     if (!listeningRef.current) return;
-    const session = captureId.current;
+    const session = sessionRef.current;
     stoppingRef.current = true;
     listeningRef.current = false;
+    processingRef.current = true; // also locks the short recorder/recognition flush
     setListening(false);
+    setTranscribing(true);
     clearTimeout(timerRef.current);
     stopSilenceWatch();
-
-    // Recognition delivers its last result asynchronously, so give it a brief
-    // moment to flush trailing words before we read the transcript. 400ms is
-    // imperceptible; without it the final word can be dropped.
-    const recogFlushed = new Promise(resolve => {
-      const r = recogRef.current;
-      if (!r) return resolve();
-      let done = false;
-      const finish = () => { if (!done) { done = true; resolve(); } };
-      try { r.addEventListener('end', finish, { once: true }); } catch { /* older impl */ }
-      setTimeout(finish, 400);
-    });
-    try { recogRef.current?.stop(); } catch { /* not started */ }
-    await recogFlushed;
-    if (session !== captureId.current) return;
-
+    const recognition = recogRef.current;
     const recorder = recorderRef.current;
-    const webSpeechText = finalTextRef.current;
-
-    // ── Fast path ────────────────────────────────────────────────────────────
-    // On-device recognition already produced the words the member watched
-    // appear on screen. Uploading the audio to Gemini for a SECOND opinion
-    // added 10–15s of dead time before anything could happen — and risked
-    // sending text different from what they just read. So when we have an
-    // on-device transcript, use it immediately and skip the network entirely.
-    // Gemini remains the fallback for browsers without recognition (iOS
-    // Safari), where it is the only way to get a transcript at all.
-    if (transcriptionRoute({ webSpeechText }).source === 'on-device') {
-      try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch { /* noop */ }
+    const stream = streamRef.current;
+    // Stop audio tracks promptly; transcription never needs an open microphone.
+    const audioStopped = new Promise(resolve => {
+      if (!recorder || recorder.state === 'inactive') { releaseStream(stream); resolve(); return; }
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(timer); releaseStream(stream); resolve(); } };
+      const timer = setTimeout(finish, 1000);
+      recorder.onstop = finish;
+      try { recorder.stop(); } catch { finish(); }
+    });
+    const recognitionStopped = new Promise(resolve => {
+      if (!recognition) { resolve(); return; }
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+      const timer = setTimeout(finish, 400);
+      try { recognition.addEventListener('end', finish, { once: true }); } catch { /* older browser */ }
+      try { recognition.stop(); } catch { finish(); }
+    });
+    await Promise.all([audioStopped, recognitionStopped]);
+    if (!current(session)) { invalidateChangedContext(session); return; }
+    if (recognition) recognition.onresult = recognition.onerror = recognition.onend = null;
+    if (recorder) recorder.ondataavailable = recorder.onerror = recorder.onstop = null;
+    recorderRef.current = null;
+    recogRef.current = null;
+    const text = finalTextRef.current;
+    if (transcriptionRoute({ webSpeechText: text }).source === 'on-device') {
       chunksRef.current = [];
-      releaseStream();
-      optsRef.current.onFinal?.(webSpeechText);
+      processingRef.current = false;
+      setTranscribing(false);
+      optsRef.current.onFinal?.(text);
       return;
     }
-
-    if (recorder && recorder.state !== 'inactive') {
-      const stopped = new Promise(resolve => { recorder.onstop = resolve; });
-      recorder.stop();
-      await stopped;
-      if (session !== captureId.current) return;
-      releaseStream();
-
-      const blob = new Blob(chunksRef.current, { type: mimeRef.current || 'audio/webm' });
-      chunksRef.current = [];
-
-      // Under ~1KB is a tap-and-release with no speech in it. The threshold
-      // lives in utils/voiceComposer.js with the rest of the routing rule.
-      if (transcriptionRoute({ webSpeechText, blobBytes: blob.size }).source === 'none') {
-        if (webSpeechText) optsRef.current.onFinal?.(webSpeechText);
-        else setError("Didn't hear anything — tap the mic and start speaking");
-        return;
-      }
-
-      setTranscribing(true);
-      try {
-        const base64 = await new Promise((resolve, reject) => {
-          const fr = new FileReader();
-          fr.onload  = () => resolve(String(fr.result).split(',')[1]);
-          fr.onerror = () => reject(new Error('read failed'));
-          fr.readAsDataURL(blob);
-        });
-        const { data } = await api.post('/ai-chat/voice-transcribe', {
-          audio: base64,
-          mimeType: mimeRef.current || 'audio/webm',
-          langHint: optsRef.current.lang,
-        }, { timeout: 30000 });
-
-        if (session !== captureId.current) return;
-
-        const transcript = String(data?.transcript || '').trim();
-        if (transcript) optsRef.current.onFinal?.(transcript);
-        else if (webSpeechText) optsRef.current.onFinal?.(webSpeechText);
-        else setError("Couldn't make out any words — try again a little closer to the mic");
-      } catch {
-        if (session !== captureId.current) return;
-        // Server or network failed — degrade to the on-device text if we have it.
-        if (webSpeechText) optsRef.current.onFinal?.(webSpeechText);
-        else setError("Couldn't reach the transcription service — check your connection");
-      } finally {
-        if (session === captureId.current) setTranscribing(false);
-      }
-      return;
+    const blob = new Blob(chunksRef.current, { type: recorder?.mimeType || session.mime || 'audio/webm' });
+    chunksRef.current = [];
+    chunkBytesRef.current = 0;
+    if (oversizedRef.current || blob.size > MAX_RETAINED_AUDIO_BYTES) {
+      processingRef.current = false; setTranscribing(false);
+      setError('That recording is too large. Try a shorter voice note, or type your log.');
+    } else if (transcriptionRoute({ webSpeechText: text, blobBytes: blob.size }).source === 'none') {
+      processingRef.current = false; setTranscribing(false);
+      setError("Didn't hear anything. Tap the microphone and start speaking, or type your log.");
+    } else {
+      await transcribe({ blob, lang: session.lang, auth: session.auth, day: session.day, context: session.context }, session);
     }
-
-    // Web Speech only (no recorder available)
-    releaseStream();
-    if (webSpeechText) optsRef.current.onFinal?.(webSpeechText);
-    else setError("Didn't hear anything — tap the mic and start speaking");
-  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [transcribe]); // eslint-disable-line react-hooks/exhaustive-deps
+  stopRef.current = stop;
 
   const start = useCallback(async () => {
-    if (listeningRef.current || startingRef.current) return;
-    const session = ++captureId.current;
-    setError(null);
-    finalTextRef.current = '';
-    chunksRef.current = [];
-    stoppingRef.current = false;
-
-    if (!hasRecorder && !SR) {
-      setError('Voice input is not supported in this browser');
-      return;
-    }
-
+    if (startingRef.current || listeningRef.current || processingRef.current || failedTakeRef.current) return false;
+    if (!hasRecorder && !SR) { setError('Voice is unavailable in this browser. You can type your log instead.'); return false; }
+    const session = { id: ++captureId.current, auth: authIdentity(), lang: optsRef.current.lang, mime: '', day: today(), context: optsRef.current.contextKey };
+    sessionRef.current = session;
     startingRef.current = true;
-    setRequesting(true);
-
+    stoppingRef.current = false;
+    chunksRef.current = [];
+    chunkBytesRef.current = 0;
+    oversizedRef.current = false;
+    finalTextRef.current = '';
+    setError(null); setRequesting(true);
     if (hasRecorder) {
       try {
-        // Ask the browser for its full cleanup chain — noise suppression, echo
-        // cancellation, auto gain. Members log from gyms, kitchens and streets;
-        // this is the single biggest capture-quality lever and it is free.
-        // Mono halves the payload with zero accuracy cost for speech.
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            noiseSuppression: true,
-            echoCancellation: true,
-            autoGainControl:  true,
-            channelCount:     1,
-          },
-        });
-        // Closing the assistant while permission is pending must not start
-        // a microphone later, after the browser prompt is accepted.
-        if (session !== captureId.current) { stream.getTracks().forEach(t => t.stop()); return; }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+          noiseSuppression: true, echoCancellation: true, autoGainControl: true, channelCount: 1,
+        } });
+        if (!current(session)) { stream.getTracks().forEach(track => track.stop()); invalidateChangedContext(session); return false; }
         streamRef.current = stream;
-        const mime = pickMime();
-        mimeRef.current = mime;
-        const rec = mime ? new MediaRecorder(stream, { mimeType: mime })
-                         : new MediaRecorder(stream);
-        recorderRef.current = rec;
-        rec.ondataavailable = (e) => { if (e.data?.size) chunksRef.current.push(e.data); };
-        rec.start(250);
+        session.mime = pickMime();
+        const recorder = session.mime ? new MediaRecorder(stream, { mimeType: session.mime }) : new MediaRecorder(stream);
+        recorderRef.current = recorder;
+        recorder.ondataavailable = event => {
+          if (!current(session) || !event.data?.size || oversizedRef.current) return;
+          if (chunkBytesRef.current + event.data.size > MAX_RETAINED_AUDIO_BYTES) {
+            oversizedRef.current = true; chunksRef.current = []; chunkBytesRef.current = 0;
+            stopRef.current?.(); return;
+          }
+          chunkBytesRef.current += event.data.size;
+          chunksRef.current.push(event.data);
+        };
+        recorder.onerror = () => { if (current(session)) stopRef.current?.(); };
+        recorder.start(250);
       } catch (err) {
-        if (session !== captureId.current) return;
+        if (!current(session)) { invalidateChangedContext(session); return false; }
         recorderRef.current = null;
         releaseStream();
-        if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+        if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError' || !SR) {
           startingRef.current = false; setRequesting(false);
-          setError('Microphone blocked — allow mic access in your browser settings');
-          return;   // permission refused: Web Speech would be blocked too
+          setError(err?.name === 'NotAllowedError' || err?.name === 'SecurityError' ? MIC_BLOCKED
+            : err?.name === 'NotFoundError' ? SR_ERRORS['audio-capture'] : "Couldn't open the microphone. Check it is connected and not being used by another app, or type your log.");
+          return false;
         }
-        if (!SR) {
-          startingRef.current = false; setRequesting(false);
-          setError("Couldn't start the microphone on this device");
-          return;
-        }
-        // Recorder failed for another reason but Web Speech exists — degrade.
       }
-    } else {
-      recorderRef.current = null;
     }
-
+    if (!current(session)) { invalidateChangedContext(session); return false; }
     startingRef.current = false;
-    setRequesting(false);
-    startRecognition();
     listeningRef.current = true;
-    setListening(true);
-    startSilenceWatch(streamRef.current, stop);
-    timerRef.current = setTimeout(stop, MAX_SECONDS * 1000);
-  }, [startRecognition, stop]);
+    setRequesting(false); setListening(true);
+    heardRef.current = false;
+    lastVoiceRef.current = Date.now();
+    if (SR) {
+      const recognition = new SR();
+      recogRef.current = recognition;
+      recognition.lang = session.lang; // preference changes apply to the NEXT take
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      let precedingFinals = '';
+      recognition.onresult = event => {
+        if (!current(session)) { invalidateChangedContext(session); return; }
+        let finals = '', interim = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const words = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finals += `${words} `; else interim += words;
+        }
+        finalTextRef.current = `${precedingFinals} ${finals}`.trim();
+        heardRef.current = true; lastVoiceRef.current = Date.now();
+        optsRef.current.onInterim?.(`${precedingFinals} ${finals}${interim}`.trim());
+      };
+      recognition.onerror = event => {
+        if (current(session) && SR_ERRORS[event.error] && !recorderRef.current) {
+          cancel(); setError(SR_ERRORS[event.error]);
+        }
+      };
+      recognition.onend = () => {
+        if (current(session) && listeningRef.current && !stoppingRef.current) {
+          precedingFinals = finalTextRef.current;
+          try { recognition.start(); } catch { /* already restarting */ }
+        }
+      };
+      try { recognition.start(); } catch {
+        if (!recorderRef.current) { cancel(); setError("Couldn't start voice input. Try again, or type your log."); return false; }
+      }
+    }
+    let analyser = null, samples = null;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC && streamRef.current) {
+      try {
+        const ctx = new AC(); audioCtxRef.current = ctx;
+        ctx.resume?.().catch(() => {});
+        const source = ctx.createMediaStreamSource(streamRef.current);
+        analyser = ctx.createAnalyser(); analyser.fftSize = 512; source.connect(analyser);
+        samples = new Uint8Array(analyser.fftSize);
+      } catch { analyser = null; }
+    }
+    silenceIvRef.current = setInterval(() => {
+      if (!current(session)) { invalidateChangedContext(session); return; }
+      if (analyser) {
+        analyser.getByteTimeDomainData(samples);
+        let sum = 0;
+        for (const sample of samples) { const amplitude = (sample - 128) / 128; sum += amplitude * amplitude; }
+        if (Math.sqrt(sum / samples.length) > VOICE_RMS) { heardRef.current = true; lastVoiceRef.current = Date.now(); }
+      }
+      if (heardRef.current && Date.now() - lastVoiceRef.current > optsRef.current.silenceMs) stopRef.current?.();
+    }, 200);
+    timerRef.current = setTimeout(() => stopRef.current?.(), MAX_SECONDS * 1000);
+    return true;
+  }, [cancel]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Discard the session: no transcription call, no onFinal. For the ✕ button.
-  const cancel = useCallback(() => {
-    captureId.current++;
-    startingRef.current = false;
-    setRequesting(false);
-    stoppingRef.current = true;
-    listeningRef.current = false;
-    setListening(false);
-    setTranscribing(false);
-    setError(null);
-    clearTimeout(timerRef.current);
-    stopSilenceWatch();
-    try { recogRef.current?.abort(); } catch { /* noop */ }
-    try { if (recorderRef.current?.state !== 'inactive') recorderRef.current.stop(); } catch { /* noop */ }
-    chunksRef.current = [];
-    finalTextRef.current = '';
-    releaseStream();
-  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  const retry = useCallback(() => {
+    const take = failedTakeRef.current;
+    if (!take || processingRef.current || startingRef.current || listeningRef.current) return false;
+    if (take.auth !== authIdentity() || take.day !== today() || take.context !== optsRef.current.contextKey) { cancel(); optsRef.current.onCancel?.(); return false; }
+    const session = { id: ++captureId.current, auth: take.auth, lang: take.lang, day: take.day, context: take.context };
+    sessionRef.current = session;
+    transcribe(take, session);
+    return true;
+  }, [cancel, transcribe]);
+  const discardTake = useCallback(() => { cancel(); }, [cancel]);
+  const toggle = useCallback(() => { listeningRef.current ? stop() : start(); }, [start, stop]);
 
-  const toggle = useCallback(() => {
-    listeningRef.current ? stop() : start();
-  }, [start, stop]);
+  // A retained take cannot be retried into a different day, even if this screen
+  // stays open through midnight without another render or request.
+  useEffect(() => {
+    if (!listening && !requesting && !transcribing && !canRetry) return;
+    const timer = setInterval(() => invalidateChangedContext(sessionRef.current), 1000);
+    return () => clearInterval(timer);
+  }, [listening, requesting, transcribing, canRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Unmount: kill everything without firing callbacks.
-  useEffect(() => () => {
-    captureId.current++;
-    startingRef.current = false;
-    stoppingRef.current = true;
-    listeningRef.current = false;
-    clearTimeout(timerRef.current);
-    clearInterval(silenceIvRef.current);
-    try { audioCtxRef.current?.close(); } catch { /* noop */ }
-    try { recogRef.current?.abort(); } catch { /* noop */ }
-    try { recorderRef.current?.state !== 'inactive' && recorderRef.current?.stop(); } catch { /* noop */ }
-    streamRef.current?.getTracks().forEach(t => t.stop());
-  }, []);
+  useEffect(() => {
+    if (sessionRef.current && sessionRef.current.context !== String(contextKey)) {
+      cancel(); optsRef.current.onCancel?.();
+    }
+  }, [contextKey, cancel]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let identity = authIdentity();
+    const unsubscribe = useAuthStore.subscribe(() => {
+      const next = authIdentity();
+      if (next !== identity) { identity = next; cancel(); optsRef.current.onCancel?.(); }
+    });
+    return () => { unsubscribe(); mountedRef.current = false; cancel(); };
+  }, [cancel]);
 
   return {
-    supported: !!(SR || hasRecorder),
-    // Consumers can tell members the transcript improves after they stop:
-    hasAccurateEngine: hasRecorder,
-    listening, requesting, transcribing, error, setError,
-    start, stop, toggle, cancel,
+    supported: !!(SR || hasRecorder), hasAccurateEngine: hasRecorder,
+    listening, requesting, transcribing, canRetry, error, setError,
+    start, stop, toggle, cancel, retry, discardTake,
   };
 }
-
 export default useVoiceInput;

@@ -1265,6 +1265,7 @@ Return ONLY raw JSON, no markdown fences:
 // Gemini transcribes the recorded audio instead — same inline_data pattern and
 // same models as /photo. The client falls back to its on-device text if this
 // endpoint fails, so errors here degrade, never break.
+const { voiceTranscriptionPrompt, whisperTranscriptionPrompt } = require('../services/voiceLanguage');
 router.post('/voice-transcribe', async (req, res) => {
   const { audio, mimeType, langHint } = req.body;
 
@@ -1277,10 +1278,11 @@ router.post('/voice-transcribe', async (req, res) => {
     return res.status(413).json({ error: 'Recording too long — keep it under 30 seconds' });
   }
   if (!GEMINI_API_KEY && !GROQ_API_KEY) {
-    return res.status(500).json({ error: 'Voice transcription needs GEMINI_API_KEY or GROQ_API_KEY to be set' });
+    return res.status(503).json({ error: 'Voice transcription is temporarily unavailable. Please retry shortly or type your log.' });
   }
 
-  const mt = /^audio\/[a-z0-9.+-]+$/i.test(String(mimeType || '')) ? mimeType : 'audio/webm';
+  const baseMime = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  const mt = ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg'].includes(baseMime) ? baseMime : 'audio/webm';
 
   // ── Engine 2: Groq-hosted Whisper large-v3 ─────────────────────────────────
   // A dedicated ASR model, strong on Indian accents, using the GROQ_API_KEY
@@ -1298,7 +1300,7 @@ router.post('/voice-transcribe', async (req, res) => {
     fd.append('response_format', 'json');
     // Whisper's prompt parameter biases style — nudge it toward Roman-script
     // Hinglish with food words kept as spoken, matching the Gemini output.
-    fd.append('prompt', 'Hinglish health log in Roman script: 2 roti, 1 katori dal, weight 82.5 kg, surya namaskar done.');
+    fd.append('prompt', whisperTranscriptionPrompt(langHint));
     const r = await axios.post(
       'https://api.groq.com/openai/v1/audio/transcriptions', fd,
       { headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, timeout: 25000 }
@@ -1306,14 +1308,7 @@ router.post('/voice-transcribe', async (req, res) => {
     return String(r.data?.text || '').trim();
   }
 
-  const prompt = `Transcribe this voice note exactly as spoken.
-Rules:
-- The speaker is logging food, workouts or health data, usually in Indian English or Hinglish (mixed Hindi and English).
-- Keep food and exercise words as spoken: roti, dal, katori, bhindi, paneer, surya namaskar — do not translate them to English equivalents.
-- If the speech is mostly Hindi, transliterate it into Roman script rather than Devanagari.
-- Write numbers as digits (2 roti, 250 ml, 82.5 kg).
-- Return ONLY the transcript text. No quotes, no labels, no commentary.
-- If there is no intelligible speech, return an empty string.${langHint === 'hi-IN' ? '\n- The speaker has set Hindi as their preferred language.' : ''}`;
+  const prompt = voiceTranscriptionPrompt(langHint);
 
   try {
     const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);

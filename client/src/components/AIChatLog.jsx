@@ -29,11 +29,14 @@ import { Icon } from './primitives';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
 import { rollbackCard } from '../utils/chatCard';
 import { foodWithLabel } from './chat/ChatFoodMacros';
+import { requestSnapshot } from '../utils/aiRequestRecovery';
+import { downscale, readFileAsBase64 } from '../utils/aiAttachments';
+import { countIncluded } from '../utils/aiParsedReview';
+import useAIRequestRecovery from '../hooks/useAIRequestRecovery';
+import AIRequestRecovery from './chat/AIRequestRecovery';
 
-const SpeechRecognition =
-  typeof window !== 'undefined'
-    ? window.SpeechRecognition || window.webkitSpeechRecognition
-    : null;
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+const MAX_PHOTO_BASE64 = 3_000_000;
 
 // resolveProtocolItems (lib/day) is the ONE derivation, shared with Today and
 // Plan; this adapter keeps the field names the chat has always used.
@@ -59,15 +62,18 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   // Transient UI state stays local — a half-finished upload is not worth
   // resuming across a navigation, and leaving `busy` true in the store would
   // strand the composer permanently if the member navigated mid-request.
-  const [busy, setBusy]           = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
+  const {
+    busy, setBusy, photoBusy, setPhotoBusy, labBusy, setLabBusy,
+    replacingPhoto, pickerContext, photoFlight, parseFlight, labFlight,
+    requestEdit, setRequestEdit, requestCurrent, rememberPicker, consumePicker, acceptPhoto,
+    newRequest, beginRequest, failRequest, finishRequest,
+  } = useAIRequestRecovery();
   const fileRef = useRef(null);
   const galleryRef = useRef(null);
-  const photoFlight = useRef(false);
-  const parseFlight = useRef(false);
   const applyingRef = useRef(false);
   const [applying, setApplying] = useState(false);
   const logDate = useLogStore(s => s.date);
+  const chatDay = useAIChat(s => s.dayKey);
   const logLoading = useLogStore(s => s.loading);
   const logError = useLogStore(s => s.error);
   const assistantReady = logDate === today() && !logLoading && logError !== 'Failed to load log';
@@ -76,13 +82,13 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const [composerHeight, setComposerHeight] = useState(220);
 
   const labRef  = useRef(null);
-  const [labBusy, setLabBusy] = useState(false);
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const recogRef  = useRef(null);
   const undoRef        = undoSnap;         // module-level, see above
   const workoutUndoRef = workoutUndoSnap;  // module-level, see above
+
 
   useEffect(() => {
     if (useAIChat.getState().composerOpen) bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
@@ -121,32 +127,12 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   // Dictation lives in its own review card above the input (useVoiceComposer):
   // 3s of silence auto-stops into a Send button; the mic appends more takes.
   // The typing box below is untouched by voice.
-  const vc = useVoiceComposer({ onSend: (t) => send(t) });
+  const vc = useVoiceComposer({ onSend: (t) => send(t), contextKey: `${logDate || ''}:${chatDay || ''}` });
   useAIEntryActions({ inputRef, fileRef, overlayRef, bottomRef, previousFocus, vc, focusRequest, composerOpen,
     canPhoto: assistantReady && !photoBusy && !labBusy && !busy && !applying });
 
   // ── Photo food logging ─────────────────────────────────────────────────────
-  // Phone photos are 3–8 MB; we downscale to 1280px and re-encode at 0.8 JPEG
-  // before upload. That keeps the request small, the AI just as accurate, and
-  // avoids members on patchy mobile data waiting on a huge upload.
-  const downscale = (file) => new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = () => { img.src = reader.result; };
-    reader.onerror = () => reject(new Error('Could not read the photo'));
-    img.onload = () => {
-      const MAX = 1280;
-      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      resolve(dataUrl.split(',')[1]);
-    };
-    img.onerror = () => reject(new Error('That file is not a readable image'));
-    reader.readAsDataURL(file);
-  });
+
 
   // `silent` is set when we are re-routing a file the member already sent via
   // the report button — a second "📷 Photo" bubble would be confusing.
@@ -154,28 +140,43 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   // goes through a ref to avoid a circular useCallback dependency.
   const sendLabReportRef = useRef(null);
 
-  const sendPhoto = useCallback(async (file, { silent = false } = {}) => {
-    if (!file || photoFlight.current) return;
-    photoFlight.current = true;
-    const requestDay = today();
-    const uploadId = 'photo-' + Date.now();
+  const sendPhoto = useCallback(async (file, { silent = false, recovery = null } = {}) => {
+    if ((!file && !recovery?.payload) || photoFlight.current || parseFlight.current || applyingRef.current) return;
+    if (recovery && !requestCurrent(recovery)) return;
+    const request = recovery || newRequest('photo', 'Photo attached · AI will estimate your meal',
+      { silent, file, payload: null });
+    photoFlight.current = request.id;
+    const controller = beginRequest(request);
+    const requestDay = request.day;
     setPhotoBusy(true);
     haptic(10);
-    if (!silent) setMessages(m => [...m, { role: 'user', text: 'Photo attached · AI will estimate your meal', uploadId }]);
     try {
-      const base64 = await downscale(file);
-      setMessages(prev => prev.map(m => m.uploadId === uploadId ? { ...m, photoPreview: 'data:image/jpeg;base64,' + base64 } : m));
-      const { data } = await api.post('/ai-chat/photo', {
-        image: base64,
-        mimeType: 'image/jpeg',
-        mealSlots,
-      }, { timeout: 60000 });   // vision is slower than chat; 35s was too tight
+      if (!request.payload) {
+        if (request.file.size > MAX_PHOTO_BYTES) {
+          request.file = null;
+          throw { response: { status: 413 } };
+        }
+        const base64 = await downscale(request.file);
+        if (!requestCurrent(request) || controller.signal.aborted) return;
+        if (base64.length > MAX_PHOTO_BASE64) {
+          request.file = null;
+          throw { response: { status: 413 } };
+        }
+        request.payload = requestSnapshot({ image: base64, mimeType: 'image/jpeg', mealSlots });
+        setMessages(prev => prev.map(m => m.requestId === request.id || m.requestIds?.includes(request.id)
+          ? { ...m, photoPreview: 'data:image/jpeg;base64,' + base64 } : m));
+      }
+      const { data } = await api.post('/ai-chat/photo', requestSnapshot(request.payload),
+        { timeout: 60000, signal: controller.signal });
+      if (!requestCurrent(request) || controller.signal.aborted) return;
 
       // A lab report reached the camera button — send it to the reader instead.
       if (data.route_to === 'lab') {
         setMessages(m => [...m, { role: 'ai', text: data.reply }]);
         setPhotoBusy(false);
-        return sendLabReportRef.current?.(file, { silent: true });
+        const original = request.file || new File([Uint8Array.from(atob(request.payload.image), c => c.charCodeAt(0))], 'meal.jpg', { type: 'image/jpeg' });
+        request.file = null; request.payload = null;
+        return sendLabReportRef.current?.(original, { silent: true });
       }
 
       setMessages(m => [...m, {
@@ -202,38 +203,40 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         },
         applied: false,
       }]);
+      request.file = null;
+      request.payload = null;
     } catch (err) {
-      const msg = err.response?.data?.error || 'Could not analyse that photo — please try again.';
-      setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
+      // Once compressed, the retry needs only the bounded request image.
+      if (request.payload) request.file = null;
+      failRequest(request, err);
     } finally {
-      photoFlight.current = false;
-      setPhotoBusy(false);
+      finishRequest(request);
+      if (photoFlight.current === request.id) { photoFlight.current = false; setPhotoBusy(false); }
     }
-  }, [photoBusy, mealSlots]);
+  }, [mealSlots, requestCurrent]);
+
+
 
   // ── Lab report reading ─────────────────────────────────────────────────────
   // PDFs go up untouched: rasterising one client-side would throw away the text
   // layer and turn a clean extraction into OCR guesswork on medical numbers.
   // Photos of printouts get the same downscale as food photos.
-  const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1]);
-    r.onerror = () => reject(new Error('Could not read that file'));
-    r.readAsDataURL(file);
-  });
+
 
   const sendLabReport = useCallback(async (file, { silent = false, force = false } = {}) => {
-    if (!file || labBusy) return;
+    if (!file || labFlight.current) return;
+    const isPdf = file.type === 'application/pdf';
+    const request = newRequest('lab', isPdf ? '📄 PDF attached' : '📷 Photo attached', { silent, file });
+    labFlight.current = request.id;
+    const controller = beginRequest(request);
     setLabBusy(true);
     haptic(10);
-    const isPdf = file.type === 'application/pdf';
     // Neutral label: the member attaches a file, the app works out what it is.
     // Claiming "my lab report" up front reads wrong when it turns out to be a
     // scale photo, and pre-labels a decision the classifier hasn't made yet.
-    if (!silent) setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 PDF attached' : '📷 Photo attached' }]);
     // A full panel can take 30–60 seconds. Without this the screen sits blank
     // and members upload the same file again, doubling the load.
-    setMessages(m => [...m, { role: 'ai', text: 'Reading it… a full lab panel can take up to a minute.', pending: true }]);
+    setMessages(m => [...m, { role: 'ai', text: 'Reading it… a full lab panel can take up to a minute.', pending: true, pendingRequest: request.id }]);
     try {
       // Reject oversized files here rather than after a long upload. Express
       // caps the body at 12MB and base64 inflates by ~33%, so anything over
@@ -245,6 +248,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       }
 
       const base64 = isPdf ? await readFileAsBase64(file) : await downscale(file);
+      if (!requestCurrent(request) || controller.signal.aborted) return;
 
       // Reading a multi-page pathology report takes far longer than a chat
       // reply. The shared client aborts at 35s, which was cutting the request
@@ -254,7 +258,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         file: base64,
         mimeType: isPdf ? 'application/pdf' : 'image/jpeg',
         force,
-      }, { timeout: 120000 });
+      }, { timeout: 120000, signal: controller.signal });
+      if (!requestCurrent(request) || controller.signal.aborted) return;
 
       // Wrong button: the image is a scale reading or a meal. Route it to the
       // photo pipeline, which already reads both — the member never has to
@@ -286,14 +291,20 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         applied: false,
       }]);
     } catch (err) {
+      if (!requestCurrent(request) || controller.signal.aborted) return;
       const timedOut = err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '');
-      const msg = err.response?.data?.error
-        || (timedOut
+      const msg = file.size > 8 * 1024 * 1024
+        ? 'That file is over 8MB. Export a smaller PDF, or photograph just the results page.'
+        : (timedOut
             ? 'That report took too long to read. A single page, or a photo of just the results table, is much quicker.'
             : 'Could not reach the reader — check your connection and try again.');
       setMessages(m => [...m.filter(x => !x.pending), { role: 'ai', text: msg, error: true }]);
-    } finally { setLabBusy(false); }
-  }, [labBusy]);
+    } finally {
+      request.file = null;
+      finishRequest(request);
+      if (labFlight.current === request.id) { labFlight.current = false; setLabBusy(false); }
+    }
+  }, [requestCurrent, sendPhoto]);
   sendLabReportRef.current = sendLabReport;
 
   const patchLab = useCallback((mi, fn) => {
@@ -357,31 +368,29 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   }, [messages]);
 
   // ── Send → parse ───────────────────────────────────────────────────────────
-  const send = useCallback(async (textOverride) => {
-    const text = (textOverride ?? input).trim();
-    if (!text || parseFlight.current) return;
-    if (photoBusy || labBusy || applyingRef.current) { setInput(text); return; }
-    const requestDay = today();
-    parseFlight.current = true;
-
-    setInput('');
-    if (inputRef.current) inputRef.current.style.height = 'auto';   // collapse the grown textarea
-    setMessages(m => [...m, { role: 'user', text }]);
-    setBusy(true);
-    haptic(10);
-
-    try {
+  const send = useCallback(async (textOverride, { recovery = null } = {}) => {
+    const text = (textOverride ?? recovery?.payload?.message ?? input).trim();
+    if (!text) return;
+    if (parseFlight.current || photoFlight.current || labFlight.current || applyingRef.current || !assistantReady) {
+      // A dictated take must not replace an unrelated typed draft.
+      if (!recovery && textOverride != null) setInput(current => current ? `${current}\n${text}` : text);
+      return;
+    }
+    if (recovery && !requestCurrent(recovery)) return;
+    if (!recovery) useAIChat.getState().ensureFreshDay(today());
+    let payload = recovery?.payload;
+    if (!payload) {
       const proto = deriveProtocolItemsCompat(useLogStore.getState().protocol);
       // Chat memory: the last few visible turns plus today's logged foods, so
       // follow-ups like "make the dal 250g" or "that was dinner" resolve to
       // real items instead of "couldn't find anything to log".
-      const recent = messages.slice(-6).map(m => ({
+      const recent = useAIChat.getState().messages.slice(-6).map(m => ({
         role: m.role === 'user' ? 'user' : 'ai',
         text: String(m.text || '').slice(0, 200),
       })).filter(r => r.text);
       const lastFoods = (useLogStore.getState().log?.food || []).slice(-20)
         .map(f => ({ name: f.name, grams: f.grams, meal: f.meal }));
-      const { data } = await api.post('/ai-chat/parse', {
+      payload = requestSnapshot({
         message: text,
         context: {
           mealSlots,
@@ -393,6 +402,26 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           waterTargetMl: useLogStore.getState().protocol?.water_target || 3000,
         },
       });
+    } else if (text !== payload.message) {
+      payload = requestSnapshot({ ...payload, message: text });
+    }
+    const request = recovery ? { ...recovery, payload } : newRequest('text', text, { payload });
+    parseFlight.current = request.id;
+    const controller = beginRequest(request);
+    const requestDay = request.day;
+    // Only a send from the main composer consumes its draft. A voice result,
+    // Retry or the failed-card editor leaves any newer typed message intact.
+    if (!recovery && textOverride == null) {
+      setInput(current => current.trim() === text ? '' : current);
+      if (inputRef.current) inputRef.current.style.height = 'auto';
+    }
+    if (recovery) setMessages(previous => previous.map(m => m.requestId === request.id ? { ...m, text } : m));
+    setBusy(true);
+    haptic(10);
+
+    try {
+      const { data } = await api.post('/ai-chat/parse', requestSnapshot(payload), { signal: controller.signal });
+      if (!requestCurrent(request) || controller.signal.aborted) return;
 
       // A whole-day summary comes back as structured fields, and renders as the
       // same card the coach sees. Nothing to apply, so no preview list.
@@ -432,13 +461,12 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         applied: false,
       }]);
     } catch (err) {
-      const msg = err.response?.data?.error || 'Something went wrong — please try again.';
-      setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
+      failRequest(request, err);
     } finally {
-      parseFlight.current = false;
-      setBusy(false);
+      finishRequest(request);
+      if (parseFlight.current === request.id) { parseFlight.current = false; setBusy(false); }
     }
-  }, [input, busy, photoBusy, labBusy, mealSlots, messages]);
+  }, [input, assistantReady, mealSlots, requestCurrent]);
 
   // ── Toggle helpers on a message's parsed preview ───────────────────────────
   const patchParsed = useCallback((mi, patchFn) => {
@@ -812,19 +840,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const undo = useCallback((mi) => rollback(mi, { reopen: false }), [rollback]);
   const editApplied = useCallback((mi) => rollback(mi, { reopen: true }), [rollback]);
 
-  // Count of included things across a parsed preview
-  const countIncluded = (p) =>
-    (p.weightOn && p.weight_kg != null ? 1 : 0) +
-    p.activities.filter(a => a.on).length +
-    p.acv.filter(a => a.on).length +
-    p.supplements.filter(s => s.on).length +
-    (p.waterOn && p.water_ml_add ? 1 : 0) +
-    (p.sleepOn && p.sleep ? 1 : 0) +
-    ((p.bodyMetricsOn && p.bodyMetrics?.length) ? 1 : 0) +
-    (p.corrections || []).filter(c => c.on).length +
-    (p.notesOn && p.notes ? 1 : 0) +
-    p.foods.filter(f => f.on).length +
-    p.workouts.filter(w => w.on).length;
+
 
   useEffect(() => {
     if (!overlay || !composerOpen) return undefined;
@@ -901,10 +917,17 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                     : m.summary
                       ? 'bg-gold/[0.06] border-gold/20 text-gold-light'
                       : 'bg-surface border-hair text-white'
-                }`}>
+                }`} data-testid={m.failedRequest ? 'ai-request-error' : undefined}>
                   {m.summary
                     ? <DaySummary s={m.summary} />
                     : <p className="leading-relaxed whitespace-pre-line">{m.text}</p>}
+
+                  {m.failedRequest && requestCurrent(m.failedRequest) && <AIRequestRecovery
+                    request={m.failedRequest} requestEdit={requestEdit} setRequestEdit={setRequestEdit}
+                    disabled={busy || photoBusy || labBusy || applying || !assistantReady}
+                    send={send} sendPhoto={sendPhoto}
+                    onReplace={request => { replacingPhoto.current = request; fileRef.current?.click(); }} />}
+
 
                   {m.planAsk && <LogPlannedButton mealPlans={mealPlans} food={todayFood} onLogPlanned={onLogPlanned} />}
 
@@ -1368,7 +1391,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         <div className="flex items-center gap-1 mt-1.5">
           <AIAttachments galleryRef={galleryRef} labRef={labRef} disabled={labBusy || photoBusy || busy || applying || !assistantReady} />
           <input ref={labRef} type="file" accept="application/pdf,image/*"
-            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendLabReport(f); }}
+            onClick={rememberPicker}
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (consumePicker(e.currentTarget) && f) sendLabReport(f); }}
             style={{ display: 'none' }} />
           <button onClick={() => fileRef.current?.click()}
             disabled={photoBusy || busy || labBusy || applying || !assistantReady}
@@ -1383,10 +1407,13 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
             </svg>
           </button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" data-testid="ai-camera-input"
-            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
+            onClick={rememberPicker}
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; acceptPhoto(f, e.currentTarget, sendPhoto); }}
+            onCancel={() => { replacingPhoto.current = null; pickerContext.current = null; }}
             style={{ display: 'none' }} />
           <input ref={galleryRef} type="file" accept="image/*" data-testid="ai-gallery-input"
-            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }} style={{ display: 'none' }} />
+            onClick={rememberPicker}
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; acceptPhoto(f, e.currentTarget, sendPhoto); }} style={{ display: 'none' }} />
           {vc.micButton}
           <span className="flex-1" />
           {input.trim() && (

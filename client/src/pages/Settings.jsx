@@ -15,6 +15,7 @@ import { disconnectSocket } from '../hooks/useSync';
 import { Card, SectionTitle, BackButton, MemberBottomNav, BottomNav } from '../components/UI';
 import HouseCircuits from '../components/coach/HouseCircuits';
 import VoiceLogging from '../components/VoiceLogging';
+import { VOICE_LANGUAGES, normalizeVoiceLang } from '../utils/voiceLanguage';
 import { roleLabel } from '../constants';
 import { changeMyPin, getMyReminderSchedule } from '../api/logs';
 import { pushPermission, registerPushSubscription } from '../hooks/usePush';
@@ -65,6 +66,7 @@ export default function Settings() {
     emergencyContact, setEmergencyContact,
     mealSlots, setMealSlots,
     avatarIdx, setAvatarIdx,
+    voiceLang, setVoiceLang,
   } = useSettingsStore();
 
   const [subs,     setSubs]     = useState([]);
@@ -237,6 +239,20 @@ export default function Settings() {
               ))}
             </div>
           </div>
+        </Card>
+
+        <Card>
+          <SectionTitle>Voice language</SectionTitle>
+          <label className="block text-xs text-mid mb-2" htmlFor="settings-voice-language">
+            Choose the language you speak most. Mixed speech works too.
+          </label>
+          <select id="settings-voice-language" data-testid="settings-voice-language"
+            value={normalizeVoiceLang(voiceLang)} onChange={e => setVoiceLang(e.target.value)}
+            className="w-full rounded-xl border border-hair bg-surface px-3 text-sm text-white"
+            style={{ minHeight: 44 }}>
+            {VOICE_LANGUAGES.map(language => <option key={language.value} value={language.value}>{language.label}</option>)}
+          </select>
+          <p className="text-caption text-lo mt-2">Used for your next recording, including food search and AI chat.</p>
         </Card>
 
         {/* Member-only: the age group changes the member's wording, the avatar sits on

@@ -361,14 +361,26 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
   }, [open]);
 
   // Voice: review card above the input — see VoiceComposer for the flow
-  const vc = useVoiceComposer({ onSend: (t) => send(t), accent: '#e0c98a' });
+  const vc = useVoiceComposer({
+    onSend: (t) => send(t), accent: '#e0c98a',
+    contextKey: `coach:${open ? 'open' : 'closed'}:${contextMember?.id ?? 'roster'}`,
+  });
+  useEffect(() => {
+    if (!open) vc.cancelCapture();
+  }, [open]); // the current render owns the capture; close always releases audio
 
   // ── Send → coach-parse ─────────────────────────────────────────────────────
   const send = useCallback(async (textOverride) => {
     const text = (textOverride ?? input).trim();
-    if (!text || busy) return;
+    if (!text) return;
+    if (busy || applying) {
+      // Dictation can finish while the previous request is running. Keep its
+      // words alongside the newer typed draft for a deliberate later send.
+      if (textOverride != null) setInput(previous => [previous.trim(), text].filter(Boolean).join('\n'));
+      return;
+    }
 
-    setInput('');
+    if (textOverride == null) setInput('');
     setMessages(m => [...m, { role: 'user', text }]);
     setBusy(true);
     haptic(10);
@@ -425,7 +437,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
     } finally {
       setBusy(false);
     }
-  }, [input, busy, contextMember?.id]);
+  }, [input, busy, applying, contextMember?.id]);
 
   const toggleAction = useCallback((mi, ai) => {
     setMessages(prev => {

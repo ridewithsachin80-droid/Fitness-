@@ -228,6 +228,7 @@ export default function WorkoutLog({ date }) {
   // server-side works everywhere, handles Hinglish, and gives a review step
   // instead of an alert() when it mishears.
   const searchVoice = useVoiceComposer({
+    contextKey: `workout-search:${date}`,
     onSend: (text) => {
       const t = (text || '').trim();
       if (!t) return;
@@ -345,6 +346,8 @@ export default function WorkoutLog({ date }) {
   const [setVoiceError, setSetVoiceError] = useState('');
 
   const setVoice = useVoiceComposer({
+    contextKey: `workout-set:${date}:${activeProgramDay ?? ''}`,
+    showLanguage: false,
     onSend: (text) => {
       const exerciseId = voiceTargetRef.current;
       // Whatever happens next, this capture is finished — clear the highlight
@@ -374,14 +377,20 @@ export default function WorkoutLog({ date }) {
     },
   });
 
-  const voiceLogSet = (exerciseId) => {
-    // Tapping the row that is already capturing cancels it, rather than
-    // silently re-arming the same target.
-    if (voiceTargetRef.current === exerciseId && listeningSetKey === exerciseId) {
-      voiceTargetRef.current = null;
-      setListeningSetKey(null);
+  const voiceLogSet = (exerciseId, event) => {
+    // The shared composer includes a language select. Changing a preference
+    // must never arm a set or retarget a recording that belongs to another row.
+    const mic = event.target.closest('button');
+    if (!mic || mic.disabled || !event.currentTarget.contains(mic)) return;
+    if (setVoice.active && voiceTargetRef.current != null && voiceTargetRef.current !== exerciseId) {
+      event.preventDefault();
+      event.stopPropagation();
+      setSetVoiceError('Finish or discard your current voice note before switching exercises.');
       return;
     }
+    // Keep the original target when this tap stops recording: onSend still
+    // needs it after the recorder finishes and the transcript is returned.
+    if (voiceTargetRef.current === exerciseId && listeningSetKey === exerciseId) return;
     voiceTargetRef.current = exerciseId;
     setSetVoiceError('');
     setListeningSetKey(exerciseId);
@@ -609,7 +618,7 @@ export default function WorkoutLog({ date }) {
                   + Add Set
                 </button>
                 <div
-                  onClickCapture={() => voiceLogSet(ex.exercise_id)}
+                  onClickCapture={event => voiceLogSet(ex.exercise_id, event)}
                   className={`px-3 py-1 rounded-lg border flex items-center gap-1.5 text-xs font-semibold transition-colors ${
                     listeningSetKey === ex.exercise_id
                       ? 'bg-gold/[0.14] border-gold/35 text-gold-light'

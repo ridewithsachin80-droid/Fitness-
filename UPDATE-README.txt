@@ -1,13 +1,49 @@
-FitLife phase 1 — updated files only
+FITLIFE — PHASE 2: VOICE LANGUAGE AND AI RECOVERY
+Updated files only; repository folder structure retained.
 
-Base: 65a70a5e6d4ec022b2de284d68a96164f1908d60
-Commit: 5091dd007814b6f46a858f48c24f1bef1d6acd50
+Base test commit: d7a2826b0ffc62cae8ea58c0a475b49331f6db24
+Target: https://fitness-test.up.railway.app/
 
-Copy the included .github, client, server and qa folders into the repository root on branch test. Include .gitignore. Do not upload the ZIP itself as the app.
-DELETE-FILES.txt lists obsolete tracked build files to remove. Unchanged source files and dependencies are intentionally omitted. No database migrations are required.
+INSTALL
+1. Extract the ZIP and copy its .github/, client/, server/, qa/ and docs/
+   paths into the existing repository root on branch test. Replace matching
+   files. Keep other app files; do not upload a wrapper folder or the ZIP itself.
+   UPDATE-README.txt is the updated repository instruction file.
+2. Include every new extracted component, hook and utility. client/dist contains
+   the rebuilt UI as well as source changes; no dependency changes or database
+   migrations are needed. No tracked files must be deleted for this update.
+3. Include .github/workflows/test-gate.yml for evidence uploads. If your file
+   picker hides .github, edit that workflow directly in GitHub and paste the
+   supplied content. npm test already builds before testing with the old workflow.
+4. Commit to test and require the NEW Test gate to pass. Baseline run 57 was
+   green (71 suites / 4,174 assertions); it does not certify this Phase 2 build.
+5. Deploy the matching test revision. Run node server/scripts/test-deployment.mjs,
+   then the P0 and Phase 2 acceptance cases in the Excel report with dedicated
+   test accounts. Retest camera/mic on Android and iPhone after deployment.
 
-For a clean checkout of the exact baseline, update.patch is an alternative: git apply --check update.patch, then git apply update.patch. Apply either the patch OR the folders, not both.
+WHAT CHANGED
+- One English/Hindi/Kannada voice preference across AI, food search, workouts
+  and coach chat. A changed language applies to the next recording.
+- Failed text: Retry or Edit that request while preserving newer typed drafts.
+- Failed photo: retry the retained image or replace it. Snap keeps its direct
+  camera behavior. Successful analysis still opens an editable review.
+- Failed recording: Retry recording or Discard without speaking again.
+- Late responses are tied to their account, session, selected day and context.
+  Raw retry audio/photos stay in memory only and are cleared on invalidation.
+- Existing minimalist Home, light/dark themes, tools, weight, editable portions,
+  quantities/macros, offline saving, and prior P0 fixes are retained.
 
-Run npm run build, then server npm test on isolated localhost PostgreSQL before release. Deploy the matching test commit and run server/scripts/test-deployment.mjs followed by P0 acceptance cases in Excel. See qa/REGRESSION-README.txt.
+VERIFICATION
+See qa/REGRESSION-README.txt, the updated Excel and QA evidence ZIP.
+All available local suites are rerun after the final client build. Local
+PostgreSQL is unavailable, so the 49 database suites require the new GitHub gate.
+Physical language accuracy and signed-in deployed acceptance remain pending.
 
-GitHub write access was denied, so this build has NOT been pushed or deployed.
+This build has NOT been pushed or deployed by the assistant. Earlier GitHub
+write access was denied. Current read-only smoke still sees the older build.
+
+PATCH ALTERNATIVE (clean checkout at the base commit only)
+  git apply --check /path/to/phase2-update.patch
+  git apply /path/to/phase2-update.patch
+Apply either the folders OR the patch, not both.
+PHASE2-INSTALL.txt and phase2-update.patch are installation aids, not app files.

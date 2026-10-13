@@ -28,6 +28,7 @@ import { foodSource } from '../utils/foodProvenance';
 import { BarcodeScanner, hasBarcodeDetector } from './food/BarcodeScanner';
 import { PrescribedMeals } from './food/PrescribedMeals';
 import MacroEditor from './food/MacroEditor';
+import FoodVoiceStatus from './food/FoodVoiceStatus';
 import { useMemberLabels, per100Of } from './food/useMemberLabels';
 
 export default function FoodLog({ items = [], onChange, calorieTarget }) {
@@ -168,6 +169,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const voiceLang = useSettingsStore(st => st.voiceLang || 'en-IN');
   const voice = useVoiceInput({
     lang: voiceLang,
+    contextKey: `food:${meal}:${showForm}`,
     onInterim: (t) => { setQuery(t); setSelected(null); },
     onFinal:   (t) => {
       setQuery(t); setSelected(null);
@@ -182,6 +184,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState(null);
   const onBarcodeFound = useCallback(async (barcode) => {
+    voice.cancel();
     setScanning(false);
     haptic(20);
     setScanMsg('Looking up product…');
@@ -225,6 +228,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   }, [labelMatches]);
 
   const handleQueryChange = (val) => {
+    voice.cancel(); // a typed correction wins over any pending recording/retry
     setQuery(val);
     setSelected(null);
     setLookupStatus('');
@@ -235,6 +239,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const pickSuggestion = (food) => {
+    voice.cancel();
     clearTimeout(debounceRef.current);
     setSelected(food);
     setQuery(food.name);
@@ -263,6 +268,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const add = () => {
+    voice.cancel();
     if (!query.trim() || !grams) return;
     const g = parseFloat(grams);
     if (isNaN(g) || g <= 0) return;
@@ -314,12 +320,14 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   }, []);
 
   const closeForm = () => {
+    voice.cancel();
     clearTimeout(debounceRef.current);
     setShowForm(false); setQuery(''); setGrams(''); setSelected(null);
     setLookupStatus(''); setSuggestions([]); setShowSuggestions(false);
   };
 
   const pickRecent = (food) => {
+    voice.cancel();
     // A food the member has their own label for comes back with the label.
     const mine = labelFor(food.name);
     setSelected(mine
@@ -333,6 +341,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const handleAISelect = (food) => {
+    voice.cancel();
     // food arrives as { ...aiFood, name: userTypedQuery, per_100g: {...}, grams: N }
     // We call onChange directly — never relies on volatile `selected` state
     const chosenGrams = food.grams || smartGrams(food.name) || 100;
@@ -646,7 +655,8 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 </button>
               )}
               {/* Voice input button */}
-              <button onClick={startVoice}
+              <button onClick={startVoice} disabled={voice.requesting || voice.transcribing || voice.canRetry}
+                aria-label={listening ? 'Stop food recording' : 'Speak food name'}
                 style={{ width: 44, height: 44, minWidth: 44 }}
                 className={`rounded-xl flex items-center justify-center border transition-all ${
                   listening
@@ -665,15 +675,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 <span className="absolute right-14 top-1/2 -translate-y-1/2 text-gold-deep text-sm font-bold">✓</span>
               )}
             </div>
-            {listening && (
-              <div className="mt-1 text-xs text-red-400 font-medium px-1">🎤 Listening… tap again when done</div>
-            )}
-            {voice.transcribing && (
-              <div className="mt-1 text-xs text-gold font-medium px-1">✨ Getting the exact words…</div>
-            )}
-            {voice.error && (
-              <div className="mt-1 text-xs text-amber-400 font-medium px-1">{voice.error}</div>
-            )}
+            <FoodVoiceStatus voice={voice} />
             {scanMsg && (
               <div className="mt-1 text-xs text-gold font-medium px-1">{scanMsg}</div>
             )}
