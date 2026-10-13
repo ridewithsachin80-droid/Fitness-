@@ -1,10 +1,14 @@
-FITLIFE PHASE 1 — REGRESSION AND DEPLOYMENT
+FITLIFE P0 — REGRESSION AND DEPLOYMENT
 
 Target repository: ridewithsachin80-droid/Fitness-, branch test
 Target app: https://fitness-test.up.railway.app/
-Baseline commit: 65a70a5e6d4ec022b2de284d68a96164f1908d60
+Patch baseline: 66b8bc9171f52d28943e37b4df7465d5de4eb805
 
 Build scope
+- P0 fixes: offline save/retry integrity, private cache cleanup, account and
+  session isolation, cold-start recovery, and workout note/selection retention.
+- New idempotent schema migrations must run during server startup.
+- Prior Phase 1 features are retained:
 - My usual inside AI opens an editable review before anything is logged.
 - Household portion units, counts and grams per unit; opt-in memory and forget.
 - Nutrition provenance labels and visible raw/cooked/unspecified preparation.
@@ -48,15 +52,20 @@ Current limitations
 - GitHub writes returned 403 Resource not accessible by integration.
 - Command-line git push has no available write credentials.
 - This workspace has no PostgreSQL binaries; new DB integration runs are
-  blocked here and cannot yet be run in CI without publishing the branch.
-- The live test app still serves the prior baseline build.
-- Real-device and signed-in live acceptance are pending.
+  blocked here. The uploaded 66b8bc9 CI ran DB tests and exposed four workout
+  persistence failures; those results predate this P0 patch.
+- Uploaded Phase 1 frontend assets were verified on the live test app.
+- The user confirmed one-tap camera and mic work on Android and iPhone.
+  This does not certify every Safari/PWA/permission path or this newer patch.
+- New P0 fixes need green database CI, matching deployment and signed-in
+  acceptance. The live browser currently shows the member/coach login page.
 - Undefined-identifier lint was not run locally because ESLint is absent.
 
 Excel workbook usage
 - Overview summarizes actual runs and release blockers.
 - Acceptance cases contains manual preconditions, steps and expected results.
 - Suite runs shows the entire registered regression set and blocked DB suites.
+- Uploaded-build CI is a separate historical column, never a current P0 pass.
 - Executed checks records actual final local assertion output.
 - Automated catalog lists assertion declarations and source locations.
 - Deployment separates current public-site checks from phase 1 acceptance.

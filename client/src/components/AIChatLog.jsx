@@ -498,6 +498,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       const prevSession = existing?.session || null;
       const prevExercises = (existing?.exercises || []).map(ex => ({
         exercise_id: ex.exercise_id,
+        fromProgram: ex.fromProgram === true,
         sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })),
       }));
 

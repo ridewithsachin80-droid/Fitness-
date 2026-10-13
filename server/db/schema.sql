@@ -603,6 +603,9 @@ END $$;
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
+-- Selected exercises with no completed sets must survive closing the sheet.
+-- Empty by default for old sessions; applied on both fresh and existing DBs.
+ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS pending_exercises JSONB NOT NULL DEFAULT '[]';
 
 -- Per-member portion memory. "1 katori" is not a fixed weight — it depends on
 -- whose kitchen the katori came from. When a member corrects the grams the AI
@@ -1076,6 +1079,20 @@ ALTER TABLE diet_plan_items ADD COLUMN IF NOT EXISTS compulsory BOOLEAN NOT NULL
 -- day - you choose"). 40 characters cut those mid-word. Widening a VARCHAR
 -- never rewrites the table and is safe to repeat on every boot.
 ALTER TABLE diet_plan_items ALTER COLUMN qty_text TYPE VARCHAR(160);
+
+-- P0: one compact receipt per member/day/browser stream, updated in place.
+-- Payloads stay in daily_logs; hashes identify safe continuation after a lost
+-- response without overwriting edits made by another device or the coach.
+CREATE TABLE IF NOT EXISTS daily_log_write_receipts (
+  patient_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  log_date    DATE NOT NULL,
+  stream_id   VARCHAR(96) NOT NULL,
+  sequence    INT NOT NULL CHECK (sequence > 0),
+  payload_hash CHAR(64) NOT NULL,
+  day_hash     CHAR(64) NOT NULL,
+  outcome      JSONB NOT NULL DEFAULT '{}',
+  PRIMARY KEY (patient_id, log_date, stream_id)
+);
 
 -- A member's own label for a food (10 Oct 2026). The shared foods table is
 -- one row per food for everyone; plain oats really is ~13 g protein per 100 g,

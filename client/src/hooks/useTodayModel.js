@@ -29,6 +29,7 @@ import {
 } from '../constants';
 import { useAIChat } from '../store/aiChatStore';
 import { sessionEnergy } from '../utils/exerciseCalories';
+import { completedWorkoutExercises } from '../utils/workoutSession';
 import { dailyRead } from '../utils/dailyRead';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
@@ -318,7 +319,7 @@ export default function useTodayModel() {
       .then(({ data }) => {
         if (cancelled) return;
         setWorkoutSummary({
-          count: (data?.exercises || []).length,
+          count: completedWorkoutExercises(data?.exercises).length,
           duration: data?.session?.duration_min || null,
           // Raw sets + cardio feed the shared calorie model (volume-based for
           // strength, MET × time for cardio)

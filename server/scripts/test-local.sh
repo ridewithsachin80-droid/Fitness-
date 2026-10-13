@@ -197,14 +197,14 @@ fi
 # for reading, not for wiring.
 LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-image-routing \
-test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue"
+test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic"
 
 DB_SUITES="test-workout-merge test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
 test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods test-known-fixes test-usual-foods"
 
-MODULE_SUITES="test-private-api-cache test-portion-defaults test-logging-phase1"
+MODULE_SUITES="test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser"
 RESULTS_DIR="${TEST_RESULTS_DIR:-$ROOT/../qa/results}"
 mkdir -p "$RESULTS_DIR"
 

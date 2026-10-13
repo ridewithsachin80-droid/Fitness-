@@ -22,7 +22,7 @@ const DeviceConnect = lazy(() => import('./pages/DeviceConnect'));
 import Onboarding     from './components/Onboarding';
 import { onboardingDecision } from './utils/onboardingGate';
 import HandsFree from './components/HandsFree';
-import { refreshRequestBody, sessionLossReport, wasSignedOut } from './utils/session';
+import { refreshRequestBody, sessionLossReport, wasSignedOut, clearSession, getStoredRefreshToken } from './utils/session';
 
 // The primitive kit demo page. `import.meta.env.DEV` is a compile-time
 // constant, so in a production build this is `null` and Vite drops the page
@@ -52,8 +52,10 @@ function PrivateRoute({ children, roles }) {
 }
 
 export default function App() {
-  const { login, setRestored } = useAuthStore();
-  const { fontSize, ageMode, onboardingDone } = useSettingsStore();
+  const { login, setRestored, user, sessionVersion, isRestoring } = useAuthStore();
+  const { fontSize, ageMode } = useSettingsStore();
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [restoreIssue, setRestoreIssue] = useState(false);
 
   // Apply dark theme + font-size on boot
   useEffect(() => {
@@ -71,6 +73,11 @@ export default function App() {
   // any interceptor can help. Sending the stored token here is what makes the
   // fallback reach the case it was written for.
   useEffect(() => {
+    const startedVersion = useAuthStore.getState().sessionVersion;
+    let cancelled = false;
+    const isCurrent = () => !cancelled && useAuthStore.getState().sessionVersion === startedVersion;
+    setRestoreIssue(false);
+    if (useAuthStore.getState().user) { setRestored(); return; }
     // The last thing done on this phone was a deliberate sign-out. Do NOT
     // restore from a cookie the sign-out could not clear (it was offline, or
     // the request was cut short) — clear it now and show the login screen.
@@ -82,8 +89,9 @@ export default function App() {
       return;
     }
     axios
-      .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true })
+      .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true, timeout: 15000 })
       .then(({ data }) => {
+        if (!isCurrent()) return;
         // Prefer the user object the server sends; fall back to decoding the
         // JWT so an older server (mid-deploy, or a stale service worker
         // talking to a new one) still restores rather than logging out.
@@ -95,11 +103,12 @@ export default function App() {
         login(data.accessToken, u, data.refreshToken || null);
       })
       .catch((err) => {
+        if (!isCurrent()) return;
         // A 401 means the session is genuinely gone and the member must sign
         // in. Anything else — offline, server restarting, DNS — is NOT a
         // reason to record a session loss; doing so would drown the real
         // signal in noise from every flaky connection.
-        if (err?.response?.status === 401) {
+        if ([401, 403].includes(err?.response?.status)) {
           try {
             const body = JSON.stringify(sessionLossReport('cold-start'));
             fetch('/api/auth/session-loss', {
@@ -110,13 +119,44 @@ export default function App() {
               credentials: 'include',
             }).catch(() => {});
           } catch (_) { /* diagnostics must never break boot */ }
+          // Expiry is confirmed. Clear the invalid fallback but retain the
+          // welcome-back hint; transient connection errors never reach here.
+          clearSession();
+          setRestored();
+        } else {
+          setRestoreIssue(true);
         }
-        setRestored();
       });
-  }, []);
+    return () => { cancelled = true; };
+  }, [restoreAttempt]);
 
-  const { user } = useAuthStore();
   useOfflineSync();
+
+  if (restoreIssue && !user) {
+    return (
+      <main className="min-h-screen bg-charcoal flex flex-col items-center justify-center gap-5 px-8 text-center" role="alert">
+        <h1 className="text-bright text-lg font-semibold">Couldn't reconnect just now.</h1>
+        <p className="text-mute text-sm">
+          {getStoredRefreshToken() ? 'Your saved sign-in is still on this device. ' : ''}
+          Check your connection and try again.
+        </p>
+        <button type="button" onClick={() => setRestoreAttempt(n => n + 1)}
+          className="px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold">Try again</button>
+      </main>
+    );
+  }
+  if (isRestoring) return (
+    <div className="min-h-screen bg-charcoal flex items-center justify-center text-bright" role="status">Reconnecting to your space…</div>
+  );
+
+  // Reset mounted page state and onboarding checks on every real sign-in.
+  // Silent token rotation leaves this key unchanged and preserves the draft.
+  return <SessionSpace key={`${user?.id ?? 'guest'}:${sessionVersion}`} />;
+}
+
+function SessionSpace() {
+  const { user } = useAuthStore();
+  const { onboardingDone } = useSettingsStore();
 
   // ── Onboarding gate ─────────────────────────────────────────────────────────
   // The flag used to come from localStorage alone, so a member on a second

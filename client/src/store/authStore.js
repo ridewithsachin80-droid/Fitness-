@@ -3,6 +3,8 @@ import { clearPrivateApiCaches } from '../utils/privateApiCache';
 import { disconnectSocket } from '../hooks/useSync';
 import {
   storeRefreshToken,
+  clearRefreshToken,
+  forgetMember,
   rememberMember,
   clearSession,
   markSeen,
@@ -20,7 +22,10 @@ import {
  * On hard refresh: the token is gone, but App.jsx calls /api/auth/refresh
  * using the cookie, which silently restores the session.
  */
-export const useAuthStore = create((set) => ({
+export const useAuthStore = create((set, get) => ({
+  // Changes on every sign-in/out, including re-login as the same member.
+  // Requests from an earlier session must never update or replay in this one.
+  sessionVersion: 0,
   accessToken: null,
   user: null,           // { id, name, role }
   isRestoring: true,    // true while checking session on first load
@@ -35,11 +40,15 @@ export const useAuthStore = create((set) => ({
    * cannot break — it simply gets the previous cookie-only behaviour.
    */
   login: (token, user, refreshToken = null) => {
+    // Login begins a new identity; optional fields from an older server must
+    // not leave the previous member's fallback or welcome hint behind.
+    clearRefreshToken();
+    forgetMember();
     if (refreshToken) storeRefreshToken(refreshToken);
     clearSignedOut();   // a real sign-in ends any earlier "signed out on this phone"
     rememberMember(user);
     markSeen();
-    set({ accessToken: token, user, isRestoring: false });
+    set((s) => ({ accessToken: token, user, isRestoring: false, sessionVersion: s.sessionVersion + 1 }));
   },
 
   /** Called after a silent token refresh. The server ROTATES the refresh
@@ -83,10 +92,13 @@ export const useAuthStore = create((set) => ({
     // registration form.
     clearSession({ deliberate: reason === null });
 
-    set({ accessToken: null, user: null, isRestoring: false });
+    set((s) => ({ accessToken: null, user: null, isRestoring: false, sessionVersion: s.sessionVersion + 1 }));
 
+    const version = get().sessionVersion;
     const cleanup = clearPrivateApiCaches().catch(() => {});
-    const go = () => { cleanup.finally(() => { window.location.href = '/login'; }); };
+    const go = () => { cleanup.finally(() => {
+      if (get().sessionVersion === version) window.location.href = '/login';
+    }); };
     if (reason !== null) { go(); return; }
 
     // A deliberate sign-out must end the session on the SERVER, because the

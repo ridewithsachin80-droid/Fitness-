@@ -9,6 +9,7 @@
  * keep working; new code imports from here.
  */
 import { create } from 'zustand';
+import { useAuthStore } from './authStore';
 
 // Only the mounted assistant owns browser input actions. Registration is kept
 // outside persisted conversation state and released when its route unmounts.
@@ -82,7 +83,8 @@ export const useAIChat = create((set, get) => ({
   resetChat: () => {
     undoSnap.current = null;
     workoutUndoSnap.current = null;
-    set({ messages: [], input: '', dayKey: null, open: false, composerOpen: false, composerFocused: false });
+    set({ messages: [], input: '', dayKey: null, open: false, composerOpen: false, composerFocused: false,
+      prefillText: '', lastAppliedAt: null, entryMode: 'text' });
   },
 
   /** Called when the panel opens; clears a conversation left over from a previous day. */
@@ -103,8 +105,14 @@ export const useAIChat = create((set, get) => ({
 // survives, so the snapshot behind that Undo button has to survive with it.
 // Without this, Undo would render as an active button and silently do nothing.
 //
-// Safe across accounts: authStore.logout() sets window.location.href, which is
-// a full document load — this module is re-evaluated and both snapshots reset.
+// Clear synchronously on an authentication boundary, including an account
+// switch before a full-page navigation has had time to complete.
 export const undoSnap        = { current: null };
 export const workoutUndoSnap = { current: null };
 
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id === previous.user?.id && state.sessionVersion === previous.sessionVersion) return;
+  entryAction = null;
+  useAIChat.getState().resetChat();
+});

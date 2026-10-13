@@ -2,7 +2,9 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 import { clientsClaim } from 'workbox-core';
-import { PRIVATE_API_CACHE, LEGACY_API_CACHES, privateCacheKey, isPrivateApiRequest } from './utils/privateApiCache';
+import { PRIVATE_API_CACHE, LEGACY_API_CACHES, CLEAR_PRIVATE_API_CACHES, clearPrivateApiCaches, privateCacheKey, isPrivateApiRequest } from './utils/privateApiCache';
+
+let privateCacheEpoch = 0;
 
 // Precache all Vite-built assets (injected by vite-plugin-pwa)
 precacheAndRoute(self.__WB_MANIFEST);
@@ -20,6 +22,10 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  if (event.data?.type === CLEAR_PRIVATE_API_CACHES) {
+    privateCacheEpoch++;
+    event.waitUntil(clearPrivateApiCaches().finally(() => event.ports?.[0]?.postMessage({ cleared: true })));
+  }
 });
 
 // Take control of already-open pages as soon as this worker activates,
@@ -32,7 +38,12 @@ registerRoute(
   context => context.url.origin === self.location.origin && isPrivateApiRequest(context),
   new NetworkFirst({ cacheName: PRIVATE_API_CACHE, networkTimeoutSeconds: 10,
     plugins: [{ cacheKeyWillBeUsed: privateCacheKey,
-      cacheWillUpdate: async ({ response }) => response.status === 200 ? response : null }],
+      handlerWillStart: ({ state }) => { state.epoch = privateCacheEpoch; },
+      cacheWillUpdate: async ({ response, state }) => response.status === 200 && state.epoch === privateCacheEpoch ? response : null,
+      // Also cover a logout occurring between cacheWillUpdate and cache.put.
+      cacheDidUpdate: async ({ cacheName, request, state }) => {
+        if (state.epoch !== privateCacheEpoch) await (await caches.open(cacheName)).delete(request);
+      } }],
   })
 );
 self.addEventListener('activate', event => {

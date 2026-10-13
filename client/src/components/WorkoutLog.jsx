@@ -195,7 +195,7 @@ export default function WorkoutLog({ date }) {
       saveWorkout({
         date,
         duration_min: durationMin ? parseInt(durationMin) : null,
-        exercises: exercisesInSession.map(ex => ({ exercise_id: ex.exercise_id, sets: ex.sets })),
+        exercises: exercisesInSession.map(ex => ({ exercise_id: ex.exercise_id, sets: ex.sets, fromProgram: ex.fromProgram === true })),
         cardio,
       }).catch(() => {});
     }, 4000);

@@ -11,6 +11,7 @@
  */
 import { useState, useEffect } from 'react';
 import { getWorkout } from '../api/workouts';
+import { completedWorkoutExercises } from '../utils/workoutSession';
 
 export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }) {
   const [data, setData]       = useState(null);
@@ -26,8 +27,9 @@ export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }
     return () => { cancelled = true; };
   }, [date, memberId, refreshTick]);
 
+  const completedExercises = completedWorkoutExercises(data?.exercises);
   if (loading) return null; // avoid a flash of "nothing logged" while this loads
-  if (!data?.exercises?.length) return null; // nothing logged that day — say nothing rather than an empty box
+  if (!completedExercises.length) return null; // nothing logged that day — say nothing rather than an empty box
 
   return (
     <div className="rounded-xl border border-hair overflow-hidden">
@@ -38,7 +40,7 @@ export default function WorkoutSessionViewer({ memberId, date, refreshTick = 0 }
         )}
       </div>
       <div className="divide-y divide-white/[0.05]">
-        {data.exercises.map(ex => (
+        {completedExercises.map(ex => (
           <div key={ex.exercise_id} className="px-3 py-2.5">
             <p className="text-sm font-semibold text-soft mb-1.5">{ex.exercise_name}</p>
             <div className="flex flex-wrap gap-1.5">

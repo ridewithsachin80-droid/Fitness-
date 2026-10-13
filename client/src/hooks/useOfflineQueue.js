@@ -2,11 +2,16 @@ import { openDB }  from 'idb';
 import { useEffect } from 'react';
 import api           from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { createQueue } from '../utils/offlineQueueCore';
+import { createQueue, newRev, withWriteMetadata } from '../utils/offlineQueueCore';
 
 const DB_NAME    = 'health-coach-offline';
 const DB_VERSION = 1;
 const STORE      = 'log-queue';
+// Storage-disabled browsers cannot make a durable outbox. Retain uncertain
+// direct-request identities in this page so an identical retry is still
+// idempotent. Never evict unresolved writes and silently reuse a new identity.
+const uncertainDirect = new Map();
+const uncertainError = () => Object.assign(new Error('The previous save may have reached the server. Your change is still on screen. Keep this page open and retry the same save when connected; check the saved day before changing or closing it.'), { code: 'SAVE_UNCERTAIN' });
 
 // ── IndexedDB helpers ────────────────────────────────────────────────────────
 
@@ -50,6 +55,7 @@ const queue = createQueue({
     notifyQueueChanged();
     // The day on screen is now older than the server's merged copy.
     import('../store/logStore').then(({ useLogStore }) => {
+      if (String(currentOwner()) !== String(notice.ownerId)) return;
       const st = useLogStore.getState();
       if (st.date === notice.date) st.reload();
     }).catch(() => {});
@@ -59,7 +65,8 @@ const queue = createQueue({
 // Offline days that reached the server after newer edits and were merged.
 // Shown once by PendingSync, then dismissed.
 let mergeNotices = [];
-export const getMergeNotices = () => mergeNotices;
+export const getMergeNotices = () => mergeNotices.filter(n =>
+  currentOwner() != null && String(n.ownerId) === String(currentOwner()));
 export function dismissMergeNotices() { mergeNotices = []; notifyQueueChanged(); }
 
 /**
@@ -72,6 +79,7 @@ export function dismissMergeNotices() { mergeNotices = []; notifyQueueChanged();
  * not have their entry silently parked.
  */
 function isRetryable(err) {
+  if (err.code === 'ERR_CANCELED') return false;   // account/session changed
   if (!err.response) return true;                 // no response at all = network
   const s = err.response.status;
   if (s === 401 || s === 403) return false;       // needs re-login, not a retry
@@ -89,7 +97,31 @@ function isRetryable(err) {
 export async function saveLogWithFallback(date, log) {
   // Who this entry belongs to is decided NOW, when the member makes the edit —
   // not later, when the queue happens to drain.
-  const owner = currentOwner();
+  const session = useAuthStore.getState();
+  const owner = session.user?.id ?? null;
+  const authSession = { owner, version: session.sessionVersion };
+  const directKey = `${owner}:${session.sessionVersion}:${date}`;
+  const signature = JSON.stringify(log);
+  const uncertain = uncertainDirect.get(directKey);
+  if (uncertain) {
+    if (uncertain.signature !== signature || !navigator.onLine) throw uncertainError();
+    try {
+      const { data } = await api.post(`/logs/${date}`, withWriteMetadata(log, uncertain.write), { _authSession: authSession });
+      uncertainDirect.delete(directKey);
+      return { queued: false, data, write: uncertain.write };
+    } catch (error) {
+      if (!isRetryable(error)) throw error;
+      throw uncertainError();
+    }
+  }
+  let prepared = null;
+  try { prepared = await queue.enqueue(date, log, owner); }
+  catch (error) {
+    if (error.code === 'QUEUE_CONFLICT') throw error;
+    // An online request may still succeed when browser storage is disabled.
+    // If it does not, we must surface a failure instead of claiming it is safe.
+    if (!navigator.onLine) throw new Error('Could not save — no connection and offline storage is unavailable.');
+  }
 
   // Try the request FIRST rather than trusting navigator.onLine.
   //
@@ -102,22 +134,34 @@ export async function saveLogWithFallback(date, log) {
   // A gym basement with one bar is exactly that case, which is the situation
   // this queue exists for.
   if (navigator.onLine) {
+    const write = prepared?.write || { streamId: newRev(), sequence: 1 };
+    if (!prepared && uncertainDirect.size >= 20) throw uncertainError();
     try {
-      const { data } = await api.post(`/logs/${date}`, log);
-      // This save is newer than anything still queued for the same day.
-      await queue.supersede(date, owner);
-      return { queued: false, data };
+      const { data } = await api.post(`/logs/${date}`, withWriteMetadata(log, write), { _authSession: authSession });
+      // Only the revision present before this request is now stale. A newer
+      // edit queued while it was in flight still needs to reach the server.
+      if (prepared) await queue.supersede(date, owner, prepared.rev, log, data, prepared.write);
+      return { queued: false, data, write };
     } catch (err) {
-      if (!isRetryable(err)) throw err;           // a real error the member must see
+      if (!isRetryable(err)) {
+        // Compare-and-swap keeps edits made during this request. A prior
+        // pending valid save is restored rather than lost to a rejected edit.
+        try { await queue.restore(prepared); } catch (_) {}
+        throw err;
+      }
+      if (!prepared) {
+        uncertainDirect.set(directKey, { signature, write });
+        throw uncertainError();
+      }
       console.warn(`Network failed despite onLine — queueing ${date}:`, err.message);
     }
   }
 
   // Offline, or the request failed in a way worth retrying
   try {
-    await queue.enqueue(date, log, owner);
+    if (!prepared) throw new Error('Offline storage is unavailable.');
     console.log(`📦 Queued log for ${date}`);
-    return { queued: true };
+    return { queued: true, write: prepared.write };
   } catch (dbErr) {
     // IndexedDB unavailable — private browsing, storage full. Failing loudly
     // is right here: silently dropping the entry would be worse.
@@ -158,6 +202,13 @@ export async function retryQueueNow() {
 /** Count of the signed-in member's logs waiting in the queue. */
 export async function getQueueCount() {
   return (await getQueueStatus()).count;
+}
+
+/** Pending server-shaped day, for restoring edits after an offline reopen.
+ *  The caller keeps base_saved_at/base_fields/base_food_ids as the original
+ *  server base; treating the queued edit itself as the base loses its delta. */
+export async function getQueuedLog(date, ownerId = currentOwner()) {
+  return queue.read(date, ownerId);
 }
 
 /**

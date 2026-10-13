@@ -18,6 +18,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const authMW = require('../middleware/auth');
+const { prepareWorkoutExercises, pendingWorkoutExercises } = require('../services/workoutSession');
 
 router.use(authMW);
 
@@ -154,7 +155,7 @@ router.get('/', async (req, res) => {
 
   try {
     const sessionRes = await pool.query(
-      `SELECT id, session_date, duration_min, notes, cardio
+      `SELECT id, session_date, duration_min, notes, cardio, pending_exercises
        FROM workout_sessions
        WHERE patient_id = $1 AND session_date = $2
        ORDER BY id DESC LIMIT 1`,
@@ -189,7 +190,29 @@ router.get('/', async (req, res) => {
       });
     }
 
-    res.json({ session, exercises: [...byExercise.values()], cardio: session.cardio || [] });
+    // Resolve names from the exercise library, never from stored client text.
+    // Old sessions default to [] and exercises removed from the library are
+    // naturally omitted rather than returning a broken item.
+    const { pending_exercises: pending, ...publicSession } = session;
+    if (Array.isArray(pending) && pending.length) {
+      const ids = pending.map(ex => Number(ex?.exercise_id))
+        .filter(id => Number.isSafeInteger(id) && id > 0 && id <= 2147483647);
+      const { rows } = await pool.query(
+        `SELECT id, name, muscle_group FROM exercises WHERE id = ANY($1::int[])`, [ids]
+      );
+      const library = new Map(rows.map(ex => [ex.id, ex]));
+      for (const entry of pending) {
+        const exercise = library.get(Number(entry?.exercise_id));
+        if (!exercise || byExercise.has(exercise.id)) continue;
+        byExercise.set(exercise.id, {
+          exercise_id: exercise.id, exercise_name: exercise.name,
+          muscle_group: exercise.muscle_group, sets: [],
+          fromProgram: entry.fromProgram === true,
+        });
+      }
+    }
+
+    res.json({ session: publicSession, exercises: [...byExercise.values()], cardio: session.cardio || [] });
   } catch (err) {
     console.error('GET /workouts error:', err);
     res.status(500).json({ error: err.message });
@@ -203,6 +226,9 @@ router.get('/', async (req, res) => {
 // the app's daily log already works (full save on each change, auto-saved).
 router.post('/', async (req, res) => {
   const { date, duration_min, notes, exercises = [], cardio = [] } = req.body;
+  const preparedExercises = prepareWorkoutExercises(exercises);
+  const pendingExercises = pendingWorkoutExercises(preparedExercises);
+  const notesProvided = Object.prototype.hasOwnProperty.call(req.body, 'notes');
 
   // Validate cardio entries server-side — the client computes calories from
   // these, so out-of-range values would produce nonsense figures.
@@ -232,14 +258,16 @@ router.post('/', async (req, res) => {
     // retry firing twice) can't create duplicate session rows the way a
     // separate SELECT-then-INSERT-or-UPDATE could.
     const upserted = await client.query(
-      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes, cardio)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes, cardio, pending_exercises)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (patient_id, session_date)
        DO UPDATE SET duration_min = EXCLUDED.duration_min,
-                     notes        = EXCLUDED.notes,
-                     cardio       = EXCLUDED.cardio
+                     notes        = CASE WHEN $7 THEN EXCLUDED.notes ELSE workout_sessions.notes END,
+                     cardio       = EXCLUDED.cardio,
+                     pending_exercises = EXCLUDED.pending_exercises
        RETURNING id`,
-      [patientId, date, duration_min || null, notes || null, JSON.stringify(cleanCardio)]
+      [patientId, date, duration_min || null, notes || null, JSON.stringify(cleanCardio),
+       JSON.stringify(pendingExercises), notesProvided]
     );
     const sessionId = upserted.rows[0].id;
 
@@ -247,17 +275,13 @@ router.post('/', async (req, res) => {
     // freeform logger with no per-set IDs round-tripping from the client.
     await client.query(`DELETE FROM session_sets WHERE session_id = $1`, [sessionId]);
 
-    for (const ex of exercises) {
-      if (!ex.exercise_id || !Array.isArray(ex.sets)) continue;
+    for (const ex of preparedExercises) {
       let setNumber = 1;
       for (const set of ex.sets) {
-        const reps = parseInt(set.reps);
-        const weight = parseFloat(set.weight_kg) || 0;
-        if (!reps || reps <= 0) continue; // skip incomplete rows
         await client.query(
           `INSERT INTO session_sets (session_id, exercise_id, set_number, reps, weight_kg)
            VALUES ($1, $2, $3, $4, $5)`,
-          [sessionId, ex.exercise_id, setNumber, reps, weight]
+          [sessionId, ex.exercise_id, setNumber, set.reps, set.weight_kg]
         );
         setNumber++;
       }

@@ -76,6 +76,17 @@ export function mapServerLog(row) {
   };
 }
 
+/** A queued payload is an edit, not a new server baseline. Preserve the last
+ * server snapshot so reconnect can still distinguish edits from stale fields. */
+export function mapQueuedLog(payload) {
+  return { ...mapServerLog(payload),
+    savedAt: payload.base_saved_at ?? null,
+    baseFoodIds: payload.base_food_ids ?? null,
+    base: payload.base_fields ?? EMPTY_BASE,
+    writeBase: payload.base_client_write ?? null,
+  };
+}
+
 /** Compute total assignable checkable items from the member's protocol */
 export function computeProtocolTotal(protocol) {
   if (!protocol) return null;
@@ -115,6 +126,7 @@ export function mapToServer(log, protocol) {
     base_saved_at:  log.savedAt ?? null,
     base_food_ids:  log.baseFoodIds ?? null,
     base_fields:    log.base ?? EMPTY_BASE,
+    ...(log.writeBase ? { base_client_write: log.writeBase } : {}),
     supplements:    log.supplements,
     sleep:          log.sleep,
     notes:          log.notes,
@@ -145,16 +157,24 @@ export function resolveSave({ now, sentDate, sentLog, isLatest, result }) {
   //     on screen; only stop the spinner if nothing newer owns it.
   if (now.date !== sentDate) return isLatest ? { saving: false } : null;
 
-  const untouched = now.log === sentLog;
+  // An earlier serialized save may advance only the server base or pending
+  // receipt while this captured snapshot waits. That does not make the
+  // member's visible fields unsaved again. Actual field edits still change
+  // their value/reference and keep the draft dirty.
+  const metadata = new Set(['savedAt', 'baseFoodIds', 'base', 'writeBase']);
+  const untouched = now.log === sentLog || [...new Set([...Object.keys(now.log), ...Object.keys(sentLog)])]
+    .every(key => metadata.has(key) || now.log[key] === sentLog[key]);
 
   if (result.queued) {
     // Held on this device only. `saved` still goes true — the member's edit IS
     // safe — but only if what was queued is still what is on screen.
-    if (untouched && isLatest) return { saving: false, saved: true, queued: true, dirty: false };
-    return isLatest ? { saving: false } : null;
+    const lineage = result.write ? { log: { ...now.log, writeBase: result.write } } : {};
+    if (untouched && isLatest) return { saving: false, saved: true, queued: true, dirty: false, ...lineage };
+    return isLatest ? { saving: false, ...lineage } : result.write ? lineage : null;
   }
 
   const server = mapServerLog(result.data);
+  if (result.write) server.writeBase = result.write;
   if (untouched && isLatest) {
     return { saving: false, saved: true, queued: false, dirty: false, log: server };
   }
@@ -165,7 +185,8 @@ export function resolveSave({ now, sentDate, sentLog, isLatest, result }) {
   //     backwards, if answers arrive out of order.
   const patch = isLatest ? { saving: false } : {};
   if (newer(server.savedAt, now.log.savedAt)) {
-    patch.log = { ...now.log, savedAt: server.savedAt, baseFoodIds: server.baseFoodIds, base: server.base };
+    patch.log = { ...now.log, savedAt: server.savedAt, baseFoodIds: server.baseFoodIds, base: server.base,
+      ...(result.write ? { writeBase: result.write } : {}) };
   }
   return Object.keys(patch).length ? patch : null;
 }
