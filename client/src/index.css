@@ -68,6 +68,15 @@ input[type='date']::-webkit-calendar-picker-indicator { filter: invert(0.6); opa
 input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type='number'] { -moz-appearance: textfield; }
 
+/* A visible keyboard location in either theme, including icon-only actions.
+   Keep pointer interaction quiet; never remove the keyboard focus indicator. */
+button:focus-visible, a[href]:focus-visible, input:focus-visible,
+textarea:focus-visible, select:focus-visible, summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 3px;
+}
+
 /* ── Flex children must be allowed to shrink ───────────────────────────────────
    A flex item's default `min-width: auto` means it refuses to shrink below its
    content's intrinsic minimum. For a text node that minimum is the longest

@@ -17,7 +17,7 @@
  * onSend(text) — which should behave exactly like typing that text and
  * pressing send.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { VOICE_LANGUAGES, normalizeVoiceLang } from '../utils/voiceLanguage';
@@ -33,6 +33,9 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
   // Transcript accepted from finished takes; interim results render after it.
   const committedRef = useRef('');
   const taRef = useRef(null);
+  const fieldId = useId();
+  const statusId = `${fieldId}-status`;
+  const errorId = `${fieldId}-error`;
   const editVersionRef = useRef(0);
   const takeEditVersionRef = useRef(0);
 
@@ -119,20 +122,22 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
       style={{ borderColor: 'var(--border)' }}>
       {/* Header line: state + language toggle / discard */}
       <div className="flex items-start justify-between gap-2 mb-1.5">
-        {voice.requesting ? <span className="text-caption text-mid">Allow microphone access to begin…</span> : voice.listening ? (
-          <span className="text-caption text-red-400 font-medium flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
-            {autoSend ? 'Listening… pause when done, I\'ll send it' : 'Listening… pause to finish, or tap the mic'}
-          </span>
-        ) : voice.transcribing ? (
-          <span className="text-caption font-medium animate-pulse" style={{ color: accent }}>
-            ✨ Getting the exact words…
-          </span>
-        ) : (
-          <span className="text-caption font-medium" style={{ color: accent }}>
-            {voice.canRetry ? 'Recording kept for retry' : draft?.trim() ? 'Heard this — check and send' : 'Ready when you are'}
-          </span>
-        )}
+        <div id={statusId} role="status" aria-live="polite" aria-atomic="true" className="min-w-0 flex-1">
+          {voice.requesting ? <span className="text-caption text-mid">Allow microphone access to begin…</span> : voice.listening ? (
+            <span className="text-caption text-red-400 font-medium flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+              {autoSend ? 'Listening… pause when done, I\'ll send it' : 'Listening… pause to finish, or tap the mic'}
+            </span>
+          ) : voice.transcribing ? (
+            <span className="text-caption font-medium animate-pulse" style={{ color: accent }}>
+              ✨ Getting the exact words…
+            </span>
+          ) : (
+            <span className="text-caption font-medium" style={{ color: accent }}>
+              {voice.canRetry ? 'Recording kept for retry' : draft?.trim() ? 'Heard this — check and send' : 'Ready when you are'}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={discard} aria-label="Discard voice note"
             style={{ minWidth: 44, minHeight: 44 }}
@@ -153,7 +158,10 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
       {/* The transcript. A textarea the whole time so "tap to edit" is literal.
           Read-only while capturing to keep the caret from fighting interim
           updates; auto-grows so nothing is ever hidden. */}
+      <label htmlFor={fieldId} className="sr-only">Voice transcript</label>
       <textarea
+        id={fieldId}
+        aria-describedby={voice.error ? `${statusId} ${errorId}` : statusId}
         ref={taRef}
         value={draft || ''}
         readOnly={voice.listening || voice.requesting}
@@ -170,7 +178,7 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
       />
 
       {voice.error && (
-        <p role="status" className="text-caption text-amber-400 font-medium mt-1">{voice.error}</p>
+        <p id={errorId} role="status" aria-live="polite" aria-atomic="true" className="text-caption text-amber-400 font-medium mt-1">{voice.error}</p>
       )}
 
       {voice.canRetry && (

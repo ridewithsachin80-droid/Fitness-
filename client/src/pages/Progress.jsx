@@ -13,7 +13,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, ReferenceLine, Legend,
 } from 'recharts';
-import { HeroNumber, Segmented, Eyebrow, Icon, EmptyState } from '../components/primitives';
+import { HeroNumber, Segmented, Eyebrow, Icon, EmptyState, Sheet } from '../components/primitives';
 import { calcFoodMacros } from '../lib/day';
 import { haptic } from '../store/settingsStore';
 import { firstName } from '../utils/personName';
@@ -90,128 +90,117 @@ function PastLogModal({ log, onClose }) {
   });
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2">
-      <div className="bg-charcoal rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[88vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair flex-shrink-0">
+    <Sheet open={!!log} onClose={onClose} title={dateStr} eyebrow="Daily log">
+      <div data-testid="past-log-details" className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {log.weight_kg && (
+            <span className="text-xs font-semibold text-gold-deep">⚖ {log.weight_kg} kg</span>
+          )}
+          {log.compliance_pct != null && (
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              log.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
+              log.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' :
+              'bg-red-400/[0.14] text-red-400'}`}>
+              {log.compliance_pct}% compliance
+            </span>
+          )}
+        </div>
+
+        {/* Activities */}
+        {checkedActs.length > 0 && (
           <div>
-            <h3 className="font-bold text-white text-base">{dateStr}</h3>
-            <div className="flex items-center gap-3 mt-1">
-              {log.weight_kg && (
-                <span className="text-xs font-semibold text-gold-deep">⚖ {log.weight_kg} kg</span>
-              )}
-              {log.compliance_pct != null && (
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  log.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
-                  log.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' :
-                  'bg-red-400/[0.14] text-red-400'}`}>
-                  {log.compliance_pct}% compliance
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">🏃 Activities</p>
+            <div className="flex flex-wrap gap-1.5">
+              {checkedActs.map(a => (
+                <span key={a.id} className="text-xs bg-gold/[0.07] text-gold-light border border-gold/[0.14] px-2.5 py-1 rounded-full font-medium">
+                  {a.icon} {a.label}
                 </span>
-              )}
+              ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-lo hover:text-white text-2xl leading-none">×</button>
-        </div>
+        )}
 
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+        {/* ACV */}
+        {checkedAcv.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 ACV</p>
+            <div className="flex flex-wrap gap-1.5">
+              {checkedAcv.map(a => (
+                <span key={a.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
+                  {a.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
-          {/* Activities */}
-          {checkedActs.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">🏃 Activities</p>
-              <div className="flex flex-wrap gap-1.5">
-                {checkedActs.map(a => (
-                  <span key={a.id} className="text-xs bg-gold/[0.07] text-gold-light border border-gold/[0.14] px-2.5 py-1 rounded-full font-medium">
-                    {a.icon} {a.label}
+        {/* Food */}
+        {foodItems.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">
+              🥗 Food {kcal > 0 && <span className="font-normal text-orange-300 normal-case">· {kcal} kcal</span>}
+            </p>
+            <div className="space-y-1">
+              {foodItems.map((item, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 text-sm py-1 border-b border-hair last:border-0">
+                  <span className="min-w-0 flex-1 break-words text-white">{item.name || item.food_name}</span>
+                  <span className="max-w-[45%] break-words text-right text-lo text-xs">{item.grams}g
+                    {item.meal && <span className="ml-1 text-ghost">· {item.meal}</span>}
                   </span>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ACV */}
-          {checkedAcv.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 ACV</p>
-              <div className="flex flex-wrap gap-1.5">
-                {checkedAcv.map(a => (
-                  <span key={a.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
-                    {a.label}
-                  </span>
-                ))}
-              </div>
+        {/* Water */}
+        {log.water_ml > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-1">💧 Water</p>
+            <p className="text-sm text-blue-400 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
+          </div>
+        )}
+
+        {/* Supplements */}
+        {checkedSupps.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">💊 Supplements</p>
+            <div className="flex flex-wrap gap-1.5">
+              {checkedSupps.map(s => (
+                <span key={s.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
+                  {s.label}
+                </span>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Food */}
-          {foodItems.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">
-                🥗 Food {kcal > 0 && <span className="font-normal text-orange-300 normal-case">· {kcal} kcal</span>}
-              </p>
-              <div className="space-y-1">
-                {foodItems.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-hair last:border-0">
-                    <span className="text-white">{item.name || item.food_name}</span>
-                    <span className="text-lo text-xs">{item.grams}g
-                      {item.meal && <span className="ml-1 text-ghost">· {item.meal}</span>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Sleep */}
+        {(sleep.bedtime || sleep.waketime) && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-1">🌙 Sleep</p>
+            <p className="text-sm text-mid">
+              {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
+              {sleep.bedtime && sleep.waketime && ' → '}
+              {sleep.waketime && `Wake ${sleep.waketime?.slice(0,5)}`}
+              {sleep.quality && <span className="ml-2 text-amber-400">{'★'.repeat(sleep.quality)}</span>}
+            </p>
+          </div>
+        )}
 
-          {/* Water */}
-          {log.water_ml > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-1">💧 Water</p>
-              <p className="text-sm text-blue-400 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
-            </div>
-          )}
+        {/* Notes */}
+        {log.notes && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
+            <p className="text-sm text-mid whitespace-pre-wrap break-words leading-relaxed">{log.notes}</p>
+          </div>
+        )}
 
-          {/* Supplements */}
-          {checkedSupps.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">💊 Supplements</p>
-              <div className="flex flex-wrap gap-1.5">
-                {checkedSupps.map(s => (
-                  <span key={s.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
-                    {s.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Sleep */}
-          {(sleep.bedtime || sleep.waketime) && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-1">🌙 Sleep</p>
-              <p className="text-sm text-mid">
-                {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
-                {sleep.bedtime && sleep.waketime && ' → '}
-                {sleep.waketime && `Wake ${sleep.waketime?.slice(0,5)}`}
-                {sleep.quality && <span className="ml-2 text-amber-400">{'★'.repeat(sleep.quality)}</span>}
-              </p>
-            </div>
-          )}
-
-          {/* Notes */}
-          {log.notes && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
-              <p className="text-sm text-mid whitespace-pre-wrap leading-relaxed">{log.notes}</p>
-            </div>
-          )}
-
-          {!checkedActs.length && !foodItems.length && !log.weight_kg && (
-            <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>
-          )}
-        </div>
+        {!checkedActs.length && !foodItems.length && !log.weight_kg && (
+          <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>
+        )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 

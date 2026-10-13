@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
+import useModalScope, { ModalScopeContext } from '../../hooks/useModalScope';
+import { visibleEnabled } from '../../utils/modalStack';
 import Icon from './Icon';
 import { haptic } from '../../store/settingsStore';
 
@@ -23,36 +25,25 @@ import { haptic } from '../../store/settingsStore';
  * Content scrolls inside the sheet; the sheet itself is at most 92% of the
  * visible height. Pass `snap="full"` for editors that want the whole screen.
  */
-export default function Sheet({ open, onClose, title, eyebrow, children, snap = 'auto', footer, className = '' }) {
-  const reduce = useReducedMotion();
-  const panelRef = useRef(null);
-  const openerRef = useRef(null);
+export default function Sheet(props) {
+  if (typeof document === 'undefined') return null;
+  return createPortal(<AnimatePresence>{props.open && <SheetSurface key="sheet" {...props} />}</AnimatePresence>, document.body);
+}
 
-  // Scroll lock + focus management
-  useEffect(() => {
-    if (!open) return undefined;
-    openerRef.current = document.activeElement;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const t = setTimeout(() => {
-      const first = panelRef.current?.querySelector('input,textarea,select,button:not([data-sheet-close])');
-      (first || panelRef.current)?.focus?.({ preventScroll: true });
-    }, 60);
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    document.addEventListener('keydown', onKey);
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-      openerRef.current?.focus?.({ preventScroll: true });
-    };
-  }, [open, onClose]);
+function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer, className = '' }) {
+  const reduce = useReducedMotion();
+  const present = useIsPresent();
+  const panelRef = useRef(null), rootRef = useRef(null);
+  const modal = useModalScope({ open: present, roots: [rootRef], focusRef: panelRef, onClose,
+    initialFocus: () => [...(panelRef.current?.querySelectorAll('input,textarea,select,button:not([data-sheet-close])') || [])]
+      .find(node => visibleEnabled(node) && node.tabIndex >= 0),
+  });
 
   // Keyboard-safe height: the sheet sizes to the VISUAL viewport, which shrinks
   // when the soft keyboard opens. Without this, on Android the bottom of the
   // sheet (where Done lives) sits under the keys.
   useEffect(() => {
-    if (!open) return undefined;
+    if (!present) return undefined;
     const vv = window.visualViewport;
     const apply = () => {
       const h = vv ? vv.height : window.innerHeight;
@@ -62,16 +53,15 @@ export default function Sheet({ open, onClose, title, eyebrow, children, snap = 
     vv?.addEventListener('resize', apply);
     window.addEventListener('resize', apply);
     return () => { vv?.removeEventListener('resize', apply); window.removeEventListener('resize', apply); };
-  }, [open, snap]);
+  }, [present, snap]);
 
-  const close = () => { haptic(8); onClose?.(); };
+  const close = () => { haptic(8); modal.requestClose(); };
 
-  if (typeof document === 'undefined') return null;
-
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-[80] flex flex-col justify-end" role="presentation">
+  return (
+      <ModalScopeContext.Provider value={modal.scopeId}>
+        <div ref={rootRef} data-modal-scope="sheet" data-modal-exiting={!present ? "" : undefined} onKeyDown={modal.onKeyDown}
+          inert={!present ? true : undefined} aria-hidden={!present ? 'true' : undefined}
+          className="fixed inset-0 z-[80] flex flex-col justify-end" role="presentation">
           <motion.div
             key="backdrop"
             className="absolute inset-0 bg-black/60"
@@ -105,11 +95,11 @@ export default function Sheet({ open, onClose, title, eyebrow, children, snap = 
               <div className="flex items-start justify-between gap-3 px-5 pt-1 pb-3">
                 <div className="min-w-0">
                   {eyebrow && <span className="block text-eyebrow font-semibold uppercase tracking-widest text-gold-deep mb-0.5">{eyebrow}</span>}
-                  {title && <h2 className="font-display text-xl font-medium text-white leading-tight truncate">{title}</h2>}
+                  {title && <h2 className="font-display text-xl font-medium text-white leading-tight break-words">{title}</h2>}
                 </div>
                 <button type="button" data-sheet-close onClick={close} aria-label="Close"
-                  style={{ minWidth: 36, minHeight: 36 }}
-                  className="-mr-2 -mt-1 flex items-center justify-center rounded-full text-lo hover:text-white active:scale-95 transition">
+                  style={{ minWidth: 44, minHeight: 44 }}
+                  className="-mr-2 -mt-1 flex-shrink-0 flex items-center justify-center rounded-full text-lo hover:text-white active:scale-95 transition">
                   <Icon name="close" size={18} />
                 </button>
               </div>
@@ -126,8 +116,6 @@ export default function Sheet({ open, onClose, title, eyebrow, children, snap = 
             )}
           </motion.div>
         </div>
-      )}
-    </AnimatePresence>,
-    document.body,
+      </ModalScopeContext.Provider>
   );
 }

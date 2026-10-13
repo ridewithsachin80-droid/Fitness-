@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Segmented, Pressable } from '../primitives';
 import { labelFromEntry, withLabel, carbsOf } from '../../lib/day';
 import { saveMyLabel, forgetMyLabel } from '../../api/memberFoods';
@@ -22,6 +22,7 @@ import { haptic } from '../../store/settingsStore';
 const r1 = (v) => String(Math.round((Number(v) || 0) * 10) / 10);
 
 export default function MacroEditor({ name, grams, per100g, foodId = null, isLabel = false, onSave, onCancel }) {
+  const descriptionId = useId();
   const g = Number(grams) || 0;
   const [mode, setMode] = useState('per100');
   const [val, setVal] = useState({
@@ -78,6 +79,7 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
       <span className="block text-eyebrow font-semibold uppercase tracking-widest text-lo mb-1">{label}</span>
       <span className="relative block">
         <input type="text" inputMode="decimal" value={val[k]} onChange={set(k)} data-testid={`macro-in-${k}`}
+          aria-describedby={descriptionId} style={{ minHeight: 44 }}
           className="w-full bg-charcoal border border-white/[0.14] rounded-xl pl-2.5 pr-6 py-2 text-sm text-white tabular-nums
             focus:outline-none focus:ring-2 focus:ring-gold/40" />
         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-caption text-ghost">g</span>
@@ -86,9 +88,10 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
   );
 
   return (
-    <div className="space-y-3" data-testid="macro-editor">
+    <div className="space-y-3" data-testid="macro-editor" aria-busy={busy}>
       <Segmented size="sm" value={mode} onChange={switchMode} name="Numbers for"
         options={[{ id: 'per100', label: 'Per 100 g (pack)' }, { id: 'portion', label: `For ${g} g` }]} />
+      <p id={descriptionId} className="sr-only">Enter grams of each nutrient {mode === 'per100' ? 'per 100 grams of food' : `for your ${g} gram portion`}. Calories are calculated from these values.</p>
 
       <div className="grid grid-cols-3 gap-2">
         {field('protein', 'Protein')}
@@ -107,11 +110,11 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
             <p className="text-caption text-lo mt-0.5">Worked out as 4 × protein + 4 × carbs + 9 × fat. A pack’s own kcal can differ by a few.</p>
           </>
         ) : (
-          <p className="text-caption text-amber-300" data-testid="macro-error-live">{res.error}</p>
+          <p className="text-caption text-warn" data-testid="macro-error-live">{res.error}</p>
         )}
       </div>
 
-      <label className="flex items-start gap-2.5 cursor-pointer" style={{ minHeight: 32 }}>
+      <label className="flex items-start gap-2.5 cursor-pointer" style={{ minHeight: 44 }}>
         <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} data-testid="macro-remember"
           className="mt-0.5 w-4 h-4 accent-gold flex-shrink-0" />
         <span className="text-note text-mid leading-snug">
@@ -120,8 +123,8 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
         </span>
       </label>
 
-      {error && <p className="text-caption text-red-300 leading-snug" data-testid="macro-error">{error}</p>}
-      {note && <p className="text-caption text-gold-light leading-snug" data-testid="macro-note">{note}</p>}
+      {error && <p className="text-caption text-danger leading-snug" data-testid="macro-error" role="alert">{error}</p>}
+      {note && <p className="text-caption text-gold-light leading-snug" data-testid="macro-note" role="status">{note}</p>}
 
       <div className="flex gap-2">
         <Pressable variant="primary" className="flex-1" onPress={save} disabled={busy} data-testid="macro-save">
@@ -130,7 +133,7 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
         <Pressable variant="secondary" onPress={onCancel} data-testid="macro-cancel">Cancel</Pressable>
       </div>
       {isLabel && !note && (
-        <button type="button" onClick={forget} data-testid="macro-forget" style={{ minHeight: 32 }}
+        <button type="button" onClick={forget} data-testid="macro-forget" style={{ minHeight: 44 }}
           className="text-caption text-lo underline underline-offset-2">
           Stop using my label for {name}
         </button>

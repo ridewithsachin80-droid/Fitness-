@@ -2,9 +2,10 @@
  * The shared store keeps a draft across navigation. Today mounts this once
  * as an on-demand workspace; existing manual sheets use the same log store. */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import useAIEntryActions from '../hooks/useAIEntryActions';
+import useModalScope, { ModalScopeContext } from '../hooks/useModalScope';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import api from '../api/client';
 import { useLogStore } from '../store/logStore';
@@ -79,6 +80,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const logError = useLogStore(s => s.error);
   const assistantReady = logDate === today() && !logLoading && logError !== 'Failed to load log';
   const overlayRef = useRef(null);
+  const composerRef = useRef(null);
+  const composerId = useId();
   const previousFocus = useRef(null);
   const [composerHeight, setComposerHeight] = useState(220);
 
@@ -121,6 +124,11 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const composerOpen    = useAIChat(s => s.composerOpen);
   const threadRef = useRef(null);
   const kbInset   = useKeyboardInset();
+  const modal = useModalScope({ open: overlay && composerOpen, roots: [overlayRef, composerRef],
+    focusRef: overlayRef, openerRef: previousFocus,
+    initialFocus: () => useAIChat.getState().entryMode === 'text' ? inputRef.current : overlayRef.current?.querySelector('button'),
+    onClose: () => useAIChat.getState().closeComposer(),
+  });
 
   // The box follows its content in BOTH directions — grows when a dictation
   // lands, shrinks when text is deleted or cleared — so it can never sit
@@ -557,26 +565,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     }));
 
   useEffect(() => {
-    if (!overlay || !composerOpen) return undefined;
-    if (!previousFocus.current) previousFocus.current = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = e => {
-      const nested = e.target?.closest?.('[role="dialog"]');
-      if (nested && nested !== overlayRef.current) return;
-      if (e.key === 'Escape') { e.preventDefault(); useAIChat.getState().closeComposer(); }
-      if (e.key === 'Tab') {
-        const nodes = [...(overlayRef.current?.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[tabindex="0"]') || []),
-          ...document.querySelectorAll('.member-assistant-composer button:not(:disabled),.member-assistant-composer textarea:not(:disabled)')].filter(el => el.getClientRects().length);
-        if (!nodes.length) return;
-        if (e.shiftKey && document.activeElement === nodes[0]) { e.preventDefault(); nodes[nodes.length-1].focus(); }
-        else if (!e.shiftKey && document.activeElement === nodes[nodes.length-1]) { e.preventDefault(); nodes[0].focus(); }
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKey); previousFocus.current?.focus?.(); previousFocus.current = null; };
-  }, [overlay, composerOpen]);
-  useEffect(() => {
     if (!overlay || !composerOpen || typeof ResizeObserver === 'undefined') return undefined;
     const el = document.querySelector('[data-testid="composer-bar"]');
     if (!el) return undefined;
@@ -995,11 +983,12 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     </section>
   );
 
-  return (<>
+  return (<ModalScopeContext.Provider value={modal.scopeId}>
     {overlay ? (composerOpen && createPortal(
-      <div className="member-assistant-overlay" role="dialog" aria-modal="true" aria-label="FitLife AI daily logging" ref={overlayRef}>
+      <div className="member-assistant-overlay" role="dialog" aria-modal="true" aria-label="FitLife AI daily logging" ref={overlayRef}
+        data-modal-scope="ai-thread" aria-owns={composerId} tabIndex={-1} onKeyDown={modal.onKeyDown}>
         <div className="member-assistant-head"><div><strong>FitLife AI</strong><p>One place for your whole day.</p></div>
-          <button type="button" className="member-theme" onClick={() => useAIChat.getState().closeComposer()} aria-label="Close AI assistant"><Icon name="close" size={19} /></button></div>
+          <button type="button" className="member-theme" onClick={modal.requestClose} aria-label="Close AI assistant"><Icon name="close" size={19} /></button></div>
         <div className="member-assistant-scroll" style={{ paddingBottom: composerHeight + kbInset }}>
           {thread}
         </div>
@@ -1011,7 +1000,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         meta asks Chrome to resize the layout viewport, and useKeyboardInset
         covers iOS, which ignores that and needs the visualViewport delta. */}
     {typeof document !== 'undefined' && composerOpen && createPortal(
-      <div data-testid="composer" className={`fixed left-0 right-0 z-[45] pointer-events-none fade-up ${overlay ? 'member-assistant-composer' : ''}`}
+      <div ref={composerRef} id={composerId} data-testid="composer" data-modal-scope={overlay ? "ai-composer" : undefined} onKeyDown={overlay ? modal.onKeyDown : undefined} className={`fixed left-0 right-0 z-[45] pointer-events-none fade-up ${overlay ? 'member-assistant-composer' : ''}`}
         style={{ bottom: `calc(${(overlay ? 8 : composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
       <div className="max-w-md mx-auto px-3 pointer-events-auto">
       <div className="glass glass-solid rounded-2xl shadow-float px-3 pt-2 pb-2" data-testid="composer-bar">
@@ -1037,10 +1026,14 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
             onFocus={() => useAIChat.getState().setComposerFocused(true)}
             onBlur={() => useAIChat.getState().setComposerFocused(false)}
             onKeyDown={(e) => {
+              if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229) return;
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
               if (e.key === 'Escape') {
                 e.preventDefault();
-                if (input.trim()) e.currentTarget.blur();                    // step away, keep the draft
+                if (input.trim()) {
+                  if (overlay) overlayRef.current?.querySelector('button')?.focus({ preventScroll: true });
+                  else e.currentTarget.blur();                              // step away, keep the draft
+                }
                 else useAIChat.getState().closeComposer();                    // nothing typed → put the bar away
               }
             }}
@@ -1109,6 +1102,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       </div>,
       document.body,
     )}
-    </>
+    </ModalScopeContext.Provider>
   );
 }

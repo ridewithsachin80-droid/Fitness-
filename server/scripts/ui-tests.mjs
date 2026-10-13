@@ -111,6 +111,17 @@ function run(code, before = null) {
   w.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {},
                           addEventListener() {}, removeEventListener() {} });
   w.scrollTo = () => {};
+  // JSDOM has no layout. Give connected, CSS-visible controls a rectangle so
+  // production modal eligibility can run; actual geometry/inert/focus behavior
+  // is verified separately by test-modal-accessibility in Chromium.
+  w.HTMLElement.prototype.getClientRects = function () {
+    if (!this.isConnected || this.closest('[hidden]')) return [];
+    for (let el = this; el; el = el.parentElement) {
+      const style = w.getComputedStyle(el);
+      if (style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)) return [];
+    }
+    return [new w.DOMRect(0, 0, 1, 1)];
+  };
   w.confirm  = () => true;
   w.fetch    = () => Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
   w.addEventListener('error', e => errors.push(String(e.message)));
@@ -638,7 +649,7 @@ async function primitivesTest() {
   ck('sheet locks page scroll while open', d.body.style.overflow === 'hidden');
   ck('sheet moves focus inside itself (first input)', d.activeElement && d.activeElement.id === 'sheet-input', d.activeElement && d.activeElement.id);
   ck('sheet has a footer', /Done/.test(dialog.innerHTML));
-  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(500);
+  d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await tick(500);
   ck('Escape closes the sheet and unlocks scroll', !d.querySelector('[role=dialog]') && d.body.style.overflow === '');
   w.__click('Open sheet'); await tick(200);
   d.querySelector('[data-sheet-close]').click(); await tick(500);
@@ -1272,7 +1283,7 @@ async function memberPage9bTest() {
   setV(q('push-body'), 'Please log lunch'); q('push-send').click(); await tick(200);
   const push = w.__posts.find(p => /\/admin\/push$/.test(p.url));
   ck('push POST carries patient_id 12 and the text', push && push.body.patient_id === 12 && /log lunch/.test(push.body.body) && !!q('push-done'), push && push.body);
-  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(700);
+  d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await tick(700);
   ck('Escape closes the sheet', !d.querySelector('[role=dialog]'));
 
   // a coach (not admin) gets no Push tab

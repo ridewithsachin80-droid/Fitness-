@@ -109,6 +109,17 @@ function run(code, before = null) {
   w.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {},
                           addEventListener() {}, removeEventListener() {} });
   w.scrollTo = () => {};
+  // JSDOM has no layout. Give connected, CSS-visible controls a rectangle so
+  // production modal eligibility can run; actual geometry/inert/focus behavior
+  // is verified separately by test-modal-accessibility in Chromium.
+  w.HTMLElement.prototype.getClientRects = function () {
+    if (!this.isConnected || this.closest('[hidden]')) return [];
+    for (let el = this; el; el = el.parentElement) {
+      const style = w.getComputedStyle(el);
+      if (style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)) return [];
+    }
+    return [new w.DOMRect(0, 0, 1, 1)];
+  };
   w.confirm  = () => true;
   w.fetch    = () => Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
   w.addEventListener('error', e => errors.push(String(e.message)));

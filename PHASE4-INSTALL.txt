@@ -1,0 +1,39 @@
+FITLIFE PHASE 4 — CUMULATIVE UPDATED FILES ONLY
+
+Includes the Phase 3 AI Save/Edit/Undo fixes and Phase 4 accessibility changes.
+Target: TEST branch at https://fitness-test.up.railway.app/
+Last verified deployment: 8a1da6560e422bdd313e54b70565a455a9815d07
+This is an overlay for the existing Fitness- repository, not a standalone app.
+It also overlays the previously delivered Phase 3 files. Use this one code ZIP.
+
+1. Extract this ZIP. Copy its client/, server/, qa/ and docs/ folders and
+   UPDATE-README.txt into the existing repository root on branch test.
+   Preserve paths and replace matching files. Do not upload the ZIP itself
+   as the application. Do not delete existing repository folders.
+2. Commit the changes and require a fresh green GitHub Test gate, including
+   all 49 database suites. Earlier CI results do not certify this build.
+3. Deploy that test revision through Railway. No new migration or env variable.
+4. Reload FitLife, accept the update prompt and verify the new frontend asset:
+   /assets/index-zar7u_1L.js
+5. Execute UAT-193 through UAT-208, Phase 3 UAT-175–192 and existing P0
+   acceptance with dedicated test accounts. Real phones and screen readers
+   remain required; browser fixtures do not replace those checks.
+
+Patch alternative ONLY for a clean checkout at the stated deployed baseline:
+  git apply --check phase4-update.patch
+  git apply phase4-update.patch
+Use folder replacement OR the patch, not both. The patch is cumulative and is
+not an incremental patch to an already modified Phase 3 checkout.
+
+Verification: production build passed; 27 available local suites /
+2,326 assertions passed. Full new CI, deployment and live acceptance
+are pending. The previous CI59/74 suites/4,447 assertions is historical.
+
+Read docs/reviews/PHASE4-PENDING-PLAN.md for all remaining work and limitations.
+This is a bounded accessibility improvement, not a claim of complete WCAG or
+physical screen-reader/device verification. Existing backend concurrency and
+health-record reversal limitations remain explicit.
+
+Commit: 507c2e4434a14e57400cf079dc971dce8ba99051
+Updated repository files: 58
+The Excel and QA evidence ZIP are reports, not deployment packages.
