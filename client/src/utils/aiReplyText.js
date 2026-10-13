@@ -1,18 +1,22 @@
+import { normalizeUnresolvedFoods } from './unresolvedFoods';
+
 const hasRows = value => Array.isArray(value) && value.length > 0;
 const positive = value => Number.isFinite(Number(value)) && Number(value) > 0;
 
 /** Logging replies describe a proposal, never a completed write. The model's
  * prose can disagree with resolved foods, member edits or save status, so the
  * review itself owns quantities, nutrition and the eventual save receipt. */
-export function hasLoggingPreview(message) {
-  if (message?.reviewProposed) return true;
-  const parsed = message?.parsed;
-  if (hasRows(message?.lab?.results)) return true;
+function hasParsedEntries(parsed) {
   if (!parsed) return false;
   return ['foods', 'activities', 'acv', 'supplements', 'workouts', 'corrections', 'bodyMetrics']
     .some(key => hasRows(parsed[key]))
     || positive(parsed.weight_kg) || positive(parsed.water_ml_add) || !!(parsed.sleep?.bedtime || parsed.sleep?.waketime)
     || parsed.notesOn === true || (typeof parsed.notes === 'string' && parsed.notes.trim().length > 0);
+}
+
+export function hasLoggingPreview(message) {
+  return !!message?.reviewProposed || hasRows(message?.lab?.results) || hasParsedEntries(message?.parsed)
+    || normalizeUnresolvedFoods(message?.parsed?.unresolved_foods).length > 0;
 }
 
 /** Follow-ups need the member's current reviewed values, including a photo's
@@ -22,6 +26,7 @@ export function aiContextText(message) {
   const p = message.parsed || {};
   const rows = value => Array.isArray(value) ? value.filter(Boolean) : [];
   const parts = rows(p.foods).map(f => `${f.name} ${f.grams}g ${f.meal || ''}${f.on === false ? ' (excluded)' : ''}`.trim());
+  for (const food of normalizeUnresolvedFoods(p.unresolved_foods)) parts.push(`Not included: ${food.name}${food.meal ? ` (${food.meal})` : ''}; quantity needed`);
   if (positive(p.weight_kg)) parts.push(`Weight ${p.weight_kg}kg${p.weightOn === false ? ' (excluded)' : ''}`);
   if (positive(p.water_ml_add)) parts.push(`Water +${p.water_ml_add}ml${p.waterOn === false ? ' (excluded)' : ''}`);
   if (p.sleep) parts.push(`Sleep ${p.sleep.bedtime || ''}–${p.sleep.waketime || ''}${p.sleepOn === false ? ' (excluded)' : ''}`);
@@ -44,6 +49,10 @@ export function aiContextText(message) {
 
 export function aiReplyText(message) {
   if (!hasLoggingPreview(message)) return typeof message?.text === 'string' ? message.text : '';
+  if (normalizeUnresolvedFoods(message?.parsed?.unresolved_foods).length
+    && !hasParsedEntries(message?.parsed) && !hasRows(message?.lab?.results)) {
+    return 'Tell me the amount for the food below. Nothing has been saved yet.';
+  }
   // Even when every row is excluded, this remains an unsaved proposal.
   // Applied can mean queued or a partial failure; its status below is the
   // only authority for whether anything actually reached the member's log.

@@ -22,6 +22,8 @@ import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CH
 export { useAIChat };
 import DaySummary from './DaySummary';
 import AIFoodReview from './chat/AIFoodReview';
+import UnresolvedFoods from './chat/UnresolvedFoods';
+import { normalizeUnresolvedFoods, foodClarificationContext } from '../utils/unresolvedFoods';
 import UsualMeals from './chat/UsualMeals';
 import { usualReview } from '../utils/usualMeals';
 import AIAttachments from './chat/AIAttachments';
@@ -228,6 +230,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           water_ml_add: null, waterOn: false,
           sleep: null, sleepOn: false,
           foods: (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
+          unresolved_foods: normalizeUnresolvedFoods(data.unresolved_foods),
           workouts: [],
           totals: data.totals,
         },
@@ -469,6 +472,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           mealSlots,
           recent,
           lastFoods,
+          foodClarification: foodClarificationContext(useAIChat.getState().messages, today()),
           activities:    proto.activities.map(({ id, label, sub }) => ({ id, label, sub })),
           acv:           proto.acv.map(({ id, label, sub }) => ({ id, label, sub })),
           supplements:   proto.supplements.map(({ id, label, sub }) => ({ id, label, sub })),
@@ -514,7 +518,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         evalMessage: text,
         // A meal-plan question with nothing to apply: the answer offers "Log <next meal> as planned".
         planAsk: isMealPlanQuestion(text) && data.weight_kg == null && !(data.foods || []).length
-          && !(data.workouts || []).length && !(data.corrections || []).length,
+          && !(data.workouts || []).length && !(data.corrections || []).length && !normalizeUnresolvedFoods(data.unresolved_foods).length,
         parsed: {
           weight_kg:    data.weight_kg,
           weightOn:     data.weight_kg != null,
@@ -527,6 +531,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           sleepOn:      !!data.sleep,
           notes: data.notes || '', notesOn: !!data.notes,
           foods:        (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
+          unresolved_foods: normalizeUnresolvedFoods(data.unresolved_foods),
           corrections:  (data.corrections || []).map(c => ({ ...c, on: true })),
           workouts:     (data.workouts || []).map(w => ({ ...w, on: true })),
           totals:       data.totals,
@@ -623,6 +628,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                   {m.summary
                     ? <DaySummary s={m.summary} />
                     : <p className="leading-relaxed whitespace-pre-line" data-testid="ai-reply-text">{aiReplyText(m)}</p>}
+                  <UnresolvedFoods foods={m.parsed?.unresolved_foods} reviewedFoods={m.parsed?.foods} />
 
                   {m.failedRequest && requestCurrent(m.failedRequest) && <AIRequestRecovery
                     request={m.failedRequest} requestEdit={requestEdit} setRequestEdit={setRequestEdit}

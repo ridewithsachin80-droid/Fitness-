@@ -1,95 +1,86 @@
-FITLIFE — PHASE 4 REGRESSION
-Scope: partial accessibility pass plus cumulative Phase 3 AI-review changes.
-Verified deployment / patch target: 8a1da6560e422bdd313e54b70565a455a9815d07
-Source diff base: 43a69b3fcf149132d13a890fff6add8e5d4c2c57
-Phase 4 development base: 3386271329f259e6f5954e29b9d2d0a33b049af5
-Final package revision: see PHASE4-INSTALL.txt in the code ZIP
+FITLIFE — MEAL CLARIFICATION REGRESSION
+Scope: incremental named-food quantity clarification on verified Phase 4.
+Intended deployment baseline: 1c0c0408b80134d8d26812c7e1f0073271e8e939
+Matching local baseline: 507c2e4434a14e57400cf079dc971dce8ba99051
+New fix revision: see MEAL-CLARIFICATION-INSTALL.txt in the code ZIP
+New build asset: /assets/index-DyjU6GwD.js
 Target: https://fitness-test.up.railway.app/ (test only)
 
 REPEATABLE GATE
 1. Install dependencies from the repository and server package locks.
-2. Run npm test from server. Its pretest builds the client; test-local.sh creates
-   isolated localhost PostgreSQL on port 5433 and runs registered suites. Never
-   point fixture tests at the live database. Existing database guards,
+2. Run npm test from server. Its pretest builds the client; test-local.sh
+   creates isolated localhost PostgreSQL on port 5433 and runs registered
+   suites. Never use the live database for fixtures. Existing database guards,
    component-size gates and layout thresholds remain in force.
-3. Require a new green GitHub Test gate for the exact cumulative commit.
-   Preserve failed-run evidence, fix reproducible defects, rebuild and repeat
-   focused checks plus the complete registered gate after each source build.
-4. Deploy the matching test commit and verify frontend/server identity.
-   Then run from the repository root:
-   node server/scripts/test-deployment.mjs
-5. Run workbook Acceptance cases on disposable member/coach/admin accounts.
-   Start with P0, then Phase 3 UAT-175–192 and Phase 4 UAT-193–208. Cover both
-   themes, enlarged text, keyboard-only navigation and supported Android/iPhone
-   browser/PWA paths. Preserve real member records.
-6. Record actual outcome, exact revision, browser/device and evidence. Keep
-   Not run, Blocked, Failed and Passed distinct. A written test case is not an
-   executed pass, and an older green CI run cannot certify current source.
+3. Require a new green Test gate for the exact incremental fix commit.
+   Preserve failures, fix defects, rebuild, then repeat focused checks and
+   the complete available gate. Historical counts remain separate.
+4. Deploy the matching test commit, verify frontend/server identity, then run
+   node server/scripts/test-deployment.mjs from the repository root.
+5. Use disposable accounts for live acceptance. Start with relevant P0 and
+   UAT-209–212; continue remaining Phase 3 UAT-175–192 and Phase 4 UAT-193–208
+   where not yet executed. Retain physical device/screen-reader checks.
+6. Record expected/actual result, revision, device and evidence. Not run,
+   Blocked, Failed and Passed differ. Preserve real member data; synthetic
+   provider responses do not prove live AI accuracy.
 
-NEW PHASE 4 COVERAGE
-test-modal-accessibility.mjs exercises participating real modal components in
-the browser: modal stack ownership, topmost focus, nested Escape/scroll/focus
-restoration and the touched accessible controls/announcements. All 84 assertions
-passed on the final source; this suite is included in the local totals below.
-The catalog contains 16 new manual cases, UAT-193–208, for 208 total.
-The new cases remain unexecuted until actual supported
-browser/device results are recorded. Fixture runs do not count as physical
-screen-reader acceptance.
+NEW FIX COVERAGE
+test-food-clarifications.js tests the real server parse pipeline with an
+isolated provider/database stub: valid portions, unresolved preservation,
+bounded context, canonical DB nutrition, truthful pending status, no daily-log
+or workout writes, and the known omission-from-both-arrays limitation.
+test-ai-food-clarifications.mjs mounts the actual AI component: mixed and
+unresolved-only replies, no automatic save, canonical edited quantities,
+short-answer context, exact Retry/newer-draft preservation, boundaries and
+photo-response handling. Model no-repeat behavior is synthetic in fixtures,
+not a guaranteed live-provider property.
 
-Phase 3's test-ai-save-receipts.mjs and all prior voice, photo, portion, cache,
-offline, session and full UI suites remain in the gate. Retest AI review Save,
-Edit, Undo and partial failures because the cumulative ZIP includes Phase 3.
-Avoid double-counting premium assertions already included in the full UI run
-or focused checks already included in a reported suite total.
+Prior modal accessibility, Save/Edit/Undo, voice/photo/portion, cache/offline,
+session and full UI suites remain registered. Do not add nested premium
+checks or focused reruns again when reporting combined suite totals.
+The manual catalog contains 212 cases. New UAT-209–212 remain Not run.
 
-CURRENT PHASE 4 RESULTS
+NEW FIX RESULTS
 Production build: PASS
-Focused modal/browser run: PASS — 84 assertions (included in local totals)
-Available local suites: 27 passed — 26 logic/module suites plus the full UI run
-Passing assertions: 2,326 — 1,509 logic/module plus 817 full UI
-Failing assertions: 0
-Full UI includes 693 core assertions and 124 nested premium assertions.
-Blocked/unexecuted suites: 49 PostgreSQL suites require the new isolated CI gate
-New complete GitHub CI for final revision: PENDING
-Deployed revision and asset verification: PENDING
-Signed-in acceptance and physical device/screen-reader results: PENDING
-Optional lint result: NOT RUN — eslint is not installed locally
+Focused server/client checks: PASS — 46 server + 60 client assertions
+Available local suites/assertions: PASS — 29 suites / 2,432 assertions
+Breakdown: 28 logic/module suites / 1,615 assertions; full UI / 817 assertions
+The UI total includes 693 core and 124 nested premium assertions, counted once.
+Failures: 0
+New complete GitHub CI, including 49 database suites: PENDING
+New deployment/asset verification: PENDING
+Live provider/member/device acceptance: PENDING
+Optional lint: report the actual new-run outcome; do not infer a pass
 
-HISTORICAL EVIDENCE — KEEP SEPARATE
-- Last verified deployment: 8a1da65.
-- Its GitHub Test run 59 passed 74 suites / 4,447 assertions. The preceding
-  release also recorded 13 public deployment checks and a scoped draft-only
-  live retest. Those results predate the new Phase 3 and Phase 4 source.
-- Phase 3 locally passed 26 available suites / 2,242 assertions: 25 logic/module
-  suites with 1,425 assertions plus full UI with 817 (including 124 premium).
-  The separate focused premium run is not added again. Phase 3 deployment has
-  not been confirmed.
-- The user's earlier one-tap camera/microphone confirmation remains evidence
-  for the phones/build tested then. Repeat relevant cases on the new revision;
-  synthetic speech/capture fixtures do not prove physical behavior or accuracy.
-- Local PostgreSQL is unavailable. The 49 database suites in the preceding
-  gate remain a required separate CI step; use the final registered manifest
-  for this build's total. No database pass is inferred from fixture tests.
+VERIFIED BASELINE EVIDENCE — NOT THE NEW FIX
+Local Phase 4 507c2e4 corresponds to uploaded test head 1c0c0408. All 58 packaged
+files match Git blob hashes; frontend is verified. GitHub Test gate run 61,
+run ID 38415568836, gate job 115358963035, passed 76 suites / 4,642 assertions
+and client build:
+- 26 logic/module suites / 1,509 assertions
+- 49 database suites / 2,316 assertions
+- Full UI / 817 assertions (693 core plus 124 nested premium)
+Optional ESLint was not installed, so it was Not run. Baseline local available
+gate was 27 suites / 2,326 assertions; its 84 modal checks are already included.
+Evidence: qa/results/phase4-deployed/github-verification.txt.
+Older deployment 8a1da65 / CI run 59 (74 suites / 4,447 assertions) and Phase 3
+local 26 suites / 2,242 assertions remain historical only. Do not add them.
 
-ACCESSIBILITY AND ARTIFACT BOUNDARIES
-This pass covers shared Sheet/participating AI modal behavior, focus styling,
-touched target sizes and labels/status, plus Progress's past-day Sheet. It is
-not a completed app-wide accessibility audit or WCAG certification. Physical
-screen-reader/device checks, remaining legacy Milestone/staff modal migration
-and a broad measured contrast pass remain pending. Desktop emulation and
-overflow checks are distinct from assistive-technology acceptance.
+BOUNDARIES AND PACKAGE
+The new fix is not deployed. Ship incremental updated files from local 507c2e4
+to the new revision for remote 1c0c0408. No deletions, migrations or new
+environment variables; preserve repository structure. The remote baseline
+workflow runs npm test and a separate client build without uploading local
+regression artifacts; its job logs confirm the full gate. Local PostgreSQL
+unavailability does not waive the new isolated CI database gate.
 
-Health/asset smoke tests do not prove authenticated save/reload, coach-visible
-records, backend revision or physical device behavior. Individual browser and
-component suites use synthetic data and may stub AI/storage/network boundaries.
-The workbook and evidence ZIP must state those boundaries for actual runs.
-
-PACKAGE AND BACKLOG
-Deliver one cumulative updated-files ZIP containing Phase 3 + Phase 4. Generate
-its app-source diff from 43a69b3; exclude unrelated workflow differences and
-installation-aid deletions. Verify the patch against uploaded baseline 8a1da65.
-The folder overlay supports 8a1da65 or a Phase 3 checkout; the patch alternative
-supports only a clean 8a1da65 checkout. Preserve original repository paths.
-The workbook and evidence ZIP are reports, not deployable app packages.
-docs/reviews/PHASE4-PENDING-PLAN.md retains the full release gate, feature
-preservation checklist, Phase 3 backend limits and remaining P1/P2 backlog.
+The original live omission's provider response/path was not captured. A model
+can omit both arrays or repeat reviewed rows despite instructions; earlier
+clarification notices remain historical. No fixture pass removes these limits.
+Accessibility remains partial: physical device/screen-reader acceptance,
+legacy Milestone/staff modals and broad contrast review remain pending.
+Browser 20px text is 125% coverage, not physical 200% acceptance or certification.
+Phase 3 standalone-lab receipts/idempotency, atomic cross-device workout
+revisions and body-metric idempotency/reversal remain follow-ups.
+Full backlog: docs/reviews/PHASE4-PENDING-PLAN.md.
+Fix details: docs/reviews/PHASE4-MEAL-CLARIFICATION-FIX.md.

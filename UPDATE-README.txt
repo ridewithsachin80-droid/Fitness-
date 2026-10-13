@@ -1,78 +1,66 @@
-FITLIFE — PHASE 4: ACCESSIBILITY AND MODAL INTERACTIONS
-Cumulative Phase 3 + Phase 4 updated files; repository paths retained.
+FITLIFE — MEAL QUANTITY CLARIFICATION FIX
+Incremental updated files only; original repository paths retained.
 
-Verified deployment / patch target: 8a1da6560e422bdd313e54b70565a455a9815d07
-Source diff base: 43a69b3fcf149132d13a890fff6add8e5d4c2c57
-Phase 4 development base: 3386271329f259e6f5954e29b9d2d0a33b049af5
-Final package revision: see PHASE4-INSTALL.txt in the code ZIP
-Final frontend asset: /assets/index-zar7u_1L.js
+Intended installed baseline: 1c0c0408b80134d8d26812c7e1f0073271e8e939 (test)
+Matching local Phase 4 source: 507c2e4434a14e57400cf079dc971dce8ba99051
+New fix revision: see MEAL-CLARIFICATION-INSTALL.txt in the code ZIP
+New frontend asset: /assets/index-DyjU6GwD.js
 Target: https://fitness-test.up.railway.app/ (branch test only)
 
 WHICH ZIP TO USE
-Use one cumulative FitLife-Phase4-Updated-Files.zip. It includes Phase 3 and
-Phase 4 because Phase 3 deployment has not been confirmed. Its source diff is
-prepared from 43a69b3, whose app source matches verified deployment 8a1da65;
-unrelated workflow differences and installation-aid deletions are excluded.
-The final patch must be checked against a clean 8a1da65 checkout before release.
-The folder overlay supports the verified baseline or an existing Phase 3
-checkout. Do not install the separate Phase 3 ZIP as well. The Excel and
-evidence ZIP are reports, not app code.
+Use the new incremental meal-clarification updated-files ZIP on the deployed
+Phase 4 baseline above. Do not reapply the older cumulative Phase 3/Phase 4 ZIP.
+The archive must include only changed/new files and its coherent client/dist
+build, preserving repository paths. Excel and evidence ZIPs are reports, not
+app code. This new fix is not deployed yet.
+
+WHAT THIS FIX CHANGES
+The live text "2 idlis and sambar for breakfast" produced only Idli, 80 g,
+107 kcal. Adding "1 bowl" for sambar produced both foods, 176 kcal total.
+The parser is instructed to represent every named consumed food. Missing or
+invalid grams become a separate amount question instead of silent omission.
+A known standard serving may still be proposed with an explicit Estimated
+label and editable quantity.
+
+Unresolved foods have no invented grams/macros and do not enter totals or the
+Save count. A short answer uses bounded context from the latest unsaved same-day
+review. Reviewed food stays available; the prompt asks for only newly resolved
+food. Every resolved portion still requires explicit Save. Existing quantities,
+macros, canonical nutrition, receipts, account/day guards, minimal navigation,
+themes and one-tap Speak/Snap/Type remain in place.
 
 INSTALL
-1. Extract the cumulative ZIP. Copy every included path into the repository
-   root on branch test, preserving client/, server/, qa/, docs/ and included
-   root files. Replace matching files. If the checkout contains later changes,
-   review and merge them instead of overwriting them blindly.
-2. Include every new hook, utility and test. Apply the coherent client/dist
-   build. This overlay does not require file deletions.
-   A separate Phase 3 installation is not required.
-3. Run the complete regression gate and require a NEW green GitHub Test result
-   for the final package commit. Historical run 59 passed 74 suites / 4,447
-   assertions for the preceding release; it does not certify this package.
-4. Deploy that exact commit to the named Railway test service. Reload FitLife,
-   accept the update prompt and verify the deployed revision and frontend asset
-   against the final package manifest. A green Railway service alone does not
-   prove that this UI and its matching server revision are running.
-5. Run node server/scripts/test-deployment.mjs, then the workbook's P0 cases,
-   Phase 3 UAT-175–192 and Phase 4 UAT-193–208 using disposable test accounts.
-   The catalog contains 208 cases, including 16 new Phase 4 cases. Include
-   supported Android/iPhone browser/PWA paths, keyboard, both themes and larger
-   text. Keep real member records intact.
-
-INCLUDED SCOPE
-- Phase 3 per-card AI Save/Edit/Undo receipts and truthful partial-save status,
-  safe retry, account/day guards and protection for unrelated later edits.
-- Shared modal stack for Sheet and participating AI modal roots: topmost focus
-  containment, nested Escape handling, scroll locking and focus return.
-- Visible keyboard focus, 44px targets in touched controls, readable dialog
-  titles, MacroEditor units/status and VoiceComposer transcript/status labels.
-- Progress past-day review uses the shared Sheet behavior.
-- Existing logging, review, correction and navigation features remain:
-  minimal Today / Progress / More, Weight, light/dark themes, direct Speak /
-  Snap / Type, editable quantities/macros and existing member/staff tools.
-
-WHAT REMAINS
-This is a partial accessibility pass. Physical screen-reader/device testing,
-remaining legacy Milestone/staff modals and the broad measured contrast review
-remain pending. This package does not claim WCAG certification.
-Phase 3 backend limits also remain: atomic cross-device workout revisions,
-body-metric idempotency/reversal and complete standalone lab-record receipts.
-See docs/reviews/PHASE4-PENDING-PLAN.md for the full ordered backlog.
+1. On branch test at the installed baseline, copy all included paths into the
+   repository root, replacing matching files and preserving folders. Review
+   later checkout changes before merging; do not overwrite them blindly.
+2. Include all new helpers/components/tests and the matching client build.
+   No deletions, database migrations or new environment variables are required.
+   If using an accompanying patch, run git apply --check on the exact baseline.
+   Apply the patch OR folder overlay, not both.
+3. Run the complete registered gate and require NEW green GitHub CI for this
+   fix's exact commit. Baseline run 61 does not certify changed source.
+4. Deploy the same commit to the Railway test service. Verify frontend asset
+   and backend revision, accept the app update and run deployment smoke.
+5. Run relevant P0 cases and UAT-209–212 using disposable accounts. The catalog
+   has 212 cases; cases 209–212 are Not run. Preserve real member records.
+   Physical camera/mic and screen-reader acceptance remain separate evidence.
 
 VERIFICATION
-Phase 4 production build: PASS
-Phase 4 focused modal/browser test: PASS — 84 assertions (included below)
-Phase 4 available local gate: PASS — 27 suites / 2,326 assertions; 0 failed
-Phase 4 new full GitHub CI: PENDING
-Matching deployment and signed-in/device acceptance: PENDING
-Historical Phase 3 local result: 26 suites / 2,242 assertions passed; deployment
-is not confirmed. Do not add historical counts to the Phase 4 total.
-Local PostgreSQL is unavailable; new database acceptance requires the isolated
-CI gate. See qa/REGRESSION-README.txt and the final workbook/evidence package.
+Phase 4 baseline: frontend verified; all 58 packaged files match GitHub
+1c0c0408. Test gate run 61 passed 76 suites / 4,642 assertions, including
+49 database suites / 2,316 assertions; its client build passed.
+New fix production build: PASS
+New fix local available regression: PASS — 29 suites / 2,432 assertions; 0 failed
+New fix focused parser/client regression: PASS — 46 server + 60 client assertions
+New fix complete GitHub CI and deployment: PENDING
+New fix physical-device/member acceptance: PENDING
 
-PATCH ALTERNATIVE — CLEAN 8a1da65 CHECKOUT ONLY
-  git apply --check /path/to/phase4-update.patch
-  git apply /path/to/phase4-update.patch
-The patch alternative is cumulative and targets 8a1da65; do not apply it to an
-already-updated Phase 3 checkout. Use the folder overlay there. Apply either the
-cumulative patch OR the folder replacement, not both.
+LIMITS AND BACKLOG
+A model can still omit food from both output arrays or repeat reviewed food
+despite instructions. No name-only deduplication hides a possibly separate
+portion. Earlier amount notices remain historical after a later clarification.
+The exact live provider response/path behind the original omission was not
+captured. The separate quick-log voice integration keeps its existing behavior;
+the explicit-review guarantee here applies to the member AI workspace.
+Accessibility/device work and Phase 3 backend limits remain open.
+See docs/reviews/PHASE4-MEAL-CLARIFICATION-FIX.md and PHASE4-PENDING-PLAN.md.

@@ -14,7 +14,7 @@ export default function AIFoodReview({ foods, disabled, mealSlots, autoSlot, onT
       <label className="flex items-start gap-3 text-sm font-semibold">
         <input type="checkbox" checked={!!f.on} disabled={disabled} onChange={() => onToggle(i)}
           className="w-5 h-5 accent-gold mt-0.5" aria-label={'Include ' + f.name} />
-        <span className="min-w-0">{f.name}<span className="block text-caption font-normal text-mid">{f.qty_text || 'Estimated portion'}</span></span>
+        <span className="min-w-0">{f.name}<span className="block text-caption font-normal text-mid">{f.qty_text || `${f.grams} g`}</span></span>
       </label>
       <div className="ai-food-fields">
         <label>Quantity · grams<input type="number" min="0.1" max="5000" step="0.1" inputMode="decimal"
