@@ -3,7 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { normaliseFoodReview, sanitiseFoodClarification } = require('../services/foodReview');
+const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros } = require('../services/foodReview');
+const { importClient } = require('./lib/client-bundle');
+const { withFoodGrams } = importClient('utils/aiFoodReview.js');
+const { calcFoodMacros } = importClient('lib/day/index.js');
 let pass = 0, fail = 0;
 const ck = (name, ok, detail = '') => { console.log(`  ${ok ? '✓' : '✗'} ${name}${ok ? '' : ': ' + JSON.stringify(detail)}`); ok ? pass++ : fail++; };
 const row = (name, grams, extras = {}) => ({ name, grams, meal: 'Breakfast', per_100g: { calories: 99 }, ...extras });
@@ -42,10 +45,13 @@ ck('reviewed context accepts only finite positive bounded portions', !badNumbers
 // Every DB operation stays in this stub and every provider call is intercepted.
 const filename = path.resolve(__dirname, '../routes/aiChat.js');
 const router = {};
-for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = () => router;
-let fixture = {}, prompts = [], queries = [];
+const routes = new Map();
+for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = (route, ...handlers) => {
+  routes.set(`${method} ${route}`, handlers.at(-1)); return router;
+};
+let fixture = {}, prompts = [], queries = [], photoCalls = 0;
 const foods = { idli: { id: 1, name: 'Idli', verified: true, per_100g: { calories: 134, protein: 3.9, total_carbs: 26, fat: 0.2 } },
-  sambar: { id: 2, name: 'Sambar', verified: true, per_100g: { calories: 46, protein: 2.5, total_carbs: 7.5, fat: 1.2 } } };
+  sambar: { id: 2, name: 'Sambar', verified: true, per_100g: { calories: 46, protein: 2.5, total_carbs: 7.5, fiber: 2, fat: 1.2 } } };
 const db = { query: async (sql, args = []) => {
   queries.push({ sql, args });
   if (/WITH c AS/.test(sql) && foods[args[0]]) return { rows: [foods[args[0]]] };
@@ -56,11 +62,15 @@ const pureModules = new Set(['../services/personName', '../services/scaleParse',
   '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview']);
 const moduleFixture = { exports: {} };
 const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,
-  process: { env: { GROQ_API_KEY: 'isolated-fixture', GROQ_MODEL: 'fixture-model', GROQ_FALLBACK_MODEL: 'fixture-model' } },
+  process: { env: { GROQ_API_KEY: 'isolated-fixture', GROQ_MODEL: 'fixture-model', GROQ_FALLBACK_MODEL: 'fixture-model', GEMINI_API_KEY: 'isolated-photo-fixture' } },
   require(name) {
     if (name === 'express') return { Router: () => router };
     if (name === '../db/pool') return db;
     if (name === 'axios') return { post: async (url, body) => {
+      if (url.startsWith('https://generativelanguage.googleapis.com/v1beta/models/')) {
+        photoCalls++;
+        return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(fixture) }] } }] } };
+      }
       if (url !== 'https://api.groq.com/openai/v1/chat/completions') throw new Error('Unexpected provider path');
       prompts.push(body.messages[0].content);
       return { data: { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(fixture) } }] } };
@@ -107,6 +117,29 @@ const parse = async (answer, message = '2 idlis and sambar for breakfast', conte
   ck('prompt covers every consumed named accompaniment or explicit unresolved item', /EVERY explicitly consumed food/.test(prompts.at(-1)) && /Never silently omit/.test(prompts.at(-1)) && /unresolved_foods/.test(prompts.at(-1)));
   result = await parse({ foods: [row('Idli', 80)] });
   ck('known limit: a model omitting both food and issue arrays is not fabricated by validator', result.foods.length === 1 && result.unresolved_foods.length === 0);
+
+  // Live regression: Sambar 200g initially showed C15 but re-entering the
+  // same grams showed C11. Exercise the actual text and photo routes, then
+  // the real client quantity editor and daily-log maths on their payloads.
+  const previewFixture = { foods: [row('Sambar', 200), row('Idli', 80)] };
+  const textPreview = await parse(previewFixture, '200g sambar and 80g idli');
+  fixture = previewFixture;
+  let photoPreview, photoStatus = 200;
+  const response = { status(code) { photoStatus = code; return this; }, json(value) { photoPreview = value; return this; } };
+  await routes.get('post /photo')({ body: { image: 'isolated-test-image', mimeType: 'image/jpeg' }, user: { id: 999, role: 'patient' } }, response);
+  ck('actual photo route succeeds using one isolated vision response', photoStatus === 200 && photoCalls === 1 && photoPreview.foods?.length === 2, photoPreview);
+  for (const [kind, preview] of [['text', textPreview], ['photo', photoPreview]]) {
+    const sambar = preview.foods[0], snapshot = JSON.stringify(sambar.per_100g);
+    const sameGrams = withFoodGrams(sambar, '200');
+    const restored = ['0', '', '5001', '200'].reduce((food, grams) => withFoodGrams(food, grams), sambar);
+    ck(`${kind}: initial Sambar200g uses net C11 while retaining stored92kcal`, sambar.macros.carb === 11 && sambar.macros.cal === 92, sambar.macros);
+    ck(`${kind}: same grams and invalid-draft roundtrip preserve every preview macro`, JSON.stringify(sambar.macros) === JSON.stringify(sameGrams.macros) && JSON.stringify(sambar.macros) === JSON.stringify(restored.macros));
+    ck(`${kind}: portion editing leaves total carbs, fibre and stored calories untouched`, snapshot === JSON.stringify(restored.per_100g) && restored.per_100g.total_carbs === 7.5 && restored.per_100g.fiber === 2 && restored.per_100g.calories === 46);
+    const daily = calcFoodMacros(preview.foods);
+    ck(`${kind}: initial combined calorie and carb totals agree with the daily log`, preview.totals.cal === daily.kcal && preview.totals.carb === +daily.carb.toFixed(1), { preview: preview.totals, daily });
+  }
+  ck('preview keeps explicit net zero instead of falling back to total', foodPreviewMacros(row('Zero net', 200, { per_100g: { total_carbs: 8, net_carbs: 0 } })).carb === 0);
+  ck('preview falls back to total carbs only when net is absent', foodPreviewMacros(row('Legacy', 150, { per_100g: { total_carbs: 8 } })).carb === 12);
   ck('parser never writes daily logs or workouts during review', queries.every(({ sql }) => !/(?:INSERT INTO|UPDATE)\s+(?:daily_logs|workout_sessions)/i.test(sql)));
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail) process.exitCode = 1;

@@ -1,5 +1,13 @@
 # Meal quantity clarification — incremental Phase 4 fix
 
+Deployment update, 13 October 2026: this meal-clarification patch is now deployed
+as test `4b1f605a`, with CI 62 passing 78 suites / 4,748 assertions. The original
+sambar request, short follow-up and UAT-209–211 observed text branches passed.
+UAT-212 retains a symbolic-minus interpretation issue. A separate carbohydrate
+preview mismatch was found; its new local fix and deployment requirements are
+in `PHASE4-NUTRITION-CONSISTENCY-FIX.md`. The preparation record below is retained
+as historical evidence; its pending-deployment statements describe that time.
+
 Prepared 13 October 2026. Intended installed baseline:
 `1c0c0408b80134d8d26812c7e1f0073271e8e939`, matching local
 `507c2e4434a14e57400cf079dc971dce8ba99051`. The new fix is **not deployed**.

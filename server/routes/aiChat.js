@@ -36,7 +36,7 @@ const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
 const { cleanScalePayload } = require('../services/scaleParse');
-const { normaliseFoodReview, sanitiseFoodClarification } = require('../services/foodReview');
+const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros } = require('../services/foodReview');
 const { cookingFatPlausibility, macroPlausibility, massBalance } = require('../services/macroCheck');
 const { FATS, DEFAULT_FAT, saturatedPlausibility, suggestFatSplit,
         detectCookingFat } = require('../services/fatProfile');
@@ -254,6 +254,10 @@ PARSING RULES:
    as {name, meal (slot or null), reason: 'quantity_needed'}, with grams
    omitted; do not invent a quantity
    or silently drop it. Do not put the same portion in both arrays.
+   Explicit zero or negative amounts, including signed numbers, are unusable:
+   return unresolved_foods and ask for a positive amount; never remove a
+   minus sign or estimate a replacement. If a hyphen could be a separator
+   or a minus sign, ask for the positive amount instead of assuming.
    Example: '2 idlis and sambar for breakfast' must represent both Idli and
    Sambar, either as reviewable food portions or as an unresolved food.
    Indian portions:
@@ -1534,13 +1538,7 @@ Return ONLY raw JSON, no markdown fences:
       // The phrase this food's portion would be remembered under, so the
       // client can report a correction without re-deriving it
       f.portion_phrase = portionPhrase(f.qty_text, f.name);
-      const factor = f.grams / 100;
-      f.macros = {
-        cal:  Math.round((f.per_100g.calories || 0) * factor),
-        pro:  +((f.per_100g.protein     || 0) * factor).toFixed(1),
-        carb: +((f.per_100g.total_carbs || 0) * factor).toFixed(1),
-        fat:  +((f.per_100g.fat         || 0) * factor).toFixed(1),
-      };
+      f.macros = foodPreviewMacros(f);
       totCal += f.macros.cal; totPro += f.macros.pro;
       totCarb += f.macros.carb; totFat += f.macros.fat;
     }
@@ -2051,13 +2049,7 @@ async function parseMemberMessage({ userId, message, context }) {
       // The phrase this food's portion would be remembered under, so the
       // client can report a correction without re-deriving it
       f.portion_phrase = portionPhrase(f.qty_text, f.name);
-      const factor = f.grams / 100;
-      f.macros = {
-        cal:  Math.round((f.per_100g.calories || 0) * factor),
-        pro:  +((f.per_100g.protein     || 0) * factor).toFixed(1),
-        carb: +((f.per_100g.total_carbs || 0) * factor).toFixed(1),
-        fat:  +((f.per_100g.fat         || 0) * factor).toFixed(1),
-      };
+      f.macros = foodPreviewMacros(f);
       totCal += f.macros.cal; totPro += f.macros.pro;
       totCarb += f.macros.carb; totFat += f.macros.fat;
     }

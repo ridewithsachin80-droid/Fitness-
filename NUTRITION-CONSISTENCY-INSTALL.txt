@@ -1,0 +1,40 @@
+FITLIFE — AI NUTRITION CONSISTENCY FIX
+
+Use this incremental updated-files ZIP on the meal-clarification build deployed
+as test 4b1f605a12c38d6001b4f1874792f2aa911db585.
+Matching local source baseline: f6686fc431006ff46a787e4943d3a6c40cdbbe3f
+New fix revision: b4d1dceff9ab96e0101cc7ea582e5d1147a16b89
+
+1. Copy all included server/, qa/, docs/ and UPDATE-README.txt paths into the
+   repository root, replacing matching files and preserving folders.
+2. Require a NEW complete GitHub Test gate for this exact fix, including the
+   49 isolated database suites; then deploy that same test commit to Railway.
+3. Retest original sambar clarification plus UAT-212 and UAT-213. Initial
+   Sambar 200 g and its same-gram edit should use the same net-carb basis.
+   Test both text and photo, then Save/Edit/Undo on a disposable test account.
+4. Keep symbolic-minus ambiguity open until paired live inputs are retested.
+   Prompt hardening alone does not guarantee the model preserves a minus sign.
+
+The app changes are server-only. The unchanged frontend was rebuilt and is
+byte-identical; /assets/index-DyjU6GwD.js alone cannot identify this new backend.
+No migrations, new environment variables, deletions or client overlay required.
+Preserve all existing project files. Do not upload this ZIP as app source or
+reapply an older cumulative ZIP. Excel and evidence ZIPs are reports.
+
+Folder overlay OR patch, not both:
+  git apply --check nutrition-consistency-fix.patch
+  git apply nutrition-consistency-fix.patch
+Patch application was checked against local f6686fc, and every touched baseline
+path matches uploaded4b1f605a by Git blob hash.
+
+Production build PASS. New available local gate:29 suites/2,444 assertions,
+zero failed;28 logic/module suites/1,627 plus full UI/817.
+Focused58 checks are INCLUDED, not added again. UI logs retain existing JSDOM
+teardown and synthetic network/indexedDB diagnostics; no clean-console claim.
+New full CI/database gate and live deployment acceptance are PENDING.
+Installed baseline CI62 passed78 suites/4,748 assertions; it does not certify
+this new fix. The213-case workbook preserves actual results and pending work.
+
+Read docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md and the full pending plan.
+Physical devices, screen readers, dedicated-account saves and coach acceptance
+remain separate gates. Existing rounding and Phase3 backend limits remain.

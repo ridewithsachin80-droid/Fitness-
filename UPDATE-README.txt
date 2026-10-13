@@ -1,3 +1,32 @@
+FITLIFE — CURRENT AI NUTRITION CONSISTENCY FIX
+Use FitLife-Phase4-Nutrition-Consistency-Fix.zip (updated files only).
+Installed baseline: test 4b1f605a12c38d6001b4f1874792f2aa911db585
+Matching local source: f6686fc431006ff46a787e4943d3a6c40cdbbe3f
+New revision and final local test totals: NUTRITION-CONSISTENCY-INSTALL.txt.
+
+Copy the included paths over the installed baseline, preserving folders.
+The application changes are server-only: initial text/photo carbohydrate
+previews now use the same existing net-carb basis as portion editing/daily
+totals. Signed-amount prompt guidance is stronger but remains probabilistic.
+No migrations, new environment variables, file removals or client changes.
+The rebuilt frontend is byte-identical; unchanged index-DyjU6GwD.js is not
+proof of the new backend deployment. Do not reapply the older code ZIPs.
+
+Deployed CI 62 passed 78 suites / 4,748 assertions and production build.
+Original sambar clarification and UAT-209–211 observed text paths pass live.
+The new carbohydrate patch is NOT deployed. Require fresh full CI, including
+database suites, then deploy that exact test commit and retest UAT-212/213.
+UAT-212 symbolic-minus ambiguity remains OPEN; prompt guidance is not a
+deterministic fix. UAT-213 captures the carbohydrate issue observed live.
+The regression catalog now has 213 cases. Preserve physical-device,
+screen-reader, disposable-account Save/Edit/Undo and coach acceptance gates.
+
+See docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md for scope and limits,
+and PHASE4-PENDING-PLAN.md for the full retained backlog.
+Excel and evidence ZIPs are reports, not application code.
+
+HISTORICAL MEAL-CLARIFICATION PREPARATION RECORD (BELOW)
+The following instructions/results describe the prior ZIP, now deployed.
 FITLIFE — MEAL QUANTITY CLARIFICATION FIX
 Incremental updated files only; original repository paths retained.
 

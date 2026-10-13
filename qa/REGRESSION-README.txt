@@ -1,3 +1,25 @@
+FITLIFE — CURRENT NUTRITION CONSISTENCY REGRESSION
+Installed baseline: test 4b1f605a12c38d6001b4f1874792f2aa911db585
+Matching local source: f6686fc431006ff46a787e4943d3a6c40cdbbe3f
+Deployed CI 62: 78 suites / 4,748 assertions PASS; build PASS.
+Live scope: 16 passed observations, 2 issues; no member records saved.
+Original sambar omission and observed UAT-209–211 text paths now pass.
+UAT-212 retains symbolic-minus ambiguity. New UAT-213 records the initial
+total-carb preview versus existing net-carb portion/daily calculation mismatch.
+
+The new server fix aligns text/photo previews with the existing net-carb basis.
+It also strengthens signed-quantity prompt guidance without a deterministic
+interpretation guarantee. The new patch is NOT deployed or certified by CI 62.
+Run a fresh complete gate and deploy the same commit. Frontend asset unchanged:
+/assets/index-DyjU6GwD.js cannot independently identify the new backend.
+Local results and revision: NUTRITION-CONSISTENCY-INSTALL.txt in the new ZIP.
+Focused server suite: 58 assertions, including 12 consistency checks; test
+fixtures exercise actual text/photo handlers and real client math. Do not count
+focused reruns again in complete gate totals. Catalog: 213 manual cases.
+See docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md and full pending plan.
+
+HISTORICAL MEAL-CLARIFICATION PREPARATION RECORD (BELOW)
+The remaining counts/pending states describe the prior package before CI 62.
 FITLIFE — MEAL CLARIFICATION REGRESSION
 Scope: incremental named-food quantity clarification on verified Phase 4.
 Intended deployment baseline: 1c0c0408b80134d8d26812c7e1f0073271e8e939

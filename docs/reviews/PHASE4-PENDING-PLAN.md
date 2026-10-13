@@ -1,9 +1,16 @@
 # Phase 4 — accessibility pass and complete pending plan
 
-Release-plan update: 13 October 2026. Verified Phase 4 baseline:
-uploaded `1c0c0408b80134d8d26812c7e1f0073271e8e939`, matching local
-`507c2e4434a14e57400cf079dc971dce8ba99051`. The current incremental
-meal-clarification fix is not deployed; its new build/revision results are pending.
+Release-plan update: 13 October 2026. Verified installed meal-clarification
+baseline: test `4b1f605a12c38d6001b4f1874792f2aa911db585`, matching local
+application source `f6686fc431006ff46a787e4943d3a6c40cdbbe3f`. CI 62 passed
+78 suites / 4,748 assertions. Original sambar and UAT-209–211 observed text
+branches passed live. A separate carbohydrate-preview consistency fix is local
+and needs fresh CI/deployment; symbolic-minus interpretation remains open with
+prompt hardening only. See `PHASE4-NUTRITION-CONSISTENCY-FIX.md`.
+
+The catalog now has 213 cases. New UAT-213 covers preview/portion carbohydrate
+consistency; UAT-212 retains the live symbolic-minus failure. Historical result
+counts and Not run statements below describe their original release stages.
 
 This phase improves interaction with existing dialogs and controls. It preserves
 the minimalist Home and existing functionality. It is a **partial accessibility

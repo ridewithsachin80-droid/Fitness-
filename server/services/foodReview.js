@@ -5,6 +5,19 @@ const label = (value, max) => typeof value === 'string'
   ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
 const identity = row => `${row.name.toLowerCase()}\u0000${(row.meal || '').toLowerCase()}`;
 
+/** Match the daily log and editable review: net carbs when available, total
+ * otherwise. Keep stored calories; editing grams must not recalculate energy
+ * from macros or change the food's nutrition snapshot. */
+function foodPreviewMacros(food) {
+  const per = food.per_100g || {}, factor = food.grams / 100;
+  return {
+    cal: Math.round((per.calories || 0) * factor),
+    pro: +((per.protein || 0) * factor).toFixed(1),
+    carb: +(((per.net_carbs != null ? per.net_carbs : per.total_carbs) || 0) * factor).toFixed(1),
+    fat: +((per.fat || 0) * factor).toFixed(1),
+  };
+}
+
 function normaliseFoodReview(rawFoods, rawUnresolved) {
   const foods = [], unresolvedFoods = [], seen = new Set();
   const addUnresolved = row => {
@@ -47,4 +60,4 @@ function sanitiseFoodClarification(value) {
   return { unresolved, reviewedFoods };
 }
 
-module.exports = { normaliseFoodReview, sanitiseFoodClarification };
+module.exports = { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros };
