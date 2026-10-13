@@ -1,77 +1,43 @@
-FITLIFE P0 — REGRESSION AND DEPLOYMENT
+FITLIFE — TEST GATE #55 REPAIR
 
-Target repository: ridewithsachin80-droid/Fitness-, branch test
-Target app: https://fitness-test.up.railway.app/
-Patch baseline: 66b8bc9171f52d28943e37b4df7465d5de4eb805
+Apply after uploaded test commit 18ef815660225d5aaf67d5f0e679da70e696123b.
+Target: https://fitness-test.up.railway.app/ (test only).
 
-Build scope
-- P0 fixes: offline save/retry integrity, private cache cleanup, account and
-  session isolation, cold-start recovery, and workout note/selection retention.
-- New idempotent schema migrations must run during server startup.
-- Prior Phase 1 features are retained:
-- My usual inside AI opens an editable review before anything is logged.
-- Household portion units, counts and grams per unit; opt-in memory and forget.
-- Nutrition provenance labels and visible raw/cooked/unspecified preparation.
-- Recent foods use the latest quantity; household memory stores one unit.
-- Expanded automated regression and read-only deployment smoke workflows.
+Observed run: https://github.com/ridewithsachin80-droid/Fitness-/actions/runs/38347452601
+Three suites failed: private cache browser (missing puppeteer-core), journey
+(old assertion removed the unfinished exercise), known fixes (one-sided lab
+limits). The known-fix suite also stopped before its tracker-state checks.
+Its 47 successful database suites are historical results for that upload,
+not proof that this subsequent correction passes the complete gate.
 
-Run after every source build
-1. Install client and server dependencies. Build from the repository root:
-   npm run build
-2. Install browser-only QA dependencies in server (not needed in production):
-   npm install --no-save puppeteer-core@25.13.0 @sparticuz/chromium@153.0.0
-3. On a machine with PostgreSQL binaries, run from server:
-   npm test
-   This creates/recreates a disposable localhost database called fitlife_test
-   on port 5433. NEVER substitute a live Railway database URL.
-4. The test gate runs logic, component, database and UI/browser suites.
-   It writes evidence to qa/results. Missing listed suites fail the gate.
-   For a locally installed Chromium, set CHROME_EXECUTABLE_PATH to that binary.
-5. Deploy the matching commit to the named test service only.
-6. From the repository root run:
-   node server/scripts/test-deployment.mjs
-   Exit 2 means the matching new build or connectivity could not be verified.
-   Exit 1 means a smoke assertion failed. Exit 0 verifies HTTP smoke only.
-7. Execute qa/manual-regression.tsv using dedicated test member/coach/admin
-   accounts. Complete P0 cases on Android, iPhone Safari and installed PWAs.
-   Record actual deployed results in the accompanying Excel workbook.
-8. Fix reproducible failures; rebuild; repeat the relevant checks and the full
-   registered gate. Do not count an older green CI run as the new build passing.
+Repair
+- Browser packages are pinned development dependencies in server/package.json
+  and package-lock.json. A normal npm install now installs them for testing.
+- Lab entry and analysis share finite number and one-sided reference handling.
+- Tracker callback state is signed, expires, and is bound to member/provider.
+- The workout journey checks no completed sets and preserves the selection.
+- Every client build removes generated dist before rebuilding the PWA worker.
+- The corrected workflow builds first, runs every registered suite and stores
+  logs/screenshots even on failure. Upload the hidden .github folder too.
 
-Automation
-- Test gate builds the client first, installs browser QA tooling and runs all
-  registered suites on branch pushes, then uploads logs/screenshots.
-- Test deployment smoke supports manual dispatch on test and a successful
-  deployment_status event whose environment URL is the exact test URL.
-- If Railway does not emit that event or uses a different URL spelling, run
-  Test deployment smoke manually on test after confirming the deployed commit.
-- HTTP smoke does not authenticate, edit health records, send notifications,
-  or certify real phone camera/mic behavior.
+Verification
+1. npm install from the repository root; npm ci in server.
+2. npm run build from the root (safe to repeat over an existing dist).
+3. cd server; npm test
+   Uses disposable localhost PostgreSQL on port 5433. Never use a live DB URL.
+4. Require a green run on the resulting test commit, then deploy that commit.
+5. Run node server/scripts/test-deployment.mjs, then the workbook's signed-in
+   P0 member/coach/device cases with dedicated test accounts.
 
-Current limitations
-- GitHub writes returned 403 Resource not accessible by integration.
-- Command-line git push has no available write credentials.
-- This workspace has no PostgreSQL binaries; new DB integration runs are
-  blocked here. The uploaded 66b8bc9 CI ran DB tests and exposed four workout
-  persistence failures; those results predate this P0 patch.
-- Uploaded Phase 1 frontend assets were verified on the live test app.
-- The user confirmed one-tap camera and mic work on Android and iPhone.
-  This does not certify every Safari/PWA/permission path or this newer patch.
-- New P0 fixes need green database CI, matching deployment and signed-in
-  acceptance. The live browser currently shows the member/coach login page.
-- Undefined-identifier lint was not run locally because ESLint is absent.
+Local focused tests run actual Express routes against synthetic SQL/HTTP
+adapters. They never contact real members or wearable providers. Their pass
+is not a PostgreSQL integration pass or live acceptance.
+The local workspace still has no PostgreSQL binaries. The complete database
+gate and real tracker integration must be rerun in CI/test deployment.
+The user confirmed one-tap camera and mic on Android and iPhone before this
+repair; browser fixtures cannot independently certify physical capture.
 
-Excel workbook usage
-- Overview summarizes actual runs and release blockers.
-- Acceptance cases contains manual preconditions, steps and expected results.
-- Suite runs shows the entire registered regression set and blocked DB suites.
-- Uploaded-build CI is a separate historical column, never a current P0 pass.
-- Executed checks records actual final local assertion output.
-- Automated catalog lists assertion declarations and source locations.
-- Deployment separates current public-site checks from phase 1 acceptance.
-- Defects records fixes, retests and outstanding access/environment blocks.
-
-Artifact boundary
-Screenshots and UI tests use synthetic fixture data. AI, storage and other
-external services may be stubbed by individual suites. A fixture pass is not
-proof of live AI accuracy, production integrations or physical device support.
+GitHub browser uploads omitted the previous hidden .github files. If drag
+upload omits them again, edit .github/workflows/test-gate.yml directly on test
+using the complete file supplied in the repair archive. The package dependency
+fix remains effective even before the workflow is updated.

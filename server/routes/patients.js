@@ -13,6 +13,7 @@ const { composeMember, summarise, composeBrief } = require('../services/triage')
 const { computeDayTotals } = require('../services/digests');
 const aiReads = require('../services/aiReads');
 const dietPlan = require('../services/dietPlan');
+const { finiteOrNull, rangeState } = require('../services/labRange');
 /** Top up one date's prescribed meals from the diet plan in force. Never throws. */
 async function ensurePlanDay(memberId, date) {
   try { await dietPlan.ensureDay(pool, memberId, date, getISTDate()); }
@@ -1516,11 +1517,10 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
       return res.status(400).json({ error: 'test_date, test_name, and value are required' });
     }
 
-    let status = 'normal';
-    if (ref_min !== undefined && ref_max !== undefined) {
-      if (parseFloat(value) < parseFloat(ref_min))       status = 'low';
-      else if (parseFloat(value) > parseFloat(ref_max))  status = 'high';
-    }
+    const numericValue = finiteOrNull(value);
+    if (numericValue === null) return res.status(400).json({ error: 'value must be a finite number' });
+    const min = finiteOrNull(ref_min), max = finiteOrNull(ref_max);
+    const status = classify(numericValue, min, max);
 
     // Same value for the same test and date within 30 seconds is a double tap:
     // return the row that is already there. Two identical HbA1c rows otherwise
@@ -1531,14 +1531,14 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
           WHERE patient_id = $1 AND test_date = $2 AND test_name = $3 AND value = $4::numeric
             AND created_at > NOW() - INTERVAL '30 seconds'
           ORDER BY id DESC LIMIT 1`,
-        [req.params.id, test_date, test_name, value]);
+        [req.params.id, test_date, test_name, numericValue]);
       if (dup.rows.length) return { row: dup.rows[0], duplicate: true };
       const ins = await db.query(
         `INSERT INTO lab_values
            (patient_id, test_date, test_name, value, unit, ref_min, ref_max, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [req.params.id, test_date, test_name, value, unit, ref_min, ref_max, status]);
+        [req.params.id, test_date, test_name, numericValue, unit, min, max, status]);
       return { row: ins.rows[0], duplicate: false };
     });
 
@@ -1667,19 +1667,8 @@ router.delete('/:id/notes/:noteId', authMW, roleCheck('monitor', 'admin'), requi
 
 const { analyseLabs } = require('../services/labAnalysis');
 
-/** Only a finite number survives; anything else becomes null. */
-function finiteOrNull(v) {
-  if (v === undefined || v === null || v === '') return null;
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 function classify(value, refMin, refMax) {
-  if (refMin == null || refMax == null) return 'normal';
-  const v = parseFloat(value);
-  if (v < parseFloat(refMin)) return 'low';
-  if (v > parseFloat(refMax)) return 'high';
-  return 'normal';
+  return rangeState(value, refMin, refMax) || 'normal';
 }
 
 async function labContext(patientId) {
@@ -2325,3 +2314,4 @@ router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), requirePatien
 
 module.exports = router;
 module.exports.sendMemberNote = sendMemberNote;
+module.exports.classifyLab = classify;

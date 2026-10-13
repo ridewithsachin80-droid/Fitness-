@@ -13,6 +13,7 @@
 const express  = require('express');
 const router   = express.Router();
 const axios    = require('axios');
+const jwt      = require('jsonwebtoken');
 const auth     = require('../middleware/auth');
 const pool     = require('../db/pool');
 
@@ -140,10 +141,11 @@ async function saveTrackerData(userId, provider, metrics) {
  */
 router.get('/oauth/:provider', auth, (req, res) => {
   const { provider } = req.params;
-  const cfg = PROVIDERS[provider];
+  const cfg = Object.hasOwn(PROVIDERS, provider) ? PROVIDERS[provider] : null;
   if (!cfg) return res.status(400).json({ error: 'Unknown provider' });
 
-  const state    = Buffer.from(JSON.stringify({ userId: req.user.id, provider })).toString('base64');
+  const state = jwt.sign({ userId: req.user.id, provider, k: 'tracker_oauth' },
+    process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '10m' });
   const redirect = `${SERVER_URL}/api/trackers/oauth/${provider}/callback`;
 
   const url = new URL(cfg.authUrl);
@@ -170,13 +172,17 @@ router.get('/oauth/:provider/callback', async (req, res) => {
   }
 
   let userId;
+  const cfg = Object.hasOwn(PROVIDERS, provider) ? PROVIDERS[provider] : null;
   try {
-    ({ userId } = JSON.parse(Buffer.from(state, 'base64').toString()));
+    const payload = jwt.verify(state, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    if (!cfg || typeof code !== 'string' || !code || payload.k !== 'tracker_oauth' ||
+        payload.provider !== provider || !Number.isSafeInteger(payload.userId) || payload.userId <= 0 ||
+        !Number.isFinite(payload.exp)) throw new Error('Invalid tracker state');
+    userId = payload.userId;
   } catch {
-    return res.status(400).send('Invalid state');
+    return res.redirect(`${CLIENT_URL}/devices?error=oauth_state&provider=${encodeURIComponent(provider)}`);
   }
 
-  const cfg      = PROVIDERS[provider];
   const redirect = `${SERVER_URL}/api/trackers/oauth/${provider}/callback`;
 
   try {
