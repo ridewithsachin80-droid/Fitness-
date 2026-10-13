@@ -32,6 +32,7 @@ import { foodWithLabel } from './chat/ChatFoodMacros';
 import { requestSnapshot } from '../utils/aiRequestRecovery';
 import { downscale, readFileAsBase64 } from '../utils/aiAttachments';
 import { countIncluded } from '../utils/aiParsedReview';
+import { aiReplyText, aiContextText, hasLoggingPreview } from '../utils/aiReplyText';
 import useAIRequestRecovery from '../hooks/useAIRequestRecovery';
 import AIRequestRecovery from './chat/AIRequestRecovery';
 
@@ -386,7 +387,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       // real items instead of "couldn't find anything to log".
       const recent = useAIChat.getState().messages.slice(-6).map(m => ({
         role: m.role === 'user' ? 'user' : 'ai',
-        text: String(m.text || '').slice(0, 200),
+        text: aiContextText(m).slice(0, 200),
       })).filter(r => r.text);
       const lastFoods = (useLogStore.getState().log?.food || []).slice(-20)
         .map(f => ({ name: f.name, grams: f.grams, meal: f.meal }));
@@ -474,7 +475,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       const next = [...prev];
       const msg = next[mi];
       if (!msg?.parsed || msg.applied) return prev;
-      next[mi] = { ...msg, parsed: patchFn(msg.parsed) };
+      next[mi] = { ...msg, reviewProposed: hasLoggingPreview(msg), noteProposed: msg.noteProposed || !!msg.parsed.notes, parsed: patchFn(msg.parsed) };
       return next;
     });
   }, []);
@@ -920,7 +921,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                 }`} data-testid={m.failedRequest ? 'ai-request-error' : undefined}>
                   {m.summary
                     ? <DaySummary s={m.summary} />
-                    : <p className="leading-relaxed whitespace-pre-line">{m.text}</p>}
+                    : <p className="leading-relaxed whitespace-pre-line" data-testid="ai-reply-text">{aiReplyText(m)}</p>}
 
                   {m.failedRequest && requestCurrent(m.failedRequest) && <AIRequestRecovery
                     request={m.failedRequest} requestEdit={requestEdit} setRequestEdit={setRequestEdit}
@@ -1052,7 +1053,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                     </div>
                   )}
 
-                  {m.parsed && (countIncluded(m.parsed) > 0 || m.parsed.workouts.length > 0) && (
+                  {m.parsed && hasLoggingPreview(m) && (
                     <div className="mt-3 space-y-3">
 
                       {/* ⚖ Weight */}
@@ -1178,7 +1179,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                         </div>
                       )}
 
-                      {m.parsed.notes && <div className="bg-charcoal rounded-xl p-3">
+                      {(m.noteProposed || m.parsed.notes || m.parsed.notesOn) && <div className="bg-charcoal rounded-xl p-3">
                         <label className="flex gap-2 items-center text-sm mb-2"><input type="checkbox" checked={!!m.parsed.notesOn} disabled={m.applied || applying}
                           onChange={e => patchParsed(mi, p => ({ ...p, notesOn: e.target.checked }))} /> Daily notes & how you feel</label>
                         <textarea aria-label="Review daily note" value={m.parsed.notes} disabled={m.applied || applying} maxLength={2000}
@@ -1217,8 +1218,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                             ))}
                             <p className="text-eyebrow text-lo px-1">
                               {m.parsed.workouts.some(w => w.on && w.sets?.length)
-                                ? 'Sets and reps go straight into your Workout log.'
-                                : "Saved to today's session · add exact sets & reps in the Workout section anytime."}
+                                ? 'Sets and reps are included in this workout review.'
+                                : 'Exact sets and reps can be added in the Workout section.'}
                             </p>
                           </div>
                         </div>

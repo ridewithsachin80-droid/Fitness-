@@ -2832,7 +2832,13 @@ async function phase8cTest() {
   ck('with every planned meal logged there is no button', btn().length === 0);
   const Y = run(chat); await tick(500);
   await say(Y, 'I ate 2 idli for breakfast');
-  ck('a message that logs food gets its usual card and no "Log as planned" button', /Got it: 2 idli/.test(Y.w.document.body.textContent) && !Y.w.document.querySelector('[data-testid="chat-log-planned"]'));
+  const foodReview = Y.w.document.querySelector('[data-testid="ai-food-review"]');
+  ck('a food message gets its canonical unsaved review and no "Log as planned" button',
+    Y.errors.length === 0 && !!foodReview && /Idli/.test(foodReview.textContent)
+    && foodReview.querySelector('[aria-label="Idli grams"]')?.value === '80'
+    && /These entries haven’t been saved yet/.test(Y.w.document.querySelector('[data-testid="ai-reply-text"]')?.textContent || '')
+    && [...Y.w.document.querySelectorAll('button')].some(b => /Save 1 item to today/.test(b.textContent))
+    && !Y.w.document.querySelector('[data-testid="chat-log-planned"]'));
   const Z = run(chat, (win) => { win.__noPlan = true; }); await tick(500);
   await say(Z, "what's today's meal plan?");
   ck('a member with no plan gets the answer and no button', /Today: Breakfast/.test(Z.w.document.body.textContent) && !Z.w.document.querySelector('[data-testid="chat-log-planned"]'));
