@@ -611,7 +611,7 @@ ck('the composer is portaled to the body and fixed for keyboard support', /creat
 ck('openChat() is a focus counter, not a boolean (a second tap still brings the composer up)',
    /focusRequest: s\.focusRequest \+ 1/.test(read('../src/store/aiChatStore.js')));
 ck('Apply stamps lastAppliedAt; the model refreshes the workout summary from it, not from "overlay closed"',
-   /markApplied\(\)/.test(chat) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
+   /useAIReviewSave\(/.test(chat) && /markApplied\(\)/.test(read('hooks/useAIReviewSave.js')) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
 ck('openChat() closes any open sheet so the composer is reachable', /if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
 ck('Today mounts exactly one AI workspace with overlay enabled', (todayPage.match(/<AIChatLog/g) || []).length === 1 && /<AIChatLog[^>]*overlay/.test(todayPage));
 

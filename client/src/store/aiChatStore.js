@@ -73,6 +73,7 @@ export const useAIChat = create((set, get) => ({
   // The day the conversation belongs to. A preview parsed last night must not
   // be applicable to today's log after the date rolls over.
   dayKey: null,
+  revision: 0,
 
   setMessages: (next) =>
     set((s) => ({ messages: typeof next === 'function' ? next(s.messages) : next })),
@@ -83,7 +84,7 @@ export const useAIChat = create((set, get) => ({
   resetChat: () => {
     undoSnap.current = null;
     workoutUndoSnap.current = null;
-    set({ messages: [], input: '', dayKey: null, open: false, composerOpen: false, composerFocused: false,
+    set({ revision: get().revision + 1, messages: [], input: '', dayKey: null, open: false, composerOpen: false, composerFocused: false,
       prefillText: '', lastAppliedAt: null, entryMode: 'text' });
   },
 
@@ -99,14 +100,9 @@ export const useAIChat = create((set, get) => ({
   },
 }));
 
-// ── Pre-apply snapshots for Undo ─────────────────────────────────────────────
-// Module-level rather than useRef for the same reason as the messages above:
-// the component unmounts on navigation but the "Applied ✓ · Undo" card now
-// survives, so the snapshot behind that Undo button has to survive with it.
-// Without this, Undo would render as an active button and silently do nothing.
-//
-// Clear synchronously on an authentication boundary, including an account
-// switch before a full-page navigation has had time to complete.
+// Legacy exports retained for compatibility with older callers. New reviews
+// keep account/day-scoped receipts on their own message and never read these
+// global snapshots. Reset still clears them at every authentication boundary.
 export const undoSnap        = { current: null };
 export const workoutUndoSnap = { current: null };
 

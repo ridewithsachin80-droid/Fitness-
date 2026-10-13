@@ -306,18 +306,18 @@ async function premiumFlow() {
  q('macro-remember').click();q('macro-save').click();await tick(400);
  ck('member macro edits replace AI values and recalculate portion',/582 kcal/.test(q('ai-food-review').textContent)&&/P 36/.test(q('ai-food-review').textContent));
  let save=[...d.querySelectorAll('button')].find(b=>/Save 1 item/.test(b.textContent));save.click();save.click();
- await waitFor(()=>d.body.textContent.includes('Saved to your daily log'),'save result');
+ await waitFor(()=>d.querySelector('[data-testid="ai-card-daily-status"]')?.textContent.trim()==='Daily log: Saved','confirmed daily save receipt');
  const saved=w.__logStore.getState().log.food;
  ck('double tap saves exactly one food entry',saved.length===4);
  ck('saved food contains edited grams, meal and member label',saved[3].grams===150&&saved[3].meal==='Lunch'&&saved[3].per_100g.protein===24&&saved[3].label===true);
  ck('save posts full log through existing endpoint',w.__posts.some(p=>p.url==='/logs/'+w.__todayStr&&p.body.food_items?.some(f=>f.name==='Oats')));
  const input=q('composer-input'); setVal(input,'water 500 ml, weight 82, B12 and felt energetic');await tick(40);
  input.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await waitFor(()=>d.body.textContent.includes('Save 4 items'),'text parse');
- w.__failSave=true;w.__click('Save 4 items');await waitFor(()=>d.body.textContent.includes('Retry saving these changes'),'failed save');
- ck('failed save is visible instead of claiming success',d.body.textContent.includes('save failed'));
+ w.__failSave=true;w.__click('Save 4 items');await waitFor(()=>q('ai-card-retry'),'failed save');
+ ck('failed save is visible instead of claiming success',/Save failed/.test([...d.querySelectorAll('[data-testid="ai-card-daily-status"]')].at(-1)?.textContent || ''));
  const water=w.__logStore.getState().log.water;
- w.__failSave=false;w.__click('Retry saving these changes');await tick(250);
- ck('retry persists without applying water or notes twice',w.__logStore.getState().log.water===water&&w.__logStore.getState().log.notes==='Felt energetic today.'&&!d.body.textContent.includes('Retry saving these changes'));
+ w.__failSave=false;q('ai-card-retry').click();await tick(250);
+ ck('retry persists without applying water or notes twice',w.__logStore.getState().log.water===water&&w.__logStore.getState().log.notes==='Felt energetic today.'&&!q('ai-card-retry')&&[...d.querySelectorAll('[data-testid="ai-card-daily-status"]')].at(-1)?.textContent.trim()==='Daily log: Saved');
  d.querySelector('[aria-label="Close AI assistant"]').click();await tick(80);
  ck('closing AI restores the home and body scrolling',!q('composer')&&d.body.style.overflow==='');
  w.__aiChat.getState().openChat();await tick(160);
@@ -373,6 +373,23 @@ async function premiumVisual(code) {
  try {for(const width of (process.env.UI_WIDTHS ? process.env.UI_WIDTHS.split(',').map(Number) : [320,390,1280])) {for(const theme of ['light','dark']) {
   const page=await browser.newPage();await page.setViewport({width,height:width>600?960:900,deviceScaleFactor:1.5});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  // A sheet exists in the DOM before its entrance spring is on screen. The
+  // locator waits for a visible, stable box and scrolls it into view, then
+  // performs a real pointer click; it does not invoke the React handler.
+  const clickStable=async selector=>{
+    try {await page.locator(selector).setTimeout(8000).click();}
+    catch(error){
+      console.error('Interaction bounds',await page.evaluate(selector=>{
+        const el=document.querySelector(selector),rect=el?.getBoundingClientRect();
+        const panel=el?.closest('[role="dialog"]');
+        return{selector,viewport:{width:innerWidth,height:innerHeight},rect:rect?.toJSON(),
+          panel:panel?.getBoundingClientRect().toJSON(),transform:panel&&getComputedStyle(panel).transform,
+          topElement:rect&&document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)?.outerHTML.slice(0,300)};
+      },selector));
+      await page.screenshot({path:path.join(out,`interaction-failure-${theme}-${width}.png`),fullPage:false});
+      throw error;
+    }
+  };
   await page.goto('http://127.0.0.1:'+server.address().port);await page.addScriptTag({content:code});
   await page.waitForFunction(()=>document.querySelector('[data-testid="plan-eat"]')?.textContent.includes('666'));
   await page.evaluate(t=>window.__settings.getState().setTheme(t),theme);
@@ -414,6 +431,13 @@ async function premiumVisual(code) {
     await page.evaluate(()=>{document.documentElement.style.fontSize='20px'});
     m=await measure();ck(`enlarged-text AI ${theme} 320px has no horizontal overflow`,m.sw<=m.vw+1,m);
   }
+  await clickStable('[data-testid="macro-cancel"]');
+  await page.waitForSelector('[data-testid="macro-editor"]',{hidden:true});
+  await clickStable('[data-testid="ai-card-save"]');
+  await page.waitForFunction(()=>document.querySelector('[data-testid="ai-card-daily-status"]')?.textContent.trim()==='Daily log: Saved');
+  m=await measure();ck(`save receipt ${theme} ${width}px has no horizontal overflow`,m.sw<=m.vw+1,m);
+  ck(`receipt actions ${theme} ${width}px retain 44px touch height`,await page.evaluate(()=>['ai-card-edit','ai-card-undo'].every(id=>document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().height>=44)));
+  if(width===390)await page.screenshot({path:path.join(out,`ai-receipt-${theme}.png`),fullPage:false});
   ck(`browser renders ${theme} ${width}px without exceptions`,errors.length===0,errors);await page.close();
  }}} finally {await browser.close();await new Promise(r=>server.close(r));}
 }

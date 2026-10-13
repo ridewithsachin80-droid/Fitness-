@@ -1,0 +1,30 @@
+FITLIFE PHASE 3 — UPDATED FILES ONLY
+
+Deploy this code ZIP to the TEST branch, after a new green GitHub gate.
+Target baseline: 8a1da6560e422bdd313e54b70565a455a9815d07
+This is an overlay for the existing Fitness- repository, not a standalone app.
+
+1. Extract this ZIP. Copy its client/, server/, qa/ and docs/ folders and
+   UPDATE-README.txt into the repository root on branch test, preserving paths.
+2. Commit the changed files. Do not upload the ZIP itself as the application.
+3. Require a fresh green GitHub Test gate, including all database suites.
+4. Deploy that test revision through Railway. No new migration or env variable.
+5. Reload FitLife, accept the update prompt and verify the new frontend asset:
+   /assets/index-CGsym_F_.js
+6. Run UAT-175 through UAT-192 plus existing P0 acceptance on dedicated test
+   accounts. The Excel and QA evidence ZIP are reports, not deployment packages.
+
+For Git users: git apply phase3-update.patch
+Use folder replacement OR the patch; do not apply both.
+
+This build gives each AI review its own Save/Edit/Undo receipt, preserves later
+unrelated edits, reports overlap conflicts, and separates daily-log, workout
+and body-metric outcomes. Read docs/reviews/PHASE3-PENDING-PLAN.md for the full
+remaining work and explicit reversal/concurrency limitations.
+
+Verification: production build passed; 26 available local suites /
+2,242 assertions passed. New full CI and deployed acceptance are pending.
+The previous deployment's CI (run 59, 74 suites / 4,447 assertions) is historical.
+
+Commit: 3386271329f259e6f5954e29b9d2d0a33b049af5
+Changed repository files: 32

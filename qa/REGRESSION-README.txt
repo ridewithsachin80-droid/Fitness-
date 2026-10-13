@@ -1,50 +1,45 @@
-FITLIFE — PHASE 2 REGRESSION
-Base: d7a2826b0ffc62cae8ea58c0a475b49331f6db24 on test.
+FITLIFE — PHASE 3 REGRESSION
+Base test commit: 8a1da6560e422bdd313e54b70565a455a9815d07
 Target: https://fitness-test.up.railway.app/ (test only).
 
-Phase 2 adds shared English/Hindi/Kannada speech preferences and request-specific
-recovery for AI text, photos and recorded audio. Home remains minimal. Existing
-AI reviews, quantities/macros, weight, tools, themes and P0 fixes remain.
-
 REPEATABLE GATE
-1. Install from repository root, then npm ci in server.
+1. Install dependencies from the repository root and server package locks.
 2. cd server; npm test
-   This builds the client first, creates an isolated localhost PostgreSQL on
-   port 5433 and runs all 73 registered suites. Never point fixture tests at
-   a live database. The existing database guard is retained.
-3. Require a new green GitHub Test gate on the Phase 2 commit.
-4. Deploy that test revision, then from repository root run:
+   The pretest builds the client. test-local.sh creates isolated localhost
+   PostgreSQL on port5433 and runs every registered suite. Never point fixture
+   tests at the live database. Existing database guards remain.
+3. Require a new green GitHub Test gate for this exact Phase 3 commit.
+4. Deploy that test revision, then from the repository root run:
    node server/scripts/test-deployment.mjs
 5. Run the Excel Acceptance cases with disposable member/coach/admin accounts.
-   Start with P0; then run Phase 2 voice/recovery cases on Android and iPhone,
-   browser/PWA where applicable, both themes and enlarged text.
+   Start with P0, then UAT-175–192. Test Android/iPhone browser/PWA as applicable,
+   both themes, larger text and interrupted saves. Keep real member logs intact.
 
 NEW COVERAGE
-- test-logging-phase2.mjs: actual components/hooks/shared consumers, request
-  snapshots, retry/edit/newer drafts, native picker ownership, session/day
-  invalidation, bounded recordings, permission fallback and 320/390px layouts.
-- test-voice-phase2.js: authenticated Express route with synthetic providers,
-  language allowlist, regional/mixed speech prompts, fallback, payload bounds,
-  retry byte fidelity and member-facing errors.
-- All original 71 suites remain registered; layout/theme assertions unchanged.
-- Component-size regression caught during first build was fixed by extracting
-  request recovery and food voice status. No test threshold was relaxed.
+test-ai-save-receipts.mjs mounts the actual AI review and log store with
+synthetic storage. It covers independent cards, newer manual edits, overlap
+conflicts, repeated taps, Edit/resave, failed reversal, safe retry, partial
+destinations, date/account guards and workout/body-metric boundaries.
+All prior voice, photo, portion, cache, offline, session and full UI suites
+remain registered. No component-size or layout threshold is relaxed.
+qa/manual-regression.tsv now has 192 scenarios, including 18 new receipt cases.
 
 EVIDENCE SCOPE
-Final local build passed. All 24 available suites passed: 2,085 assertion rows,
-zero failures (1,280 logic/component checks + 805 full UI checks including
-112 nested premium checks). The focused new suites account for 227 checks.
-The complete results are in the accompanying Excel and evidence ZIP.
-The complete local database gate is blocked by missing PostgreSQL. Baseline
-GitHub run 57 passed 71 suites / 4,174 assertions, including 49 database suites;
-this historical green result is not a Phase 2 CI pass.
+The accompanying workbook's Phase 3 runs and Phase 3 checks hold actual local
+results; previous suite/catalog/patch sheets retain historical evidence.
+Production build passed. All 26 available local suites passed 2,242 assertions:
+25 logic/module suites: 1,425; full UI: 817 (includes 124 premium assertions).
+The separate focused premium pass is not added again. No app gate was relaxed.
+Optional lint was not run: eslint is not installed in this local environment.
+Local PostgreSQL remains unavailable. A new full CI must run the 49 database
+suites before test deployment; previous CI success cannot certify this revision.
 
-Read-only Railway smoke currently sees the previous frontend. Phase 2 is not
-pushed or deployed. Health/authenticated-access rejection checks do not replace
-signed-in member/coach acceptance. Earlier physical camera/mic confirmation is
-retained in report notes; repeat it after this voice change. Synthetic speech
-fixtures do not prove real recognition quality or Kannada accuracy.
+The preceding deployment (8a1da65) passed GitHub run59:74 suites /4,447
+assertions, 13 public deployment checks and a scoped draft-only live retest.
+Phase 3 is a new local build, not deployed. Health checks alone do not verify
+member save/reload, coach visibility, backend revision or physical devices.
+The user's earlier camera/mic confirmation is preserved; retest relevant cases
+on this build. Synthetic speech fixtures do not prove real recognition quality.
 
-qa/manual-regression.tsv is the complete manual case checklist. The Excel also
-contains actual executed assertion rows, all registered suites and the source
-catalog, with local, baseline CI and deployed results distinguished.
+Known backend limits and all remaining enhancements are recorded in
+docs/reviews/PHASE3-PENDING-PLAN.md. Unexecuted acceptance cases stay Not run.

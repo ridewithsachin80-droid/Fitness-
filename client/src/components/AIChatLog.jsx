@@ -8,12 +8,13 @@ import useAIEntryActions from '../hooks/useAIEntryActions';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import api from '../api/client';
 import { useLogStore } from '../store/logStore';
+import { useAuthStore } from '../store/authStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { today, plural } from '../constants';
 import { resolveProtocolItems, defaultMealSlot, isMealPlanQuestion } from '../lib/day';
 import LogPlannedButton from './chat/LogPlannedButton';
-import { useAIChat, undoSnap, workoutUndoSnap } from '../store/aiChatStore';
+import { useAIChat } from '../store/aiChatStore';
 import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CHIPS, GroupHeader, ToggleChip } from './chat/ChatAtoms';
 
 // Re-exported so every existing `import { useAIChat } from './AIChatLog'` keeps working.
@@ -22,12 +23,10 @@ import DaySummary from './DaySummary';
 import AIFoodReview from './chat/AIFoodReview';
 import UsualMeals from './chat/UsualMeals';
 import { usualReview } from '../utils/usualMeals';
-import { portionCorrections } from '../utils/householdPortions';
 import AIAttachments from './chat/AIAttachments';
 import { withFoodGrams, foodReviewError } from '../utils/aiFoodReview';
 import { Icon } from './primitives';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
-import { rollbackCard } from '../utils/chatCard';
 import { foodWithLabel } from './chat/ChatFoodMacros';
 import { requestSnapshot } from '../utils/aiRequestRecovery';
 import { downscale, readFileAsBase64 } from '../utils/aiAttachments';
@@ -35,6 +34,9 @@ import { countIncluded } from '../utils/aiParsedReview';
 import { aiReplyText, aiContextText, hasLoggingPreview } from '../utils/aiReplyText';
 import useAIRequestRecovery from '../hooks/useAIRequestRecovery';
 import AIRequestRecovery from './chat/AIRequestRecovery';
+import useAIReviewSave from '../hooks/useAIReviewSave';
+import AIReviewSaveStatus from './chat/AIReviewSaveStatus';
+import { definitiveWriteFailure } from '../utils/aiSaveReceipt';
 
 const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 const MAX_PHOTO_BASE64 = 3_000_000;
@@ -71,8 +73,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   } = useAIRequestRecovery();
   const fileRef = useRef(null);
   const galleryRef = useRef(null);
-  const applyingRef = useRef(false);
-  const [applying, setApplying] = useState(false);
   const logDate = useLogStore(s => s.date);
   const chatDay = useAIChat(s => s.dayKey);
   const logLoading = useLogStore(s => s.loading);
@@ -83,13 +83,34 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const [composerHeight, setComposerHeight] = useState(220);
 
   const labRef  = useRef(null);
+  const labSaveFlight = useRef(null);
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const recogRef  = useRef(null);
-  const undoRef        = undoSnap;         // module-level, see above
-  const workoutUndoRef = workoutUndoSnap;  // module-level, see above
 
+
+  // ── What's still pending after applying — the "coach nudge" ────────────────
+  const computePending = useCallback((newLog) => {
+    const proto  = deriveProtocolItemsCompat(useLogStore.getState().protocol);
+    const target = useLogStore.getState().protocol?.water_target || 3000;
+    const pending = [];
+
+    if (!newLog.weight) pending.push('morning weight');
+    const actLeft = proto.activities.filter(a => !newLog.activities?.[a.id]).length;
+    if (actLeft > 0) pending.push(`${actLeft} activit${actLeft > 1 ? 'ies' : 'y'}`);
+    const acvLeft = proto.acv.filter(a => !newLog.acv?.[a.id]).length;
+    if (acvLeft > 0) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
+    const suppLeft = proto.supplements.filter(s => !newLog.supplements?.[s.id]).length;
+    if (suppLeft > 0) pending.push(`${suppLeft} ${plural(suppLeft, 'supplement')}`);
+    if ((newLog.water || 0) < target) pending.push(`water (${((target - (newLog.water || 0)) / 1000).toFixed(1)}L to go)`);
+    if (!newLog.food?.length) pending.push('food log');
+    if (!newLog.sleep?.bedtime || !newLog.sleep?.waketime) pending.push('sleep times');
+
+    return pending.slice(0, 3);
+  }, []);
+
+  const { applying, applyingRef, applyAll, undo, editApplied, retryUndo } = useAIReviewSave({ mealSlots, mealPlans, computePending });
 
   useEffect(() => {
     if (useAIChat.getState().composerOpen) bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
@@ -284,7 +305,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         role: 'ai',
         text: data.reply,
         lab: {
-          test_date: data.test_date || new Date().toISOString().slice(0, 10),
+          test_date: data.test_date || today(),
           lab_name: data.lab_name || '',
           results: (data.results || []).map(r => ({ ...r, on: r.value !== null })),
           needs_review: data.needs_review || 0,
@@ -312,7 +333,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     setMessages(prev => {
       const next = [...prev];
       const m = next[mi];
-      if (!m?.lab || m.applied) return prev;
+      if (!m?.lab || m.applied || labSaveFlight.current || m.labSaveLocked || m.labSaveUnconfirmed) return prev;
       next[mi] = { ...m, lab: fn(m.lab) };
       return next;
     });
@@ -323,23 +344,41 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   // in lab history (where it duplicates the weight series and never reaches the
   // coach's daily view). 20–300 kg plausibility gate matches the parsers.
   const saveLabs = useCallback(async (mi) => {
-    const m = messages[mi];
-    if (!m?.lab || m.applied) return;
+    const m = useAIChat.getState().messages[mi];
+    if (!m?.lab || m.applied || m.labSaveUnconfirmed || applyingRef.current
+      || (labSaveFlight.current?.current())) return;
+    const auth = useAuthStore.getState(), selectedDay = useLogStore.getState().date;
+    const initialWeight = useLogStore.getState().log.weight;
+    const revision = useAIChat.getState().revision, reviewDay = today();
+    if (selectedDay !== reviewDay || useLogStore.getState().loading || useLogStore.getState().error === 'Failed to load log') return;
+    let invalidated = false;
+    const current = () => !invalidated && useAuthStore.getState().user?.id === auth.user?.id
+      && useAuthStore.getState().sessionVersion === auth.sessionVersion
+      && useAIChat.getState().revision === revision && today() === reviewDay
+      && useLogStore.getState().date === selectedDay && useAIChat.getState().messages.some(card => card.lab === m.lab);
+    const patch = values => { if (current()) setMessages(cards => cards.map(card => card.lab === m.lab ? { ...card, ...values } : card)); };
     const rows = m.lab.results.filter(r => r.on && r.value !== null && r.value !== '');
     if (!rows.length) return;
 
     // Only when the reading is from today — retro-writing today's log from an
     // old report would be wrong. Past-dated weight rows stay in lab history.
-    const today = new Date().toISOString().slice(0, 10);
     // Routing rules live in utils/labRouting.js — the same functions
     // test-coach-view runs, and asserted to agree with the server's copy of the
     // weight-name predicate.
-    const { weightRow, labRows } = routeLabRows(rows, m.lab.test_date, today);
+    const { weightRow, labRows } = routeLabRows(rows, m.lab.test_date, reviewDay);
 
-    setLabBusy(true);
+    const flight = { current }; labSaveFlight.current = flight;
+    const unsubscribe = useLogStore.subscribe((state, previous) => { if (state.date !== previous.date) invalidated = true; });
+    setLabBusy(true); patch({ labSaveNotice: null });
+    let appendSent = false, appendConfirmed = !!m.labSaveLocked;
     try {
-      let saved = 0, notice = null;
-      if (labRows.length) {
+      let saved = m.labSaved || 0, notice = m.labNotice || null;
+      if (labRows.length && !appendConfirmed) {
+        if (!current()) return;
+        appendSent = true;
+        // Persist the uncertain boundary on the card before the append. A
+        // day change or remount must never make the same report retryable.
+        patch({ labSaveUnconfirmed: true, labSaveNotice: 'The report save is not yet confirmed. Check Lab results before repeating it.' });
         const { data } = await api.post('/members/me/labs', {
           test_date: m.lab.test_date,
           lab_name: m.lab.lab_name || null,
@@ -348,25 +387,50 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
             ref_min: r.ref_min, ref_max: r.ref_max,
           })),
         });
+        if (!current()) return;
         saved = data.saved; notice = data.notice;
+        if (Number(saved) !== labRows.length) {
+          patch({ labSaveUnconfirmed: true, labSaveNotice: 'Some report results may already be saved. Check Lab results before adding them again.' }); return;
+        }
+        appendConfirmed = true;
+        patch({ labSaved: saved, labNotice: notice, labSaveLocked: true, labSaveUnconfirmed: false, labSaveNotice: null });
       }
+      let weightQueued = false;
       if (weightRow) {
+        if (!current()) return;
         const { updateLog, saveLog } = useLogStore.getState();
-        updateLog('weight', String(parseFloat(weightRow.value)));
-        await saveLog();
+        const value = String(parseFloat(weightRow.value));
+        if ((m.labWeightApplied && useLogStore.getState().log.weight !== value)
+          || (!m.labWeightApplied && String(useLogStore.getState().log.weight ?? '') !== String(initialWeight ?? ''))) {
+          patch({ labSaveNotice: 'Weight has changed since this review. Keep the newer value and use the Weight editor to make a correction.' }); return;
+        }
+        if (!m.labWeightApplied) updateLog('weight', value);
+        patch({ labWeightApplied: true, labSaveLocked: true });
+        const result = await saveLog();
+        if (!current()) return;
+        if (!result || result.ok === false || useLogStore.getState().error) {
+          patch({ labSaveNotice: `${saved ? 'Report results saved. ' : ''}Weight save was not confirmed. Retry to save the weight without repeating report results.` }); return;
+        }
+        if (result.data && Number(result.data.weight_kg) !== Number(weightRow.value)) {
+          patch({ labSaveNotice: 'The server kept a different weight. Check the Weight editor before making another change.' }); return;
+        }
+        weightQueued = !!result.queued;
       }
+      if (!current()) return;
       haptic(30);
-      setMessages(prev => {
-        const next = [...prev];
-        next[mi] = { ...next[mi], applied: true, labSaved: saved, labNotice: notice,
-                     weightLogged: weightRow ? parseFloat(weightRow.value) : null };
-        return next;
-      });
+      patch({ applied: true, labSaved: saved, labNotice: notice, weightQueued,
+        weightLogged: weightRow ? parseFloat(weightRow.value) : null, labSaveNotice: null });
     } catch (err) {
-      const msg = err.response?.data?.error || 'Could not save those results.';
-      setMessages(prev => [...prev, { role: 'ai', text: msg, error: true }]);
-    } finally { setLabBusy(false); }
-  }, [messages]);
+      if (!current()) return;
+      const uncertain = appendSent && !appendConfirmed && !definitiveWriteFailure(err);
+      patch({ labSaveUnconfirmed: uncertain, labSaveNotice: uncertain
+        ? 'The report save is not confirmed. Check Lab results before adding it again.'
+        : 'Could not save those results. Reconnect and try again.' });
+    } finally {
+      unsubscribe();
+      if (labSaveFlight.current === flight) { labSaveFlight.current = null; if (!labFlight.current) setLabBusy(false); }
+    }
+  }, [setMessages]);
 
   // ── Send → parse ───────────────────────────────────────────────────────────
   const send = useCallback(async (textOverride, { recovery = null } = {}) => {
@@ -492,357 +556,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       [key]: p[key].map((it, i) => (i === idx ? { ...it, on: !it.on } : it)),
     }));
 
-  // ── What's still pending after applying — the "coach nudge" ────────────────
-  const computePending = useCallback((newLog) => {
-    const proto  = deriveProtocolItemsCompat(useLogStore.getState().protocol);
-    const target = useLogStore.getState().protocol?.water_target || 3000;
-    const pending = [];
-
-    if (!newLog.weight) pending.push('morning weight');
-    const actLeft = proto.activities.filter(a => !newLog.activities?.[a.id]).length;
-    if (actLeft > 0) pending.push(`${actLeft} activit${actLeft > 1 ? 'ies' : 'y'}`);
-    const acvLeft = proto.acv.filter(a => !newLog.acv?.[a.id]).length;
-    if (acvLeft > 0) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
-    const suppLeft = proto.supplements.filter(s => !newLog.supplements?.[s.id]).length;
-    if (suppLeft > 0) pending.push(`${suppLeft} ${plural(suppLeft, 'supplement')}`);
-    if ((newLog.water || 0) < target) pending.push(`water (${((target - (newLog.water || 0)) / 1000).toFixed(1)}L to go)`);
-    if (!newLog.food?.length) pending.push('food log');
-    if (!newLog.sleep?.bedtime || !newLog.sleep?.waketime) pending.push('sleep times');
-
-    return pending.slice(0, 3);
-  }, []);
-
-  // ── Workouts — SAFE merge into workout_sessions ────────────────────────────
-  // POST /api/workouts REPLACES the whole day's session (all exercises/sets),
-  // so we always GET the current session first and resend its exercises
-  // unchanged — never silently wiping a manually-logged workout. We only add
-  // duration + a note line; freeform AI-parsed workouts don't map to a named
-  // exercise_id, so they live in the session's `notes` field for now (visible
-  // to the member and their coach) rather than inventing exercise rows.
-  const applyWorkouts = useCallback(async (workoutsOn) => {
-    if (!workoutsOn.length) return { ok: true };
-    const date = useLogStore.getState().date;
-    try {
-      const { data: existing } = await api.get('/workouts', { params: { date } });
-      const prevSession = existing?.session || null;
-      const prevExercises = (existing?.exercises || []).map(ex => ({
-        exercise_id: ex.exercise_id,
-        fromProgram: ex.fromProgram === true,
-        sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })),
-      }));
-
-      // Snapshot for Undo
-      workoutUndoRef.current = {
-        date,
-        hadSession: !!prevSession,
-        duration_min: prevSession?.duration_min ?? null,
-        notes: prevSession?.notes ?? null,
-        exercises: prevExercises,
-        cardio: Array.isArray(existing?.cardio) ? existing.cardio : [],
-      };
-
-      // Resolve an exercise by name, creating it if the library doesn't have it.
-      // The library is shared globally, and POST /exercises upserts on name,
-      // so this is safe to call for an existing name too.
-      const resolveExerciseId = async (name) => {
-        try {
-          const { data: found } = await api.get('/workouts/exercises', { params: { q: name } });
-          const exact = (found || []).find(
-            e => e.name.toLowerCase() === name.toLowerCase()
-          );
-          if (exact) return exact.id;
-        } catch { /* fall through to create */ }
-        try {
-          const { data: created } = await api.post('/workouts/exercises', { name });
-          return created?.id || null;
-        } catch (err) {
-          console.error('AI chat: could not resolve exercise', name, err);
-          return null;
-        }
-      };
-
-      // Three buckets:
-      //   sets      → real exercise rows (volume-based calories)
-      //   cardio    → real cardio rows on the session (MET × time calories)
-      //   freeform  → anything we can't structure, kept as a session note
-      const structured = workoutsOn.filter(w => w.sets?.length);
-      const cardioIn   = workoutsOn.filter(w => !w.sets?.length && w.cardio_type);
-      const freeform   = workoutsOn.filter(w => !w.sets?.length && !w.cardio_type);
-
-      const mergedExercises = [...prevExercises];
-      for (const w of structured) {
-        const exId = await resolveExerciseId(w.name);
-        if (!exId) { freeform.push(w); continue; }  // fall back to a note
-        const sets = w.sets.map(st => ({ reps: st.reps, weight_kg: st.weight_kg }));
-        const already = mergedExercises.find(e => e.exercise_id === exId);
-        if (already) already.sets = [...already.sets, ...sets];  // append, never replace
-        else mergedExercises.push({ exercise_id: exId, sets });
-      }
-
-      // Duration only comes from FREEFORM work (a 30-min walk, an hour of
-      // cycling). Set-based lifts must not add duration — each apply would
-      // stack another block of minutes onto the session, and since burn is
-      // duration × MET that inflates calories without limit. A member logging
-      // "bench press 3 sets" twice was ending up with a 4-hour session.
-      // Merge new cardio with what's already on the session, skipping exact
-      // duplicates so re-applying the same message can't double the day.
-      const prevCardio = Array.isArray(existing?.cardio) ? existing.cardio : [];
-      const newCardio = cardioIn
-        .map(w => ({
-          type:         w.cardio_type,
-          duration_min: parseFloat(w.duration_min) || 0,
-          speed_kmh:    w.speed_kmh ?? null,
-          distance_km:  w.distance_km ?? null,
-        }))
-        .filter(c => c.duration_min > 0)
-        .filter(c => !prevCardio.some(p =>
-          p.type === c.type && Number(p.duration_min) === Number(c.duration_min)
-        ));
-      const mergedCardio = [...prevCardio, ...newCardio];
-
-      const addedMinutes = freeform.reduce((s, w) => s + (parseFloat(w.duration_min) || 0), 0);
-      const rawDuration = (prevSession?.duration_min || 0) + addedMinutes;
-      // 8 h is a generous ceiling for one day's training; beyond that the value
-      // is almost certainly an accumulation bug rather than a real session.
-      const newDuration = rawDuration > 0 ? Math.min(480, rawDuration) : (prevSession?.duration_min || null);
-
-      const newLines = freeform.map(w =>
-        `\u2728 ${w.name}${w.qty_text ? ` \u2014 ${w.qty_text}` : ''}${w.calories_burned ? ` (~${w.calories_burned} kcal)` : ''}`
-      );
-      const combinedNotes = [prevSession?.notes, ...newLines].filter(Boolean).join('\n').slice(0, 2000);
-
-      await api.post('/workouts', {
-        date,
-        duration_min: newDuration,
-        notes: combinedNotes,
-        exercises: mergedExercises,
-        cardio: mergedCardio,
-      });
-      return { ok: true, exercisesAdded: structured.length, cardioAdded: newCardio.length };
-    } catch (err) {
-      console.error('AI chat: failed to save workouts:', err);
-      workoutUndoRef.current = null;
-      return { ok: false };
-    }
-  }, []);
-
-  // ── Apply everything included to today's log ───────────────────────────────
-  const applyAll = useCallback(async (mi) => {
-    const msg = messages[mi];
-    if (!msg?.parsed || msg.applied || applyingRef.current) return;
-    const p = msg.parsed;
-    const currentState = useLogStore.getState();
-    if (currentState.date !== today() || currentState.loading || currentState.error === 'Failed to load log' || (msg.logDate && msg.logDate !== today())) {
-      setMessages(prev => [...prev, { role: 'ai', error: true, text: 'Return to today and wait for your log to load before saving this review.' }]);
-      return;
-    }
-    if (foodReviewError(p.foods)) return;
-    applyingRef.current = true;
-    setApplying(true);
-    try {
-
-    const { log: cur, updateLog, saveLog } = useLogStore.getState();
-
-    // Snapshot for undo
-    undoRef.current = {
-      weight: cur.weight, activities: cur.activities, acv: cur.acv,
-      supplements: cur.supplements, water: cur.water, sleep: cur.sleep,
-      food: cur.food, notes: cur.notes,
-    };
-
-    const newLog = { ...cur };
-
-    if (p.notesOn && p.notes?.trim()) {
-      newLog.notes = [cur.notes, p.notes.trim()].filter(Boolean).join('\n').slice(0, 4000);
-      updateLog('notes', newLog.notes);
-    }
-
-    if (p.weightOn && p.weight_kg != null) {
-      newLog.weight = String(p.weight_kg);
-      updateLog('weight', newLog.weight);
-    }
-    const onIds = (list) => list.filter(i => i.on).map(i => i.id);
-    if (onIds(p.activities).length) {
-      newLog.activities = { ...cur.activities };
-      onIds(p.activities).forEach(id => { newLog.activities[id] = true; });
-      updateLog('activities', newLog.activities);
-    }
-    if (onIds(p.acv).length) {
-      newLog.acv = { ...cur.acv };
-      onIds(p.acv).forEach(id => { newLog.acv[id] = true; });
-      updateLog('acv', newLog.acv);
-    }
-    if (onIds(p.supplements).length) {
-      newLog.supplements = { ...cur.supplements };
-      onIds(p.supplements).forEach(id => { newLog.supplements[id] = true; });
-      updateLog('supplements', newLog.supplements);
-    }
-    if (p.waterOn && p.water_ml_add) {
-      newLog.water = Math.min(10000, (cur.water || 0) + p.water_ml_add);
-      updateLog('water', newLog.water);
-    }
-    if (p.sleepOn && p.sleep) {
-      newLog.sleep = {
-        ...cur.sleep,
-        ...(p.sleep.bedtime  ? { bedtime:  p.sleep.bedtime }  : {}),
-        ...(p.sleep.waketime ? { waketime: p.sleep.waketime } : {}),
-      };
-      updateLog('sleep', newLog.sleep);
-    }
-    // Corrections update the LAST matching item by name — the most recently
-    // logged dal is "the dal" the member means. Grams and slot only; the
-    // per_100g stays, so calories recompute automatically from the new grams.
-    const corrOn = (p.corrections || []).filter(c => c.on);
-    if (corrOn.length) {
-      const food = [...(cur.food || [])];
-      for (const c of corrOn) {
-        for (let i = food.length - 1; i >= 0; i--) {
-          if (String(food[i].name).toLowerCase() === c.name.toLowerCase()) {
-            food[i] = { ...food[i],
-              ...(c.grams ? { grams: c.grams } : {}),
-              ...(c.meal  ? { meal: c.meal }   : {}) };
-            break;
-          }
-        }
-      }
-      newLog.food = food;
-      updateLog('food', food);
-    }
-
-    const foodsOn = p.foods.filter(f => f.on);
-    if (foodsOn.length) {
-      const baseId = Date.now();
-      const newItems = foodsOn.map((f, i) => ({
-        id:       baseId + i,
-        name:     f.name,
-        grams:    f.grams,
-        // No meal said: the one due now (lib/day defaultMealSlot), not the first slot.
-        meal:     (f.meal && mealSlots.includes(f.meal)) ? f.meal
-                  : defaultMealSlot({ mealSlots, mealPlans, food: cur.food || [] }),
-        food_id:  f.food_id || null,
-        per_100g: f.per_100g || null,
-        source:   f.source || null,
-        ...(f.qty_text ? { qty_text:f.qty_text } : {}),
-        ...(f.label ? { label: true } : {}),
-      }));
-      newLog.food = [...(newLog.food || cur.food || []), ...newItems];
-      updateLog('food', newLog.food);
-    }
-
-    if (p.bodyMetricsOn && p.bodyMetrics?.length) {
-      // Body-scan metrics go to lab history (the coach's Body Composition
-      // section reads from there). Fire-and-forget with a visible failure —
-      // the daily log has already applied and must not be blocked by this.
-      api.post('/members/me/labs', {
-        test_date: new Date().toISOString().slice(0, 10),
-        results: p.bodyMetrics.map(bm => ({ test_name: bm.name, value: bm.value, unit: bm.unit })),
-        lab_name: 'Smart Scale',
-        notes: 'Captured from a scale screenshot via AI chat',
-      }).catch(() => {
-        setMessages(msgs => [...msgs, {
-          role: 'ai', error: true,
-          text: "Your weight was logged, but saving the body metrics failed — try the screenshot again later.",
-        }]);
-      });
-    }
-
-    haptic(30);
-    await saveLog();
-
-    // Teach the app this member's real portion sizes. Only rows they actually
-    // corrected, and only where the AI gave a recognisable unit phrase.
-    const corrections = portionCorrections(foodsOn);
-    if (corrections.length) {
-      api.post('/ai-chat/portions', { corrections })
-        .catch(err => console.error('portion learning failed:', err));
-    }
-
-    // Capture quantity corrections and excluded foods for the existing eval set.
-    if (msg.evalMessage) {
-      const edits = [
-        ...p.foods
-          .filter(f => f.on && Number(f.grams) > 0 && Number(f.grams) !== Number(f.ai_grams))
-          .map(f => ({
-            field:     'grams',
-            ai_output: { name: f.name, grams: Number(f.ai_grams), meal: f.meal || null },
-            corrected: { name: f.name, grams: Number(f.grams),    meal: f.meal || null },
-          })),
-        ...p.foods
-          .filter(f => !f.on)
-          .map(f => ({
-            field:     'food_name',
-            ai_output: { name: f.name, grams: Number(f.ai_grams), meal: f.meal || null },
-            corrected: null,      // null = the member says this item does not exist
-          })),
-      ];
-      for (const e of edits) {
-        api.post('/ai-chat/eval-sample', {
-          source:  msg.evalSource || 'member_parse',
-          message: msg.evalMessage,
-          ...e,
-        }).catch(() => {});   // bookkeeping — never surfaces to the member
-      }
-    }
-
-    const workoutsOn = p.workouts.filter(w => w.on);
-    const workoutResult = await applyWorkouts(workoutsOn);
-
-    setMessages(prev => {
-      const next = [...prev];
-      next[mi] = { ...next[mi], applied: true, logSaveFailed: !!useLogStore.getState().error, queued: useLogStore.getState().queued, workoutSaveFailed: workoutsOn.length > 0 && !workoutResult.ok, pending: computePending(newLog) };
-      return next;
-    });
-    useAIChat.getState().markApplied();
-    } finally { applyingRef.current = false; setApplying(false); }
-  }, [messages, mealSlots, computePending, applyWorkouts]);
-
-  // ── Undo / Edit last apply ─────────────────────────────────────────────────
-  // Both roll the log back to its pre-apply snapshot; they differ only in what
-  // the card becomes afterwards. Undo → "Changes reverted." Edit → the preview
-  // card again, editable, so the member can fix a value and re-apply.
-  const rollback = useCallback((mi, { reopen }) => {
-    const snap = undoRef.current;
-    if (!snap) return;
-    const { updateLog, saveLog } = useLogStore.getState();
-    Object.entries(snap).forEach(([field, val]) => updateLog(field, val));
-    undoRef.current = null;
-    haptic(20);
-    saveLog().catch(() => {});
-
-    // Restore workout_sessions to its pre-apply state, if we changed it
-    const wSnap = workoutUndoRef.current;
-    if (wSnap) {
-      workoutUndoRef.current = null;
-      if (wSnap.hadSession) {
-        api.post('/workouts', {
-          date: wSnap.date,
-          duration_min: wSnap.duration_min,
-          notes: wSnap.notes,
-          exercises: wSnap.exercises,
-          cardio: wSnap.cardio || [],
-        }).catch(err => console.error('AI chat: workout undo failed:', err));
-      }
-      // If there was no session before, the one we created via applyWorkouts
-      // stays — there's no delete endpoint, and an empty/duration-only
-      // session is harmless (it just won't show in the Workout section
-      // until it has notes or sets, which it still does — acceptable
-      // trade-off vs. adding a destructive DELETE path just for undo).
-    }
-
-    // The Undo/Edit transition lives in utils/chatCard.js — the same function
-    // test-coach-view exercises.
-    setMessages(prev => {
-      const next = [...prev];
-      next[mi] = rollbackCard(next[mi], { reopen });
-      return next;
-    });
-  }, []);
-
-  const undo = useCallback((mi) => rollback(mi, { reopen: false }), [rollback]);
-  const editApplied = useCallback((mi) => rollback(mi, { reopen: true }), [rollback]);
-
-
-
   useEffect(() => {
     if (!overlay || !composerOpen) return undefined;
     if (!previousFocus.current) previousFocus.current = document.activeElement;
@@ -910,7 +623,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
               </div>
             </div>
           ) : (
-            <div key={mi} className="flex justify-start">
+            <div key={mi} className="flex justify-start" data-testid={m.parsed ? "ai-review-card" : undefined} data-review-index={mi} data-review-id={m.saveReceipt?.id}>
               <div className="max-w-[94%] w-full">
                 <div className={`ai-reply text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
                   m.error
@@ -961,19 +674,19 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                     <div className="mt-3">
                       <div className="flex items-center gap-2 mb-2">
                         <input type="date" value={m.lab.test_date}
-                          max={new Date().toISOString().slice(0, 10)}
-                          disabled={m.applied}
+                          max={today()}
+                          disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                           onChange={e => patchLab(mi, l => ({ ...l, test_date: e.target.value }))}
                           style={{ minHeight: 32 }}
                           className="bg-charcoal border border-white/[0.12] rounded-lg px-2 text-caption text-white" />
                         <input value={m.lab.lab_name} placeholder="Lab name"
-                          disabled={m.applied}
+                          disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                           onChange={e => patchLab(mi, l => ({ ...l, lab_name: e.target.value }))}
                           style={{ minHeight: 32 }}
                           className="flex-1 min-w-0 bg-charcoal border border-white/[0.12] rounded-lg px-2 text-caption text-white placeholder-lo" />
                       </div>
                       {!m.applied
-                        && m.lab.test_date === new Date().toISOString().slice(0, 10)
+                        && m.lab.test_date === today()
                         && m.lab.results.some(r => r.on && isScaleWeightRow(r)) && (
                         <p className="text-caption text-gold mb-2 px-1">
                           ⚖ Weight found — it will go into today's daily log, the rest into body history.
@@ -998,7 +711,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                               <button
                                 onClick={() => patchLab(mi, l => ({
                                   ...l, results: l.results.map((x, j) => j === ri ? { ...x, on: !x.on } : x) }))}
-                                disabled={m.applied}
+                                disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                                 className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
                                   r.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'}`}>✓</button>
                               <span className="text-caption font-semibold text-white flex-1 min-w-0 truncate">
@@ -1007,7 +720,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                               <input
                                 value={r.value ?? ''} inputMode="decimal"
                                 placeholder="?"
-                                disabled={m.applied}
+                                disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                                 onChange={e => patchLab(mi, l => ({
                                   ...l, results: l.results.map((x, j) => j === ri
                                     ? { ...x, value: e.target.value === '' ? null : parseFloat(e.target.value), on: e.target.value !== '' } : x) }))}
@@ -1028,8 +741,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                       {m.applied ? (
                         <div className="mt-2 bg-ok-deep/[0.08] border border-ok-deep/25 rounded-xl px-3.5 py-3">
                           <p className="text-body-sm font-bold text-gold-light">
-                            ✓ {m.labSaved > 0 ? `${m.labSaved} results saved` : 'Saved'}
-                            {m.weightLogged != null && ` · ⚖ ${m.weightLogged} kg logged for today`}
+                            {m.labSaved > 0 ? `${m.labSaved} results saved` : m.weightQueued ? 'Kept on this device' : 'Saved'}
+                            {m.weightLogged != null && ` · ${m.weightLogged} kg ${m.weightQueued ? 'waiting to sync' : 'logged for today'}`}
                           </p>
                           {m.labNotice && (
                             <p className="text-caption text-amber-200 mt-1 leading-relaxed">{m.labNotice}</p>
@@ -1037,16 +750,16 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                         </div>
                       ) : (
                         <>
-                          <button onClick={() => saveLabs(mi)} disabled={labBusy}
+                          {m.labSaveNotice && <p role="status" className="text-caption text-warn mt-2">{m.labSaveNotice}</p>}
+                          <button onClick={() => saveLabs(mi)} disabled={labBusy || applying || !assistantReady || m.labSaveUnconfirmed}
                             style={{ minHeight: 44 }}
                             className="w-full mt-2 rounded-xl text-sm font-bold text-charcoal
                               bg-gradient-to-r from-gold-light via-gold to-gold-dark
                               active:scale-[0.98] transition-transform disabled:opacity-60">
-                            {labBusy ? 'Saving…' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
+                            {labBusy ? 'Saving…' : m.labSaveUnconfirmed ? 'Check Lab results' : m.labSaveLocked ? 'Retry weight save' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
                           </button>
                           <p className="text-eyebrow text-lo mt-1.5 leading-relaxed">
-                            Read from your report by AI — check the numbers before saving.
-                            Nothing is stored until you do.
+                            {m.labSaveLocked || m.labSaveUnconfirmed ? 'Previously submitted report results will not be sent again.' : 'Read from your report by AI — check the numbers before saving. Nothing is stored until you do.'}
                           </p>
                         </>
                       )}
@@ -1071,10 +784,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                       {m.parsed.bodyMetrics?.length > 0 && (
                         <div>
                           <GroupHeader icon="📊" title="Body scan" count={m.parsed.bodyMetrics.length} />
-                          <ToggleChip on={m.parsed.bodyMetricsOn}
+                          {m.parsed.bodyMetricsLocked ? <p className="text-caption text-mid">Body metrics were already submitted. Check Lab results to avoid adding them twice.</p> : <ToggleChip on={m.parsed.bodyMetricsOn}
                             onToggle={() => patchParsed(mi, p => ({ ...p, bodyMetricsOn: !p.bodyMetricsOn }))}>
                             Save {m.parsed.bodyMetrics.length} metrics to body history
-                          </ToggleChip>
+                          </ToggleChip>}
                           <p className="text-eyebrow text-lo mt-1 px-1">
                             {m.parsed.bodyMetrics.slice(0, 4).map(bm => `${bm.name} ${bm.value}${bm.unit || ''}`).join(' · ')}
                             {m.parsed.bodyMetrics.length > 4 && ` · +${m.parsed.bodyMetrics.length - 4} more`}
@@ -1233,60 +946,16 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                       )}
 
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
-                        <button onClick={() => applyAll(mi)} disabled={applying || !assistantReady || !!foodReviewError(m.parsed.foods)}
+                        <button data-testid="ai-card-save" onClick={() => applyAll(mi)} disabled={applying || labBusy || !assistantReady || !!foodReviewError(m.parsed.foods)}
                           style={{ minHeight: 48 }}
                           className="w-full rounded-xl text-sm font-bold bg-gold text-charcoal active:scale-[0.98] disabled:opacity-40 transition-all">
                           {applying ? 'Saving…' : 'Save'} {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
                         </button>
                       )}
 
-                      {m.applied && m.logSaveFailed && <button type="button" className="w-full text-sm text-gold py-3" onClick={async () => {
-                        if (applyingRef.current) return; applyingRef.current = true; setApplying(true);
-                        try { await useLogStore.getState().saveLog(); setMessages(prev => prev.map((card, i) => i === mi ? { ...card, logSaveFailed: !!useLogStore.getState().error, queued: useLogStore.getState().queued } : card)); }
-                        finally { applyingRef.current = false; setApplying(false); }
-                      }} disabled={applying}>Retry saving these changes</button>}
-                      {m.applied && (
-                        <div className={`border rounded-xl px-3.5 py-3 space-y-2 ${
-                          m.workoutSaveFailed ? 'bg-amber-500/[0.08] border-amber-500/25' : 'bg-ok-deep/[0.08] border-ok-deep/25'
-                        }`}>
-                          <div className="flex items-center justify-between">
-                            <p className={`text-body-sm font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-gold-light'}`}>
-                              {m.logSaveFailed ? 'Changes kept on screen — save failed' : m.queued ? 'Saved on this device · waiting to sync' : m.workoutSaveFailed ? 'Daily log saved — workout needs attention' : 'Saved to your daily log'}
-                            </p>
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => editApplied(mi)}
-                                style={{ minHeight: 32 }}
-                                className="text-caption font-semibold text-gold hover:text-gold-light transition-colors">
-                                ✏️ Edit
-                              </button>
-                              <button onClick={() => undo(mi)}
-                                style={{ minHeight: 32 }}
-                                className="text-caption font-semibold text-mid hover:text-white underline underline-offset-2 transition-colors">
-                                Undo
-                              </button>
-                            </div>
-                          </div>
-                          {m.workoutSaveFailed && (
-                            <p className="text-caption text-amber-300 leading-relaxed">
-                              The workout couldn't be saved. Check your connection and log it in the Workout section.
-                            </p>
-                          )}
-                          {m.pending?.length > 0 ? (
-                            <p className="text-caption text-mid leading-relaxed">
-                              Still pending today: {m.pending.join(' · ')}
-                            </p>
-                          ) : (
-                            <p className="text-caption text-mid">Everything's logged for today — great job! 🎉</p>
-                          )}
-                          <p className="text-eyebrow text-lo leading-relaxed">
-                            Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.
-                          </p>
-                        </div>
-                      )}
-
-                      {m.undone && (
-                        <p className="text-caption text-mid text-center">Changes reverted.</p>
-                      )}
+                      {m.saveNotice && <p role="status" className="text-caption text-warn">{m.saveNotice}</p>}
+                      <AIReviewSaveStatus card={m} disabled={applying || labBusy || !assistantReady}
+                        onRetry={() => applyAll(mi)} onEdit={() => editApplied(mi)} onUndo={() => undo(mi)} onRetryUndo={() => retryUndo(mi)} />
                     </div>
                   )}
                 </div>
