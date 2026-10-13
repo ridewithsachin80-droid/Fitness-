@@ -401,19 +401,21 @@ async function loadPortions(patientId) {
 async function recordPortions(patientId, corrections) {
   for (const c of corrections) {
     const phrase = String(c?.phrase || '').trim().toLowerCase();
-    const grams = parseFloat(c?.grams);
-    if (!phrase || !Number.isFinite(grams) || grams <= 0 || grams > 5000) continue;
+    const quantity = c?.quantity === undefined ? 1 : Number(c.quantity);
+    const grams = Number(c?.grams) / quantity;
+    if (!phrase || phrase.length > 80 || !Number.isFinite(quantity) || quantity <= 0 || quantity > 100 ||
+        !Number.isFinite(grams) || grams <= 0 || grams > 5000) continue;
     try {
       await pool.query(
         `INSERT INTO member_portions (patient_id, phrase, grams, samples)
          VALUES ($1, $2, $3, 1)
          ON CONFLICT (patient_id, phrase) DO UPDATE
-           SET grams = ROUND(
+           SET grams = CASE WHEN $4 THEN EXCLUDED.grams ELSE ROUND(
                  (member_portions.grams * LEAST(member_portions.samples, 8) + EXCLUDED.grams)
-                 / (LEAST(member_portions.samples, 8) + 1), 1),
+                 / (LEAST(member_portions.samples, 8) + 1), 1) END,
                samples = LEAST(member_portions.samples + 1, 99),
                updated_at = NOW()`,
-        [patientId, phrase, grams]
+        [patientId, phrase, grams, c.replace === true]
       );
     } catch (err) {
       console.error('recordPortions failed for', phrase, err.message);
@@ -2934,6 +2936,19 @@ router.post('/eval-sample', async (req, res) => {
 // back to them — learning they cannot see feels like the app guessing.
 router.get('/portions', async (req, res) => {
   res.json({ portions: await loadPortions(req.user.id) });
+});
+
+// Forget one household measure, scoped to the signed-in member.
+router.delete('/portions', async (req, res) => {
+  const phrase = String(req.body?.phrase || '').trim().toLowerCase();
+  if (!phrase || phrase.length > 80) return res.status(400).json({ error:'Choose a saved portion to forget' });
+  try {
+    await pool.query('DELETE FROM member_portions WHERE patient_id = $1 AND phrase = $2', [req.user.id, phrase]);
+    res.json({ forgotten:true });
+  } catch (err) {
+    console.error('Forget portion failed:', err.message);
+    res.status(500).json({ error:'Could not forget that portion. Try again.' });
+  }
 });
 
 // ── POST /api/ai-chat/coach-parse ────────────────────────────────────────────

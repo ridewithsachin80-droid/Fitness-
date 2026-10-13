@@ -20,6 +20,9 @@ import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CH
 export { useAIChat };
 import DaySummary from './DaySummary';
 import AIFoodReview from './chat/AIFoodReview';
+import UsualMeals from './chat/UsualMeals';
+import { usualReview } from '../utils/usualMeals';
+import { portionCorrections } from '../utils/householdPortions';
 import AIAttachments from './chat/AIAttachments';
 import { withFoodGrams, foodReviewError } from '../utils/aiFoodReview';
 import { Icon } from './primitives';
@@ -688,6 +691,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                   : defaultMealSlot({ mealSlots, mealPlans, food: cur.food || [] }),
         food_id:  f.food_id || null,
         per_100g: f.per_100g || null,
+        source:   f.source || null,
+        ...(f.qty_text ? { qty_text:f.qty_text } : {}),
         ...(f.label ? { label: true } : {}),
       }));
       newLog.food = [...(newLog.food || cur.food || []), ...newItems];
@@ -716,9 +721,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
 
     // Teach the app this member's real portion sizes. Only rows they actually
     // corrected, and only where the AI gave a recognisable unit phrase.
-    const corrections = foodsOn
-      .filter(f => f.portion_phrase && Number(f.grams) > 0 && Number(f.grams) !== Number(f.ai_grams))
-      .map(f => ({ phrase: f.portion_phrase, grams: Number(f.grams) }));
+    const corrections = portionCorrections(foodsOn);
     if (corrections.length) {
       api.post('/ai-chat/portions', { corrections })
         .catch(err => console.error('portion learning failed:', err));
@@ -1318,6 +1321,9 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         style={{ bottom: `calc(${(overlay ? 8 : composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
       <div className="max-w-md mx-auto px-3 pointer-events-auto">
       <div className="glass glass-solid rounded-2xl shadow-float px-3 pt-2 pb-2" data-testid="composer-bar">
+        <UsualMeals active={composerOpen && !messages.some(m => !m.applied && m.parsed?.foods?.length)}
+          autoSlot={autoSlot} disabled={!assistantReady || busy || photoBusy || labBusy || applying}
+          onChoose={suggestion => { inputRef.current?.blur(); setMessages(m => [...m, usualReview(suggestion, today())]); }} />
         {vc.card}
         {(photoBusy || labBusy) && <p className="text-caption text-gold py-2" role="status">{photoBusy ? 'Analysing your photo and calculating nutrition…' : 'Reading your document…'}</p>}
         {logError && <p className="text-caption text-danger pb-2" role="alert">{logError}</p>}

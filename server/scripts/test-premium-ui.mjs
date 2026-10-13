@@ -44,6 +44,7 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import http from 'http';
+import { browserExecutable } from './lib/browser-executable.mjs';
 
 const HERE       = path.dirname(fileURLToPath(import.meta.url));
 const ROOT       = path.resolve(HERE, '../..');
@@ -376,7 +377,7 @@ async function premiumVisual(code) {
  const shell='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style></head><body><div id="root"></div></body></html>';
  const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(shell)});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const browser=await puppeteer.launch({executablePath:await chromium.executablePath(),args:[...chromium.args,'--no-sandbox','--disable-dev-shm-usage'],headless:true});
+ const browser=await puppeteer.launch({executablePath:await browserExecutable(chromium),args:[...chromium.args,'--no-sandbox','--disable-dev-shm-usage'],headless:true});
  const out=process.env.UI_SHOTS||path.join(ROOT,'design-previews');fs.mkdirSync(out,{recursive:true});
  try {for(const width of (process.env.UI_WIDTHS ? process.env.UI_WIDTHS.split(',').map(Number) : [320,390,1280])) {for(const theme of ['light','dark']) {
   const page=await browser.newPage();await page.setViewport({width,height:width>600?960:900,deviceScaleFactor:1.5});

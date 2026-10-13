@@ -196,25 +196,32 @@ fi
 # the localhost guard. Both lists run after DATABASE_URL is exported, so this is
 # for reading, not for wiring.
 LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
-test-coach-program test-coach-questions test-workout-merge test-image-routing \
+test-coach-program test-coach-questions test-image-routing \
 test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue"
 
-DB_SUITES="test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
+DB_SUITES="test-workout-merge test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
-test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods"
+test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods test-known-fixes test-usual-foods"
+
+MODULE_SUITES="test-private-api-cache test-portion-defaults test-logging-phase1"
+RESULTS_DIR="${TEST_RESULTS_DIR:-$ROOT/../qa/results}"
+mkdir -p "$RESULTS_DIR"
 
 failed=0
 total_pass=0
 
 run_suite() {
   local name=$1
-  local log="/tmp/fitlife-$name.log"
-  if [ ! -f "scripts/$name.js" ]; then
-    printf "  %-24s %s\n" "$name" "— not present, skipped"
+  local log="$RESULTS_DIR/$name.log"
+  local script="scripts/$name.js"
+  [ -f "$script" ] || script="scripts/$name.mjs"
+  if [ ! -f "$script" ]; then
+    printf "  %-24s %s\n" "$name" "— missing required suite"
+    failed=$((failed + 1))
     return
   fi
-  if timeout 300 node "scripts/$name.js" >"$log" 2>&1; then
+  if timeout 300 node "$script" >"$log" 2>&1; then
     local n; n=$(grep -c '✓' "$log")
     # A suite that exits 0 having asserted NOTHING is not a pass. test-weekly-report
     # skipped itself for months because it wanted TEST_DATABASE_URL and the gate
@@ -238,6 +245,7 @@ run_suite() {
 echo
 echo "▸ Logic suites (no database needed)"
 for s in $LOGIC_SUITES; do run_suite "$s"; done
+for s in $MODULE_SUITES; do run_suite "$s"; done
 
 echo
 echo "▸ Database suites (these self-seed; no fixtures required)"
@@ -262,7 +270,7 @@ elif [ ! -d "$ROOT/../node_modules/react" ] && [ ! -d "$ROOT/../client/node_modu
   printf "  %-24s %s\n" "ui-tests" "✗ client dependencies missing — run: npm install (from the repo root)"
   failed=$((failed + 1))
 else
-  uilog=/tmp/fitlife-ui-tests.log
+  uilog="$RESULTS_DIR/ui-tests.log"
   if timeout 600 node scripts/ui-tests.mjs >"$uilog" 2>&1; then
     n=$(grep -c '✓' "$uilog")
     if [ "$n" -eq 0 ]; then
@@ -288,6 +296,6 @@ echo
 if [ "$failed" -eq 0 ]; then
   echo "✅ All suites passed — $total_pass assertions"
 else
-  echo "❌ $failed suite(s) failed — see /tmp/fitlife-<suite>.log"
+  echo "❌ $failed suite(s) failed — see $RESULTS_DIR/<suite>.log"
 fi
 exit $failed

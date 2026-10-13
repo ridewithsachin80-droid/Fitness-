@@ -337,6 +337,9 @@ router.post('/presets', authMW, async (req, res) => {
     name:     String(i.name || '').slice(0, 120),
     grams:    Number(i.grams) || 0,
     per_100g: i.per_100g && typeof i.per_100g === 'object' ? i.per_100g : null,
+    label:    !!i.label,
+    source:   ['member','db','db-verified','db-unverified','ai','ai-estimate','photo','plan','saved'].includes(i.source) ? i.source : null,
+    qty_text: i.qty_text ? String(i.qty_text).slice(0, 120) : null,
   })).filter(i => i.name && i.grams > 0);
 
   if (!clean.length) return res.status(400).json({ error: 'Those items had no quantities' });

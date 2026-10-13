@@ -24,6 +24,7 @@ import { useVoiceInput } from '../hooks/useVoiceInput';
 import { TYPICAL_GRAMS, smartGrams, PORTIONS, PortionPicker } from './food/portions.jsx';
 import { TrafficBadge } from './food/TrafficBadge';
 import { calcMacros } from './food/macros';
+import { foodSource } from '../utils/foodProvenance';
 import { BarcodeScanner, hasBarcodeDetector } from './food/BarcodeScanner';
 import { PrescribedMeals } from './food/PrescribedMeals';
 import MacroEditor from './food/MacroEditor';
@@ -103,6 +104,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         meal,
         food_id:  i.food_id ?? null,
         per_100g: i.per_100g || null,
+        source:i.source || 'saved', label:!!i.label, qty_text:i.qty_text || null,
       }));
     if (!toAdd.length) { setRepeatNote('Nothing to copy.'); return; }
     onChange([...(items || []), ...toAdd]);
@@ -515,13 +517,13 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                         {/* Change the macros: the pack's numbers, calories follow (10 Oct 2026). */}
                         <button onClick={() => { haptic(10); setEditingId(editingId === item.id ? null : item.id); }}
                           data-testid="food-edit-macros" aria-expanded={editingId === item.id}
-                          style={{ minHeight: 32 }}
+                          style={{ minHeight: 44 }}
                           className="ml-auto text-caption font-semibold text-gold px-2 rounded-lg flex-shrink-0 active:bg-gold/10">
                           Edit macros
                         </button>
                         {/* Always-visible remove button */}
                         <button onClick={() => remove(item.id)}
-                          style={{ minWidth: 32, minHeight: 32 }}
+                          style={{ minWidth: 44, minHeight: 44 }}
                           className="flex items-center justify-center rounded-full text-ghost hover:text-red-400 hover:bg-red-400/10 transition-all ml-2 flex-shrink-0"
                           aria-label="Remove item">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -529,6 +531,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                           </svg>
                         </button>
                       </div>
+                      <p className="text-caption text-mid mt-1" data-testid="logged-food-source">{foodSource(item)}</p>
                       {editingId === item.id && (
                         <div className="mt-2 pt-2 border-t border-hair">
                           <MacroEditor name={item.name} grams={item.grams} per100g={per100Of(item)}

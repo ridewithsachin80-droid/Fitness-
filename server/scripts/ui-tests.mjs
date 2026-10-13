@@ -44,6 +44,7 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import http from 'http';
+import { browserExecutable } from './lib/browser-executable.mjs';
 
 const HERE       = path.dirname(fileURLToPath(import.meta.url));
 const ROOT       = path.resolve(HERE, '../..');
@@ -883,7 +884,7 @@ async function progressTest() {
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const page = await browser.newPage();
       await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -984,7 +985,7 @@ async function planTest() {
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const page = await browser.newPage();
       await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -1854,7 +1855,7 @@ async function cspTest() {
   app.use((req, res) => res.sendFile(path.join(dist, 'index.html')));
   const server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+  const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
   try {
     const page = await browser.newPage();
     // Block the service worker: a stale one from another run must not answer.
@@ -2610,7 +2611,7 @@ async function reviewFixesTest() {
       const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
       const distDir = path.join(ROOT, 'client', 'dist', 'assets');
       const built = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
-      const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+      const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
       try {
         const page = await browser.newPage();
         await page.setContent(`<!doctype html><html><head><style>${built}</style></head><body style="background:#121316"><p style="color:#fff">text under the bar</p><div class="fade-up" style="position:fixed;left:0;right:0;top:0"><div id="bar" class="glass glass-solid">bar</div><div id="plain" class="glass">plain</div></div></body></html>`);
@@ -2734,7 +2735,7 @@ async function phase8cTest() {
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const out = [];
       for (const [role, width] of [['admin', 320], ['admin', 360], ['monitor', 320], ['monitor', 390]]) {
@@ -3083,7 +3084,7 @@ async function honestStatesTest() {
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root" style="padding:16px"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const out = [];
       for (const width of [320, 360, 390]) {
@@ -3380,7 +3381,7 @@ async function overflowTest() {
   const origin = `http://127.0.0.1:${server.address().port}/`;
 
   const browser = await puppeteerCore.launch({
-    executablePath: await chromium.executablePath(),
+    executablePath: await browserExecutable(chromium),
     args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
     headless: true,
   });

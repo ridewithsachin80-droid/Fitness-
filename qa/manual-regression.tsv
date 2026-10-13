@@ -1,0 +1,139 @@
+Area	Scenario	Steps	Expected	Priority	Related suite
+Home	Minimal home	Sign in as a member; open Today without opening any disclosure.	Calories, macros, Water, Move, Sleep and Weight are accessible; secondary details are collapsed.	P0	ui-tests / premium
+Home	Light theme	Select light theme; reopen Today, AI, Progress and More.	Light palette is consistent and text remains legible on all four surfaces.	P0	ui-tests / premium
+Home	Dark theme	Select dark theme; reopen Today, AI, Progress and More.	Dark palette is consistent; fields, sheets and menus do not flash white.	P0	ui-tests / premium
+Home	Theme persistence	Change theme; reload and close/reopen the installed app.	Chosen theme is retained.	P1	ui-tests / settings
+Home	Small phone	Use a 320 px viewport; inspect Today and open AI review and macro editor.	No horizontal scrolling, clipped buttons or inaccessible save action.	P0	ui-tests / overflow
+Home	Large text	Increase text size; inspect Today, More, chat and portion editor.	Labels wrap; controls remain operable and values are not truncated.	P1	ui-tests / premium
+Home	Desktop layout	Open at 1280 px; navigate Today to Progress and More.	Content remains constrained and readable; overlays stay centered.	P1	ui-tests / premium
+Home	Three destinations	Use Today, Progress and More in succession.	Correct destination opens without duplicate tabs or missing tools.	P0	ui-tests / premium
+Home	Weight shortcut	Tap Weight in the daily summary; enter 81.8; finish and reload.	The existing weight editor opens and the saved value appears in the summary.	P0	ui-tests / premium
+Home	Missing weight	Open a date with no weight entry; tap Add weight.	An honest empty state opens the weight editor.	P1	ui-tests / premium
+Home	Full plan access	Open View your complete plan; inspect meals, workouts and protocol.	All assigned plan functions remain accessible.	P0	ui-tests / member plan
+Home	Details access	Open daily entries and insights through More and Today disclosures.	Food corrections, notes, coach messages and insights remain available.	P0	ui-tests / premium
+Home	Empty day	Open Today for a new member with no entries.	No fabricated progress; helpful logging controls remain available.	P1	ui-tests / honest states
+Home	Keyboard navigation	Tab through navigation and AI controls; open and close a sheet with keyboard.	Visible focus and usable button order; focus returns after closing.	P1	ui-tests / premium
+AI entry	Speak direct entry	On a real Android phone, tap Speak once and grant requested microphone permission.	AI opens and listening begins without a second microphone tap.	P0	ui-tests / premium; device required
+AI entry	Speak on iPhone	On iPhone Safari and installed PWA, tap Speak once.	Supported voice input starts or a clear supported fallback appears.	P0	Device required
+AI entry	Mic denied	Deny microphone permission; retry after changing the browser permission.	Clear recovery; no stuck recording state or silent loss of input.	P0	test-hands-free
+AI entry	Stop recording	Speak a meal; stop; inspect transcript before saving.	Recording stops, text is reviewable and nothing logs twice.	P0	test-hands-free
+AI entry	Speech interruption	Start listening then close AI or navigate away.	Mic stops and no hidden recording continues.	P0	test-hands-free
+AI entry	Type direct entry	Tap Type from Today and enter a short meal.	Composer focuses immediately and the entered text remains editable.	P0	ui-tests / premium
+AI entry	Snap direct entry	On Android and iPhone, tap Snap once.	Camera capture opens directly where supported; it does not default to browsing files.	P0	ui-tests / premium; device required
+AI entry	Gallery alternative	Open attachment menu and choose gallery.	Existing photos remain available separately from Snap.	P1	ui-tests / premium
+AI entry	Camera cancelled	Open Snap then cancel the camera.	Assistant remains usable with no invented meal or save.	P1	ui-tests / premium
+AI entry	Mixed daily log	Type food, 500 ml water, weight and sleep in one message; review selections.	Every supported item is independently reviewable and saves to the correct day.	P0	test-aichat; test-member-apply
+AI entry	Food question	Ask whether a meal fits the plan rather than asking to log it.	Question is answered without silently adding food.	P0	test-member-questions
+AI entry	Unavailable AI	Interrupt AI network access while submitting a meal.	An actionable error appears; input is retained and no false success is shown.	P0	ui-tests / honest states
+AI entry	Repeated send	Double tap Send rapidly during slow parsing.	One parse request and one review are created.	P0	ui-tests / premium
+AI entry	Unsupported attachment	Attach a non-image or unsupported document through its supported attachment path.	Appropriate validation or document flow; no crash or mislabeled food.	P1	test-image-routing
+Usual	Saved meal suggestion	Save a meal preset; reopen AI during its meal slot.	My usual offers the saved meal inside AI without adding Home clutter.	P0	test-logging-phase1
+Usual	Review before save	Tap My usual and inspect the review before pressing Save.	No write occurs on selection; quantities, meal and macros are editable.	P0	test-logging-phase1
+Usual	Single confirmed save	Choose My usual; press Save once; reload the day.	Each selected food is logged once on the intended date.	P0	ui-tests / premium; test-usual-foods
+Usual	Double selection	Double tap My usual during a slow render.	Only one review is created.	P0	test-logging-phase1
+Usual	Newest quantity	Log rice at 100 g yesterday and 200 g today; reopen recent suggestions.	The recent quantity is 200 g, not yesterday’s 100 g.	P0	test-usual-foods
+Usual	Latest same-day entry	Log rice twice today at 150 g then 200 g; reopen recent suggestions.	Latest same-day quantity is used while frequency counts both entries.	P0	test-usual-foods
+Usual	Current nutrition label	Save a meal; update that food’s personal nutrition label; choose the saved meal.	Latest personal label supplies macros and is identified as the member’s label.	P0	test-logging-phase1
+Usual	Current meal slot	Choose a breakfast preset while the active meal slot is Dinner.	Review uses the current slot and allows it to be changed.	P1	test-logging-phase1
+Usual	More usual foods	Create multiple presets and recent foods; expand More under My usual.	Alternatives are available in a bounded list without expanding Home.	P1	test-logging-phase1
+Usual	Partial fetch failure	Block recent-foods while leaving presets available; reopen AI.	Available suggestions still appear with a retry for failed sources.	P1	test-logging-phase1
+Usual	Shared-device isolation	Open suggestions for member A; switch to B while requests are pending.	A’s suggestions disappear and late A responses never appear for B.	P0	test-logging-phase1
+Usual	Busy lock	While photo analysis or saving is in progress, tap a usual suggestion.	A second operation cannot interrupt or duplicate the pending save.	P0	test-logging-phase1
+Photo review	Automatic analysis	Capture a food photo and wait for analysis.	Recognized foods and estimated portions/macros appear automatically for review.	P0	ui-tests / premium; test-aichat
+Photo review	Multiple foods	Capture a plate with multiple foods; inspect all detected rows.	Separate food rows can each be included, excluded and edited.	P0	test-aichat
+Photo review	Edit grams	Change a reviewed food from 100 g to 150 g.	Calories and all macros recalculate proportionally before saving.	P0	test-logging-phase1
+Photo review	Decimal grams	Enter a decimal portion, such as 125.5 g.	Decimal weight is retained and nutrition recalculates without integer truncation.	P1	ui-tests / premium
+Photo review	Empty grams	Clear a selected food’s grams and press Save.	Save is blocked with a useful quantity message.	P0	ui-tests / premium
+Photo review	Oversized grams	Enter 6000 g in the review.	The value is rejected for saving; it is not silently changed to 5000 g.	P0	test-logging-phase1
+Photo review	Exclude item	Untick one detected food then save the others.	Unticked food does not enter the log or portion memory.	P0	test-logging-phase1
+Photo review	Meal assignment	Move one food from Breakfast to Dinner before saving.	Food appears under Dinner and totals remain correct.	P0	ui-tests / premium
+Photo review	Photo estimate clarity	Review food with verified database nutrition and a photo-estimated portion.	Nutrition source is shown separately; the portion is still described as estimated.	P1	test-logging-phase1
+Photo review	Unknown provenance	Review an older saved item without source metadata.	UI states that the source was not recorded; it does not imply verified nutrition.	P1	test-logging-phase1
+Photo review	Save failure recovery	Lose connectivity while confirming a review; reconnect and retry.	No false saved status; the review remains recoverable and entries are not duplicated.	P0	ui-tests / premium; test-offline-queue
+Photo review	Close and reopen	Close AI with a review present, then reopen it.	Conversation and pending edits remain available as designed.	P1	ui-tests / premium
+Portions	Household disclosure	Expand Household portions for a food described as 2 bowls.	Unit, count and grams per unit are shown without crowding the collapsed review.	P1	test-logging-phase1
+Portions	Count multiplication	Use 3 bowls at 150 g per bowl.	Total is 450 g and all macros scale from the same total.	P0	test-logging-phase1
+Portions	Fractional measure	Review a food described as half a cup or 1/2 cup with known grams.	Half-unit count is interpreted consistently without inventing a weight.	P1	test-logging-phase1
+Portions	Remember measure	Use 2 bowls totaling 360 g; choose Remember and save.	One bowl is remembered as 180 g, not 360 g.	P0	test-portion-memory
+Portions	Preserve count	Switch a 2-bowl review to a saved 180 g bowl.	Count stays 2 and total becomes 360 g.	P0	test-logging-phase1
+Portions	Edit measure	Change grams per bowl from 180 to 150; opt in to remember and save.	Current totals update and the explicitly edited measure replaces the old one.	P0	test-portion-memory
+Portions	Memory opt-out	Edit a household portion but leave Remember unchecked; save.	Current food saves without updating the household portion preference.	P0	test-logging-phase1
+Portions	Raw versus cooked	Create remembered bowls for Rice (Raw) and Rice (Cooked); review each.	The two preparation-specific measures do not match each other.	P0	test-logging-phase1
+Portions	Unknown preparation	Review a food name that does not state raw or cooked.	Preparation is described as unspecified rather than guessed.	P1	test-logging-phase1
+Portions	Forget measure	Choose a saved portion and press Forget; reopen the assistant.	Only that member’s saved measure is removed; food currently being reviewed remains editable.	P0	test-portion-memory
+Portions	Forget retry	Interrupt the forget request; restore network and retry.	Failure is visible, preference remains until deletion succeeds, and retry is safe.	P0	test-logging-phase1; test-portion-memory
+Portions	Member isolation	Member B attempts to forget the same phrase saved by member A.	A’s preference remains unchanged.	P0	test-portion-memory
+Portions	Return to grams	Choose a household measure, then switch to Grams.	Stale portion phrase and count metadata are cleared; current grams remain editable.	P1	test-logging-phase1
+Portions	Invalid count	Enter zero, negative, blank or more than 100 portions.	Included food cannot be saved until valid or excluded.	P0	test-logging-phase1
+Portions	No measure supplied	Review a food with no household quantity information.	App offers grams without inventing bowl size.	P1	test-logging-phase1
+Macros	Edit per 100 g	Open Edit macros, enter pack values per 100 g and save.	Portion totals recalculate using the entered label values.	P0	ui-tests / macros; test-member-foods
+Macros	Edit eaten portion	Select portion mode and enter protein, carbs and fat for the amount eaten.	Values convert correctly into per-100 g storage and current portion totals.	P0	test-day-lib; test-member-foods
+Macros	Invalid nutrition	Enter negative macros or a total exceeding the portion’s weight.	Clear validation prevents impossible nutrition from saving.	P0	test-member-foods
+Macros	Net versus total carbs	Test one food with net carbs and another with only total carbs.	Day totals use the app’s established net-first rule consistently.	P0	test-nutrition-contract; test-day-lib
+Macros	Label privacy	Edit member A’s label, then review the same food as B.	A’s personal label does not alter B’s food or shared database nutrition.	P0	test-member-foods
+Macros	Cancel edit	Change values in the macro editor and cancel.	Original food nutrition remains unchanged.	P1	ui-tests / macros
+Macros	Saved-item editing	Edit macros for a food already in today’s log and reload.	Daily totals and the food’s provenance remain consistent after save.	P0	ui-tests / macros; test-member-foods
+Macros	Coach label visibility	Open the member’s nutrition tab as their assigned coach.	Personal-label food is identified accurately in the coach view.	P1	ui-tests / macros
+Daily log	Water increment	Add 250 ml twice; reload the day.	Water increases by 500 ml and does not duplicate after refresh.	P0	test-day-merge; test-member-apply
+Daily log	Weight decimal	Enter weight with a decimal through the summary and through AI review.	Both routes store the same units and update the same daily weight.	P0	test-member-apply; ui-tests / premium
+Daily log	Weight comparison	Open dates before and after a weight change, including a date without weight.	Comparisons use dated measurements and do not invent a delta for missing data.	P0	ui-tests / premium
+Daily log	Overnight sleep	Set bedtime before midnight and wake time next morning.	Sleep duration crosses midnight correctly.	P0	test-day-lib; test-sleep-target
+Daily log	Checklist	Toggle assigned activities and supplements; reload.	Only assigned items and configured totals drive progress.	P0	test-day-lib; test-day-merge
+Daily log	Past-day save	Edit yesterday’s water, food and weight; save and switch to today.	Yesterday changes; today remains unchanged.	P0	ui-tests / premium; test-day-merge
+Daily log	Failed save date lock	Force a save failure and try to change dates.	Unsaved edits remain visible and navigation cannot silently discard them.	P0	ui-tests / premium
+Daily log	Undo AI log	Save a supported AI batch, then use Undo.	The affected log fields restore without deleting unrelated manual workout sets.	P0	test-member-apply; test-workout-merge
+Daily log	Notes	Add a note manually and another through AI, then reload.	Notes are preserved without erasing prior text.	P1	test-member-apply
+Daily log	Midnight boundary	Log just before and after midnight in the configured India business date.	Each entry belongs to the correct date; no false future-date rejection.	P0	test-day-merge; test-session
+Workout	Start assigned session	Open Move and start today’s assigned workout.	Correct exercises and prescribed sets appear.	P0	test-session; test-member-plan
+Workout	Record sets	Enter reps, weight and completion for multiple exercises; save and reopen.	All sets and exercise ordering persist.	P0	test-session; test-known-fixes
+Workout	AI and manual merge	Save manual sets, then log a freeform workout through AI.	Existing sets survive while new duration and notes are merged.	P0	test-workout-merge
+Workout	Unfinished exercise	Save a session containing an exercise with no completed set.	Exercise remains visible on reopening.	P1	test-known-fixes
+Workout	Session notes	Save a workout update without sending notes after notes already exist.	Existing notes are retained.	P0	test-known-fixes
+Workout	Cardio	Log duration and supported cardio metrics, then reopen.	Session totals and display remain consistent.	P1	test-cardio
+Workout	Circuits	Open a prescribed circuit and complete one round.	Exercise sequence and circuit completion are preserved.	P1	test-coach-circuits
+Workout	Device connection	Open tracker connections; cancel authorization and return.	Cancellation does not create a fake connection or lose session data.	P1	test-twa-contract; device required
+Progress	Nutrition trend	Open progress after several known daily logs.	Energy and macro trends reflect actual logged dates and correct units.	P0	ui-tests / progress
+Progress	Compliance period	Include a log older than 30 days, then open the 30-day view.	Older entries do not inflate the displayed 30-day compliance.	P0	ui-tests / progress
+Progress	Empty trend	Open progress with no data.	Honest empty state; no fabricated measurements or health conclusions.	P1	ui-tests / honest states
+Progress	Lab values	Review labs with only an upper or lower reference limit.	One-sided limits and units are handled correctly in member and coach views.	P0	test-labs; test-known-fixes
+Progress	Progress photos	Upload a test photo, inspect comparison, then remove the test record.	Private photo flow and date ordering work without exposing another member’s photo.	P0	test-progress-photos
+Progress	Weekly check-in	Complete a test weekly check-in and open the coach brief.	Answers and relevant weekly data appear accurately.	P0	test-weekly
+Member tools	Meal plan swap	Choose an approved swap from the plan and confirm it.	Allowed swap is recorded with correct nutrition and plan context.	P0	test-swaps
+Member tools	Plate versus plan	Capture a test plate against the assigned meal plan.	Comparison is reviewable; estimates are not treated as exact measurements.	P0	test-plate-photo
+Member tools	Plan PDF	Download a plan PDF in light and dark mode.	Readable PDF opens with correct meals and no missing sections.	P1	test-plan-pdf
+Member tools	Barcode	Use a supported barcode; cancel; try an unknown barcode.	Supported results are editable; unknown items have a usable fallback.	P1	Device required
+Member tools	Coach message	Using test accounts, send a routine test note to the assigned coach.	Message appears once and is only available to the intended participants.	P0	test-messaging
+Member tools	Reminder settings	Change reminder settings on a test account and reopen settings.	Preferences persist; notification state is described accurately.	P1	test-nudges
+Member tools	Voice shortcut	Issue and revoke a test voice logging token.	Revocation disables the shortcut without signing the member out of the app.	P0	test-quick-log
+Member tools	Kannada voice	Use supported Kannada utterances in the voice pilot on a real phone.	Transcript and parsed items remain reviewable; failure is clear.	P1	test-voice-pilot; device required
+Coach	Member list	Sign in as coach and open the assigned-member list.	Only authorized members are visible with correct status.	P0	test-coach-assign; test-coach-triage
+Coach	Unassigned member	Try opening a member not assigned to the coach through a copied URL.	Server rejects unauthorized access without revealing private records.	P0	test-safety
+Coach	Member detail	Open an assigned member’s day, nutrition and progress views.	Dates, macros, weight and labels match the member’s saved log.	P0	ui-tests / coach; test-coach-view
+Coach	Program editing	Create or edit a test program, assign it and open it as the member.	Exercises, sequencing and schedule reach the assigned member correctly.	P0	test-coach-program; test-member-plan
+Coach	Diet plan editing	Create a draft diet plan, validate totals and publish to a test member.	Versioned plan and meal targets remain consistent.	P0	test-diet-plan; test-diet-studio
+Coach	AI command review	Ask coach AI to change a test plan; inspect the proposed action before confirming.	No plan change occurs without the intended apply action.	P0	test-coach-questions; test-aichat
+Coach	Morning nudge preview	Generate a morning message preview for a test member.	Message uses the correct day, previous-day log and program context.	P0	test-morning-nudge
+Coach	Weekly report	Generate a weekly report for seeded test data.	Totals and week boundaries match the underlying records.	P0	test-weekly-report
+Coach	Food verification	Review an estimated food in the verification queue.	Verified provenance is applied consistently without overwriting private labels.	P0	test-foods-queue; test-food-propagate
+Coach	Document attachment	Attach a test plan document with a note, then submit.	Nothing sends on selection alone; note and document reach the intended flow.	P1	ui-tests / coach documents
+Admin	Dashboard	Sign in as admin; open dashboard and food management.	Views mount with usable controls at phone and desktop widths.	P0	ui-tests / overflow
+Admin	Role separation	Try admin routes while signed in as a member or coach.	Unauthorized roles cannot perform administrative operations.	P0	test-safety; smoke-routes
+Admin	Food database edit	Edit a test food’s verified values and inspect dependent shared records.	Propagation follows existing rules and personal labels remain private.	P0	test-food-propagate
+Admin	Food duplicates	Search, create and review a duplicate food candidate.	Lookup and review prevent confusing or unintended duplicate entries.	P1	test-food-lookup; test-foods-queue
+Admin	Audit trail	Perform a test administrative change and inspect its audit record.	Actor and action are recorded without granting broader access.	P1	test-audit
+Session	Login restore	Sign in, reload, close the browser and reopen the installed app.	Supported session restore works without exposing tokens in visible URLs.	P0	test-session; test-session-logic
+Session	Expired session	Expire a test session while a draft is open; attempt a save.	Clear sign-in recovery; no false saved status or unauthorized write.	P0	test-session
+Session	Shared-device cache	Read member A’s log; sign out; sign in as B while offline.	A’s private cached responses are not displayed to B.	P0	test-private-api-cache
+Session	Offline logging	Disconnect after loading Today; edit supported data; reconnect.	Queued entries reconcile once, preserving newer writes and the correct dates.	P0	test-offline-queue; test-day-merge
+Session	Duplicate tabs	Make supported edits in two tabs and reconnect after one goes offline.	Synchronization preserves log integrity and does not double-apply queued changes.	P0	test-offline-queue
+Session	Anonymous API access	Request recent foods, presets, portions and member foods without a token.	Each endpoint returns 401 and no private health data.	P0	test-deployment
+Session	Content policy	Load the built app under production security headers.	App mounts; allowed previews/audio work; untrusted image/script origins remain blocked.	P0	ui-tests / csp
+Session	Camera and mic privacy	Close the assistant or sign out during capture/listening.	Capture resources stop; sensitive drafts are not exposed across members.	P0	Device required; test-hands-free
+Deployment	Fresh asset identity	After deployment, compare the live index asset paths with client/dist/index.html from this build.	Main JS/CSS match this build; a healthy old deployment is not counted as a pass.	P0	test-deployment
+Deployment	Service health	Request /health on the named test environment after deployment.	HTTP 200 and status ok; no inference that this alone verifies the new UI.	P0	test-deployment
+Deployment	Asset availability	Request each JS/CSS asset referenced by the live app shell.	HTTP 200 and actual asset content rather than an HTML fallback.	P0	test-deployment
+Deployment	Service-worker upgrade	Install the previous PWA; deploy this build; reopen and accept/update as designed.	Fresh build appears without a permanent stale screen or lost draft.	P0	Physical device required
+Deployment	Cold refresh routes	Open direct Today, Progress, More and coach URLs and refresh each.	SPA routing serves the app and role-appropriate content without a 404.	P0	ui-tests / boot; deployed browser required
+Deployment	Full database gate	On an isolated localhost PostgreSQL, run the complete npm test command.	Every registered suite asserts real checks and exits successfully; no missing suites are skipped.	P0	test-local.sh
+Deployment	Railway post-deploy smoke	Run Test deployment smoke after Railway confirms the matching commit.	Read-only health, assets, worker and anonymous-access checks pass; signed-in tests remain separate.	P0	test-deployment
+Deployment	Member acceptance	After smoke succeeds, use dedicated test member and coach accounts for all P0 cases.	All P0 cases pass on the deployed build before wider release.	P0	Manual acceptance required

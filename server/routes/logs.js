@@ -51,7 +51,7 @@ router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
     const freq = {};
     for (const row of result.rows) {
       const items = Array.isArray(row.food_items) ? row.food_items : [];
-      for (const item of items) {
+      for (const item of [...items].reverse()) {
         const key = item.food_id ? `id:${item.food_id}` : `name:${item.name}`;
         if (!freq[key]) {
           freq[key] = {
@@ -60,18 +60,22 @@ router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
             per_100g: item.per_100g || null,
             count:    0,
             last_g:   item.grams,
+            source:   item.source || null,
+            label:    !!item.label,
+            qty_text: item.qty_text || null,
           };
         }
         freq[key].count++;
-        freq[key].last_g = item.grams; // update to most recent gram amount
+        // Rows arrive newest first. Keep that first quantity and nutrition;
+        // older days contribute frequency only.
       }
     }
 
     const top8 = Object.values(freq)
       .sort((a, b) => b.count - a.count)
       .slice(0, 8)
-      .map(({ food_id, name, per_100g, count, last_g }) => ({
-        food_id, name, per_100g, count, last_g,
+      .map(({ food_id, name, per_100g, count, last_g, source, label, qty_text }) => ({
+        food_id, name, per_100g, count, last_g, source, label, qty_text,
       }));
 
     res.json(top8);

@@ -91,3 +91,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 @media(max-width:350px){.member-home-logger{padding-left:16px;padding-right:16px}}
 
 .member-header-tools{display:flex;align-items:center;gap:8px}.member-assistant-overlay{background:var(--bg-base)}
+.usual-meals{margin:0 0 20px;border-block:1px solid var(--border);padding:10px 0}
+.usual-primary{display:flex;flex:1;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;min-height:64px;padding:8px 4px}
+.usual-primary strong{font-size:16px;font-weight:500;overflow-wrap:anywhere}.usual-more{min-height:44px;padding:10px 12px;color:var(--accent);font-size:13px}
+.usual-list{display:grid;max-height:240px;overflow:auto}.usual-list button{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;min-height:52px;padding:10px 4px;border-top:1px solid var(--border);font-size:14px}.usual-list small{font-size:11px;color:var(--text-mid);flex-shrink:0}
+.portion-details{border-top:1px solid var(--border);font-size:12px}.portion-details summary{min-height:44px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--text-hi)}.portion-details summary:after{content:'+';font-size:18px}.portion-details[open] summary:after{content:'−'}.portion-details summary span{font-size:10px;color:var(--text-mid);margin-left:auto}.portion-details>p{margin-top:10px;line-height:1.5}
+.portion-field{display:grid;gap:5px;color:var(--text-mid);margin:4px 0 12px}.portion-field select{min-height:44px;max-width:100%;border:1px solid var(--border);border-radius:9px;padding:8px;color:var(--text-hi)}.portion-remember{display:flex;align-items:center;gap:8px;min-height:44px;line-height:1.5}.portion-remember input{width:18px;height:18px;accent-color:var(--accent)}.portion-forget{min-height:44px;color:var(--text-mid);text-decoration:underline;text-underline-offset:3px}
