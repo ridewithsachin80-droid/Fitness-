@@ -146,6 +146,7 @@ async function callAI(prompt, opts = {}) {
           }
           return { text, provider: provider.name, model };
         } catch (err) {
+          if (opts.singleAttempt) throw err;
           lastErr = err;
           const status = err.response?.status;
           const retryable = status === 429 || status === 503;
@@ -367,13 +368,17 @@ PARSING RULES:
    baaki hai?", "did I hit my protein target?", "what's my weight trend?")
    rather than something to log, set "question" to the member's question and
    leave every other field empty/null. The app will answer it from their real
-   data. If the message BOTH logs something AND asks something, treat it as a
-   log (parse the loggable items, question stays null).
+   data. If the message BOTH logs something AND asks something, parse every
+   loggable item, keep question null, and put ONLY the question in mixed_question.
+   Preserve the question's language (including Hindi, Kannada or mixed language).
+   Example: "drank 500ml water, how much is left?" => water_ml_add 500,
+   mixed_question "How much water is left?". Never answer it in reply or claim a save.
 
 Return ONLY a raw JSON object, no markdown fences, exactly this structure:
 {
-  "reply": "Got it — weight 82.5, walk done, lunch logged at 290 kcal, 1L water.",
+  "reply": "Here are your entries to review.",
   "question": null,
+  "mixed_question": null,
   "coach_message": null,
   "notes": null,
   "corrections": [],
@@ -2133,7 +2138,19 @@ async function parseMemberMessage({ userId, message, context }) {
     const nothingParsed = !notes && !weight_kg && !activities.length && !acv.length &&
       !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length && corrections.length === 0;
 
+    const advice = typeof parsed.mixed_question === 'string' && parsed.mixed_question.trim()
+      ? await require('../services/mixedRequestAnswer').mixedRequestAnswer(parsed.mixed_question, {
+      context: () => buildDayContext(userId, ctx),
+      answer: async (question, savedContext) => {
+        const result = await callAI(buildAnswerPrompt(question, savedContext) +
+          '\nThis question accompanied an UNSAVED review. Answer ONLY from the saved snapshot above. Do not add pending entries or say you saved, logged or updated anything. If the question asks about after this entry, explain it must first be reviewed and saved, then asked again. Reply in the language of the question.',
+          { timeout: 8000, maxTokens: 300, singleAttempt: true });
+        return result.text;
+      },
+    }) : null;
+
     return ({ 
+      advice,
       // When nothing was parsed the model's own sentence is NOT trustworthy: a
       // repeated "walking 40 minutes" produced "Got it — logged a 40-minute
       // walk" with empty arrays, so the app claimed a save that never

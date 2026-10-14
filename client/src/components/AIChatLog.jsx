@@ -575,8 +575,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
-        // Eval set: the exact message that produced this card, so an edit the
-        // member makes below can be paired with the question that caused it.
+        advice: data.advice?.basis === 'saved_snapshot' && typeof data.advice?.text === 'string'
+          ? { text: data.advice.text.slice(0, 700), question: String(data.advice.question || '').slice(0, 300), unavailable: data.advice.unavailable === true }
+          : null,
+        // Eval set: pair member edits with the message that produced this card.
         logDate: requestDay,
         evalSource: 'member_parse',
         evalMessage: text,
@@ -695,6 +697,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                     : <p className="leading-relaxed whitespace-pre-line" data-testid="ai-reply-text" role={m.draftEditStatus ? 'status' : undefined}>{aiReplyText(m)}</p>}
                   <UnresolvedFoods foods={m.parsed?.unresolved_foods} reviewedFoods={m.parsed?.foods} />
                   <UnresolvedSleep value={m.parsed?.unresolved_sleep} />
+                  {m.advice && <div className="mt-3 pt-3 border-t border-hair" data-testid="ai-mixed-answer">
+                    <p className="text-xs text-muted mb-1">{m.advice.unavailable ? 'Question not answered' : 'Based on saved entries when you asked · this review is excluded'}</p>
+                    <p className="leading-relaxed whitespace-pre-line">{m.advice.text}</p>
+                  </div>}
 
                   {m.failedRequest && requestCurrent(m.failedRequest) && <AIRequestRecovery
                     request={m.failedRequest} requestEdit={requestEdit} setRequestEdit={setRequestEdit}

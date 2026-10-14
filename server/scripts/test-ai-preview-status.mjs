@@ -112,6 +112,13 @@ try {
   check('Cancel restores the prior preview and its 201 kcal item', JSON.stringify(w.chat.getState().messages.at(-1).parsed.foods) === beforeCancel && d.querySelector('.chat-food-calories').textContent === '201 kcal');
   check('quantity editing and macro Cancel produce no member-data writes', noWrites());
 
+  w.answer = {...mealAnswer('Saved the food.'), advice: {basis:'saved_snapshot',question:'How much protein?',text:'Your saved entries contain 20g protein.'}};
+  await send('I ate idlis and sambar. How much protein?');
+  check('mixed answer appears separately from canonical unsaved status', q('ai-mixed-answer')?.textContent.includes('20g protein') && reply().includes('These entries haven’t been saved yet.'));
+  check('mixed answer labels its saved snapshot and excludes the review', q('ai-mixed-answer')?.textContent.includes('this review is excluded'));
+  check('mixed answer does not leak into logging context as saved review', !w.contextText(w.chat.getState().messages.at(-1)).includes('20g protein'));
+  check('mixed request does not write member data', noWrites());
+
   const advice = 'You logged water earlier. For a balanced breakfast, add a source of protein and fruit.';
   w.answer = { reply: advice, foods: [], activities: [], acv: [], supplements: [], workouts: [], corrections: [] };
   await send('How can I balance breakfast?');

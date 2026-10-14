@@ -195,7 +195,7 @@ fi
 # Split by whether the suite needs Postgres, which is just whether it carries
 # the localhost guard. Both lists run after DATABASE_URL is exported, so this is
 # for reading, not for wiring.
-LOGIC_SUITES="test-sleep-clarification test-draft-food-edits test-ai-draft-food-edits test-food-clarifications test-voice-phase2 test-coach-view test-rename-contracts smoke-routes test-member-questions \
+LOGIC_SUITES="test-mixed-request-answer test-sleep-clarification test-draft-food-edits test-ai-draft-food-edits test-food-clarifications test-voice-phase2 test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-image-routing \
 test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic test-ci55-regressions"
 
