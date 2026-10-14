@@ -258,6 +258,8 @@ export default function useTodayModel() {
   }, [loading]);
   const [heroPanel, setHeroPanel] = useState(null);   // 'weight'|'food'|'protocol'|'water'|'workout'|'sleep'
 
+  const [foodTarget, setFoodTarget] = useState(null);
+
   // PWA app shortcuts: long-press icon → /?open=ai or /?open=weight.
   // Handled once on mount, then the param is stripped so a refresh doesn't
   // re-trigger it.
@@ -663,8 +665,12 @@ export default function useTodayModel() {
   };
   const goToday = async () => { if (await flushPendingSave()) setDate(today()); };
 
-  const openSheet  = (key) => { setHeroPanel(key); haptic(10); };
-  const closeSheet = () => setHeroPanel(null);
+  const openSheet = (key, target = null) => {
+    setFoodTarget(key === 'food' && target && typeof target.meal === 'string'
+      ? { ...target, date, owner: user?.id } : null);
+    setHeroPanel(key); haptic(10);
+  };
+  const closeSheet = () => { setHeroPanel(null); setFoodTarget(null); };
   // Phase 2: the prescribed meal being logged "as planned" (null = sheet closed).
   const [plannedMeal, setPlannedMeal] = useState(null);
   const openPlanned  = (meal) => setPlannedMeal(meal);
@@ -701,6 +707,7 @@ export default function useTodayModel() {
     streak, streakIsBest, milestone, setMilestone, volumePB,
     // sheets (heroPanel under its historical name)
     sheet: heroPanel, openSheet, closeSheet,
+    foodTarget: foodTarget?.date === date && foodTarget?.owner === user?.id ? foodTarget : null,
     plannedMeal, openPlanned, closePlanned,
     plateJob, openPlate, closePlate,
     // protocol chip long-press popover

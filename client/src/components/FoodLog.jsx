@@ -31,12 +31,12 @@ import MacroEditor from './food/MacroEditor';
 import FoodVoiceStatus from './food/FoodVoiceStatus';
 import { useMemberLabels, per100Of } from './food/useMemberLabels';
 
-export default function FoodLog({ items = [], onChange, calorieTarget }) {
+export default function FoodLog({ items = [], onChange, calorieTarget, mealTarget = null, mealHeadingRef }) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
   const nutritionView = useSettingsStore(s => s.nutritionView);
 
   const [showForm, setShowForm]       = useState(false);
-  const [meal, setMeal]               = useState(mealSlots[0] || 'Meal 1');
+  const [meal, setMeal]               = useState(() => mealSlots.find(slot => slot.toLowerCase() === mealTarget?.meal?.toLowerCase()) || mealSlots[0] || 'Meal 1');
   const [query, setQuery]             = useState('');
   const [grams, setGrams]             = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -494,8 +494,11 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         const mealItems = byMeal(m);
         const totals = mealTotal(mealItems);
         return (
-          <div key={m}>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <div key={m} data-food-meal={m}>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap scroll-mt-2 outline-none focus-visible:ring-2 focus-visible:ring-gold rounded"
+              role="heading" aria-level={3} tabIndex={mealTarget && slotOf({ meal: mealTarget.meal }) === m ? 0 : -1}
+              ref={mealTarget && slotOf({ meal: mealTarget.meal }) === m ? mealHeadingRef : undefined}
+              data-food-meal-target={mealTarget && slotOf({ meal: mealTarget.meal }) === m ? "" : undefined}>
               <span className="text-xs font-bold text-ghost tracking-wider">{m}</span>
               {mealItems.length > 0 && (
                 <>

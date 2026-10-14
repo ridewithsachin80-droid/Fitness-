@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Sheet, Pressable } from '../primitives';
 import FoodLog from '../FoodLog';
 import { MacroProgress, PrescribedMeals } from '../today/DayWidgets';
@@ -10,9 +11,10 @@ import EatenMacros from '../today/EatenMacros';
  * `snap="full"` — a food search with a keyboard needs the whole screen.
  */
 export default function FoodSheet({ open, onClose, m }) {
+  const mealHeadingRef = useRef(null);
   const { log, protocol, update, logMeal, loading, activeActivities, workoutKcal, weightKg, kcalTarget, eaten, terms, isToday } = m;
   return (
-    <Sheet open={open && !loading} onClose={onClose} snap="full" eyebrow="Food" title="What did you eat?"
+    <Sheet open={open && !loading} onClose={onClose} snap="full" eyebrow="Food" title={m.foodTarget?.label || "What did you eat?"} initialFocusRef={mealHeadingRef}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       {protocol?.macros && (
         <div className="mb-3 -mx-1">
@@ -37,7 +39,7 @@ export default function FoodSheet({ open, onClose, m }) {
       )}
       <div id="section-food">
         <p className="text-caption text-lo mb-2">Enter weight before cooking · tap mic for voice input</p>
-        <FoodLog items={log.food} onChange={v => update('food', v)} calorieTarget={kcalTarget} />
+        <FoodLog mealTarget={m.foodTarget} mealHeadingRef={mealHeadingRef} items={log.food} onChange={v => update('food', v)} calorieTarget={kcalTarget} />
       </div>
     </Sheet>
   );

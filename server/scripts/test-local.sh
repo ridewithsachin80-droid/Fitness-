@@ -204,7 +204,7 @@ test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-feat
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
 test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods test-known-fixes test-usual-foods"
 
-MODULE_SUITES="test-ai-chat-scroll test-ai-food-caption-sync test-progress-weight test-sleep-clarification-ui test-ai-draft-food-edits-ui test-ai-food-clarifications test-modal-accessibility test-ai-save-receipts test-ai-preview-status test-logging-phase2 test-built-css test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser"
+MODULE_SUITES="test-timeline-meal-entry test-ai-chat-scroll test-ai-food-caption-sync test-progress-weight test-sleep-clarification-ui test-ai-draft-food-edits-ui test-ai-food-clarifications test-modal-accessibility test-ai-save-receipts test-ai-preview-status test-logging-phase2 test-built-css test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser"
 RESULTS_DIR="${TEST_RESULTS_DIR:-$ROOT/../qa/results}"
 mkdir -p "$RESULTS_DIR"
 

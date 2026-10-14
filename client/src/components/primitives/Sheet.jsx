@@ -30,13 +30,19 @@ export default function Sheet(props) {
   return createPortal(<AnimatePresence>{props.open && <SheetSurface key="sheet" {...props} />}</AnimatePresence>, document.body);
 }
 
-function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer, className = '' }) {
+function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer, className = '', initialFocusRef }) {
   const reduce = useReducedMotion();
   const present = useIsPresent();
-  const panelRef = useRef(null), rootRef = useRef(null);
+  const panelRef = useRef(null), rootRef = useRef(null), contentRef = useRef(null);
   const modal = useModalScope({ open: present, roots: [rootRef], focusRef: panelRef, onClose,
-    initialFocus: () => [...(panelRef.current?.querySelectorAll('input,textarea,select,button:not([data-sheet-close])') || [])]
-      .find(node => visibleEnabled(node) && node.tabIndex >= 0),
+    initialFocus: () => {
+      const target = initialFocusRef?.current;
+      if (target && panelRef.current?.contains(target) && visibleEnabled(target)) {
+        return target;
+      }
+      return [...(panelRef.current?.querySelectorAll('input,textarea,select,button:not([data-sheet-close])') || [])]
+      .find(node => visibleEnabled(node) && node.tabIndex >= 0);
+    },
   });
 
   // Keyboard-safe height: the sheet sizes to the VISUAL viewport, which shrinks
@@ -54,6 +60,18 @@ function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer
     window.addEventListener('resize', apply);
     return () => { vv?.removeEventListener('resize', apply); window.removeEventListener('resize', apply); };
   }, [present, snap]);
+
+  // Position once after the viewport height is applied. Do not move the list
+  // again when foods, macros or the keyboard change while the editor is open.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const target = initialFocusRef?.current, content = contentRef.current;
+      if (target && content?.contains(target)) {
+        content.scrollTop += target.getBoundingClientRect().top - content.getBoundingClientRect().top - 8;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [initialFocusRef]);
 
   const close = () => { haptic(8); modal.requestClose(); };
 
@@ -105,7 +123,7 @@ function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer
               </div>
             )}
 
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-4">
+            <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-4">
               {children}
             </div>
 

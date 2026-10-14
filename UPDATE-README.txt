@@ -1,3 +1,6 @@
+PHASE 6: DIRECT MEAL ENTRY
+Baseline GitHub test 7270b98. Tapping a logged meal opens its existing food section directly; all foods and the general editor remain available. See docs/reviews/PHASE6-MEAL-TIMELINE.md.
+
 AI REVIEW SCROLL FIX — 14 OCT 2026
 New long reviews open at the first item. Quantity/macro edits no longer force the list to the bottom. The review area supports keyboard scrolling and a visible scrollbar. Close/reopen returns to review access. No changes to Save, nutrition calculations, camera or microphone actions.
 Incremental baseline: GitHub test 45e66a0. Apply updated files in their original paths.
