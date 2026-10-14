@@ -25,6 +25,56 @@ const eq   = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const day = importClient('lib/day/index.js');
 
+// Date-only keys must remain calendar dates on travelling members' devices.
+// Exercise the production helpers, including the local-timezone regression
+// and the instant immediately around midnight in the app's IST calendar.
+console.log('\n[0] calendar-key arithmetic across device timezones');
+{
+  const calendar = importClient('constants.js');
+  const originalTZ = process.env.TZ, NativeDate = global.Date;
+  const cases = [
+    ['2026-10-14', -1, '2026-10-13'], ['2026-10-13', 1, '2026-10-14'],
+    ['2026-03-08', 1, '2026-03-09'], ['2026-03-09', -1, '2026-03-08'],
+    ['2026-11-01', 1, '2026-11-02'], ['2026-11-02', -1, '2026-11-01'],
+    ['2024-03-01', -1, '2024-02-29'], ['2024-02-29', 1, '2024-03-01'],
+    ['2026-03-01', -1, '2026-02-28'], ['2026-01-01', -1, '2025-12-31'],
+    ['2025-12-31', 1, '2026-01-01'], ['2026-10-14', -29, '2026-09-15'],
+  ];
+  try {
+    for (const tz of ['UTC', 'America/Los_Angeles', 'Asia/Kolkata', 'Pacific/Kiritimati']) {
+      process.env.TZ = tz;
+      for (const [key, offset, expected] of cases) {
+        ck(`${tz}: ${key} shifted ${offset} days is ${expected}`, calendar.shiftDateKey(key, offset) === expected);
+      }
+      const keys = Array.from({ length: 30 }, (_, i) => calendar.shiftDateKey('2026-09-15', i));
+      ck(`${tz}:30-day grid has30 distinct dates ending on selected IST day`, new Set(keys).size === 30 && keys[0] === '2026-09-15' && keys.at(-1) === '2026-10-14');
+      ck(`${tz}: shifting zero preserves the date key`, calendar.shiftDateKey('2026-10-14', 0) === '2026-10-14');
+      for (const [instant, expectedToday, expectedPrevious] of [
+        ['2026-10-13T18:29:59.000Z', '2026-10-13', '2026-10-12'],
+        ['2026-10-13T18:30:00.000Z', '2026-10-14', '2026-10-13'],
+        ['2026-03-09T18:30:00.000Z', '2026-03-10', '2026-03-09'],
+        ['2026-11-02T18:30:00.000Z', '2026-11-03', '2026-11-02'],
+      ]) {
+        const fixed = NativeDate.parse(instant);
+        global.Date = class extends NativeDate {
+          constructor(...args) { super(...(args.length ? args : [fixed])); }
+          static now() { return fixed; }
+        };
+        ck(`${tz}: IST today and previous day at ${instant}`, calendar.today() === expectedToday && calendar.istDaysAgo(1) === expectedPrevious);
+        ck(`${tz}: istDate preserves actual-instant conversion at ${instant}`, calendar.istDate(new NativeDate(instant)) === expectedToday);
+        global.Date = NativeDate;
+      }
+    }
+    for (const [key, offset] of [['2026-02-30', 1], ['2026-13-01', 1], ['2026-1-01', 1], ['', 1], [null, 1],
+      ['2026-10-14', 0.5], ['2026-10-14', Infinity], ['2026-10-14', '1'], ['9999-12-31', 1], ['0000-01-01', -1]]) {
+      ck(`invalid/out-of-range date shift ${String(key)} / ${String(offset)} is rejected`, calendar.shiftDateKey(key, offset) === null);
+    }
+  } finally {
+    global.Date = NativeDate;
+    if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ;
+  }
+}
+
 // ── Fixtures (identical to the golden run) ──────────────────────────────────
 const foods = [
   { name: 'idli',   grams: 120, per_100g: { calories: 130, protein: 3.5, total_carbs: 28, net_carbs: 26, fat: 0.8, vit_b12: 0.1, calcium: 12, iron: 1.1, fiber: 1.2, sodium: 250, potassium: 80, magnesium: 14, zinc: 0.4, folate: 20, vit_d: 0 } },

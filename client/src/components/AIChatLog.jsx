@@ -40,6 +40,7 @@ import AIRequestRecovery from './chat/AIRequestRecovery';
 import useAIReviewSave from '../hooks/useAIReviewSave';
 import AIReviewSaveStatus from './chat/AIReviewSaveStatus';
 import { definitiveWriteFailure } from '../utils/aiSaveReceipt';
+import { buildDraftFoodContext, applyDraftFoodEdit, isDraftFoodEditable } from '../utils/aiDraftFoodEdits';
 
 const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 const MAX_PHOTO_BASE64 = 3_000_000;
@@ -86,6 +87,13 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const composerId = useId();
   const previousFocus = useRef(null);
   const [composerHeight, setComposerHeight] = useState(220);
+  const [draftFoodTarget, setDraftFoodTarget] = useState(null);
+  const draftFoods = buildDraftFoodContext(messages, logDate, draftFoodTarget, mealSlots, autoSlot);
+  const selectedDraftFood = draftFoods.context?.target && draftFoods.context.foods.find(f =>
+    f.reviewId === draftFoods.context.target.reviewId && f.foodId === draftFoods.context.target.foodId);
+  useEffect(() => {
+    if (draftFoodTarget && !selectedDraftFood) setDraftFoodTarget(null);
+  }, [draftFoodTarget, selectedDraftFood]);
 
   const labRef  = useRef(null);
   const labSaveFlight = useRef(null);
@@ -455,7 +463,15 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     if (recovery && !requestCurrent(recovery)) return;
     if (!recovery) useAIChat.getState().ensureFreshDay(today());
     let payload = recovery?.payload;
+    let draftSnapshot = recovery?.draftSnapshot;
     if (!payload) {
+      const draft = buildDraftFoodContext(useAIChat.getState().messages, today(), draftFoodTarget, mealSlots, autoSlot);
+      if (draft.reason === 'target_unavailable') {
+        setDraftFoodTarget(null);
+        setMessages(previous => [...previous, { role: 'ai', text: 'That food is no longer available for an AI edit. Choose an unsaved food again, or use the existing Edit action for a saved review.' }]);
+        return;
+      }
+      draftSnapshot = draft.snapshot;
       const proto = deriveProtocolItemsCompat(useLogStore.getState().protocol);
       // Chat memory: the last few visible turns plus today's logged foods, so
       // follow-ups like "make the dal 250g" or "that was dinner" resolve to
@@ -472,6 +488,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           mealSlots,
           recent,
           lastFoods,
+          draftFoods: draft.context,
           foodClarification: foodClarificationContext(useAIChat.getState().messages, today()),
           activities:    proto.activities.map(({ id, label, sub }) => ({ id, label, sub })),
           acv:           proto.acv.map(({ id, label, sub }) => ({ id, label, sub })),
@@ -483,6 +500,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       payload = requestSnapshot({ ...payload, message: text });
     }
     const request = recovery ? { ...recovery, payload } : newRequest('text', text, { payload });
+    request.draftSnapshot = draftSnapshot;
     parseFlight.current = request.id;
     const controller = beginRequest(request);
     const requestDay = request.day;
@@ -499,6 +517,35 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     try {
       const { data } = await api.post('/ai-chat/parse', requestSnapshot(payload), { signal: controller.signal });
       if (!requestCurrent(request) || controller.signal.aborted) return;
+
+      // The server's existing safety response takes precedence over edit mode.
+      // Display only its guidance, without attaching any proposed actions.
+      if (data.safety && data.question === true && typeof data.reply === 'string') {
+        setMessages(previous => [...previous, { role: 'ai', text: data.reply }]);
+        return;
+      }
+
+      // Edits update the original unsaved review. Even a malformed response in
+      // explicitly targeted mode cannot fall through to a second food card.
+      if (Object.prototype.hasOwnProperty.call(data, 'draft_edit') || payload.context?.draftFoods?.target) {
+        setMessages(previous => {
+          const result = applyDraftFoodEdit(previous, data.draft_edit, request.draftSnapshot, {
+            day: today(), mealSlots: useSettingsStore.getState().mealSlots, applying: !!applyingRef.current,
+          });
+          const choose = data.draft_edit?.status === 'clarify' && data.draft_edit.reason === 'choose_food';
+          const reply = result.applied ? 'Review updated. Nothing saved yet.'
+            : result.reason === 'no_change' ? 'Your review already has those values. Nothing was changed.'
+            : result.reason === 'review_changed' || result.reason === 'busy' ? 'That review changed while I was working. Choose the food again and retry. Nothing was changed.'
+            : choose ? 'Choose Edit with AI on the food you want to change, then tell me the quantity or meal.'
+            : 'I couldn’t update that review. Choose Edit with AI on the food and try again, or edit its fields. Nothing was changed.';
+          return [...result.messages, { role: 'ai', text: reply, draftEditStatus: result.applied ? 'updated' : 'unchanged' }];
+        });
+        // A retry owns its original target, not a selection made after failure.
+        const completedTarget = payload.context?.draftFoods?.target;
+        setDraftFoodTarget(current => current?.reviewId === completedTarget?.reviewId
+          && current?.foodId === completedTarget?.foodId ? null : current);
+        return;
+      }
 
       // A whole-day summary comes back as structured fields, and renders as the
       // same card the coach sees. Nothing to apply, so no preview list.
@@ -544,7 +591,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       finishRequest(request);
       if (parseFlight.current === request.id) { parseFlight.current = false; setBusy(false); }
     }
-  }, [input, assistantReady, mealSlots, requestCurrent]);
+  }, [input, assistantReady, mealSlots, autoSlot, draftFoodTarget, requestCurrent]);
 
   // ── Toggle helpers on a message's parsed preview ───────────────────────────
   const patchParsed = useCallback((mi, patchFn) => {
@@ -627,7 +674,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                 }`} data-testid={m.failedRequest ? 'ai-request-error' : undefined}>
                   {m.summary
                     ? <DaySummary s={m.summary} />
-                    : <p className="leading-relaxed whitespace-pre-line" data-testid="ai-reply-text">{aiReplyText(m)}</p>}
+                    : <p className="leading-relaxed whitespace-pre-line" data-testid="ai-reply-text" role={m.draftEditStatus ? 'status' : undefined}>{aiReplyText(m)}</p>}
                   <UnresolvedFoods foods={m.parsed?.unresolved_foods} reviewedFoods={m.parsed?.foods} />
 
                   {m.failedRequest && requestCurrent(m.failedRequest) && <AIRequestRecovery
@@ -879,6 +926,13 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                           <GroupHeader icon="🥗" title="Food" count={m.parsed.foods.filter(f => f.on).length} />
                           <AIFoodReview foods={m.parsed.foods} disabled={m.applied || applying}
                             mealSlots={mealSlots} autoSlot={autoSlot}
+                            editableFoodIds={m.parsed.foods.filter(f => isDraftFoodEditable(m, f, logDate)).map(f => f.draftFoodId)}
+                            editBusy={busy || photoBusy || labBusy || !assistantReady}
+                            onEditWithAI={fi => {
+                              setDraftFoodTarget({ reviewId: m.draftReviewId, foodId: m.parsed.foods[fi].draftFoodId });
+                              useAIChat.getState().openChat('text');
+                              inputRef.current?.focus();
+                            }}
                             onToggle={fi => toggleListItem(mi, 'foods', fi)}
                             onGrams={(fi, value) => setGrams(mi, fi, value)}
                             onPatch={(fi, patch) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => i === fi ? { ...f, ...patch } : f) }))}
@@ -1014,6 +1068,11 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           autoSlot={autoSlot} disabled={!assistantReady || busy || photoBusy || labBusy || applying}
           onChoose={suggestion => { inputRef.current?.blur(); setMessages(m => [...m, usualReview(suggestion, today())]); }} />
         {vc.card}
+        {selectedDraftFood && <div data-testid="draft-food-target" className="flex items-center justify-between gap-2 text-caption text-mid" role="status">
+          <span>Editing {selectedDraftFood.name} · {selectedDraftFood.grams} g{selectedDraftFood.meal ? ` · ${selectedDraftFood.meal}` : ''}. Tell me the quantity or meal.</span>
+          <button type="button" className="text-gold min-h-[44px] shrink-0" aria-label="Cancel food edit"
+            disabled={busy} onClick={() => setDraftFoodTarget(null)}>Cancel</button>
+        </div>}
         {(photoBusy || labBusy) && <p className="text-caption text-gold py-2" role="status">{photoBusy ? 'Analysing your photo and calculating nutrition…' : 'Reading your document…'}</p>}
         {logError && <p className="text-caption text-danger pb-2" role="alert">{logError}</p>}
         {!assistantReady && <p className="text-caption text-warn py-2">{logLoading ? 'Loading your daily log…' : 'Open Today before logging with AI. Your draft is kept.'}</p>}

@@ -24,7 +24,7 @@ import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { getMyProfile, getMyToday, getMyRead } from '../api/logs';
 import {
-  today, istDate, istDaysAgo,
+  today, istDate, istDaysAgo, shiftDateKey,
   calcCompliance, plural,
 } from '../constants';
 import { useAIChat } from '../store/aiChatStore';
@@ -61,9 +61,8 @@ export default function useTodayModel() {
   useEffect(() => {
     let cancelled = false;
     setYesterdayWeight(null);
-    const previous = new Date(date + 'T12:00:00');
-    previous.setDate(previous.getDate() - 1);
-    api.get(`/logs/${istDate(previous)}`).then(({ data }) => {
+    const previous = shiftDateKey(date, -1);
+    api.get(`/logs/${previous}`).then(({ data }) => {
       if (!cancelled && data?.weight_kg) setYesterdayWeight(parseFloat(data.weight_kg));
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -652,18 +651,14 @@ export default function useTodayModel() {
   // Date navigation, shared by the header arrows
   const goPrevDay = async () => {
     if (!await flushPendingSave()) return;
-    const d = new Date(date + 'T12:00:00');
-    d.setDate(d.getDate() - 1);
-    setDate(istDate(d));
+    setDate(shiftDateKey(date, -1));
   };
   // Steps forward ONE day, mirroring '‹'. It used to jump straight back to
   // today, so a member who went back five days to fix something and then
   // wanted day four was thrown to today and had to press '‹' four more times.
   const goNextDay = async () => {
     if (!await flushPendingSave()) return;
-    const d = new Date(`${date}T12:00:00`);   // midday: no DST/offset edge
-    d.setDate(d.getDate() + 1);
-    const next = istDate(d);
+    const next = shiftDateKey(date, 1);
     setDate(next > today() ? today() : next);
   };
   const goToday = async () => { if (await flushPendingSave()) setDate(today()); };

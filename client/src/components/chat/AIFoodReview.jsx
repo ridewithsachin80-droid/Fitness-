@@ -4,13 +4,14 @@ import { foodSource } from '../../utils/foodProvenance';
 import HouseholdPortion from './HouseholdPortion';
 import usePortionMemory from '../../hooks/usePortionMemory';
 
-export default function AIFoodReview({ foods, disabled, mealSlots, autoSlot, onToggle, onGrams, onPatch, onMacros }) {
+export default function AIFoodReview({ foods, disabled, mealSlots, autoSlot, onToggle, onGrams, onPatch, onMacros,
+  editableFoodIds = [], editBusy = false, onEditWithAI }) {
   const total = reviewTotals(foods);
   const error = foodReviewError(foods);
   const memory = usePortionMemory(!disabled);
   return <div className="space-y-3" data-testid="ai-food-review">
     <p className="text-caption text-mid">Check the portion, meal and nutrition before saving. Photo portions are estimates.</p>
-    {foods.map((f, i) => <div key={i} className={'ai-food-review' + (!f.on ? ' excluded' : '')}>
+    {foods.map((f, i) => <div key={f.draftFoodId || i} className={'ai-food-review' + (!f.on ? ' excluded' : '')}>
       <label className="flex items-start gap-3 text-sm font-semibold">
         <input type="checkbox" checked={!!f.on} disabled={disabled} onChange={() => onToggle(i)}
           className="w-5 h-5 accent-gold mt-0.5" aria-label={'Include ' + f.name} />
@@ -30,6 +31,11 @@ export default function AIFoodReview({ foods, disabled, mealSlots, autoSlot, onT
         <span className="text-caption text-mid" data-testid="food-source">{foodSource(f)}</span>
         <ChatFoodMacros f={f} disabled={disabled} onSave={per => onMacros(i, per)} />
       </div>
+      {onEditWithAI && editableFoodIds.includes(f.draftFoodId) && <button type="button"
+        className="text-caption text-gold min-h-[44px]" disabled={disabled || editBusy}
+        data-testid="ai-food-edit" aria-label={`Edit ${f.name} with AI`} onClick={() => onEditWithAI(i)}>
+        Edit with AI
+      </button>}
       {f.warning && <p className="text-caption text-warn">{f.warning}</p>}
     </div>)}
     {memory.error && !disabled && <p className="text-caption text-mid">Saved portions couldn’t load. You can still edit grams. <button

@@ -1,3 +1,15 @@
+FITLIFE — PHASE 5 AI DRAFT EDIT REGRESSION
+New suites validate server contract/side-effect isolation, immutable client
+draft targets/revisions, and actual mounted AIChatLog interaction/race cases.
+Build and complete available local totals: PHASE5-INSTALL.txt.
+New full CI with49 isolated database suites and deployment/live acceptance
+are pending. Do not use historical CI63 as proof of this changed source.
+233 manual cases are retained; UAT214–233 appended as Not run. Automated
+fixtures are separate from live member/device outcomes. UAT212 remains Fail;
+UAT213 Partial. Preserve prior history, diagnostics and pending gates.
+See docs/reviews/PHASE5-AI-DRAFT-EDITS.md and qa/results/phase5-draft-edit.
+
+HISTORICAL REGRESSION RECORDS BELOW — counts refer to their own revisions.
 FITLIFE — CURRENT NUTRITION CONSISTENCY REGRESSION
 Installed baseline: test 4b1f605a12c38d6001b4f1874792f2aa911db585
 Matching local source: f6686fc431006ff46a787e4943d3a6c40cdbbe3f

@@ -1,3 +1,19 @@
+# Current roadmap update — Phase 5
+
+The current release plan is [PHASE5-AI-DRAFT-EDITS.md](PHASE5-AI-DRAFT-EDITS.md).
+Verified installed baseline is test `3da43bd01b731b8bc09687b208de51b0c2680e01`,
+matching local `b4d1dce`; CI63 passed 78 suites / 4,760 assertions. The nutrition
+fix is deployed: observed text consistency passed, UAT-213 remains Partial
+because photo/save acceptance is pending. UAT-212 remains Fail for spaced
+hyphen ambiguity. Phase 5 implements bounded unsaved-food AI edits; it still
+needs its own CI, deployment and live/device acceptance. Catalog:233 cases.
+
+The following Phase 4 plan is preserved as a historical record. Its earlier
+package, pending-deployment and Not run statements describe that release stage;
+use Phase 5 for current deployment instructions and backlog status.
+
+---
+
 # Phase 4 — accessibility pass and complete pending plan
 
 Release-plan update: 13 October 2026. Verified installed meal-clarification

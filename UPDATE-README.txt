@@ -1,3 +1,27 @@
+FITLIFE — PHASE 5: AI DRAFT FOOD EDITING
+Use FitLife-Phase5-AI-Draft-Edits-Updated-Files.zip only on the installed
+test baseline 3da43bd01b731b8bc09687b208de51b0c2680e01 (local b4d1dce).
+Copy the included original folder paths into the repository root.
+This build changes client and server. Require fresh full CI, including the
+49 isolated database suites, then deploy the same commit to Railway.
+Exact revision, asset, file list and local totals: PHASE5-INSTALL.txt.
+
+Members can select Edit with AI on an unsaved food and request grams/meal
+changes. A single eligible food can accept an unselected follow-up; several
+foods require a selection. The original review updates; Save stays explicit.
+Nothing new is added to Home. Receipt-owned reviews keep existing Edit/Undo.
+Regression also fixes calendar navigation, previous-weight comparison and
+Progress date windows on devices outside India; today still follows IST.
+No migrations, environment changes, dependencies or file deletions required.
+Do not reapply an older cumulative ZIP. Excel/evidence ZIPs are reports.
+
+See docs/reviews/PHASE5-AI-DRAFT-EDITS.md for current scope and complete pending
+work. New CI/deployment/live and physical-device acceptance remain pending.
+The prior baseline passed CI63 (78 suites/4,760 assertions). It does not
+certify this changed build. Manual catalog:233 cases; new214–233 Not run.
+UAT212 remains Fail for spaced-hyphen ambiguity; UAT213 remains Partial.
+
+HISTORICAL RELEASE RECORDS BELOW — superseded for deployment instructions.
 FITLIFE — CURRENT AI NUTRITION CONSISTENCY FIX
 Use FitLife-Phase4-Nutrition-Consistency-Fix.zip (updated files only).
 Installed baseline: test 4b1f605a12c38d6001b4f1874792f2aa911db585

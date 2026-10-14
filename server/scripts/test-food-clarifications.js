@@ -59,7 +59,7 @@ const db = { query: async (sql, args = []) => {
   return { rows: [] };
 } };
 const pureModules = new Set(['../services/personName', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile',
-  '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview']);
+  '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview', '../services/draftFoodReview']);
 const moduleFixture = { exports: {} };
 const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,
   process: { env: { GROQ_API_KEY: 'isolated-fixture', GROQ_MODEL: 'fixture-model', GROQ_FALLBACK_MODEL: 'fixture-model', GEMINI_API_KEY: 'isolated-photo-fixture' } },

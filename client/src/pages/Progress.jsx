@@ -24,14 +24,12 @@ import StrengthProgress from '../components/StrengthProgress';
 import WeeklyReportCard from '../components/WeeklyReportCard';
 import MuscleCoverage from '../components/MuscleCoverage';
 import TrainingSummary from '../components/TrainingSummary';
-import { today, istDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
+import { today, shiftDateKey, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function nDaysAgo(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().split('T')[0];
+  return shiftDateKey(today(), -n);
 }
 
 // Chart colours for this page. Carbs and fat were two near-identical yellows
@@ -358,7 +356,7 @@ export default function Progress() {
   // (today and the 29 before). This used to average the last 30 LOGS, which
   // for someone logging twice a week reached back months, so "30-day
   // compliance" read 6% here and 0% on Profile for the same member.
-  const from30 = (() => { const s = new Date(today() + 'T12:00:00'); s.setDate(s.getDate() - 29); return istDate(s); })();
+  const from30 = shiftDateKey(today(), -29);
   const in30 = sorted.filter(l => l.log_date >= from30);
   const avg30 = in30.length
     ? Math.round(in30.reduce((s, l) => s + (l.compliance_pct || 0), 0) / in30.length)
@@ -709,14 +707,13 @@ export default function Progress() {
           {(() => {
             const byDate = new Map(sorted.map(l => [l.log_date, l]));
             const cells = [];
-            const start = new Date(today() + 'T12:00:00'); start.setDate(start.getDate() - 29);
+            const start = shiftDateKey(today(), -29);
             // pad to the week start so columns are weekdays (Mon first)
-            const pad = (start.getDay() + 6) % 7;
+            const pad = (new Date(`${start}T00:00:00Z`).getUTCDay() + 6) % 7;
             for (let i = 0; i < pad; i++) cells.push(null);
             for (let i = 0; i < 30; i++) {
-              const d = new Date(start); d.setDate(start.getDate() + i);
-              const key = istDate(d);
-              cells.push({ key, log: byDate.get(key) || null, day: d.getDate() });
+              const key = shiftDateKey(start, i);
+              cells.push({ key, log: byDate.get(key) || null, day: Number(key.slice(-2)) });
             }
             const tone = (pct) => pct == null ? 'bg-white/[0.04] text-ghost'
               : pct >= 75 ? 'bg-gold/[0.55] text-charcoal' : pct >= 50 ? 'bg-gold/[0.28] text-white' : pct > 0 ? 'bg-gold/[0.12] text-mid' : 'bg-white/[0.06] text-lo';

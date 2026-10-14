@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand';
 import { useAuthStore } from './authStore';
+import { ensureDraftFoodIds } from '../utils/aiDraftFoodEdits';
 
 // Only the mounted assistant owns browser input actions. Registration is kept
 // outside persisted conversation state and released when its route unmounts.
@@ -76,7 +77,7 @@ export const useAIChat = create((set, get) => ({
   revision: 0,
 
   setMessages: (next) =>
-    set((s) => ({ messages: typeof next === 'function' ? next(s.messages) : next })),
+    set((s) => ({ messages: ensureDraftFoodIds(typeof next === 'function' ? next(s.messages) : next, s.messages) })),
   setInput: (next) =>
     set((s) => ({ input: typeof next === 'function' ? next(s.input) : next })),
 
