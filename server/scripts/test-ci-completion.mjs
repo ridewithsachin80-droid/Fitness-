@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 const script = fs.readFileSync(new URL('./test-local.sh', import.meta.url), 'utf8');
 const start = script.indexOf('  if timeout 600 node scripts/ui-tests.mjs');
 const end = script.indexOf('\nfi\n', start);
@@ -26,5 +27,12 @@ try {
     console.log(`  ${ok ? '✓' : '✗'} CI gate ${accepted ? 'accepts' : 'rejects'} ${name}`);
     if (!ok) { failures++; console.error(result.stdout, result.stderr); }
   }
+  const ordinary = script.slice(script.indexOf('run_suite() {'), script.indexOf('\necho\necho "▸ Logic suites'));
+  const inputPath = path.join(dir, 'ordinary.log');
+  fs.writeFileSync(inputPath, '  ✓ ordinary assertion\n');
+  const result = spawnSync('bash', [], {cwd: fileURLToPath(new URL('..', import.meta.url)), input: `set -u\ntimeout() { cat "$FIXTURE_INPUT"; }\nfailed=0\ntotal_pass=0\n${ordinary}\nrun_suite test-ci-completion\nexit "$failed"\n`, env: {...process.env, RESULTS_DIR:dir, FIXTURE_INPUT:inputPath}, encoding:'utf8'});
+  const ok = result.status === 0 && result.stdout.includes('1 assertions');
+  console.log(`  ${ok ? '✓' : '✗'} ordinary suite gate accepts assertions without a UI summary`);
+  if (!ok) { failures++; console.error(result.stdout, result.stderr); }
 } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 process.exitCode = failures ? 1 : 0;
