@@ -1,8 +1,8 @@
 import { copy, normalizedWorkout } from './aiSaveReceipt';
 
 /** Resolve once, then retain the complete replacement body for safe retries.
- * GET/compare cannot provide a server-side compare-and-swap; remote concurrent
- * writes remain an explicit limit until the workout API accepts revisions. */
+ * The save hook attaches the last observed server revision so replacement
+ * and Undo cannot overwrite a concurrent save after the comparison. */
 export async function prepareWorkoutChange(api, rows, date, check) {
   const { data } = await api.get('/workouts', { params: { date } }); check();
   const before = normalizedWorkout(data || {}, date), after = copy(before);

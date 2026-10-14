@@ -11,13 +11,13 @@ export default function AIReviewSaveStatus({ card, disabled, onRetry, onEdit, on
   if (!receipt) return <p role="status" className="text-caption text-mid">{card.logSaveFailed ? 'Save was not confirmed.' : card.queued ? 'Kept on this device — waiting to sync.' : 'This is an earlier saved review.'} Open the daily log to check or edit it; this review has no undo receipt.</p>;
   const entries = ['daily', 'workout', 'body'].filter(key => receipt[key].state !== 'not-needed');
   const complete = entries.every(key => receipt[key].state === 'saved');
-  const retry = !receipt.undoRequested && entries.some(key => ['failed', 'pending'].includes(receipt[key].state) || (key === 'workout' && receipt[key].state === 'unconfirmed'));
+  const retry = !receipt.undoRequested && entries.some(key => ['failed', 'pending'].includes(receipt[key].state) || ((key === 'workout' || (key === 'body' && receipt.body.requestId)) && receipt[key].state === 'unconfirmed'));
   return <div data-testid="ai-card-save-status" className="border border-hair rounded-xl px-3.5 py-3 space-y-2" role="status">
     <p className="text-body-sm font-semibold text-white">{receipt.running ? receipt.undoRequested ? 'Undoing this review…' : 'Saving this review…' : receipt.undoRequested ? 'Undo needs attention' : complete ? 'Saved' : 'Check your save status'}</p>
     {entries.map(key => <p key={key} data-testid={`ai-card-${key}-status`} className="text-caption text-mid">
       {label[key]}: {undoText[receipt[key].undoState] || receipt[key].detail || stateText[receipt[key].state]}
     </p>)}
-    {receipt.body.state === 'unconfirmed' && <p className="text-caption text-warn">Body metrics may already be in Lab results. They will not be sent again automatically.</p>}
+    {receipt.body.state === 'unconfirmed' && <p className="text-caption text-warn">{receipt.body.requestId ? 'Retry safely to confirm this submission without adding its body metrics twice.' : 'Body metrics may already be in Lab results. They will not be sent again automatically.'}</p>}
     {receipt.daily.change?.canonicalConflict && <p className="text-caption text-warn">The server kept different values. Review the daily log before making another change; this review cannot undo those values.</p>}
     {receipt.undoError && <p data-testid="ai-card-undo-error" className="text-caption text-warn">{receipt.undoError}</p>}
     <div className="flex flex-wrap gap-3">

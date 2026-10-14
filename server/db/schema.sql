@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS lab_values (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- One receipt per member submission. A retry returns the original result;
+-- a different review may legitimately contain the same measurements.
+CREATE TABLE IF NOT EXISTS member_lab_receipts (
+  patient_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request_id VARCHAR(120) NOT NULL,
+  payload_hash TEXT NOT NULL,
+  response JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (patient_id, request_id)
+);
+
 -- ── PUSH SUBSCRIPTIONS ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   id           SERIAL PRIMARY KEY,
@@ -606,6 +617,7 @@ ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
 -- Selected exercises with no completed sets must survive closing the sheet.
 -- Empty by default for old sessions; applied on both fresh and existing DBs.
 ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS pending_exercises JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS revision INT NOT NULL DEFAULT 0;
 
 -- Per-member portion memory. "1 katori" is not a fixed weight — it depends on
 -- whose kitchen the katori came from. When a member corrects the grams the AI

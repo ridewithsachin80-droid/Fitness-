@@ -42,6 +42,7 @@ import AIRequestRecovery from './chat/AIRequestRecovery';
 import useAIReviewSave from '../hooks/useAIReviewSave';
 import AIReviewSaveStatus from './chat/AIReviewSaveStatus';
 import { definitiveWriteFailure } from '../utils/aiSaveReceipt';
+import { writeRequestId } from '../utils/writeRequestId';
 import { buildDraftFoodContext, applyDraftFoodEdit, isDraftFoodEditable } from '../utils/aiDraftFoodEdits';
 
 const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
@@ -361,7 +362,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     setMessages(prev => {
       const next = [...prev];
       const m = next[mi];
-      if (!m?.lab || m.applied || labSaveFlight.current || m.labSaveLocked || m.labSaveUnconfirmed) return prev;
+      if (!m?.lab || m.applied || labSaveFlight.current || m.labSaveLocked || m.labSaveUnconfirmed || m.labSubmissionConflict) return prev;
       next[mi] = { ...m, lab: fn(m.lab) };
       return next;
     });
@@ -373,7 +374,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   // coach's daily view). 20–300 kg plausibility gate matches the parsers.
   const saveLabs = useCallback(async (mi) => {
     const m = useAIChat.getState().messages[mi];
-    if (!m?.lab || m.applied || m.labSaveUnconfirmed || applyingRef.current
+    if (!m?.lab || m.applied || (m.labSaveUnconfirmed && !m.labRequestId) || m.labSubmissionConflict || applyingRef.current
       || (labSaveFlight.current?.current())) return;
     const auth = useAuthStore.getState(), selectedDay = useLogStore.getState().date;
     const initialWeight = useLogStore.getState().log.weight;
@@ -406,8 +407,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         appendSent = true;
         // Persist the uncertain boundary on the card before the append. A
         // day change or remount must never make the same report retryable.
-        patch({ labSaveUnconfirmed: true, labSaveNotice: 'The report save is not yet confirmed. Check Lab results before repeating it.' });
+        const requestId = m.labRequestId || writeRequestId();
+        patch({ labRequestId: requestId, labSaveUnconfirmed: true, labSaveNotice: 'This report save is not confirmed yet. A retry will not add these results twice.' });
         const { data } = await api.post('/members/me/labs', {
+          request_id: requestId,
           test_date: m.lab.test_date,
           lab_name: m.lab.lab_name || null,
           results: labRows.map(r => ({
@@ -451,8 +454,9 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     } catch (err) {
       if (!current()) return;
       const uncertain = appendSent && !appendConfirmed && !definitiveWriteFailure(err);
-      patch({ labSaveUnconfirmed: uncertain, labSaveNotice: uncertain
-        ? 'The report save is not confirmed. Check Lab results before adding it again.'
+      patch({ labSubmissionConflict: err.response?.status === 409, labSaveUnconfirmed: uncertain, labSaveNotice: err.response?.status === 409
+        ? 'This submission has different saved results. Check Lab results before making another change.' : uncertain
+        ? 'The report save is not confirmed. Retry safely to check and finish this submission.'
         : 'Could not save those results. Reconnect and try again.' });
     } finally {
       unsubscribe();
@@ -817,15 +821,15 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                       ) : (
                         <>
                           {m.labSaveNotice && <p role="status" className="text-caption text-warn mt-2">{m.labSaveNotice}</p>}
-                          <button onClick={() => saveLabs(mi)} disabled={labBusy || applying || !assistantReady || m.labSaveUnconfirmed}
+                          <button onClick={() => saveLabs(mi)} disabled={labBusy || applying || !assistantReady || m.labSubmissionConflict || (m.labSaveUnconfirmed && !m.labRequestId)}
                             style={{ minHeight: 44 }}
                             className="w-full mt-2 rounded-xl text-sm font-bold text-charcoal
                               bg-gradient-to-r from-gold-light via-gold to-gold-dark
                               active:scale-[0.98] transition-transform disabled:opacity-60">
-                            {labBusy ? 'Saving…' : m.labSaveUnconfirmed ? 'Check Lab results' : m.labSaveLocked ? 'Retry weight save' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
+                            {labBusy ? 'Saving…' : m.labSubmissionConflict ? 'Check Lab results' : m.labSaveUnconfirmed ? m.labRequestId ? 'Retry report save' : 'Check Lab results' : m.labSaveLocked ? 'Retry weight save' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
                           </button>
                           <p className="text-eyebrow text-lo mt-1.5 leading-relaxed">
-                            {m.labSaveLocked || m.labSaveUnconfirmed ? 'Previously submitted report results will not be sent again.' : 'Read from your report by AI — check the numbers before saving. Nothing is stored until you do.'}
+                            {m.labSaveLocked || m.labSaveUnconfirmed ? m.labRequestId ? 'Retries confirm the same submission without adding duplicate results.' : 'Previously submitted report results will not be sent again.' : 'Read from your report by AI — check the numbers before saving. Nothing is stored until you do.'}
                           </p>
                         </>
                       )}

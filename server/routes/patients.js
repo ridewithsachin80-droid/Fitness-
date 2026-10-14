@@ -1437,6 +1437,10 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatie
 // transcribing a PDF and a member typing from a phone deserve different trust.
 router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
   const { test_date, results, lab_name, notes } = req.body || {};
+  const requestId = req.body?.request_id;
+  if (requestId !== undefined && (typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{12,120}$/.test(requestId))) {
+    return res.status(400).json({ error: 'Invalid submission ID' });
+  }
   if (!test_date || !Array.isArray(results) || !results.length) {
     return res.status(400).json({ error: 'test_date and a results array are required' });
   }
@@ -1461,9 +1465,23 @@ router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
 
   if (!clean.length) return res.status(400).json({ error: 'No usable results — each needs a name and a numeric value' });
 
+  const payloadHash = requestId ? require('crypto').createHash('sha256').update(JSON.stringify({
+    test_date, clean, lab_name: lab_name ? String(lab_name).slice(0, 120) : null,
+    notes: notes ? String(notes).slice(0, 500) : null,
+  })).digest('hex') : null;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    if (requestId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`lab:${req.user.id}:${requestId}`]);
+      const { rows } = await client.query('SELECT payload_hash, response FROM member_lab_receipts WHERE patient_id=$1 AND request_id=$2', [req.user.id, requestId]);
+      if (rows[0]) {
+        await client.query('ROLLBACK');
+        if (rows[0].payload_hash !== payloadHash) return res.status(409).json({ code: 'SUBMISSION_CONFLICT', error: 'This submission has already been used for different results. Check Lab results.' });
+        return res.status(200).json({ ...rows[0].response, replayed: true });
+      }
+    }
     const saved = [];
     for (const r of clean) {
       const { rows } = await client.query(
@@ -1478,10 +1496,8 @@ router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
          notes ? String(notes).slice(0, 500) : null]);
       saved.push(rows[0]);
     }
-    await client.query('COMMIT');
-
     const abnormal = saved.filter(r => r.status !== 'normal');
-    res.status(201).json({
+    const response = {
       saved: saved.length,
       results: saved,
       // Stated plainly rather than interpreted. The app must not tell someone
@@ -1489,7 +1505,11 @@ router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
       notice: abnormal.length
         ? `${abnormal.length} result${abnormal.length > 1 ? 's are' : ' is'} outside the reference range. Your coach can see these — discuss anything abnormal with the doctor who ordered the test.`
         : null,
-    });
+    };
+    if (requestId) await client.query('INSERT INTO member_lab_receipts (patient_id, request_id, payload_hash, response) VALUES ($1,$2,$3,$4)',
+      [req.user.id, requestId, payloadHash, JSON.stringify(response)]);
+    await client.query('COMMIT');
+    res.status(201).json(response);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('POST /patients/me/labs error:', err);

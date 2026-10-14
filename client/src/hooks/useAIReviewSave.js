@@ -13,6 +13,7 @@ import { nextRequestId } from '../utils/aiRequestRecovery';
 import { copy, same, createDailyChange, dailyMatches, reverseDailyChange, canonicalDailyChange,
   normalizedWorkout, definitiveWriteFailure, destinationNeeded, OVERLAP_MESSAGE } from '../utils/aiSaveReceipt';
 import { prepareWorkoutChange } from '../utils/aiWorkoutReceipt';
+import { writeRequestId } from '../utils/writeRequestId';
 
 // A request that left this date and came back is still stale. This generation
 // survives route unmounts; auth/session and conversation are checked separately.
@@ -91,29 +92,30 @@ export default function useAIReviewSave({ mealSlots, mealPlans, computePending }
       if (same(current, dest.change.after)) { dest.state = 'saved'; write(receipt); return; }
       if (!same(current, dest.change.before)) { dest.state = 'conflict'; write(receipt); return; }
       dest.attempted = true;
-      await api.post('/workouts', copy(dest.change.after)); check();
+      await api.post('/workouts', { ...copy(dest.change.after), expected_revision: data?.session?.revision ?? 0 }); check();
       dest.state = 'saved';
     } catch (error) {
       if (error.code === 'REVIEW_SCOPE_CHANGED') throw error;
-      dest.state = error.code === 'WORKOUT_CONFLICT' ? 'conflict' : dest.attempted && !definitiveWriteFailure(error) ? 'unconfirmed' : 'failed';
+      dest.state = error.code === 'WORKOUT_CONFLICT' || error.response?.data?.code === 'WORKOUT_CONFLICT' ? 'conflict' : dest.attempted && !definitiveWriteFailure(error) ? 'unconfirmed' : 'failed';
       if (error.code === 'WORKOUT_CONFLICT') dest.detail = error.message;
     }
     write(receipt);
   };
   const saveBody = async (receipt, check) => {
     const dest = receipt.body;
-    if (acknowledged(dest.state) || dest.state === 'unconfirmed') return;
+    if (acknowledged(dest.state) || dest.state === 'conflict' || (dest.state === 'unconfirmed' && !dest.requestId)) return;
     dest.state = 'saving'; write(receipt);
     try {
-      check(); dest.attempted = true;
+      check(); dest.requestId ||= writeRequestId(); dest.attempted = true; write(receipt);
       const { data } = await api.post('/members/me/labs', {
+        request_id: dest.requestId,
         test_date: receipt.day, results: receipt.parsed.bodyMetrics.map(bm => ({ test_name: bm.name, value: bm.value, unit: bm.unit })),
         lab_name: 'Smart Scale', notes: 'Captured from a scale screenshot via AI chat',
       }); check();
       dest.state = Number(data?.saved) === receipt.parsed.bodyMetrics.length ? 'saved' : 'unconfirmed';
     } catch (error) {
       if (error.code === 'REVIEW_SCOPE_CHANGED') throw error;
-      dest.state = definitiveWriteFailure(error) ? 'failed' : 'unconfirmed';
+      dest.state = error.response?.status === 409 ? 'conflict' : definitiveWriteFailure(error) ? 'failed' : 'unconfirmed';
     }
     write(receipt);
   };
@@ -209,6 +211,7 @@ export default function useAIReviewSave({ mealSlots, mealPlans, computePending }
       if (workout.change && !['saved', 'not-needed'].includes(workout.undoState)) {
         const { data } = await api.get('/workouts', { params: { date: receipt.day } }); check();
         const current = normalizedWorkout(data, receipt.day);
+        workout.undoRevision = data?.session?.revision ?? 0;
         if (same(current, workout.change.before)) workout.undoState = 'saved';
         else if (!same(current, workout.change.after)) { workoutConflict(); return; }
       }
@@ -229,6 +232,7 @@ export default function useAIReviewSave({ mealSlots, mealPlans, computePending }
         // Daily persistence above can take time. Recheck immediately before the
         // workout replacement so an intervening manual save is not overwritten.
         const { data } = await api.get('/workouts', { params: { date: receipt.day } }); check();
+        workout.undoRevision = data?.session?.revision ?? 0;
         const current = normalizedWorkout(data, receipt.day);
         if (same(current, workout.change.before)) workout.undoState = 'saved';
         else if (!same(current, workout.change.after)) { workoutConflict(); return; }
@@ -237,8 +241,8 @@ export default function useAIReviewSave({ mealSlots, mealPlans, computePending }
         // An empty prior session is a real restoration: POST clears notes, sets,
         // cardio and duration even if the API retains an empty session row.
         workout.undoState = 'saving'; write(receipt);
-        try { await api.post('/workouts', copy(workout.change.before)); check(); workout.undoState = 'saved'; }
-        catch (error) { if (error.code === 'REVIEW_SCOPE_CHANGED') throw error; workout.undoState = 'failed'; receipt.undoError = 'The workout undo is not confirmed. Retry undo to check and finish it.'; return; }
+        try { await api.post('/workouts', { ...copy(workout.change.before), expected_revision: workout.undoRevision }); check(); workout.undoState = 'saved'; }
+        catch (error) { if (error.code === 'REVIEW_SCOPE_CHANGED') throw error; if (error.response?.status === 409) { workoutConflict(); return; } workout.undoState = 'failed'; receipt.undoError = 'The workout undo is not confirmed. Retry undo to check and finish it.'; return; }
       }
       check();
       receipt.rolledBack = true;

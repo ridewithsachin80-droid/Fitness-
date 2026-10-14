@@ -155,7 +155,7 @@ router.get('/', async (req, res) => {
 
   try {
     const sessionRes = await pool.query(
-      `SELECT id, session_date, duration_min, notes, cardio, pending_exercises
+      `SELECT id, session_date, duration_min, notes, cardio, pending_exercises, revision
        FROM workout_sessions
        WHERE patient_id = $1 AND session_date = $2
        ORDER BY id DESC LIMIT 1`,
@@ -226,6 +226,10 @@ router.get('/', async (req, res) => {
 // the app's daily log already works (full save on each change, auto-saved).
 router.post('/', async (req, res) => {
   const { date, duration_min, notes, exercises = [], cardio = [] } = req.body;
+  const expected = req.body.expected_revision;
+  if (expected !== undefined && (!Number.isSafeInteger(expected) || expected < 0)) {
+    return res.status(400).json({ error: 'expected_revision must be a non-negative integer' });
+  }
   const preparedExercises = prepareWorkoutExercises(exercises);
   const pendingExercises = pendingWorkoutExercises(preparedExercises);
   const notesProvided = Object.prototype.hasOwnProperty.call(req.body, 'notes');
@@ -244,7 +248,10 @@ router.post('/', async (req, res) => {
       note:         c?.note ? String(c.note).slice(0, 120) : null,
     }))
     .filter(c => c.duration_min > 0);
-  if (!date) return res.status(400).json({ error: 'date is required' });
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+    || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
+    return res.status(400).json({ error: 'A valid YYYY-MM-DD date is required' });
+  }
 
   const patientId = await resolvePatientId(req, res);
   if (patientId === null) return; // resolvePatientId already sent the error response
@@ -253,19 +260,31 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    // Serialize every writer, including legacy/manual clients and first saves
+    // where no row exists yet. Check and replacement share this transaction.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`workout:${patientId}:${date}`]);
+    if (expected !== undefined) {
+      const { rows } = await client.query('SELECT revision FROM workout_sessions WHERE patient_id=$1 AND session_date=$2 FOR UPDATE', [patientId, date]);
+      if ((rows[0]?.revision ?? 0) !== expected) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ code: 'WORKOUT_CONFLICT', error: 'Your workout has newer changes. Review it before saving again.' });
+      }
+    }
+
     // Atomic upsert — relies on the UNIQUE(patient_id, session_date)
     // constraint, so two concurrent saves for the same day (e.g. a network
     // retry firing twice) can't create duplicate session rows the way a
     // separate SELECT-then-INSERT-or-UPDATE could.
     const upserted = await client.query(
-      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes, cardio, pending_exercises)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO workout_sessions (patient_id, session_date, duration_min, notes, cardio, pending_exercises, revision)
+       VALUES ($1, $2, $3, $4, $5, $6, 1)
        ON CONFLICT (patient_id, session_date)
        DO UPDATE SET duration_min = EXCLUDED.duration_min,
                      notes        = CASE WHEN $7 THEN EXCLUDED.notes ELSE workout_sessions.notes END,
                      cardio       = EXCLUDED.cardio,
-                     pending_exercises = EXCLUDED.pending_exercises
-       RETURNING id`,
+                     pending_exercises = EXCLUDED.pending_exercises,
+                     revision = workout_sessions.revision + 1
+       RETURNING id, revision`,
       [patientId, date, duration_min || null, notes || null, JSON.stringify(cleanCardio),
        JSON.stringify(pendingExercises), notesProvided]
     );
@@ -304,7 +323,7 @@ router.post('/', async (req, res) => {
       }
     } catch (e) { /* non-fatal — the save itself already succeeded */ }
 
-    res.json({ saved: true, session_id: sessionId });
+    res.json({ saved: true, session_id: sessionId, revision: upserted.rows[0].revision });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('POST /workouts error:', err);

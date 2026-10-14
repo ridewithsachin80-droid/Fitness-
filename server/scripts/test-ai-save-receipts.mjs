@@ -32,7 +32,7 @@ async function bundle(){return(await build({stdin:{resolveDir:path.join(ROOT,'cl
  `},bundle:true,write:false,format:'iife',jsx:'automatic',loader:{'.js':'jsx','.jsx':'jsx','.css':'empty'},define:{'process.env.NODE_ENV':'"production"','import.meta.env':'{"DEV":false,"PROD":true}'},plugins:[{name:'synthetic-api',setup(b){b.onResolve({filter:/(?:^|\/)client$/},args=>/api\/client$/.test(args.path)||args.importer.includes(`${path.sep}api${path.sep}`)?{path:API}:null)}}],logLevel:'silent'})).outputFiles[0].text}
 function mount(code,initialLog={}){
  const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:'https://fitlife-receipt-fixture.invalid/',runScripts:'outside-only',pretendToBeVisual:true});
- const w=dom.window;const errors=[];w.__initialLog=initialLog;w.__calls=[];w.__savedLogs={};w.__labs=[];w.__workout={session:null,exercises:[],cardio:[]};
+ const w=dom.window;const errors=[];w.__initialLog=initialLog;w.__calls=[];w.__savedLogs={};w.__labs=[];w.__labReceipts={};w.__workout={session:null,exercises:[],cardio:[]};
  w.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=()=>{};w.confirm=()=>true;
  w.fetch=async()=>({ok:false,status:401,json:async()=>({})});
  w.__defaultApi=async e=>{
@@ -42,10 +42,10 @@ function mount(code,initialLog={}){
    const row={...copy(e.body),saved_at:new Date().toISOString()};w.__savedLogs[e.url]=row;return{data:copy(row)};
   }
   if(e.url==='/workouts'&&e.method==='get')return{data:copy(w.__workout)};
-  if(e.url==='/workouts'&&e.method==='post'){w.__workout={session:{duration_min:e.body.duration_min,notes:e.body.notes},exercises:copy(e.body.exercises||[]),cardio:copy(e.body.cardio||[])};return{data:{saved:true,session_id:1}}}
+  if(e.url==='/workouts'&&e.method==='post'){const revision=w.__workout.session?.revision??0;if(e.body.expected_revision!==undefined&&e.body.expected_revision!==revision)throw Object.assign(new Error('Concurrent edit'),{response:{status:409,data:{code:'WORKOUT_CONFLICT'}}});w.__workout={session:{revision:revision+1,duration_min:e.body.duration_min,notes:e.body.notes},exercises:copy(e.body.exercises||[]),cardio:copy(e.body.cardio||[])};return{data:{saved:true,session_id:1}}}
   if(e.url==='/workouts/exercises'&&e.method==='get')return{data:[{id:101,name:'Squat'}]};
   if(e.url==='/workouts/exercises'&&e.method==='post')return{data:{id:101,name:e.body.name}};
-  if(e.url==='/members/me/labs'&&e.method==='post'){const rows=(e.body.results||[]).map((row,i)=>({...copy(row),id:w.__labs.length+i+1}));w.__labs.push(...rows);return{data:{saved:rows.length,results:rows}}}
+  if(e.url==='/members/me/labs'&&e.method==='post'){if(e.body.request_id&&w.__labReceipts[e.body.request_id])return{data:copy(w.__labReceipts[e.body.request_id])};const rows=(e.body.results||[]).map((row,i)=>({...copy(row),id:w.__labs.length+i+1}));w.__labs.push(...rows);const data={saved:rows.length,results:rows};if(e.body.request_id)w.__labReceipts[e.body.request_id]=copy(data);return{data}}
   return{data:e.method==='get'?[]:{ok:true}};
  };
  w.__api=async e=>{w.__calls.push({...e,body:e.body===undefined?undefined:copy(e.body)});if(w.__intercept){const r=await w.__intercept(e);if(r!==undefined)return r}return w.__defaultApi(e)};
@@ -212,7 +212,7 @@ async function partialSaves(code){
   await click(B,a,'save');await quiet(B);await tick(120);
   ck('unknown append-only metric outcome is explicit rather than reported as saved',/confirm|unknown|check|uncertain/i.test(card(B,a)?.textContent||''));
   const retry=action(B,a,'retry');if(retry&&!retry.disabled){retry.click();await quiet(B)}
-  ck('ambiguous append-only metrics are not blindly duplicated by Retry',writes(B,'/members/me/labs').length===1&&B.w.__labs.length===1);
+  ck('ambiguous append-only metrics are not blindly duplicated by Retry',writes(B,'/members/me/labs').length===2&&B.w.__labs.length===1&&writes(B,'/members/me/labs')[0].body.request_id===writes(B,'/members/me/labs')[1].body.request_id);
  }finally{B.close()}
 }
 async function serverMergeGuards(code){
@@ -348,6 +348,42 @@ async function standaloneLabScope(code){
  }finally{A.close()}
 }
 
+async function reliableWrites(code){
+ const A=mount(code);try{
+  const a=await review(A,{foods:[food('Retry oats')]});A.w.__chat.getState().setMessages(ms=>ms.map((m,i)=>i===a?{...m,parsed:{...m.parsed,bodyMetrics:[{name:'Body fat',value:20,unit:'%'}],bodyMetricsOn:true}}:m));await tick();let first=true;
+  A.w.__intercept=async e=>{if(e.method==='post'&&e.url==='/members/me/labs'&&first){first=false;await A.w.__defaultApi(e);throw ambiguous()}};
+  await click(A,a,'save');await until(()=>action(A,a,'retry')&&!messages(A)[a].saveReceipt?.running,'body safe retry');
+  ck('lost body acknowledgement exposes an explicit safe retry',/Retry safely/.test(card(A,a).textContent));
+  await click(A,a,'retry');await saved(A,a);
+  const calls=writes(A,'/members/me/labs');
+  ck('body retry reuses its original request ID',calls.length===2&&calls[0].body.request_id===calls[1].body.request_id&&!!calls[0].body.request_id);
+  ck('body retry confirms one persisted measurement',A.w.__labs.length===1);
+ }finally{A.close()}
+ const B=mount(code);try{
+  B.w.__workout={session:{revision:7,duration_min:10,notes:null},exercises:[],cardio:[]};
+  const a=await review(B,{workouts:[{name:'Walk',duration_min:20}]});
+  B.w.__intercept=e=>{if(e.method==='post'&&e.url==='/workouts')throw Object.assign(new Error('Concurrent edit'),{response:{status:409,data:{code:'WORKOUT_CONFLICT'}}})};
+  await click(B,a,'save');await until(()=>messages(B)[a].saveReceipt?.workout.state==='conflict','atomic workout conflict');
+  ck('AI workout save sends the observed server revision',writes(B,'/workouts')[0].body.expected_revision===7);
+  ck('server conflict preserves newer workout and reports it',B.w.__workout.session.duration_min===10&&/newer changes|not overwritten/i.test(card(B,a).textContent));
+ }finally{B.close()}
+ const U=mount(code);try{
+  const a=await review(U,{workouts:[{name:'Walk',duration_min:15}]});await click(U,a,'save');await saved(U,a);await click(U,a,'undo');await until(()=>messages(U)[a].undone,'revision-aware Undo');
+  const calls=writes(U,'/workouts');ck('Save and Undo each send the last observed revision',calls.length===2&&calls[0].body.expected_revision===0&&calls[1].body.expected_revision===1);
+ }finally{U.close()}
+ const C=mount(code);try{
+  await until(()=>C.q('composer-input'),'standalone retry mounted');
+  C.w.__chat.getState().setMessages([{role:'ai',lab:{test_date:C.w.__today,results:[{test_name:'Body fat',value:20,unit:'%',on:true}]}}]);await tick();
+  let first=true;C.w.__intercept=async e=>{if(e.url==='/members/me/labs'&&e.method==='post'&&first){first=false;await C.w.__defaultApi(e);throw ambiguous()}};
+  [...C.w.document.querySelectorAll('button')].find(b=>/^Save 1 results$/.test(b.textContent.trim())).click();
+  await until(()=>[...C.w.document.querySelectorAll('button')].some(b=>b.textContent==='Retry report save'),'report retry');
+  [...C.w.document.querySelectorAll('button')].find(b=>b.textContent==='Retry report save').click();await until(()=>messages(C)[0].applied,'report replay confirmed');
+  const calls=writes(C,'/members/me/labs');
+  ck('standalone report retry reuses its submission ID',calls.length===2&&calls[0].body.request_id===calls[1].body.request_id);
+  ck('standalone report retry saves once and confirms success',C.w.__labs.length===1&&messages(C)[0].labSaved===1);
+ }finally{C.close()}
+}
+
 async function noOpAndCap(code){
  const A=mount(code,{water:9900,activities:{walk:true}});try{
   const a=await review(A,{water_ml_add:500,activities:[{id:'walk',label:'Walk'}]});await click(A,a,'save');await saved(A,a);
@@ -358,6 +394,7 @@ async function noOpAndCap(code){
  }finally{A.close()}
 }
 try{const code=await bundle();
+ await section('Atomic workout and idempotent lab writes',()=>reliableWrites(code));
  await section('Receipt delta invariants',()=>receiptUtilityCases(code));
  await section('Independent per-card receipts',()=>independentCards(code));
  await section('Manual changes and conflict protection',()=>manualEdits(code));
