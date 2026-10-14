@@ -12,7 +12,7 @@ import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
 import { getMemberMorningMessage, markMorningNudgeSent } from '../api/logs';
 import { openWhatsApp } from '../utils/personalMessage';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
-import { Segmented, Collapsible } from '../components/primitives';
+import { Sheet, Segmented, Collapsible } from '../components/primitives';
 import Timeline from '../components/today/Timeline';
 import { timelineModelFromServerLog, previousWeight } from '../lib/day';
 import MemberBrief from '../components/coach/MemberBrief';
@@ -45,7 +45,7 @@ import { firstName } from '../utils/personName';
 
 // ── Nutrition helper — Sprint 1 foods have per_100g, legacy fall back to NUTRITION_DB
 // ── Add lab value modal ───────────────────────────────────────────────────────
-function AddLabModal({ memberId, onClose, onAdded }) {
+export function AddLabModal({ memberId, onClose, onAdded }) {
   const [form, setForm] = useState({
     test_date: (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })(),
     test_name: '', value: '', unit: '', ref_min: '', ref_max: '',
@@ -56,6 +56,7 @@ function AddLabModal({ memberId, onClose, onAdded }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = async () => {
+    if (saving) return;
     if (!form.test_date || !form.test_name || !form.value) {
       setError('Date, test name and value are required'); return;
     }
@@ -71,12 +72,8 @@ function AddLabModal({ memberId, onClose, onAdded }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-bold text-white">Add Lab Value</h3>
-          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
-        </div>
+    <Sheet open onClose={onClose} title="Add Lab Value">
+      <div className="space-y-3">
         {[
           { key: 'test_date', label: 'Date',      type: 'date' },
           { key: 'test_name', label: 'Test name', type: 'text', placeholder: 'HbA1c, GGT, B12…' },
@@ -87,23 +84,23 @@ function AddLabModal({ memberId, onClose, onAdded }) {
         ].map(({ key, label, type, placeholder }) => (
           <div key={key}>
             <label className="block text-eyebrow text-lo font-semibold mb-1.5">{label}</label>
-            <input type={type} value={form[key]} placeholder={placeholder}
+            <input aria-label={label} type={type} value={form[key]} placeholder={placeholder}
               onChange={e => set(key, e.target.value)}
               className="w-full border border-hair-med rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/[0.28]" />
           </div>
         ))}
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
         <button onClick={submit} disabled={saving}
           className="w-full py-3 bg-gold hover:bg-gold-light text-charcoal font-bold rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Add Lab Value'}
         </button>
       </div>
-    </div>
+    </Sheet>
   );
 }
 
 // ── Set PIN modal (Sprint 8) ──────────────────────────────────────────────────
-function SetPinModal({ memberId, memberName, onClose, onSaved }) {
+export function SetPinModal({ memberId, memberName, onClose, onSaved }) {
   const [pin,     setPin]     = useState('');
   const [confirm, setConfirm] = useState('');
   const [show,    setShow]    = useState(false);
@@ -112,6 +109,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
   const [success, setSuccess] = useState(false);
 
   const submit = async () => {
+    if (saving) return;
     if (pin.length < 4)     { setError('PIN must be at least 4 characters'); return; }
     if (pin !== confirm)    { setError('PINs do not match'); return; }
     setSaving(true); setError('');
@@ -126,15 +124,8 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
-        <div className="flex items-center justify-between mb-1">
-          <div>
-            <h3 className="font-bold text-white">Set Login PIN</h3>
-            <p className="text-xs text-lo mt-0.5">{memberName}</p>
-          </div>
-          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
-        </div>
+    <Sheet open onClose={onClose} title="Set Login PIN" eyebrow={memberName}>
+      <div className="space-y-3">
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
@@ -153,7 +144,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
               <div key={label}>
                 <label className="block text-eyebrow text-lo font-semibold mb-1.5">{label}</label>
                 <div className="relative">
-                  <input type={show ? 'text' : 'password'} inputMode="numeric" value={value}
+                  <input aria-label={label} type={show ? 'text' : 'password'} inputMode="numeric" value={value}
                     onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
                     placeholder="Min. 4 characters"
                     className="w-full border border-hair-med rounded-xl px-3 py-2.5 pr-14 text-sm
@@ -167,7 +158,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
                 </div>
               </div>
             ))}
-            {error && <p className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p role="alert" className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !pin || !confirm}
               className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
                 rounded-xl transition-colors disabled:opacity-50">
@@ -176,14 +167,14 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
           </>
         )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 
 // AddNoteModal removed in Sprint 12b — the Note tab of MemberActionSheet replaced it in 9b.
 
 // ── Weight Entry modal (Sprint 11) ───────────────────────────────────────────
-function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
+export function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
   const todayStr = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
   const [date,    setDate]    = useState(todayStr);
   const [weight,  setWeight]  = useState('');
@@ -192,6 +183,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
   const [success, setSuccess] = useState(false);
 
   const submit = async () => {
+    if (saving) return;
     const w = parseFloat(weight);
     if (!weight || isNaN(w) || w < 20 || w > 400) {
       setError('Enter a valid weight between 20–400 kg');
@@ -209,15 +201,8 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-bold text-white">Log Weight</h3>
-            <p className="text-xs text-lo mt-0.5">{memberName}</p>
-          </div>
-          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
-        </div>
+    <Sheet open onClose={onClose} title="Log Weight" eyebrow={memberName}>
+      <div className="space-y-3">
 
         {success ? (
           <div className="text-center py-4">
@@ -231,7 +216,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
             </p>
             <div>
               <label className="block text-eyebrow text-lo font-semibold mb-1.5">Date</label>
-              <input type="date" value={date} max={todayStr}
+              <input aria-label="Date" type="date" value={date} max={todayStr}
                 onChange={e => setDate(e.target.value)}
                 className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm
                   focus:outline-none focus:ring-2 focus:ring-gold/[0.28]" />
@@ -239,7 +224,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
             <div>
               <label className="block text-eyebrow text-lo font-semibold mb-1.5">Weight (kg)</label>
               <div className="flex items-center gap-2">
-                <input type="number" step="0.1" inputMode="decimal" value={weight}
+                <input aria-label="Weight (kg)" type="number" step="0.1" inputMode="decimal" value={weight}
                   onChange={e => setWeight(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && submit()}
                   placeholder="e.g. 84.5"
@@ -248,7 +233,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
                 <span className="text-lo font-bold text-lg">kg</span>
               </div>
             </div>
-            {error && <p className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p role="alert" className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !weight}
               className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
                 rounded-xl transition-colors disabled:opacity-50">
@@ -257,7 +242,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
           </>
         )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 

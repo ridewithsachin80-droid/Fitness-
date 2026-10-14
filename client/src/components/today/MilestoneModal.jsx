@@ -1,4 +1,4 @@
-import { Pressable } from '../primitives';
+import { Pressable, Sheet } from '../primitives';
 
 /**
  * MilestoneModal — the celebration shown once per milestone after a save
@@ -9,8 +9,8 @@ import { Pressable } from '../primitives';
 export default function MilestoneModal({ milestone, onClose }) {
   if (!milestone) return null;
   return (
-    <div className="fixed inset-0 bg-black/60 z-[85] flex items-center justify-center p-6" onClick={onClose} role="dialog" aria-modal="true" aria-label="Milestone" data-testid="milestone">
-      <div className="bg-surface rounded-3xl border border-white/[0.08] p-8 max-w-xs w-full text-center shadow-float" onClick={e => e.stopPropagation()}>
+    <Sheet open onClose={onClose} title="Milestone" layerClassName="z-[85]">
+      <div data-testid="milestone" className="py-4 text-center">
         <div className="flex justify-center mb-4">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-gold"
             strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -29,6 +29,6 @@ export default function MilestoneModal({ milestone, onClose }) {
         <p className="text-sm text-mid leading-relaxed mb-6">{milestone.body}</p>
         <Pressable variant="primary" className="w-full" onPress={onClose}>Let's keep going.</Pressable>
       </div>
-    </div>
+    </Sheet>
   );
 }

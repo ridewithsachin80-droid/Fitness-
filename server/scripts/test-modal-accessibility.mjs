@@ -31,11 +31,13 @@ fs.writeFileSync(API,`import {today,istDaysAgo} from '${path.join(ROOT,'client/s
 const ENTRY=`
  import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {createPortal} from 'react-dom';
  import {MemoryRouter} from 'react-router-dom';import Sheet from './components/primitives/Sheet';
+ import {AddLabModal,SetPinModal,WeightEntryModal} from './pages/Monitor'; import MilestoneModal from './components/today/MilestoneModal';
  import AIChatLog from './components/AIChatLog';import Progress from './pages/Progress';
  import {useAuthStore} from './store/authStore';import {useLogStore} from './store/logStore';import {useAIChat} from './store/aiChatStore';import {useSettingsStore} from './store/settingsStore';import {today,emptyLog} from './constants';
  useAuthStore.setState({user:{id:214,name:'Accessibility fixture',role:'patient'},isRestoring:false});
  useLogStore.setState({date:today(),log:emptyLog(),protocol:{activities:[],acv:[],supplements:[],meal_plan:[]},loading:false,error:null});
  useAIChat.getState().ensureFreshDay(today());window.__chat=useAIChat;window.__settings=useSettingsStore;window.__auth=useAuthStore;
+ function LegacyFixture(){const [which,setWhich]=useState(null);return <><main id="fixture-background">{['lab','pin','weight','milestone'].map(k=><button id={'open-'+k} key={k} onClick={()=>setWhich(k)}>{k}</button>)}</main>{which==='lab'&&<AddLabModal memberId={214} onClose={()=>setWhich(null)} onAdded={()=>{}}/>}{which==='pin'&&<SetPinModal memberId={214} memberName="Test member" onClose={()=>setWhich(null)} onSaved={()=>{}}/>}{which==='weight'&&<WeightEntryModal memberId={214} memberName="Test member" onClose={()=>setWhich(null)} onSaved={()=>{}}/>}{which==='milestone'&&<MilestoneModal milestone={{title:'Seven days',body:'Keep going',icon:'flame'}} onClose={()=>setWhich(null)}/>}</>}
  function SheetFixture(){const [parent,setParent]=useState(false),[child,setChild]=useState(false),[empty,setEmpty]=useState(false),[mounted,setMounted]=useState(true),[opener,setOpener]=useState(true),[late,setLate]=useState(false),[draft,setDraft]=useState(''),[version,setVersion]=useState(0);
  window.__control={bump:()=>setVersion(v=>v+1),dropParent:()=>setMounted(false),removeOpener:()=>setOpener(false),addPortal:()=>setLate(true),openChild:()=>setChild(true)};
  return <><main id="fixture-background" style={{padding:16}}>{opener&&<button id="open-parent" onClick={()=>setParent(true)}>Open parent</button>}<button id="open-empty" onClick={()=>setEmpty(true)}>Open empty</button><input id="outside-input" aria-label="Outside input"/><span id="version">{version}</span></main>
@@ -47,7 +49,7 @@ const ENTRY=`
  function InitialFixture(){React.useEffect(()=>{window.__initialMounts=(window.__initialMounts||0)+1},[]);const[parent,setParent]=useState(true),[child,setChild]=useState(true);return <Sheet open={parent} title="Initial parent" onClose={()=>setParent(false)}><input id="initial-parent-field"/><Sheet open={child} title="Initial child" onClose={()=>setChild(false)}><input id="initial-child-field"/></Sheet></Sheet>}
  function AI(){return <><main id="fixture-background" style={{padding:16}}><button id="launch-type" onClick={()=>useAIChat.getState().openChat('text')}>Type</button><button id="launch-speak" onClick={()=>useAIChat.getState().openChat('voice')}>Speak</button><button id="launch-snap" onClick={()=>useAIChat.getState().openChat('photo')}>Snap</button><input id="outside-input" aria-label="Outside input"/></main><AIChatLog overlay/></>}
  window.__seedReview=()=>useAIChat.getState().setMessages([{role:'ai',text:'Review fixture oats',parsed:{foods:[{name:'Oats',grams:150,meal:'Breakfast',on:true,label:true,per_100g:{calories:374,protein:13.2,total_carbs:60,fat:7.8},macros:{cal:561,pro:19.8,carb:90,fat:11.7}}],activities:[],acv:[],supplements:[],workouts:[],corrections:[]}}]);
- window.__root=createRoot(document.getElementById('root'));window.__root.render(window.__fixtureMode==='initial'?<React.StrictMode><InitialFixture/></React.StrictMode>:window.__fixtureMode==='ai'?<AI/>:window.__fixtureMode==='progress'?<MemoryRouter initialEntries={['/progress?tab=reports']}><Progress/></MemoryRouter>:<SheetFixture/>);
+ window.__root=createRoot(document.getElementById('root'));window.__root.render(window.__fixtureMode==='legacy'?<LegacyFixture/>:window.__fixtureMode==='initial'?<React.StrictMode><InitialFixture/></React.StrictMode>:window.__fixtureMode==='ai'?<AI/>:window.__fixtureMode==='progress'?<MemoryRouter initialEntries={['/progress?tab=reports']}><Progress/></MemoryRouter>:<SheetFixture/>);
 `;
 async function assets(){
  const clientRequire=createRequire(path.join(ROOT,'client/package.json'));
@@ -193,13 +195,38 @@ async function captureAndHistory(){const page=await pageFor('ai');try{
  ck(`${theme} Progress history has no runtime exceptions`,p.__errors.length===0,p.__errors);
  }finally{await p.close()}}
 }
+async function legacyDialogs(){for(const theme of ['light','dark']){const p=await pageFor('legacy',theme,320,true);try{
+ for(const [kind,title] of [['lab','Add Lab Value'],['pin','Set Login PIN'],['weight','Log Weight'],['milestone','Milestone']]){
+ await p.focus('#open-'+kind);await p.keyboard.press('Enter');await p.waitForSelector(selector(title));
+ await wait(p,t=>document.querySelector(`[role=dialog][aria-label="${t}"]`).contains(document.activeElement),title);
+ ck(`${theme} ${kind} opens with focus inside a named dialog`,(await active(p)).dialog===title);
+ ck(`${theme} ${kind} isolates background and fits enlarged text at320px`,await p.evaluate(()=>document.getElementById('root').inert&&document.documentElement.scrollWidth<=innerWidth+1));
+ ck(`${theme} ${kind} has labelled fields and44px close control`,await p.$eval(selector(title),d=>[...d.querySelectorAll('input')].every(e=>!!e.getAttribute('aria-label'))&&d.querySelector('[data-sheet-close]').getBoundingClientRect().height>=44));
+ if(kind==='lab'){await p.$eval(selector(title)+' button:not([data-sheet-close])',b=>b.click());await wait(p,()=>!!document.querySelector('[role=alert]'));ck(`${theme} lab validation announces errors without losing the form`,await p.$eval('[role=alert]',e=>e.textContent.includes('required')));}
+ await closeDialog(p,title);ck(`${theme} ${kind} Escape restores original launcher focus`,(await active(p)).id==='open-'+kind);
+ }
+ for(const [kind,title,fields,url,method] of [
+ ['lab','Add Lab Value',{'Test name':'Fixture lab','Value':'6.2','Unit':'%'},'/members/214/labs','post'],
+ ['pin','Set Login PIN',{'New PIN':'4638','Confirm PIN':'4638'},'/members/214/pin','patch'],
+ ['weight','Log Weight',{'Weight (kg)':'82.4'},'/members/214/weight','patch']]){
+ await click(p,'#open-'+kind);await p.waitForSelector(selector(title));
+ for(const [label,value] of Object.entries(fields))await p.type('input[aria-label="'+label+'"]',value);
+ await p.evaluate(t=>{const d=document.querySelector(`[role=dialog][aria-label="${t}"]`);[...d.querySelectorAll('button')].find(b=>/^(Add Lab Value|Set PIN|Save Weight)$/.test(b.textContent.trim())).click()},title);
+ await wait(p,u=>window.__apiCalls.some(c=>c.url===u),url);
+ ck(`${theme} ${kind} saves using the existing member endpoint`,await p.evaluate((u,m)=>window.__apiCalls.filter(c=>c.url===u&&c.method===m).length===1,url,method));
+ ck(`${theme} ${kind} preserves submitted values`,await p.evaluate((u,k)=>{const b=window.__apiCalls.find(c=>c.url===u).body;return k==='lab'?b.test_name==='Fixture lab'&&b.value==='6.2'&&b.unit==='%':k==='pin'?b.pin==='4638':b.weight_kg===82.4&&!!b.date},url,kind));
+ await wait(p,t=>!document.querySelector(`[role=dialog][aria-label="${t}"]`),title);
+ }
+ ck(`${theme} migrated dialogs have no runtime exceptions`,p.__errors.length===0,p.__errors);
+ }finally{await p.close()}}}
+
 try{
  fs.mkdirSync(SHOTS,{recursive:true});const files=await assets();code=files.code;strictCode=files.strictCode;
  const html='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+files.css+'</style></head><body><div id="root"></div><div id="pre-hidden" aria-hidden="true">Already hidden</div><div id="pre-false" aria-hidden="false">Explicit false</div><div id="pre-inert" inert>Already inert</div></body></html>';
  server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(html)});await new Promise(r=>server.listen(0,'127.0.0.1',r));url='http://127.0.0.1:'+server.address().port;
  const puppeteer=(await import('puppeteer-core')).default,chromium=(await import('@sparticuz/chromium')).default;
  browser=await puppeteer.launch({executablePath:await browserExecutable(chromium),args:[...chromium.args,'--no-sandbox','--disable-dev-shm-usage'],headless:true});
- await section('Sheet keyboard behavior',sheetKeyboard);await section('Initially open nested Sheets and StrictMode',initialNested);await section('Modal background isolation and lifecycle cleanup',isolationAndCleanup);
+ await section('Migrated staff and milestone dialogs',legacyDialogs);await section('Sheet keyboard behavior',sheetKeyboard);await section('Initially open nested Sheets and StrictMode',initialNested);await section('Modal background isolation and lifecycle cleanup',isolationAndCleanup);
  await section('Keyboard focus appearance and enlarged-text Sheet layout',visualMatrix);await section('AI nested macro scope and semantic controls',aiNestedAndLabels);
  await section('One-tap input routing and historical log Sheet',captureAndHistory);
 }catch(error){ck('modal accessibility suite setup',false,error.stack)}finally{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));fs.rmSync(TMP,{recursive:true,force:true})}

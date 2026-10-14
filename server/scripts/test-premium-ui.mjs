@@ -330,7 +330,12 @@ async function premiumFlow() {
  w.__failSave=false;q('ai-card-retry').click();await tick(250);
  ck('retry persists without applying water or notes twice',w.__logStore.getState().log.water===water&&w.__logStore.getState().log.notes==='Felt energetic today.'&&!q('ai-card-retry')&&[...d.querySelectorAll('[data-testid="ai-card-daily-status"]')].at(-1)?.textContent.trim()==='Daily log: Saved');
  d.querySelector('[aria-label="Close AI assistant"]').click();await tick(80);
- ck('closing AI restores the home and body scrolling',!q('composer')&&d.body.style.overflow==='');
+ ck('closing AI restores the home',!q('composer'));
+ if(q('milestone')){
+   ck('a pending milestone retains modal scroll isolation',d.body.style.overflow==='hidden');
+   q('milestone').querySelector('button').click();await tick(80);
+ }
+ ck('dismissing the final dialog restores body scrolling',d.body.style.overflow==='');
  w.__aiChat.getState().openChat();await tick(160);
  ck('reopening keeps the conversation',!!q('ai-food-review'));
  w.__aiChat.setState({dayKey:'2000-01-01'});w.__aiChat.getState().ensureFreshDay(w.__todayStr);await tick(100);

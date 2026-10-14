@@ -30,7 +30,7 @@ export default function Sheet(props) {
   return createPortal(<AnimatePresence>{props.open && <SheetSurface key="sheet" {...props} />}</AnimatePresence>, document.body);
 }
 
-function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer, className = '', initialFocusRef }) {
+function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer, className = '', layerClassName = 'z-[80]', initialFocusRef }) {
   const reduce = useReducedMotion();
   const present = useIsPresent();
   const panelRef = useRef(null), rootRef = useRef(null), contentRef = useRef(null);
@@ -79,7 +79,7 @@ function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer
       <ModalScopeContext.Provider value={modal.scopeId}>
         <div ref={rootRef} data-modal-scope="sheet" data-modal-exiting={!present ? "" : undefined} onKeyDown={modal.onKeyDown}
           inert={!present ? true : undefined} aria-hidden={!present ? 'true' : undefined}
-          className="fixed inset-0 z-[80] flex flex-col justify-end" role="presentation">
+          className={`fixed inset-0 ${layerClassName} flex flex-col justify-end`} role="presentation">
           <motion.div
             key="backdrop"
             className="absolute inset-0 bg-black/60"
