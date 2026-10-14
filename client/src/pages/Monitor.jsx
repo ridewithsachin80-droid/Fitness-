@@ -37,6 +37,7 @@ import { UNSORTED_MEAL, groupByMeal, deriveBodyComp } from '../utils/coachView';
 import { calcN, calcMicrosFromItems, rowCompliance, WeightTooltip } from '../lib/coach/dayMath.jsx';
 import DayDetail from '../components/coach/DayDetail';
 import MemberCharts from '../components/coach/MemberCharts';
+import CoachHistorySheet from '../components/coach/CoachHistorySheet';
 import { firstName } from '../utils/personName';
 
 // Bucket for food rows whose meal slot is null, blank, or no longer part of the
@@ -844,68 +845,7 @@ export default function Coach() {
 
         {/* Drill-down modal — log detail for the tapped bar */}
         {tab === 'today' && (<>   {/* Compliance drill-down modal */}
-        {selectedLog && (() => {
-          const fl    = selectedLog;
-          const dateLabel = new Date(String(fl.log_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-          const foodItems = fl.food_items || [];
-          const totalKcal = foodItems.reduce((s, i) => s + (calcN(i)?.cal || 0), 0);
-          return (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2"
-              onClick={() => setSelectedLog(null)}>
-              <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[82vh] flex flex-col"
-                onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair flex-shrink-0">
-                  <div>
-                    <h3 className="font-bold text-white">{dateLabel}</h3>
-                    <div className="flex gap-3 mt-1">
-                      {fl.weight_kg && <span className="text-xs font-semibold text-gold-deep">⚖ {fl.weight_kg} kg</span>}
-                      {fl.compliance_pct != null && (
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                          fl.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
-                          fl.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.14] text-red-400'
-                        }`}>{fl.compliance_pct}%</span>
-                      )}
-                    </div>
-                  </div>
-                  <button onClick={() => setSelectedLog(null)} className="text-lo hover:text-white text-2xl leading-none">×</button>
-                </div>
-                <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-                  {foodItems.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-lo tracking-wider mb-2">
-                        🥗 Food {totalKcal > 0 && <span className="font-normal text-orange-300 normal-case">· {totalKcal} kcal</span>}
-                      </p>
-                      <div className="space-y-1">
-                        {foodItems.map((item, i) => {
-                          const n = calcN(item);
-                          return (
-                            <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-white/[0.05] last:border-0">
-                              <div>
-                                <span className="text-white font-medium">{item.name}</span>
-                                <span className="text-xs text-lo ml-1">{item.grams}g{item.meal ? ` · ${item.meal}` : ''}</span>
-                              </div>
-                              {n && <span className="text-xs font-bold text-orange-300">{n.cal} kcal</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {fl.water_ml > 0 && (
-                    <p className="text-sm text-blue-400 font-semibold">💧 {(fl.water_ml / 1000).toFixed(1)} L water</p>
-                  )}
-                  {fl.notes && (
-                    <div>
-                      <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
-                      <p className="text-sm text-mid whitespace-pre-wrap leading-relaxed">{fl.notes}</p>
-                    </div>
-                  )}
-                  {!foodItems.length && !fl.weight_kg && <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        <CoachHistorySheet log={selectedLog} onClose={() => setSelectedLog(null)} />
         </>)}
 
         {/* What their own data says about their metabolism — the engine

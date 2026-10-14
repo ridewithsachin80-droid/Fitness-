@@ -32,11 +32,16 @@ const ENTRY=`
  import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {createPortal} from 'react-dom';
  import {MemoryRouter} from 'react-router-dom';import Sheet from './components/primitives/Sheet';
  import {AddLabModal,SetPinModal,WeightEntryModal} from './pages/Monitor'; import MilestoneModal from './components/today/MilestoneModal';
+ import CoachHistorySheet from './components/coach/CoachHistorySheet'; import MemberCharts from './components/coach/MemberCharts';
  import AIChatLog from './components/AIChatLog';import Progress from './pages/Progress';
  import {useAuthStore} from './store/authStore';import {useLogStore} from './store/logStore';import {useAIChat} from './store/aiChatStore';import {useSettingsStore} from './store/settingsStore';import {today,emptyLog} from './constants';
  useAuthStore.setState({user:{id:214,name:'Accessibility fixture',role:'patient'},isRestoring:false});
  useLogStore.setState({date:today(),log:emptyLog(),protocol:{activities:[],acv:[],supplements:[],meal_plan:[]},loading:false,error:null});
  useAIChat.getState().ensureFreshDay(today());window.__chat=useAIChat;window.__settings=useSettingsStore;window.__auth=useAuthStore;
+ function CoachHistoryFixture(){const [log,setLog]=useState(null),[single,setSingle]=useState(false);
+ const rows=[{log_date:'2026-10-10',weight_kg:82.4,compliance_pct:90,water_ml:2500,notes:'History note '+('LongNote'.repeat(90)),food_items:Array.from({length:24},(_,i)=>({name:'History oats '+i,grams:100,meal:'Breakfast',per_100g:{calories:374}}))},{log_date:'2026-10-11',compliance_pct:0,water_ml:500},{log_date:'2026-10-12',notes:'Notes-only day'},{log_date:'2026-10-13'}];
+ window.__singleHistory=()=>setSingle(true);
+ return <><main id="fixture-background"><MemberCharts weightData={[]} complianceData={(single?rows.slice(1,2):rows).map(log=>({date:log.log_date,score:log.compliance_pct||0,log}))} avg30={30} profile={{}} setSelectedLog={setLog}/></main><CoachHistorySheet log={log} onClose={()=>setLog(null)}/></>}
  function LegacyFixture(){const [which,setWhich]=useState(null);return <><main id="fixture-background">{['lab','pin','weight','milestone'].map(k=><button id={'open-'+k} key={k} onClick={()=>setWhich(k)}>{k}</button>)}</main>{which==='lab'&&<AddLabModal memberId={214} onClose={()=>setWhich(null)} onAdded={()=>{}}/>}{which==='pin'&&<SetPinModal memberId={214} memberName="Test member" onClose={()=>setWhich(null)} onSaved={()=>{}}/>}{which==='weight'&&<WeightEntryModal memberId={214} memberName="Test member" onClose={()=>setWhich(null)} onSaved={()=>{}}/>}{which==='milestone'&&<MilestoneModal milestone={{title:'Seven days',body:'Keep going',icon:'flame'}} onClose={()=>setWhich(null)}/>}</>}
  function SheetFixture(){const [parent,setParent]=useState(false),[child,setChild]=useState(false),[empty,setEmpty]=useState(false),[mounted,setMounted]=useState(true),[opener,setOpener]=useState(true),[late,setLate]=useState(false),[draft,setDraft]=useState(''),[version,setVersion]=useState(0);
  window.__control={bump:()=>setVersion(v=>v+1),dropParent:()=>setMounted(false),removeOpener:()=>setOpener(false),addPortal:()=>setLate(true),openChild:()=>setChild(true)};
@@ -49,7 +54,7 @@ const ENTRY=`
  function InitialFixture(){React.useEffect(()=>{window.__initialMounts=(window.__initialMounts||0)+1},[]);const[parent,setParent]=useState(true),[child,setChild]=useState(true);return <Sheet open={parent} title="Initial parent" onClose={()=>setParent(false)}><input id="initial-parent-field"/><Sheet open={child} title="Initial child" onClose={()=>setChild(false)}><input id="initial-child-field"/></Sheet></Sheet>}
  function AI(){return <><main id="fixture-background" style={{padding:16}}><button id="launch-type" onClick={()=>useAIChat.getState().openChat('text')}>Type</button><button id="launch-speak" onClick={()=>useAIChat.getState().openChat('voice')}>Speak</button><button id="launch-snap" onClick={()=>useAIChat.getState().openChat('photo')}>Snap</button><input id="outside-input" aria-label="Outside input"/></main><AIChatLog overlay/></>}
  window.__seedReview=()=>useAIChat.getState().setMessages([{role:'ai',text:'Review fixture oats',parsed:{foods:[{name:'Oats',grams:150,meal:'Breakfast',on:true,label:true,per_100g:{calories:374,protein:13.2,total_carbs:60,fat:7.8},macros:{cal:561,pro:19.8,carb:90,fat:11.7}}],activities:[],acv:[],supplements:[],workouts:[],corrections:[]}}]);
- window.__root=createRoot(document.getElementById('root'));window.__root.render(window.__fixtureMode==='legacy'?<LegacyFixture/>:window.__fixtureMode==='initial'?<React.StrictMode><InitialFixture/></React.StrictMode>:window.__fixtureMode==='ai'?<AI/>:window.__fixtureMode==='progress'?<MemoryRouter initialEntries={['/progress?tab=reports']}><Progress/></MemoryRouter>:<SheetFixture/>);
+ window.__root=createRoot(document.getElementById('root'));window.__root.render(window.__fixtureMode==='coachHistory'?<CoachHistoryFixture/>:window.__fixtureMode==='legacy'?<LegacyFixture/>:window.__fixtureMode==='initial'?<React.StrictMode><InitialFixture/></React.StrictMode>:window.__fixtureMode==='ai'?<AI/>:window.__fixtureMode==='progress'?<MemoryRouter initialEntries={['/progress?tab=reports']}><Progress/></MemoryRouter>:<SheetFixture/>);
 `;
 async function assets(){
  const clientRequire=createRequire(path.join(ROOT,'client/package.json'));
@@ -220,13 +225,33 @@ async function legacyDialogs(){for(const theme of ['light','dark']){const p=awai
  ck(`${theme} migrated dialogs have no runtime exceptions`,p.__errors.length===0,p.__errors);
  }finally{await p.close()}}}
 
+async function coachHistory(){for(const theme of ['light','dark']){const p=await pageFor('coachHistory',theme,320,true);try{
+ const choose=async value=>{await p.focus('select[aria-label="Review a day"]');await p.select('select[aria-label="Review a day"]',value);await p.waitForSelector('[data-testid="coach-history"]');await wait(p,()=>document.querySelector('[role=dialog]').contains(document.activeElement));};
+ const close=async()=>{await p.keyboard.press('Escape');await wait(p,()=>!document.querySelector('[data-testid="coach-history"]'));};
+ ck(`${theme} coach history selector exposes all logged dates including zero score`,await p.$$eval('select option',es=>es.length===5&&es.some(e=>e.textContent.includes('2026-10-11')&&e.textContent.includes('0%'))));
+ await choose('0');
+ ck(`${theme} coach history preserves date weight compliance food quantity meal calories water and notes`,await p.$eval('[role=dialog]',e=>['2026','82.4 kg','90%','History oats 23','100g','Breakfast','374 kcal','8976 kcal','2.5 L','History note'].every(v=>e.textContent.includes(v))));
+ ck(`${theme} coach history has focus and isolates the background`,await p.evaluate(()=>document.querySelector('[role=dialog]').contains(document.activeElement)&&document.getElementById('root').inert));
+ ck(`${theme} long coach history fits enlarged text at320px`,await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ ck(`${theme} long coach history can scroll to the final note`,await p.evaluate(()=>{const content=document.querySelector('[data-testid="coach-history"]').parentElement;content.scrollTop=content.scrollHeight;return content.scrollTop>0&&content.scrollTop+content.clientHeight>=content.scrollHeight-2}));
+ await close();
+ ck(`${theme} closing history restores selector focus and scrolling`,await p.evaluate(()=>document.activeElement.getAttribute('aria-label')==='Review a day'&&window.__bodyStyles()===window.__initialBodyStyle));
+ await choose('0');ck(`${theme} the same day can be reopened`,!!await p.$('[data-testid="coach-history"]'));await close();
+ await choose('1');ck(`${theme} water-only zero-score day is not reported empty`,await p.$eval('[data-testid="coach-history"]',e=>e.textContent.includes('0.5 L')&&e.textContent.includes('0%')&&!e.textContent.includes('No data recorded')));await close();
+ await choose('2');ck(`${theme} notes-only day is not reported empty`,await p.$eval('[data-testid="coach-history"]',e=>e.textContent.includes('Notes-only day')&&!e.textContent.includes('No data recorded')));await close();
+ await choose('3');ck(`${theme} truly empty day has its existing empty message`,await p.$eval('[data-testid="coach-history"]',e=>e.textContent.includes('No data recorded')));await close();
+ await p.evaluate(()=>window.__singleHistory());await wait(p,()=>document.querySelectorAll('select option').length===2);await choose('0');ck(`${theme} a single logged day remains available`,await p.$eval('[data-testid="coach-history"]',e=>e.textContent.includes('0.5 L')));await close();
+ ck(`${theme} reviewing history makes no write requests`,await p.evaluate(()=>window.__apiCalls.every(c=>c.method==='get')));
+ ck(`${theme} coach history has no runtime exceptions`,p.__errors.length===0,p.__errors);
+ }finally{await p.close()}}}
+
 try{
  fs.mkdirSync(SHOTS,{recursive:true});const files=await assets();code=files.code;strictCode=files.strictCode;
  const html='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+files.css+'</style></head><body><div id="root"></div><div id="pre-hidden" aria-hidden="true">Already hidden</div><div id="pre-false" aria-hidden="false">Explicit false</div><div id="pre-inert" inert>Already inert</div></body></html>';
  server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(html)});await new Promise(r=>server.listen(0,'127.0.0.1',r));url='http://127.0.0.1:'+server.address().port;
  const puppeteer=(await import('puppeteer-core')).default,chromium=(await import('@sparticuz/chromium')).default;
  browser=await puppeteer.launch({executablePath:await browserExecutable(chromium),args:[...chromium.args,'--no-sandbox','--disable-dev-shm-usage'],headless:true});
- await section('Migrated staff and milestone dialogs',legacyDialogs);await section('Sheet keyboard behavior',sheetKeyboard);await section('Initially open nested Sheets and StrictMode',initialNested);await section('Modal background isolation and lifecycle cleanup',isolationAndCleanup);
+ await section('Coach daily history',coachHistory);await section('Migrated staff and milestone dialogs',legacyDialogs);await section('Sheet keyboard behavior',sheetKeyboard);await section('Initially open nested Sheets and StrictMode',initialNested);await section('Modal background isolation and lifecycle cleanup',isolationAndCleanup);
  await section('Keyboard focus appearance and enlarged-text Sheet layout',visualMatrix);await section('AI nested macro scope and semantic controls',aiNestedAndLabels);
  await section('One-tap input routing and historical log Sheet',captureAndHistory);
 }catch(error){ck('modal accessibility suite setup',false,error.stack)}finally{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));fs.rmSync(TMP,{recursive:true,force:true})}

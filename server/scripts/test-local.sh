@@ -195,7 +195,7 @@ fi
 # Split by whether the suite needs Postgres, which is just whether it carries
 # the localhost guard. Both lists run after DATABASE_URL is exported, so this is
 # for reading, not for wiring.
-LOGIC_SUITES="test-mixed-request-answer test-sleep-clarification test-draft-food-edits test-ai-draft-food-edits test-food-clarifications test-voice-phase2 test-coach-view test-rename-contracts smoke-routes test-member-questions \
+LOGIC_SUITES="test-ci-completion test-mixed-request-answer test-sleep-clarification test-draft-food-edits test-ai-draft-food-edits test-food-clarifications test-voice-phase2 test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-image-routing \
 test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic test-ci55-regressions"
 
@@ -227,7 +227,10 @@ run_suite() {
     # skipped itself for months because it wanted TEST_DATABASE_URL and the gate
     # exports DATABASE_URL — 214 lines of coverage printing a green tick and
     # "0 assertions", which reads like a pass unless you look at the number.
-    if [ "$n" -eq 0 ]; then
+    if ! grep -Eq '^✅ ui-tests: [1-9][0-9]* passed, 0 failed$' "$uilog"; then
+      printf "  %-24s %s\n" "ui-tests" "✗ missing successful completion summary"
+      failed=$((failed + 1))
+    elif [ "$n" -eq 0 ]; then
       failed=$((failed + 1))
       printf "  ✗ %-22s RAN BUT ASSERTED NOTHING — skipped itself, or its output format changed\n" "$name"
       head -5 "$log" | sed 's/^/      /'
@@ -273,7 +276,10 @@ else
   uilog="$RESULTS_DIR/ui-tests.log"
   if timeout 600 node scripts/ui-tests.mjs >"$uilog" 2>&1; then
     n=$(grep -c '✓' "$uilog")
-    if [ "$n" -eq 0 ]; then
+    if ! grep -Eq '^✅ ui-tests: [1-9][0-9]* passed, 0 failed$' "$uilog"; then
+      printf "  %-24s %s\n" "ui-tests" "✗ missing successful completion summary"
+      failed=$((failed + 1))
+    elif [ "$n" -eq 0 ]; then
       printf "  %-24s %s\n" "ui-tests" "✗ exited 0 having asserted nothing"
       failed=$((failed + 1))
     else

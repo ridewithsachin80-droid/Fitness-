@@ -43,7 +43,7 @@ export default function MemberCharts({ weightData, complianceData, avg30, profil
 
         {/* Sprint 6: 30-day compliance chart — tap a bar to drill into that day */}
 
-        {complianceData.length > 1 && (
+        {complianceData.length > 0 && (
           <Card>
             <div className="flex items-center justify-between mb-2">
               <SectionTitle icon="📊">30-Day Compliance</SectionTitle>
@@ -75,7 +75,20 @@ export default function MemberCharts({ weightData, complianceData, avg30, profil
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <p className="text-eyebrow text-lo mt-1.5 text-center">Tap any bar to see what they logged that day</p>
+            <label className="block mt-3 text-xs text-lo">
+              Review a day
+              <select aria-label="Review a day" value="" onChange={event => {
+                const selected = complianceData[Number(event.target.value)];
+                if (event.target.value !== '' && selected?.log) setSelectedLog(selected.log);
+              }} className="mt-1 block w-full min-h-[44px] rounded-xl border border-hair bg-surface px-3 text-sm text-white">
+                <option value="" disabled>Choose a logged day</option>
+                {complianceData.map((day, index) => day.log && (
+                  <option key={String(day.log.log_date)} value={index}>
+                    {String(day.log.log_date).slice(0, 10)} · {day.score ?? 0}%
+                  </option>
+                ))}
+              </select>
+            </label>
           </Card>
         )}
 
