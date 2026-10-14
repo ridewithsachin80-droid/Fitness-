@@ -69,7 +69,7 @@ async function callGroqOnce(model, prompt, opts = {}) {
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
       max_tokens: opts.maxTokens || 3000,
-      response_format: { type: 'json_object' },
+      ...(opts.json === false ? {} : { response_format: { type: 'json_object' } }),
     },
     {
       headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
@@ -2144,7 +2144,7 @@ async function parseMemberMessage({ userId, message, context }) {
       answer: async (question, savedContext) => {
         const result = await callAI(buildAnswerPrompt(question, savedContext) +
           '\nThis question accompanied an UNSAVED review. Answer ONLY from the saved snapshot above. Do not add pending entries or say you saved, logged or updated anything. If the question asks about after this entry, explain it must first be reviewed and saved, then asked again. Reply in the language of the question.',
-          { timeout: 8000, maxTokens: 300, singleAttempt: true });
+          { timeout: 8000, maxTokens: 300, singleAttempt: true, json: false });
         return result.text;
       },
     }) : null;
