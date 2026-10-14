@@ -127,9 +127,16 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
 
   const { applying, applyingRef, applyAll, undo, editApplied, retryUndo } = useAIReviewSave({ mealSlots, mealPlans, computePending });
 
+  // Move only for a newly appended message, never for quantity, macro or
+  // receipt updates. Long replies start at their first item, not at Save.
   useEffect(() => {
-    if (useAIChat.getState().composerOpen) bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
-  }, [messages, busy]);
+    if (!useAIChat.getState().composerOpen || !messages.length) return;
+    const last = messages[messages.length - 1];
+    const reply = last.role !== 'user'
+      ? threadRef.current?.querySelector(`[data-review-index="${messages.length - 1}"]`)
+      : null;
+    (reply || bottomRef.current)?.scrollIntoView?.({ block: reply ? 'start' : 'end', behavior: 'instant' });
+  }, [messages.length]);
 
   const focusRequest = useAIChat(s => s.focusRequest);
   const composerFocused = useAIChat(s => s.composerFocused);
@@ -1061,7 +1068,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         data-modal-scope="ai-thread" aria-owns={composerId} tabIndex={-1} onKeyDown={modal.onKeyDown}>
         <div className="member-assistant-head"><div><strong>FitLife AI</strong><p>One place for your whole day.</p></div>
           <button type="button" className="member-theme" onClick={modal.requestClose} aria-label="Close AI assistant"><Icon name="close" size={19} /></button></div>
-        <div className="member-assistant-scroll" style={{ paddingBottom: composerHeight + kbInset }}>
+        <div className="member-assistant-scroll" role="region" aria-label="Conversation and food review" tabIndex={0}
+          style={{ marginBottom: composerHeight + kbInset, paddingBottom: 16, scrollPaddingBlock: 16 }}>
           {thread}
         </div>
       </div>, document.body)) : thread}

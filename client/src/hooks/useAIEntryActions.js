@@ -19,7 +19,9 @@ export default function useAIEntryActions({ inputRef, fileRef, overlayRef, botto
 
   useLayoutEffect(() => {
     if (!composerOpen || !focusRequest) return;
-    (bottomRef.current)?.scrollIntoView?.({ block: 'end' });
+    const replies = overlayRef.current?.querySelectorAll('[data-review-index]');
+    const review = replies?.[replies.length - 1];
+    (review || bottomRef.current)?.scrollIntoView?.({ block: review ? 'start' : 'end', behavior: 'instant' });
     if (useAIChat.getState().entryMode === 'text') inputRef.current?.focus({ preventScroll: true });
     else overlayRef.current?.querySelector('button')?.focus({ preventScroll: true });
   }, [focusRequest, composerOpen]);

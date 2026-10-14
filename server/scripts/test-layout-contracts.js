@@ -629,7 +629,7 @@ ck('the composer appears on request and the member dock opens it', /composerOpen
 
 ck('the assistant has Close, and the thread offers Tell me while the bar is away',
    /aria-label="Close AI assistant"/.test(chat) && /data-testid="thread-open-composer"/.test(chat));
-ck('AI transcript reserves measured space above its composer', /paddingBottom: composerHeight \+ kbInset/.test(chat) && /ResizeObserver/.test(chat));
+ck('AI transcript reserves measured space above its composer', /marginBottom: composerHeight \+ kbInset/.test(chat) && /ResizeObserver/.test(chat));
 
 ck('the box re-measures on every text change (grows and shrinks)', /useEffect\(\(\) => \{ autoGrow\(inputRef\.current\); \}, \[input\]\)/.test(chat));
 ck('the bottom nav is hidden while the assistant is open', /!composerOpen && <nav/.test(read('components/UI.jsx')));
