@@ -7,7 +7,7 @@ app.use('/api/workouts',require('../routes/workouts'));app.use('/api/members',re
 let passed=0,failed=0,server,ids=[];
 const check=(name,ok)=>{console.log(`  ${ok?'✓':'✗'} ${name}`);ok?passed++:failed++;};
 (async()=>{
- const make=async n=>{const {rows:[u]}=await pool.query("INSERT INTO users (name,phone,password,role,active) VALUES ($1,$2,'x','patient',true) RETURNING id",['Write fixture '+n,'rw-'+Date.now()+'-'+n]);ids.push(u.id);return u;};
+ const make=async n=>{const {rows:[u]}=await pool.query("INSERT INTO users (name,phone,password,role,active) VALUES ($1,$2,'x','patient',true) RETURNING id",['Write fixture '+n,'rw-'+Date.now().toString(36)+'-'+n]);ids.push(u.id);return u;};
  const a=await make(1),b=await make(2);
  const token=u=>jwt.sign({id:u.id,role:'patient',name:'Write fixture'},process.env.JWT_SECRET,{expiresIn:'1h'});
  server=app.listen(0);const base='http://127.0.0.1:'+server.address().port;
