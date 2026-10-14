@@ -13,6 +13,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getMyNotifications, markNotificationsRead } from '../api/logs';
 import { getMyProfile } from '../api/logs';
+import Sheet from './primitives/Sheet';
 
 function timeAgo(dateStr) {
   const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -33,48 +34,42 @@ export default function NotificationBell() {
   const [items, setItems]         = useState([]);
   const [unreadCount, setUnread]  = useState(0);
   const [loading, setLoading]     = useState(false);
-  const panelRef = useRef(null);
-
+  const [errors, setErrors] = useState({});
+  const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState('');
+  const busy = useRef(false);
   const load = async () => {
-    try {
-      const { data } = await getMyNotifications();
-      setItems(data.notifications || []);
-      setUnread(data.unreadCount || 0);
-      try {
-        const { data: prof } = await getMyProfile();
-        setMessages(prof?.coach_notes || []);
-      } catch { /* messages are supplementary — bell still works without them */ }
-    } catch { /* non-fatal — bell just stays at its current state */ }
+    if (busy.current) return;
+    busy.current = true;
+    setLoading(true);
+    const nextErrors = {};
+    await Promise.all([
+      getMyNotifications().then(({ data }) => {
+        setItems(data.notifications || []);
+        setUnread(data.unreadCount || 0);
+      }).catch(() => { nextErrors.reminders = "Couldn't refresh reminders. Try again."; }),
+      getMyProfile().then(({ data }) => setMessages(data?.coach_notes || []))
+        .catch(() => { nextErrors.messages = "Couldn't refresh coach messages. Try again."; }),
+    ]);
+    setErrors(nextErrors);
+    setLoading(false);
+    busy.current = false;
   };
-
-  // Load once on mount so the unread badge is correct even before opening
   useEffect(() => { load(); }, []);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e) => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
-
-  const toggle = async () => {
-    const next = !open;
-    setOpen(next);
-    if (next) {
-      setLoading(true);
-      await load();
-      setLoading(false);
-      if (unreadCount > 0) {
-        markNotificationsRead().catch(() => {});
-        setUnread(0);
-      }
-    }
+  const toggle = () => { setOpen(true); setMarkError(''); load(); };
+  const markRead = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setMarking(true);
+    setMarkError('');
+    try { await markNotificationsRead(); setUnread(0); }
+    catch { setMarkError("Couldn't mark reminders as read. Try again."); }
+    finally { busy.current = false; setMarking(false); }
   };
 
   return (
-    <div className="relative" ref={panelRef}>
-      <button onClick={toggle} aria-label="Notifications"
+    <div className="relative">
+      <button onClick={toggle} aria-label="Notifications" aria-haspopup="dialog" aria-expanded={open}
         className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-all ${
           unreadCount > 0
             ? 'bg-gold shadow-glow'
@@ -96,24 +91,33 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-[52px] w-80 max-w-[88vw] bg-charcoal border border-white/[0.08]
-          rounded-2xl shadow-card-raised z-50 max-h-[70vh] overflow-y-auto">
+      <Sheet open={open} onClose={() => setOpen(false)} title="Notifications">
+          <p className="text-xs text-dim mb-3">Coach messages and reminders, all in one place.</p>
           <div className="flex gap-1 p-1.5 border-b border-hair sticky top-0 bg-charcoal z-10">
             {[['messages', `Messages${messages.length ? ` (${messages.length})` : ''}`], ['reminders', 'Reminders']].map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
+              <button key={k} onClick={() => setTab(k)} aria-pressed={tab === k}
+                className={`flex-1 min-h-[44px] py-2 rounded-lg text-xs font-bold transition-colors ${
                   tab === k ? 'bg-gold text-charcoal' : 'text-dim hover:text-mid'
                 }`}>{label}</button>
             ))}
           </div>
 
+          {loading && <p role="status" className="py-3 text-sm text-dim">Refreshing…</p>}
+          {errors[tab] && <div role="alert" className="py-3 text-sm text-danger">
+            <p>{errors[tab]}</p><button disabled={loading || marking} onClick={load} className="min-h-[44px] underline">Try again</button>
+          </div>}
+          {tab === 'reminders' && unreadCount > 0 && <button onClick={markRead}
+            disabled={loading || marking || !!errors.reminders}
+            className="min-h-[44px] text-sm text-gold-deep disabled:opacity-50">
+            {marking ? 'Marking…' : 'Mark all reminders as read'}
+          </button>}
+          {tab === 'reminders' && markError && <p role="alert" className="text-sm text-danger">{markError}</p>}
           {tab === 'messages' && (
-            messages.length === 0 ? (
+            messages.length === 0 ? (!loading && !errors.messages && (
               <div className="px-4 py-8 text-center text-xs text-dim">
                 No messages from your coach yet.
               </div>
-            ) : (
+            )) : (
               <div className="divide-y divide-white/[0.06]">
                 {messages.map(m => (
                   <div key={m.id} className="px-4 py-3">
@@ -133,28 +137,26 @@ export default function NotificationBell() {
                         {new Date(m.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </span>
                     </div>
-                    <p className="text-xs text-mid leading-relaxed whitespace-pre-wrap">{m.note}</p>
+                    <p className="text-xs text-mid leading-relaxed whitespace-pre-wrap break-words">{m.note}</p>
                   </div>
                 ))}
               </div>
             )
           )}
 
-          {tab === 'reminders' && (loading ? (
-            <div className="px-4 py-8 text-center text-xs text-dim">Loading…</div>
-          ) : items.length === 0 ? (
+          {tab === 'reminders' && (items.length === 0 ? (!loading && !errors.reminders && (
             <div className="px-4 py-8 text-center text-xs text-dim">
-              No reminders yet. Your coach can set these up under Reminders.
+              No reminders yet. They will appear here when available.
             </div>
-          ) : (
+          )) : (
             <div className="divide-y divide-white/[0.06]">
               {items.map(n => (
                 <div key={n.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium text-soft leading-tight">{n.title}</span>
+                    <span className="min-w-0 break-words text-sm font-medium text-soft leading-tight">{n.title}</span>
                     <span className="text-eyebrow text-dim flex-shrink-0 mt-0.5 whitespace-nowrap">{timeAgo(n.sent_at)}</span>
                   </div>
-                  <p className="text-xs text-mid mt-1 leading-relaxed">{n.body}</p>
+                  <p className="break-words text-xs text-mid mt-1 leading-relaxed">{n.body}</p>
                   {/* There used to be a red "Delivery failed — your coach may
                       want to know" badge here, shown to the MEMBER.
                       Two things wrong with it:
@@ -172,8 +174,7 @@ export default function NotificationBell() {
               ))}
             </div>
           ))}
-        </div>
-      )}
+      </Sheet>
     </div>
   );
 }

@@ -17,10 +17,14 @@ const checks=[];let pass=0,fail=0;
 const ck=(name,ok,detail='')=>{checks.push({name,status:ok?'Pass':'Fail',detail:ok?'':String(detail)});console.log(`  ${ok?'✓':'✗'} ${name}${ok||!detail?'':': '+String(detail).slice(0,240)}`);ok?pass++:fail++};
 const API=path.join(TMP,'api.js');
 fs.writeFileSync(API,`import {today,istDaysAgo} from '${path.join(ROOT,'client/src/constants.js')}';
- window.__apiCalls=[];window.__pastDate=istDaysAgo(1);
+ window.__inboxFail=false;window.__readFail=false;window.__emptyInbox=false;window.__apiCalls=[];window.__pastDate=istDaysAgo(1);
  const row={log_date:window.__pastDate,weight_kg:'82.4',compliance_pct:90,food_items:[{id:'past-idli',name:'Idli fixture',grams:120,meal:'Breakfast',per_100g:{calories:130,protein:3.5,total_carbs:28,fat:0.8}}],water_ml:2500,activities:{walk:true},acv:{acv1:true},supplements:{b12:true},sleep:{bedtime:'22:15',waketime:'06:30',quality:4},notes:'Historical note fixture'};
  const call=async(method,url,body)=>{window.__apiCalls.push({method,url,body});
+ if(url==='/reminders/my-notifications/mark-read'){if(window.__readFail)throw Error('offline');return{data:{marked:true}};}
  if(method==='get'){
+ if(url==='/reminders/my-notifications'){if(window.__inboxFail)throw Error('offline');return{data:{unreadCount:window.__emptyInbox?0:2,notifications:window.__emptyInbox?[]:Array.from({length:30},(_,i)=>({id:i,title:'Reminder '+i,body:'Water '+('longword'.repeat(35)),sent_at:new Date().toISOString()}))}};}
+ if(url==='/members/me'&&window.__fixtureMode==='inbox'){if(window.__inboxFail)throw Error('offline');return{data:{coach_notes:window.__emptyInbox?[]:[{id:1,note:'Coach note fixture',note_date:'2026-10-14',monitor_name:'Coach'}]}};}
+
  if(url.startsWith('/logs/range/'))return{data:[row]};
  if(url==='/members/me')return{data:{start_weight:'88',target_weight:'78',height_cm:'172',labs:[]}};
  if(url==='/members/me/weekly-report')return{data:{latest:null,history:[]}};
@@ -33,6 +37,7 @@ const ENTRY=`
  import {MemoryRouter} from 'react-router-dom';import Sheet from './components/primitives/Sheet';
  import {AddLabModal,SetPinModal,WeightEntryModal} from './pages/Monitor'; import MilestoneModal from './components/today/MilestoneModal';
  import CoachHistorySheet from './components/coach/CoachHistorySheet'; import MemberCharts from './components/coach/MemberCharts';
+ import NotificationBell from './components/NotificationBell';
  import AIChatLog from './components/AIChatLog';import Progress from './pages/Progress';
  import {useAuthStore} from './store/authStore';import {useLogStore} from './store/logStore';import {useAIChat} from './store/aiChatStore';import {useSettingsStore} from './store/settingsStore';import {today,emptyLog} from './constants';
  useAuthStore.setState({user:{id:214,name:'Accessibility fixture',role:'patient'},isRestoring:false});
@@ -54,7 +59,7 @@ const ENTRY=`
  function InitialFixture(){React.useEffect(()=>{window.__initialMounts=(window.__initialMounts||0)+1},[]);const[parent,setParent]=useState(true),[child,setChild]=useState(true);return <Sheet open={parent} title="Initial parent" onClose={()=>setParent(false)}><input id="initial-parent-field"/><Sheet open={child} title="Initial child" onClose={()=>setChild(false)}><input id="initial-child-field"/></Sheet></Sheet>}
  function AI(){return <><main id="fixture-background" style={{padding:16}}><button id="launch-type" onClick={()=>useAIChat.getState().openChat('text')}>Type</button><button id="launch-speak" onClick={()=>useAIChat.getState().openChat('voice')}>Speak</button><button id="launch-snap" onClick={()=>useAIChat.getState().openChat('photo')}>Snap</button><input id="outside-input" aria-label="Outside input"/></main><AIChatLog overlay/></>}
  window.__seedReview=()=>useAIChat.getState().setMessages([{role:'ai',text:'Review fixture oats',parsed:{foods:[{name:'Oats',grams:150,meal:'Breakfast',on:true,label:true,per_100g:{calories:374,protein:13.2,total_carbs:60,fat:7.8},macros:{cal:561,pro:19.8,carb:90,fat:11.7}}],activities:[],acv:[],supplements:[],workouts:[],corrections:[]}}]);
- window.__root=createRoot(document.getElementById('root'));window.__root.render(window.__fixtureMode==='coachHistory'?<CoachHistoryFixture/>:window.__fixtureMode==='legacy'?<LegacyFixture/>:window.__fixtureMode==='initial'?<React.StrictMode><InitialFixture/></React.StrictMode>:window.__fixtureMode==='ai'?<AI/>:window.__fixtureMode==='progress'?<MemoryRouter initialEntries={['/progress?tab=reports']}><Progress/></MemoryRouter>:<SheetFixture/>);
+ window.__root=createRoot(document.getElementById('root'));window.__root.render(window.__fixtureMode==='inbox'?<NotificationBell/>:window.__fixtureMode==='coachHistory'?<CoachHistoryFixture/>:window.__fixtureMode==='legacy'?<LegacyFixture/>:window.__fixtureMode==='initial'?<React.StrictMode><InitialFixture/></React.StrictMode>:window.__fixtureMode==='ai'?<AI/>:window.__fixtureMode==='progress'?<MemoryRouter initialEntries={['/progress?tab=reports']}><Progress/></MemoryRouter>:<SheetFixture/>);
 `;
 async function assets(){
  const clientRequire=createRequire(path.join(ROOT,'client/package.json'));
@@ -245,13 +250,44 @@ async function coachHistory(){for(const theme of ['light','dark']){const p=await
  ck(`${theme} coach history has no runtime exceptions`,p.__errors.length===0,p.__errors);
  }finally{await p.close()}}}
 
+async function reminderInbox(){for(const theme of ['light','dark']){const p=await pageFor('inbox',theme,320,true);try{
+ await wait(p,()=>document.querySelector('[aria-label="Notifications"]').textContent.includes('2'));
+ await click(p,'[aria-label="Notifications"]');await wait(p,()=>document.querySelector('[role=dialog]')&&!document.querySelector('[role=status]'));
+ ck(`${theme} inbox opens as a named modal and shows coach messages`,await p.$eval('[role=dialog]',e=>e.getAttribute('aria-label')==='Notifications'&&e.textContent.includes('Coach note fixture')));
+ ck(`${theme} opening inbox does not mark unseen reminders read`,await p.evaluate(()=>window.__apiCalls.every(c=>c.method==='get')));
+ const tab=async()=>{await p.evaluate(()=>[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Reminders').click());};await tab();
+ ck(`${theme} reminder tab preserves history and unread badge`,await p.evaluate(()=>document.querySelector('[role=dialog]').textContent.includes('Reminder 29')&&document.querySelector('button[aria-label="Notifications"]').textContent.includes('2')));
+ ck(`${theme} inbox fits 320px with enlarged text`,await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ ck(`${theme} long reminder history scrolls to its end`,await p.evaluate(()=>{const e=document.querySelector('[role=dialog] .overflow-y-auto');if(!e)return false;e.scrollTop=e.scrollHeight;return e.scrollTop>0&&e.scrollTop+e.clientHeight>=e.scrollHeight-2}));
+ await p.evaluate(()=>{window.__readFail=true;[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Mark all reminders as read').click()});
+ await wait(p,()=>document.querySelector('[role=alert]'));
+ ck(`${theme} failed mark-read keeps unread count and exposes retry`,await p.evaluate(()=>document.querySelector('[role=alert]').textContent.includes("Couldn't mark")&&document.querySelector('button[aria-label="Notifications"]').textContent.includes('2')));
+ await p.evaluate(()=>{window.__readFail=false;[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Mark all reminders as read').click()});
+ await wait(p,()=>!document.querySelector('button[aria-label="Notifications"]').textContent.includes('2'));
+ ck(`${theme} successful explicit mark-read clears badge`,await p.evaluate(()=>!document.querySelector('[role=alert]')));
+ await closeDialog(p,'Notifications');
+ ck(`${theme} closing inbox restores bell focus and page scrolling`,await p.evaluate(()=>document.activeElement.getAttribute('aria-label')==='Notifications'&&window.__bodyStyles()===window.__initialBodyStyle));
+ await p.evaluate(()=>{window.__inboxFail=true});await click(p,'button[aria-label="Notifications"]');await wait(p,()=>document.querySelector('[role=alert]'));
+ ck(`${theme} refresh failure preserves existing reminders with an error`,await p.$eval('[role=dialog]',e=>e.textContent.includes('Reminder 29')&&e.textContent.includes("Couldn't refresh reminders")&&!e.textContent.includes('No reminders yet')));
+ await p.evaluate(()=>{window.__inboxFail=false;window.__emptyInbox=true;[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Try again').click()});
+ await wait(p,()=>document.querySelector('[role=dialog]').textContent.includes('No reminders yet'));
+ ck(`${theme} retry replaces stale history with confirmed empty response`,await p.$eval('[role=dialog]',e=>!e.textContent.includes('Reminder 29')&&!e.querySelector('[role=alert]')));
+ await closeDialog(p,'Notifications');
+ await p.evaluate(()=>{window.__inboxFail=true});await click(p,'button[aria-label="Notifications"]');await wait(p,()=>document.querySelector('[role=alert]'));
+ ck(`${theme} failed empty reminder refresh never claims an empty inbox`,await p.$eval('[role=dialog]',e=>!e.textContent.includes('No reminders yet')));
+ await p.evaluate(()=>[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Messages').click());
+ ck(`${theme} failed coach-message refresh has its own error without false empty text`,await p.$eval('[role=dialog]',e=>e.textContent.includes("Couldn't refresh coach messages")&&!e.textContent.includes('No messages from your coach yet')));
+ await closeDialog(p,'Notifications');
+ ck(`${theme} inbox flow has no runtime exceptions`,p.__errors.length===0,p.__errors);
+ }finally{await p.close()}}}
+
 try{
  fs.mkdirSync(SHOTS,{recursive:true});const files=await assets();code=files.code;strictCode=files.strictCode;
  const html='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+files.css+'</style></head><body><div id="root"></div><div id="pre-hidden" aria-hidden="true">Already hidden</div><div id="pre-false" aria-hidden="false">Explicit false</div><div id="pre-inert" inert>Already inert</div></body></html>';
  server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(html)});await new Promise(r=>server.listen(0,'127.0.0.1',r));url='http://127.0.0.1:'+server.address().port;
  const puppeteer=(await import('puppeteer-core')).default,chromium=(await import('@sparticuz/chromium')).default;
  browser=await puppeteer.launch({executablePath:await browserExecutable(chromium),args:[...chromium.args,'--no-sandbox','--disable-dev-shm-usage'],headless:true});
- await section('Coach daily history',coachHistory);await section('Migrated staff and milestone dialogs',legacyDialogs);await section('Sheet keyboard behavior',sheetKeyboard);await section('Initially open nested Sheets and StrictMode',initialNested);await section('Modal background isolation and lifecycle cleanup',isolationAndCleanup);
+ await section('Reminder inbox',reminderInbox);await section('Coach daily history',coachHistory);await section('Migrated staff and milestone dialogs',legacyDialogs);await section('Sheet keyboard behavior',sheetKeyboard);await section('Initially open nested Sheets and StrictMode',initialNested);await section('Modal background isolation and lifecycle cleanup',isolationAndCleanup);
  await section('Keyboard focus appearance and enlarged-text Sheet layout',visualMatrix);await section('AI nested macro scope and semantic controls',aiNestedAndLabels);
  await section('One-tap input routing and historical log Sheet',captureAndHistory);
 }catch(error){ck('modal accessibility suite setup',false,error.stack)}finally{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));fs.rmSync(TMP,{recursive:true,force:true})}
