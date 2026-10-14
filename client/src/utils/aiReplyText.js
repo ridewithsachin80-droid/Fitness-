@@ -1,4 +1,5 @@
 import { normalizeUnresolvedFoods } from './unresolvedFoods';
+import { normalizeSleepClarification } from './sleepClarification';
 
 const hasRows = value => Array.isArray(value) && value.length > 0;
 const positive = value => Number.isFinite(Number(value)) && Number(value) > 0;
@@ -16,7 +17,8 @@ function hasParsedEntries(parsed) {
 
 export function hasLoggingPreview(message) {
   return !!message?.reviewProposed || hasRows(message?.lab?.results) || hasParsedEntries(message?.parsed)
-    || normalizeUnresolvedFoods(message?.parsed?.unresolved_foods).length > 0;
+    || normalizeUnresolvedFoods(message?.parsed?.unresolved_foods).length > 0
+    || !!normalizeSleepClarification(message?.parsed?.unresolved_sleep);
 }
 
 /** Follow-ups need the member's current reviewed values, including a photo's
@@ -25,7 +27,11 @@ export function aiContextText(message) {
   if (!hasLoggingPreview(message)) return aiReplyText(message);
   const p = message.parsed || {};
   const rows = value => Array.isArray(value) ? value.filter(Boolean) : [];
-  const parts = rows(p.foods).map(f => `${f.name} ${f.grams}g ${f.meal || ''}${f.on === false ? ' (excluded)' : ''}`.trim());
+  const sleepIssue = normalizeSleepClarification(p.unresolved_sleep);
+  // Keep the pending question before food lists so the bounded conversation
+  // context still explains a reply such as "11pm to7am" in a mixed log.
+  const parts = sleepIssue ? [`Sleep not included${sleepIssue.duration_minutes != null ? ` (${sleepIssue.duration_minutes} minutes reported)` : ''}; bedtime and wake time needed`] : [];
+  parts.push(...rows(p.foods).map(f => `${f.name} ${f.grams}g ${f.meal || ''}${f.on === false ? ' (excluded)' : ''}`.trim()));
   for (const food of normalizeUnresolvedFoods(p.unresolved_foods)) parts.push(`Not included: ${food.name}${food.meal ? ` (${food.meal})` : ''}; quantity needed`);
   if (positive(p.weight_kg)) parts.push(`Weight ${p.weight_kg}kg${p.weightOn === false ? ' (excluded)' : ''}`);
   if (positive(p.water_ml_add)) parts.push(`Water +${p.water_ml_add}ml${p.waterOn === false ? ' (excluded)' : ''}`);
@@ -49,6 +55,10 @@ export function aiContextText(message) {
 
 export function aiReplyText(message) {
   if (!hasLoggingPreview(message)) return typeof message?.text === 'string' ? message.text : '';
+  if (normalizeSleepClarification(message?.parsed?.unresolved_sleep)
+    && !hasParsedEntries(message?.parsed) && !hasRows(message?.lab?.results)) {
+    return 'There’s a detail to confirm. Nothing has been saved yet.';
+  }
   if (normalizeUnresolvedFoods(message?.parsed?.unresolved_foods).length
     && !hasParsedEntries(message?.parsed) && !hasRows(message?.lab?.results)) {
     return 'Tell me the amount for the food below. Nothing has been saved yet.';

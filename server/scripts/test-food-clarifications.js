@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros } = require('../services/foodReview');
+const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros, needsPositiveAmountClarification } = require('../services/foodReview');
 const { importClient } = require('./lib/client-bundle');
 const { withFoodGrams } = importClient('utils/aiFoodReview.js');
 const { calcFoodMacros } = importClient('lib/day/index.js');
@@ -11,9 +11,25 @@ let pass = 0, fail = 0;
 const ck = (name, ok, detail = '') => { console.log(`  ${ok ? '✓' : '✗'} ${name}${ok ? '' : ': ' + JSON.stringify(detail)}`); ok ? pass++ : fail++; };
 const row = (name, grams, extras = {}) => ({ name, grams, meal: 'Breakfast', per_100g: { calories: 99 }, ...extras });
 
+for (const message of ['rice - 50 g', 'rice -50g', 'rice − 50 grams', 'rice - .5 g', 'rice - 1,000 g',
+  'rice -1e2g', 'rice -1e-2g', 'rice negative 50 g', 'rice minus 50 grams', '-50g rice', '- 50g',
+  'water - 250 ml', 'rice -50 -100g', '100 ml water and rice - 50g', 'rice 1e -3g',
+  'rice 100g\n- dal - 50g', 'weight - 70 kg', 'milk - .25 litres',
+  'rice -\u00a050 g', 'rice - 50\u00a0g', 'rice -\u202f50\u202fg', 'rice minus\u00a050\u00a0g']) {
+  ck(`signed or ambiguous amount clarifies: ${JSON.stringify(message)}`, needsPositiveAmountClarification(message));
+}
+for (const message of ['rice 50 g', 'rice 50-100g', 'rice 50 - 100 g', 'rice 50g -100g',
+  'rice 50 g - 100 g', '- rice 50g\n- dal 100g', '- 50g rice', '  - 50 g rice\n  - 100 ml milk',
+  'rice 1000e-1g', 'rice 1e-3g', 'rice 1e+2g', 'rice 50–100g', 'rice 50—100g',
+  'low-fat curd 100g', 'rice - bowl 50g', 'lost 2 kg last week', 'rice',
+  'rice 50\u00a0g -\u00a0100\u00a0g', '-\u202f50\u202fg rice']) {
+  ck(`ordinary amount, list or range reaches normal parsing: ${JSON.stringify(message)}`, !needsPositiveAmountClarification(message));
+}
+for (const message of [null, undefined, [], {}, 50]) ck('malformed message is not interpreted as a signed quantity', !needsPositiveAmountClarification(message));
+
 const valid = normaliseFoodReview([row('Idli', 80), row('Sambar', 150)], []);
 ck('two valid food portions survive unchanged', valid.foods.length === 2 && valid.foods[0].grams === 80 && valid.foods[1].grams === 150 && !valid.unresolvedFoods.length);
-for (const grams of [null, undefined, 0, -1, '', 'unknown', 'Infinity', Infinity, { toString: null }, 0.1]) {
+for (const grams of [null, undefined, 0, -1, '-50', '- 50', '', 'unknown', 'Infinity', Infinity, { toString: null }, 0.1]) {
   const out = normaliseFoodReview([row('Idli', 80), row('Sambar', grams)], []);
   ck(`invalid or missing portion ${JSON.stringify(grams)} becomes a named unresolved food`, out.foods.length === 1 && out.unresolvedFoods[0]?.name === 'Sambar' && out.unresolvedFoods[0]?.reason === 'quantity_needed');
 }
@@ -59,7 +75,7 @@ const db = { query: async (sql, args = []) => {
   return { rows: [] };
 } };
 const pureModules = new Set(['../services/personName', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile',
-  '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview', '../services/draftFoodReview']);
+  '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview', '../services/draftFoodReview', '../services/sleepReview']);
 const moduleFixture = { exports: {} };
 const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,
   process: { env: { GROQ_API_KEY: 'isolated-fixture', GROQ_MODEL: 'fixture-model', GROQ_FALLBACK_MODEL: 'fixture-model', GEMINI_API_KEY: 'isolated-photo-fixture' } },
@@ -98,6 +114,33 @@ const parse = async (answer, message = '2 idlis and sambar for breakfast', conte
 };
 
 (async () => {
+  // Reproduce the live provider failure without calling a provider: even a
+  // fixture that would silently make the amount positive is never consumed.
+  fixture = { foods: [row('Rice', 50)], water_ml_add: 250, weight_kg: 70,
+    notes: 'unrelated log', corrections: [{ type: 'weight', value: 70 }],
+    coach_message: 'must never be sent', reply: 'Logged your rice.' };
+  for (const [message, context] of [
+    ['rice - 50 g', {}],
+    ['rice -50g and 250ml water', {}],
+    ['rice − 50 g', {}],
+    ['rice -\u00a050\u202fg', {}],
+    ['sambar - 50 g', { foodClarification: { unresolved: [{ name: 'Sambar' }], reviewedFoods: [{ name: 'Idli', grams: 80 }] } }],
+    ['make it - 50g', { draftFoods: { foods: [{ reviewId: 'review-1', foodId: 'food-1', name: 'Rice', grams: 150, meal: 'Lunch' }], target: { reviewId: 'review-1', foodId: 'food-1' } } }],
+  ]) {
+    const providerBefore = prompts.length, dbBefore = queries.length;
+    const blocked = await api.parseMemberMessage({ userId: 999, message, context });
+    ck(`actual parser asks for a positive amount: ${message}`, blocked.amount_clarification === 'positive_quantity' && blocked.question === true && /positive amount/.test(blocked.reply) && /resend the full entry/.test(blocked.reply));
+    ck('ambiguous quantity is held before any provider or database operation', prompts.length === providerBefore && queries.length === dbBefore);
+    ck('held entry carries no fabricated food, correction, workout or other saveable value',
+      blocked.foods.length === 0 && blocked.unresolved_foods.length === 0 && blocked.corrections.length === 0 && blocked.workouts.length === 0 && blocked.activities.length === 0 && blocked.acv.length === 0 && blocked.supplements.length === 0 && blocked.weight_kg === null && blocked.water_ml_add === null && blocked.sleep === null && blocked.notes === null && blocked.totals.cal === 0 && !blocked.draft_edit && !blocked.coach_message_sent);
+  }
+  const providerBefore = prompts.length, dbBefore = queries.length;
+  const safety = await api.parseMemberMessage({ userId: 999, message: 'chest pain after my run, rice - 50g', context: {} });
+  ck('urgent safety guidance retains priority over quantity clarification', safety.safety === 'emergency' && safety.question === true && !safety.amount_clarification && prompts.length === providerBefore && queries.length === dbBefore, safety);
+  for (const message of ['rice 50-100g', 'rice 50g -100g', '- 50g rice', '- rice 50g\n- dal 100g', 'rice 1000e-1g']) {
+    const ordinary = await parse({ foods: [row('Rice', 50)] }, message);
+    ck('normal lists and positive ranges retain the existing provider path', ordinary.foods.length === 1 && ordinary.foods[0].grams === 50 && !ordinary.amount_clarification);
+  }
   let result = await parse({ foods: [row('Idli', 80), row('Sambar', 150)] }, '2 idlis and 1 bowl sambar for breakfast');
   ck('explicit two-food meal keeps both server-enriched foods', result.foods.length === 2 && result.foods.every(f => f.source === 'db-verified'));
   ck('canonical nutrition remains Idli107 + Sambar69 =176', result.foods[0].macros.cal === 107 && result.foods[1].macros.cal === 69 && result.totals.cal === 176);

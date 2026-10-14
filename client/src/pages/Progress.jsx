@@ -308,10 +308,13 @@ export default function Progress() {
   const last30   = sorted.slice(-30);
 
   const rangeFrom  = nDaysAgo(parseInt(range, 10));
-  const weightAll  = sorted.filter(l => l.weight_kg);
+  // A newer food/water-only day must not hide the last actual weigh-in.
+  const weightAll  = sorted.filter(l =>
+    (typeof l.weight_kg === 'number' || typeof l.weight_kg === 'string')
+    && Number.isFinite(Number(l.weight_kg)) && Number(l.weight_kg) > 0);
   const weightData = weightAll
     .filter(l => l.log_date >= rangeFrom)
-    .map(l => ({ date: shortDate(l.log_date), weight: parseFloat(l.weight_kg) }));
+    .map(l => ({ date: shortDate(l.log_date), weight: Number(l.weight_kg) }));
   // Change over the selected window: first weigh-in in range → latest
   const rangeDelta = weightData.length > 1
     ? +(weightData[weightData.length - 1].weight - weightData[0].weight).toFixed(1)
@@ -323,8 +326,8 @@ export default function Progress() {
   }));
 
   // Stats
-  const latest  = sorted[sorted.length - 1];
-  const latestW = latest?.weight_kg ? parseFloat(latest.weight_kg) : null;
+  const latest  = weightAll[weightAll.length - 1];
+  const latestW = latest ? Number(latest.weight_kg) : null;
   const startW  = profile?.start_weight ? parseFloat(profile.start_weight) : null;
   const targetW = profile?.target_weight ? parseFloat(profile.target_weight) : null;
   const lostKg  = startW && latestW ? +(startW - latestW).toFixed(1) : null;

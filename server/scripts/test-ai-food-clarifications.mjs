@@ -110,6 +110,35 @@ async function section(code, name, run) {
 
 try {
   const code = await bundle();
+  await section(code, 'Signed-amount clarification holds the entire entry', async A => {
+    const guidance = 'Please confirm a positive amount without a minus sign. Nothing in this entry has been processed or saved. Please resend the full entry with the intended amounts.';
+    const i = await send(A, { amount_clarification: 'positive_quantity', question: true, reply: guidance,
+      foods: [food('Rice', 50)], unresolved_foods: [quantity()], water_ml_add: 250,
+      weight_kg: 70, workouts: [{ name: 'Must not render' }], corrections: [{ type: 'weight' }] }, 'rice - 50 g and water 250ml');
+    check('signed-amount response displays the exact server clarification', messages(A)[i].text === guidance && A.d.body.textContent.includes(guidance));
+    check('clarification discards all action payloads instead of inventing a positive review', !messages(A)[i].parsed && !messages(A)[i].draftEditStatus && !A.q('ai-food-review') && !A.q('ai-unresolved-foods') && !save(A, i));
+    check('whole-entry hold creates no log or other member write', dataWrites(A).length === 0 && A.w.log.getState().log.food.length === 0);
+    const j = await send(A, { foods: [food('Rice', 50)], water_ml_add: 250 }, 'rice 50 g and water 250ml');
+    check('resending a corrected full entry creates one ordinary unsaved review', messages(A)[j].parsed.foods.length === 1 && messages(A)[j].parsed.foods[0].grams === 50 && messages(A)[j].parsed.water_ml_add === 250 && !!save(A, j) && dataWrites(A).length === 0);
+  });
+
+  await section(code, 'Signed-amount clarification preserves explicit draft selection', async A => {
+    const i = await send(A, { foods: [food('Rice', 150)] }, 'rice 150g');
+    A.d.querySelector('[aria-label="Edit Rice with AI"]').click(); await tick();
+    const before = JSON.stringify(messages(A)[i]);
+    const target = { reviewId: messages(A)[i].draftReviewId, foodId: messages(A)[i].parsed.foods[0].draftFoodId };
+    const guidance = 'Please confirm a positive amount without a minus sign. Nothing in this entry has been processed or saved. Please resend the full entry with the intended amounts.';
+    const j = await send(A, { amount_clarification: 'positive_quantity', question: true, reply: guidance,
+      draft_edit: { status: 'edit', ...target, grams: 50 }, foods: [food('Rice duplicate', 50)], water_ml_add: 250 }, 'make it - 50g');
+    check('selected mode keeps the quantity clarification visible instead of a generic edit error', messages(A)[j].text === guidance && A.d.body.textContent.includes(guidance) && !messages(A)[j].draftEditStatus);
+    check('invalid signed edit changes neither original review nor its canonical quantity', JSON.stringify(messages(A)[i]) === before && messages(A)[i].parsed.foods[0].grams === 150);
+    check('selected target remains available for the corrected request', A.q('draft-food-target')?.textContent.includes('Rice') && lastParse(A).body.context.draftFoods.target.foodId === target.foodId);
+    check('selected clarification cannot duplicate food or write any member data', messages(A).filter(m => m.parsed?.foods?.length).length === 1 && !messages(A)[j].parsed && dataWrites(A).length === 0);
+    await send(A, { draft_edit: { status: 'edit', ...target, grams: 200 } }, 'make it 200g');
+    check('corrected request updates only the original selected review once', messages(A)[i].parsed.foods[0].grams === 200 && messages(A).filter(m => m.parsed?.foods?.length).length === 1 && lastParse(A).body.context.draftFoods.target.foodId === target.foodId);
+    check('corrected edit clears selection and still requires explicit Save', !A.q('draft-food-target') && !!save(A, i) && !messages(A)[i].applied && dataWrites(A).length === 0);
+  });
+
   await section(code, 'Bounded clarification and reply contracts', async A => {
     const U = A.w.clarification, day = A.w.today;
     check('missing or malformed unresolved lists normalize to no questions', [null, undefined, {}, 'Sambar'].every(v => U.normalizeUnresolvedFoods(v).length === 0));

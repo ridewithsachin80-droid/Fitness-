@@ -23,6 +23,8 @@ export { useAIChat };
 import DaySummary from './DaySummary';
 import AIFoodReview from './chat/AIFoodReview';
 import UnresolvedFoods from './chat/UnresolvedFoods';
+import UnresolvedSleep from './chat/UnresolvedSleep';
+import { normalizeSleepClarification } from '../utils/sleepClarification';
 import { normalizeUnresolvedFoods, foodClarificationContext } from '../utils/unresolvedFoods';
 import UsualMeals from './chat/UsualMeals';
 import { usualReview } from '../utils/usualMeals';
@@ -525,6 +527,14 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         return;
       }
 
+      // A server quantity preflight also takes precedence over selected edit
+      // mode. Retain that selection for the corrected request; accept no
+      // proposed actions or food rows from a clarification response.
+      if (data.amount_clarification === 'positive_quantity' && data.question === true && typeof data.reply === 'string') {
+        setMessages(previous => [...previous, { role: 'ai', text: data.reply }]);
+        return;
+      }
+
       // Edits update the original unsaved review. Even a malformed response in
       // explicitly targeted mode cannot fall through to a second food card.
       if (Object.prototype.hasOwnProperty.call(data, 'draft_edit') || payload.context?.draftFoods?.target) {
@@ -576,6 +586,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           waterOn:      data.water_ml_add != null,
           sleep:        data.sleep,
           sleepOn:      !!data.sleep,
+          unresolved_sleep: normalizeSleepClarification(data.unresolved_sleep),
           notes: data.notes || '', notesOn: !!data.notes,
           foods:        (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
           unresolved_foods: normalizeUnresolvedFoods(data.unresolved_foods),
@@ -676,6 +687,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                     ? <DaySummary s={m.summary} />
                     : <p className="leading-relaxed whitespace-pre-line" data-testid="ai-reply-text" role={m.draftEditStatus ? 'status' : undefined}>{aiReplyText(m)}</p>}
                   <UnresolvedFoods foods={m.parsed?.unresolved_foods} reviewedFoods={m.parsed?.foods} />
+                  <UnresolvedSleep value={m.parsed?.unresolved_sleep} />
 
                   {m.failedRequest && requestCurrent(m.failedRequest) && <AIRequestRecovery
                     request={m.failedRequest} requestEdit={requestEdit} setRequestEdit={setRequestEdit}

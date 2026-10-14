@@ -1,3 +1,26 @@
+FITLIFE — PHASE 5: AUTHENTICATED REGRESSION FIXES
+Use FitLife-Phase5-Authenticated-Fixes-Updated-Files.zip only on installed
+test c6b7bf8712733122a0ce695b67d652ff00fc6174 (local 5b8cffe).
+Overlay the included original folder paths at the repository root.
+Deploy client and server together; no migrations, dependencies, environment
+changes or file deletions. Exact files/revision: AUTHENTICATED-FIXES-INSTALL.txt.
+
+Fixes four observed issues: stale food quantity captions after manual edits;
+ambiguous negative mass/volume requests interpreted as positive; missing
+duration-only sleep clarification; Progress hiding the latest valid weight
+when a newer daily entry has no weight. Explicit Save/Edit/Undo remain.
+No additional Home controls or changes to the minimalist navigation.
+
+Production build and integrated local gate passed: 36 suites / 2,992
+assertions, zero failures. Full GitHub CI (including 49 isolated database
+suites), deployment identity checks and authenticated retests follow this
+source release. Refer to the latest Excel/evidence for their completed results.
+Manual catalog: 236 cases. Physical-device, media and fault cases remain
+separate acceptance gates; build success does not certify those cases.
+See docs/reviews/PHASE5-AUTHENTICATED-FIXES.md and the earlier Phase 5 roadmap.
+Do not reapply an older ZIP. Excel/evidence ZIPs are reports, not app code.
+
+HISTORICAL RELEASE RECORDS BELOW — superseded for deployment instructions.
 FITLIFE — PHASE 5: AI DRAFT FOOD EDITING
 Use FitLife-Phase5-AI-Draft-Edits-Updated-Files.zip only on the installed
 test baseline 3da43bd01b731b8bc09687b208de51b0c2680e01 (local b4d1dce).

@@ -1,13 +1,31 @@
 import { carbsOf } from '../lib/day';
 
+// Keep a household description separate from the changing gram total while a
+// draft is edited. It is not sent as nutrition or persisted by the save mapper.
+function quantityDescription(food) {
+  const text = String(food.qty_description ?? food.qty_text ?? '').trim().slice(0, 160);
+  const description = text.replace(/\s*·\s*[-+]?\d+(?:\.\d+)?\s*g\s*$/i, '').trim();
+  // Free-form text containing another gram/kg amount can contradict the new
+  // quantity. Retain only descriptions without a competing weight claim.
+  return /[-+]?\d+(?:\.\d+)?\s*(?:kg|kilograms?|g|grams?)\b/i.test(description) ? '' : description;
+}
+
 export function withFoodGrams(food, value) {
   // An empty input is allowed while typing, but cannot be applied.
   const raw = Number(value);
   const grams = value === '' ? '' : Number.isFinite(raw) ? Math.max(0, raw) : '';
   const per = food.per_100g || {};
   const k = (Number(grams) || 0) / 100;
+  const portion = food.portion ? { ...food.portion,
+    quantity: grams === '' ? '' : +(Number(grams) / Number(food.portion.grams_per_unit)).toFixed(3) } : null;
+  const changed = grams === '' || (food.grams != null && Number(food.grams) !== grams);
+  const description = portion ? '' : quantityDescription(food);
+  const caption = grams === '' ? '' : portion && Number.isFinite(portion.quantity) && portion.unit
+    ? `${portion.quantity} ${portion.unit} · ${grams} g`
+    : [description, `${grams} g`].filter(Boolean).join(' · ');
   return { ...food, grams,
-    ...(food.portion ? { portion:{ ...food.portion, quantity:grams === '' ? '' : +(Number(grams) / Number(food.portion.grams_per_unit)).toFixed(3) } } : {}),
+    ...(portion ? { portion } : {}),
+    ...(changed ? { qty_text: caption, qty_description: description } : {}),
     macros: {
     cal: Math.round((Number(per.calories) || 0) * k),
     pro: +((Number(per.protein) || 0) * k).toFixed(1),

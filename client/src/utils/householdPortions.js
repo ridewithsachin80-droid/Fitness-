@@ -40,7 +40,7 @@ export function withPortion(food, portion, quantity = 1) {
   // Reject oversized portions in review instead of silently reducing them.
   const next = withFoodGrams(food, grams);
   return { ...next, portion:{ ...portion, quantity },
-    qty_text: quantity === '' ? '' : `${quantity} ${portion.unit}`,
+    qty_text: quantity === '' ? '' : `${quantity} ${portion.unit}`, qty_description:'',
     portion_phrase:portion.phrase };
 }
 

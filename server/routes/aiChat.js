@@ -36,7 +36,8 @@ const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
 const { cleanScalePayload } = require('../services/scaleParse');
-const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros } = require('../services/foodReview');
+const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros, needsPositiveAmountClarification } = require('../services/foodReview');
+const { resolveSleepReview } = require('../services/sleepReview');
 const { sanitiseDraftFoods, resolveDraftFoodEdit, draftEditReply } = require('../services/draftFoodReview');
 const { cookingFatPlausibility, macroPlausibility, massBalance } = require('../services/macroCheck');
 const { FATS, DEFAULT_FAT, saturatedPlausibility, suggestFatSplit,
@@ -260,6 +261,12 @@ PARSING RULES:
    Amount ADDED, 0–6000. If they say "finished my water target", use ${ctx.waterTargetMl}.
 6. SLEEP — "slept 10:30 to 6:30"→bedtime "22:30", waketime "06:30" (24h HH:MM).
    Evening times without am/pm are PM for bedtime; morning times are AM for wake.
+   A duration alone ("slept 8 hours", "slept8h") does not give the clock times.
+   Keep sleep null and return unresolved_sleep:{reason:"times_needed",
+   duration_minutes:480} (use the stated duration, or null when unknown).
+   Ask for bedtime and wake time; never invent them from a schedule or duration.
+   Keep all other explicitly stated entries in the same review. On a follow-up
+   with sleep times, resolve only sleep; do not repeat earlier review entries.
 6b. NOTES — when the member explicitly describes their mood, energy, symptoms or
    challenges, return those statements in "notes" (maximum 2000 characters).
    Keep their meaning, do not diagnose, do not invent details. Otherwise notes=null.
@@ -377,6 +384,7 @@ Return ONLY a raw JSON object, no markdown fences, exactly this structure:
   "supplement_ids": ["b12", "d3"],
   "water_ml_add": 1000,
   "sleep": { "bedtime": "22:30", "waketime": "06:30" },
+  "unresolved_sleep": null,
   "foods": [
     {
       "name": "Chapati", "qty_text": "2 pieces", "grams": 60, "meal": null,
@@ -1011,8 +1019,6 @@ async function enrichFromDB(foods, patientId = null) {
 }
 
 // ── Validators ───────────────────────────────────────────────────────────────
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-
 function whitelistIds(aiIds, allowedItems) {
   if (!Array.isArray(aiIds)) return [];
   const allowed = new Set(allowedItems.map(i => i.id));
@@ -1857,6 +1863,19 @@ async function parseMemberMessage({ userId, message, context }) {
     });
   }
 
+  // Do not let provider interpretation turn an ambiguous/negative quantity
+  // into a positive log. Hold every part of this entry, with no guessed food
+  // names, provider call, learning, correction or coach-message side effect.
+  if (needsPositiveAmountClarification(cleanMsg)) {
+    return {
+      amount_clarification: 'positive_quantity', question: true,
+      reply: 'Please confirm a positive amount without a minus sign, for example "rice 50 g". Nothing in this entry has been processed or saved. Please resend the full entry with the intended amounts.',
+      weight_kg: null, activities: [], acv: [], supplements: [], water_ml_add: null,
+      sleep: null, notes: null, foods: [], unresolved_foods: [], corrections: [], workouts: [],
+      totals: { cal: 0, pro: 0, carb: 0, fat: 0 },
+    };
+  }
+
   const ctx = {
     foodClarification: sanitiseFoodClarification(context?.foodClarification),
     mealSlots:     Array.isArray(context?.mealSlots) ? context.mealSlots.slice(0, 8).map(s => String(s).slice(0, 40)) : [],
@@ -2015,12 +2034,7 @@ async function parseMemberMessage({ userId, message, context }) {
     else water_ml_add = Math.min(6000, water_ml_add);
 
     // ── Sleep ──
-    let sleep = null;
-    if (parsed.sleep && (parsed.sleep.bedtime || parsed.sleep.waketime)) {
-      const bt = HHMM.test(parsed.sleep.bedtime  || '') ? parsed.sleep.bedtime  : null;
-      const wt = HHMM.test(parsed.sleep.waketime || '') ? parsed.sleep.waketime : null;
-      if (bt || wt) sleep = { bedtime: bt, waketime: wt };
-    }
+    const { sleep, unresolvedSleep } = resolveSleepReview(parsed.sleep, parsed.unresolved_sleep, cleanMsg);
 
     // ── Corrections — whitelist against foods actually in today's log ────────
     const loggedNames = new Map(ctx.lastFoods.map(f => [f.name.toLowerCase(), f.name]));
@@ -2124,7 +2138,9 @@ async function parseMemberMessage({ userId, message, context }) {
       // repeated "walking 40 minutes" produced "Got it — logged a 40-minute
       // walk" with empty arrays, so the app claimed a save that never
       // happened. If there is nothing to apply, say so in our own words.
-      reply: nothingParsed && unresolvedFoods.length
+      reply: nothingParsed && unresolvedSleep
+        ? 'What time did you go to bed and wake up? Sleep is not included yet. Nothing has been saved.'
+        : nothingParsed && unresolvedFoods.length
         ? `Tell me the amount for ${unresolvedFoods.map(row => row.name).join(', ')} before it can be included. Nothing has been saved.`
         : nothingParsed
         ? "Nothing new to log there — it may already be in today's log. Tell me what to change (\"make the walk 30 minutes\"), or add something new."
@@ -2135,6 +2151,7 @@ async function parseMemberMessage({ userId, message, context }) {
       supplements,
       water_ml_add,
       sleep,
+      unresolved_sleep: unresolvedSleep,
       notes,
       foods,
       unresolved_foods: unresolvedFoods,

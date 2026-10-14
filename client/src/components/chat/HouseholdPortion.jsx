@@ -21,7 +21,7 @@ export default function HouseholdPortion({ food, memories, disabled, onPatch, on
       <label className="portion-field">Unit<select aria-label={`${food.name} portion unit`} disabled={disabled || forgetting}
         value={selected} onChange={e => {
           const option = options.find(o => o.key === e.target.value);
-          if (!option) { onPatch({ portion:null, portion_phrase:null, qty_text:'', remember_portion:false }); return; }
+          if (!option) { onPatch({ portion:null, portion_phrase:null, qty_text:'', qty_description:'', remember_portion:false }); return; }
           const count = p?.quantity || statedPortion(food)?.quantity || option.quantity || 1;
           onPatch(withPortion(food, option, count));
         }}><option value="">Grams</option>{options.map(o => <option key={o.key} value={o.key}>

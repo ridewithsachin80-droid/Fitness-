@@ -55,7 +55,7 @@ for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[me
 let fixture = {}, calls = 0, queries = [], sideEffects = 0;
 const pureModules = new Set(['../services/personName', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile',
   '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety',
-  '../services/foodReview', '../services/draftFoodReview']);
+  '../services/foodReview', '../services/draftFoodReview', '../services/sleepReview']);
 const moduleFixture = { exports: {} };
 const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,
   process: { env: { GROQ_API_KEY: 'isolated-fixture', GROQ_MODEL: 'fixture-model', GROQ_FALLBACK_MODEL: 'fixture-model' } },
