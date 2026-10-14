@@ -12,7 +12,7 @@ const bundle = async (contents, defines = {}) => (await build({
   stdin: { contents, resolveDir: source }, bundle: true, write: false, format: 'iife',
   define: { 'process.env.NODE_ENV': '"production"', ...defines }, logLevel: 'silent',
 })).outputFiles[0].text;
-const worker = await bundle("import './sw.js';", { 'self.__WB_MANIFEST': '[]' });
+const worker = await bundle("import './sw.js';", { 'self.__WB_MANIFEST': JSON.stringify([{url:'/index.html',revision:'offline-shell-fixture'}]) });
 const helpers = await bundle("import {clearPrivateApiCaches} from './utils/privateApiCache.js'; window.clearPrivateApiCaches=clearPrivateApiCaches;");
 let mode = 'online', pass = 0, releaseHeld;
 let requestHeld;
@@ -110,6 +110,16 @@ try {
     return (await cache.keys()).some(r => r.url.includes('/api/logs/held'));
   }, { timeout: 1500 }).catch(() => {});
   check('a response already in flight cannot recreate private data after logout', !(await cacheKeys()).some(k => k.includes('/api/logs/held')));
+  await page.setOfflineMode(true);
+  for (const route of ['/progress?from=qa', '/coach/901', '/']) {
+    await page.goto(`http://127.0.0.1:${server.address().port}${route}`);
+    check('offline navigation serves the public shell: ' + route, await page.title() === 'Private cache test');
+  }
+  for (const route of ['/api/auth/callback', '/missing.js', '/unknown-route']) {
+    let rejected = false;
+    try { await page.goto(`http://127.0.0.1:${server.address().port}${route}`); } catch { rejected = true; }
+    check('offline shell never replaces non-app response: ' + route, rejected);
+  }
   console.log(`Private API cache browser: ${pass} passed, 0 failed`);
 } finally {
   if (browser) await browser.close();

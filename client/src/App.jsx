@@ -3,6 +3,7 @@ import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useOfflineSync } from './hooks/useOfflineQueue';
+import { useConnectionRecovery } from './hooks/useConnectionRecovery';
 import { useAuthStore } from './store/authStore';
 import { useSettingsStore, applyTheme, applyFontSize } from './store/settingsStore';
 import { getMyOnboarding } from './api/logs';
@@ -56,6 +57,7 @@ export default function App() {
   const { fontSize, ageMode } = useSettingsStore();
   const [restoreAttempt, setRestoreAttempt] = useState(0);
   const [restoreIssue, setRestoreIssue] = useState(false);
+  const online = useConnectionRecovery(restoreIssue && !user, () => setRestoreAttempt(n => n + 1));
 
   // Apply dark theme + font-size on boot
   useEffect(() => {
@@ -88,10 +90,16 @@ export default function App() {
       setRestored();
       return;
     }
+    if (navigator.onLine === false) {
+      setRestoreIssue(true);
+      return;
+    }
+    const controller = new AbortController();
     axios
-      .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true, timeout: 15000 })
+      .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true, timeout: 15000, signal: controller.signal })
       .then(({ data }) => {
         if (!isCurrent()) return;
+        if (!data?.accessToken) throw new Error('Session restore did not return an access token.');
         // Prefer the user object the server sends; fall back to decoding the
         // JWT so an older server (mid-deploy, or a stale service worker
         // talking to a new one) still restores rather than logging out.
@@ -127,7 +135,7 @@ export default function App() {
           setRestoreIssue(true);
         }
       });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [restoreAttempt]);
 
   useOfflineSync();
@@ -135,13 +143,13 @@ export default function App() {
   if (restoreIssue && !user) {
     return (
       <main className="min-h-screen bg-charcoal flex flex-col items-center justify-center gap-5 px-8 text-center" role="alert">
-        <h1 className="text-bright text-lg font-semibold">Couldn't reconnect just now.</h1>
+        <h1 className="text-bright text-lg font-semibold">{online ? "Couldn't reconnect just now." : "You're offline."}</h1>
         <p className="text-mute text-sm">
           {getStoredRefreshToken() ? 'Your saved sign-in is still on this device. ' : ''}
-          Check your connection and try again.
+          {online ? "Try again, or return when your connection is stronger." : "Connect to the internet to reopen your account. We'll try again when you're back online."}
         </p>
-        <button type="button" onClick={() => setRestoreAttempt(n => n + 1)}
-          className="px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold">Try again</button>
+        <button type="button" disabled={!online} onClick={() => setRestoreAttempt(n => n + 1)}
+          className="px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold disabled:opacity-50">Try again</button>
       </main>
     );
   }
@@ -168,6 +176,7 @@ function SessionSpace() {
   const [justOnboarded,   setJustOnboarded]   = useState(false);
   const [checkFailed,     setCheckFailed]     = useState(false);
   const [checkAttempt,    setCheckAttempt]    = useState(0);
+  const online = useConnectionRecovery(checkFailed, () => setCheckAttempt(n => n + 1));
 
   useEffect(() => {
     if (user?.role !== 'patient') return undefined;
@@ -175,6 +184,7 @@ function SessionSpace() {
     // A member switching accounts must not be handed the previous answer.
     let cancelled = false;
     setCheckFailed(false);
+    if (navigator.onLine === false) { setCheckFailed(true); return; }
 
     getMyOnboarding()
       .then(({ data }) => {
@@ -219,14 +229,15 @@ function SessionSpace() {
           ) : (
             <>
               <p className="text-bright text-base">
-                Couldn't reach FitLife just now.
+                {online ? "Couldn't reach FitLife just now." : "You're offline."}
               </p>
               <p className="text-mute text-sm">
-                Check your connection — your log is safe.
+                Your saved entries haven't changed. We'll retry when you reconnect or return to the app.
               </p>
               <button
+                type="button" disabled={!online}
                 onClick={() => setCheckAttempt((n) => n + 1)}
-                className="mt-1 px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold"
+                className="mt-1 px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold disabled:opacity-50"
               >
                 Try again
               </button>

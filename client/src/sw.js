@@ -1,5 +1,5 @@
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
-import { registerRoute } from 'workbox-routing';
+import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL, getCacheKeyForURL } from 'workbox-precaching';
+import { registerRoute, NavigationRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 import { clientsClaim } from 'workbox-core';
 import { PRIVATE_API_CACHE, LEGACY_API_CACHES, CLEAR_PRIVATE_API_CACHES, clearPrivateApiCaches, privateCacheKey, isPrivateApiRequest } from './utils/privateApiCache';
@@ -8,6 +8,15 @@ let privateCacheEpoch = 0;
 
 // Precache all Vite-built assets (injected by vite-plugin-pwa)
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Reopen installed-app deep links without a network. This is only the public
+// shell: App still requires a successful session refresh before member data.
+// Never replace API, asset or OAuth callback responses with HTML.
+if (getCacheKeyForURL('/index.html')) {
+  registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), {
+    allowlist: [/^\/(?:$|\?|(?:login|plan|progress|more|profile|settings|devices|admin(?:\/foods)?|coach(?:\/\d+)?)(?:\?|$))/, /^\/monitor(?:\/\d+)?(?:\?|$)/],
+  }));
+}
 
 // Delete precaches from previous versions — without this, old hashed bundles
 // linger and can be served after an update.
