@@ -170,8 +170,8 @@ export default function AdminDashboard() {
           {/* AI command bar — the coach's fastest path to any change */}
           <button onClick={() => openCoachAI()}
             style={{ minHeight: 52 }}
-            className="w-full flex items-center gap-3 bg-gradient-to-r from-gold/[0.16] to-gold-dark/[0.08] border border-gold/40 hover:border-gold/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgba(212,175,55,0.10)]">
-            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.5)]">✨</span>
+            className="w-full flex items-center gap-3 bg-gradient-to-r from-gold/[0.16] to-gold-dark/[0.08] border border-gold/40 hover:border-gold/60 rounded-2xl px-4 py-3 transition-all active:scale-[0.99] shadow-[0_0_24px_rgb(var(--fit-accent)/0.10)]">
+            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgb(var(--fit-accent)/0.5)]">✨</span>
             <span className="text-sm text-mid font-medium flex-1 text-left truncate">"Set Bujju water 4L, message Asha…"</span>
             <span className="text-gold-light">🎤</span>
           </button>
@@ -250,7 +250,7 @@ export default function AdminDashboard() {
                 are ink. Set in the display face at a size worth reading —
                 previously 15px bold with an 8px capitalised caption. */}
             <div className="grid grid-cols-4 rounded-[20px] bg-surface divide-x divide-white/[0.055]"
-              style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+              style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
               {[
                 { label: 'Members',   value: overview.stats.total_members },
                 { label: 'Logged',    value: `${overview.stats.logged_today}/${overview.stats.total_members}`, accent: true },
@@ -464,8 +464,8 @@ export default function AdminDashboard() {
                       ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-amber-400/35' : 'border-hair'}`}>
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/coach/${m.id}`)}>
                       <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-gold-light"
-                        style={{ background: 'linear-gradient(135deg,#2A2620,#1A1C20)',
-                          border: '1px solid rgba(212,175,55,0.18)' }}>
+                        style={{ background: 'linear-gradient(135deg,var(--bg-surface),var(--bg-surface))',
+                          border: '1px solid rgb(var(--fit-accent) / 0.18)' }}>
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -485,8 +485,8 @@ export default function AdminDashboard() {
                       {/* Compliance ring */}
                       <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center"
                         style={{ background: pct != null
-                          ? `conic-gradient(${ringColor} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`
-                          : 'rgba(255,255,255,0.06)' }}>
+                          ? `conic-gradient(${ringColor} 0 ${pct}%, rgb(var(--fit-ink) / 0.08) ${pct}% 100%)`
+                          : 'rgb(var(--fit-ink) / 0.06)' }}>
                         <span className="w-7 h-7 rounded-full bg-surface flex items-center justify-center text-[8px] font-extrabold"
                           style={{ color: ringColor }}>
                           {pct != null ? `${pct}%` : '—'}
@@ -508,7 +508,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
                           <div className="h-full rounded-full transition-all"
-                            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#D4AF37,#F0E2B6)' }} />
+                            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,var(--accent),rgb(var(--fit-accent) / 0.6))' }} />
                         </div>
                       </div>
                     )}

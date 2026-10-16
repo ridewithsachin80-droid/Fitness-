@@ -23,12 +23,14 @@ export default defineConfig({
         // Activity uses theme_color for the SPLASH SCREEN and status bar, so
         // the wrong gold would be the first thing every Android member sees on
         // every single launch.
-        theme_color: '#D4AF37',
+        // 16 Oct 2026: the brand is green (Sachin's decision) — forest green
+        // #315D47, the light-theme accent, readable as a status bar.
+        theme_color: '#315D47',
         // Play requires a stable manifest id for a TWA.
         id: '/',
         // Was #ffffff, which flashed a white screen on every cold start before
         // the app painted. Matching the app's own background removes the flash.
-        background_color: '#0b0b0e',
+        background_color: '#141817',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',

@@ -103,7 +103,7 @@ function FoodEditCard({ food, onSaved }) {
 
   return (
     <div className="mt-2 rounded-2xl bg-surface px-3.5 py-3"
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
       <p className="text-[14px] font-semibold text-white">{food.name}</p>
       <p className="text-caption text-lo mt-0.5">
         Per 100g · {food.verified ? 'verified' : `from ${food.source}, unverified`} ·
@@ -583,7 +583,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgb(var(--fit-accent)/0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">Coach AI</p>
             <p className="text-eyebrow text-ghost leading-tight">Manage protocols & messages by chat</p>
@@ -713,7 +713,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                         <button onClick={() => applyAll(mi)}
                           disabled={applying}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgb(var(--fit-accent)/0.4)] transition-all disabled:opacity-60">
                           {applying
                             ? 'Applying…'
                             : `Apply changes for ${m.actions.filter(a => a.on && a.resolved).length} ${plural(m.actions.filter(a => a.on && a.resolved).length, 'member')}`}
@@ -861,7 +861,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               (input.trim() || pendingFile) && !busy
-                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
+                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgb(var(--fit-accent)/0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-ghost'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

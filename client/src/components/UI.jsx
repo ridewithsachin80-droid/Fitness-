@@ -21,7 +21,7 @@ import { Icon } from './primitives';
 export function Card({ children, className = '' }) {
   return (
     <div className={`rounded-[20px] px-4 py-4 bg-surface ${className}`}
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
       {children}
     </div>
   );
@@ -115,20 +115,20 @@ export function SectionTitle({ children, icon, tooltip }) {
             onClick={() => setShow(v => !v)}
             style={{
               width: 20, height: 20, borderRadius: '50%',
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+              background: 'rgb(var(--fit-ink) / 0.08)', border: '1px solid rgb(var(--fit-ink) / 0.15)',
               color: 'var(--text-mid)', fontSize: 11, fontWeight: 700,
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>?</button>
           {show && (
             <div style={{
               position: 'absolute', right: 0, top: 26, zIndex: 50,
-              background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.12)',
+              background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.12)',
               borderRadius: 12, padding: '10px 14px', fontSize: 12, color: 'var(--text-hi)',
               lineHeight: 1.5, width: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
             }}>
               {tooltip}
               <button onClick={() => setShow(false)} style={{
-                display: 'block', marginTop: 8, fontSize: 11, color: '#D4AF37',
+                display: 'block', marginTop: 8, fontSize: 11, color: 'var(--accent)',
                 fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               }}>Got it ✓</button>
             </div>
@@ -252,7 +252,9 @@ export function MemberBottomNav({ showAIAction = true } = {}) {
   const composerOpen = useAIChat(s => s.composerOpen);
   const openChat = useAIChat(s => s.openChat);
   const tabs = [
-    { label: 'Today', path: '/', icon: 'home', active: pathname === '/' || pathname === '/plan' },
+    // Plan is a tab again (16 Oct 2026): members open their diet plan daily.
+    { label: 'Today', path: '/', icon: 'home', active: pathname === '/' },
+    { label: 'Plan', path: '/plan', icon: 'calendar', active: pathname === '/plan' },
     { label: 'Progress', path: '/progress', icon: 'trend', active: pathname === '/progress' },
     { label: 'More', path: '/more', icon: 'more', active: ['/more', '/profile', '/settings', '/devices'].includes(pathname) },
   ];
@@ -313,7 +315,7 @@ export function BottomNav({ role }) {
       className={`min-w-0 flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${tab.active ? 'text-gold' : 'text-lo hover:text-mid'}`}>
       {tab.icon}
       <span className="text-nav-label font-semibold tracking-normal">{tab.label}</span>
-      {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
+      {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgb(var(--fit-accent)/0.8)]" />}
     </button>
   );
   return (
@@ -367,21 +369,21 @@ export function QuickJump({ sections }) {
       {open && (
         <div style={{
           position: 'absolute', bottom: 52, right: 0, background: 'var(--bg-surface)',
-          border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '8px 0', minWidth: 160,
+          border: '1px solid rgb(var(--fit-ink) / 0.12)', borderRadius: 16, padding: '8px 0', minWidth: 160,
           boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
         }}>
           {sections.map(s => (
             <button key={s.id} onClick={() => scrollTo(s.id)} style={{
               display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
               background: 'none', border: 'none', color: 'var(--text-hi)', fontSize: 13, cursor: 'pointer',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid rgb(var(--fit-ink) / 0.06)',
             }}>{s.icon} {s.label}</button>
           ))}
         </div>
       )}
       <button onClick={() => { setOpen(v => !v); haptic(15); }} style={{
-        width: 44, height: 44, borderRadius: 22, background: '#D4AF37', color: '#fff', fontSize: 18,
-        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgba(212,175,55,0.5)',
+        width: 44, height: 44, borderRadius: 22, background: 'var(--accent)', color: 'var(--fit-on-accent)', fontSize: 18,
+        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgb(var(--fit-accent) / 0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>{open ? '✕' : '⚡'}</button>
     </div>

@@ -5,6 +5,12 @@ import { useAIChat } from '../store/aiChatStore';
 import { useLogStore } from '../store/logStore';
 import { nextRequestId, requestBelongsToChat, requestFailureMessage } from '../utils/aiRequestRecovery';
 
+// Counts every change of the day on screen. Subscribed when this module loads,
+// not in an effect: an effect starts after the first paint, so a quick
+// away-and-back right after opening could be missed (16 Oct 2026).
+let dayChanges = 0;
+useLogStore.subscribe((state, prev) => { if (state.date !== prev?.date) dayChanges++; });
+
 const MAX_FAILED_PHOTOS = 3;
 
 /** Own the lifetime of in-memory AI retries and native file selections.
@@ -24,16 +30,19 @@ export default function useAIRequestRecovery() {
 
   const requestCurrent = useCallback(request => useLogStore.getState().date === request?.day
     && requestBelongsToChat(request, useAuthStore.getState(), useAIChat.getState(), useLogStore.getState().date), []);
+  // Any change of the day on screen — even away and straight back — ends a
+  // picker that was opened before it (16 Oct 2026). The old check compared
+  // only the day itself, so away-and-back passed or failed on timing.
   const pickerCurrent = scope => {
     const auth = useAuthStore.getState();
     return !!scope && scope.owner === (auth.user?.id ?? null) && scope.sessionVersion === auth.sessionVersion
       && scope.day <= today() && scope.day === useLogStore.getState().date
-      && scope.day === useAIChat.getState().dayKey;
+      && scope.day === useAIChat.getState().dayKey && scope.dayChanges === dayChanges;
   };
   const rememberPicker = event => {
     const auth = useAuthStore.getState();
     pickerContext.current = { owner: auth.user?.id ?? null, sessionVersion: auth.sessionVersion,
-      day: useLogStore.getState().date, input: event.currentTarget };
+      day: useLogStore.getState().date, dayChanges, input: event.currentTarget };
   };
   const consumePicker = inputElement => {
     const scope = pickerContext.current;

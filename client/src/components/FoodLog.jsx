@@ -380,7 +380,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
         className="w-full flex items-center gap-3 bg-gradient-to-r from-gold/[0.14] to-gold-dark/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgb(var(--fit-accent)/0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
           <span className="block text-caption text-mute leading-tight truncate">Say your whole day — I'll fill the entire log</span>
@@ -399,7 +399,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                   style={{ minHeight: 44, whiteSpace: 'nowrap', flexShrink: 0 }}
                   className="flex items-center gap-2 text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-xl px-3 py-2 transition-colors text-soft font-medium">
                   <span className="truncate max-w-[100px]">{food.name}</span>
-                  {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
+                  {kcal && <span className="text-gold font-bold whitespace-nowrap">{kcal} kcal</span>}
                 </button>
               );
             })}
@@ -503,12 +503,12 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
               {mealItems.length > 0 && (
                 <>
                   <span className="text-xs text-ghost">{mealItems.reduce((s,i)=>s+i.grams,0).toFixed(0)}g</span>
-                  <span className="text-xs font-semibold text-orange-400">{totals.cal} kcal</span>
+                  <span className="text-xs font-semibold text-gold">{totals.cal} kcal</span>
                   {/* Macros for the meal in both views (10 Oct 2026) — the simple
                       view used to show calories only. */}
-                  <span className="text-xs text-blue-400">P {totals.pro.toFixed(1)}g</span>
-                  <span className="text-xs text-amber-400">C {totals.carb.toFixed(1)}g</span>
-                  <span className="text-xs text-amber-400">F {totals.fat.toFixed(1)}g</span>
+                  <span className="text-xs text-mid">P {totals.pro.toFixed(1)}g</span>
+                  <span className="text-xs text-mid">C {totals.carb.toFixed(1)}g</span>
+                  <span className="text-xs text-mid">F {totals.fat.toFixed(1)}g</span>
                 </>
               )}
             </div>
@@ -543,7 +543,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                           </svg>
                         </button>
                       </div>
-                      <p className="text-caption text-mid mt-1" data-testid="logged-food-source">{foodSource(item)}</p>
+                      {(item.source || item.label) && <p className="text-caption text-mid mt-1" data-testid="logged-food-source">{foodSource(item)}</p>}
                       {editingId === item.id && (
                         <div className="mt-2 pt-2 border-t border-hair">
                           <MacroEditor name={item.name} grams={item.grams} per100g={per100Of(item)}
@@ -557,10 +557,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                           ? <TrafficBadge n={n} target={calorieTarget} />
                           : (
                             <div className="flex gap-3 mt-1">
-                              <span className="text-xs font-bold text-orange-400">{n.cal} kcal</span>
-                              <span className="text-xs text-blue-400">P {n.pro}g</span>
-                              <span className="text-xs text-amber-400">C {n.carb}g</span>
-                              <span className="text-xs text-amber-400">F {n.fat}g</span>
+                              <span className="text-xs font-bold text-gold">{n.cal} kcal</span>
+                              <span className="text-xs text-mid">P {n.pro}g</span>
+                              <span className="text-xs text-mid">C {n.carb}g</span>
+                              <span className="text-xs text-mid">F {n.fat}g</span>
                             </div>
                           )
                       )}
@@ -584,10 +584,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
           <div className="flex items-center justify-between bg-white/[0.04] rounded-2xl px-4 py-2.5 border border-white/[0.06]">
             <span className="text-xs font-bold text-ghost tracking-wider">Day total</span>
             <div className="flex gap-3">
-              <span className="text-xs font-bold text-orange-400">{dayTotal.cal} kcal</span>
-              <span className="text-xs text-blue-400">P {dayTotal.pro.toFixed(1)}g</span>
-              <span className="text-xs text-amber-400">C {dayTotal.carb.toFixed(1)}g</span>
-              <span className="text-xs text-amber-400">F {dayTotal.fat.toFixed(1)}g</span>
+              <span className="text-xs font-bold text-gold">{dayTotal.cal} kcal</span>
+              <span className="text-xs text-mid">P {dayTotal.pro.toFixed(1)}g</span>
+              <span className="text-xs text-mid">C {dayTotal.carb.toFixed(1)}g</span>
+              <span className="text-xs text-mid">F {dayTotal.fat.toFixed(1)}g</span>
             </div>
           </div>
         );
@@ -627,7 +627,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                       className="flex items-center gap-1.5 text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-xl px-2.5 py-1.5 transition-colors text-soft font-medium">
                       <span className="truncate max-w-[100px]">{food.name}</span>
                       <span className="text-faint">{food.last_g}g</span>
-                      {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
+                      {kcal && <span className="text-gold font-bold whitespace-nowrap">{kcal} kcal</span>}
                     </button>
                   );
                 })}
@@ -705,7 +705,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                         {food.verified && (
                           <span className="text-xs bg-gold/[0.12] text-gold px-1.5 py-0.5 rounded font-semibold">✓</span>
                         )}
-                        <span className="text-xs font-bold text-orange-400">{food.per_100g?.calories || 0} kcal</span>
+                        <span className="text-xs font-bold text-gold">{food.per_100g?.calories || 0} kcal</span>
                       </div>
                     </div>
                     {food.name_local && food.name_local !== food.name && (
@@ -718,8 +718,8 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                   onTouchStart={(e) => e.preventDefault()}
                   onClick={() => { setShowSuggestions(false); lookupOff(); }}
                   style={{ minHeight: 44 }}
-                  className="w-full text-left px-3 py-2.5 hover:bg-blue-500/10 transition-colors border-t border-white/[0.05]">
-                  <span className="text-xs text-blue-400 font-semibold">🔍 Search Open Food Facts for "{query}"</span>
+                  className="w-full text-left px-3 py-2.5 hover:bg-gold/10 transition-colors border-t border-white/[0.05]">
+                  <span className="text-xs text-mid font-semibold">🔍 Search Open Food Facts for "{query}"</span>
                 </button>
               </div>
             )}
@@ -730,7 +730,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                 {lookupStatus === 'found'    && <p className="text-xs text-gold-deep px-1 font-semibold">✓ Found on Open Food Facts</p>}
                 {lookupStatus === 'notfound' && <p className="text-xs text-faint px-1">Not found — searching AI…</p>}
                 {lookupStatus === '' && (
-                  <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold px-1 hover:underline">
+                  <button onClick={lookupOff} className="text-xs text-mid font-semibold px-1 hover:underline">
                     🔍 Not in local DB — search Open Food Facts
                   </button>
                 )}
@@ -762,10 +762,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
             <div className="bg-charcoal rounded-xl border border-gold/20 px-3 py-2">
               <p className="text-xs text-faint mb-1">Per 100g — {selected.name}</p>
               <div className="flex gap-3 flex-wrap">
-                <span className="text-xs font-bold text-orange-400">{selected.per_100g.calories || 0} kcal</span>
-                <span className="text-xs text-blue-400">P {selected.per_100g.protein || 0}g</span>
-                <span className="text-xs text-amber-400">C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net</span>
-                <span className="text-xs text-amber-400">F {selected.per_100g.fat || 0}g</span>
+                <span className="text-xs font-bold text-gold">{selected.per_100g.calories || 0} kcal</span>
+                <span className="text-xs text-mid">P {selected.per_100g.protein || 0}g</span>
+                <span className="text-xs text-mid">C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net</span>
+                <span className="text-xs text-mid">F {selected.per_100g.fat || 0}g</span>
                 {!selected.verified && <span className="text-xs text-faint italic">unverified</span>}
               </div>
             </div>

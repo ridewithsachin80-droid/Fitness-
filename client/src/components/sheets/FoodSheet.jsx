@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Sheet, Pressable } from '../primitives';
+import { Sheet, Pressable, Collapsible } from '../primitives';
 import FoodLog from '../FoodLog';
 import { MacroProgress, PrescribedMeals } from '../today/DayWidgets';
 import EatenMacros from '../today/EatenMacros';
@@ -16,6 +16,14 @@ export default function FoodSheet({ open, onClose, m }) {
   return (
     <Sheet open={open && !loading} onClose={onClose} snap="full" eyebrow="Food" title={m.foodTarget?.label || "What did you eat?"} initialFocusRef={mealHeadingRef}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
+      {/* 16 Oct 2026: the day's totals on one line, the bars folded away, so the
+          foods come first. Opening "Macros & nutrients" shows everything as before. */}
+      <p className="text-sm text-white mb-2 tabular-nums" data-testid="food-day-total">
+        <span className="font-display text-base">{Math.round(m.kcalIn || 0).toLocaleString('en-IN')}</span>
+        {kcalTarget ? <span className="text-lo"> / {Number(kcalTarget).toLocaleString('en-IN')} kcal</span> : <span className="text-lo"> kcal</span>}
+        <span className="text-mid"> · P {Math.round(eaten?.pro || 0)} g · C {Math.round(eaten?.carb || 0)} g · F {Math.round(eaten?.fat || 0)} g</span>
+      </p>
+      <div className="mb-3"><Collapsible title="Macros & nutrients" summary={protocol?.macros ? 'Your targets, bar by bar' : 'What you have eaten today'} testId="food-macros-details">
       {protocol?.macros && (
         <div className="mb-3 -mx-1">
           <MacroProgress
@@ -34,6 +42,7 @@ export default function FoodSheet({ open, onClose, m }) {
       {!protocol?.macros && eaten && (
         <div className="mb-3"><EatenMacros eaten={eaten} terms={terms} isToday={isToday} /></div>
       )}
+      </Collapsible></div>
       {protocol?.meal_plan?.length > 0 && (
         <PrescribedMeals mealPlan={protocol.meal_plan} foodItems={log.food} onLogMeal={logMeal} />
       )}

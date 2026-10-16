@@ -1,3 +1,4 @@
+import { themeColor } from '../utils/themeColor';
 import WeeklyBrief from '../components/coach/WeeklyBrief';
 import ProgressPhotos from '../components/progress/ProgressPhotos';
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -773,7 +774,7 @@ export default function Coach() {
                   const isToday = log.log_date === todayIST;
                   const isActive = log.log_date === activeDate;
                   const pct = log.compliance_pct || 0;
-                  const dotColor = pct >= 75 ? '#D4AF37' : pct >= 50 ? '#fbbf24' : '#f87171';
+                  const dotColor = pct >= 75 ? 'var(--accent)' : pct >= 50 ? '#fbbf24' : '#f87171';
                   const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
                   return (
                     <button key={log.log_date}
@@ -828,8 +829,8 @@ export default function Coach() {
             {streak14.map(d => (
               <div key={d.date} title={`${d.date} · ${d.logged ? `${d.pct}%` : 'no log'}`}
                 className="flex-1 h-5 rounded-[3px]"
-                style={{ background: !d.logged ? 'rgba(255,255,255,0.05)'
-                  : d.pct >= 75 ? 'rgba(212,175,55,0.55)'
+                style={{ background: !d.logged ? 'rgb(var(--fit-ink) / 0.05)'
+                  : d.pct >= 75 ? 'rgb(var(--fit-accent) / 0.55)'
                   : d.pct >= 50 ? 'rgba(251,191,36,0.40)'
                   :               'rgba(248,113,113,0.35)' }} />
             ))}
@@ -1252,7 +1253,7 @@ export default function Coach() {
                     <p className="text-caption font-semibold text-mid mb-1">{m.name}</p>
                     <ResponsiveContainer width="100%" height={80}>
                       <LineChart data={m.series} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} />
                         <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                         <Tooltip

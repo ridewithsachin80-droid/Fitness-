@@ -136,7 +136,7 @@ export default function AdminReminders({ members = [] }) {
   const memberSchedules = schedules.filter(s =>  s.patient_id);
 
   const cardStyle = {
-    background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.07)',
+    background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.07)',
     borderRadius: 12, padding: 16, marginBottom: 12,
   };
 
@@ -144,27 +144,27 @@ export default function AdminReminders({ members = [] }) {
   // (not a red fill) = destructive. The blue/green "Test" fills were the only
   // saturated colours left on the coach's screens.
   const BTN = {
-    '#D4AF37': { background: '#D4AF37', color: 'var(--bg-base)', border: 'none' },
+    'var(--accent)': { background: 'var(--accent)', color: 'var(--fit-on-accent)', border: 'none' },
     '#b91c1c': { background: 'rgba(248,113,113,0.08)', color: '#f87171', border: '1px solid rgba(248,113,113,0.25)' },
   };
-  const btnStyle = (color = '#D4AF37') => ({
-    ...(BTN[color] || { background: 'rgba(255,255,255,0.05)', color: 'var(--text-mid)', border: '1px solid rgba(255,255,255,0.11)' }),
+  const btnStyle = (color = 'var(--accent)') => ({
+    ...(BTN[color] || { background: 'rgb(var(--fit-ink) / 0.05)', color: 'var(--text-mid)', border: '1px solid rgb(var(--fit-ink) / 0.11)' }),
     borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
     fontSize: 13, fontWeight: 700, minHeight: 36,
   });
 
-  if (loading) return <div style={{ color: '#5a5a68', padding: 24, fontSize: 14 }}>Loading…</div>;
+  if (loading) return <div style={{ color: 'var(--text-lo)', padding: 24, fontSize: 14 }}>Loading…</div>;
 
   return (
     <div style={{ color: 'var(--text-hi)', maxWidth: 700 }}>
-      <h2 style={{ color: '#F0E2B6', fontFamily: 'Fraunces, serif', fontWeight: 600, fontSize: 20, marginBottom: 4 }}>🔔 Reminder Schedules</h2>
+      <h2 style={{ color: 'rgb(var(--fit-accent) / 0.6)', fontFamily: 'Fraunces, serif', fontWeight: 600, fontSize: 20, marginBottom: 4 }}>🔔 Reminder Schedules</h2>
       <p style={{ color: '#888', fontSize: 13, marginBottom: 20 }}>
         Set custom times for water and activity reminders. Repeats every {editing?.retry_interval_min ?? 5} min until the member taps OK.
       </p>
 
       {msg && (
-        <div style={{ background: '#1e3a2e', border: '1px solid rgba(212,175,55,0.35)', borderRadius: 8,
-          padding: '10px 16px', marginBottom: 16, color: '#F0E2B6', fontSize: 14 }}>
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-accent) / 0.35)', borderRadius: 8,
+          padding: '10px 16px', marginBottom: 16, color: 'rgb(var(--fit-accent) / 0.6)', fontSize: 14 }}>
           {msg}
         </div>
       )}
@@ -182,8 +182,8 @@ export default function AdminReminders({ members = [] }) {
           <div style={{ background: 'var(--bg-base)', borderRadius: 16, padding: 24,
             width: '100%', maxWidth: 360, boxSizing: 'border-box',
             maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
-            border: '1px solid rgba(212,175,55,0.35)' }}>
-            <h3 style={{ color: '#F0E2B6', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
+            border: '1px solid rgb(var(--fit-accent) / 0.35)' }}>
+            <h3 style={{ color: 'rgb(var(--fit-accent) / 0.6)', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
               {/* Each type's own label (fix, 10 Oct 2026, ADM-017: Weight and ACV were titled "Activity"). */}
               {(TYPES.find(t => t.key === editing.type) || TYPES[1]).label} Reminders
             </h3>
@@ -198,7 +198,7 @@ export default function AdminReminders({ members = [] }) {
               <div style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>Reminder Times (IST)</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                 {editing.times.map(t => (
-                  <div key={t} style={{ background: 'rgba(212,175,55,0.13)', border: '1px solid #D4AF37',
+                  <div key={t} style={{ background: 'rgb(var(--fit-accent) / 0.13)', border: '1px solid var(--accent)',
                     borderRadius: 20, padding: '4px 12px', fontSize: 13,
                     display: 'flex', alignItems: 'center', gap: 6 }}>
                     {t}
@@ -210,7 +210,7 @@ export default function AdminReminders({ members = [] }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <input type="time" value={newTime}
                   onChange={e => setNewTime(e.target.value)}
-                  style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.12)',
+                  style={{ background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.12)',
                     borderRadius: 8, padding: '6px 10px', color: 'var(--text-hi)', flex: 1 }} />
                 <button onClick={addTime} style={btnStyle()}>+ Add</button>
               </div>
@@ -222,23 +222,23 @@ export default function AdminReminders({ members = [] }) {
                 <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>Max Retries</div>
                 <input type="number" min={1} max={10} value={editing.max_retries}
                   onChange={e => setEditing(ed => ({ ...ed, max_retries: +e.target.value }))}
-                  style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.12)',
+                  style={{ background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.12)',
                     borderRadius: 8, padding: '6px 10px', color: 'var(--text-hi)', width: '100%' }} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>Retry Every (min)</div>
                 <input type="number" min={1} max={60} value={editing.retry_interval_min}
                   onChange={e => setEditing(ed => ({ ...ed, retry_interval_min: +e.target.value }))}
-                  style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.12)',
+                  style={{ background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.12)',
                     borderRadius: 8, padding: '6px 10px', color: 'var(--text-hi)', width: '100%' }} />
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={save} disabled={saving} style={btnStyle('#D4AF37')}>
+              <button onClick={save} disabled={saving} style={btnStyle('var(--accent)')}>
                 {saving ? 'Saving...' : '✅ Save Schedule'}
               </button>
-              <button onClick={() => setEditing(null)} style={btnStyle('#444')}>Cancel</button>
+              <button onClick={() => setEditing(null)} style={btnStyle('quiet')}>Cancel</button>
             </div>
           </div>
         </div>
@@ -246,7 +246,7 @@ export default function AdminReminders({ members = [] }) {
 
       {/* ── Global Schedules ── */}
       <div style={cardStyle}>
-        <div style={{ fontWeight: 700, marginBottom: 12, color: '#fff' }}>
+        <div style={{ fontWeight: 700, marginBottom: 12, color: 'var(--text-hi)' }}>
           🌐 Global Reminders <span style={{ fontSize: 12, color: '#888' }}>(all members)</span>
         </div>
         <div style={{ display: 'grid',
@@ -255,14 +255,14 @@ export default function AdminReminders({ members = [] }) {
             const s = globalSchedules.find(x => x.type === t.key);
             return (
               <div key={t.key} style={{ minWidth: 0, background: 'var(--bg-base)',
-                borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                borderRadius: 10, padding: 12, border: '1px solid rgb(var(--fit-ink) / 0.07)' }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.label}</div>
                 {s ? (
                   <>
                     <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>
                       {s.times.join(' · ')}
                     </div>
-                    <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-lo)', marginBottom: 8 }}>
                       Retry {s.retry_interval_min}min × {s.max_retries}
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -282,7 +282,7 @@ export default function AdminReminders({ members = [] }) {
       </div>
 
       {/* ── Per-Member Schedules ── */}
-      <div style={{ fontWeight: 700, marginBottom: 10, color: '#fff' }}>
+      <div style={{ fontWeight: 700, marginBottom: 10, color: 'var(--text-hi)' }}>
         👤 Per-Member Overrides
       </div>
       {members.map(member => {
@@ -294,7 +294,7 @@ export default function AdminReminders({ members = [] }) {
               <span style={{ fontWeight: 600 }}>{member.name}</span>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => toggleDevices(member.id)}
-                  style={{ ...btnStyle(openDevicesFor === member.id ? '#D4AF37' : '#374151'), fontSize: 11 }}>
+                  style={{ ...btnStyle(openDevicesFor === member.id ? 'var(--accent)' : 'var(--border)'), fontSize: 11 }}>
                   📱 Devices{devices[member.id] ? ` (${devices[member.id].length})` : ''}
                 </button>
                 <button onClick={() => sendTest(member.id, 'water')}
@@ -311,7 +311,7 @@ export default function AdminReminders({ members = [] }) {
             {/* Devices panel — diagnoses "member didn't get the reminder" by
                 showing exactly which device(s) are registered for this account. */}
             {openDevicesFor === member.id && (
-              <div style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+              <div style={{ background: 'var(--bg-base)', border: '1px solid rgb(var(--fit-ink) / 0.07)', borderRadius: 10, padding: 10, marginBottom: 10 }}>
                 {devicesLoading ? (
                   <div style={{ fontSize: 12, color: '#888' }}>Loading…</div>
                 ) : !devices[member.id]?.length ? (
@@ -323,13 +323,13 @@ export default function AdminReminders({ members = [] }) {
                   devices[member.id].map(sub => (
                     <div key={sub.id} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '6px 0', borderBottom: '1px solid #1A1C20', fontSize: 12,
+                      padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12,
                     }}>
                       <div>
-                        <div style={{ color: sub.active ? '#9EA3B0' : '#666' }}>
+                        <div style={{ color: sub.active ? 'var(--text-mid)' : 'var(--text-lo)' }}>
                           {sub.device_name || 'Unknown device'} {!sub.active && '(inactive)'}
                         </div>
-                        <div style={{ color: '#666', fontSize: 10 }}>
+                        <div style={{ color: 'var(--text-lo)', fontSize: 10 }}>
                           Registered {new Date(sub.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </div>
                       </div>
@@ -348,14 +348,14 @@ export default function AdminReminders({ members = [] }) {
                 const s = pSchedules.find(x => x.type === t.key);
                 return (
                   <div key={t.key} style={{ minWidth: 0, background: 'var(--bg-base)',
-                    borderRadius: 10, padding: 10, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    borderRadius: 10, padding: 10, border: '1px solid rgb(var(--fit-ink) / 0.07)' }}>
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{t.label}</div>
                     {s ? (
                       <>
                         <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
                           {s.times.join(' · ')}
                         </div>
-                        <div style={{ fontSize: 10, color: '#666', marginBottom: 6 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-lo)', marginBottom: 6 }}>
                           Retry {s.retry_interval_min}min × {s.max_retries}
                         </div>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -365,7 +365,7 @@ export default function AdminReminders({ members = [] }) {
                       </>
                     ) : (
                       <button onClick={() => startEdit(member.id, t.key)}
-                        style={{ ...btnStyle('#374151'), fontSize: 11 }}>
+                        style={{ ...btnStyle('var(--border)'), fontSize: 11 }}>
                         + Override
                       </button>
                     )}

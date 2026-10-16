@@ -15,7 +15,8 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { haptic } from '../store/settingsStore';
 
-const GOLD = '#D4AF37', BG = '#121316', CARD = '#1A1C20', MUT = '#9EA3B0', FAINT = '#7E8596';
+// The shareable image is always the dark card, in the brand green (16 Oct 2026; was gold).
+const GOLD = '#B7D7C2', BG = '#141817', CARD = '#1C2220', MUT = '#ADBDB1', FAINT = '#97AA9C';
 
 const fmtDate = (iso) => new Date(iso + 'T00:00:00Z')
   .toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -219,7 +220,7 @@ async function renderShareImage(d, note) {
   x.fillText(`${fmtDate(d.weekStart)} – ${fmtDate(d.weekEnd)}`, W / 2, 322);
 
   if (d.latestWeight != null) {
-    x.fillStyle = '#FFFFFF'; x.font = `bold 130px ${serif}`;
+    x.fillStyle = '#F2F4EC'; x.font = `bold 130px ${serif}`;
     x.fillText(`${d.latestWeight} kg`, W / 2, 500);
     if (d.weekDelta != null) {
       x.fillStyle = d.weekDelta < 0 ? '#5DCAA5' : d.weekDelta > 0 ? '#EF9F27' : MUT;
@@ -242,14 +243,14 @@ async function renderShareImage(d, note) {
   tiles.forEach(([v, l], i) => {
     const tx = x0 + i * (tw + gap);
     x.fillStyle = CARD; roundRect(x, tx, y0, tw, th, 20); x.fill();
-    x.fillStyle = '#FFFFFF'; x.font = `bold 46px ${sans}`; x.fillText(v, tx + tw / 2, y0 + 75);
+    x.fillStyle = '#F2F4EC'; x.font = `bold 46px ${sans}`; x.fillText(v, tx + tw / 2, y0 + 75);
     x.fillStyle = FAINT; x.font = `bold 19px ${sans}`; x.fillText(l, tx + tw / 2, y0 + 118);
   });
 
   let y = 940;
   if (d.win) {
-    x.strokeStyle = 'rgba(212,175,55,0.5)'; x.lineWidth = 2;
-    x.fillStyle = 'rgba(212,175,55,0.08)';
+    x.strokeStyle = 'rgba(183,215,194,0.5)'; x.lineWidth = 2;
+    x.fillStyle = 'rgba(183,215,194,0.08)';
     roundRect(x, 90, y, W - 180, 90, 18); x.fill(); x.stroke();
     x.fillStyle = GOLD; x.font = `30px ${sans}`;
     x.fillText(`🎉 ${clip(x, d.win, W - 260)}`, W / 2, y + 57);

@@ -3,12 +3,28 @@ import { persist } from 'zustand/middleware';
 import { normalizeVoiceLang } from '../utils/voiceLanguage';
 
 // ── Theme / font helpers ──────────────────────────────────────────────────────
+// 'dark' | 'light' | 'system'. "system" (the default since 16 Oct 2026)
+// follows the phone's own dark/light setting until the member picks one.
+export function resolvedTheme(theme) {
+  const choice = theme || useSettingsStore.getState().theme || 'system';
+  if (choice === 'dark' || choice === 'light') return choice;
+  try { return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'dark'; }
+}
 export function applyTheme(theme) {
-  const selected = theme || useSettingsStore.getState().theme || 'light';
-  document.documentElement.setAttribute('data-theme', selected === 'dark' ? 'dark' : 'light');
+  const selected = resolvedTheme(theme);
+  document.documentElement.setAttribute('data-theme', selected);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = selected === 'dark' ? '#141817' : '#f8f9f6';
+  // iPhone status bar: white icons on dark, dark icons on light (read at launch).
+  const ios = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (ios) ios.content = selected === 'dark' ? 'black-translucent' : 'default';
 }
+// Keep "system" in step when the phone switches at sunset.
+try {
+  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+    if ((useSettingsStore.getState().theme || 'system') === 'system') applyTheme('system');
+  });
+} catch (_) {}
 
 export function applyFontSize(size) {
   document.documentElement.setAttribute('data-fontsize', size);
@@ -25,8 +41,8 @@ export const useSettingsStore = create(
     (set, get) => ({
       // 'child' | 'adult' | 'senior' | null (null triggers onboarding)
       ageMode: null,
-      theme: 'light',
-      setTheme: (theme) => { const value = theme === 'dark' ? 'dark' : 'light'; set({ theme: value }); applyTheme(value); },
+      theme: 'system',
+      setTheme: (theme) => { const value = ['dark', 'light'].includes(theme) ? theme : 'system'; set({ theme: value }); applyTheme(value); },
       // 'normal' | 'large'
       fontSize: 'normal',
       // 'simple' | 'detailed'

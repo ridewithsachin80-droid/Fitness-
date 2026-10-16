@@ -410,7 +410,7 @@ export default function WorkoutLog({ date }) {
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
         className="w-full flex items-center gap-3 mb-3 bg-gradient-to-r from-gold/[0.14] to-gold-dark/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgb(var(--fit-accent)/0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
           <span className="block text-caption text-mute leading-tight truncate">"Bench press 3 sets of 20kg" or "5 km walk in 1 hour"</span>
@@ -420,7 +420,7 @@ export default function WorkoutLog({ date }) {
       {/* Rest timer banner — manually started via the ⏱ button on any exercise */}
       {restSeconds !== null && (
         <div className={`flex items-center justify-between mb-3 px-3 py-2.5 rounded-xl border transition-colors ${
-          restSeconds <= 0 ? 'bg-[rgba(212,175,106,0.12)] border-[rgba(212,175,106,0.30)]' : 'bg-gold/10 border-gold/20'}`}>
+          restSeconds <= 0 ? 'bg-[rgb(var(--fit-accent)/0.12)] border-[rgb(var(--fit-accent)/0.30)]' : 'bg-gold/10 border-gold/20'}`}>
           <div className="flex items-center gap-2">
             <span className="text-lg">⏱</span>
             <span className={`font-display text-lg font-semibold ${restSeconds <= 0 ? 'text-gold' : 'text-bright'}`}>

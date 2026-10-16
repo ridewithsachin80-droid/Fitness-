@@ -93,7 +93,7 @@ function PinForm({ phone, pin, showPin, loading, error, onPhone, onPin, onToggle
         className="w-full py-3.5 bg-gold hover:bg-gold-light disabled:opacity-40
           disabled:cursor-not-allowed text-charcoal font-bold rounded-xl
           transition-all duration-200 text-sm tracking-wide active:scale-[0.98]
-          shadow-[0_0_24px_rgba(212,175,55,0.35)]">
+          shadow-[0_0_24px_rgb(var(--fit-accent)/0.35)]">
         {loading
           ? <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-charcoal/30 border-t-charcoal rounded-full animate-spin" />
@@ -231,7 +231,7 @@ export default function Login() {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2
           w-[400px] h-[400px] rounded-full opacity-[0.04]"
-          style={{ background: 'radial-gradient(circle, #D4AF37, #F0E2B6 30%, transparent 70%)' }} />
+          style={{ background: 'radial-gradient(circle, var(--accent), rgb(var(--fit-accent) / 0.6) 30%, transparent 70%)' }} />
       </div>
 
       <div className="w-full max-w-sm relative">
@@ -255,7 +255,7 @@ export default function Login() {
 
         {/* Login card */}
         <div className="rounded-2xl border border-white/[0.08] bg-surface
-          shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.7)]
+          shadow-[0_0_0_1px_rgb(var(--fit-ink)/0.06),0_24px_60px_rgba(0,0,0,0.7)]
           overflow-hidden scale-up">
 
           {showForgot && (
@@ -297,7 +297,7 @@ export default function Login() {
                 <div className="text-eyebrow text-ghost mt-0.5 font-medium">{tab.sub}</div>
                 {mode === tab.id && (
                   <div className="absolute bottom-0 left-4 right-4 h-[1.5px] bg-gold rounded-full
-                    shadow-[0_0_10px_rgba(212,175,55,0.70)]" />
+                    shadow-[0_0_10px_rgb(var(--fit-accent)/0.70)]" />
                 )}
               </button>
             ))}

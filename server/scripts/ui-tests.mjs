@@ -952,8 +952,9 @@ async function planTest() {
 
   // nav
   const navLabels = [...d.querySelectorAll('.member-nav-links button')].map(b => b.textContent.trim()).filter(Boolean);
-  ck('nav is Today · Progress · More — full plan and profile remain available', navLabels.join(',') === 'Today,Progress,More', navLabels);
-  ck('Plan belongs to Today in the simplified navigation', [...d.querySelectorAll('.member-nav-links button')].find(b => /Today/.test(b.textContent))?.getAttribute('aria-current') === 'page');
+  // 16 Oct 2026 (Sachin): Plan is a tab again.
+  ck('nav is Today · Plan · Progress · More — profile and settings remain available', navLabels.join(',') === 'Today,Plan,Progress,More', navLabels);
+  ck('on the Plan page the Plan tab is the current one', [...d.querySelectorAll('.member-nav-links button')].find(b => /Plan/.test(b.textContent))?.getAttribute('aria-current') === 'page');
 
   // Today view
   ck('Today view: this weekday\'s program day with sets × reps', q('plan-today-workout') && /Bench press/.test(q('plan-today-workout').textContent) && /3 × 10/.test(q('plan-today-workout').textContent), q('plan-today-workout')?.textContent);
@@ -3162,7 +3163,8 @@ async function macrosEatenTest() {
   const q = (id, root = d) => root.querySelector(`[data-testid="${id}"]`);
   const qa = (id, root = d) => [...root.querySelectorAll(`[data-testid="${id}"]`)];
   ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
-  ck('home shows all three eaten macros in a compact summary', ['P 37 g', 'C 59 g', 'F 34 g'].every(v => q('plan-eat').textContent.includes(v)), q('plan-eat').textContent);
+  // 16 Oct 2026: against the coach's targets again, as on production ("37 / 120 g").
+  ck('home shows all three eaten macros against the coach\'s targets', ['P 37 / 120 g', 'C 59 / 150 g', 'F 34 / 60 g'].every(v => q('plan-eat').textContent.replace(/\s+/g, ' ').includes(v)), q('plan-eat').textContent);
   q('home-log-details').querySelector('button').click(); await tick(150);
   const meals = qa('meal-macros').map(e => e.textContent);
   ck('timeline: each meal shows its macros under the foods (Breakfast P 10 · C 52 · F 4; Lunch P 27 · C 8 · F 30)',
@@ -3170,6 +3172,9 @@ async function macrosEatenTest() {
 
   q('plan-eat').click(); await tick(500);
   const dlg = () => d.querySelector('[role=dialog][aria-label="What did you eat?"]');
+  // 16 Oct 2026: the day's totals are one line at the top; the bars sit under "Macros & nutrients".
+  ck('food sheet: the day on one line, against the targets', /666 \/ 1,800 kcal · P 37 g · C 59 g · F 34 g/.test(q('food-day-total')?.textContent.replace(/\s+/g, ' ') || ''), q('food-day-total')?.textContent);
+  q('food-macros-details')?.querySelector('button')?.click(); await tick(300);
   ck('food sheet with targets: the macro bars (as before), not the no-target card', /Macro Targets/.test(dlg()?.textContent || '') && !q('eaten-card'), dlg()?.textContent.slice(0, 80));
   ck('each food shows kcal · P · C · F in the simple view', qa('food-macros').length === 3 && /390 kcal · P27g · C7\.5g · F30g/.test(qa('food-macros')[2].textContent), qa('food-macros').map(e => e.textContent));
   ck('each meal header shows P, C and F in the simple view too (it showed kcal only)', /P 9\.8g/.test(dlg().textContent) && /C 51\.6g/.test(dlg().textContent) && /F 4\.0g/.test(dlg().textContent));
@@ -3247,6 +3252,7 @@ async function macrosEatenTest() {
   ck('without targets home still shows all eaten macros', ['P 37 g', 'C 59 g', 'F 34 g'].every(v => bq('plan-eat').textContent.includes(v)));
   ck('timeline meals show their macros too', bd.querySelectorAll('[data-testid="meal-macros"]').length === 2);
   bq('plan-eat').click(); await tick(500);
+  bq('food-macros-details')?.querySelector('button')?.click(); await tick(300);
   ck('food sheet: an "Eaten today" card with 666 kcal and the three macros, saying there are no targets yet',
      /Eaten today/.test(bq('eaten-card')?.textContent || '') && /666/.test(bq('eaten-kcal').textContent) && /37 g/.test(bq('eaten-card').textContent) && /No targets from your coach yet/.test(bq('eaten-no-targets').textContent) && !/Macro Targets/.test(bd.body.textContent), bq('eaten-card')?.textContent);
   ck('each food still shows kcal · P · C · F (the line was hidden with no calorie target), without the target dot',
@@ -3327,6 +3333,46 @@ async function macrosEatenTest() {
   ck('coach: in the day\'s full log, the label food is marked "member\'s own label" (and only that one)', dd.querySelectorAll('[data-testid="coach-label-tag"]').length === 1, dd.querySelectorAll('[data-testid="coach-label-tag"]').length);
   ck('the card is on the coach\'s Nutrition tab', /\{tab === 'nutrition' && \(<>[^\n]*\n\s*<Card><MemberLabelsCard memberId=\{parseInt\(memberId\)\}/.test(srcOf('pages/Monitor.jsx')));
   } catch (e) { ck('section D ran to the end', false, e.message); }
+}
+
+
+// Fixes-2b (16 Oct 2026): the redesigned Today with production's features back,
+// Sachin's decisions (Plan tab, coach line open, both themes) and the UX review.
+async function fixes2bTest() {
+  console.log('\n[38] Fixes-2b — Today: one-line header, targets, weight change, program day, coach line, next habits, what\'s new');
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import DailyLog from './pages/DailyLog.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      import { useSettingsStore } from './store/settingsStore.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+      useSettingsStore.setState({ onboardingDone: true, ageMode: 'adult' });
+      createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, stub('api-38-today.js', TODAY_API_STUB));
+    const A = run(code); await tick(1200);
+    const d = A.w.document, q = id => d.querySelector(`[data-testid="${id}"]`), txt = el => (el?.textContent || '').replace(/\s+/g, ' ');
+    ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
+    ck('no big "Your day." title — the greeting is one line', !/Your day\./.test(d.body.textContent) && /Asha/.test(txt(d.querySelector('.member-hello'))));
+    ck('the streak shows beside the greeting (it was hidden on Today)', /🔥 3/.test(txt(q('today-streak'))), txt(q('today-streak')));
+    ck('weight tile: 82.4 kg and the change vs yesterday (↓ 0.3)', /82\.4 kg/.test(txt(q('hero-weight'))) && /↓ 0\.3 vs yesterday/.test(txt(q('hero-weight'))), txt(q('hero-weight')));
+    ck('Move tile names the program day and its exercises', /Push · \w{3} · \d+ ex/.test(txt(q('plan-move'))), txt(q('plan-move')));
+    ck('protein, carbs and fat against the coach\'s targets, each with a bar', /37 \/ 120 g/.test(txt(q('plan-macros'))) && d.querySelectorAll('.member-macro-bar').length === 3, txt(q('plan-macros')));
+    ck('the ring says it opens the meals', /See meals/.test(txt(q('plan-eat'))));
+    ck('the coach line is open on Today with the unread message', /Great week/.test(txt(q('coach-line'))), txt(q('coach-line')).slice(0, 80));
+    ck('"Plan & tools" names the next habits instead of "0 of 16"', /^Next: /.test(txt(q('home-plan-details')?.querySelector('button small, button span:last-child') || q('home-plan-details')).replace(/^Plan & tools ?/, '')) || /Next: /.test(txt(q('home-plan-details'))), txt(q('home-plan-details')).slice(0, 80));
+    ck('a one-time "What\'s new" card for members who used the app before', !!q('whats-new'));
+    q('whats-new-ok')?.click(); await tick(200);
+    ck('…"Got it" hides it for good on this phone', !q('whats-new') && A.w.localStorage.getItem('fitlife-whats-new-2026-10') === '1');
+  } catch (e) { ck('section A ran to the end', false, e.message); }
+  try {
+    const src = f => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+    ck('quick re-add says "238 kcal", not "238k"', !/\{kcal\}k</.test(src('components/FoodLog.jsx')) && /\{kcal\} kcal/.test(src('components/FoodLog.jsx')));
+    ck('Connected Devices lists working trackers first and the rest under "Coming soon"', /comingSoonTrackers/.test(src('pages/DeviceConnect.jsx')) && /trackers-coming-soon/.test(src('pages/DeviceConnect.jsx')));
+    ck('Settings offers Match phone / Light / Dark', /\['system', 'Match phone'\]/.test(src('pages/Settings.jsx')));
+    ck('the profile never says "Coach Coach"', /\^coach\\b\/i\.test\(p\.monitor_name\)/.test(src('pages/Profile.jsx')));
+    ck('Today\'s Read uses the target, one number ("720 left", not "941 under")', /kcal so far — \$\{left/.test(src('utils/dailyRead.js')) && !/You're \$\{Math\.abs/.test(src('utils/dailyRead.js')));
+  } catch (e) { ck('section B ran to the end', false, e.message); }
 }
 
 // Restored 16 Oct 2026: deleted on 12–14 Oct together with the fixes it guards.
@@ -3737,6 +3783,7 @@ async function overflowTest() {
     await runTest("honestStatesTest", honestStatesTest);
     await runTest("macrosEatenTest", macrosEatenTest);
     await runTest("knownFixesTest", knownFixesTest);
+    await runTest("fixes2bTest", fixes2bTest);
     await runTest("overflowTest", overflowTest);
     await runTest("cspTest", cspTest);
   } catch (err) {

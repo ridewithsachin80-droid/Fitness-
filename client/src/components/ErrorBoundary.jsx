@@ -58,7 +58,7 @@ export default class ErrorBoundary extends React.Component {
           Your logged data is safe on the server. Reloading usually fixes this.
         </p>
         <button onClick={this.recover} style={{
-          background: '#D4AF37', color: 'var(--bg-base)', border: 0, borderRadius: 999,
+          background: 'var(--accent)', color: 'var(--bg-base)', border: 0, borderRadius: 999,
           padding: '12px 28px', fontSize: 15, fontWeight: 600,
         }}>
           Reload app

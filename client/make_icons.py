@@ -25,11 +25,14 @@ os.makedirs(OUT, exist_ok=True)
 
 SS = 3
 
-BG_OUT = (8, 8, 10)              # tile corners
-BG_IN  = (30, 28, 32)            # warm charcoal centre
-GOLD_D = (150, 112, 48)          # shadow side of the metal
-GOLD   = (201, 162, 77)
-GOLD_L = (245, 226, 168)         # lit edge
+# 16 Oct 2026: the brand is green (Sachin's decision). Same mark, same
+# rendering; the "metal" is now sage on a green-black tile. The constant names
+# stay GOLD_* so the rest of the script reads as before.
+BG_OUT = (9, 12, 11)             # tile corners
+BG_IN  = (28, 36, 33)            # green-charcoal centre (#1C2421)
+GOLD_D = (52, 98, 74)            # shadow side (#34624A)
+GOLD   = (111, 165, 135)         # #6FA587
+GOLD_L = (205, 231, 214)         # lit edge (#CDE7D6)
 
 
 def lerp(a, b, t):

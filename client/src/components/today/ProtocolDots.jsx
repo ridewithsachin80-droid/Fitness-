@@ -30,7 +30,7 @@ export default function ProtocolDots({ activeActivities = [], activeACV = [], ac
           {items.map(it => (
             <span key={it.id} title={it.label}
               className={`block w-3 h-3 rounded-full transition-colors ${
-                it.on ? 'bg-gold shadow-[0_0_8px_rgba(212,175,55,0.45)]'
+                it.on ? 'bg-gold shadow-[0_0_8px_rgb(var(--fit-accent)/0.45)]'
                 : it.auto ? 'border border-dashed border-white/25'
                 : 'bg-white/[0.10]'}`} />
           ))}

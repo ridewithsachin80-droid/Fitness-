@@ -87,7 +87,7 @@ class PdfDoc {
   heading(s, { size = 13, color = '#121316' } = {}) {
     this.ensure(size * 2.6); this.y -= size * 0.9;
     this.para(s, { size, font: 'bold', color, gap: 2 });
-    this.line(MARGIN, this.y, A4.w - MARGIN, this.y, '#D4AF37', 1); this.y -= 6;
+    this.line(MARGIN, this.y, A4.w - MARGIN, this.y, '#315D47', 1); this.y -= 6;
   }
   space(h) { this.y -= h; }
 

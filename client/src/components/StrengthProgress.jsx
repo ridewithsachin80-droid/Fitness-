@@ -1,3 +1,4 @@
+import { accent, themeColor } from '../utils/themeColor';
 /**
  * StrengthProgress.jsx
  *
@@ -65,12 +66,12 @@ function PRDot(props) {
   if (payload.isPR) {
     return (
       <g>
-        <circle cx={cx} cy={cy} r={6} fill="#d4af6a" stroke="var(--bg-base)" strokeWidth={2} />
-        <text x={cx} y={cy - 12} textAnchor="middle" fontSize={10} fontWeight={700} fill="#d4af6a">PR</text>
+        <circle cx={cx} cy={cy} r={6} fill="var(--accent)" stroke="var(--bg-base)" strokeWidth={2} />
+        <text x={cx} y={cy - 12} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--accent)">PR</text>
       </g>
     );
   }
-  return <circle cx={cx} cy={cy} r={3} fill="#D4AF37" />;
+  return <circle cx={cx} cy={cy} r={3} fill={accent()} />;
 }
 
 function ChartTooltip({ active, payload }) {
@@ -141,7 +142,7 @@ export default function StrengthProgress() {
       <div className="flex items-center justify-between mb-3">
         <SectionTitle icon="💪">Strength Progress</SectionTitle>
         {prCount > 0 && (
-          <span className="text-xs font-bold text-gold bg-[rgba(212,175,106,0.10)] px-2 py-0.5 rounded-full">
+          <span className="text-xs font-bold text-gold bg-[rgb(var(--fit-accent)/0.10)] px-2 py-0.5 rounded-full">
             🏆 {prCount} {plural(prCount, 'PR')}
           </span>
         )}
@@ -167,12 +168,12 @@ export default function StrengthProgress() {
         <>
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={sessions} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} />
               <XAxis dataKey="date" tickFormatter={formatDateShort} tick={{ fontSize: 9, fill: '#5a5a68' }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 9, fill: '#5a5a68' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
               <Tooltip content={<ChartTooltip />} />
-              <Line type="monotone" dataKey="bestE1rm" stroke="#D4AF37" strokeWidth={2.5}
-                dot={<PRDot />} activeDot={{ r: 5, fill: '#D4AF37' }} />
+              <Line type="monotone" dataKey="bestE1rm" stroke={accent()} strokeWidth={2.5}
+                dot={<PRDot />} activeDot={{ r: 5, fill: accent() }} />
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-between text-xs text-dim mt-1 px-1">

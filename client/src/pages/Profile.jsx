@@ -138,7 +138,7 @@ function StatPill({ label, value, unit, accent = false }) {
   return (
     <div className={`rounded-2xl px-3 py-3 text-center ${
       accent ? 'bg-gold/[0.07]' : 'bg-surface'}`}
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
       <p className={`font-display text-[23px] leading-none font-medium tabular-nums ${
         accent ? 'text-gold-light' : 'text-white'}`}>
         {value ?? '—'}
@@ -234,7 +234,7 @@ export default function Profile() {
                 <h1 className="font-display text-num font-medium leading-tight truncate">{p.name}</h1>
                 <p className="text-caption text-mid mt-0.5" data-testid="profile-meta">
                   {weeks ? `Week ${weeks}` : 'New member'}
-                  {p.monitor_name ? ` · Coach ${p.monitor_name}` : ''}
+                  {p.monitor_name ? ` · ${/^coach\b/i.test(p.monitor_name) ? '' : 'Coach '}${p.monitor_name}` : ''}
                   {memberAge ? ` · ${memberAge} yrs` : ''}
                 </p>
               </div>

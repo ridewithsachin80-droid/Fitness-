@@ -1,3 +1,4 @@
+import { accent, themeColor } from '../../utils/themeColor';
 /**
  * components/today/DayWidgets.jsx — the four data widgets that used to be
  * private functions inside pages/DailyLog.jsx, moved here verbatim in Sprint 3
@@ -24,17 +25,17 @@ export function ComplianceRing({ pct }) {
   const isHigh = pct >= 80;
   return (
     <svg
-      className={`w-16 h-16 -rotate-90 transition-[filter] duration-700 ${isHigh ? 'drop-shadow-[0_0_10px_rgba(212,175,106,0.45)]' : ''}`}
+      className={`w-16 h-16 -rotate-90 transition-[filter] duration-700 ${isHigh ? 'drop-shadow-[0_0_10px_rgb(var(--fit-accent)/0.45)]' : ''}`}
       viewBox="0 0 64 64"
     >
       <defs>
         <linearGradient id="complianceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%"   stopColor="#D4AF37" />
-          <stop offset="60%"  stopColor="#F0E2B6" />
-          <stop offset="100%" stopColor={isHigh ? '#d4af6a' : '#F0E2B6'} />
+          <stop offset="0%"   stopColor={accent()} />
+          <stop offset="60%"  stopColor="rgb(var(--fit-accent) / 0.6)" />
+          <stop offset="100%" stopColor={isHigh ? 'var(--accent)' : 'rgb(var(--fit-accent) / 0.6)'} />
         </linearGradient>
       </defs>
-      <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="6" />
+      <circle cx="32" cy="32" r={r} fill="none" stroke={themeColor('--fit-ink', 0.10)} strokeWidth="6" />
       {pct > 0 && (
         <circle cx="32" cy="32" r={r} fill="none" stroke="url(#complianceGradient)" strokeWidth="6"
           strokeDasharray={`${(pct / 100) * circ} ${circ}`} strokeLinecap="round"
@@ -162,10 +163,11 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
   const netKcal = Math.round(totals.kcal) - burnTotal;
 
   const bars = [
-    { key:'kcal', label:'Calories',  icon:null, unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-orange-400', light:'bg-orange-400/[0.08]', text:'text-orange-400' },
-    { key:'pro',  label:'Protein',   icon:null, unit:'g',    current:+totals.pro.toFixed(1),  target:macros.pro,  bg:'bg-blue-500',   light:'bg-blue-400/[0.08]',   text:'text-blue-400' },
-    { key:'carb', label:'Net Carbs', icon:'🌾', unit:'g',    current:+totals.carb.toFixed(1), target:macros.carb, bg:'bg-amber-400',  light:'bg-amber-400/[0.08]',  text:'text-amber-400' },
-    { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-amber-500', light:'bg-amber-400/[0.08]', text:'text-amber-400' },
+    // Brand colours only (16 Oct 2026): one accent at four strengths.
+    { key:'kcal', label:'Calories',  icon:null, unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-gold', light:'bg-gold/[0.08]', text:'text-gold' },
+    { key:'pro',  label:'Protein',   icon:null, unit:'g',    current:+totals.pro.toFixed(1),  target:macros.pro,  bg:'bg-gold/80', light:'bg-gold/[0.08]', text:'text-gold' },
+    { key:'carb', label:'Net Carbs', icon:'🌾', unit:'g',    current:+totals.carb.toFixed(1), target:macros.carb, bg:'bg-gold/60', light:'bg-gold/[0.08]', text:'text-gold' },
+    { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-gold/45', light:'bg-gold/[0.08]', text:'text-gold' },
   ];
 
   return (

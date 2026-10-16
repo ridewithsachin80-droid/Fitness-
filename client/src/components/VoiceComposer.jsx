@@ -209,7 +209,7 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
             </svg>
           </button>
           <button onClick={sendDraft} disabled={!canSend}
-            style={{ minHeight: 44, background: canSend ? accent : 'rgba(255,255,255,0.08)' }}
+            style={{ minHeight: 44, background: canSend ? accent : 'rgb(var(--fit-ink) / 0.08)' }}
             className={`rounded-full px-4 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
               canSend ? 'text-charcoal' : 'text-lo'
             }`}>

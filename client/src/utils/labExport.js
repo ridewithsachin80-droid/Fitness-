@@ -173,24 +173,24 @@ export function printLabReport({ labs = [], comparisons = [], insight = null, me
   @page { margin: 16mm; }
   * { box-sizing: border-box; }
   body { font: 11pt/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c1b18; margin: 0; }
-  header { border-bottom: 2px solid #D4AF37; padding-bottom: 8px; margin-bottom: 16px; }
+  header { border-bottom: 2px solid #315D47; padding-bottom: 8px; margin-bottom: 16px; }
   h1 { font-size: 19pt; margin: 0 0 2px; }
   .sub { color: #6b6a64; font-size: 9.5pt; margin: 0; }
-  h2 { font-size: 13pt; margin: 22px 0 8px; color: #8C6D37; border-bottom: 0.5pt solid #ddd; padding-bottom: 3px; }
+  h2 { font-size: 13pt; margin: 22px 0 8px; color: #315D47; border-bottom: 0.5pt solid #ddd; padding-bottom: 3px; }
   h3 { font-size: 11pt; margin: 14px 0 6px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em;
-       color: #6b6a64; border-bottom: 0.5pt solid #D4AF37; padding: 4px 6px; }
+       color: #6b6a64; border-bottom: 0.5pt solid #315D47; padding: 4px 6px; }
   td { padding: 4px 6px; border-bottom: 0.3pt solid #eee; font-size: 10pt; }
   td.n, th.n { text-align: right; }
   tr.flag td { background: #fdf6e6; }
   .cmp, .mk { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 0.3pt solid #eee; }
-  .cmp-h { margin: 0; } .dir { color: #8C6D37; font-size: 9pt; margin-left: 6px; }
+  .cmp-h { margin: 0; } .dir { color: #315D47; font-size: 9pt; margin-left: 6px; }
   .cmp-s, .mk-t { margin: 1px 0; font-size: 9pt; color: #6b6a64; }
   .cmp-c, .mk-w { margin: 3px 0; font-size: 9.5pt; color: #4a4944; }
-  .mk-h { margin: 0 0 2px; font-weight: 600; color: #8C6D37; }
+  .mk-h { margin: 0 0 2px; font-weight: 600; color: #315D47; }
   .meal { margin-bottom: 6px; font-size: 10pt; }
-  .why { color: #8C6D37; font-size: 9pt; margin-left: 5px; }
+  .why { color: #315D47; font-size: 9pt; margin-left: 5px; }
   .lead { font-size: 10.5pt; }
   .doc { background: #fdf6e6; padding: 7px 9px; border-radius: 4px; font-size: 10pt; }
   .caveat { font-size: 8.5pt; color: #6b6a64; line-height: 1.45; margin-top: 8px; }

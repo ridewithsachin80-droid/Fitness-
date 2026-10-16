@@ -638,7 +638,8 @@ ck('the bottom nav is hidden while the assistant is open', /!composerOpen && <na
 console.log('\n[11] Plan + nav');
 const ui = read('components/UI.jsx');
 const planPage = read('pages/Plan.jsx');
-ck('member navigation has Today, Progress and More', (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0,3).join(',') === 'Today:/,Progress:/progress,More:/more'; })());
+// 16 Oct 2026 (Sachin): Plan is a tab again — Today · Plan · Progress · More.
+ck('member navigation has Today, Plan, Progress and More', (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0,4).join(',') === 'Today:/,Plan:/plan,Progress:/progress,More:/more'; })());
 
 ck('/settings still resolves and Profile links to it (the screen moved, it did not vanish)',
    /path="\/settings"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')) && /navigate\('\/settings'\)/.test(read('pages/Profile.jsx')));
@@ -734,8 +735,9 @@ ck('Today prefers the cached read but keeps the local one as a fallback',
 console.log('\n[18] Coach charts + outlier rule');
 const mon3 = read('pages/Monitor.jsx');
 const charts = read('components/coach/MemberCharts.jsx');   // moved out of Monitor in 12b
-ck('the coach\'s weight chart is gold, not the old green/red', /stroke="#D4AF37" strokeWidth=\{2\.5\}/.test(charts) && !/stroke="#10b981"/.test(charts) && !/stroke="#f87171"\n\s+strokeDasharray/.test(charts));
-ck('compliance bars are tinted gold by value, and each still opens that day', /<Cell key=\{i\} fill=\{\(d\.score \|\| 0\) >= 75 \? '#D4AF37'/.test(charts) && /setSelectedLog\(data\.log\)/.test(charts));
+// 16 Oct 2026: the brand is green; the charts read the live theme accent (utils/themeColor), never a hand-written gold.
+ck('the coach\'s weight chart is the brand accent, not the old green/red', /stroke=\{accent\(\)\} strokeWidth=\{2\.5\}/.test(charts) && !/#D4AF37/i.test(charts) && !/stroke="#10b981"/.test(charts) && !/stroke="#f87171"\n\s+strokeDasharray/.test(charts));
+ck('compliance bars are tinted with the brand accent by value, and each still opens that day', /<Cell key=\{i\} fill=\{\(d\.score \|\| 0\) >= 75 \? accent\(\)/.test(charts) && /setSelectedLog\(data\.log\)/.test(charts));
 ck('the member page\'s "vs yesterday" uses the shared outlier rule, not the raw previous row',
    /previousWeight\(sortedLogs, sortedLogs\.findIndex/.test(mon3) && !/const prev = sortedLogs\[i \+ 1\]/.test(mon3));
 const triageSrc = fs.readFileSync(path.join(__dirname, '../services/triage.js'), 'utf8');
@@ -870,6 +872,30 @@ ck('hasBarcodeDetector lives with the scanner and is exported', /export const ha
      !/Delivery failed/i.test(bell));
   ck('no push-transport wording leaks into the member notification panel',
      !/(delivery (failed|error)|could not be delivered|push failed)/i.test(bell));
+}
+
+// ── Brand: green, both themes (16 Oct 2026, Sachin's decision) ────────────────
+console.log('\n[brand] green everywhere, both themes');
+{
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+  const SRC = path.join(__dirname, '../../client/src');
+  const gold = /#(d4af37|d4af6a|c5a059|f0e2b6|8c6d37|c9a227)\b|rgba\(\s*212\s*,\s*175\s*,\s*(55|106)/i;
+  const offenders = walk(SRC).filter(f => /\.(jsx?|css)$/.test(f)).filter(f => {
+    const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    return gold.test(code);
+  }).map(f => path.relative(SRC, f));
+  ck('no gold left in the app code (the brand is green since 16 Oct 2026)', offenders.length === 0, offenders);
+  const css = fs.readFileSync(path.join(SRC, 'index.css'), 'utf8');
+  ck('dark accent #B7D7C2 on #141817; light accent #315D47 on #F8F9F6',
+     /--fit-base: 20 24 23;[\s\S]*--fit-accent: 183 215 194;[\s\S]*\[data-theme="light"\][\s\S]*--fit-base: 248 249 246;[\s\S]*--fit-accent: 49 93 71;/.test(css));
+  const store = fs.readFileSync(path.join(SRC, 'store/settingsStore.js'), 'utf8');
+  const init = fs.readFileSync(path.join(SRC, '../public/theme-init.js'), 'utf8');
+  ck('with no saved choice the theme follows the phone (store default "system", start-up script reads prefers-color-scheme)',
+     /theme: 'system'/.test(store) && /prefers-color-scheme/.test(store) && /prefers-color-scheme/.test(init));
+  const html = fs.readFileSync(path.join(SRC, '../index.html'), 'utf8');
+  ck('the start-up theme script runs after the metas it sets', html.indexOf('theme-init.js') > html.indexOf('apple-mobile-web-app-status-bar-style'));
+  const vite = fs.readFileSync(path.join(SRC, '../vite.config.js'), 'utf8');
+  ck('the manifest uses the brand green and the dark ground', /theme_color: '#315D47'/.test(vite) && /background_color: '#141817'/.test(vite));
 }
 
 console.log(`\n═══ LAYOUT CONTRACTS: ${pass} passed, ${fail} failed ═══`);

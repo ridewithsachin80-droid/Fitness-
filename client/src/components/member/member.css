@@ -6,6 +6,9 @@
 .member-theme{width:44px;height:44px;flex-shrink:0;border:1px solid var(--border);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--text-mid)}
 .member-greeting{align-items:center!important}.member-greeting h1{font:400 15px/1.5 'Outfit',sans-serif;color:var(--text-mid)}
 .member-greeting>div:last-child{padding-top:0}.member-greeting [data-testid=save-status]{font-size:12px}
+.member-hello{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.member-streak{flex-shrink:0;font-size:13px;font-weight:500;color:var(--text-mid);padding:4px 10px;border:1px solid var(--border);border-radius:999px;font-variant-numeric:tabular-nums}
+.member-nextup,.member-coach-line{margin-top:12px}.member-coach-line:empty{display:none}
 .member-day-title{font:450 clamp(38px,8vw,48px)/1.12 'Fraunces',Georgia,serif;letter-spacing:-1.5px;margin:7px 0 0}
 .member-content{max-width:var(--member-width);margin:auto;padding:0 26px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:38px;align-items:start}
 .member-overview{min-width:0}.member-stack{display:flex;flex-direction:column;gap:14px;min-width:0}
@@ -21,6 +24,10 @@
 .member-macros{display:grid;grid-template-columns:repeat(3,1fr);margin:12px 12px 0}
 .member-macros>span{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--text-mid)}
 .member-macros>span+span{border-left:1px solid var(--border)}.member-macros strong{font-size:20px;line-height:1.2;font-weight:450;color:var(--text-hi);font-variant-numeric:tabular-nums}.member-macros small{font-size:14px;font-weight:400}
+.member-macro-goal{font-size:13px;color:var(--text-lo);font-weight:400}
+.member-macro-bar{display:block;height:3px;margin:5px 14px 3px;border-radius:3px;background:var(--border);overflow:hidden}.member-macro-bar>span{display:block;height:100%;background:var(--accent);border-radius:3px}
+.member-ring-hint{display:block;margin-top:10px;font-size:12px;color:var(--accent)}
+.member-metric-note{display:block;font-size:11.5px;color:var(--text-mid);margin-top:2px}
 .member-empty-hint{display:block;font-size:12px;line-height:1.5;color:var(--text-mid);margin:12px 0 0}
 .member-metrics{display:grid;grid-template-columns:1fr 1fr;margin-top:5px}
 .member-metric{display:flex;align-items:center;text-align:left;gap:10px;min-width:0;min-height:77px;padding:12px 0;color:var(--text-hi)}
@@ -35,6 +42,12 @@
 .member-ai-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
 .member-ai-actions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:60px;border-radius:15px;color:var(--text-hi);font-size:12px;font-weight:450}
 .member-ai-actions button:first-child{background:var(--accent);color:var(--fit-on-accent)}
+.member-home-logger.is-slim .member-ai-actions button{flex-direction:row;min-height:44px;gap:8px}
+.member-home-logger{transition:padding .15s ease}.member-home-logger.is-slim{padding-top:4px;padding-bottom:6px}
+.member-whatsnew{border:1px solid var(--border);background:var(--bg-surface);border-radius:17px;padding:14px 16px;margin:6px 0 10px;font-size:13px;color:var(--text-mid)}
+.member-whatsnew-title{display:flex;align-items:center;gap:8px;color:var(--text-hi);font-weight:500;font-size:14px;margin-bottom:6px}.member-whatsnew-title svg{color:var(--accent)}
+.member-whatsnew ul{display:grid;gap:3px;padding-left:2px}.member-whatsnew li{list-style:none}.member-whatsnew strong{color:var(--text-hi);font-weight:500}
+.member-whatsnew button{margin-top:10px;min-height:44px;padding:0 18px;border-radius:12px;background:var(--accent);color:var(--fit-on-accent);font-weight:600;font-size:13px}
 .member-return-today{display:flex;gap:8px;align-items:center;justify-content:center;min-height:56px;width:100%;color:var(--accent);font-size:13px}
 .member-details{min-width:0;padding:8px 0 0;margin-top:40px;scroll-margin-top:20px}
 .member-details>div>button{min-height:70px}.member-details>div{scroll-margin-top:20px}.member-details .member-links{border:0;background:transparent}.member-details .member-stack{padding:6px 0}

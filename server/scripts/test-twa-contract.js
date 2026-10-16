@@ -30,7 +30,8 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
                             : (fail++, console.log('  \u2717 ' + n + ' ' + JSON.stringify(e ?? '').slice(0, 200))); };
 
 const ROOT    = path.join(__dirname, '..', '..');
-const GOLD    = '#D4AF37';
+// The brand colour. Gold until 16 Oct 2026; green (forest #315D47) since.
+const GOLD    = '#315D47';
 const OLD_GOLD = '#c9a227';
 const PKG     = 'app.upscale.fitlife';
 
@@ -40,7 +41,7 @@ const PKG     = 'app.upscale.fitlife';
   const vite = fs.readFileSync(path.join(ROOT, 'client', 'vite.config.js'), 'utf8');
   const themeMatch = /theme_color:\s*'([^']+)'/.exec(vite);
 
-  ck('theme_color is the brand gold — it becomes the Android splash screen and status bar',
+  ck('theme_color is the brand green — it becomes the Android splash screen and status bar',
      themeMatch && themeMatch[1] === GOLD, themeMatch && themeMatch[1]);
   ck(`the old gold ${OLD_GOLD} does not reappear`,
      !new RegExp(OLD_GOLD, 'i').test(vite.replace(/\/\/.*$/gm, '')));

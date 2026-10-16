@@ -133,7 +133,7 @@ export default function MemberList() {
               at all, so it carries the gold and the others stay ink — three
               equally coloured numbers made him read all three every time. */}
           <div className="grid grid-cols-3 mt-4 rounded-[20px] bg-surface divide-x divide-white/[0.055]"
-            style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+            style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
             {[
               { label: 'Logged today', value: loggedToday.length },
               { label: 'Pending',      value: noLogToday.length, accent: noLogToday.length > 0 },

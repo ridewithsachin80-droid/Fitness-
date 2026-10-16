@@ -31,7 +31,7 @@
 [data-theme="light"] {
   --fit-base: 248 249 246; --fit-surface: 255 255 253; --fit-input: 242 245 241;
   --fit-ink: 32 48 38; --fit-soft: 53 72 59; --fit-mid: 82 102 87;
-  --fit-lo: 93 112 98; --fit-ghost: 108 127 113; --fit-line: 215 224 211;
+  --fit-lo: 93 112 98; --fit-ghost: 96 114 101; /* ghost was 4.05:1 — now ≥ 4.5:1 on every light surface (16 Oct 2026) */ --fit-line: 215 224 211;
   --fit-accent: 49 93 71; --fit-ok: 24 113 72; --fit-warn: 137 86 22;
   --fit-danger: 164 48 44; --fit-info: 42 91 153;
   --fit-on-accent: #fffef8; --fit-shadow: 0 18px 60px #243c1e08;
@@ -137,8 +137,8 @@ textarea:focus-visible, select:focus-visible, summary:focus-visible,
 .saved-pulse { animation: saved-pulse 1s ease-in-out 2; }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(212,175,55,0); }
-  50%       { box-shadow: 0 0 0 8px rgba(212,175,55,0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--fit-accent) / 0); }
+  50%       { box-shadow: 0 0 0 8px rgb(var(--fit-accent) / 0.15); }
 }
 .pulse-glow { animation: pulse-glow 2s ease infinite; }
 
@@ -191,7 +191,7 @@ textarea:focus-visible, select:focus-visible, summary:focus-visible,
 .autosave-dot {
   display: inline-block;
   width: 6px; height: 6px; border-radius: 3px;
-  background: #D4AF37; margin-right: 4px;
+  background: var(--accent); margin-right: 4px;
   animation: blink 1s ease-in-out 3;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
@@ -205,11 +205,11 @@ textarea:focus-visible, select:focus-visible, summary:focus-visible,
    Honours reduced-motion, since a permanent pulse is exactly the kind of
    ambient animation people disable it for. */
 @keyframes orb-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.45); }
-  50%      { box-shadow: 0 0 0 9px rgba(212, 175, 55, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--fit-accent) / 0.45); }
+  50%      { box-shadow: 0 0 0 9px rgb(var(--fit-accent) / 0); }
 }
 .orb-breathe { animation: orb-breathe 3.2s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .orb-breathe { animation: none; box-shadow: 0 0 18px rgba(212, 175, 55, 0.35); }
+  .orb-breathe { animation: none; box-shadow: 0 0 18px rgb(var(--fit-accent) / 0.35); }
 }

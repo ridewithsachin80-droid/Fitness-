@@ -341,7 +341,11 @@ export default function DeviceConnect() {
     t.subtitle.toLowerCase().includes(search.toLowerCase())
   );
   const connectedTrackers = filtered.filter(t => localConnected.has(t.id));
-  const availableTrackers = filtered.filter(t => !localConnected.has(t.id));
+  // Working ones first; the ones that cannot connect yet go under "Coming soon"
+  // (16 Oct 2026: five "Not supported yet" cards came before anything usable).
+  const notConnected = filtered.filter(t => !localConnected.has(t.id));
+  const availableTrackers = notConnected.filter(t => !unsupportedNote(t, hcSupported));
+  const comingSoonTrackers = notConnected.filter(t => !!unsupportedNote(t, hcSupported));
 
   /* ── BLE live metric display (for HART) ────────────────────── */
   const bleActive  = ['connecting','reading'].includes(ble.status);
@@ -393,8 +397,8 @@ export default function DeviceConnect() {
 
       {/* ── Header ── */}
       <div style={{
-        background: '#131317',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        background: 'var(--bg-base)',
+        borderBottom: '1px solid rgb(var(--fit-ink) / 0.07)',
         padding: '40px 16px 16px',
       }}>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
@@ -408,8 +412,8 @@ export default function DeviceConnect() {
             </div>
             {anyLoading && (
               <div style={{
-                width: 32, height: 32, border: '3px solid rgba(212,175,55,0.2)',
-                borderTopColor: '#D4AF37', borderRadius: '50%',
+                width: 32, height: 32, border: '3px solid rgb(var(--fit-accent) / 0.2)',
+                borderTopColor: 'var(--accent)', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite', flexShrink: 0, marginTop: 4,
               }} />
             )}
@@ -432,7 +436,7 @@ export default function DeviceConnect() {
             style={{
               width: '100%', boxSizing: 'border-box',
               padding: '12px 14px 12px 42px',
-              background: '#131317', border: '1px solid rgba(255,255,255,0.09)',
+              background: 'var(--bg-base)', border: '1px solid rgb(var(--fit-ink) / 0.09)',
               borderRadius: 14, color: '#d8d8de', fontSize: 14, outline: 'none',
             }}
           />
@@ -446,8 +450,8 @@ export default function DeviceConnect() {
         {!hcSupported && (
           <div data-testid="hc-unsupported" style={{
             marginBottom: 16, padding: '14px 16px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.09)',
+            background: 'rgb(var(--fit-ink) / 0.03)',
+            border: '1px solid rgb(var(--fit-ink) / 0.09)',
             borderRadius: 16,
           }}>
             <p style={{ color: 'var(--text-hi)', fontWeight: 700, fontSize: 14, margin: 0 }}>
@@ -541,6 +545,20 @@ export default function DeviceConnect() {
           </div>
         )}
 
+        {/* ── Coming soon ── */}
+        {comingSoonTrackers.length > 0 && (
+          <div style={{ marginTop: (connectedTrackers.length + availableTrackers.length) > 0 ? 20 : 0 }} data-testid="trackers-coming-soon">
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-lo)', marginBottom: 10 }}>Coming soon ({comingSoonTrackers.length})</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {comingSoonTrackers.map(tracker => (
+                <TrackerCard key={tracker.id} tracker={tracker} isConnected={false} isSyncing={false} liveMetrics={{}}
+                  onSyncNow={() => {}} onDisconnect={() => {}} onConnect={() => handleConnect(tracker.id)}
+                  oauthAvailable={oauthAvailable} unsupported={unsupportedNote(tracker, hcSupported)} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Empty state ── */}
         {filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '48px 24px', color: '#4e4e5c' }}>
@@ -553,8 +571,8 @@ export default function DeviceConnect() {
         {/* ── Privacy note ── */}
         <div style={{
           marginTop: 16, padding: '12px 14px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgb(var(--fit-ink) / 0.03)',
+          border: '1px solid rgb(var(--fit-ink) / 0.06)',
           borderRadius: 14,
         }}>
           <p style={{ color: '#4e4e5c', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
@@ -579,8 +597,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
   return (
     <div style={{
       borderRadius: 18,
-      background: isConnected ? tracker.bg : '#131317',
-      border: `1px solid ${isConnected ? tracker.border : 'rgba(255,255,255,0.07)'}`,
+      background: isConnected ? tracker.bg : 'var(--bg-base)',
+      border: `1px solid ${isConnected ? tracker.border : 'rgb(var(--fit-ink) / 0.07)'}`,
       overflow: 'hidden',
       transition: 'all 0.2s',
       boxShadow: isConnected ? `0 0 20px ${tracker.glow}` : 'none',
@@ -593,8 +611,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
         {/* Icon */}
         <div style={{
           width: 50, height: 50, borderRadius: 14, flexShrink: 0,
-          background: isConnected ? `${tracker.color}22` : 'rgba(255,255,255,0.06)',
-          border: `1.5px solid ${isConnected ? tracker.border : 'rgba(255,255,255,0.1)'}`,
+          background: isConnected ? `${tracker.color}22` : 'rgb(var(--fit-ink) / 0.06)',
+          border: `1.5px solid ${isConnected ? tracker.border : 'rgb(var(--fit-ink) / 0.1)'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
           boxShadow: isConnected ? `0 0 16px ${tracker.glow}` : 'none',
         }}>
@@ -661,8 +679,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
               <span key={m} style={{
                 fontSize: 11, fontWeight: 600,
                 color: isConnected ? tracker.color : 'var(--text-lo)',
-                background: isConnected ? tracker.bg : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${isConnected ? tracker.border : 'rgba(255,255,255,0.06)'}`,
+                background: isConnected ? tracker.bg : 'rgb(var(--fit-ink) / 0.04)',
+                border: `1px solid ${isConnected ? tracker.border : 'rgb(var(--fit-ink) / 0.06)'}`,
                 borderRadius: 20, padding: '3px 9px',
               }}>{m}</span>
             ))}
@@ -672,8 +690,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             marginBottom: 12, padding: '8px 12px',
-            background: 'rgba(255,255,255,0.03)', borderRadius: 10,
-            border: '1px solid rgba(255,255,255,0.06)',
+            background: 'rgb(var(--fit-ink) / 0.03)', borderRadius: 10,
+            border: '1px solid rgb(var(--fit-ink) / 0.06)',
           }}>
             <span style={{ fontSize: 13 }}>{PROTOCOL_LABELS[tracker.protocol].icon}</span>
             <span style={{ color: '#8e8e9a', fontSize: 12 }}>via {PROTOCOL_LABELS[tracker.protocol].label}</span>
@@ -697,7 +715,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
           ) : unsupported ? (
             <p data-testid={`tracker-unsupported-${tracker.id}`} style={{
               margin: 0, padding: '11px 12px', borderRadius: 12,
-              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgb(var(--fit-ink) / 0.03)', border: '1px solid rgb(var(--fit-ink) / 0.08)',
               color: '#8e8e9a', fontSize: 13, lineHeight: 1.5,
             }}>{unsupported}</p>
           ) : (

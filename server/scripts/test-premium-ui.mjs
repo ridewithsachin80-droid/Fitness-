@@ -241,7 +241,8 @@ async function premiumFlow() {
  setVal(q('weight-input'),'81.8');await tick(70);
  ck('editing summary weight updates the original log and visible value',w.__logStore.getState().log.weight==='81.8'&&q('hero-weight').textContent.includes('81.8'));
  setVal(q('weight-input'),'');await tick(50);
- ck('missing weight has a direct Add weight action',q('hero-weight').textContent.includes('Add weight'));
+ // 16 Oct 2026: short empty labels ("Log weight") so a tile never breaks onto two lines.
+ ck('missing weight has a direct Log weight action',q('hero-weight').textContent.includes('Log weight'));
  setVal(q('weight-input'),'82.4');w.__click('Done');await tick(400);
  q('home-plan-details').querySelector('button').click();await tick(60);
  ck('plan tools retain micronutrients and meal ideas without duplicate weight',!q('home-plan-details').querySelector('[data-testid="hero-weight"]')&&!!q('chip-nutrition')&&!!q('chip-mealidea'));
@@ -251,7 +252,8 @@ async function premiumFlow() {
  ck('existing log values load into the redesigned home', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent) && /1.50/.test(q('chip-water').textContent));
  await waitFor(()=>q('plan-move')?.textContent.includes('Push'),'program loaded');
  ck('daily overview retains workout, sleep, checklist and full plan', /Push/.test(q('plan-move').textContent)&&/7h 45m/.test(q('chip-sleep').textContent)&&/3 of 5/.test(q('plan-recover').textContent)&&d.body.textContent.includes('View your complete plan'), [q('plan-move').textContent,q('chip-sleep').textContent,q('plan-recover').textContent]);
- ck('three member navigation destinations', d.querySelectorAll('.member-nav-links button').length===3);
+ // 16 Oct 2026 (Sachin): Plan is a tab again — Today · Plan · Progress · More.
+ ck('four member navigation destinations', d.querySelectorAll('.member-nav-links button').length===4);
  ck('AI workspace is closed on initial load', !q('composer')&&!q('ai-thread'));
  q('theme-toggle').click();await tick(30);
  ck('dark theme updates document and persists', d.documentElement.dataset.theme==='dark'&&JSON.parse(w.localStorage.getItem('fitlife-settings-v2')).state.theme==='dark');
@@ -356,7 +358,7 @@ async function premiumFlow() {
  d.querySelector('[aria-label="Previous day"]').click();await tick(160);
  ck('weight comparison requests the day before the selected entry',w.__calls.some(p=>p==='/logs/'+new Date(new Date(w.__logStore.getState().date+'T12:00:00Z').getTime()-86400000).toISOString().slice(0,10)));
  w.__logStore.setState({protocol:null,log:{...w.__logStore.getState().log,food:[],weight:'',water:0,sleep:{}}});await tick(80);
- ck('empty day offers clear logging actions without a made-up calorie target',q('plan-eat').textContent.includes('kcal logged')&&!q('plan-eat').textContent.includes('1,800')&&q('hero-weight').textContent.includes('Add weight'));
+ ck('empty day offers clear logging actions without a made-up calorie target',q('plan-eat').textContent.includes('kcal logged')&&!q('plan-eat').textContent.includes('1,800')&&q('hero-weight').textContent.includes('Log weight'));
  ck('no uncaught render errors',errors.length===0,errors);
  w.__testRoot.unmount();w.close();return code;
 }
@@ -367,15 +369,16 @@ async function navigationFlow() {
  const d=w.document,q=id=>d.querySelector(`[data-testid="${id}"]`);
  const link=label=>[...d.querySelectorAll('a')].find(el=>el.textContent.includes(label));
  await waitFor(()=>link('Food & saved meals'),'More directory');
- ck('More retains all eleven feature destinations',d.querySelectorAll('.member-more-link').length===11&&link('Profile & health')?.getAttribute('href')==='/profile'&&link('Preferences')?.getAttribute('href')==='/settings');
+ // 16 Oct 2026: More is 7 rows — Plan and Progress are tabs, the checklist and the day's entries are on Today.
+ ck('More keeps the seven destinations that are not elsewhere',d.querySelectorAll('.member-more-link').length===7&&link('Profile & health')?.getAttribute('href')==='/profile'&&link('Settings')?.getAttribute('href')==='/settings'&&link('Connected devices')?.getAttribute('href')==='/devices');
  link('Food & saved meals').click();await waitFor(()=>q('plan-eat')&&d.querySelector('[role="dialog"]'),'food deep link');
  ck('More opens the existing food sheet directly',d.querySelector('[role="dialog"]').textContent.includes('Add food item'));
  w.__click('Done');await tick(300);w.__click('More');await waitFor(()=>link('Coach & check-ins'),'return to More');
  link('Coach & check-ins').click();await waitFor(()=>q('home-insight-details')?.dataset.open==='1','coach disclosure');
  ck('More opens coach tools while keeping other sections collapsed',q('home-plan-details').dataset.open==='0'&&q('home-log-details').dataset.open==='0'&&!!q('ai-read'));
- w.__click('More');await waitFor(()=>link('Your daily entries'),'return to More');
- link('Your daily entries').click();await waitFor(()=>q('home-log-details')?.dataset.open==='1','entries disclosure');
- ck('More opens the daily entries and correction tools',!!q('logged-section')&&q('home-insight-details').dataset.open==='0');
+ // The day's entries are on Today itself now (not a More row): open them there.
+ q('home-log-details').querySelector('button').click();await waitFor(()=>q('home-log-details')?.dataset.open==='1','entries disclosure');
+ ck('Today opens the daily entries and correction tools',!!q('logged-section'));
  ck('navigation has no uncaught exceptions',errors.length===0,errors);w.__testRoot.unmount();w.close();
 }
 async function premiumVisual(code) {

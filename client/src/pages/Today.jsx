@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import AILauncher from '../components/member/AILauncher';
 import DailyEssentials from '../components/member/DailyEssentials';
+import WhatsNew from '../components/member/WhatsNew';
 import ThemeToggle from '../components/member/ThemeToggle';
 import NotificationBell from '../components/NotificationBell';
 import useTodayModel from '../hooks/useTodayModel';
+import useScrolledPast from '../hooks/useScrolledPast';
 import { Card, OfflineBanner, MemberBottomNav } from '../components/UI';
 import { SkeletonCard, Icon, Collapsible } from '../components/primitives';
 import { haptic } from '../store/settingsStore';
@@ -39,36 +41,58 @@ export default function Today() {
   const openChat = useAIChat(s => s.openChat);
   const composerOpen = useAIChat(s => s.composerOpen);
   const { log, protocol, loading, isToday, sheet, openSheet, closeSheet, terms, ageMode } = m;
+  // The logging bar slims down to one row once the member scrolls (16 Oct
+  // 2026): the bar plus the tabs took a sixth of the screen. Still tappable.
+  const slim = useScrolledPast(120);
 
   return (
     <div className="min-h-screen bg-charcoal font-sans member-home">
       <OfflineBanner />
       <header className="member-header">
         <div className="member-brandbar"><span className="member-wordmark">fitlife</span><div className="member-header-tools"><NotificationBell /><ThemeToggle /></div></div>
-        <Greeting compact user={m.user} avatar={null} autoSaved={m.autoSaved} queued={m.queued} saving={m.saving} error={m.error} onRetry={m.retrySave}
-          streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} weekNumber={m.weekNumber} date={m.date} />
-        <h2 className="member-day-title">{isToday ? 'Your day.' : 'Your journal.'}</h2>
-        <PendingSync /><PushPrimer hasLogged={m.hasLoggedAnything} />
+        {/* One line, not a greeting + a big "Your day." (16 Oct 2026): the
+            Weight and Sleep tiles now sit above the logging bar on a phone. */}
+        <div className="member-hello">
+          <Greeting compact user={m.user} avatar={null} autoSaved={m.autoSaved} queued={m.queued} saving={m.saving} error={m.error} onRetry={m.retrySave}
+            streak={m.streak} streakIsBest={m.streakIsBest} isToday={isToday} weekNumber={m.weekNumber} date={m.date} />
+          {isToday && m.streak >= 2 && <span className="member-streak" data-testid="today-streak" aria-label={`${m.streak}-day streak`}>🔥 {m.streak}</span>}
+        </div>
+        <PendingSync />
       </header>
       <main className="member-content" data-testid="member-main">
         {loading ? <><SkeletonCard lines={3} /><SkeletonCard lines={4} /></> : <>
           <div className="member-overview">
+            {isToday && <WhatsNew />}
             <section className="member-snapshot" aria-label="Daily summary">
               <DateNav compact date={m.date} isToday={isToday} onPrev={m.goPrevDay} onNext={m.goNextDay} onToday={m.goToday} />
               <DailyEssentials m={m} onOpen={openSheet} />
             </section>
-            <button type="button" className="member-plan-link" onClick={() => navigate('/plan')}>Today’s plan <Icon name="arrow-right" size={19} /></button>
+            {/* The coach's meal plan for today, open — one tap to log a planned meal (as in production). */}
+            {isToday && m.mealPlans?.length > 0 && <div className="member-nextup"><NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
+              onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat('text')} /></div>}
+            {/* The coach, open on Today (Sachin, 16 Oct 2026): unread messages first, else today's read. */}
+            <div className="member-coach-line" data-testid="coach-line">
+              {m.unreadNotes?.length ? <CoachNotes m={m} /> :
+                <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
+                  action={nextAction({ isToday, hour: istHour(), weight: log.weight, foodCount: (log.food || []).length,
+                    waterMl: log.water || 0, waterTarget: protocol?.water_target || 3000, protocolDone: m.protocolDone, protocolTotal: m.protocolTotal,
+                    sleepSet: !!(log.sleep?.bedtime && log.sleep?.waketime), workoutPlanned: !!m.coachPlan?.todayDay,
+                    workoutLogged: (m.workoutSummary.count || 0) > 0 || (m.workoutSummary.cardio || []).length > 0 })} />}
+            </div>
+            <PushPrimer hasLogged={m.hasLoggedAnything} />
             {/* AI logging works on any day up to today (16 Oct 2026); the save names the day. */}
-            <div className="member-home-logger"><AILauncher /></div>
+            <div className={`member-home-logger${slim ? ' is-slim' : ''}`}><AILauncher /></div>
           </div>
           <div className="member-details">
-            <Collapsible defaultOpen={m.detailSection === 'plan'} title="Plan & tools" summary={`${m.protocolDone} of ${m.protocolTotal} daily habits done`} icon="calendar" testId="home-plan-details">
-            {isToday && m.mealPlans?.length > 0 && <NextUp mealPlans={m.mealPlans} food={log.food} terms={terms}
-              onLog={m.openPlanned} onSnap={m.openPlate} onOther={() => openChat('text')} />}
+            {/* The next three habits, not "0 of 16" (16 Oct 2026). */}
+            <Collapsible defaultOpen={m.detailSection === 'plan'} title="Plan & tools"
+              summary={m.protocolTotal > 0 && m.protocolDone < m.protocolTotal && m.pending?.length
+                ? `Next: ${m.pending.slice(0, 3).join(' · ')}`
+                : m.protocolTotal > 0 ? `All ${m.protocolTotal} daily habits done ✓` : 'Your plan, nutrition and meal ideas'} icon="calendar" testId="home-plan-details">
             <div className="member-links">
               <button type="button" className="member-link" onClick={() => openSheet('protocol')} data-testid="plan-recover"><Icon name="check" size={18} /><span>Daily checklist <small>· {m.protocolDone} of {m.protocolTotal} done</small></span><Icon name="chevron-right" size={15} /></button>
               <button type="button" className="member-link" onClick={() => navigate('/plan')}><Icon name="calendar" size={18} /><span>View your complete plan <small>· meals, training & recovery</small></span><Icon name="chevron-right" size={15} /></button>
-              <button type="button" className="member-link" onClick={() => openSheet('nutrition')} data-testid="chip-nutrition"><Icon name="pill" size={18} /><span>Nutrition & micronutrients</span><Icon name="chevron-right" size={15} /></button>
+              <button type="button" className="member-link" onClick={() => openSheet('nutrition')} data-testid="chip-nutrition"><Icon name="pill" size={18} /><span>Nutrition & micronutrients{m.micro?.hasData ? <small> · {m.micro.met}/{m.micro.total} met</small> : null}</span><Icon name="chevron-right" size={15} /></button>
               <button type="button" className="member-link" onClick={() => openSheet('mealidea')} data-testid="chip-mealidea"><Icon name="food" size={18} /><span>What could I eat next?</span><Icon name="chevron-right" size={15} /></button>
             </div>
             </Collapsible>
@@ -77,14 +101,9 @@ export default function Today() {
               <div id="section-notes"><NotesRow value={log.notes} onChange={v => m.update('notes', v)} label={terms.notes}
                 placeholder={ageMode === 'child' ? 'How did you feel today?' : 'Symptoms, energy, how you felt…'} /></div>
             </Collapsible>
-            <Collapsible defaultOpen={m.detailSection === 'insights'} title="Insights & coach" summary={m.unreadNotes?.length ? `${m.unreadNotes.length} unread coach message${m.unreadNotes.length > 1 ? 's' : ''} · check-ins & recovery` : 'Your daily read, check-ins & recovery'} icon="spark" testId="home-insight-details">
+            <Collapsible defaultOpen={m.detailSection === 'insights'} title="Check-ins & recovery" summary="Weekly check-in, progress photos and recovery" icon="spark" testId="home-insight-details">
             <div className="member-stack">
-            <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet}
-              action={nextAction({ isToday, hour: istHour(), weight: log.weight, foodCount: (log.food || []).length,
-                waterMl: log.water || 0, waterTarget: protocol?.water_target || 3000, protocolDone: m.protocolDone, protocolTotal: m.protocolTotal,
-                sleepSet: !!(log.sleep?.bedtime && log.sleep?.waketime), workoutPlanned: !!m.coachPlan?.todayDay,
-                workoutLogged: (m.workoutSummary.count || 0) > 0 || (m.workoutSummary.cardio || []).length > 0 })} />
-            <CoachNotes m={m} />
+            {m.unreadNotes?.length > 0 && <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet} />}
             {isToday && <><ProgressPhotoCard /><CheckinCard /><VoicePilotCard /><RecoveryCard today={m.date} /></>}
             {!protocol && <Card><h2 className="font-display text-xl mb-2">Welcome to FitLife</h2><p className="text-sm text-mid">Your coach will set up your personalised plan. You can already log food, weight, water and sleep.</p></Card>}
             </div>

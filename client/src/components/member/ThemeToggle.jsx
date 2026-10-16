@@ -1,8 +1,9 @@
-import { useSettingsStore } from '../../store/settingsStore';
+import { useSettingsStore, resolvedTheme } from '../../store/settingsStore';
 import { Icon } from '../primitives';
 
 export default function ThemeToggle() {
-  const theme = useSettingsStore(s => s.theme);
+  useSettingsStore(s => s.theme); // re-render when it changes
+  const theme = resolvedTheme();
   const setTheme = useSettingsStore(s => s.setTheme);
   return <button type="button" className="member-theme" data-testid="theme-toggle"
     aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

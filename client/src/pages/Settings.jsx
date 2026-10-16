@@ -133,8 +133,9 @@ export default function Settings() {
         {sub && <p className="text-xs text-lo">{sub}</p>}
       </div>
       <button onClick={() => { onChange(!value); haptic(15); }}
-        style={{ width: 48, height: 28, borderRadius: 14, background: value ? '#D4AF37' : 'rgba(255,255,255,0.1)', transition: 'all .2s', position: 'relative', border: 'none', cursor: 'pointer' }}>
-        <div style={{ width: 22, height: 22, borderRadius: 11, background: '#fff', position: 'absolute', top: 3, left: value ? 23 : 3, transition: 'left .2s' }} />
+        style={{ width: 48, height: 28, borderRadius: 14, background: value ? 'var(--accent)' : 'rgb(var(--fit-ink) / 0.14)', transition: 'all .2s', position: 'relative', border: '1px solid var(--border)', cursor: 'pointer' }}>
+        {/* Visible in both themes, on and off (16 Oct 2026: the white knob vanished on light cards). */}
+        <div style={{ width: 22, height: 22, borderRadius: 11, background: value ? 'var(--fit-on-accent)' : 'var(--text-mid)', position: 'absolute', top: 2, left: value ? 22 : 2, transition: 'left .2s' }} />
       </button>
     </div>
   );
@@ -205,8 +206,9 @@ export default function Settings() {
           <SectionTitle icon="🎨">Appearance</SectionTitle>
 
           <div className="flex gap-2 mb-5" aria-label="Colour theme">
-            {['light', 'dark'].map(value => <button key={value} type="button" onClick={() => setTheme(value)} aria-pressed={theme === value}
-              className={`flex-1 rounded-xl border py-3 text-sm capitalize ${theme === value ? 'border-gold bg-gold/10 text-gold' : 'border-hair text-mid'}`}>{value} mode</button>)}
+            {[['system', 'Match phone'], ['light', 'Light'], ['dark', 'Dark']].map(([value, label]) => <button key={value} type="button" onClick={() => setTheme(value)} aria-pressed={(theme || 'system') === value}
+              data-testid={`theme-${value}`} style={{ minHeight: 44 }}
+              className={`flex-1 rounded-xl border py-3 text-sm ${(theme || 'system') === value ? 'border-gold bg-gold/10 text-gold font-semibold' : 'border-hair text-mid'}`}>{label}</button>)}
           </div>
           {/* Font size */}
           <div className="mb-4">
@@ -283,8 +285,8 @@ export default function Settings() {
               <button key={i} onClick={() => { setAvatarIdx(i); haptic(15); }}
                 style={{
                   width: '100%', aspectRatio: '1', borderRadius: 12, fontSize: 24,
-                  border: avatarIdx === i ? '2px solid #D4AF37' : '2px solid transparent',
-                  background: avatarIdx === i ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+                  border: avatarIdx === i ? '2px solid var(--accent)' : '2px solid transparent',
+                  background: avatarIdx === i ? 'rgb(var(--fit-accent) / 0.15)' : 'rgb(var(--fit-ink) / 0.04)',
                   cursor: 'pointer', transition: 'all .15s',
                 }}>{a}</button>
             ))}
@@ -303,9 +305,9 @@ export default function Settings() {
                     ? 'border-gold/30 bg-gold/[0.06]'
                     : 'border-hair bg-surface'}`}>
                 <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderColor: localMeals.includes(m) ? '#D4AF37' : 'rgba(255,255,255,0.2)',
-                  background: localMeals.includes(m) ? '#D4AF37' : 'transparent' }}>
-                  {localMeals.includes(m) && <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span>}
+                  borderColor: localMeals.includes(m) ? 'var(--accent)' : 'rgb(var(--fit-ink) / 0.2)',
+                  background: localMeals.includes(m) ? 'var(--accent)' : 'transparent' }}>
+                  {localMeals.includes(m) && <span style={{ fontSize: 10, color: 'var(--fit-on-accent)', fontWeight: 700 }}>✓</span>}
                 </div>
                 <span className="text-sm text-white font-medium">{m}</span>
               </button>

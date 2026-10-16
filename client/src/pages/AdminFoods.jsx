@@ -652,7 +652,7 @@ export default function AdminFoods() {
                         </div>
                         {food.name_local && <p className="text-xs text-lo mt-0.5">{food.name_local}</p>}
                         {food.kcal_per_100g && (
-                          <p className="text-xs font-semibold text-orange-300 mt-0.5">{Math.round(food.kcal_per_100g)} kcal/100g</p>
+                          <p className="text-xs font-semibold text-gold mt-0.5">{Math.round(food.kcal_per_100g)} kcal/100g</p>
                         )}
                       </div>
                       {/* Always visible on touch screens; hover-to-reveal only where there is a mouse

@@ -1,3 +1,4 @@
+import { accent, themeColor } from '../utils/themeColor';
 /**
  * Progress.jsx — Sprint 6
  * Member-facing progress page: weight trend, compliance streak,
@@ -38,7 +39,7 @@ function nDaysAgo(n) {
 const MACRO = { kcal: '#B08A4A', pro: '#5895DC', carb: '#B38F1F', fat: '#D9608F' };
 // The chart pop-up, dark like the card it sits on (the library's default is a white box).
 const TIP = {
-  contentStyle: { fontSize: 11, borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.14)', color: 'var(--text-hi)', padding: '6px 10px' },
+  contentStyle: { fontSize: 11, borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.14)', color: 'var(--text-hi)', padding: '6px 10px' },
   labelStyle: { color: 'var(--text-mid)', marginBottom: 2 },
   itemStyle: { color: 'var(--text-hi)', padding: 0 },
 };
@@ -456,20 +457,20 @@ export default function Progress() {
                 <AreaChart data={weightData} margin={{ top: 8, right: 16, left: 16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor="#D4AF37" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#D4AF37" stopOpacity={0} />
+                      <stop offset="0%"   stopColor={accent()} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={accent()} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false}
                     interval={Math.max(0, Math.floor(weightData.length / 4))} />
                   <YAxis domain={['auto', 'auto']} hide />
-                  <Tooltip content={<WeightTip />} cursor={{ stroke: 'rgba(212,175,55,0.35)' }} />
+                  <Tooltip content={<WeightTip />} cursor={{ stroke: accent(0.35) }} />
                   {targetW && (
-                    <ReferenceLine y={targetW} stroke="#C5A059" strokeDasharray="4 4"
-                      label={{ value: `Goal ${targetW}`, position: 'insideTopRight', fontSize: 9, fill: '#C5A059' }} />
+                    <ReferenceLine y={targetW} stroke="var(--accent)" strokeDasharray="4 4"
+                      label={{ value: `Goal ${targetW}`, position: 'insideTopRight', fontSize: 9, fill: 'var(--accent)' }} />
                   )}
-                  <Area type="monotone" dataKey="weight" stroke="#D4AF37" strokeWidth={2.5} fill="url(#goldFill)"
-                    dot={weightData.length <= 14 ? { fill: '#D4AF37', r: 3, strokeWidth: 0 } : false} activeDot={{ r: 5, fill: '#F0E2B6' }} />
+                  <Area type="monotone" dataKey="weight" stroke={accent()} strokeWidth={2.5} fill="url(#goldFill)"
+                    dot={weightData.length <= 14 ? { fill: accent(), r: 3, strokeWidth: 0 } : false} activeDot={{ r: 5, fill: accent(0.6) }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -596,10 +597,10 @@ export default function Progress() {
             <p className="text-xs text-lo font-medium mb-1">Calories (kcal)</p>
             <ResponsiveContainer width="100%" height={90}>
               <BarChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
-                <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']} cursor={{ fill: themeColor('--fit-ink', 0.04) }}
                   contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle} />
                 {profile?.macros?.kcal && (
                   <ReferenceLine y={profile.macros.kcal} stroke="#e0c98a" strokeDasharray="3 3" />
@@ -619,11 +620,11 @@ export default function Progress() {
             </div>
             <ResponsiveContainer width="100%" height={110}>
               <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} />
                 <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle}
-                  cursor={{ stroke: 'rgba(255,255,255,0.18)' }} formatter={(v, name) => [`${v} g`, name]} />
+                  cursor={{ stroke: themeColor('--fit-ink', 0.18) }} formatter={(v, name) => [`${v} g`, name]} />
                 <Line type="monotone" name="Protein" dataKey="pro"  stroke={MACRO.pro}  strokeWidth={2} dot={{ r: 3, fill: MACRO.pro,  strokeWidth: 0 }} />
                 <Line type="monotone" name="Carbs"   dataKey="carb" stroke={MACRO.carb} strokeWidth={2} dot={{ r: 3, fill: MACRO.carb, strokeWidth: 0 }} />
                 <Line type="monotone" name="Fat"     dataKey="fat"  stroke={MACRO.fat}  strokeWidth={2} dot={{ r: 3, fill: MACRO.fat,  strokeWidth: 0 }} />

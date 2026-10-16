@@ -81,7 +81,7 @@ export default function StreakCard() {
         {data.cells.map(c => (
           <div key={c.date} title={c.date}
             className="flex-1 h-4 rounded-[3px]"
-            style={{ background: c.logged ? 'rgba(212,175,55,0.55)' : 'rgba(255,255,255,0.05)' }} />
+            style={{ background: c.logged ? 'rgb(var(--fit-accent) / 0.55)' : 'rgb(var(--fit-ink) / 0.05)' }} />
         ))}
       </div>
       {milestone && (

@@ -38,7 +38,7 @@ for(const width of [390,1280])for(const theme of ['light','dark']){
  const click=async sel=>{await page.focus(sel);await page.keyboard.press('Enter');};const label=`${width}px ${theme}`;
  await click('[data-testid=home-log-details] > button');await page.waitForSelector('[data-testid=row-meal]');
  for(const [row,group,title] of [[1,'Lunch','lunch'],[3,'Other','Unsorted'],[2,'Tea [late]','Tea [late]']]){
-  const rows=await page.$$('[data-testid=row-meal]');await rows[row].click();await page.waitForSelector('[data-food-meal-target]');await pause(700);
+  const rows=await page.$$('[data-testid=row-meal]');await rows[row].evaluate(e=>e.scrollIntoView({block:'center'}));await pause(150);await rows[row].click();await page.waitForSelector('[data-food-meal-target]');await pause(700);
   const g=await page.evaluate(()=>{const h=document.querySelector('[data-food-meal-target]'),sc=h.closest('[role=dialog]').querySelector('.overflow-y-auto');return{group:h.parentElement.dataset.foodMeal,focused:document.activeElement===h,top:h.getBoundingClientRect().top,scrollTop:sc.scrollTop,scrollRect:sc.getBoundingClientRect().toJSON(),all:document.querySelectorAll('[data-food-meal]').length,heading:document.querySelector('[role=dialog]').getAttribute('aria-label')}});
   ck(label+' '+group+' targets intended section',g.group===group&&g.heading===title,g);
   ck(label+' '+group+' heading is focused and visible',g.focused&&g.top>=g.scrollRect.top-2&&g.top<g.scrollRect.bottom,g);

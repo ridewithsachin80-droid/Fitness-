@@ -1,3 +1,4 @@
+import { accent, themeColor } from '../../utils/themeColor';
 import { Card, SectionTitle } from '../UI';
 import { WeightTooltip } from '../../lib/coach/dayMath.jsx';
 import {
@@ -18,24 +19,24 @@ export default function MemberCharts({ weightData, complianceData, avg30, profil
             <SectionTitle icon="📈">Weight Trend</SectionTitle>
             <ResponsiveContainer width="100%" height={160}>
               <LineChart data={weightData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} />
                 <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <Tooltip content={<WeightTooltip />} />
                 {profile.start_weight && (
-                  <ReferenceLine y={parseFloat(profile.start_weight)} stroke="#8C6D37"
-                    strokeDasharray="4 4" label={{ value: 'Start', position: 'right', fontSize: 9, fill: '#C5A059' }} />
+                  <ReferenceLine y={parseFloat(profile.start_weight)} stroke={accent(0.6)}
+                    strokeDasharray="4 4" label={{ value: 'Start', position: 'right', fontSize: 9, fill: 'var(--accent)' }} />
                 )}
                 {profile.target_weight && (
-                  <ReferenceLine y={parseFloat(profile.target_weight)} stroke="#F0E2B6"
-                    strokeDasharray="4 4" label={{ value: 'Goal', position: 'right', fontSize: 9, fill: '#F0E2B6' }} />
+                  <ReferenceLine y={parseFloat(profile.target_weight)} stroke="rgb(var(--fit-accent) / 0.6)"
+                    strokeDasharray="4 4" label={{ value: 'Goal', position: 'right', fontSize: 9, fill: 'rgb(var(--fit-accent) / 0.6)' }} />
                 )}
                 {/* Sprint 9b.1: the coach's charts speak the app's language —
                     gold for the member's own line, gold-deep for the goal,
                     tinted bars for compliance. Green/red belong to status
                     (good/bad), not to "this is your weight". */}
-                <Line type="monotone" dataKey="weight" stroke="#D4AF37" strokeWidth={2.5}
-                  dot={{ fill: '#D4AF37', r: 3, strokeWidth: 0 }} activeDot={{ r: 5, fill: '#F0E2B6' }} />
+                <Line type="monotone" dataKey="weight" stroke={accent()} strokeWidth={2.5}
+                  dot={{ fill: accent(), r: 3, strokeWidth: 0 }} activeDot={{ r: 5, fill: accent(0.6) }} />
               </LineChart>
             </ResponsiveContainer>
           </Card>
@@ -70,7 +71,7 @@ export default function MemberCharts({ weightData, complianceData, avg30, profil
                 <Bar dataKey="score" radius={[2, 2, 0, 0]}
                   onClick={(data) => data?.log && setSelectedLog(data.log)}>
                   {complianceData.map((d, i) => (
-                    <Cell key={i} fill={(d.score || 0) >= 75 ? '#D4AF37' : (d.score || 0) >= 50 ? 'rgba(212,175,55,0.55)' : 'rgba(212,175,55,0.28)'} />
+                    <Cell key={i} fill={(d.score || 0) >= 75 ? accent() : (d.score || 0) >= 50 ? accent(0.55) : accent(0.28)} />
                   ))}
                 </Bar>
               </BarChart>
