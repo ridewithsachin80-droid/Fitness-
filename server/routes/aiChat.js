@@ -1923,6 +1923,13 @@ async function parseMemberMessage({ userId, message, context }) {
     // The presence of this operation is exclusive, even when malformed.
     // Never reinterpret a failed draft edit as an append, saved correction,
     // coach message, learned food or evaluation write.
+    // …but only when there IS a draft to edit. A stray draft_edit key in an
+    // ordinary reply (no draft foods sent) must not swallow a normal log.
+    // (The client sent a draft, even a malformed one — then the edit stays exclusive.)
+    const hasDraft = context?.draftFoods != null || (ctx.draftFoods?.foods?.length || 0) > 0;
+    const hasOtherLog = parsed && ['foods', 'corrections', 'workouts', 'activities', 'acv', 'supplements']
+      .some(k => Array.isArray(parsed[k]) && parsed[k].length) || parsed?.weight_kg != null || parsed?.water_ml_add != null || parsed?.sleep;
+    if (parsed && !draftTargetRequested && !hasDraft && hasOtherLog && Object.hasOwn(parsed, 'draft_edit')) delete parsed.draft_edit;
     if (draftTargetRequested || (parsed && Object.hasOwn(parsed, 'draft_edit'))) {
       const draft_edit = resolveDraftFoodEdit(parsed?.draft_edit, ctx.draftFoods, ctx.mealSlots);
       return { reply: draftEditReply(draft_edit), draft_edit, question: false,

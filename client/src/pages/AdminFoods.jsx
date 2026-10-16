@@ -655,7 +655,9 @@ export default function AdminFoods() {
                           <p className="text-xs font-semibold text-orange-300 mt-0.5">{Math.round(food.kcal_per_100g)} kcal/100g</p>
                         )}
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Always visible on touch screens; hover-to-reveal only where there is a mouse
+                          (fix, 10 Oct 2026, ADM-021: on a phone ✏️ and 🗑 could never be tapped). */}
+                      <div className="flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100" data-testid="food-row-actions">
                         <button onClick={() => { setEditing(food); setMode('edit'); }}
                           className="w-8 h-8 flex items-center justify-center rounded-lg text-lo hover:text-gold hover:bg-gold/[0.08] transition-colors text-sm">
                           ✏️

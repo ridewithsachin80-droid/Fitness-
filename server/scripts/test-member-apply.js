@@ -126,11 +126,11 @@ const EMPTY = () => ({
     await applyParsed(member, { ...EMPTY(), foods: [
       { name: 'Rice', grams: 150, meal: 'Lunch',  per_100g: rice, on: true },
       { name: 'Dal',  grams: 200, meal: 'Brunch', per_100g: dal,  on: true },
-    ] }, { istDate: DATE, source: 'voice' });
+    ] }, { istDate: DATE, source: 'voice', nowMin: 8 * 60 });
     log = await readLog(member);
     ck('foods are appended', log.food_items.length === 2, log.food_items.length);
     ck('a valid meal slot is kept', log.food_items[0].meal === 'Lunch', log.food_items[0].meal);
-    ck('an unknown slot falls back to the member\'s FIRST slot rather than inventing a fourth only they have',
+    ck('an unknown slot falls back to one of the member\'s own slots (at 8 am, Breakfast) rather than inventing a fourth',
        log.food_items[1].meal === 'Breakfast', log.food_items[1].meal);
     ck('the source is stamped, so the coach can see a voice log from a typed one',
        log.food_items[0].source === 'voice', log.food_items[0]);
@@ -215,6 +215,53 @@ const EMPTY = () => ({
     const customLog = await readLog(custom);
     ck('an unknown slot falls back to their real slot, not to "Breakfast"',
        customLog.food_items[0].meal === 'Post-workout', customLog.food_items[0].meal);
+
+    // ── Voice fixes (10 Oct 2026) ─────────────────────────────────────────
+    // What /quick-log really passes: the parser's output, which has
+    // weight_kg / water_ml_add / sleep but NOT the app's weightOn / waterOn /
+    // sleepOn preview ticks. Hands-free weight, water and sleep were dropped.
+    console.log('\nVoice: what the parser really returns (VOI-011, VOI-012)');
+    {
+      const v = await freshMember();
+      const asParsed = { reply: 'ok', weight_kg: 82, water_ml_add: 1000, sleep: { bedtime: '23:00', waketime: '06:00' },
+                         activities: [], acv: [], supplements: [], foods: [], corrections: [] };
+      const r = await applyParsed(v, asParsed, { istDate: DATE, source: 'voice' });
+      const vl = await readLog(v);
+      ck('weight said by voice is saved (no weightOn from the parser)', Number(vl.weight_kg) === 82 && r.applied.weight === 82, vl.weight_kg);
+      ck('water said by voice is added', vl.water_ml === 1000 && r.applied.water_ml === 1000, vl.water_ml);
+      ck('sleep said by voice is saved', vl.sleep.bedtime === '23:00' && vl.sleep.waketime === '06:00', vl.sleep);
+      ck('the spoken reply mentions them', /82 kg/.test(composeVoiceReply(r.applied, r.dayTotals)) && /1000 ml water/.test(composeVoiceReply(r.applied, r.dayTotals)) && /sleep/.test(composeVoiceReply(r.applied, r.dayTotals)), composeVoiceReply(r.applied, r.dayTotals));
+      const tooHeavy = await applyParsed(v, { weight_kg: 850 }, { istDate: DATE });
+      ck('the plausibility gate still applies (850 kg refused)', tooHeavy.applied.weight === null && Number((await readLog(v)).weight_kg) === 82);
+
+      const at = async (nowMin, slots) => {
+        const m = await freshMember(slots ? { meal_slots: slots } : {});
+        await applyParsed(m, { foods: [{ name: 'Curd rice', grams: 200, per_100g: rice }] }, { istDate: DATE, source: 'voice', nowMin });
+        return (await readLog(m)).food_items[0].meal;
+      };
+      ck('no meal said at 13:00 → Lunch (it was always the first slot, Breakfast)', await at(13 * 60) === 'Lunch', await at(13 * 60));
+      ck('at 08:30 → Breakfast; at 20:30 → Dinner', await at(8 * 60 + 30) === 'Breakfast' && await at(20 * 60 + 30) === 'Dinner');
+      ck('at 17:30 with a Snack slot → Snack', await at(17 * 60 + 30, ['Breakfast', 'Lunch', 'Snack', 'Dinner']) === 'Snack');
+      ck('slots with no meal names are spread over the day (13:00 of Meal 1–4 → Meal 2)', await at(13 * 60, ['Meal 1', 'Meal 2', 'Meal 3', 'Meal 4']) === 'Meal 2');
+
+      const { pickSlot } = require('../services/mealSlot');
+      const slots = ['Breakfast', 'Lunch', 'Pre-workout', 'Dinner'];
+      ck('a prescribed meal due within 2½ hours wins over the clock (Pre-workout at 17:00, asked 16:10)',
+         pickSlot({ slots, meals: [{ meal: 'Pre-workout', time: '17:00' }], food: [], nowMin: 16 * 60 + 10 }) === 'Pre-workout');
+      ck('…unless it is already logged (then the clock decides: Lunch before 16:00)',
+         pickSlot({ slots, meals: [{ meal: 'Pre-workout', time: '17:00' }], food: [{ meal: 'Pre-workout', name: 'Banana' }], nowMin: 15 * 60 }) === 'Lunch');
+      ck('…and not when it is more than 2½ hours away', pickSlot({ slots, meals: [{ meal: 'Pre-workout', time: '19:00' }], food: [], nowMin: 13 * 60 }) === 'Lunch');
+      ck('the nearest of two due meals wins', pickSlot({ slots, meals: [{ meal: 'Lunch', time: '13:00' }, { meal: 'Pre-workout', time: '15:30' }], food: [], nowMin: 14 * 60 + 50 }) === 'Pre-workout');
+      ck('no slots at all → "Meal 1"', pickSlot({ slots: [], nowMin: 600 }) === 'Meal 1');
+
+      // The server rule and the app rule are the same rule.
+      const { importClient } = require('./lib/client-bundle');
+      const day = importClient('lib/day/index.js');
+      const cases = [[8 * 60, []], [13 * 60, []], [17 * 60 + 30, []], [21 * 60, []], [16 * 60 + 10, [{ meal: 'Pre-workout', time: '17:00' }]]];
+      const same = cases.every(([nowMin, meals]) => pickSlot({ slots, meals, food: [], nowMin })
+        === day.defaultMealSlot({ mealSlots: slots, mealPlans: meals.map(m => ({ ...m, items: [{ name: 'x', grams: 1 }] })), food: [], nowMin }));
+      ck('the server picks the same meal as the app for the same time and plan', same);
+    }
 
     // ── Compliance ────────────────────────────────────────────────────────
     console.log('\nCompliance');

@@ -2,7 +2,15 @@
 // is enough to compare a value; an absent/invalid bound is never treated as 0.
 function finiteOrNull(value) {
   if (value == null || (typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') return null;
-  const n = Number(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  // Reports are typed as printed: "5.6 %", "200 mg/dL", "1,200". Read the
+  // leading number (as parseFloat did before 14 Oct) so a unit after the value
+  // is neither rejected nor read as "no limit". Text with no leading number
+  // ("high", "< 200") is still null — one-sided limits use their own field.
+  const s = value.trim().replace(/(\d),(?=\d{3}(\D|$))/g, '$1');
+  const m = s.match(/^[+-]?(\d+(\.\d*)?|\.\d+)/);
+  if (!m) return null;
+  const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
 }
 function rangeState(value, refMin, refMax) {

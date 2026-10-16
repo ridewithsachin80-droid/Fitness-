@@ -51,7 +51,8 @@ for(const width of [390,1280])for(const theme of ['light','dark']){
  ck(label+' complete editor remains named',await page.$eval('[role=dialog]',e=>e.getAttribute('aria-label')==='What did you eat?'));
  await page.keyboard.press('Escape');await pause(500);
  await page.evaluate(()=>window.logs.setState({date:'2026-10-10'}));await pause(400);
- await (await page.$$('[data-testid=row-meal]'))[1].click();await pause(700);
+ // 16 Oct 2026: past days now show the AI logging bar too; bring the row to the middle first, as a member would scroll.
+ {const r=(await page.$$('[data-testid=row-meal]'))[1];await r.evaluate(e=>e.scrollIntoView({block:'center'}));await pause(200);await r.click();}await pause(700);
  ck(label+' historical meal opens selected group',await page.$eval('[data-food-meal-target]',e=>e.parentElement.dataset.foodMeal==='Lunch'));
  await page.evaluate(()=>window.logs.setState({date:'2026-10-09'}));await pause(150);
  ck(label+' changed date clears stale target',await page.$('[data-food-meal-target]')===null);

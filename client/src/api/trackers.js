@@ -1,3 +1,5 @@
+import { refreshRequestBody } from '../utils/session';
+import { useAuthStore } from '../store/authStore';
 /**
  * api/trackers.js
  * Client-side API helpers for the tracker integration.
@@ -27,3 +29,18 @@ export const disconnectTracker = (provider) =>
  */
 export const getOAuthUrl = (provider) =>
   `/api/trackers/oauth/${provider}`;
+
+/**
+ * Renew the session cookie before leaving the app for a tracker's sign-in page
+ * (fix, 10 Oct 2026, UI-012). That page is a full navigation to
+ * /api/trackers/oauth/<provider>, which can only be signed in by the
+ * accessToken COOKIE — and that cookie lapses after about 15 minutes even
+ * though the app itself keeps working (it renews its own copy on demand). So
+ * "Connect Fitbit" after a while in the app showed {"error":"Token expired"}.
+ */
+export async function renewSessionCookie() {
+  // Through the app's own client (withCredentials, base /api). Its 401 retry
+  // skips /auth/refresh, so a dead session fails here instead of looping.
+  const { data } = await api.post('/auth/refresh', refreshRequestBody());
+  useAuthStore.getState().setToken(data.accessToken, data.refreshToken || null);
+}

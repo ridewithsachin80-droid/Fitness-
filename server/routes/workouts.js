@@ -207,7 +207,8 @@ router.get('/', async (req, res) => {
         byExercise.set(exercise.id, {
           exercise_id: exercise.id, exercise_name: exercise.name,
           muscle_group: exercise.muscle_group, sets: [],
-          fromProgram: entry.fromProgram === true,
+          // Rows saved by the 10 Oct build used from_program; read both.
+          fromProgram: entry.fromProgram === true || entry.from_program === true,
         });
       }
     }

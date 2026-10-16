@@ -18,6 +18,7 @@
  * `sheet`.
  */
 import { useEffect, useCallback, useState, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useLogStore }  from '../store/logStore';
 import { canRefresh } from '../utils/logSync';
 import { useAuthStore } from '../store/authStore';
@@ -263,14 +264,21 @@ export default function useTodayModel() {
   // PWA app shortcuts: long-press icon → /?open=ai or /?open=weight.
   // Handled once on mount, then the param is stripped so a refresh doesn't
   // re-trigger it.
+  //
+  // Read from the ROUTER's location, not once on mount (fix, 10 Oct 2026,
+  // VOI-013; restored 16 Oct): hands-free "open workout" navigates to
+  // /?open=workout while Today is already on screen, and a mount-only read
+  // never saw it.
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
-    const open = new URLSearchParams(window.location.search).get('open');
+    const open = new URLSearchParams(location.search).get('open');
     if (!open) return;
     if (open === 'ai') useAIChat.getState().openChat();
     // Sprint 6: the Plan screen deep-links to any sheet (/?open=workout …)
     if (['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition', 'mealidea'].includes(open)) setHeroPanel(open);
-    window.history.replaceState({}, '', window.location.pathname);
-  }, []);
+    navigate(location.pathname, { replace: true });
+  }, [location.search]);
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });
   // Bumped whenever the AI applies a day, so WorkoutLog remounts and picks up
   // anything the AI just wrote (otherwise an open sheet shows stale data).

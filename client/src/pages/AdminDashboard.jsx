@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { adminResetPin, adminSendPush, getAuditLog, adminDeleteMember, markMessagesRead } from '../api/logs';
 import { Card, SectionTitle, PageLoader, BottomNav } from '../components/UI';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural } from '../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural, today as istToday } from '../constants';
 import AdminReminders from '../components/AdminReminders';
 import MessageMember from '../components/MessageMember';
 import TodaysGaps from '../components/TodaysGaps';
@@ -120,7 +120,9 @@ export default function AdminDashboard() {
 
   if (loading) return <PageLoader />;
 
-  const today = new Date().toISOString().split('T')[0];
+  // India's date, not UTC's (fix, 10 Oct 2026, ADM-022): between midnight
+  // and 05:30 IST the UTC date is still yesterday, so NO LOG was wrong.
+  const today = istToday();
 
   return (
     <div className="min-h-screen bg-charcoal">

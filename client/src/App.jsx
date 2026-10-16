@@ -24,6 +24,7 @@ import Onboarding     from './components/Onboarding';
 import { onboardingDecision } from './utils/onboardingGate';
 import HandsFree from './components/HandsFree';
 import { refreshRequestBody, sessionLossReport, wasSignedOut, clearSession, getStoredRefreshToken } from './utils/session';
+import { clearPrivateApiCaches } from './utils/privateApiCache';
 
 // The primitive kit demo page. `import.meta.env.DEV` is a compile-time
 // constant, so in a production build this is `null` and Vite drops the page
@@ -130,6 +131,9 @@ export default function App() {
           // Expiry is confirmed. Clear the invalid fallback but retain the
           // welcome-back hint; transient connection errors never reach here.
           clearSession();
+          // The expired session's cached reads go too (16 Oct 2026); logout
+          // already cleared them, an expiry at start-up did not.
+          clearPrivateApiCaches().catch(() => {});
           setRestored();
         } else {
           setRestoreIssue(true);
@@ -192,7 +196,10 @@ function SessionSpace() {
         setServerOnboarded(data.onboarding_done === true);
         // Mirror the member's saved mode so font size and terminology follow
         // them onto this device.
-        if (data.onboarding_done && data.age_mode) {
+        // Only to set up a NEW device (fix, 10 Oct 2026, SET-006): on every
+        // launch this reset the member's own Settings choices (text size,
+        // nutrition display, avatar) back to the setup answers.
+        if (data.onboarding_done && data.age_mode && !useSettingsStore.getState().onboardingDone) {
           useSettingsStore.getState().finishOnboarding(data.age_mode);
           if (Number.isInteger(data.avatar_idx)) {
             useSettingsStore.getState().setAvatarIdx(data.avatar_idx);

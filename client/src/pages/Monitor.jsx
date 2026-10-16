@@ -1296,6 +1296,10 @@ export default function Coach() {
         />
       )}
 
+      {/* CMP-010/011 (10 Oct 2026, restored 16 Oct): both buttons set state but nothing was mounted. */}
+      {showWeightForm && <WeightEntryModal memberId={memberId} memberName={profile?.name} onClose={() => setShowWeight(false)} onSaved={() => load({ quiet: true })} />}
+      {showProgramBuilder && <ProgramBuilderModal memberId={parseInt(memberId)} memberName={profile?.name} onClose={() => setShowProgramBuilder(false)} onSaved={() => load({ quiet: true })} />}
+
       {/* Sprint 9: Add note modal */}
       {/* Sprint 9b: Note · Message · Push in one sheet. */}
       <MemberActionSheet

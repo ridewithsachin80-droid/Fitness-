@@ -27,7 +27,7 @@ const owns = receipt => {
   return receipt && receipt.owner === (auth.user?.id ?? null) && receipt.sessionVersion === auth.sessionVersion
     && receipt.chatRevision === chat.revision && chat.messages.some(card => card.saveReceipt?.id === receipt.id);
 };
-const ready = receipt => owns(receipt) && receipt.day === today() && receipt.day === useLogStore.getState().date
+const ready = receipt => owns(receipt) && receipt.day <= today() && receipt.day === useLogStore.getState().date
   && !useLogStore.getState().loading && useLogStore.getState().error !== 'Failed to load log';
 
 /** A receipt belongs to a review, never to the most recently pressed button.
@@ -139,8 +139,9 @@ export default function useAIReviewSave({ mealSlots, mealPlans, computePending }
     let receipt = card.saveReceipt;
     if (!receipt || receipt.rolledBack) {
       const log = useLogStore.getState(), auth = useAuthStore.getState();
-      if (card.applied || log.date !== today() || log.loading || log.error === 'Failed to load log' || (card.logDate && card.logDate !== today())) {
-        message(index, 'Return to today and wait for your log to load before saving this review.'); return;
+      // Any day up to today (16 Oct 2026), but only the day this review was made on.
+      if (card.applied || log.date > today() || log.loading || log.error === 'Failed to load log' || (card.logDate && card.logDate !== log.date)) {
+        message(index, 'Open the day this review was for and wait for its log to load before saving.'); return;
       }
       if (foodReviewError(card.parsed.foods)) return;
       const id = nextRequestId(), parsed = copy(card.parsed);

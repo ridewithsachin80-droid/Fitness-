@@ -64,6 +64,9 @@ input, textarea, select {
   color: var(--text-hi) !important;
 }
 input::placeholder, textarea::placeholder { color: var(--text-lo) !important; }
+/* Never wider than their box: at 320 px with large text some browsers gave
+   date and text inputs a minimum width wider than the screen (16 Oct 2026). */
+input, select, textarea { max-width: 100%; min-width: 0; }
 input[type='date']::-webkit-calendar-picker-indicator { filter: invert(0.6); opacity: 0.5; }
 input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type='number'] { -moz-appearance: textfield; }

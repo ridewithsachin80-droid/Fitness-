@@ -2,7 +2,7 @@ import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL, getCa
 import { registerRoute, NavigationRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 import { clientsClaim } from 'workbox-core';
-import { PRIVATE_API_CACHE, LEGACY_API_CACHES, CLEAR_PRIVATE_API_CACHES, clearPrivateApiCaches, privateCacheKey, isPrivateApiRequest } from './utils/privateApiCache';
+import { PRIVATE_API_CACHE, LEGACY_API_CACHES, CLEAR_PRIVATE_API_CACHES, clearPrivateApiCaches, privateCacheKey, isPrivateApiRequest, prunePrivateCache } from './utils/privateApiCache';
 
 let privateCacheEpoch = 0;
 
@@ -51,7 +51,9 @@ registerRoute(
       cacheWillUpdate: async ({ response, state }) => response.status === 200 && state.epoch === privateCacheEpoch ? response : null,
       // Also cover a logout occurring between cacheWillUpdate and cache.put.
       cacheDidUpdate: async ({ cacheName, request, state }) => {
-        if (state.epoch !== privateCacheEpoch) await (await caches.open(cacheName)).delete(request);
+        const cache = await caches.open(cacheName);
+        if (state.epoch !== privateCacheEpoch) { await cache.delete(request); return; }
+        await prunePrivateCache(cache, request);
       } }],
   })
 );

@@ -145,7 +145,7 @@ router.get('/oauth/:provider', auth, (req, res) => {
   if (!cfg) return res.status(400).json({ error: 'Unknown provider' });
 
   const state = jwt.sign({ userId: req.user.id, provider, k: 'tracker_oauth' },
-    process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '10m' });
+    process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '15m' });
   const redirect = `${SERVER_URL}/api/trackers/oauth/${provider}/callback`;
 
   const url = new URL(cfg.authUrl);

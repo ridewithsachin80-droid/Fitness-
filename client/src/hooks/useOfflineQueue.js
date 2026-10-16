@@ -94,6 +94,8 @@ function isRetryable(err) {
  * @param {object} log   - log payload (server shape)
  * @returns {Promise<{queued: boolean, data?: object}>}
  */
+export const ENQUEUE_TIMEOUT_MS = 3000;
+
 export async function saveLogWithFallback(date, log) {
   // Who this entry belongs to is decided NOW, when the member makes the edit —
   // not later, when the queue happens to drain.
@@ -114,10 +116,18 @@ export async function saveLogWithFallback(date, log) {
       throw uncertainError();
     }
   }
-  let prepared = null;
-  try { prepared = await queue.enqueue(date, log, owner); }
+  let prepared = null, lateQueue = null;
+  // Browser storage can stall (iOS Safari, a blocked upgrade in another tab).
+  // Wait at most ENQUEUE_TIMEOUT_MS, then post directly (16 Oct 2026): a stall
+  // used to hold this save — and every later save of the day — forever.
+  const enqueued = queue.enqueue(date, log, owner);
+  try {
+    prepared = await Promise.race([enqueued, new Promise((_, reject) =>
+      setTimeout(() => reject(Object.assign(new Error('Offline storage is slow'), { code: 'QUEUE_TIMEOUT' })), ENQUEUE_TIMEOUT_MS))]);
+  }
   catch (error) {
     if (error.code === 'QUEUE_CONFLICT') throw error;
+    if (error.code === 'QUEUE_TIMEOUT') lateQueue = enqueued;
     // An online request may still succeed when browser storage is disabled.
     // If it does not, we must surface a failure instead of claiming it is safe.
     if (!navigator.onLine) throw new Error('Could not save — no connection and offline storage is unavailable.');
@@ -141,6 +151,8 @@ export async function saveLogWithFallback(date, log) {
       // Only the revision present before this request is now stale. A newer
       // edit queued while it was in flight still needs to reach the server.
       if (prepared) await queue.supersede(date, owner, prepared.rev, log, data, prepared.write);
+      // A stalled enqueue that finishes later is already saved by this POST.
+      if (lateQueue) lateQueue.then(late => late && queue.supersede(date, owner, late.rev, log, data, late.write)).catch(() => {});
       return { queued: false, data, write };
     } catch (err) {
       if (!isRetryable(err)) {

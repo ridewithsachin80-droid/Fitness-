@@ -367,7 +367,10 @@ export default function LabResults({ memberId = null, memberName = '' }) {
             </p>
             <div className="mt-2 space-y-1" data-testid="lab-markers">
               {comparisons.map((c, i) => {
-                const arrow = c.direction === 'improved' ? '↓' : c.direction === 'worsened' ? '↑' : '→';
+                // The arrow shows which way the NUMBER moved; the colour says
+                // whether that is good (fix, 10 Oct 2026, LAB-005: vitamin D
+                // rising 20 → 35 showed "↓" because the arrow meant "improved").
+                const arrow = c.to > c.from ? '↑' : c.to < c.from ? '↓' : '→';
                 const tone  = c.direction === 'improved' ? 'text-gold-light' : c.direction === 'worsened' ? 'text-amber-300' : 'text-mid';
                 return (
                   <div key={i} className="flex items-baseline gap-2 py-1 border-b border-hair last:border-b-0" data-testid="lab-marker">

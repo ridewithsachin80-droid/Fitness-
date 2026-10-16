@@ -184,7 +184,8 @@ export default function AdminReminders({ members = [] }) {
             maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
             border: '1px solid rgba(212,175,55,0.35)' }}>
             <h3 style={{ color: '#F0E2B6', fontFamily: 'Fraunces, serif', fontWeight: 600, margin: '0 0 4px' }}>
-              {editing.type === 'water' ? '💧 Water' : '🏃 Activity'} Reminders
+              {/* Each type's own label (fix, 10 Oct 2026, ADM-017: Weight and ACV were titled "Activity"). */}
+              {(TYPES.find(t => t.key === editing.type) || TYPES[1]).label} Reminders
             </h3>
             <p style={{ color: '#888', fontSize: 12, margin: '0 0 16px' }}>
               {editing.patient_id

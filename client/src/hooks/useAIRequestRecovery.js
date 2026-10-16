@@ -23,17 +23,17 @@ export default function useAIRequestRecovery() {
   const [requestEdit, setRequestEdit] = useState(null);
 
   const requestCurrent = useCallback(request => useLogStore.getState().date === request?.day
-    && requestBelongsToChat(request, useAuthStore.getState(), useAIChat.getState(), today()), []);
+    && requestBelongsToChat(request, useAuthStore.getState(), useAIChat.getState(), useLogStore.getState().date), []);
   const pickerCurrent = scope => {
     const auth = useAuthStore.getState();
     return !!scope && scope.owner === (auth.user?.id ?? null) && scope.sessionVersion === auth.sessionVersion
-      && scope.day === today() && scope.day === useLogStore.getState().date
+      && scope.day <= today() && scope.day === useLogStore.getState().date
       && scope.day === useAIChat.getState().dayKey;
   };
   const rememberPicker = event => {
     const auth = useAuthStore.getState();
     pickerContext.current = { owner: auth.user?.id ?? null, sessionVersion: auth.sessionVersion,
-      day: today(), input: event.currentTarget };
+      day: useLogStore.getState().date, input: event.currentTarget };
   };
   const consumePicker = inputElement => {
     const scope = pickerContext.current;
@@ -41,9 +41,12 @@ export default function useAIRequestRecovery() {
     return scope?.input === inputElement && pickerCurrent(scope);
   };
   const newRequest = (kind, text, { silent = false, payload = null, file = null } = {}) => {
-    useAIChat.getState().ensureFreshDay(today());
+    // The day on screen, which may be a past day (16 Oct 2026: AI logging on
+    // past days). A chat belongs to one day; switching day starts a fresh one.
+    const day = useLogStore.getState().date;
+    useAIChat.getState().ensureFreshDay(day);
     const auth = useAuthStore.getState();
-    const request = { id: nextRequestId(), kind, day: today(), owner: auth.user?.id ?? null,
+    const request = { id: nextRequestId(), kind, day, owner: auth.user?.id ?? null,
       sessionVersion: auth.sessionVersion, payload, file };
     setMessages(previous => {
       if (silent) {
@@ -105,7 +108,7 @@ export default function useAIRequestRecovery() {
         for (const m of stale) { m.failedRequest.invalidated = true; m.failedRequest.file = null; m.failedRequest.payload = null; }
         const expired = new Set(stale);
         setMessages(previous => previous.filter(m => !stalePending.has(m.pendingRequest)).map(m => expired.has(m)
-          ? { ...m, failedRequest: null, text: 'This request has expired. Return to today and add it again.' } : m));
+          ? { ...m, failedRequest: null, text: 'This request has expired. Open that day again and add it.' } : m));
       }
       if (replacingPhoto.current && !requestCurrent(replacingPhoto.current)) replacingPhoto.current = null;
       setRequestEdit(current => current && requestCurrent(current.request) ? current : null);

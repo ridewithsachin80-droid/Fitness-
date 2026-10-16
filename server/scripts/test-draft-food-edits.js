@@ -114,6 +114,10 @@ const noWrites = () => queries.every(sql => !/\b(INSERT|UPDATE|DELETE)\b/.test(s
   ck('invalid selected target cannot erase selected-mode safety', result.draft_edit?.reason === 'invalid_edit' && emptyActions(result) && noWrites());
   result = await parse({ draft_edit: edit() }, undefined);
   ck('operation without draft context is rejected', result.draft_edit?.reason === 'invalid_edit' && noWrites());
+  // 16 Oct 2026: a stray draft_edit key beside an ordinary log, with no draft
+  // on screen, must not swallow the log ("2 roti + dal" came back as "could not match").
+  result = await parse({ foods: [{ name: 'Extra Rice', grams: 150, per_100g: { calories: 100 } }], draft_edit: {} }, undefined, 'I ate 150 grams of rice');
+  ck('a stray draft_edit beside a normal log (no draft) is ignored and the food is kept', !result.draft_edit && result.foods.length === 1 && result.foods[0].grams === 150, result);
   result = await parse({ foods: [{ name: 'Extra Rice', grams: 150, per_100g: { calories: 100 } }] }, single, 'I ate another 150 grams of rice');
   ck('normal unselected request can still propose a genuinely new serving', !result.draft_edit && result.foods.length === 1 && result.foods[0].grams === 150, result);
   result = await parse({ corrections: [{ name: 'Sambar', grams: 250 }] }, undefined, 'change saved sambar to 250 grams');

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { registerAIEntryAction, useAIChat } from '../store/aiChatStore';
 import { today } from '../constants';
+import { useLogStore } from '../store/logStore';
 
 /** Keep browser-gated actions inside the original tap, including on iOS.
  * Rendering the portal must complete before focusing or clicking its input.
@@ -11,7 +12,7 @@ export default function useAIEntryActions({ inputRef, fileRef, overlayRef, botto
   latest.current = { vc, canPhoto };
   useLayoutEffect(() => registerAIEntryAction((mode, open) => {
     if (!useAIChat.getState().composerOpen) previousFocus.current = document.activeElement;
-    flushSync(() => { useAIChat.getState().ensureFreshDay(today()); open(); });
+    flushSync(() => { useAIChat.getState().ensureFreshDay(useLogStore.getState().date || today()); open(); });
     if (mode === 'voice') latest.current.vc.startRecording();
     else if (mode === 'photo' && latest.current.canPhoto) fileRef.current?.click();
     else if (mode === 'text') inputRef.current?.focus({ preventScroll: true });

@@ -33,6 +33,7 @@ const pool = require('../db/pool');
 const { withMemberLock } = require('../db/locks');
 const { getISTDate } = require('../utils/istDate');
 const { calcCompliance, protocolTotalFor } = require('./compliance');
+const { pickSlot, prescribedMeals, istMinutes } = require('./mealSlot');
 
 const WATER_CAP_ML   = 10000;
 const WEIGHT_MIN_KG  = 20;
@@ -105,6 +106,9 @@ async function applyParsed(userId, parsed, opts = {}) {
     `SELECT * FROM patient_profiles WHERE user_id = $1`, [userId]);
   const profile = profRows[0] || null;
   const slots   = await mealSlotsFor(profile, userId);
+  // Only needed when a food arrives without a meal; read before the lock.
+  const needSlot = onlyOn(parsed && parsed.foods).some(f => !(f.meal && slots.includes(f.meal)));
+  const meals    = needSlot ? await prescribedMeals(pool, userId, istDate) : [];
 
   // From here to the write below runs under the per-member lock (db/locks.js).
   // This function reads the day, changes it in memory and writes the whole row
@@ -135,7 +139,12 @@ async function applyParsed(userId, parsed, opts = {}) {
   // The plausibility gate is not defensive padding. A misheard "one eighty
   // five" for 85 would rewrite the member's whole trend line, and over voice
   // there is no preview in which to catch it.
-  if (p.weightOn && p.weight_kg != null) {
+  // The parser returns weight_kg, water_ml_add and sleep but never the
+  // weightOn / waterOn / sleepOn switches — those are the app's preview
+  // ticks. Voice has no preview, so "not switched off" counts as on (fix,
+  // 10 Oct 2026, VOI-011: hands-free weight, water and sleep were never saved).
+  // An explicit false still means "leave it out".
+  if (p.weightOn !== false && p.weight_kg != null) {
     const w = Number(p.weight_kg);
     if (Number.isFinite(w) && w >= WEIGHT_MIN_KG && w <= WEIGHT_MAX_KG) {
       weightKg = w;
@@ -156,7 +165,7 @@ async function applyParsed(userId, parsed, opts = {}) {
   tickInto(supplements, p.supplements, 'supplements');
 
   // ── Water ─────────────────────────────────────────────────────────────────
-  if (p.waterOn && p.water_ml_add) {
+  if (p.waterOn !== false && p.water_ml_add) {
     const add = Number(p.water_ml_add);
     if (Number.isFinite(add) && add > 0) {
       const before = waterMl;
@@ -166,7 +175,7 @@ async function applyParsed(userId, parsed, opts = {}) {
   }
 
   // ── Sleep ─────────────────────────────────────────────────────────────────
-  if (p.sleepOn && p.sleep) {
+  if (p.sleepOn !== false && p.sleep) {
     if (p.sleep.bedtime)  { sleep.bedtime  = p.sleep.bedtime;  applied.sleep = true; }
     if (p.sleep.waketime) { sleep.waketime = p.sleep.waketime; applied.sleep = true; }
   }
@@ -199,14 +208,18 @@ async function applyParsed(userId, parsed, opts = {}) {
   const foodsOn = onlyOn(p.foods);
   if (foodsOn.length) {
     const baseId = Date.now();
+    // No meal said (or one the member does not have): the meal due now, as
+    // the app does (services/mealSlot.js) — it used to be the FIRST slot,
+    // so lunch said at 1 pm landed in Breakfast (VOI-012, 10 Oct 2026).
+    const dueNow = needSlot ? pickSlot({ slots, meals, food, nowMin: opts.nowMin ?? istMinutes() }) : slots[0];
     food = food.concat(foodsOn.map((f, i) => ({
       id:       baseId + i,
       name:     String(f.name || '').slice(0, 120),
       grams:    Number(f.grams) || 0,
-      // An unrecognised slot falls back to the member's FIRST slot rather than
-      // inventing one. A member with "Breakfast/Lunch/Dinner" who says
-      // "brunch" should not end up with a fourth slot only they have.
-      meal:     (f.meal && slots.includes(f.meal)) ? f.meal : slots[0],
+      // An unrecognised slot falls back to one of the member's own slots
+      // rather than inventing one. A member with "Breakfast/Lunch/Dinner" who
+      // says "brunch" should not end up with a fourth slot only they have.
+      meal:     (f.meal && slots.includes(f.meal)) ? f.meal : dueNow,
       food_id:  f.food_id || null,
       per_100g: f.per_100g && Number(f.per_100g.calories) > 0 ? f.per_100g : null,
       // Where this came from, so the coach view can distinguish a voice log
@@ -246,7 +259,7 @@ async function applyParsed(userId, parsed, opts = {}) {
   // Body Composition section reads from. Deliberately AFTER the log write and
   // deliberately non-fatal: the day's log has already committed and must not
   // be rolled back because a secondary write failed.
-  if (p.bodyMetricsOn && Array.isArray(p.bodyMetrics) && p.bodyMetrics.length) {
+  if (p.bodyMetricsOn !== false && Array.isArray(p.bodyMetrics) && p.bodyMetrics.length) {
     try {
       for (const bm of p.bodyMetrics) {
         if (!bm || !bm.name) continue;

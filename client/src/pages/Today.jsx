@@ -58,8 +58,8 @@ export default function Today() {
               <DailyEssentials m={m} onOpen={openSheet} />
             </section>
             <button type="button" className="member-plan-link" onClick={() => navigate('/plan')}>Today’s plan <Icon name="arrow-right" size={19} /></button>
-            {isToday ? <div className="member-home-logger"><AILauncher /></div> :
-              <button type="button" className="member-return-today" onClick={m.goToday}>Return to today for AI logging <Icon name="arrow-right" size={17} /></button>}
+            {/* AI logging works on any day up to today (16 Oct 2026); the save names the day. */}
+            <div className="member-home-logger"><AILauncher /></div>
           </div>
           <div className="member-details">
             <Collapsible defaultOpen={m.detailSection === 'plan'} title="Plan & tools" summary={`${m.protocolDone} of ${m.protocolTotal} daily habits done`} icon="calendar" testId="home-plan-details">

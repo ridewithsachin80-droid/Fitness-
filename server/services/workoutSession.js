@@ -15,8 +15,14 @@ function prepareWorkoutExercises(exercises) {
   });
 }
 
+// At most 40 not-started exercises are kept, once each (as on 10 Oct): a
+// program day has well under 20, and the list is stored on every save.
+const MAX_PENDING = 40;
 function pendingWorkoutExercises(exercises) {
+  const seen = new Set();
   return exercises.filter(exercise => exercise.sets.length === 0)
+    .filter(({ exercise_id }) => !seen.has(exercise_id) && seen.add(exercise_id))
+    .slice(0, MAX_PENDING)
     .map(({ exercise_id, fromProgram }) => ({ exercise_id, fromProgram }));
 }
 

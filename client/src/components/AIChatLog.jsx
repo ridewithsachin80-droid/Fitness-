@@ -33,6 +33,7 @@ import { withFoodGrams, foodReviewError } from '../utils/aiFoodReview';
 import { Icon } from './primitives';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
 import { foodWithLabel } from './chat/ChatFoodMacros';
+import { logTarget } from '../utils/chatCard';
 import { requestSnapshot } from '../utils/aiRequestRecovery';
 import { downscale, readFileAsBase64 } from '../utils/aiAttachments';
 import { countIncluded } from '../utils/aiParsedReview';
@@ -84,7 +85,9 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   const chatDay = useAIChat(s => s.dayKey);
   const logLoading = useLogStore(s => s.loading);
   const logError = useLogStore(s => s.error);
-  const assistantReady = logDate === today() && !logLoading && logError !== 'Failed to load log';
+  // Any day up to today — a member can fill in yesterday's forgotten dinner
+  // (16 Oct 2026). Every save names the day it writes to (logTarget).
+  const assistantReady = !!logDate && logDate <= today() && !logLoading && logError !== 'Failed to load log';
   const overlayRef = useRef(null);
   const composerRef = useRef(null);
   const composerId = useId();
@@ -171,7 +174,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     inputRef.current?.blur();
   };
 
-  useEffect(() => { useAIChat.getState().ensureFreshDay(today()); }, []);
+  useEffect(() => { useAIChat.getState().ensureFreshDay(useLogStore.getState().date || today()); }, []);
 
   // ── Voice input ────────────────────────────────────────────────────────────
   // Dictation lives in its own review card above the input (useVoiceComposer):
@@ -378,12 +381,12 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       || (labSaveFlight.current?.current())) return;
     const auth = useAuthStore.getState(), selectedDay = useLogStore.getState().date;
     const initialWeight = useLogStore.getState().log.weight;
-    const revision = useAIChat.getState().revision, reviewDay = today();
+    const revision = useAIChat.getState().revision, reviewDay = selectedDay;
     if (selectedDay !== reviewDay || useLogStore.getState().loading || useLogStore.getState().error === 'Failed to load log') return;
     let invalidated = false;
     const current = () => !invalidated && useAuthStore.getState().user?.id === auth.user?.id
       && useAuthStore.getState().sessionVersion === auth.sessionVersion
-      && useAIChat.getState().revision === revision && today() === reviewDay
+      && useAIChat.getState().revision === revision
       && useLogStore.getState().date === selectedDay && useAIChat.getState().messages.some(card => card.lab === m.lab);
     const patch = values => { if (current()) setMessages(cards => cards.map(card => card.lab === m.lab ? { ...card, ...values } : card)); };
     const rows = m.lab.results.filter(r => r.on && r.value !== null && r.value !== '');
@@ -474,11 +477,11 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       return;
     }
     if (recovery && !requestCurrent(recovery)) return;
-    if (!recovery) useAIChat.getState().ensureFreshDay(today());
+    if (!recovery) useAIChat.getState().ensureFreshDay(useLogStore.getState().date);
     let payload = recovery?.payload;
     let draftSnapshot = recovery?.draftSnapshot;
     if (!payload) {
-      const draft = buildDraftFoodContext(useAIChat.getState().messages, today(), draftFoodTarget, mealSlots, autoSlot);
+      const draft = buildDraftFoodContext(useAIChat.getState().messages, useLogStore.getState().date, draftFoodTarget, mealSlots, autoSlot);
       if (draft.reason === 'target_unavailable') {
         setDraftFoodTarget(null);
         setMessages(previous => [...previous, { role: 'ai', text: 'That food is no longer available for an AI edit. Choose an unsaved food again, or use the existing Edit action for a saved review.' }]);
@@ -502,7 +505,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
           recent,
           lastFoods,
           draftFoods: draft.context,
-          foodClarification: foodClarificationContext(useAIChat.getState().messages, today()),
+          foodClarification: foodClarificationContext(useAIChat.getState().messages, useLogStore.getState().date),
           activities:    proto.activities.map(({ id, label, sub }) => ({ id, label, sub })),
           acv:           proto.acv.map(({ id, label, sub }) => ({ id, label, sub })),
           supplements:   proto.supplements.map(({ id, label, sub }) => ({ id, label, sub })),
@@ -551,7 +554,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
       if (Object.prototype.hasOwnProperty.call(data, 'draft_edit') || payload.context?.draftFoods?.target) {
         setMessages(previous => {
           const result = applyDraftFoodEdit(previous, data.draft_edit, request.draftSnapshot, {
-            day: today(), mealSlots: useSettingsStore.getState().mealSlots, applying: !!applyingRef.current,
+            day: useLogStore.getState().date, mealSlots: useSettingsStore.getState().mealSlots, applying: !!applyingRef.current,
           });
           const choose = data.draft_edit?.status === 'clarify' && data.draft_edit.reason === 'choose_food';
           const reply = result.applied ? 'Review updated. Nothing saved yet.'
@@ -1026,7 +1029,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                         <button data-testid="ai-card-save" onClick={() => applyAll(mi)} disabled={applying || labBusy || !assistantReady || !!foodReviewError(m.parsed.foods)}
                           style={{ minHeight: 48 }}
                           className="w-full rounded-xl text-sm font-bold bg-gold text-charcoal active:scale-[0.98] disabled:opacity-40 transition-all">
-                          {applying ? 'Saving…' : 'Save'} {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
+                          {applying ? 'Saving…' : 'Save'} {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to {logTarget(m.logDate || logDate, today())}
                         </button>
                       )}
 
@@ -1105,7 +1108,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
         </div>}
         {(photoBusy || labBusy) && <p className="text-caption text-gold py-2" role="status">{photoBusy ? 'Analysing your photo and calculating nutrition…' : 'Reading your document…'}</p>}
         {logError && <p className="text-caption text-danger pb-2" role="alert">{logError}</p>}
-        {!assistantReady && <p className="text-caption text-warn py-2">{logLoading ? 'Loading your daily log…' : 'Open Today before logging with AI. Your draft is kept.'}</p>}
+        {!assistantReady && <p className="text-caption text-warn py-2">{logLoading ? 'Loading your daily log…' : 'Open a day up to today before logging with AI. Your draft is kept.'}</p>}
 
         {/* Sprint 5b.1: two rows. The text gets the full width and grows to
             five lines (a dictated day is often three), the tools sit

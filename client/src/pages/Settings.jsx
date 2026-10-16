@@ -341,7 +341,7 @@ export default function Settings() {
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ color: 'var(--text-hi)', fontWeight: 700, fontSize: 15, margin: 0 }}>Connected Devices</p>
-                <p style={{ color: 'var(--text-lo)', fontSize: 12, margin: '2px 0 0' }}>HART, Garmin, Apple Watch, Samsung &amp; more</p>
+                <p style={{ color: 'var(--text-lo)', fontSize: 12, margin: '2px 0 0' }}>Fitbit, WHOOP and Polar</p>
               </div>
               <span style={{ color: 'var(--text-lo)', fontSize: 18 }}>›</span>
             </div>

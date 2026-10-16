@@ -79,4 +79,11 @@ check('reopened unfinished program exercises are replaced on a day switch', () =
     .map(ex => ({ ...ex, sets: [] }));
   assert.deepEqual(applyProgramDay(pending, { exercises: [{ exercise_id: 13, exercise_name: 'Squat' }] }).map(ex => ex.exercise_id), [13]);
 });
+check('pending exercises are kept once each, at most 40 (restored 16 Oct 2026)', () => {
+  const many = prepareWorkoutExercises([{ exercise_id: 5, sets: [] }, { exercise_id: 5, sets: [] },
+    ...Array.from({ length: 50 }, (_, i) => ({ exercise_id: 100 + i, sets: [] }))]);
+  const pending = pendingWorkoutExercises(many);
+  assert.equal(pending.length, 40);
+  assert.equal(pending.filter(ex => ex.exercise_id === 5).length, 1);
+});
 console.log(`\nWORKOUT SESSION LOGIC: ${passed} passed, 0 failed`);

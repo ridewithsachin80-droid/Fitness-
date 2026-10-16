@@ -118,6 +118,11 @@ export function mapToServer(log, protocol) {
       // The member typed these numbers from their own pack (10 Oct 2026); the
       // coach's day view marks the item so they know where the numbers came from.
       ...(item.label ? { label: true } : {}),
+      // Where the numbers came from and the household portion ("2 rotis").
+      // The server stores both, but they were never sent, so after the
+      // auto-save an AI item read "Nutrition source not recorded" (16 Oct 2026).
+      ...(item.source ? { source: String(item.source).slice(0, 40) } : {}),
+      ...(item.qty_text ? { qty_text: String(item.qty_text).slice(0, 80) } : {}),
     })),
     water_ml:       log.water,
     // What this phone last saw of the day: when it was saved, which food was in

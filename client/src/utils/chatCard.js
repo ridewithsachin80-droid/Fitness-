@@ -41,3 +41,20 @@ export function rollbackCard(card, { reopen }) {
 export function previewVisible(card) {
   return !card.applied && !card.undone;
 }
+
+/**
+ * Which day an Apply writes to, in words for the button (AIC-029, 10 Oct 2026).
+ * The chat writes to the day on screen; the button said "today's log" even
+ * when the member was looking at yesterday.
+ *
+ * @param {string} date      the day on screen, YYYY-MM-DD (IST)
+ * @param {string} todayStr  today, YYYY-MM-DD (IST)
+ * @param {string} noun      'log' or 'session'
+ * @returns "today's log" · "yesterday's log" · "the log for Thu 8 Oct"
+ */
+export function logTarget(date, todayStr, noun = 'log') {
+  if (!date || date === todayStr) return `today's ${noun}`;
+  const d = new Date(`${date}T12:00:00`), t = new Date(`${todayStr}T12:00:00`);
+  if (Math.round((t - d) / 86400000) === 1) return `yesterday's ${noun}`;
+  return `the ${noun} for ${d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}`;
+}

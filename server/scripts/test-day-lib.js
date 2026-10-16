@@ -391,9 +391,25 @@ console.log('\n[7g] a member\'s own label: protein, carbs, fat → calories (10 
   ck('the day totals use the label: 50 g → 193 kcal, 12 g protein', (() => { const t = day.calcFoodMacros([{ name: 'oats', grams: 50, per_100g: w }]); return t.kcal === 193 && near(t.pro, 12) && near(t.carb, 27.5); })());
   ck('carbsOf: net first, then total, then 0', carbsOf({ net_carbs: 5, total_carbs: 9 }) === 5 && carbsOf({ total_carbs: 9 }) === 9 && carbsOf(null) === 0);
   ck('macroLine: whole grams', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }) === 'P 18 g · C 60 g · F 9 g', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }));
+  // WKT-012 (10 Oct 2026, restored 16 Oct): a program day pulled in but not
+  // started stays listed, but only exercises with a done set count as logged.
+  const WS = importClient('utils/workoutSession.js');
+  ck('WKT-012: only exercises with a done set count as logged (a not-started program day is not "Logged · 3 exercises")',
+     WS.completedWorkoutExercises([{ exercise_id: 1, sets: [] }, { exercise_id: 2, sets: [{ reps: '', weight_kg: '' }] }, { exercise_id: 3, sets: [{ reps: 8, weight_kg: 40 }] }]).map(e => e.exercise_id).join() === '3'
+     && WS.completedWorkoutExercises(null).length === 0);
+  {
+    const todaySrc = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/hooks/useTodayModel.js'), 'utf8');
+    const viewerSrc = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/components/WorkoutSessionViewer.jsx'), 'utf8');
+    ck('…and Today\'s Move row and the coach\'s session view use it', /count: completedWorkoutExercises\(data\?\.exercises\)\.length/.test(todaySrc) && /completedWorkoutExercises\(data\?\.exercises\)/.test(viewerSrc));
+  }
   const L = importClient('utils/logSync.js');
   const body = L.mapToServer({ food: [{ id: 9, name: 'Oats', grams: 50, meal: 'Breakfast', food_id: 4, per_100g: w, label: true }, { id: 10, name: 'Tea', grams: 100 }] }, null);
   ck('the day save keeps the label mark and the edited numbers (it was dropped before — caught by the UI test)', body.food_items[0].label === true && body.food_items[0].per_100g.protein === 24 && !('label' in body.food_items[1]), body.food_items);
+  {
+    // 16 Oct 2026: the source and the household portion were dropped on save.
+    const b2 = L.mapToServer({ food: [{ id: 11, name: 'Roti', grams: 60, meal: 'Lunch', source: 'verified', qty_text: '2 rotis' }, { id: 12, name: 'Dal', grams: 150 }] }, null);
+    ck('the day save keeps where the numbers came from and the household portion ("2 rotis")', b2.food_items[0].source === 'verified' && b2.food_items[0].qty_text === '2 rotis' && !('qty_text' in b2.food_items[1]), b2.food_items);
+  }
   const base = L.baseOf({ food_items: [{ id: 9, grams: 50, meal: 'Breakfast', per_100g: w }] });
   ck('the day as loaded records each item\'s macros, so an edit survives a merge', base.food_macros['9'] === '386:24:55:7.8' && L.EMPTY_BASE.food_macros && Object.keys(L.EMPTY_BASE.food_macros).length === 0, base.food_macros);
   const server = require('fs').readFileSync(require('path').join(__dirname, '../services/memberFoods.js'), 'utf8');

@@ -91,6 +91,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 .member-attachments{position:relative;flex-shrink:0}.member-attachments>button{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;color:var(--text-mid)}
 .member-attachment-menu{position:absolute;bottom:calc(100% + 8px);left:0;width:210px;padding:6px;border:1px solid var(--border);border-radius:15px;background:var(--bg-surface);box-shadow:0 6px 30px #0002;z-index:1}
 .member-attachment-menu button{display:flex;align-items:center;gap:10px;min-height:48px;width:100%;padding:10px;font-size:13px;text-align:left;border-radius:10px}.member-attachment-menu button:hover{background:var(--accent-dim)}
+/* Things scrolled to or focused stop clear of the fixed logging bar (16 Oct 2026: the bar now shows on past days too). */
+@media(max-width:767px){html:has(.member-home){scroll-padding-bottom:calc(160px + env(safe-area-inset-bottom))}}
 @media(max-width:767px){.member-home{padding-bottom:92px}.member-home-logger{position:fixed;left:0;right:0;max-width:500px;margin:auto;padding:6px 22px 10px;bottom:calc(64px + env(safe-area-inset-bottom))}}
 @media(max-width:350px){.member-home-logger{padding-left:16px;padding-right:16px}}
 

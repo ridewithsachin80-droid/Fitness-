@@ -114,6 +114,11 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n))
       const c = await call('POST', `/api/patients/${member}/labs`, C, { test_date: d, test_name: 'LDL', value: 180, unit: 'mg/dL', ref_min: '', ref_max: 130 });
       ck('coach entry: same rule — LDL 180 over "≤ 130" is HIGH, and the blank minimum is stored as empty, not an error',
          c.status === 201 && c.data.status === 'high' && c.data.ref_min === null && Number(c.data.ref_max) === 130, [c.status, c.data.status, c.data.ref_min, c.data.error]);
+      // 16 Oct 2026: values typed as printed, with the unit after the number.
+      const u = await call('POST', `/api/patients/${member}/labs`, C, { test_date: d, test_name: 'HbA1c', value: '6.1 %', unit: '%', ref_min: '', ref_max: '5.7 %' });
+      ck('coach entry: "6.1 %" over "5.7 %" is accepted and HIGH (it was refused with 400 after 14 Oct)', u.status === 201 && Number(u.data.value) === 6.1 && u.data.status === 'high', [u.status, u.data.error, u.data.status]);
+      const { finiteOrNull } = require('../services/labRange');
+      ck('lab numbers: "200 mg/dL" → 200, "1,200" → 1200, "high" / "< 200" → none', finiteOrNull('200 mg/dL') === 200 && finiteOrNull('1,200') === 1200 && finiteOrNull('high') === null && finiteOrNull('< 200') === null);
       const { classifyLab } = require('../routes/patients');
       ck('classify: blank strings and nonsense never flag', classifyLab(5, '', '') === 'normal' && classifyLab('abc', 1, 2) === 'normal');
     }

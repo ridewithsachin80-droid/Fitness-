@@ -161,7 +161,7 @@ export default function Onboarding({ onDone } = {}) {
           );
         })}
       </div>
-      {goals.length > 1 && <p className="text-caption text-lo mt-3" data-testid="onb-primary">Main goal: <span className="text-gold-light font-semibold">{GOAL_OPTIONS.find(g => g.id === goals[0])?.label}</span> · tap to reorder</p>}
+      {goals.length > 1 && <p className="text-caption text-lo mt-3" data-testid="onb-primary">Main goal: <span className="text-gold-light font-semibold">{GOAL_OPTIONS.find(g => g.id === goals[0])?.label}</span> · to change the order, tap a goal to unpick it and tap it again — it goes to the end</p>}
       <Footer onBack={() => setStep(0)} onNext={() => setStep(2)} disabled={goals.length === 0} />
     </Screen>
   );

@@ -41,7 +41,7 @@ async function loadHook(ctx) {
     '../api/client': 'export default globalThis.__p0OfflineHook.api;',
     '../store/authStore': 'export const useAuthStore = { getState: () => globalThis.__p0OfflineHook.session, subscribe: () => () => {} };',
     '../store/logStore': 'export const useLogStore = { getState: () => globalThis.__p0OfflineHook.logStore };',
-    idb: 'export const openDB = async () => { const ctx = globalThis.__p0OfflineHook; if (ctx.storageError) throw ctx.storageError; return ctx.db; };',
+    idb: 'export const openDB = async () => { const ctx = globalThis.__p0OfflineHook; if (ctx.stall) await new Promise(() => {}); if (ctx.storageError) throw ctx.storageError; return ctx.db; };',
     react: 'export const useEffect = () => {};',
   };
   const result = await esbuild.build({
@@ -653,6 +653,20 @@ function receiptServer(initial = {}) {
       let error;
       try { await pending; } catch (e) { error = e; }
       ck('a canceled account-bound request is surfaced instead of queued', error?.code === 'ERR_CANCELED' && db.rows.size === 0, error?.message);
+    }
+    {
+      // 16 Oct 2026: a stalled IndexedDB (iOS Safari, a blocked upgrade) held
+      // every save of the day forever. Now: wait ENQUEUE_TIMEOUT_MS, then post.
+      const db = memDB(), posted = [];
+      const ctx = { db, stall: true, session: { user: { id: 214 }, sessionVersion: 1 },
+        api: { post: async (url, payload) => { posted.push(payload); return { data: { saved_at: '2026-10-16T00:00:00Z' } }; } } };
+      const hook = await loadHook(ctx);
+      net.onLine = true;
+      const t0 = Date.now();
+      // A hang must fail the check, not let node exit quietly with nothing pending.
+      const res = await Promise.race([hook.saveLogWithFallback('2026-10-01', { water_ml: 500 }), new Promise(r => setTimeout(() => r({ hung: true }), 8000))]);
+      const took = Date.now() - t0;
+      ck('a stalled offline store does not hold the save: it posts directly after the time limit', res.queued === false && posted.length === 1 && posted[0].water_ml === 500 && took >= hook.ENQUEUE_TIMEOUT_MS - 50 && took < hook.ENQUEUE_TIMEOUT_MS + 2000, { took, posted: posted.length });
     }
     {
       const db = memDB();
