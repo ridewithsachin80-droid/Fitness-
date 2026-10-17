@@ -282,7 +282,13 @@ async function deleteFoods(page, re) {
   await page.keyboard.press('Escape'); await wait(800);
   await settle();
 }
-async function sheetSet(page, chip, steps) { await tap(page, chip); await wait(900); await steps(); await tapText(page, /^Done$/); await wait(600); }
+async function sheetSet(page, chip, steps) {
+  // Like a person: if the screen was still settling and the tap missed, tap again (R15 was flaky on 17 Oct).
+  const opened = () => page.waitForSelector('[role=dialog][aria-modal=true]', { visible: true, timeout: 5000 }).then(() => true, () => false);
+  await tap(page, chip);
+  if (!(await opened())) { await wait(1500); await tap(page, chip); must(await opened(), `tapping ${chip} twice did not open its panel`); }
+  await wait(600); await steps(); await tapText(page, /^Done$/); await wait(600);
+}
 
 // ── Screen checks (layout, reach, gold) ──────────────────────────────────────
 const noSidewaysScroll = page => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
