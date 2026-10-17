@@ -182,9 +182,13 @@ async function memberLogin(page, acc) {
     await waitFor(page, () => document.querySelector('[data-testid="daily-essentials"], [data-testid="onb-next"], [data-testid="onb-primary"]'), null, 30e3);
   } catch {
     // Say what the login screen says (wrong PIN, paused, too many tries…), never the PIN itself.
-    const said = await page.evaluate(() => [...document.querySelectorAll('[role=alert], .text-red-400, .text-danger, p')]
-      .map(e => e.textContent.trim()).filter(t => /PIN|number|paused|attempt|invalid|incorrect|wrong|error|try again/i.test(t)).slice(0, 3).join(' / '));
-    throw new Error(`sign-in did not reach Today. The login screen says: "${said || 'nothing — still on the login page'}"`);
+    const why = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll('button')].find(b => /^Log In/.test(b.textContent.trim()));
+      const pin = document.querySelector('input[type=password]')?.value || '';
+      const form = (btn?.closest('form, section, div.card, main') || document.body).innerText.replace(/\s+/g, ' ').slice(0, 300);
+      return `Log In button ${btn ? (btn.disabled ? 'DISABLED' : 'enabled') : 'not found'}; PIN typed: ${pin.length} characters${/\s/.test(pin) ? ' (contains a space!)' : ''}; screen: "${form}"`;
+    });
+    throw new Error(`sign-in did not reach Today. ${why}`);
   }
   await finishOnboarding(page);
   await page.waitForSelector('[data-testid="daily-essentials"]', { timeout: 30e3 });
