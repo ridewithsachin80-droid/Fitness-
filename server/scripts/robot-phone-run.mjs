@@ -19,8 +19,8 @@
  *   FITLIFE_ROBOT_MEMBER_PHONE,  FITLIFE_ROBOT_MEMBER_PIN   — "Auto Member", assigned to the coach below
  *   FITLIFE_ROBOT_MEMBER2_PHONE, FITLIFE_ROBOT_MEMBER2_PIN  — "Auto Member Two", NOT assigned to that coach
  *   FITLIFE_ROBOT_COACH_EMAIL,   FITLIFE_ROBOT_COACH_PASSWORD — "Auto Coach"
- * Without them the run is skipped with a warning (exit 0), so the push is not
- * marked red before Sachin has created the accounts.
+ * Without them the run is BLOCKED: it fails (exit 3) and says nothing was
+ * tested — a missing login must never look like a pass.
  *
  * Run:  node scripts/robot-phone-run.mjs [--wait-for-deploy]
  *   ROBOT_BASE_URL   defaults to https://fitness-test.up.railway.app (production is refused)
@@ -57,10 +57,15 @@ const missing = Object.entries({ FITLIFE_ROBOT_MEMBER_PHONE: ACC.a.phone, FITLIF
   FITLIFE_ROBOT_MEMBER2_PHONE: ACC.b.phone, FITLIFE_ROBOT_MEMBER2_PIN: ACC.b.pin,
   FITLIFE_ROBOT_COACH_EMAIL: ACC.coach.email, FITLIFE_ROBOT_COACH_PASSWORD: ACC.coach.password }).filter(([, v]) => !v).map(([k]) => k);
 if (missing.length) {
-  const msg = `Phone robot skipped: the robot's test-site accounts are not set up yet (missing: ${missing.join(', ')}).`;
+  // BLOCKED is a failure, never a pass (17 Oct 2026): the accounts exist now, so
+  // a missing login means nothing was verified and the run must show red.
+  const msg = `BLOCKED — nothing was tested: the robot's test-site logins are missing (${missing.join(', ')}). This is not a pass.`;
   console.log(msg);
-  if (GH) console.log(`::warning title=Phone robot skipped::${ghEsc(msg)}`);
-  process.exit(0);
+  fs.mkdirSync(OUT, { recursive: true });
+  fs.writeFileSync(path.join(OUT, 'report.md'), `# Phone robot — BLOCKED\n\n${msg}\n`);
+  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `# Phone robot — BLOCKED\n\n${msg}\n`);
+  if (GH) console.log(`::error title=Phone robot BLOCKED (not tested)::${ghEsc(msg)}`);
+  process.exit(3);
 }
 
 // ── Wait until the test site serves this commit's compiled app ───────────────
@@ -505,6 +510,18 @@ await check('R11b', 'Links that open a sheet still do after the AI was used', ['
     await A.keyboard.press('Escape'); await wait(600);
   }
   must(!bad.length, `landed on Today with nothing open: ${bad.join('; ')}`);
+}, { page: A });
+
+await check('R11c', 'Meal ideas always shows a real screen (never blank, never "null")', ['SHT-021'], async () => {
+  await gotoPath(A, '/more'); await tapText(A, /^Meal ideas/);
+  await waitFor(A, () => { const b = document.querySelector('[data-testid="meal-idea-body"]'); return b && b.dataset.state !== 'loading'; }, null, 20e3)
+    .catch(() => { throw new Error('the Meal ideas panel never finished loading'); });
+  const r = await A.evaluate(() => { const b = document.querySelector('[data-testid="meal-idea-body"]'); const d = b.closest('[role=dialog]');
+    return { state: b.dataset.state, reason: b.dataset.reason, text: (d?.innerText || '').replace(/\s+/g, ' ') }; });
+  must(['no-targets', 'message', 'suggestion'].includes(r.state), `state "${r.state}": ${r.text.slice(0, 120)}`);
+  must(!/null|undefined|NaN/.test(r.text), `shows a broken value: "${r.text.slice(0, 160)}"`);
+  await A.keyboard.press('Escape'); await wait(600);
+  return `${r.state}${r.reason ? ' / ' + r.reason : ''}: "${r.text.slice(0, 70)}"`;
 }, { page: A });
 
 await check('R12', 'Plan and Progress tabs load', ['PLN-001', 'PRG-003'], async () => {

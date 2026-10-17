@@ -18,7 +18,6 @@ import { useSettingsStore, haptic } from '../store/settingsStore';
 import AIFoodSearch from './AIFoodSearch';
 import { useAIChat } from '../store/aiChatStore';
 import { useVoiceInput } from '../hooks/useVoiceInput';
-
 // ── Extended portion map ──────────────────────────────────────────────────────
 // Sprint 12c: the pieces above the main component live in components/food/.
 import { TYPICAL_GRAMS, smartGrams, PORTIONS, PortionPicker } from './food/portions.jsx';
@@ -28,7 +27,7 @@ import { foodSource } from '../utils/foodProvenance';
 import { BarcodeScanner, hasBarcodeDetector } from './food/BarcodeScanner';
 import { PrescribedMeals } from './food/PrescribedMeals';
 import MacroEditor from './food/MacroEditor';
-import FoodVoiceStatus from './food/FoodVoiceStatus';
+import FoodVoiceStatus from './food/FoodVoiceStatus'; import WeighingHint from './food/WeighingHint';
 import { useMemberLabels, per100Of } from './food/useMemberLabels';
 
 export default function FoodLog({ items = [], onChange, calorieTarget, mealTarget = null, mealHeadingRef }) {
@@ -791,6 +790,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
               className="px-3 py-2.5 text-ghost hover:text-mute text-lg leading-none"
               aria-label="Close">×</button>
           </div>
+          <WeighingHint name={selected?.name || query} />
         </div>
       )}
     </div>

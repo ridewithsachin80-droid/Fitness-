@@ -14,3 +14,17 @@ export function preparationLabel(food = {}) {
   if (/\bcooked\b/i.test(food.name || '')) return 'Cooked weight';
   return 'Preparation not specified';
 }
+
+/**
+ * Raw or cooked: what the food's nutrition numbers are for, read from its name
+ * (17 Oct 2026). The food sheet used to tell everyone "Enter weight before
+ * cooking", which is wrong for the many foods whose numbers are for the cooked
+ * dish (cooked rice, dal tadka, steamed idli). Only explicit words count; when
+ * the name does not say, the answer is null and the member is asked to check.
+ */
+export function weighingBasis(name = '') {
+  const n = String(name || '');
+  if (/\b(raw|uncooked)\b/i.test(n)) return 'raw';
+  if (/\b(cooked|boiled|steamed|fried|roasted|grilled|baked|tadka|curry|gravy|sabzi)\b/i.test(n)) return 'cooked';
+  return null;
+}

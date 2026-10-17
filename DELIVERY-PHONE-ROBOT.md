@@ -50,7 +50,7 @@ These are the "Phone only" rows in column Q of the workbook.
    - gold on the Today ring → 6 screen checks failed, naming the ring;
    - food silently dropped from the save → the meal, undo and yesterday checks failed.
 3. **Guards:**
-   - with no accounts set up, it skips with a warning and exits 0, so pushes are not red before the setup;
+   - with a login missing, the run is **BLOCKED**: it fails red and says nothing was tested (changed 17 Oct from a green "skipped");
    - pointed at production, it refuses.
 
 ## Setup (Sachin, once)

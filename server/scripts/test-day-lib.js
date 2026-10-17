@@ -288,6 +288,37 @@ console.log('\n[7d] suggestMeal');
   const r = day.remaining({ kcalIn: 900, kcalTarget: 1800, proteinIn: 45, proteinTarget: 120 });
   ck('remaining() reports both gaps', r.kcal === 900 && r.protein === 75);
   ck('remaining() is null without any target', day.remaining({ kcalIn: 900 }) === null);
+
+  // 17 Oct 2026: a protein-only target printed "80 g protein and null kcal
+  // still to go". Every target combination, with and without food history.
+  const bad = /null|undefined|NaN/;
+  const combos = {
+    'calories and protein': { kcalIn: 900, kcalTarget: 1800, proteinIn: 40, proteinTarget: 120 },
+    'protein only':         { kcalIn: 900, proteinIn: 40, proteinTarget: 120 },
+    'calories only':        { kcalIn: 900, kcalTarget: 1800 },
+  };
+  for (const [label, o] of Object.entries(combos)) {
+    for (const [hist, f] of [['with history', foods], ['no history', []], ['nothing fits', [{ name: 'Ghee', per_100g: { calories: 900, protein: 0 }, last_g: 500, count: 3 }]]]) {
+      const r = S({ ...o, foods: f });
+      ck(`${label}, ${hist}: no "null"/"undefined"/"NaN" in the words`, r && !bad.test(r.headline + ' ' + (r.note || '')), r && r.headline);
+    }
+  }
+  ck('protein only, no history: "80 g protein still to go."', S({ ...combos['protein only'], foods: [] }).headline === '80 g protein still to go.', S({ ...combos['protein only'], foods: [] }).headline);
+  ck('calories only, no history: "900 kcal left today."', S({ ...combos['calories only'], foods: [] }).headline === '900 kcal left today.');
+  ck('both, no history: names both gaps', S({ ...combos['calories and protein'], foods: [] }).headline === '80 g protein and 900 kcal still to go.');
+  ck('neither target: no suggestion at all (null), so the sheet shows its own "targets not set" screen', S({ kcalIn: 900, foods }) === null);
+  ck('gapText never prints null for any mix', [[900, 80], [null, 80], [900, null], [null, null], [NaN, undefined]].every(([k, p]) => !bad.test(day.gapText(k, p))));
+  ck('every outcome carries a reason for the screen to show', ['over', 'on-target', 'no-history', 'no-fit', 'suggestion'].every(x =>
+    [over, done, noHistory, tight, gap].some(r => r.reason === x)), [over, done, noHistory, tight, gap].map(r => r.reason));
+}
+
+// ── 7d2. Raw or cooked: how to weigh (17 Oct 2026) ──────────────────────────
+console.log('\n[7d2] weighingBasis');
+{
+  const prov = importClient('utils/foodProvenance.js');
+  ck('"Rice (Cooked)", "Idli (Steamed)", "Dal Tadka" → weigh it cooked', ['Rice (Cooked)', 'Idli (Steamed)', 'Dal Tadka'].every(n => prov.weighingBasis(n) === 'cooked'));
+  ck('"Oats (Raw)", "Toor dal uncooked" → weigh it raw', ['Oats (Raw)', 'Toor dal uncooked'].every(n => prov.weighingBasis(n) === 'raw'));
+  ck('a name that does not say (Banana, Paneer, "") → unknown, so the member is asked to check', ['Banana (Ripe)', 'Paneer', '', null].every(n => prov.weighingBasis(n) === null));
 }
 
 // ── 7e. suggestLoad — double progression ────────────────────────────────────

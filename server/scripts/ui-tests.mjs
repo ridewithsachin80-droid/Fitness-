@@ -3396,6 +3396,71 @@ async function fixes2bTest() {
       }
     } catch (e) { ck(`open=${sheet} section ran to the end`, false, e.message); }
   }
+  // 17 Oct 2026: Meal ideas has one explicit screen per situation. Before, no
+  // targets showed a heading and "Done" only, and a failed request looked like
+  // "no food history". Each case mounts the real sheet in the browser.
+  {
+    const ideaApi = stub('api-38-idea.js', `
+      window.__calls = 0;
+      const foods = [{ name: 'Paneer (Low Fat)', per_100g: { calories: 204, protein: 18 }, last_g: 150, count: 5 },
+                     { name: 'Idli', per_100g: { calories: 130, protein: 3.5 }, last_g: 120, count: 9 }];
+      const get = async (url) => { window.__calls++;
+        if (!/recent-foods/.test(url)) return { data: [] };
+        const mode = window.__mode;
+        if (mode === 'pending') return new Promise(() => {});
+        if (mode === 'fail' && window.__calls === 1) throw new Error('Network Error');
+        return { data: mode === 'empty' ? [] : foods }; };
+      export default { get, post: get, put: get, patch: get, delete: get };`);
+    const mount = async (mode, targets) => {
+      const code = await bundle(`
+        import { createRoot } from 'react-dom/client';
+        import MealIdeaSheet from './components/sheets/MealIdeaSheet.jsx';
+        window.__mode = ${JSON.stringify(mode)};
+        const m = { log: { food: [] }, update: () => {}, kcalIn: 900, proteinIn: 40, terms: { kcal: 'kcal' }, ...${JSON.stringify(targets)} };
+        createRoot(document.getElementById('root')).render(<MealIdeaSheet open m={m} onClose={() => {}} />);`, ideaApi);
+      const W = run(code); await tick(900);
+      const body = () => W.w.document.querySelector('[data-testid="meal-idea-body"]');
+      const all = () => (W.w.document.querySelector('[role="dialog"]')?.textContent || '');
+      return { W, body, all };
+    };
+    const both = { kcalTarget: 1800, proteinTarget: 120 };
+    try {
+      const n = await mount('ok', {});
+      ck('Meal ideas, no targets: says targets aren’t set and that meals can still be logged (no fetch, no invented gap)',
+        n.body()?.dataset.state === 'no-targets' && /targets aren’t set yet/.test(n.all()) && /still log meals/.test(n.all()) && n.W.w.__calls === 0, n.all().slice(0, 140));
+      const l = await mount('pending', both);
+      ck('Meal ideas, loading: a loading state, not an empty one', l.body()?.dataset.state === 'loading', l.body()?.dataset.state);
+      const f = await mount('fail', both);
+      ck('Meal ideas, request failed: says so with "Try again" — not "no history"', f.body()?.dataset.state === 'error' && /Couldn’t load your recent foods/.test(f.all()) && !/log a few meals/i.test(f.all()), f.all().slice(0, 140));
+      f.W.w.document.querySelector('[data-testid="idea-retry"]').click(); await tick(900);
+      ck('…"Try again" loads the foods and shows a suggestion', f.body()?.dataset.state === 'suggestion' && f.W.w.document.querySelectorAll('[data-testid="idea-item"]').length > 0, f.body()?.dataset.state);
+      const e = await mount('empty', both);
+      ck('Meal ideas, no food history: asks to log a few meals', e.body()?.dataset.state === 'message' && e.body()?.dataset.reason === 'no-history' && /log a few meals/i.test(e.all()), e.all().slice(0, 140));
+      const s = await mount('ok', both);
+      ck('Meal ideas, valid suggestion: foods from the member’s history with "Add to today"', s.body()?.dataset.state === 'suggestion' && /Paneer/.test(s.all()) && !!s.W.w.document.querySelector('[data-testid="idea-add"]'), s.all().slice(0, 140));
+      for (const [label, t] of [['calories and protein', both], ['protein only', { proteinTarget: 120 }], ['calories only', { kcalTarget: 1800 }], ['neither', {}]]) {
+        for (const mode of ['ok', 'empty']) {
+          const x = await mount(mode, t);
+          ck(`Meal ideas, ${label}, ${mode === 'ok' ? 'with' : 'no'} history: never shows null / undefined / NaN`, !/null|undefined|NaN/.test(x.all()) && x.all().trim().length > 20, x.all().slice(0, 120));
+        }
+      }
+    } catch (e) { ck('meal idea states section ran to the end', false, e.message); }
+  }
+  // Raw or cooked: the food sheet no longer tells everyone to weigh before cooking.
+  try {
+    const sheet = fs.readFileSync(path.join(CLIENT_SRC, 'components/sheets/FoodSheet.jsx'), 'utf8');
+    ck('the food sheet no longer says "Enter weight before cooking" to everyone', !/Enter weight before cooking/.test(sheet));
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import WeighingHint from './components/food/WeighingHint.jsx';
+      createRoot(document.getElementById('root')).render(<div>
+        <div id="c"><WeighingHint name="Rice (Cooked)" /></div><div id="r"><WeighingHint name="Oats (Raw)" /></div>
+        <div id="u"><WeighingHint name="Paneer" /></div><div id="n"><WeighingHint name="" /></div></div>);`);
+    const H = run(code); await tick(300);
+    const t = id => H.w.document.querySelector(`#${id}`).textContent;
+    ck('weighing hint: cooked food → weigh it cooked; raw → weigh before cooking; unknown → check raw or cooked; no food → nothing',
+      /weigh it cooked/.test(t('c')) && /weigh it before cooking/.test(t('r')) && /Check whether these numbers are for raw or cooked/.test(t('u')) && t('n') === '', [t('c'), t('r'), t('u'), t('n')]);
+  } catch (e) { ck('weighing hint section ran to the end', false, e.message); }
   // MAC-003 (17 Oct 2026): a macro over the coach's target turns amber on
   // Today, as it did on production's Eat row; the others stay as they are.
   try {
