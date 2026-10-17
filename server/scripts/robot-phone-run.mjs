@@ -177,6 +177,10 @@ async function memberLogin(page, acc) {
   await page.type('input[type=password]', acc.pin);
   const typed = await page.$eval('input[type=tel]', el => el.value.replace(/\D/g, '').length);
   must(typed === 10, `the phone number secret has ${typed} digits after typing, not 10 (check the secret: digits only, no +91)`);
+  // Keep the server's own answer to the sign-in (status and message, never the PIN).
+  let answer = null;
+  const onResp = async r => { if (/\/api\/auth\/[\w-]*login/.test(r.url()) && r.request().method() === 'POST') answer = `${r.status()} ${(await r.text().catch(() => '')).slice(0, 160)}`; };
+  page.on('response', onResp);
   await tapText(page, /^Log In/);
   try {
     await waitFor(page, () => document.querySelector('[data-testid="daily-essentials"], [data-testid="onb-next"], [data-testid="onb-primary"]'), null, 30e3);
@@ -188,7 +192,7 @@ async function memberLogin(page, acc) {
       const form = (btn?.closest('form, section, div.card, main') || document.body).innerText.replace(/\s+/g, ' ').slice(0, 300);
       return `Log In button ${btn ? (btn.disabled ? 'DISABLED' : 'enabled') : 'not found'}; PIN typed: ${pin.length} characters${/\s/.test(pin) ? ' (contains a space!)' : ''}; screen: "${form}"`;
     });
-    throw new Error(`sign-in did not reach Today. ${why}`);
+    throw new Error(`sign-in did not reach Today. Server answered: ${answer || 'nothing'}. ${why}`);
   }
   await finishOnboarding(page);
   await page.waitForSelector('[data-testid="daily-essentials"]', { timeout: 30e3 });
