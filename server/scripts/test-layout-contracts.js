@@ -612,7 +612,11 @@ ck('openChat() is a focus counter, not a boolean (a second tap still brings the 
    /focusRequest: s\.focusRequest \+ 1/.test(read('../src/store/aiChatStore.js')));
 ck('Apply stamps lastAppliedAt; the model refreshes the workout summary from it, not from "overlay closed"',
    /useAIReviewSave\(/.test(chat) && /markApplied\(\)/.test(read('hooks/useAIReviewSave.js')) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
-ck('openChat() closes any open sheet so the composer is reachable', /if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
+// 17 Oct 2026: only a NEW request closes the sheet. The old form ("any
+// non-zero counter") also fired on arrival at Today and shut the sheet a link
+// had just opened; ui-tests [38] covers both directions in the browser.
+ck('openChat() closes any open sheet so the composer is reachable (a new request only)',
+   /chatFocusRequest !== seenFocusRequest\.current\) setHeroPanel\(null\)/.test(model) && !/if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
 ck('Today mounts exactly one AI workspace with overlay enabled', (todayPage.match(/<AIChatLog/g) || []).length === 1 && /<AIChatLog[^>]*overlay/.test(todayPage));
 
 ck('the viewport meta asks Android to resize the layout viewport for the keyboard',

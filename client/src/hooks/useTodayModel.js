@@ -294,9 +294,17 @@ export default function useTodayModel() {
   // openChat() from anywhere (orb, Today's read, a sheet's "Log with AI"
   // banner) must be able to reach the composer — which a sheet would cover.
   // Close whatever sheet is open on the same signal.
+  //
+  // Only a NEW request closes the sheet (17 Oct 2026). The counter keeps its
+  // value between screens, so reacting to it on arrival closed the sheet a
+  // link had just asked for: once the member had used the AI, More → Meal
+  // ideas / Food / Nutrition and Plan → Log, Water, Sleep, Start all landed on
+  // Today with nothing open.
   const chatFocusRequest = useAIChat(s => s.focusRequest);
+  const seenFocusRequest = useRef(chatFocusRequest);
   useEffect(() => {
-    if (chatFocusRequest) setHeroPanel(null);
+    if (chatFocusRequest !== seenFocusRequest.current) setHeroPanel(null);
+    seenFocusRequest.current = chatFocusRequest;
   }, [chatFocusRequest]);
 
   // Personal-best detection. Declared here, AFTER heroPanel and

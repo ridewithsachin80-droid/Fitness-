@@ -491,6 +491,22 @@ await check('R11', 'More: seven rows, each opens', ['RDS-015'], async () => {
   }
 }, { page: A });
 
+// 17 Oct 2026 (found by Sachin): after the AI had been used, links that open
+// a sheet on Today landed with nothing open. The robot has used the AI by now.
+await check('R11b', 'Links that open a sheet still do after the AI was used', ['RDS-015', 'SHT-020', 'SHT-021', 'PLN-006'], async () => {
+  const sheetOpen = () => A.evaluate(() => [...document.querySelectorAll('[role=dialog][aria-modal=true]')].map(d => d.getAttribute('aria-label')).join(','));
+  const bad = [];
+  for (const [from, label] of [['/more', /^Food & saved meals/], ['/more', /^Nutrition details/], ['/more', /^Meal ideas/], ['/plan', /^Log ›$/], ['/plan', /^Water/], ['/plan', /^Sleep/]]) {
+    await gotoPath(A, from);
+    try { await tapText(A, label); } catch { continue; } // e.g. no "Log ›" without a plan
+    await wait(2000);
+    const open = await sheetOpen();
+    if (!open) bad.push(`${from} → ${label.source.replace(/[\^$]/g, '')}`);
+    await A.keyboard.press('Escape'); await wait(600);
+  }
+  must(!bad.length, `landed on Today with nothing open: ${bad.join('; ')}`);
+}, { page: A });
+
 await check('R12', 'Plan and Progress tabs load', ['PLN-001', 'PRG-003'], async () => {
   await gotoPath(A, '/plan'); await wait(1500);
   for (const t of ['Week', 'Nutrition', 'Recovery', 'Today']) { await tapText(A, new RegExp(`^${t}$`)).catch(() => {}); await wait(700); }

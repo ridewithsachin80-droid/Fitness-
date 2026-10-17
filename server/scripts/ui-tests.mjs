@@ -3365,6 +3365,37 @@ async function fixes2bTest() {
     q('whats-new-ok')?.click(); await tick(200);
     ck('…"Got it" hides it for good on this phone', !q('whats-new') && A.w.localStorage.getItem('fitlife-whats-new-2026-10') === '1');
   } catch (e) { ck('section A ran to the end', false, e.message); }
+  // 17 Oct 2026 (found by Sachin): once the AI had been used, More → Meal ideas
+  // / Food / Nutrition and Plan → Log, Water, Sleep landed on Today with nothing
+  // open — Today closed the sheet on arrival because the AI's request counter
+  // was not 0. Arrive the way those links do, with the counter already used.
+  for (const sheet of ['mealidea', 'food', 'water']) {
+    try {
+      const code = await bundle(`
+        import { createRoot } from 'react-dom/client';
+        import { MemoryRouter } from 'react-router-dom';
+        import DailyLog from './pages/DailyLog.jsx';
+        import { useAuthStore } from './store/authStore.js';
+        import { useSettingsStore } from './store/settingsStore.js';
+        import { useAIChat } from './store/aiChatStore.js';
+        useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+        useSettingsStore.setState({ onboardingDone: true, ageMode: 'adult' });
+        useAIChat.setState({ focusRequest: 3, open: false, composerOpen: false }); window.__aiChat = useAIChat;
+        createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/?open=${sheet}']}><DailyLog /></MemoryRouter>);`, stub(`api-38-open-${sheet}.js`, TODAY_API_STUB));
+      const S = run(code); await tick(1500);
+      // A closing sheet stays in the page for its exit animation, marked aria-hidden; count only live ones.
+      const live = () => [...S.w.document.querySelectorAll('[role="dialog"][aria-modal="true"]')].filter(d => !d.closest('[aria-hidden="true"]'));
+      const dialogs = live();
+      ck(`/?open=${sheet} after the AI was used: the sheet is open on arrival`, dialogs.length === 1, dialogs.map(d => d.getAttribute('aria-label')));
+      if (sheet === 'food') {
+        // …and the rule still does its job: a NEW AI request closes the sheet,
+        // so the composer is never hidden behind it.
+        S.w.__aiChat.getState().openChat(); await tick(800);
+        const labels = live().map(d => d.getAttribute('aria-label'));
+        ck('a new AI request still closes the open sheet (only the AI panel is left)', !labels.includes('What did you eat?') && labels.some(l => /FitLife AI/.test(l || '')), labels);
+      }
+    } catch (e) { ck(`open=${sheet} section ran to the end`, false, e.message); }
+  }
   // MAC-003 (17 Oct 2026): a macro over the coach's target turns amber on
   // Today, as it did on production's Eat row; the others stay as they are.
   try {

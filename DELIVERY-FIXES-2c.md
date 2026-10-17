@@ -40,3 +40,26 @@ Pushed to the **test** branch on top of Fixes 2b.
   - `client/dist/*` (the compiled app)
 - **New:** `DELIVERY-FIXES-2c.md` (this note).
 - Nothing renamed or deleted.
+
+---
+
+## Added the same evening (17 Oct): links that open a sheet on Today
+- **Bug (found by Sachin):** once a member had used the AI in a session, these links landed on Today with **nothing open**:
+  - More → Food & saved meals, Nutrition details, Meal ideas;
+  - Plan → Log ›, Water, Sleep, Start;
+  - the voice commands "open food" and "open workout".
+- **Why:** Today closes any open sheet when the AI panel is asked for, so the panel is never hidden behind it. The AI's request counter keeps its value between screens, so on arrival Today mistook the old request for a new one and closed the sheet the link had just opened.
+- **Fix:** `client/src/hooks/useTodayModel.js` closes the sheet only on a **new** request.
+  - In real Chrome: all the links above open their sheet after the AI was used.
+  - "Log with AI Chat" inside the food sheet still closes the sheet and opens the panel.
+- **Tests:**
+  - **New:** ui-tests [38] arrives at Today via `?open=mealidea`, `food` and `water` with the AI already used (all fail on the old code), and checks that a new AI request still closes an open sheet.
+  - **New robot check:** R11b clicks these links on the live test site after using the AI.
+  - **Changed on purpose:** test-layout-contracts matched the old line `if (chatFocusRequest) setHeroPanel(null)`, which was the bug. It now requires the new-request-only form and forbids the old one; the behaviour is covered in ui-tests.
+- **Full gate green locally:** 5,726 assertions. Robot on the local copy: 45/45.
+- **Files:**
+  - `client/src/hooks/useTodayModel.js`
+  - `server/scripts/ui-tests.mjs`
+  - `server/scripts/test-layout-contracts.js`
+  - `server/scripts/robot-phone-run.mjs`
+  - `client/dist/*`
