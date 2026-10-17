@@ -48,6 +48,33 @@ done
 cd "$(dirname "$0")/.." || exit 1
 ROOT=$(pwd)
 
+# On GitHub, also write what failed as an annotation (17 Oct 2026). The job
+# log is stored on a server our build workspace cannot reach; annotations can
+# be read through the GitHub API. Output only — no check changes.
+failed_suites=""
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  GATE_OUT=$(mktemp)
+  exec > >(tee "$GATE_OUT") 2>&1
+  gh_annotate() {
+    local code=$? body="" s log
+    [ "$code" -eq 0 ] && return
+    sleep 1
+    body=$(grep -E -A4 '✗|FAILED|could not run' "$GATE_OUT" | head -40)
+    for s in $failed_suites; do
+      log="${RESULTS_DIR:-}/$s.log"
+      [ -f "$log" ] && body="$body
+── $s.log ──
+$(grep -E -B2 -A3 '✗|Error|error:|AssertionError|Timeout' "$log" | head -40)"
+    done
+    [ -f "${RESULTS_DIR:-}/ui-tests.log" ] && grep -q '✗\|Error' "${RESULTS_DIR}/ui-tests.log" && body="$body
+── ui-tests.log (✗ lines) ──
+$(grep -E -B2 -A3 '✗|Error' "${RESULTS_DIR}/ui-tests.log" | head -40)"
+    body=$(printf '%s' "${body:-exit $code with no ✗ line}" | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | awk '{printf "%s%%0A", $0}')
+    echo "::error title=Test gate failed (exit $code)::$body"
+  }
+  trap gh_annotate EXIT
+fi
+
 # ── Locate the Postgres binaries ─────────────────────────────────────────────
 if ! command -v initdb >/dev/null 2>&1; then
   for d in /usr/lib/postgresql/*/bin /opt/homebrew/opt/postgresql*/bin /usr/local/opt/postgresql*/bin; do
@@ -237,6 +264,7 @@ run_suite() {
     printf "  ✓ %-22s %s assertions\n" "$name" "$n"
   else
     failed=$((failed + 1))
+    failed_suites="$failed_suites $name"
     printf "  ✗ %-22s FAILED\n" "$name"
     grep -E '✗|Error|error:' "$log" | head -4 | sed 's/^/      /'
   fi
