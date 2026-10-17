@@ -69,8 +69,16 @@ $(grep -E -B2 -A3 '✗|Error|error:|AssertionError|Timeout' "$log" | head -40)"
     [ -f "${RESULTS_DIR:-}/ui-tests.log" ] && grep -q '✗\|Error' "${RESULTS_DIR}/ui-tests.log" && body="$body
 ── ui-tests.log (✗ lines) ──
 $(grep -E -B2 -A3 '✗|Error' "${RESULTS_DIR}/ui-tests.log" | head -40)"
-    body=$(printf '%s' "${body:-exit $code with no ✗ line}" | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | awk '{printf "%s%%0A", $0}')
-    echo "::error title=Test gate failed (exit $code)::$body"
+    # Short, one per failed suite: a very long annotation is dropped by GitHub
+    # (17 Oct 2026: a 120-line one never arrived).
+    enc() { printf '%s' "$1" | head -c 900 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e 's/::/: :/g' | awk '{printf "%s%%0A", $0}'; }
+    for s in $failed_suites; do
+      log="${RESULTS_DIR:-}/$s.log"
+      [ -f "$log" ] && echo "::error title=Gate: $s failed::$(enc "$(grep -E '✗|Error|AssertionError|Timeout' "$log" | head -6)")"
+    done
+    [ -f "${RESULTS_DIR:-}/ui-tests.log" ] && grep -q '✗' "${RESULTS_DIR}/ui-tests.log" && echo "::error title=Gate: ui-tests failed::$(enc "$(grep -E '✗' "${RESULTS_DIR}/ui-tests.log" | head -6)")"
+    [ -z "$failed_suites" ] && echo "::error title=Test gate failed (exit $code)::$(enc "${body:-no ✗ line printed}")"
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '### Test gate failed\n\n```\n%s\n```\n' "$body" >> "$GITHUB_STEP_SUMMARY"
   }
   trap gh_annotate EXIT
 fi
