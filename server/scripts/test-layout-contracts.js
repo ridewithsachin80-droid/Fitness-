@@ -885,6 +885,27 @@ console.log('\n[brand] green everywhere, both themes');
     return gold.test(code);
   }).map(f => path.relative(SRC, f));
   ck('no gold left in the app code (the brand is green since 16 Oct 2026)', offenders.length === 0, offenders);
+  // 17 Oct 2026: the list above missed the old light gold (#e0c98a) on food
+  // rows, Progress, Devices and Coach AI. Catch gold by its hue instead: any
+  // #rrggbb between about 37° and 52° that is not one of the standard amber
+  // WARNING shades (those are meant to look like a warning, not the brand).
+  const AMBER_OK = new Set(['fbbf24', 'f59e0b', 'fcd34d', 'fde68a', 'fef3c7', 'd97706', 'b45309', 'eab308', 'facc15', 'fde047']);
+  const goldish = (hex) => {
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, dlt = max - min;
+    if (!dlt) return false;
+    const s = dlt / (1 - Math.abs(2 * l - 1));
+    let h = max === r ? ((g - b) / dlt) % 6 : max === g ? (b - r) / dlt + 2 : (r - g) / dlt + 4;
+    h = (h * 60 + 360) % 360;
+    return h >= 37 && h <= 52 && s >= 0.35 && l >= 0.3 && l <= 0.85;
+  };
+  const byHue = walk(SRC).filter(f => /\.(jsx?|css)$/.test(f)).flatMap(f => {
+    const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
+    return [...code.matchAll(/#([0-9a-f]{6})\b/gi)].map(m => m[1].toLowerCase())
+      .filter(h => goldish(h) && !AMBER_OK.has(h)).map(h => `${path.relative(SRC, f)} #${h}`);
+  });
+  ck('no gold-coloured hex codes either (caught by hue, not by a list)', byHue.length === 0, byHue);
+  ck('the hue check itself recognises the old golds', ['d4af37', 'e0c98a', 'b38f1f', 'b08a4a', 'c9a227'].every(goldish) && !goldish('315d47') && !goldish('b7d7c2'));
   const css = fs.readFileSync(path.join(SRC, 'index.css'), 'utf8');
   ck('dark accent #B7D7C2 on #141817; light accent #315D47 on #F8F9F6',
      /--fit-base: 20 24 23;[\s\S]*--fit-accent: 183 215 194;[\s\S]*\[data-theme="light"\][\s\S]*--fit-base: 248 249 246;[\s\S]*--fit-accent: 49 93 71;/.test(css));

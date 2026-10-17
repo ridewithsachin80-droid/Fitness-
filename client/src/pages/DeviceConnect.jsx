@@ -668,7 +668,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
             <div style={{ display: 'flex', gap: 12, marginBottom: 12, padding: '10px 12px', background: 'rgba(34,197,94,0.05)', borderRadius: 10, border: '1px solid rgba(34,197,94,0.15)' }}>
               {liveMetrics.heart_rate && <span style={{ color: '#22c55e', fontSize: 13, fontWeight: 700 }}>❤️ {liveMetrics.heart_rate} bpm</span>}
               {liveMetrics.spo2 && <span style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700 }}>🩸 {liveMetrics.spo2}%</span>}
-              {liveMetrics.hrv && <span style={{ color: '#e0c98a', fontSize: 13, fontWeight: 700 }}>📊 HRV {liveMetrics.hrv}ms</span>}
+              {liveMetrics.hrv && <span style={{ color: '#a78bfa', fontSize: 13, fontWeight: 700 }}>📊 HRV {liveMetrics.hrv}ms</span>}
               {liveMetrics.battery != null && <span style={{ color: '#f59e0b', fontSize: 13, fontWeight: 700 }}>🔋 {liveMetrics.battery}%</span>}
             </div>
           )}

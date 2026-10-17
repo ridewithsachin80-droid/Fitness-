@@ -3365,6 +3365,22 @@ async function fixes2bTest() {
     q('whats-new-ok')?.click(); await tick(200);
     ck('…"Got it" hides it for good on this phone', !q('whats-new') && A.w.localStorage.getItem('fitlife-whats-new-2026-10') === '1');
   } catch (e) { ck('section A ran to the end', false, e.message); }
+  // MAC-003 (17 Oct 2026): a macro over the coach's target turns amber on
+  // Today, as it did on production's Eat row; the others stay as they are.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import DailyEssentials from './components/member/DailyEssentials.jsx';
+      const m = { log: { food: [{ name: 'Ghee rice' }], water: 0 }, kcalIn: 900, kcalTarget: 1800, protocol: null, sleepText: null, sleepMins: null,
+        coachPlan: null, coachRows: null, workoutSummary: {}, isToday: true, ageMode: 'adult', weightDelta: null,
+        eaten: { pro: 37, carb: 40, fat: 75 }, macroTargets: { pro: 120, carb: 150, fat: 60 } };
+      createRoot(document.getElementById('root')).render(<DailyEssentials m={m} onOpen={() => {}} />);`);
+    const O = run(code); await tick(300);
+    const cells = [...O.w.document.querySelectorAll('[data-testid="plan-macros"] > span')];
+    ck('a macro over its target is marked (fat 75 / 60 g) and the others are not', cells.length === 3 && cells[2].classList.contains('is-over') && !cells[0].classList.contains('is-over') && !cells[1].classList.contains('is-over'), cells.map(c => c.className));
+    const css = fs.readFileSync(path.join(CLIENT_SRC, 'components/member/member.css'), 'utf8');
+    ck('…and the marked number and bar use the warning colour', /\.is-over \.member-macro-value\{color:rgb\(var\(--fit-warn\)\)\}/.test(css) && /\.is-over \.member-macro-bar>span\{background:rgb\(var\(--fit-warn\)\)\}/.test(css));
+  } catch (e) { ck('over-target section ran to the end', false, e.message); }
   try {
     const src = f => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
     ck('quick re-add says "238 kcal", not "238k"', !/\{kcal\}k</.test(src('components/FoodLog.jsx')) && /\{kcal\} kcal/.test(src('components/FoodLog.jsx')));

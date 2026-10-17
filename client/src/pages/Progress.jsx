@@ -36,7 +36,9 @@ function nDaysAgo(n) {
 // Chart colours for this page. Carbs and fat were two near-identical yellows
 // (#fbbf24 and #d9b451): the lines could not be told apart. These three are
 // checked for separation, including for colour-blind readers, on the card colour.
-const MACRO = { kcal: '#B08A4A', pro: '#5895DC', carb: '#B38F1F', fat: '#D9608F' };
+// 17 Oct 2026: calories take the brand colour (read live, so both themes work);
+// carbs moved from mustard (read as the old gold) to burnt orange.
+const MACRO = { get kcal() { return accent(); }, pro: '#5895DC', carb: '#C0711F', fat: '#D9608F' };
 // The chart pop-up, dark like the card it sits on (the library's default is a white box).
 const TIP = {
   contentStyle: { fontSize: 11, borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.14)', color: 'var(--text-hi)', padding: '6px 10px' },
@@ -603,7 +605,7 @@ export default function Progress() {
                 <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']} cursor={{ fill: themeColor('--fit-ink', 0.04) }}
                   contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle} />
                 {profile?.macros?.kcal && (
-                  <ReferenceLine y={profile.macros.kcal} stroke="#e0c98a" strokeDasharray="3 3" />
+                  <ReferenceLine y={profile.macros.kcal} stroke={accent()} strokeDasharray="3 3" />
                 )}
                 <Bar dataKey="kcal" fill={MACRO.kcal} radius={[3, 3, 0, 0]} />
               </BarChart>

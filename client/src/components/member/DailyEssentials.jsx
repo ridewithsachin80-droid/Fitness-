@@ -50,8 +50,10 @@ export default function DailyEssentials({ m, onOpen }) {
       </span>
       <span className="member-macros" data-testid="plan-macros">{macros.map(([label, short, value, goal]) => {
         const g = Number(goal) > 0 ? Number(goal) : null, v = Math.round(Number(value) || 0);
-        return <span key={label}>
-          <strong><span className="sr-only">{short} </span>{v}{g ? <span className="member-macro-goal"> / {Math.round(g)}</span> : null} <small>g</small></strong>
+        // Over the coach's target: the number and its bar turn amber, as on production (MAC-003, 17 Oct 2026).
+        const over = g && v > g;
+        return <span key={label} className={over ? 'is-over' : undefined}>
+          <strong><span className="sr-only">{short} </span><span className="member-macro-value">{v}</span>{g ? <span className="member-macro-goal"> / {Math.round(g)}</span> : null} <small>g</small></strong>
           {g && <span className="member-macro-bar" aria-hidden="true"><span style={{ width: Math.min(100, v / g * 100) + '%' }} /></span>}
           <span>{label}</span>
         </span>;

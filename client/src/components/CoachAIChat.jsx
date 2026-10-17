@@ -362,7 +362,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
 
   // Voice: review card above the input — see VoiceComposer for the flow
   const vc = useVoiceComposer({
-    onSend: (t) => send(t), accent: '#e0c98a',
+    onSend: (t) => send(t), // accent: the theme's own (was the old gold, 17 Oct 2026)
     contextKey: `coach:${open ? 'open' : 'closed'}:${contextMember?.id ?? 'roster'}`,
   });
   useEffect(() => {
