@@ -175,8 +175,17 @@ async function memberLogin(page, acc) {
   await page.waitForSelector('input[type=tel]', { timeout: 30e3 });
   await page.type('input[type=tel]', acc.phone);
   await page.type('input[type=password]', acc.pin);
+  const typed = await page.$eval('input[type=tel]', el => el.value.replace(/\D/g, '').length);
+  must(typed === 10, `the phone number secret has ${typed} digits after typing, not 10 (check the secret: digits only, no +91)`);
   await tapText(page, /^Log In/);
-  await waitFor(page, () => document.querySelector('[data-testid="daily-essentials"], [data-testid="onb-next"], [data-testid="onb-primary"]'), null, 30e3);
+  try {
+    await waitFor(page, () => document.querySelector('[data-testid="daily-essentials"], [data-testid="onb-next"], [data-testid="onb-primary"]'), null, 30e3);
+  } catch {
+    // Say what the login screen says (wrong PIN, paused, too many tries…), never the PIN itself.
+    const said = await page.evaluate(() => [...document.querySelectorAll('[role=alert], .text-red-400, .text-danger, p')]
+      .map(e => e.textContent.trim()).filter(t => /PIN|number|paused|attempt|invalid|incorrect|wrong|error|try again/i.test(t)).slice(0, 3).join(' / '));
+    throw new Error(`sign-in did not reach Today. The login screen says: "${said || 'nothing — still on the login page'}"`);
+  }
   await finishOnboarding(page);
   await page.waitForSelector('[data-testid="daily-essentials"]', { timeout: 30e3 });
   await wait(800);
