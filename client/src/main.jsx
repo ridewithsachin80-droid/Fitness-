@@ -6,6 +6,7 @@ import './index.css';
 // Register Vite PWA service worker
 // In production this enables offline support and caching.
 import { registerSW } from 'virtual:pwa-register';
+import { watchForNewVersion } from './utils/swReload';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 // ── Chunk-load self-healing ───────────────────────────────────────────────────
@@ -23,14 +24,8 @@ window.addEventListener('vite:preloadError', (event) => {
 // Reload only once the NEW worker has actually taken control. Reloading
 // immediately after updateSW() is a race — the old worker is often still
 // controlling the page, so the user reloads and sees the old app again.
-let reloading = false;
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return;
-    reloading = true;
-    window.location.reload();
-  });
-}
+// …and never on the very first install (utils/swReload.js, 17 Oct 2026).
+if ('serviceWorker' in navigator) watchForNewVersion(navigator.serviceWorker);
 
 const updateSW = registerSW({
   immediate: true,

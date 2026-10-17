@@ -348,6 +348,16 @@ const marker = `Robot ${STAMP}`;
 const A = await newPage('member A');
 let todayBefore = null;
 
+await check('R00', 'First visit: the page does not reload by itself', ['OFF-011', 'LOG-001'], async () => {
+  // 17 Oct 2026: on a brand-new phone the app reloaded a few seconds after
+  // opening, wiping a half-typed login (it reloaded on the first install).
+  const P = await newPage('first visit'); let loads = 0; P.on('load', () => loads++);
+  await P.goto(BASE, { waitUntil: 'load' }); await wait(15e3);
+  const controlled = await P.evaluate(() => !!navigator.serviceWorker?.controller);
+  await P.browserContext().close();
+  must(loads === 1, `the page loaded ${loads} times in 15 s on a first visit (expected 1)`);
+  return `1 load; offline helper in control: ${controlled}`;
+});
 await check('R01', 'Member signs in; Today opens with four tabs', ['LOG-001', 'RDS-001', 'SMK-004'], async () => {
   await memberLogin(A, ACC.a);
   const tabs = await A.$$eval('nav a, nav button', els => els.map(e => e.textContent.trim()).filter(Boolean));

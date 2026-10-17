@@ -104,7 +104,8 @@ export default function MealIdeaSheet({ open, onClose, m }) {
               </p>
             </>
           ) : (
-            <EmptyState compact icon={idea.reason === 'no-history' ? 'food' : 'check'} title={idea.headline} body={idea.note || ''} />
+            <EmptyState compact icon={idea.reason === 'no-history' ? 'food' : 'check'} body={idea.note || ''}
+              title={{ 'no-history': 'No usual foods yet', 'no-fit': 'Nothing you usually eat fits', over: 'Over for today', 'on-target': 'You’re on target' }[idea.reason] || 'Nothing to add right now'} />
           )}
         </div>
       )}

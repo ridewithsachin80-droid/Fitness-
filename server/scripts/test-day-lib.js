@@ -312,6 +312,25 @@ console.log('\n[7d] suggestMeal');
     [over, done, noHistory, tight, gap].some(r => r.reason === x)), [over, done, noHistory, tight, gap].map(r => r.reason));
 }
 
+// ── 7d3. Reload only when a new version takes over (17 Oct 2026) ────────────
+// The first install also fires "controllerchange"; the old rule reloaded then,
+// wiping a new member's half-typed login a few seconds after the first visit.
+console.log('\n[7d3] watchForNewVersion');
+{
+  const { watchForNewVersion } = importClient('utils/swReload.js');
+  const fake = (controller) => { const t = new EventTarget(); t.controller = controller; return t; };
+  let n = 0; const first = fake(null); watchForNewVersion(first, () => n++);
+  first.dispatchEvent(new Event('controllerchange'));
+  ck('first visit: the helper taking control does NOT reload the page', n === 0, n);
+  first.dispatchEvent(new Event('controllerchange'));
+  ck('…a later new version on that same page does reload it', n === 1, n);
+  let m = 0; const upd = fake({}); watchForNewVersion(upd, () => m++);
+  upd.dispatchEvent(new Event('controllerchange')); upd.dispatchEvent(new Event('controllerchange'));
+  ck('a new version replacing the old one reloads exactly once', m === 1, m);
+  const main = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/main.jsx'), 'utf8');
+  ck('main.jsx uses it, and no longer reloads on every controllerchange', /watchForNewVersion\(navigator\.serviceWorker\)/.test(main) && !/addEventListener\('controllerchange'/.test(main));
+}
+
 // ── 7d2. Raw or cooked: how to weigh (17 Oct 2026) ──────────────────────────
 console.log('\n[7d2] weighingBasis');
 {

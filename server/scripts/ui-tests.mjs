@@ -3436,6 +3436,8 @@ async function fixes2bTest() {
       ck('…"Try again" loads the foods and shows a suggestion', f.body()?.dataset.state === 'suggestion' && f.W.w.document.querySelectorAll('[data-testid="idea-item"]').length > 0, f.body()?.dataset.state);
       const e = await mount('empty', both);
       ck('Meal ideas, no food history: asks to log a few meals', e.body()?.dataset.state === 'message' && e.body()?.dataset.reason === 'no-history' && /log a few meals/i.test(e.all()), e.all().slice(0, 140));
+      const head = e.W.w.document.querySelector('[role="dialog"]')?.getAttribute('aria-label') || '';
+      ck('…and the heading is not printed twice', head && e.all().split(head).length - 1 === 1, e.all().slice(0, 160));
       const s = await mount('ok', both);
       ck('Meal ideas, valid suggestion: foods from the member’s history with "Add to today"', s.body()?.dataset.state === 'suggestion' && /Paneer/.test(s.all()) && !!s.W.w.document.querySelector('[data-testid="idea-add"]'), s.all().slice(0, 140));
       for (const [label, t] of [['calories and protein', both], ['protein only', { proteinTarget: 120 }], ['calories only', { kcalTarget: 1800 }], ['neither', {}]]) {

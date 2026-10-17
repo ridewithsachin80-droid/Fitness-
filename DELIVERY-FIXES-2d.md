@@ -37,6 +37,27 @@ A run with missing logins now **fails** with "BLOCKED — nothing was tested… 
 
 New robot check **R11c**: on the live test site, Meal ideas always settles on a real screen and never shows null/undefined/NaN.
 
+## 5. Found by the robot: the app reloaded itself on a first visit
+**Bug:** on a brand-new phone or browser, the app reloaded itself a few seconds after opening. That wiped a half-typed phone number or PIN, or an open panel.
+
+**Cause:** the "reload when a new version takes over" rule also fired the first time the offline helper took control, when there's no old version to replace.
+
+**Fix:** `client/src/utils/swReload.js` (new), used by `client/src/main.jsx`, reloads only when a new version replaces an old one.
+
+**Proven in real Chrome on a production-mode copy:**
+- a fresh visit now loads **once** in 15 s (it was twice, every time);
+- a simulated deploy still shows "New version available" and reloads into it.
+
+**Tests:**
+- test-day-lib [7d3]:
+  - first install → no reload;
+  - a later new version → reload;
+  - a version swap reloads exactly once;
+  - main.jsx uses the rule.
+- Robot **R00:** a first visit on the live site loads once.
+
+**Also:** the "no food history" Meal ideas screen printed its heading twice. It now has its own short title, and a ui-test checks the heading appears once.
+
 ## Tests (all new, none weakened)
 - **test-day-lib:**
   - every target combination × with history, no history, nothing fits: no null/undefined/NaN;
@@ -55,7 +76,7 @@ New robot check **R11c**: on the live test site, Meal ideas always settles on a 
   - the food sheet no longer says "Enter weight before cooking".
 - **Mutation-checked:** on the old code these fail, reproducing "80 g protein and null kcal still to go." word for word.
 - **Size contract:** FoodLog must stay under 800 lines; one blank line was removed to keep it at 799 (the limit wasn't changed).
-- **Full gate green locally:** 5,760 assertions.
+- **Full gate green locally:** 5,765 assertions (after the reload fix). Robot on the local copy: 47/47.
 
 ## Screens checked
 Phone 390 px and desktop 1280 px, light and dark:
@@ -75,6 +96,7 @@ Microphone, camera, keyboard over inputs, installing the app.
   - `client/src/components/sheets/FoodSheet.jsx`
   - `client/src/components/FoodLog.jsx` (one import, one line)
   - `client/src/utils/foodProvenance.js`
+  - `client/src/main.jsx`
   - `server/scripts/robot-phone-run.mjs`
   - `server/scripts/test-day-lib.js`
   - `server/scripts/ui-tests.mjs`
@@ -82,5 +104,6 @@ Microphone, camera, keyboard over inputs, installing the app.
   - `client/dist/*`
 - **New:**
   - `client/src/components/food/WeighingHint.jsx`
+  - `client/src/utils/swReload.js`
   - `DELIVERY-FIXES-2d.md`
 - Nothing renamed or deleted.
