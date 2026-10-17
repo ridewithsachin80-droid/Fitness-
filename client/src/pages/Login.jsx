@@ -244,7 +244,7 @@ export default function Login() {
             <PulseRing delay={0} size={150} opacity={0.07} />
             <PulseRing delay={0.8} size={180} opacity={0.04} />
             <img
-              src="/logo-full.png"
+              src="/logo-full.png?v=green1"
               alt="FitLife"
               className="relative w-[150px] h-auto select-none"
               draggable="false"
