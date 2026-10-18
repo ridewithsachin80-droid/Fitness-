@@ -598,6 +598,26 @@ await check('R11c', 'Meal ideas always shows a real screen (never blank, never "
   return `${r.state}${r.reason ? ' / ' + r.reason : ''}: "${r.text.slice(0, 70)}"`;
 }, { page: A });
 
+// Fixes-2h: the live database has the raw/cooked column. The food search reply is
+// read off the wire: a missing column would be a 500, not a quiet fallback.
+await check('R11d', 'Food search answers, and every food says raw, cooked or not specified', [], async () => {
+  await gotoPath(A, '/'); await wait(800);
+  await A.evaluate(() => { const e = document.querySelector('[data-testid="plan-eat"]'); e?.scrollIntoView({ block: 'center' }); e?.click(); }); await wait(1200);
+  await tapText(A, /Add food item/); await wait(400);
+  const reply = A.waitForResponse(r => r.url().includes('/api/foods/search'), { timeout: 15e3 });
+  await A.focus('input[placeholder="Food name…"]'); await A.keyboard.type('rice', { delay: 40 });
+  const res = await reply.catch(() => null);
+  must(res, 'the food search was never called');
+  const rows = await res.json().catch(() => null);
+  must(res.status() === 200 && Array.isArray(rows), `food search replied ${res.status()}`);
+  must(rows.length > 0, 'food search found nothing for "rice"');
+  const bad = rows.filter(r => !Object.prototype.hasOwnProperty.call(r, 'preparation') || ![null, 'raw', 'cooked'].includes(r.preparation));
+  must(!bad.length, `rows without a raw/cooked field: ${bad.slice(0, 3).map(r => r.name).join(', ')}`);
+  await A.keyboard.press('Escape'); await wait(600);
+  const marked = rows.filter(r => r.preparation).length;
+  return `${rows.length} foods, ${marked} marked raw/cooked, ${rows.length - marked} not specified`;
+}, { page: A });
+
 await check('R12', 'Plan and Progress tabs load', ['PLN-001', 'PRG-003'], async () => {
   await gotoPath(A, '/plan'); await wait(1500);
   for (const t of ['Week', 'Nutrition', 'Recovery', 'Today']) { await tapText(A, new RegExp(`^${t}$`)).catch(() => {}); await wait(700); }

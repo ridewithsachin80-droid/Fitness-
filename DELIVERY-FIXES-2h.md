@@ -69,6 +69,9 @@ Whether a food's nutrition numbers are for the **raw** or the **cooked** food is
 - **Robot (local):** 49 passed cleanly, 0 retries, 0 failed.
 - **2h screens at 360 px, both themes:** 12/12. These include the database check that a coach/admin tap stores raw with who and when.
 
+## Live database check (added after the first push)
+New robot check **R11d** opens the food sheet on the live test site, searches "rice" and reads the server's reply. It passes only if the reply is 200 and every food carries a raw/cooked field (raw, cooked or not specified). A missing column would make the search fail, so this proves the test database was migrated.
+
 ## Not done here
 - **Pre-marking existing foods:** that is a coach task, done in the review queue or the food form. The code doesn't guess.
 - **Raw/cooked on the coach's diet-plan editor rows:** not shown. They take it from the matched food.
