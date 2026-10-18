@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Card, SectionTitle, BackButton } from '../components/UI';
 import { plural } from '../constants';
+import { nutrientStatus, STATUS_LABEL } from '../lib/day';
 
 const CATEGORIES = ['grain','vegetable','fruit','pulse','dairy','meat','nut','oil','spice','beverage','branded','supplement','other'];
 const SOURCES = ['manual','ai','nin','usda','off'];
@@ -36,17 +37,20 @@ function normaliseAiCategory(raw) {
   return AI_CATEGORY_MAP[String(raw).toLowerCase().trim()] || 'other';
 }
 
+// Fixes-2k: a blank box is "not recorded" (null), not 0. Only the core figures
+// start at 0. Typing 0 records a real 0.
 const DEFAULT_NUTRIENTS = {
-  calories:0, protein:0, total_carbs:0, net_carbs:0, fat:0, fiber:0, sugar:0,
-  saturated_fat:0, cholesterol:0,
-  vit_a:0, vit_b1:0, vit_b2:0, vit_b3:0, vit_b5:0, vit_b6:0, vit_b12:0,
-  vit_c:0, vit_d:0, vit_e:0, vit_k:0, folate:0, biotin:0, choline:0,
-  calcium:0, iron:0, magnesium:0, phosphorus:0, potassium:0, sodium:0,
-  zinc:0, copper:0, manganese:0, selenium:0,
-  omega3_ala:0, omega3_epa:0, omega3_dha:0, omega6:0,
-  lycopene:0, beta_glucan:0,
-  glycemic_index:0, glycemic_load:0,
+  calories:0, protein:0, total_carbs:0, net_carbs:0, fat:0, fiber:null, sugar:null,
+  saturated_fat:null, cholesterol:null,
+  vit_a:null, vit_b1:null, vit_b2:null, vit_b3:null, vit_b5:null, vit_b6:null, vit_b12:null,
+  vit_c:null, vit_d:null, vit_e:null, vit_k:null, folate:null, biotin:null, choline:null,
+  calcium:null, iron:null, magnesium:null, phosphorus:null, potassium:null, sodium:null,
+  zinc:null, copper:null, manganese:null, selenium:null,
+  omega3_ala:null, omega3_epa:null, omega3_dha:null, omega6:null,
+  lycopene:null, beta_glucan:null,
+  glycemic_index:null, glycemic_load:null,
 };
+const CORE_N = ['calories', 'protein', 'total_carbs', 'net_carbs', 'fat'];
 
 const NUTRIENT_GROUPS = [
   { label: 'Macros', keys: ['calories','protein','total_carbs','net_carbs','fat','fiber','sugar','saturated_fat','cholesterol'] },
@@ -81,7 +85,8 @@ function FoodForm({ initial, onSave, onCancel, saving,
   const [nutrientTab, setNutrientTab] = useState('Macros');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const setN = (k, v) => setForm(f => ({ ...f, per_100g: { ...f.per_100g, [k]: parseFloat(v) || 0 } }));
+  const setN = (k, v) => setForm(f => ({ ...f, per_100g: { ...f.per_100g,
+    [k]: v === '' ? (CORE_N.includes(k) ? 0 : null) : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : (CORE_N.includes(k) ? 0 : null)) } }));
 
   return (
     <div className="space-y-4">
@@ -149,9 +154,15 @@ function FoodForm({ initial, onSave, onCancel, saving,
               <label className="block text-xs text-faint mb-1 capitalize">
                 {k.replace(/_/g,' ')} {NUTRIENT_UNITS[k] ? `(${NUTRIENT_UNITS[k]})` : ''}
               </label>
-              <input type="number" step="0.001" value={form.per_100g[k] || ''}
+              <input type="number" step="0.001" value={form.per_100g[k] == null ? '' : form.per_100g[k]}
+                placeholder={CORE_N.includes(k) ? '0' : 'not recorded'}
                 onChange={e => setN(k, e.target.value)}
                 className="w-full border border-hair-med rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35" />
+              {!CORE_N.includes(k) && (
+                <span className="block text-micro text-lo mt-0.5" data-testid="nutrient-status" data-key={k}>
+                  {STATUS_LABEL[nutrientStatus(form.per_100g, k, { source: form.source === 'ai' && !form.verified ? 'ai' : 'db' })]}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -358,6 +369,21 @@ export default function AdminFoods() {
       .then(({ data }) => setImpact(data))
       .catch(() => setImpact(null));
   }, [editing?.id]);
+
+  // Fixes-2k (18 Oct 2026): the list rows carry only calories. Opening the
+  // form from one showed every nutrient as the form's default, and saving
+  // wrote those defaults over the food's real values (every vitamin and
+  // mineral became 0). The form now opens with the full stored record.
+  const startEdit = async (food) => {
+    setError('');
+    try {
+      const { data } = await api.get(`/foods/${food.id}`);
+      setEditing({ ...food, ...data });
+      setMode('edit');
+    } catch (e) {
+      setError(e.response?.data?.error || 'Could not open this food. Try again.');
+    }
+  };
 
   const handleSave = async (form) => {
     setSaving(true); setError('');
@@ -696,7 +722,7 @@ export default function AdminFoods() {
                       {/* Always visible on touch screens; hover-to-reveal only where there is a mouse
                           (fix, 10 Oct 2026, ADM-021: on a phone ✏️ and 🗑 could never be tapped). */}
                       <div className="flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100" data-testid="food-row-actions">
-                        <button onClick={() => { setEditing(food); setMode('edit'); }}
+                        <button onClick={() => startEdit(food)} data-testid="food-edit"
                           className="w-8 h-8 flex items-center justify-center rounded-lg text-lo hover:text-gold hover:bg-gold/[0.08] transition-colors text-sm">
                           ✏️
                         </button>

@@ -101,6 +101,7 @@ app.use('/api/weekly',        require('./routes/weekly'));  // Phase 7: check-in
 app.use('/api/voice-pilot',   require('./routes/voicePilot'));  // Phase 8: Kannada voice pilot
 app.use('/api/member-foods',  require('./routes/memberFoods')); // a member's own food labels (10 Oct 2026)
 app.use('/api/foods',         foodsRoutes);
+app.use('/api/nutrient-enrichment', require('./routes/nutrientEnrichment'));   // Fixes-2k pilot
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {

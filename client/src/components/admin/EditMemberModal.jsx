@@ -10,6 +10,7 @@ import { adminResetPin, adminSendPush, getAuditLog, adminDeleteMember, markMessa
 import { Card, SectionTitle } from '../UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural } from '../../constants';
 import { StatCard, Modal, Field, assignableCoaches } from './AdminAtoms';
+import { microCoverage } from '../../lib/day';
 
 // because the tab is rendered conditionally — hook count changes between renders.
 export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
@@ -97,6 +98,8 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
     }]);
   };
 
+  // Fixes-2k: which nutrients the planned foods actually record (same rule as the member's panel).
+  const planCov = microCoverage(mealPlan.flatMap(m => (m.items || []).map(it => ({ grams: it.qty_g || 0, per_100g: it.per_100g || {}, source: it.source }))));
   const dayTotal = mealPlan.reduce((acc, m) => {
     (m.items || []).forEach(item => {
       acc.kcal   += item.kcal  || 0;
@@ -245,26 +248,31 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
           {/* Micronutrients */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-white/[0.15]">
             {[
-              ['🐟 Omega-3',    dayTotal.omega3,    1000, 'mg',  1],
-              ['💉 B12',        dayTotal.vit_b12,   2.4,  'mcg', 1],
-              ['☀️ Vit D',      dayTotal.vit_d,     600,  'IU',  0],
-              ['🍊 Vit C',      dayTotal.vit_c,     65,   'mg',  0],
-              ['🦴 Calcium',    dayTotal.calcium,   1200, 'mg',  0],
-              ['⚙️ Iron',       dayTotal.iron,      8,    'mg',  1],
-              ['⚡ Magnesium',  dayTotal.magnesium, 320,  'mg',  0],
-              ['🔩 Zinc',       dayTotal.zinc,      8,    'mg',  1],
-              ['🧬 Folate',     dayTotal.folate,    400,  'mcg', 0],
-              ['🍌 Potassium',  dayTotal.potassium, 2600, 'mg',  0],
-            ].map(([label, val, target, unit, dec]) => {
+              ['🐟 Omega-3',    dayTotal.omega3,    1000, 'mg',  1, ['omega3_epa','omega3_dha','omega3_ala']],
+              ['💉 B12',        dayTotal.vit_b12,   2.4,  'mcg', 1, ['vit_b12']],
+              ['☀️ Vit D',      dayTotal.vit_d,     600,  'IU',  0, ['vit_d']],
+              ['🍊 Vit C',      dayTotal.vit_c,     65,   'mg',  0, ['vit_c']],
+              ['🦴 Calcium',    dayTotal.calcium,   1200, 'mg',  0, ['calcium']],
+              ['⚙️ Iron',       dayTotal.iron,      8,    'mg',  1, ['iron']],
+              ['⚡ Magnesium',  dayTotal.magnesium, 320,  'mg',  0, ['magnesium']],
+              ['🔩 Zinc',       dayTotal.zinc,      8,    'mg',  1, ['zinc']],
+              ['🧬 Folate',     dayTotal.folate,    400,  'mcg', 0, ['folate']],
+              ['🍌 Potassium',  dayTotal.potassium, 2600, 'mg',  0, ['potassium']],
+            ].map(([label, val, target, unit, dec, keys]) => {
+              // Fixes-2k: the same rule as the member's panel. Food with no value for the
+              // nutrient makes the total a minimum ("≥"); estimates are marked "~". Neither is red.
+              const c = keys.reduce((o, k) => ({ unknownGrams: Math.max(o.unknownGrams, planCov[k]?.unknownGrams || 0), estimated: o.estimated + (planCov[k]?.estimated || 0) }), { unknownGrams: 0, estimated: 0 });
               const v   = +val.toFixed(dec);
               const pct = Math.min(100, (val / target) * 100);
-              const cls = pct >= 80 ? 'text-gold-light' : pct >= 50 ? 'text-warn' : 'text-red-400';
+              const unsure = (c.unknownGrams > 0 || c.estimated > 0) && pct < 80;
+              const cls = unsure ? 'text-mid' : pct >= 80 ? 'text-gold-light' : pct >= 50 ? 'text-warn' : 'text-red-400';
+              const shown = c.unknownGrams > 0 && val === 0 ? '—' : `${c.unknownGrams > 0 && pct < 80 ? '≥ ' : ''}${c.estimated > 0 ? '~' : ''}${v}`;
               return (
-                <div key={label} className="flex items-center justify-between">
+                <div key={label} className="flex items-center justify-between" data-testid="plan-micro" data-unsure={unsure ? '1' : '0'}>
                   <span className="text-xs text-mid">{label}</span>
                   <span className={`text-xs font-bold ${cls}`}>
-                    {v} <span className="text-mid font-normal">{unit}</span>
-                    <span className="text-mid ml-1">({Math.round(pct)}%)</span>
+                    {shown} <span className="text-mid font-normal">{unit}</span>
+                    {shown !== '—' && <span className="text-mid ml-1">({Math.round(pct)}%)</span>}
                   </span>
                 </div>
               );

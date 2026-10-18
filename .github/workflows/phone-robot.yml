@@ -59,7 +59,8 @@ jobs:
         run: |
           f=qa/robot-results
           { cat "$f/report.md" 2>/dev/null || echo "# Phone robot: no report (the run stopped before writing one)"
-            echo; cat "$f/live-assets.md" 2>/dev/null || echo "Live file check: did not run."; } > "$RUNNER_TEMP/summary.md"
+            echo; cat "$f/live-assets.md" 2>/dev/null || echo "Live file check: did not run."
+            echo; cat "$f/nutrient-inventory.md" 2>/dev/null || true; } > "$RUNNER_TEMP/summary.md"
           head -c 60000 "$RUNNER_TEMP/summary.md" > "$RUNNER_TEMP/summary-cut.md"
           title=$(grep -m1 '^\*\*' "$f/report.md" 2>/dev/null | tr -d '*' | cut -c1-200)
           gh api "repos/${{ github.repository }}/check-runs" \

@@ -28,6 +28,7 @@
  */
 
 const { normaliseNutrients } = require('./nutrients');
+const { stamp } = require('./nutrientStatus');
 
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -101,8 +102,10 @@ function normaliseItem(it) {
   const grams = num(it.grams, 1, 2000);
   if (!name || grams === null) return null;
   const p = it.per_100g && typeof it.per_100g === 'object' ? it.per_100g : {};
+  // Fixes-2k: values from a food-table row carry their statuses; the model's own
+  // figures (no _status) are AI estimates, and its zeros are not kept as values.
   const per_100g = {
-    ...normaliseNutrients(p),
+    ...(p._status ? normaliseNutrients(p) : stamp(normaliseNutrients(p), 'ai', { dropZeros: true })),
     calories:    num(p.calories ?? it.kcal_100g, 0, 900) ?? 0,
     protein:     num(p.protein ?? it.protein_100g, 0, 100) ?? 0,
     total_carbs: num(p.total_carbs ?? it.carbs_100g, 0, 100) ?? 0,

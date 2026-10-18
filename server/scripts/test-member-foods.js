@@ -98,7 +98,8 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n))
       ck('protein 24, carbs 55, fat 7.8 as typed', p.protein === 24 && p.total_carbs === 55 && p.net_carbs === 55 && p.fat === 7.8, p);
       ck('calories 4×24 + 4×55 + 9×7.8 = 386 — the 999 the request carried is ignored', p.calories === 386, p.calories);
       ck('fibre, iron and calcium kept from the food it replaces', p.fiber === 10.1 && p.iron === 3.8 && p.calcium === 54, p);
-      ck('every nutrient field present (normalised like every other food)', Object.keys(p).length >= 39 && p.vit_b12 === 0, Object.keys(p).length);
+      // Changed 18 Oct 2026 (Fixes-2k): B12 the request did not carry is null (not recorded), not 0. Still every field present.
+      ck('every nutrient field present (normalised like every other food); B12 nobody recorded is null, not 0', Object.keys(p).length >= 39 && 'vit_b12' in p && p.vit_b12 === null, Object.keys(p).length);
       ck('name trimmed; linked to the shared food it came from', r.data.name === OATS && r.data.base_food_id === oatsId, [r.data.name, r.data.base_food_id]);
 
       const again = await call('PUT', '/api/member-foods', M, { name: OATS.toUpperCase(), per_100g: { protein: 25, carbs: 54, fat: 8 } });

@@ -91,7 +91,7 @@ export default function DayStrip({ m, onOpen }) {
             {micro.hasData && micro.known > 0 ? `${micro.met} / ${micro.total}` : '—'}
             <span className="text-caption text-lo font-sans font-medium" data-testid="micro-tile-sub"> {!micro.hasData ? 'log food first'
               : micro.known === 0 ? 'not known for these foods'
-              : `targets met${micro.unknown ? ` · ${micro.unknown} not known` : ''}`}</span>
+              : `targets met${micro.estimate ? ` · ${micro.estimate} est.` : ''}${micro.unknown ? ` · ${micro.unknown} not known` : ''}`}</span>
           </span>
           <span className="flex-1 h-1 rounded-full bg-white/[0.07] overflow-hidden" aria-hidden="true">
             <span className="block h-full rounded-full bg-gold transition-all duration-500" style={{ width: `${micro.hasData ? (micro.met / micro.total) * 100 : 0}%` }} />

@@ -3585,6 +3585,47 @@ async function fixes2bTest() {
     const badgeEl = nd.querySelector('[data-testid="micro-summary"]');
     ck('with nutrients not known, the count is neutral, not red ("not known" is not "failing")', !/red-400|text-warn/.test(badgeEl?.className || '') && /text-mid/.test(badgeEl?.className || ''), badgeEl?.className);
   } catch (e) { ck('unknown-nutrients section ran to the end', false, e.message); }
+
+  // Fixes-2k: reference, recorded, recipe and AI values are told apart on the real panel.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { NutritionSummary } from './components/today/DayWidgets.jsx';
+      import { countMicrosMet } from './lib/day/index.js';
+      const foods = [
+        { name: 'Spinach', grams: 100, source: 'db', per_100g: { calories: 24, iron: 2.95, vit_c: 30.28, calcium: 82.29, _status: { iron: 'reference', vit_c: 'reference', calcium: 'reference' } } },
+        { name: 'Palak curry (AI)', grams: 200, source: 'ai', per_100g: { calories: 90, iron: 3, vit_c: 10, zinc: 0 } },
+        { name: 'Dal tadka', grams: 150, source: 'db', per_100g: { calories: 110, calcium: 20, _status: { calcium: 'recipe' } } },
+      ];
+      window.__count = countMicrosMet({ foodItems: foods, rdaOverrides: { iron: '8', vit_c: '25' } });
+      createRoot(document.getElementById('root')).render(<NutritionSummary foodItems={foods} supplements={{}} activities={{}} activeActivities={[]} rdaOverrides={{ iron: '8', vit_c: '25' }} />);`);
+    const N = run(code); await tick(400);
+    const nd = N.w.document;
+    const row = k => nd.querySelector(`[data-testid="micro-row"][data-key="${k}"]`);
+    const tab = re => [...nd.querySelectorAll('button')].find(b => re.test(b.textContent));
+    ck('2k panel: vitamin C met on reference values alone (30.28 of 25) shows "~" because an AI estimate is in the total, and is "met"',
+       row('vit_c')?.dataset.status === 'met' && row('vit_c').dataset.approx === '1' && /~50/.test(row('vit_c').textContent), row('vit_c')?.textContent);
+    tab(/Minerals/)?.click(); await tick(120);
+    ck('2k panel: iron reaches 8.95 of 8 only with the AI curry → "~9" and "Estimate", never "met", never red',
+       row('iron')?.dataset.status === 'estimate' && /~9/.test(row('iron').textContent) && /Estimate/.test(row('iron').textContent) && !/text-red|bg-gold-deep/.test(row('iron').innerHTML), row('iron')?.textContent);
+    ck('2k panel: zinc (an old AI 0) is "Not known", not 0', row('zinc')?.dataset.status === 'unknown' && /Not known/.test(row('zinc').textContent), row('zinc')?.textContent);
+    ck('2k panel: the estimate note explains "~" and why an estimate is not "met"', /reached only with estimates shows as “Estimate”, not as met/.test(nd.querySelector('[data-testid="micro-estimate-note"]')?.textContent || ''));
+    const badge = nd.querySelector('[data-testid="micro-summary"]')?.textContent || '';
+    ck('2k panel: the header says how many are estimated, matching the Today count',
+       badge === `${N.w.__count.met}/${N.w.__count.total} · ${N.w.__count.estimate} estimated · ${N.w.__count.unknown} not known` && N.w.__count.estimate >= 1, [badge, N.w.__count]);
+  } catch (e) { ck('2k provenance panel section ran to the end', false, e.message); }
+
+  // Fixes-2k: the admin food form keeps "not recorded" blank and says each value's status.
+  try {
+    const src = fs.readFileSync(path.join(CLIENT_SRC, 'pages/AdminFoods.jsx'), 'utf8');
+    ck('2k admin form: blank boxes start empty (null), not 0; a cleared box saves null',
+       /vit_c:null/.test(src) && /iron:null/.test(src) && /v === '' \? \(CORE_N\.includes\(k\) \? 0 : null\)/.test(src) && /value=\{form\.per_100g\[k\] == null \? '' : form\.per_100g\[k\]\}/.test(src));
+    ck('2k admin form: each nutrient shows its status (Reference value / Recorded / Recipe estimate / AI estimate / Not known)', /data-testid="nutrient-status"/.test(src) && /STATUS_LABEL\[nutrientStatus\(/.test(src));
+    ck('2k admin form: editing from the list loads the full food first (list rows carry only calories; saving them wiped every nutrient)',
+       /onClick=\{\(\) => startEdit\(food\)\}/.test(src) && /api\.get\(`\/foods\/\$\{food\.id\}`\)/.test(src) && !/onClick=\{\(\) => \{ setEditing\(food\); setMode\('edit'\); \}\}/.test(src));
+    const chat = fs.readFileSync(path.join(CLIENT_SRC, 'components/CoachAIChat.jsx'), 'utf8');
+    ck('2k coach chat food card: the status map is never shown as a nutrient box', /k !== '_status'/.test(chat));
+  } catch (e) { ck('2k admin form checks ran', false, e.message); }
   try {
     const dd = fs.readFileSync(path.join(CLIENT_SRC, 'components/coach/DayDetail.jsx'), 'utf8');
     const strip = fs.readFileSync(path.join(CLIENT_SRC, 'components/today/DayStrip.jsx'), 'utf8');

@@ -227,12 +227,13 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                       const KEYS = ['vit_b12','vit_d','vit_c','calcium','iron','magnesium','zinc','folate','omega3_epa','omega3_dha','fiber'];
                       const met = KEYS.filter(k => st.rows[k]?.status === 'met').length;
                       const unk = KEYS.filter(k => st.rows[k]?.status === 'unknown').length;
+                      const est = KEYS.filter(k => st.rows[k]?.status === 'estimate').length;   // Fixes-2k
                       return (
                         <details className="border border-hair rounded-xl overflow-hidden" data-testid="coach-key-nutrients">
                           <summary className="px-3 py-2.5 text-xs font-semibold text-faint cursor-pointer
                             hover:text-gold list-none flex justify-between items-center bg-surface">
                             <span>🔬 Key Nutrients</span>
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${microCountTone(met, KEYS.length, unk)}`}>{met}/{KEYS.length}{unk ? ` · ${unk} not known` : ''} ▼</span>
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${microCountTone(met, KEYS.length, unk + est)}`}>{met}/{KEYS.length}{est ? ` · ${est} estimated` : ''}{unk ? ` · ${unk} not known` : ''} ▼</span>
                           </summary>
                           <div className="px-3 py-3 space-y-2 bg-surface">
                             {KEYS.map(k => <MicroRow key={k} r={st.rows[k]} custom={!!data?.profile?.rda_overrides?.[k]} />)}

@@ -22,18 +22,22 @@ import {
 /** The quick "key nutrients" count, read from the shared status (Fixes-2i). EPA and DHA count as one. */
 export function quickMicroCount(st) {
   const keys = QUICK_MICRO_KEYS.filter(k => k !== 'omega3_dha');
-  let met = 0, unknown = 0;
+  let met = 0, unknown = 0, estimate = 0;
   for (const k of keys) {
     const r = st.rows[k]; if (!r) continue;
     if (k === 'omega3_epa') {
+      // EPA and DHA count as one omega-3 target. Confirmed amounts alone must reach it (Fixes-2k).
       const d = st.rows.omega3_dha;
-      const v = r.value + (d?.value || 0);
-      if ((v / r.rda) * 100 >= 80) met++;
+      const conf = r.confirmed + (d?.confirmed || 0), all = r.value + (d?.value || 0);
+      if ((conf / r.rda) * 100 >= 80) met++;
+      else if ((all / r.rda) * 100 >= 80) estimate++;
       else if (r.coverage !== 'full' || d?.coverage !== 'full') unknown++;
+      else if (r.estimated + (d?.estimated || 0) > 0) estimate++;
     } else if (r.status === 'met') met++;
     else if (r.status === 'unknown') unknown++;
+    else if (r.status === 'estimate') estimate++;
   }
-  return { met, unknown, total: keys.length };
+  return { met, unknown, estimate, total: keys.length };
 }
 
 /** Colour for a "met / total" count (Fixes-2i): red or amber only when the shortfall is KNOWN.
@@ -170,7 +174,7 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
   // Same rule as the panel and the Today tile: unknown is never counted as zero (Fixes-2i).
   const mst = microStatus({ foodItems, supplements, activities, activeActivities, rdaOverrides });
   const hasMicroData = mst.hasData;
-  const { met: quickMet, unknown: quickUnknown, total: quickTotal } = quickMicroCount(mst);
+  const { met: quickMet, unknown: quickUnknown, estimate: quickEst, total: quickTotal } = quickMicroCount(mst);
 
   // Exercise burn now comes from the Workout log (passed in), not from
   // protocol checkboxes — those are compliance only.
@@ -248,7 +252,7 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
       {hasMicroData && (
         <div className="mt-3 pt-3 border-t border-hair flex items-center justify-between text-xs">
           <span className="text-faint font-medium">🔬 Key Nutrients</span>
-          <span className={`px-2 py-0.5 rounded-full font-bold ${microCountTone(quickMet, quickTotal, quickUnknown)}`} data-testid="quick-micros">{`${quickMet}/${quickTotal}`} met{quickUnknown ? ` · ${quickUnknown} not known` : ''} · see below ↓</span>
+          <span className={`px-2 py-0.5 rounded-full font-bold ${microCountTone(quickMet, quickTotal, quickUnknown + quickEst)}`} data-testid="quick-micros">{`${quickMet}/${quickTotal}`} met{quickEst ? ` · ${quickEst} estimated` : ''}{quickUnknown ? ` · ${quickUnknown} not known` : ''} · see below ↓</span>
         </div>
       )}
     </Card>
@@ -266,18 +270,23 @@ export function MicroRow({ r, custom = false }) {
   const val = +r.value.toFixed(dec);
   const pct = Math.min(100, r.pct);
   const unknown = r.status === 'unknown';
+  // Fixes-2k: a total that leans on recipe or AI estimates is neutral and says "Estimate".
+  const est = r.status === 'estimate';
   const good = r.status === 'met';
-  const warn = !unknown && !r.upper && r.status === 'below' && r.pct >= 50;
-  const barCls  = unknown ? 'bg-white/[0.18]' : good ? 'bg-gold-deep' : warn ? 'bg-warn' : r.upper ? 'bg-red-500' : 'bg-red-400';
-  const textCls = unknown ? 'text-mid' : good ? 'text-gold-deep' : warn ? 'text-warn' : 'text-red-400';
-  const badgeCls= unknown ? 'bg-white/[0.06] text-mid' : good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400';
-  const shown = unknown ? (r.value > 0 ? `≥ ${val}` : '—') : val;
+  const neutral = unknown || est;
+  const warn = !neutral && !r.upper && r.status === 'below' && r.pct >= 50;
+  const barCls  = neutral ? 'bg-white/[0.18]' : good ? 'bg-gold-deep' : warn ? 'bg-warn' : r.upper ? 'bg-red-500' : 'bg-red-400';
+  const textCls = neutral ? 'text-mid' : good ? 'text-gold-deep' : warn ? 'text-warn' : 'text-red-400';
+  const badgeCls= neutral ? 'bg-white/[0.06] text-mid' : good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400';
+  const approx = r.approx ? '~' : '';
+  const shown = unknown ? (r.value > 0 ? `≥ ${approx}${val}` : '—') : `${approx}${val}`;
   const badge = unknown ? (r.value > 0 ? 'At least' : 'Not known')
+    : est ? 'Estimate'
     : r.status === 'over' ? `⚠️ ${Math.round(r.pct)}%`
     : r.upper ? `${Math.round(r.pct)}%`
     : `${Math.round(r.pct)}%`;
   return (
-    <div data-testid="micro-row" data-key={r.key} data-status={r.status} data-coverage={r.coverage}>
+    <div data-testid="micro-row" data-key={r.key} data-status={r.status} data-coverage={r.coverage} data-approx={r.approx ? '1' : '0'}>
       <div className="flex items-center justify-between text-xs mb-1">
         <span className="text-mid font-medium">{r.icon} {r.label}
           {custom && <span className="ml-1 text-gold text-xs">★</span>}
@@ -309,7 +318,9 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
 
   const count = (keys, s) => keys.filter(k => st.rows[k]?.status === s).length;
   const vMet = count(VITAMINS, 'met'), mMet = count(MINERALS, 'met'), sMet = count(SPECIALS, 'met');
-  const vUnk = count(VITAMINS, 'unknown'), mUnk = count(MINERALS, 'unknown'), sUnk = count(SPECIALS, 'unknown');
+  // Not known or estimated: neither is a confirmed result (Fixes-2k).
+  const unsure = (keys) => count(keys, 'unknown') + count(keys, 'estimate');
+  const vUnk = unsure(VITAMINS), mUnk = unsure(MINERALS), sUnk = unsure(SPECIALS);
   const totalMet = st.met;
   const totalAll = st.total;
   const hasOverrides = Object.keys(rdaOverrides).length > 0;
@@ -320,7 +331,7 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
         <SectionTitle icon="🔬">Nutrition Summary</SectionTitle>
         <div className="flex items-center gap-2">
           {hasOverrides && <span className="text-xs text-gold font-semibold">★ custom targets</span>}
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${microCountTone(totalMet, totalAll, st.unknown)}`} data-testid="micro-summary">{`${totalMet}/${totalAll}`}{st.unknown ? ` · ${st.unknown} not known` : ''}</span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${microCountTone(totalMet, totalAll, st.unknown + st.estimate)}`} data-testid="micro-summary">{`${totalMet}/${totalAll}`}{st.estimate ? ` · ${st.estimate} estimated` : ''}{st.unknown ? ` · ${st.unknown} not known` : ''}</span>
         </div>
       </div>
 
@@ -345,6 +356,11 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
       {st.unknown > 0 && (
         <p className="text-caption text-mid mb-3 leading-snug" data-testid="micro-unknown-note">
           Some foods you logged don’t list every nutrient. Those totals show as “at least” or “not known”, never as zero.
+        </p>
+      )}
+      {Object.values(st.rows).some(r => r.approx) && (
+        <p className="text-caption text-mid mb-3 leading-snug" data-testid="micro-estimate-note">
+          Values marked ~ include estimates (from a recipe or the AI). A target reached only with estimates shows as “Estimate”, not as met.
         </p>
       )}
 

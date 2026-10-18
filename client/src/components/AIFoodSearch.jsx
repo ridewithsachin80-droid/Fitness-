@@ -140,7 +140,8 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
     }
   };
 
-  const sc = (v) => v == null ? '0' : ((v * grams) / 100).toFixed(1).replace(/\.0$/, '');
+  // Fixes-2k: a nutrient nobody recorded shows as "—", never 0.
+  const sc = (v) => v == null ? '—' : ((v * grams) / 100).toFixed(1).replace(/\.0$/, '');
 
   const card  = { background: bg, border: `1.5px solid ${border}`, borderRadius: r, padding: 14 };
   const mBox  = (col) => ({

@@ -71,9 +71,11 @@ function FoodEditCard({ food, onSaved }) {
   const [done, setDone]   = useState(null);
 
   const micros = Object.keys(food.per_100g || {})
-    .filter(k => !MACRO_FIELDS.some(([m]) => m === k) && k !== 'net_carbs');
+    .filter(k => !MACRO_FIELDS.some(([m]) => m === k) && k !== 'net_carbs' && k !== '_status');   // _status is the per-nutrient status map (Fixes-2k)
 
-  const set = (k, v) => setVals(o => ({ ...o, [k]: v === '' ? 0 : parseFloat(v) || 0 }));
+  // Fixes-2k: a cleared micronutrient box is "not recorded" (null), not 0. Macros stay numbers.
+  const isMacro = (k) => MACRO_FIELDS.some(([m]) => m === k);
+  const set = (k, v) => setVals(o => ({ ...o, [k]: v === '' ? (isMacro(k) ? 0 : null) : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : (isMacro(k) ? 0 : null)) }));
 
   const save = async () => {
     setBusy(true); setErr('');
@@ -217,7 +219,7 @@ function FoodEditCard({ food, onSaved }) {
         <div className="grid grid-cols-2 gap-2 mt-2">
           {micros.map(k => (
             <label key={k} className="flex items-center gap-2">
-              <input type="number" inputMode="decimal" value={vals[k] ?? 0}
+              <input type="number" inputMode="decimal" value={vals[k] ?? ''} placeholder="—"
                 onChange={e => set(k, e.target.value)}
                 disabled={!food.editable || busy}
                 className="w-[74px] bg-charcoal border border-white/[0.09] rounded-lg

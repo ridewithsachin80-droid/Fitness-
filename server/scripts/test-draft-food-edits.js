@@ -53,7 +53,7 @@ ck('proposal validation never mutates the source snapshot', before === JSON.stri
 const filename = path.resolve(__dirname, '../routes/aiChat.js'), router = {};
 for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = () => router;
 let fixture = {}, calls = 0, queries = [], sideEffects = 0;
-const pureModules = new Set(['../services/personName', '../services/targetOrigin', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile',
+const pureModules = new Set(['../services/personName', '../services/targetOrigin', '../services/nutrientStatus', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile',
   '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety',
   '../services/foodReview', '../services/draftFoodReview', '../services/sleepReview']);
 const moduleFixture = { exports: {} };

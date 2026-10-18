@@ -27,8 +27,16 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n)) : (fail++, con
     ck('a food stored with every micronutrient at 0: iron, calcium, vitamin C and fibre are "not known", not 0',
        /fibre not known/.test(a) && /Iron not known · calcium not known · vitamin C not known/.test(a), a);
     const b = await answerFoodQuestion(`${B.toLowerCase()} nutrition`);
-    ck('a food whose record fills minerals and vitamins: the numbers, and a 0 in a filled group is a real 0 (vitamin C 0mg, fibre 0g)',
-       /Iron 3mg · calcium 90mg · vitamin C 0mg/.test(b) && /fibre 0g/.test(b), b);
+    // Changed 18 Oct 2026 (Fixes-2k, Sachin's rule): this row is AI-created and unchecked, so its
+    // numbers are AI estimates; and its vitamin C 0 / fibre 0 are no longer "real" just because the
+    // record fills other minerals and vitamins. A 0 with a recorded status is real (checked below).
+    ck('an AI-created food: its numbers are AI estimates ("~3mg (AI estimate)"); its vitamin C 0 and fibre 0 are not known',
+       /Iron ~3mg \(AI estimate\) · calcium ~90mg \(AI estimate\) · vitamin C not known/.test(b) && /fibre not known/.test(b), b);
+    ids.push((await ins(`Zzrecorded${tag} Greens`, { calories: 30, protein: 3, total_carbs: 4, fat: 0.5, fiber: 0, iron: 3, calcium: 90, vit_c: 0,
+      _status: { fiber: 'recorded', iron: 'recorded', calcium: 'recorded', vit_c: 'recorded' } })).rows[0].id);
+    const c = await answerFoodQuestion(`zzrecorded${tag} greens nutrition`);
+    ck('the same food recorded by a coach: the numbers, and its recorded 0s are real (vitamin C 0mg, fibre 0g)',
+       /Iron 3mg · calcium 90mg · vitamin C 0mg/.test(c) && /fibre 0g/.test(c), c);
   } catch (e) { fail++; console.log('  ✗ suite crashed: ' + e.stack); }
   finally {
     await pool.query(`DELETE FROM foods WHERE id = ANY($1)`, [ids]).catch(() => {});

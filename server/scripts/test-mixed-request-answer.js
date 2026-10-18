@@ -5,7 +5,7 @@ const check=(name,ok)=>{console.log(`  ${ok?'✓':'✗'} ${name}`);ok?passed++:f
 const filename = path.resolve(__dirname, '../routes/aiChat.js'), router = {};
 for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = () => router;
 let fixture = {}, prompts = [], queries = [], failAnswer = false, formats = [];
-const pure = new Set(['../services/personName', '../services/targetOrigin', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile', '../services/nutrients',
+const pure = new Set(['../services/personName', '../services/targetOrigin', '../services/nutrientStatus', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile', '../services/nutrients',
   '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview', '../services/draftFoodReview', '../services/sleepReview', '../services/mixedRequestAnswer']);
 const moduleFixture = { exports: {} };
 const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,

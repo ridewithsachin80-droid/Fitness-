@@ -127,7 +127,14 @@ function simulate({ days, trueTDEE, intake, startW, noise = 0.8, foodEvery = 1, 
     ck('vitamin A and omega-3 too: recorded too patchily to tell a 0 from a blank', tu.vit_a && tu.omega3_ala && !tg.vit_a && !tg.omega3_ala, Object.keys(tu));
     ck('a nutrient these foods do carry is still reported when it is low (calcium 68 mg of 1000 → 7%)',
        tg.calcium && tg.calcium.pct === 7 && tg.calcium.coverage === 100, tg.calcium);
-    ck('B12 on real plant foods is a true zero and IS reported (0%), not hidden as unknown', tg.vit_b12 && tg.vit_b12.pct === 0 && !tu.vit_b12, [tg.vit_b12, tu.vit_b12]);
+    // Changed 18 Oct 2026 (Fixes-2k, Sachin's rule): these rows carry no B12 value
+    // at all. The old rule called that a true zero because the rows list minerals;
+    // other nutrients in a record no longer prove a zero. B12 is now "cannot be
+    // judged" here, and a B12 zero backed by a reference IS still reported (below).
+    ck('B12 not recorded on these plant foods is "cannot be judged", not a 0% gap (other nutrients do not prove a zero)', !tg.vit_b12 && tu.vit_b12 && tu.vit_b12.coverage === 0, [tg.vit_b12, tu.vit_b12]);
+    const refB12 = (f) => ({ ...f, per_100g: { ...f.per_100g, vit_b12: 0, _status: { vit_b12: 'reference' } } });
+    const tr = byName(analyse(days(10, [refB12(rice), refB12(dal), ghee])).micro_gaps);
+    ck('a B12 zero taken from a reference record IS a true zero and IS reported (0%)', tr.vit_b12 && tr.vit_b12.pct === 0, tr.vit_b12);
     ck('ghee carries no minerals and that is a fact, so it does not lower the mineral coverage', tg.calcium.coverage === 100 && hasFigure(ghee.per_100g, 'iron') === true && hasFigure(ghee.per_100g, 'vit_e') === false);
     ck('nothing is both a gap and unknown', table.micro_gaps.every(g => !tu[g.nutrient]));
     ck('unknowns are listed least-covered first', table.micro_unknown.every((u, i) => i === 0 || u.coverage >= table.micro_unknown[i - 1].coverage), table.micro_unknown.map(u => u.coverage));
@@ -137,8 +144,10 @@ function simulate({ days, trueTDEE, intake, startW, noise = 0.8, foodEvery = 1, 
     const mixed = analyse(days(10, [rice, dal, ghee, guess, guess]));
     const mu = byName(mixed.micro_unknown);
     ck('with 40% of calories from a macros-only food, coverage is 60%: below the bar, so NOTHING is claimed',
-       MIN_COVERAGE === 0.7 && mixed.micro_gaps.length === 0 && mu.calcium && mu.calcium.coverage === 60 && mu.vit_b12 && mu.vit_b12.coverage === 60, [mixed.micro_gaps, mixed.micro_unknown]);
-    ck('a macros-only food is not a "real zero" for B12 or fibre', hasFigure(guess.per_100g, 'vit_b12') === false && hasFigure(guess.per_100g, 'fiber') === false && hasFigure(rice.per_100g, 'vit_b12') === true);
+       MIN_COVERAGE === 0.7 && mixed.micro_gaps.length === 0 && mu.calcium && mu.calcium.coverage === 60 && mu.vit_b12 && mu.vit_b12.coverage === 0, [mixed.micro_gaps, mixed.micro_unknown]);   // B12: 60 → 0 (Fixes-2k, see above)
+    ck('a macros-only food is not a "real zero" for B12 or fibre; a referenced zero is (Fixes-2k: the rice row\'s missing B12 no longer counts)',
+       hasFigure(guess.per_100g, 'vit_b12') === false && hasFigure(guess.per_100g, 'fiber') === false && hasFigure(rice.per_100g, 'vit_b12') === false
+       && hasFigure(refB12(rice).per_100g, 'vit_b12') === true && hasFigure({ ...rice.per_100g, vit_b12: null }, 'vit_b12') === false);
 
     // Exactly on the bar, and one step under it. Calories: table foods 700, guess 300 → 70%.
     const tbl = { name: 'Table food', grams: 700, per_100g: { calories: 100, protein: 5, total_carbs: 15, fat: 2, fiber: 1, calcium: 20, iron: 1, magnesium: 20, potassium: 100 } };

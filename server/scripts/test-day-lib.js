@@ -141,7 +141,7 @@ console.log('\n[3] countMicrosMet');
      && day.microStatus({ foodItems: foods.slice(0, 2), supplements: sup, activities: acts, activeActivities: active }).rows.sodium.status === 'met', st.rows.sodium);
   const none = day.countMicrosMet({ foodItems: [{ name: 'chapati', grams: 80 }] });
   ck('a food with no nutrient values: food was logged (hasData), nothing is met, all 31 are not known — never "0 of everything"',
-     eq(none, { met: 0, unknown: 31, known: 0, total: 31, hasData: true }), none);
+     eq(none, { met: 0, estimate: 0, unknown: 31, known: 0, total: 31, hasData: true }), none);   // Fixes-2k: the count also says how many are estimated
   ck('nothing logged at all → hasData false', day.countMicrosMet({ foodItems: [] }).hasData === false);
   const ov = day.countMicrosMet({ foodItems: foods, supplements: sup, activities: acts, activeActivities: active, rdaOverrides: { calcium: '10' } });
   ck('coach RDA override (calcium 10) flips one more target → 19 (calcium: an at-least amount that already meets it)', ov.met === 19, ov);
@@ -157,13 +157,20 @@ console.log('\n[3b] unknown nutrient values are not zero');
      ['vit_a', 'vit_b12', 'calcium', 'iron', 'sodium', 'fiber', 'omega3_ala', 'lycopene'].every(k => kz[k] === false), kz);
   const detailed = { calories: 60, vit_c: 30, vit_b12: 0, calcium: 40, iron: 0, sodium: 5, fiber: 0, omega3_ala: 0 };
   const kd = day.microKnown(detailed);
-  ck('a 0 inside a group the record fills is measured: B12 0 (vitamins known), iron 0 (minerals known), fiber 0 (detailed record)',
-     kd.vit_b12 === true && kd.iron === true && kd.fiber === true, kd);
+  // Changed 18 Oct 2026 (Fixes-2k, Sachin's rule): this check used to expect
+  // B12 0, iron 0 and fibre 0 to count as measured because the same record
+  // fills other vitamins and minerals. Other nutrients no longer prove a zero:
+  // with no status, an old 0 is uncertain. A 0 that carries a status is real.
+  ck('a 0 with no status is uncertain even when the record fills its group (B12 0, iron 0, fibre 0 are not known)',
+     kd.vit_b12 === false && kd.iron === false && kd.fiber === false && kd.vit_c === true && kd.calcium === true, kd);
+  const stated = day.microKnown({ ...detailed, _status: { vit_b12: 'reference', iron: 'recorded' } });
+  ck('…a 0 that carries a status (reference or recorded) is a real, known zero', stated.vit_b12 === true && stated.iron === true && stated.fiber === false, stated);
   ck('…but a group the record leaves at 0 is still unknown (fats: omega-3 0 with no fat data)', kd.omega3_ala === false, kd);
   ck('a key the record does not have, or an explicit null, is unknown', kd.vit_a === false && day.microKnown({ vit_c: 30, vit_a: null }).vit_a === false);
   ck('no record at all → nothing known', Object.values(day.microKnown(null)).every(v => v === false));
 
-  const known = { name: 'Dal', grams: 100, per_100g: { calories: 110, vit_b12: 0, vit_c: 2, iron: 2, calcium: 20, sodium: 300, fiber: 4 } };
+  // Fixes-2k: the B12 0 is marked as a reference value, so it is a measured zero (it was implied by the group before).
+  const known = { name: 'Dal', grams: 100, per_100g: { calories: 110, vit_b12: 0, vit_c: 2, iron: 2, calcium: 20, sodium: 300, fiber: 4, _status: { vit_b12: 'reference' } } };
   const blank = { name: 'Curry (AI)', grams: 100, per_100g: zeroFilled };
   const S1 = day.microStatus({ foodItems: [known] });
   ck('everything eaten knows it: iron 2 mg of 18 is "below"; B12 measured 0 is "zero"; sodium 300 is "met" (under the cap)',
@@ -181,6 +188,36 @@ console.log('\n[3b] unknown nutrient values are not zero');
   const c = day.countMicrosMet({ foodItems: [known, blank] }), st2 = day.microStatus({ foodItems: [known, blank] });
   ck('the Today tile count and the panel come from one rule (met, unknown, known agree)', c.met === st2.met && c.unknown === st2.unknown && c.known === c.total - c.unknown, { c, st: [st2.met, st2.unknown] });
   ck('grams of 0 do not make anything unknown', day.microStatus({ foodItems: [known, { ...blank, grams: 0 }] }).rows.iron.status === 'below');
+}
+
+// ── 3c. Estimates are not confirmed (Fixes-2k) ──────────────────────────────
+console.log('\n[3c] recipe and AI estimates never count as a confirmed target met');
+{
+  const st = (p, k, item) => day.nutrientStatus(p, k, item);
+  ck('statuses: explicit status wins; null → unknown; old 0 → unknown; old value → recorded, or ai when the item came from the AI or a photo',
+     st({ iron: 2, _status: { iron: 'reference' } }, 'iron') === 'reference' && st({ iron: null }, 'iron') === 'unknown' && st({ iron: 0 }, 'iron') === 'unknown'
+     && st({ iron: 2 }, 'iron') === 'recorded' && st({ iron: 2 }, 'iron', { source: 'ai' }) === 'ai' && st({ iron: 2 }, 'iron', { source: 'photo' }) === 'ai'
+     && st({ iron: 0, _status: { iron: 'recorded' } }, 'iron') === 'recorded');
+  const ref = { name: 'Spinach', grams: 100, per_100g: { calories: 23, iron: 2.95, _status: { iron: 'reference' } } };
+  const aiItem = { name: 'Palak curry (AI)', grams: 200, source: 'ai', per_100g: { calories: 90, iron: 3 } };
+  const recipe = { name: 'Dal tadka', grams: 200, per_100g: { calories: 110, iron: 2, _status: { iron: 'recipe' } } };
+  const R1 = day.microStatus({ foodItems: [ref, aiItem], rdaOverrides: { iron: '8' } });
+  ck('iron 2.95 confirmed + 6 from an AI estimate reaches 8.95 of 8, but only with the estimate → "estimate", not "met"',
+     R1.rows.iron.status === 'estimate' && near(R1.rows.iron.confirmed, 2.95) && near(R1.rows.iron.estimated, 6) && R1.rows.iron.approx === true, R1.rows.iron);
+  ck('…and the count says estimated, not met', R1.estimate >= 1 && R1.rows.iron.status !== 'met' && day.countMicrosMet({ foodItems: [ref, aiItem], rdaOverrides: { iron: '8' } }).estimate === R1.estimate);
+  const R2 = day.microStatus({ foodItems: [{ ...ref, grams: 300 }, aiItem], rdaOverrides: { iron: '8' } });
+  ck('confirmed values alone reach the target (8.85 of 8) → "met", shown as ~ because an estimate is in the total', R2.rows.iron.status === 'met' && R2.rows.iron.approx === true, R2.rows.iron);
+  const R3 = day.microStatus({ foodItems: [recipe], rdaOverrides: { iron: '8' } });
+  ck('a recipe estimate below the target is "estimate", never "below" (red)', R3.rows.iron.status === 'estimate', R3.rows.iron);
+  const salt = { name: 'Pickle (AI)', grams: 100, source: 'ai', per_100g: { calories: 30, sodium: 2500 } };
+  ck('sodium over its cap only by an AI estimate is "estimate", not "over"; confirmed sodium over the cap is "over"',
+     day.microStatus({ foodItems: [salt] }).rows.sodium.status === 'estimate'
+     && day.microStatus({ foodItems: [{ ...salt, source: 'db', per_100g: { ...salt.per_100g, _status: { sodium: 'recorded' } } }] }).rows.sodium.status === 'over');
+  ck('a supplement is a confirmed amount (B12 1000 mcg meets the target on its own)', day.microStatus({ foodItems: [aiItem], supplements: { b12: true } }).rows.vit_b12.status === 'met');
+  const legacyLog = { name: 'Old log', grams: 100, per_100g: { calories: 100, iron: 4, zinc: 0 } };
+  ck('an old logged item (no statuses): its iron 4 is recorded, its zinc 0 is not known — read, never rewritten',
+     day.microStatus({ foodItems: [legacyLog], rdaOverrides: { iron: '4' } }).rows.iron.status === 'met' && day.microStatus({ foodItems: [legacyLog] }).rows.zinc.status === 'unknown'
+     && legacyLog.per_100g.zinc === 0 && !legacyLog.per_100g._status);
 }
 
 // ── 4. Energy ───────────────────────────────────────────────────────────────

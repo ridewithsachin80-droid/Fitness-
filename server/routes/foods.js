@@ -36,39 +36,45 @@ router.use(authMW);
 // One implementation, in services/nutrients.js. This file held the widest of
 // three copies — 45 fields against 39 — so the module carries the union.
 const { normaliseNutrients } = require('../services/nutrients');
+const { stampSupplied, stamp, metaFor, withStatus } = require('../services/nutrientStatus');   // Fixes-2k
 
 
 // ─── Open Food Facts nutrient mapper ─────────────────────────────────────────
 // Maps OFF API response to our nutrient schema (values already per 100g in OFF)
 function mapOffNutrients(nutriments = {}) {
-  return normaliseNutrients({
-    calories:      nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0,
-    protein:       nutriments['proteins_100g']    || 0,
-    total_carbs:   nutriments['carbohydrates_100g'] || 0,
-    fat:           nutriments['fat_100g']          || 0,
-    fiber:         nutriments['fiber_100g']        || 0,
-    sugar:         nutriments['sugars_100g']       || 0,
-    saturated_fat: nutriments['saturated-fat_100g'] || 0,
-    trans_fat:     nutriments['trans-fat_100g']    || 0,
-    cholesterol:   (nutriments['cholesterol_100g'] || 0) * 1000, // g → mg
-    sodium:        (nutriments['sodium_100g']      || 0) * 1000, // g → mg
-    potassium:     (nutriments['potassium_100g']   || 0) * 1000,
-    calcium:       (nutriments['calcium_100g']     || 0) * 1000,
-    iron:          (nutriments['iron_100g']        || 0) * 1000,
-    magnesium:     (nutriments['magnesium_100g']   || 0) * 1000,
-    phosphorus:    (nutriments['phosphorus_100g']  || 0) * 1000,
-    zinc:          (nutriments['zinc_100g']        || 0) * 1000,
-    vit_a:         (nutriments['vitamin-a_100g']   || 0) * 1000000, // g → mcg
-    vit_c:         (nutriments['vitamin-c_100g']   || 0) * 1000,    // g → mg
-    vit_d:         (nutriments['vitamin-d_100g']   || 0),
-    vit_e:         (nutriments['vitamin-e_100g']   || 0) * 1000,
-    vit_k:         (nutriments['vitamin-k_100g']   || 0) * 1000000,
-    folate:        (nutriments['folate_100g']      || nutriments['folic-acid_100g'] || 0) * 1000000,
-    omega3_ala:    (nutriments['alpha-linolenic-acid_100g'] || 0) * 1000,
-    omega3_epa:    (nutriments['eicosapentaenoic-acid_100g'] || 0) * 1000,
-    omega3_dha:    (nutriments['docosahexaenoic-acid_100g']  || 0) * 1000,
-    omega6:        (nutriments['linoleic-acid_100g'] || 0) * 1000,
-  });
+  // Fixes-2k: only what the label declares. A nutrient the label leaves out is
+  // null (not known), and a declared 0 ("Trans fat 0 g") is a recorded 0.
+  const n = (k, f = 1) => (nutriments[k] === undefined || nutriments[k] === null || nutriments[k] === '' ? undefined : Number(nutriments[k]) * f);
+  const raw = {
+    calories:      nutriments['energy-kcal_100g'] ?? nutriments['energy-kcal'] ?? 0,
+    protein:       nutriments['proteins_100g']    ?? 0,
+    total_carbs:   nutriments['carbohydrates_100g'] ?? 0,
+    fat:           nutriments['fat_100g']          ?? 0,
+    fiber:         n('fiber_100g'),
+    sugar:         n('sugars_100g'),
+    saturated_fat: n('saturated-fat_100g'),
+    trans_fat:     n('trans-fat_100g'),
+    cholesterol:   n('cholesterol_100g', 1000), // g → mg
+    sodium:        n('sodium_100g', 1000),      // g → mg
+    potassium:     n('potassium_100g', 1000),
+    calcium:       n('calcium_100g', 1000),
+    iron:          n('iron_100g', 1000),
+    magnesium:     n('magnesium_100g', 1000),
+    phosphorus:    n('phosphorus_100g', 1000),
+    zinc:          n('zinc_100g', 1000),
+    vit_a:         n('vitamin-a_100g', 1000000), // g → mcg
+    vit_c:         n('vitamin-c_100g', 1000),    // g → mg
+    vit_d:         n('vitamin-d_100g', 1000000 * 40), // g → mcg → IU (the app stores vitamin D in IU; this was stored as grams)
+    vit_e:         n('vitamin-e_100g', 1000),
+    vit_k:         n('vitamin-k_100g', 1000000),
+    folate:        n('folate_100g', 1000000) ?? n('folic-acid_100g', 1000000),
+    omega3_ala:    n('alpha-linolenic-acid_100g', 1000),
+    omega3_epa:    n('eicosapentaenoic-acid_100g', 1000),
+    omega3_dha:    n('docosahexaenoic-acid_100g', 1000),
+    omega6:        n('linoleic-acid_100g', 1000),
+  };
+  const supplied = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined));
+  return stampSupplied(normaliseNutrients(supplied), supplied, 'recorded');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -316,7 +322,8 @@ router.get('/search', async (req, res) => {
     `;
 
     const { rows } = await pool.query(sql, baseParams);
-    res.json(rows);
+    // Fixes-2k: each food carries its per-nutrient statuses, so a logged copy keeps them.
+    res.json(rows.map(withStatus));
   } catch (err) {
     console.error('GET /api/foods/search error:', err);
     res.status(500).json({ error: err.message });
@@ -438,7 +445,7 @@ router.get('/:id', async (req, res) => {
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Food not found' });
-    res.json(rows[0]);
+    res.json(withStatus(rows[0]));
   } catch (err) {
     console.error('GET /api/foods/:id error:', err);
     res.status(500).json({ error: err.message });
@@ -576,15 +583,20 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: `category must be one of: ${validCategories.join(', ')}` });
   }
 
-  const normNutrients = normaliseNutrients(per_100g);
+  // Fixes-2k: what the coach or admin typed is "recorded" (an explicit 0 included);
+  // an AI-sourced row is an "ai" estimate, and its zeros are not kept as values.
+  const normNutrients = source === 'ai'
+    ? stamp(normaliseNutrients(per_100g), 'ai', { dropZeros: true })
+    : stampSupplied(normaliseNutrients(per_100g), per_100g, 'recorded');
+  const createMeta = metaFor(normNutrients, per_100g, { status: source === 'ai' ? 'ai' : 'recorded', by: req.user.id, at: new Date().toISOString(), via: 'food form' });
 
   try {
     const { rows } = await pool.query(
       `INSERT INTO foods (name, name_hindi, name_local, category, source, verified, per_100g,
-                          preparation, preparation_by, preparation_at)
+                          preparation, preparation_by, preparation_at, nutrient_meta)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::varchar,
                CASE WHEN $8::varchar IS NULL THEN NULL ELSE $9::int END,
-               CASE WHEN $8::varchar IS NULL THEN NULL ELSE NOW() END)
+               CASE WHEN $8::varchar IS NULL THEN NULL ELSE NOW() END, $10::jsonb)
        RETURNING id, name, name_hindi, name_local, category, source, verified, per_100g, preparation`,
       [
         name.trim(),
@@ -596,6 +608,7 @@ router.post('/', async (req, res) => {
         JSON.stringify(normNutrients),
         prep,
         req.user.id,
+        JSON.stringify(createMeta),
       ]
     );
     res.status(201).json(rows[0]);
@@ -638,9 +651,16 @@ router.put('/:id', async (req, res) => {
 
     const prev = existing.rows[0];
 
+    // Fixes-2k: only the nutrients this edit changed become "recorded" (by this
+    // user, now); everything else keeps its value and its status.
+    const changed = per_100g ? Object.fromEntries(Object.entries(per_100g).filter(([k, v]) => {
+      const before = prev.per_100g?.[k]; const norm = (x) => (x === '' || x === undefined ? null : x === null ? null : Number(x));
+      return k !== '_status' && norm(before) !== norm(v);
+    })) : {};
     const normNutrients = per_100g
-      ? normaliseNutrients({ ...prev.per_100g, ...per_100g })
+      ? stampSupplied(normaliseNutrients({ ...prev.per_100g, ...per_100g, _status: prev.per_100g?._status }), changed, 'recorded')
       : prev.per_100g;
+    const editMeta = metaFor(normNutrients, changed, { status: 'recorded', by: req.user.id, at: new Date().toISOString(), via: 'food form' });
 
     const validCategories = [
       'dairy','grain','vegetable','fruit','nut','oil',
@@ -659,7 +679,8 @@ router.put('/:id', async (req, res) => {
         category    = $4,
         source      = $5,
         verified    = $6,
-        per_100g    = $7
+        per_100g    = $7,
+        nutrient_meta = COALESCE(nutrient_meta, '{}'::jsonb) || $10::jsonb
        WHERE id = $8
        RETURNING id, name, name_hindi, name_local, category, source, verified, per_100g, preparation`,
       [
@@ -675,6 +696,7 @@ router.put('/:id', async (req, res) => {
         default_grams === undefined ? prev.default_grams
           : (Number.isFinite(parseInt(default_grams)) && parseInt(default_grams) > 0
              ? parseInt(default_grams) : null),
+        JSON.stringify(editMeta),
       ]
     );
 

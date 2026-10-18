@@ -742,6 +742,15 @@ ALTER TABLE foods ADD COLUMN IF NOT EXISTS default_grams INT;
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation VARCHAR(10);
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation_by INT REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation_at TIMESTAMPTZ;
+
+-- Fixes-2k (18 Oct 2026): where each nutrient value came from, per food.
+-- {"iron": {"status": "reference", "source": {"dataset": "IFCT 2017", "record_id": "C033",
+--   "name": "Spinach"}, "basis": "raw", "assumptions": "...", "date": "...",
+--   "reviewer": null, "review_status": "pending", "batch_id": 3}, ...}
+-- A compact copy of each status rides inside per_100g._status, so logged items
+-- keep it. Existing rows start empty: their values are read by the legacy rule
+-- in services/nutrientStatus.js (an old 0 stays "uncertain", nothing rewritten).
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS nutrient_meta JSONB DEFAULT '{}';
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'foods_preparation_check') THEN
     ALTER TABLE foods ADD CONSTRAINT foods_preparation_check CHECK (preparation IS NULL OR preparation IN ('raw','cooked'));
@@ -1152,3 +1161,41 @@ DO $$ BEGIN
     ALTER TABLE member_foods ADD CONSTRAINT member_foods_preparation_check CHECK (preparation IS NULL OR preparation IN ('raw','cooked'));
   END IF;
 END $$;
+
+
+-- ── Fixes-2k: nutrient enrichment batches (reversible) ────────────────────────
+-- A batch proposes values for missing nutrients on unchecked AI-created foods,
+-- each backed by a source (IFCT 2017, USDA SR28, an exact label, or a recipe
+-- calculation). Applying writes only genuinely missing or uncertain values and
+-- keeps every before-value here, so a batch can be rolled back. Proposing is
+-- separate from applying: a batch stays 'proposed' until someone applies it.
+CREATE TABLE IF NOT EXISTS nutrient_enrichment_batches (
+  id           SERIAL PRIMARY KEY,
+  label        TEXT NOT NULL,
+  status       VARCHAR(12) NOT NULL DEFAULT 'proposed'
+                 CHECK (status IN ('proposed','applied','rolled_back')),
+  created_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  applied_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  applied_at   TIMESTAMPTZ,
+  rolled_back_by INT REFERENCES users(id) ON DELETE SET NULL,
+  rolled_back_at TIMESTAMPTZ,
+  notes        TEXT
+);
+CREATE TABLE IF NOT EXISTS nutrient_enrichment_changes (
+  id           SERIAL PRIMARY KEY,
+  batch_id     INT NOT NULL REFERENCES nutrient_enrichment_batches(id) ON DELETE CASCADE,
+  food_id      INT NOT NULL REFERENCES foods(id) ON DELETE CASCADE,
+  nutrient     VARCHAR(40) NOT NULL,
+  before_value NUMERIC,
+  before_status VARCHAR(12),
+  before_meta  JSONB,
+  after_value  NUMERIC,
+  after_status VARCHAR(12) NOT NULL CHECK (after_status IN ('reference','recipe','ai')),
+  after_meta   JSONB NOT NULL,
+  outcome      VARCHAR(20) NOT NULL DEFAULT 'proposed'
+                 CHECK (outcome IN ('proposed','applied','skipped','rolled_back','rollback_conflict')),
+  reason       TEXT,
+  UNIQUE (batch_id, food_id, nutrient)
+);
+CREATE INDEX IF NOT EXISTS idx_nec_batch ON nutrient_enrichment_changes(batch_id);

@@ -675,6 +675,37 @@ await check('R13', 'Coach signs in; home and the member page load', ['SMK-006', 
   must(!/Something went wrong/i.test(await bodyText(C)), 'the member page shows an error');
 }, { page: C });
 
+// Fixes-2k: the read-only nutrient inventory of the live test database, for the
+// enrichment pilot. Read with the coach's own session (captured from the app's
+// next API call; never printed). Writes nutrient-inventory.md for the report.
+await check('R13b', 'Nutrient inventory (read-only): eligible foods, missing nutrients, uncertain zeros', [], async () => {
+  const req = C.waitForRequest(r => /\/api\//.test(r.url()) && !!r.headers().authorization, { timeout: 20e3 });
+  await tapText(C, /^Nutrition$/).catch(() => {}); await wait(400); await tapText(C, /^Today$/).catch(() => {});
+  const auth = (await req.catch(() => null))?.headers().authorization;
+  must(auth, 'could not read the coach session from the app');
+  const res = await fetch(`${BASE}/api/nutrient-enrichment/inventory?top=40`, { headers: { Authorization: auth } });
+  must(res.status === 200, `inventory replied ${res.status}`);
+  const inv = await res.json();
+  must(typeof inv.eligible_total === 'number' && Array.isArray(inv.top_eligible), 'inventory has no eligible list');
+  const short = (k) => k.replace('vit_', '').replace('omega3_', 'ω3 ');
+  const md = [
+    `## Nutrient inventory (live test database, read-only)`, '',
+    `${inv.foods_total} foods · **${inv.eligible_total} eligible** (${inv.rule}). Usage = logged in the last ${inv.usage_window_days} days.`, '',
+    '| Source | Verified | Checked by coach | Foods |', '|---|---|---|---|',
+    ...inv.by_source.map(r => `| ${r.source} | ${r.verified ? 'yes' : 'no'} | ${r.checked ? 'yes' : 'no'} | ${r.n} |`), '',
+    '**Per nutrient, over the eligible foods** (empty · uncertain 0 · old value · with status)', '',
+    Object.entries(inv.per_nutrient).map(([k, c]) => `${short(k)} ${c.empty}·${c.uncertain_zero}·${c.legacy_value}·${c.with_status}`).join(' | '), '',
+    '**Most-logged eligible foods**', '',
+    '| id | Food | Prep | Logs (members) | kcal · P · C · F | Old values | Uncertain 0 | Empty |', '|---|---|---|---|---|---|---|---|',
+    ...inv.top_eligible.map(f => `| ${f.id} | ${String(f.name).replace(/\|/g, '/')} | ${f.preparation || '—'} | ${f.logs} (${f.members}) | ${[f.calories, f.protein, f.total_carbs, f.fat].map(v => v ?? '—').join(' · ')} | ${Object.entries(f.values).map(([k, v]) => `${short(k)} ${+Number(v).toFixed(2)}`).join(', ') || '—'} | ${f.uncertain_zero.map(short).join(', ') || '—'} | ${f.missing.length} |`),
+    '', '<details><summary>Exact records (one JSON line per food, for the pilot review)</summary>', '', '```',
+    ...inv.top_eligible.map(f => JSON.stringify({ id: f.id, name: f.name, prep: f.preparation, kcal: f.calories, p: f.protein, c: f.total_carbs, f: f.fat, logs: f.logs, values: f.values, uncertain_zero: f.uncertain_zero, statuses: f.statuses })),
+    '```', '</details>',
+  ].join('\n');
+  fs.writeFileSync(path.join(OUT, 'nutrient-inventory.md'), md + '\n');
+  return `${inv.eligible_total} eligible of ${inv.foods_total} foods; top ${inv.top_eligible.length} listed`;
+}, { page: C, soft: true });
+
 await check('R14', 'Coach note reaches the member in the coach line', ['RPR-005', 'CMP-005', 'TOD-014', 'RDS-011'], async () => {
   await tap(C, 'open-note');
   await C.waitForSelector('[data-testid="note-text"]', { visible: true });

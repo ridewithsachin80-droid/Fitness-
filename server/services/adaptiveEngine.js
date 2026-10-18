@@ -58,11 +58,11 @@ const MIN_DAYS_FOOD = 10;
 // The rule now, per food and per nutrient:
 //
 //   · a value above 0 is a figure.
-//   · a 0 is a real zero only for the four nutrients that whole food groups
-//     genuinely lack — fibre (animal foods, oils, sugar), B12 (every plant
-//     food), vitamin C (grains, pulses, meat, dairy) and vitamin D (most
-//     foods) — and only on a food that carries mineral figures at all, which
-//     is what tells a row from a composition table from a macros-only guess.
+//   · a 0 is a real zero only when its status says it was recorded or taken
+//     from a reference (Fixes-2k). Until 18 Oct 2026 a 0 (or a missing value)
+//     for fibre, B12, vitamin C or vitamin D counted as real on any food that
+//     carried mineral figures; Sachin ruled that guess out: other nutrients in
+//     a record do not prove a zero.
 //   · for everything else a 0 is "no figure": calcium, iron, magnesium,
 //     potassium, zinc, folate and vitamin E are in practically every whole
 //     food, and vitamin A and omega-3 are recorded too patchily to tell.
@@ -74,9 +74,7 @@ const MIN_DAYS_FOOD = 10;
 // and the nutrient is listed as "cannot be judged". At or above it, the part
 // with no figure is assumed to be as rich as the part with one (intake ÷
 // coverage) rather than assumed to be empty.
-const REAL_ZERO      = new Set(['fiber', 'vit_b12', 'vit_c', 'vit_d']);
 const NO_MINERALS_IN_REFINED = new Set(['calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'folate']);
-const PROFILE_KEYS   = ['calcium', 'iron', 'magnesium', 'potassium'];
 const MIN_COVERAGE   = 0.7;        // share of calories with a figure, per nutrient
 const MIN_DAYS_MICRO = 5;          // "consistently" needs more than a day or two
 const GAP_BELOW_PCT  = 70;
@@ -92,10 +90,6 @@ const RDA = {
 
 const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 
-/** A row that carries mineral figures — a composition-table food, not a macros-only guess. */
-function isProfiled(p) {
-  return PROFILE_KEYS.filter(k => num(p[k]) > 0).length >= 2;
-}
 
 /** Refined oil, ghee, sugar: nothing but fat or carbohydrate, and genuinely no minerals. */
 function isRefinedFatOrSugar(p) {
@@ -105,9 +99,14 @@ function isRefinedFatOrSugar(p) {
 
 /** Does this food carry a figure for this nutrient? See "Unknown is not zero". */
 function hasFigure(p, k) {
+  // Fixes-2k: nothing recorded is no figure; a 0 is a figure only when its
+  // status says it was recorded or referenced. Other nutrients in the record
+  // no longer make a 0 "real" (the isProfiled guess is retired). The one
+  // exception kept is physical: refined oil, ghee and sugar carry no minerals.
   if (num(p[k]) > 0) return true;
-  if (REAL_ZERO.has(k)) return isProfiled(p) || isRefinedFatOrSugar(p);
-  return NO_MINERALS_IN_REFINED.has(k) && isRefinedFatOrSugar(p);
+  if (NO_MINERALS_IN_REFINED.has(k) && isRefinedFatOrSugar(p)) return true;
+  if (p[k] === null || p[k] === undefined || p[k] === '') return false;
+  return !!(p._status && p._status[k]);
 }
 
 /**

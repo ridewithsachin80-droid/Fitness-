@@ -74,7 +74,7 @@ const db = { query: async (sql, args = []) => {
   if (/COUNT\(\*\)/.test(sql)) return { rows: [{ n: 0 }] };
   return { rows: [] };
 } };
-const pureModules = new Set(['../services/personName', '../services/targetOrigin', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile',
+const pureModules = new Set(['../services/personName', '../services/targetOrigin', '../services/nutrientStatus', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile',
   '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview', '../services/draftFoodReview', '../services/sleepReview']);
 const moduleFixture = { exports: {} };
 const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,

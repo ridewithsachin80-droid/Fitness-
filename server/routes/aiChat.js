@@ -36,6 +36,7 @@ const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
 const { targetOrigin, waterTargetText, routineText, markWaterSet } = require('../services/targetOrigin');   // Fixes-2j
+const { stamp, withStatus, describe: describeNutrient } = require('../services/nutrientStatus');   // Fixes-2k
 const { cleanScalePayload } = require('../services/scaleParse');
 const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros, needsPositiveAmountClarification } = require('../services/foodReview');
 const { resolveSleepReview } = require('../services/sleepReview');
@@ -769,7 +770,8 @@ async function learnFoods(foods) {
         // the model returned, so a food learned from chat could land in the
         // table with six fields — and every member who logged it afterwards
         // inherited those gaps, through every other path.
-        [name, category, JSON.stringify(normaliseNutrients(f.per_100g))]
+        // Fixes-2k: the AI's numbers are AI estimates; its zeros are not kept as values.
+        [name, category, JSON.stringify(stamp(normaliseNutrients(f.per_100g), 'ai', { dropZeros: true }))]
       );
     } catch (err) {
       // A learning failure is not worth failing the member's log over
@@ -894,6 +896,8 @@ function applyCookingFat(foods, message, profileDefault = null) {
       per_100g: { ...n,
         saturated_fat: split.saturated,
         omega9_mufa: (+n.omega9_mufa || 0) || split.mufa,
+        // Fixes-2k: worked out from the cooking-fat split, so an estimate, never a recorded value.
+        _status: { ...(n._status || {}), saturated_fat: 'recipe', ...((+n.omega9_mufa || 0) ? {} : { omega9_mufa: 'recipe' }) },
       },
     };
   });
@@ -914,7 +918,7 @@ async function enrichFromDB(foods, patientId = null) {
   const out = [];
   for (const f of foods) {
     let food_id = null;
-    let per100g = normaliseNutrients(f.per_100g);
+    let per100g = stamp(normaliseNutrients(f.per_100g), 'ai', { dropZeros: true });   // Fixes-2k
     let source  = 'ai';
     // The coach's typical serving for this food, carried through so the parse
     // can fall back to it when the member named no quantity.
@@ -951,7 +955,7 @@ async function enrichFromDB(foods, patientId = null) {
       //   5  anything else that matched
       const { rows } = await pool.query(
         `WITH c AS (
-           SELECT id, name, per_100g, verified, default_grams, name_aliases, preparation,
+           SELECT id, name, per_100g, verified, verified_by, source, default_grams, name_aliases, preparation,
                   LOWER(BTRIM(SPLIT_PART(name, '(', 1))) AS base
            FROM foods
            WHERE LOWER(name)       = $1
@@ -960,7 +964,7 @@ async function enrichFromDB(foods, patientId = null) {
               OR LOWER(name_aliases::text) LIKE $2
               OR LOWER(name)       LIKE $3
          )
-         SELECT id, name, per_100g, verified, default_grams, preparation,
+         SELECT id, name, per_100g, verified, verified_by, source, default_grams, preparation,
                 CASE
                   WHEN LOWER(name) = $1                              THEN 0
                   WHEN base = $1                                     THEN 1
@@ -999,7 +1003,8 @@ async function enrichFromDB(foods, patientId = null) {
       if (rows.length && rows[0].per_100g && (parseFloat(rows[0].per_100g.calories) || 0) > 0) {
         food_id = rows[0].id;
         preparation = rows[0].preparation ?? null;
-        per100g = normaliseNutrients(rows[0].per_100g);
+        // Fixes-2k: carry each nutrient's status from the matched row (an AI-created row stays an AI estimate).
+        per100g = withStatus({ ...rows[0], per_100g: normaliseNutrients(rows[0].per_100g) }).per_100g;
         source  = rows[0].verified ? 'db-verified' : 'db';
         defaultGrams = rows[0].default_grams;
       }
@@ -2879,7 +2884,7 @@ function normaliseMealPlan(raw) {
       // through the shared normaliser.
       const n = it.per_100g || {};
       const per_100g = {
-        ...normaliseNutrients(n),
+        ...(n._status ? normaliseNutrients(n) : stamp(normaliseNutrients(n), 'ai', { dropZeros: true })),   // Fixes-2k: the model's figures are AI estimates
         calories:    num(n.calories, 0, 900)  ?? 0,
         protein:     num(n.protein, 0, 100)   ?? 0,
         total_carbs: num(n.total_carbs, 0, 100) ?? 0,
@@ -3300,7 +3305,7 @@ async function answerFoodQuestion(qText) {
   if (name.length < 3) return null;
 
   const { rows } = await pool.query(
-    `SELECT name, source, verified, per_100g
+    `SELECT name, source, verified, verified_by, per_100g, nutrient_meta
        FROM foods
       WHERE lower(name) = $1 OR lower(name) LIKE $2
       ORDER BY verified DESC, (lower(name) = $1) DESC, length(name)
@@ -3312,16 +3317,15 @@ async function answerFoodQuestion(qText) {
   const f = rows[0];
   const n = f.per_100g || {};
   const r = (v) => Math.round((+v || 0) * 10) / 10;
-  // Unknown is not zero (Fixes-2i): missing values were stored as 0, so a 0 is
-  // only reported when the record fills that group (as the member app does).
-  const has = (keys) => keys.some(k => +n[k] > 0);
-  const minerals = has(['calcium', 'iron', 'magnesium', 'phosphorus', 'potassium', 'sodium', 'zinc']);
-  const vitamins = has(['vit_a', 'vit_b1', 'vit_b2', 'vit_b12', 'vit_c', 'vit_d', 'vit_e', 'folate']);
-  const v = (k, unit, known) => (known ? `${r(n[k])}${unit}` : 'not known');
+  // Unknown is not zero (Fixes-2i), and an estimate says so (Fixes-2k): each
+  // value is labelled by its status (services/nutrientStatus.js); a value with
+  // no status reads by the legacy rule (an old 0 is "not known").
+  const ctx = { aiSourced: f.source === 'ai' && !f.verified && !f.verified_by };
+  const v = (k, unit) => describeNutrient(n, k, unit, ctx, f.nutrient_meta);
   const lines = [
     `${f.name} — per 100g: ${r(n.calories)} kcal, ${r(n.protein)}g protein, ` +
-    `${r(n.total_carbs)}g carbs, ${r(n.fat)}g fat, fibre ${v('fiber', 'g', +n.fiber > 0 || minerals || vitamins)}.`,
-    `Iron ${v('iron', 'mg', minerals)} · calcium ${v('calcium', 'mg', minerals)} · vitamin C ${v('vit_c', 'mg', vitamins)}.`,
+    `${r(n.total_carbs)}g carbs, ${r(n.fat)}g fat, fibre ${v('fiber', 'g')}.`,
+    `Iron ${v('iron', 'mg')} · calcium ${v('calcium', 'mg')} · vitamin C ${v('vit_c', 'mg')}.`,
     f.verified ? 'Verified.' : `From ${f.source === 'ai' ? 'an AI estimate' : f.source}, not yet verified.`,
   ];
 
