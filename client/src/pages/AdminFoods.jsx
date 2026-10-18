@@ -70,6 +70,7 @@ const NUTRIENT_UNITS = {
 function emptyForm() {
   return {
     name: '', name_hindi: '', name_local: '', category: 'vegetable', source: 'manual', verified: true,
+    preparation: '',
     per_100g: { ...DEFAULT_NUTRIENTS },
   };
 }
@@ -112,6 +113,16 @@ function FoodForm({ initial, onSave, onCancel, saving,
           <select value={form.source} onChange={e => set('source', e.target.value)}
             className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35 bg-surface">
             {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2">
+          {/* Raw or cooked: what these numbers are for (Fixes-2h). Members are told to weigh it the same way. */}
+          <label htmlFor="food-preparation" className="block text-xs font-semibold text-faint tracking-wider mb-1">Numbers are for</label>
+          <select id="food-preparation" value={form.preparation || ''} onChange={e => set('preparation', e.target.value)} data-testid="food-preparation"
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35 bg-surface">
+            <option value="">Not specified</option>
+            <option value="raw">Raw (weigh before cooking)</option>
+            <option value="cooked">Cooked (weigh as eaten)</option>
           </select>
         </div>
         <div className="col-span-2 flex items-center gap-2">
@@ -214,6 +225,17 @@ export default function AdminFoods() {
   const [queueIdx, setQueueIdx] = useState(0);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [queueError, setQueueError] = useState('');
+
+  // Raw or cooked, set from the queue by a coach or admin (Fixes-2h).
+  const setPreparation = async (food, value) => {
+    setQueueError('');
+    try {
+      const { data } = await api.patch(`/foods/${food.id}/preparation`, { preparation: value });
+      setReview(r => ({ ...r, foods: r.foods.map(f => (f.id === food.id ? { ...f, preparation: data.preparation } : f)) }));
+    } catch (e) {
+      setQueueError(e.response?.data?.error || "Couldn't save raw or cooked — try again.");
+    }
+  };
 
   const verify = async (food) => {
     setVerifying(v => ({ ...v, [food.id]: true }));
@@ -509,6 +531,22 @@ export default function AdminFoods() {
                             ✓ Calories match its macros
                           </p>
                         )}
+
+                        <div className="mb-3" data-testid="queue-preparation">
+                          <p className="text-caption text-lo mb-1">Numbers are for</p>
+                          <div className="flex gap-1.5" role="group" aria-label={`${f.name}: numbers are for`}>
+                            {[['raw', 'Raw'], ['cooked', 'Cooked'], [null, 'Not specified']].map(([v, l]) => {
+                              const on = (f.preparation ?? null) === v;
+                              return (
+                                <button key={l} type="button" aria-pressed={on} disabled={busy}
+                                  onClick={() => setPreparation(f, v)} style={{ minHeight: 36 }}
+                                  className={`flex-1 text-caption font-semibold rounded-xl px-2 border ${on ? 'bg-gold/[0.12] border-gold/40 text-gold' : 'bg-surface border-hair-med text-mid'}`}>
+                                  {l}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
 
                         <p className="text-caption text-faint mb-3">
                           {f.members > 0

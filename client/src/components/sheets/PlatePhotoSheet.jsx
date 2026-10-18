@@ -75,6 +75,9 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
   const set = (k, patch) => setChoices(c => ({ ...c, [k]: { ...c[k], ...patch } }));
   const g = (k) => Math.min(2000, parseFloat(choices[k]?.grams));
 
+  // Raw/cooked for a row: the member's edit, else what the plan or food row said (Fixes-2h).
+  const prepOf = (c, r) => { const v = c?.preparation !== undefined ? c.preparation : r?.preparation; return v === 'raw' || v === 'cooked' ? v : null; };
+
   // What would be logged, for a given way of logging it.
   const rowsFor = (as) => {
     if (!res) return [];
@@ -82,11 +85,11 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
     const out = [];
     res.planned.forEach((r, i) => {
       const k = `p${i}`;
-      if (as === 'meal' && choices[k]?.on && g(k) > 0) out.push({ name: r.name, grams: g(k), meal: slot, per_100g: choices[k]?.per_100g || r.per_100g, ...(choices[k]?.per_100g ? { label: true } : {}), kind: 'planned' });
+      if (as === 'meal' && choices[k]?.on && g(k) > 0) out.push({ name: r.name, grams: g(k), meal: slot, per_100g: choices[k]?.per_100g || r.per_100g, ...(choices[k]?.per_100g ? { label: true } : {}), preparation: prepOf(choices[k], r), kind: 'planned' });
     });
     res.extras.forEach((r, i) => {
       const k = `x${i}`;
-      if (choices[k]?.on && g(k) > 0) out.push({ name: r.name, grams: g(k), meal: slot, per_100g: choices[k]?.per_100g || r.per_100g, ...(choices[k]?.per_100g ? { label: true } : {}), kind: 'extra' });
+      if (choices[k]?.on && g(k) > 0) out.push({ name: r.name, grams: g(k), meal: slot, per_100g: choices[k]?.per_100g || r.per_100g, ...(choices[k]?.per_100g ? { label: true } : {}), preparation: prepOf(choices[k], r), kind: 'extra' });
     });
     return out;
   };
@@ -109,7 +112,7 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
   // A plain function, not a component: a component defined inside render is a
   // new type every render, so React would remount the grams box on each key
   // press and the keyboard would close.
-  const row = ({ k, name, sub, tone, icon, extra, per100g }) => {
+  const row = ({ k, name, sub, tone, icon, extra, per100g, prep: rowPrep }) => {
     const c = choices[k] || { on: true, grams: '' };
     const per = c.per_100g || per100g;
     const macros = foodWithLabel({ grams: g(k) || 0 }, per || {}).macros;
@@ -132,8 +135,8 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
       </div>
       <div className="flex justify-between items-center gap-2 mt-2"><span className="text-caption text-mid">{macros.cal} kcal · P {macros.pro} · C {macros.carb} · F {macros.fat}</span>
         <button type="button" className="text-caption text-gold font-semibold min-h-[44px]" onClick={() => setEditing(editing === k ? null : k)} data-testid="plate-edit-macros">Edit macros</button></div>
-      {editing === k && <MacroEditor name={name} grams={g(k) || 0} per100g={per} isLabel={!!c.per_100g}
-        onSave={next => { set(k, { per_100g: next }); setEditing(null); }} onCancel={() => setEditing(null)} />}
+      {editing === k && <MacroEditor name={name} grams={g(k) || 0} per100g={per} isLabel={!!c.per_100g} preparation={c.preparation !== undefined ? c.preparation : (rowPrep ?? null)}
+        onSave={(next, how) => { set(k, { per_100g: next, ...(how?.preparation !== undefined ? { preparation: how.preparation } : {}) }); setEditing(null); }} onCancel={() => setEditing(null)} />}
       </div>
     );
   };
@@ -162,10 +165,10 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
         <p className="text-caption text-mid">Matched to your plan. Amounts are estimates: change any that look wrong.</p>
         {res.planned.map((r, i) => {
           const s = STATUS[r.status] || STATUS.as_planned;
-          return row({ k: `p${i}`, name: r.name, per100g: r.per_100g, sub: s.text(r), tone: s.tone, icon: s.icon });
+          return row({ k: `p${i}`, name: r.name, per100g: r.per_100g, prep: r.preparation, sub: s.text(r), tone: s.tone, icon: s.icon });
         })}
         {res.extras.map((r, i) => (
-          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, extra: true, icon: 'plus', tone: 'text-warn', sub: `Not in your plan · ${r.kcal} ${kcalWord}` })
+          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, prep: r.preparation, extra: true, icon: 'plus', tone: 'text-warn', sub: `Not in your plan · ${r.kcal} ${kcalWord}` })
         ))}
         {extrasKcal > EXTRA_FLAG_KCAL && <p className="text-caption text-mid pt-1" data-testid="plate-coach-note">Your coach will see the extras.</p>}
         {res.photo_saved && <p className="text-caption text-lo pt-1">Only you and your coach can see this photo.</p>}
@@ -185,7 +188,7 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
           {res.meal} is {res.planned.map(p => p.name.toLowerCase()).join(', ')}. Here&rsquo;s what I can see:
         </p>
         {res.extras.map((r, i) => (
-          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, extra: true, icon: 'plus', tone: 'text-warn', sub: `About ${r.grams} g · ${r.kcal} ${kcalWord}` })
+          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, prep: r.preparation, extra: true, icon: 'plus', tone: 'text-warn', sub: `About ${r.grams} g · ${r.kcal} ${kcalWord}` })
         ))}
         <Pressable variant="primary" className="w-full" disabled={!plate.length} onPress={() => save('extra')} data-testid="plate-as-extra">
           Log as an extra snack · {kcal(plate).toLocaleString('en-IN')} {kcalWord}

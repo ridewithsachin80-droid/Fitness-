@@ -727,6 +727,20 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS cooking_fat VARCHAR(20);
 -- beats the generic default.
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS default_grams INT;
 
+-- ── Raw or cooked: what a food's numbers are for (Fixes-2h, 18 Oct 2026) ─────
+-- NULL = not specified. Set by a coach or admin, with who and when; never
+-- guessed from the name. Logged items, saved meals and plan items copy the
+-- value when the food is chosen (JSON, no column needed). A member's own
+-- label carries its own answer (a column on the labels table, further down).
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation VARCHAR(10);
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation_by INT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation_at TIMESTAMPTZ;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'foods_preparation_check') THEN
+    ALTER TABLE foods ADD CONSTRAINT foods_preparation_check CHECK (preparation IS NULL OR preparation IN ('raw','cooked'));
+  END IF;
+END $$;
+
 -- ── AI EVAL SET (Sprint L1) ──────────────────────────────────────────────────
 -- Every correction a member or coach makes to an AI parse is a test case: a
 -- real Hinglish message, from a real member, with a known-correct answer, in a
@@ -1123,3 +1137,11 @@ CREATE TABLE IF NOT EXISTS member_foods (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (patient_id, name_key)
 );
+
+-- A member's own label says raw or cooked too (Fixes-2h, 18 Oct 2026). NULL = not specified.
+ALTER TABLE member_foods ADD COLUMN IF NOT EXISTS preparation VARCHAR(10);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'member_foods_preparation_check') THEN
+    ALTER TABLE member_foods ADD CONSTRAINT member_foods_preparation_check CHECK (preparation IS NULL OR preparation IN ('raw','cooked'));
+  END IF;
+END $$;

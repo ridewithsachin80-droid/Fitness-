@@ -29,7 +29,7 @@ export default function AIFoodReview({ foods, disabled, mealSlots, autoSlot, onT
         onPatch={patch => onPatch(i, patch)} onForget={memory.forget} />
       <div className="flex items-center justify-between gap-3 border-t border-hair pt-2">
         <span className="text-caption text-mid" data-testid="food-source">{foodSource(f)}</span>
-        <ChatFoodMacros f={f} disabled={disabled} onSave={per => onMacros(i, per)} />
+        <ChatFoodMacros f={f} disabled={disabled} onSave={(per, how) => onMacros(i, per, how)} />
       </div>
       {onEditWithAI && editableFoodIds.includes(f.draftFoodId) && <button type="button"
         className="text-caption text-gold min-h-[44px]" disabled={disabled || editBusy}

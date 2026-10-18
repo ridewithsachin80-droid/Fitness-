@@ -30,6 +30,7 @@ const { propagationImpact, propagateFoodNutrition, propagateUnlinked } = require
 const { saturatedPlausibility } = require('../services/fatProfile');
 
 // ─── All routes require authentication ────────────────────────────────────────
+const { parsePreparation, cleanPreparation } = require('../services/foodPreparation');
 router.use(authMW);
 
 // One implementation, in services/nutrients.js. This file held the widest of
@@ -105,7 +106,7 @@ router.get(['/review', '/unverified'], authMW, role('monitor', 'admin'), async (
          GROUP BY 1
        )
        SELECT f.id, f.name, f.category, f.source, f.verified, f.per_100g, f.created_at,
-              f.verified_by, f.verified_at,
+              f.verified_by, f.verified_at, f.preparation, f.preparation_by, f.preparation_at,
               COALESCE(l.times_logged, 0) AS times_logged,
               COALESCE(l.members, 0)      AS members,
               l.last_logged
@@ -226,6 +227,33 @@ router.patch('/:id/verify', authMW, role('monitor', 'admin'), async (req, res) =
   }
 });
 
+// ── PATCH /api/foods/:id/preparation ─────────────────────────────────────────
+// Raw or cooked: what this food's numbers are for (Fixes-2h). A coach or admin
+// sets it; who and when are kept, like verification. null clears it ("not
+// specified"). Logged entries keep the value they were logged with.
+router.patch('/:id/preparation', authMW, role('monitor', 'admin'), async (req, res) => {
+  try {
+    if (!Object.prototype.hasOwnProperty.call(req.body || {}, 'preparation')) {
+      return res.status(400).json({ error: 'Say raw, cooked or not specified.' });
+    }
+    const prep = parsePreparation(req.body.preparation);
+    const { rows } = await pool.query(
+      `UPDATE foods
+          SET preparation    = $2::varchar,
+              preparation_by = CASE WHEN $2::varchar IS NULL THEN NULL ELSE $3::int END,
+              preparation_at = CASE WHEN $2::varchar IS NULL THEN NULL ELSE NOW() END
+        WHERE id = $1
+    RETURNING id, name, preparation, preparation_by, preparation_at`,
+      [req.params.id, prep, req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Food not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    console.error('PATCH /foods/:id/preparation error:', err);
+    res.status(500).json({ error: 'Could not update the food' });
+  }
+});
+
 router.get('/search', async (req, res) => {
   try {
     const q        = (req.query.q        || '').trim();
@@ -263,7 +291,7 @@ router.get('/search', async (req, res) => {
 
     const sql = `
       SELECT
-        id, name, name_hindi, name_local, name_aliases, category, source, verified, per_100g
+        id, name, name_hindi, name_local, name_aliases, category, source, verified, per_100g, preparation
       FROM foods
       WHERE (
         name        ILIKE $1
@@ -338,6 +366,7 @@ router.post('/presets', authMW, async (req, res) => {
     grams:    Number(i.grams) || 0,
     per_100g: i.per_100g && typeof i.per_100g === 'object' ? i.per_100g : null,
     label:    !!i.label,
+    preparation: cleanPreparation(i.preparation),
     source:   ['member','db','db-verified','db-unverified','ai','ai-estimate','photo','plan','saved'].includes(i.source) ? i.source : null,
     qty_text: i.qty_text ? String(i.qty_text).slice(0, 120) : null,
   })).filter(i => i.name && i.grams > 0);
@@ -405,7 +434,7 @@ router.get('/yesterday', authMW, async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, name_hindi, name_local, category, source, verified, per_100g FROM foods WHERE id = $1',
+      'SELECT id, name, name_hindi, name_local, category, source, verified, per_100g, preparation FROM foods WHERE id = $1',
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Food not found' });
@@ -530,6 +559,9 @@ router.post('/', async (req, res) => {
     category, source = 'manual', verified = true,
     per_100g = {},
   } = req.body;
+  let prep;
+  try { prep = parsePreparation(req.body.preparation) ?? null; }
+  catch (e) { return res.status(400).json({ error: e.message }); }
 
   if (!name || !category) {
     return res.status(400).json({ error: 'name and category are required' });
@@ -548,9 +580,12 @@ router.post('/', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO foods (name, name_hindi, name_local, category, source, verified, per_100g)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, name, name_hindi, name_local, category, source, verified, per_100g`,
+      `INSERT INTO foods (name, name_hindi, name_local, category, source, verified, per_100g,
+                          preparation, preparation_by, preparation_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::varchar,
+               CASE WHEN $8::varchar IS NULL THEN NULL ELSE $9::int END,
+               CASE WHEN $8::varchar IS NULL THEN NULL ELSE NOW() END)
+       RETURNING id, name, name_hindi, name_local, category, source, verified, per_100g, preparation`,
       [
         name.trim(),
         name_hindi  || null,
@@ -559,6 +594,8 @@ router.post('/', async (req, res) => {
         source,
         !!verified,
         JSON.stringify(normNutrients),
+        prep,
+        req.user.id,
       ]
     );
     res.status(201).json(rows[0]);
@@ -590,6 +627,9 @@ router.put('/:id', async (req, res) => {
     propagate_portion = false,
     propagate_unlinked = false,
   } = req.body;
+  let prep;   // undefined = leave as it is
+  try { prep = parsePreparation(req.body.preparation); }
+  catch (e) { return res.status(400).json({ error: e.message }); }
 
   try {
     // Fetch existing first
@@ -621,7 +661,7 @@ router.put('/:id', async (req, res) => {
         verified    = $6,
         per_100g    = $7
        WHERE id = $8
-       RETURNING id, name, name_hindi, name_local, category, source, verified, per_100g`,
+       RETURNING id, name, name_hindi, name_local, category, source, verified, per_100g, preparation`,
       [
         name       ?? prev.name,
         name_hindi ?? prev.name_hindi,
@@ -644,6 +684,16 @@ router.put('/:id', async (req, res) => {
     // edited. But a food that was WRONG was wrong for everyone who ever logged
     // it, and their weekly reports and adaptive calorie estimates were computed
     // from it — so the coach gets to say "yes, fix those too".
+    // Raw or cooked, only when it was sent and actually changed (who/when kept).
+    if (prep !== undefined && prep !== prev.preparation) {
+      const { rows: pr } = await pool.query(
+        `UPDATE foods SET preparation = $2::varchar,
+                          preparation_by = CASE WHEN $2::varchar IS NULL THEN NULL ELSE $3::int END,
+                          preparation_at = CASE WHEN $2::varchar IS NULL THEN NULL ELSE NOW() END
+          WHERE id = $1 RETURNING preparation`, [id, prep, req.user.id]);
+      rows[0].preparation = pr[0]?.preparation ?? null;
+    }
+
     let propagated = null;
     if ((propagate || propagate_unlinked) && per_100g) {
       try {
@@ -708,7 +758,7 @@ router.get('/admin/list', async (req, res) => {
       dataParams  = [pattern, limit, offset];
       countParams = [pattern];
       dataQuery   = `
-        SELECT id, name, name_hindi, name_local, category, source, verified,
+        SELECT id, name, name_hindi, name_local, category, source, verified, preparation,
                per_100g->>'calories' AS kcal_per_100g
         FROM foods
         WHERE LOWER(name) LIKE $1 OR LOWER(name_local) LIKE $1
@@ -721,7 +771,7 @@ router.get('/admin/list', async (req, res) => {
       dataParams  = [limit, offset];
       countParams = [];
       dataQuery   = `
-        SELECT id, name, name_hindi, name_local, category, source, verified,
+        SELECT id, name, name_hindi, name_local, category, source, verified, preparation,
                per_100g->>'calories' AS kcal_per_100g
         FROM foods
         ORDER BY name ASC

@@ -918,6 +918,7 @@ async function enrichFromDB(foods, patientId = null) {
     // The coach's typical serving for this food, carried through so the parse
     // can fall back to it when the member named no quantity.
     let defaultGrams = null;
+    let preparation = null;   // raw/cooked: only from the food row or the member's label (Fixes-2h)
     try {
       // Match on every name column the seeds populate, not just `name`.
       // The seeds put the everyday name in `name_local` ("Whey Protein") and
@@ -949,7 +950,7 @@ async function enrichFromDB(foods, patientId = null) {
       //   5  anything else that matched
       const { rows } = await pool.query(
         `WITH c AS (
-           SELECT id, name, per_100g, verified, default_grams, name_aliases,
+           SELECT id, name, per_100g, verified, default_grams, name_aliases, preparation,
                   LOWER(BTRIM(SPLIT_PART(name, '(', 1))) AS base
            FROM foods
            WHERE LOWER(name)       = $1
@@ -958,7 +959,7 @@ async function enrichFromDB(foods, patientId = null) {
               OR LOWER(name_aliases::text) LIKE $2
               OR LOWER(name)       LIKE $3
          )
-         SELECT id, name, per_100g, verified, default_grams,
+         SELECT id, name, per_100g, verified, default_grams, preparation,
                 CASE
                   WHEN LOWER(name) = $1                              THEN 0
                   WHEN base = $1                                     THEN 1
@@ -973,8 +974,12 @@ async function enrichFromDB(foods, patientId = null) {
                 -- the member said "raw". "moong dal" tied three ways: Split
                 -- Yellow Raw 334, Whole Green (dry) 347, Cooked 105, and the
                 -- lowest id won, so 200 g of dal was logged as 668 kcal.
+                -- A coach-set preparation counts the same as the word in
+                -- the name (Fixes-2h).
                 CASE WHEN $1 ~ '\\mraw\\M'               THEN 0
+                     WHEN preparation = 'cooked'           THEN 0
                      WHEN name ~* '\\mcooked\\M'          THEN 0
+                     WHEN preparation = 'raw'              THEN 2
                      WHEN name ~* '\\mraw\\M'             THEN 2
                      ELSE 1 END AS eaten,
                 -- Some foods are seeded twice: once per 100g and once per
@@ -992,6 +997,7 @@ async function enrichFromDB(foods, patientId = null) {
 
       if (rows.length && rows[0].per_100g && (parseFloat(rows[0].per_100g.calories) || 0) > 0) {
         food_id = rows[0].id;
+        preparation = rows[0].preparation ?? null;
         per100g = normaliseNutrients(rows[0].per_100g);
         source  = rows[0].verified ? 'db-verified' : 'db';
         defaultGrams = rows[0].default_grams;
@@ -1008,16 +1014,19 @@ async function enrichFromDB(foods, patientId = null) {
         const label = await MemberFoods.findLabel(patientId, f.name);
         if (label) {
           out.push({ ...f, food_id: label.base_food_id || food_id, per_100g: normaliseNutrients(label.per_100g),
-                     source: 'member', label: true, default_grams: defaultGrams });
+                     source: 'member', label: true, default_grams: defaultGrams,
+                     preparation: label.preparation ?? null });
           continue;
         }
       } catch (e) { console.error('ai-chat member label lookup failed for', f.name, e.message); }
     }
     // Both checks, in order: a per-serving label is the more specific
     // diagnosis, so it wins if both would fire.
+    // preparation is only ever the stored value (or null): whatever the model
+    // said about raw/cooked is not passed on as if it were checked.
     out.push(flagCookingFat(flagSuspectDensity({
       ...f, food_id, per_100g: per100g, source,
-      default_grams: defaultGrams,
+      default_grams: defaultGrams, preparation,
     })));
   }
   return out;
@@ -3358,7 +3367,7 @@ async function detectFoodEdit(msg, user) {
   if (name.length < 3) return null;
 
   const { rows } = await pool.query(
-    `SELECT id, name, source, verified, per_100g, default_grams FROM foods
+    `SELECT id, name, source, verified, per_100g, default_grams, preparation FROM foods
       WHERE lower(name) = $1 OR lower(name) LIKE $2
       ORDER BY (lower(name) = $1) DESC, verified DESC, length(name)
       LIMIT 6`,
@@ -3399,6 +3408,7 @@ async function detectFoodEdit(msg, user) {
     verified: f.verified,
     per_100g: normaliseNutrients(f.per_100g),
     default_grams: f.default_grams,
+    preparation: f.preparation ?? null,
     // "edit masala dosa portion to 200" opens with 200 already in the box.
     // Suggested, never saved — the coach still presses the button.
     suggested_grams: /\b(portion|serving|gram|grams|weight|size|qty|quantity)\b/.test(t)

@@ -3194,6 +3194,12 @@ async function macrosEatenTest() {
   [...ed().querySelectorAll('[role=tab]')][0].click(); await tick(80);
   ck('and back to per 100 g (37.5 → 25)', q('macro-in-protein').value === '25');
   ck('"Use these every time" is on by default and names the food', q('macro-remember').checked && /every time I log Paneer bhurji/.test(ed().textContent));
+  // Fixes-2h: "These numbers are for" — the member says cooked.
+  const prepTabs = [...ed().querySelectorAll('[role=tab]')].slice(2);
+  ck('the editor asks what the numbers are for: Raw · Cooked · Not sure, starting at "Not sure"', prepTabs.map(t => t.textContent.trim()).join('|') === 'Raw|Cooked|Not sure'
+     && prepTabs[2].getAttribute('aria-selected') === 'true', prepTabs.map(t => t.textContent));
+  prepTabs[1].click(); await tick(60);
+  ck('choosing Cooked says how to weigh it', /Weigh it cooked/.test(q('macro-prep-note').textContent), q('macro-prep-note').textContent);
   const putsBefore = A.w.__posts.filter(p => p.url === '/member-foods').length;
   q('macro-save').click(); await tick(300);
   const put = A.w.__posts.filter(p => p.url === '/member-foods').pop();
@@ -3201,6 +3207,7 @@ async function macrosEatenTest() {
      && put.body.name === 'Paneer bhurji' && put.body.per_100g.protein === 25 && put.body.per_100g.calories === 300 && put.body.per_100g.net_carbs === 5, put?.body);
   const item = A.w.__logStore.getState().log.food.find(f => f.id === 3);
   ck('the logged food now carries the new numbers and the label mark', item.per_100g.protein === 25 && item.per_100g.calories === 300 && item.label === true, item);
+  ck('the saved label and the logged food both say "cooked"', put.body.preparation === 'cooked' && item.preparation === 'cooked', { label: put?.body?.preparation, item: item.preparation });
   ck('the row says "your label" and shows 450 kcal · P37.5g', qa('food-label-tag').length === 1 && /450 kcal · P37\.5g/.test(qa('food-macros')[2]?.textContent || ''), qa('food-macros').map(e => e.textContent));
   ck('the editor closed', !ed());
 
@@ -3217,6 +3224,7 @@ async function macrosEatenTest() {
   q('macro-save').click(); await tick(200);
   const idli = A.w.__logStore.getState().log.food.find(f => f.id === 1);
   ck('with "every time" unticked: just this entry changes, no label saved', A.w.__posts.filter(p => p.url === '/member-foods').length === n1 && idli.per_100g.fat === 1 && idli.label === true, idli.per_100g);
+  ck('left at "Not sure", the entry is not specified (null), not guessed', idli.preparation === null, idli.preparation);
   ck('Cancel on a fresh editor changes nothing', await (async () => { qa('food-edit-macros')[1].click(); await tick(100); await typeIn(A, q('macro-in-protein'), '40'); q('macro-cancel').click(); await tick(100);
      return !ed() && A.w.__logStore.getState().log.food.find(f => f.id === 2).per_100g.protein === 2.8; })());
 
@@ -3495,7 +3503,44 @@ async function fixes2bTest() {
       /weigh it cooked/.test(t('c')) && /weigh it before cooking/.test(t('r')) && /Check whether these numbers are for raw or cooked/.test(t('u')) && t('n') === '', [t('c'), t('r'), t('u'), t('n')]);
     ck('weighing hint: the record’s marker is used first (Poha marked cooked → weigh it cooked)', /weigh it cooked/.test(t('m')) && H.w.document.querySelector('#m [data-from]').dataset.from === 'record');
     ck('weighing hint: record and name disagree → it says so and asks the member to check', /record says cooked but its name says raw/.test(t('x')) && /check which the numbers are for/.test(t('x')), t('x'));
+    // Fixes-2h: a stored answer (record or label) is said plainly; one read from the name says it is from the name.
+    ck('weighing hint: a stored answer is said plainly; one read only from the name says so ("probably")',
+      /^These numbers are for the cooked food/.test(t('m')) && /^The name says cooked, so these numbers are probably for the cooked food/.test(t('c'))
+      && /^The name says raw/.test(t('r')) && H.w.document.querySelector('#c [data-from]').dataset.from === 'name', [t('m'), t('c'), t('r')]);
   } catch (e) { ck('weighing hint section ran to the end', false, e.message); }
+
+  // Fixes-2h: raw/cooked from the food search reaches the logged item.
+  try {
+    const api = stub('api-2h-foodlog.js', `
+      const POHA = { id: 91, name: 'Poha (Plain)', per_100g: { calories: 130, protein: 2.5, total_carbs: 27, net_carbs: 26, fat: 1 }, preparation: 'cooked' };
+      const get = async (url) => /\\/foods\\/search/.test(url) ? { data: [POHA] } : { data: [] };
+      export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { useState } from 'react';
+      import FoodLog from './components/FoodLog.jsx';
+      window.__items = [];
+      function Host() { const [items, set] = useState([]); return <FoodLog items={items} onChange={v => { window.__items = v; set(v); }} />; }
+      createRoot(document.getElementById('root')).render(<Host />);`, api);
+    const F = run(code); await tick(400);
+    const fd = F.w.document;
+    const setVal = (el, v) => { Object.getOwnPropertyDescriptor(F.w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new F.w.Event('input', { bubbles: true })); };
+    const findBtn = (re) => [...fd.querySelectorAll('button')].find(b => re.test(b.textContent.trim()));
+    findBtn(/Add food item/)?.click(); await tick(200);
+    setVal(fd.querySelector('input[placeholder="Food name…"]'), 'poha'); await tick(700);
+    findBtn(/^Poha \(Plain\)/)?.click(); await tick(200);
+    const hint = fd.querySelector('[data-testid="weighing-hint"]');
+    ck('food search: a food stored as cooked shows the stored hint (not a guess from the name)', hint?.dataset.basis === 'cooked' && hint?.dataset.from === 'record', hint?.outerHTML?.slice(0, 200));
+    setVal(fd.querySelector('input[placeholder="Weight in grams"]'), '150'); await tick(100);
+    findBtn(/^Add$/)?.click(); await tick(200);
+    const added = F.w.__items[0];
+    ck('…and Add logs it with preparation "cooked"', added?.name === 'Poha (Plain)' && added?.grams === 150 && added?.preparation === 'cooked', added);
+    findBtn(/Add food item/)?.click(); await tick(200);
+    setVal(fd.querySelector('input[placeholder="Food name…"]'), 'Homemade thing'); await tick(100);
+    setVal(fd.querySelector('input[placeholder="Weight in grams"]'), '80'); await tick(50);
+    findBtn(/^Add$/)?.click(); await tick(200);
+    ck('a food typed without choosing a search result is logged as not specified (null), never guessed', F.w.__items[1]?.name === 'Homemade thing' && F.w.__items[1]?.preparation === null, F.w.__items[1]);
+  } catch (e) { ck('food search raw/cooked section ran to the end', false, e.message); }
   // MAC-003 (17 Oct 2026): a macro over the coach's target turns amber on
   // Today, as it did on production's Eat row; the others stay as they are.
   try {

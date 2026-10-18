@@ -636,7 +636,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
   }, [patchParsed]);
 
   // The member's own macros for a preview food (10 Oct 2026, chat/ChatFoodMacros).
-  const setMacros = (mi, idx, per) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => (i === idx ? foodWithLabel(f, per) : f)) }));
+  const setMacros = (mi, idx, per, how) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => (i === idx ? foodWithLabel(f, per, how?.preparation) : f)) }));
   const toggleListItem = (mi, key, idx) =>
     patchParsed(mi, p => ({
       ...p,
@@ -968,7 +968,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                             onToggle={fi => toggleListItem(mi, 'foods', fi)}
                             onGrams={(fi, value) => setGrams(mi, fi, value)}
                             onPatch={(fi, patch) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => i === fi ? { ...f, ...patch } : f) }))}
-                            onMacros={(fi, per) => setMacros(mi, fi, per)} />
+                            onMacros={(fi, per, how) => setMacros(mi, fi, per, how)} />
                         </div>
                       )}
 

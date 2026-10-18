@@ -559,6 +559,7 @@ export default function useTodayModel() {
       meal:     meal.name,
       food_id:  item.food_id  || null,
       per_100g: item.per_100g || null,
+      preparation: item.preparation ?? null,
     }));
     const existing = log.food || [];
     // Only skip items already in THIS meal slot — same food can appear in multiple meals

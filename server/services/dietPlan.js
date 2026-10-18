@@ -111,7 +111,9 @@ function normaliseItem(it) {
   // compulsory: the coach's brief fixed this food and its amount ("200 g curd
   // daily"). Fit to target never changes its grams.
   return { name, grams, qty_text: str(it.qty_text, 160) || `${grams} g`, per_100g,
-           compulsory: it.compulsory === true };
+           compulsory: it.compulsory === true,
+           // raw/cooked from the food table (set by enrichDays), kept on re-save (Fixes-2h)
+           preparation: ['raw', 'cooked'].includes(it.preparation) ? it.preparation : null };
 }
 
 /**

@@ -72,9 +72,9 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
   }, []);
 
   // Edited macros onto one logged item; a remembered label is offered by the search at once.
-  const saveMacros = (item, per100g, { remembered }) => {
-    onChange(items.map(i => (i.id === item.id ? { ...i, per_100g: per100g, label: true } : i)));
-    if (remembered) remember(item.name, per100g, item.food_id || null);
+  const saveMacros = (item, per100g, { remembered, preparation }) => {
+    onChange(items.map(i => (i.id === item.id ? { ...i, per_100g: per100g, label: true, ...(preparation !== undefined ? { preparation } : {}) } : i)));
+    if (remembered) remember(item.name, per100g, item.food_id || null, preparation);
     setEditingId(null);
   };
 
@@ -189,7 +189,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
     setScanMsg('Looking up product…');
     try {
       const { data } = await api.post('/foods/lookup', { barcode });
-      setSelected({ id: data.id, name: data.name, per_100g: data.per_100g });
+      setSelected({ id: data.id, name: data.name, per_100g: data.per_100g, preparation: data.preparation ?? null });
       setQuery(data.name);
       setScanMsg(null);
     } catch (err) {
@@ -275,7 +275,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
       id: Date.now(), name: selected?.name || query.trim(),
       grams: g, meal,
       food_id: selected?.label ? selected.base_food_id : (selected?.id || null),
-      per_100g: selected?.per_100g || null,
+      per_100g: selected?.per_100g || null, preparation: selected?.preparation ?? null,   // raw/cooked as stored (2h); typed: null
       ...(selected?.label ? { label: true } : {}),
     }]);
     haptic(25);
@@ -330,8 +330,8 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
     // A food the member has their own label for comes back with the label.
     const mine = labelFor(food.name);
     setSelected(mine
-      ? { id: `label-${mine.id}`, name: food.name, per_100g: mine.per_100g, label: true, base_food_id: mine.base_food_id || food.food_id || null }
-      : { id: food.food_id, name: food.name, per_100g: food.per_100g });
+      ? { id: `label-${mine.id}`, name: food.name, per_100g: mine.per_100g, label: true, base_food_id: mine.base_food_id || food.food_id || null, preparation: mine.preparation ?? null }
+      : { id: food.food_id, name: food.name, per_100g: food.per_100g, preparation: food.preparation ?? null });
     setQuery(food.name);
     setGrams(String(food.last_g || 100));
     setSuggestions([]); setShowSuggestions(false); setLookupStatus('');
@@ -545,7 +545,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
                       {(item.source || item.label) && <p className="text-caption text-mid mt-1" data-testid="logged-food-source">{foodSource(item)}</p>}
                       {editingId === item.id && (
                         <div className="mt-2 pt-2 border-t border-hair">
-                          <MacroEditor name={item.name} grams={item.grams} per100g={per100Of(item)}
+                          <MacroEditor name={item.name} grams={item.grams} per100g={per100Of(item)} preparation={item.preparation ?? null}
                             foodId={item.food_id || null} isLabel={!!item.label || !!labelFor(item.name)}
                             onSave={(per100g, how) => saveMacros(item, per100g, how)}
                             onCancel={() => setEditingId(null)} />

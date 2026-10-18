@@ -64,6 +64,7 @@ router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
             source:   item.source || null,
             label:    !!item.label,
             qty_text: item.qty_text || null,
+            preparation: ['raw', 'cooked'].includes(item.preparation) ? item.preparation : null,
           };
         }
         freq[key].count++;
@@ -75,8 +76,8 @@ router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
     const top8 = Object.values(freq)
       .sort((a, b) => b.count - a.count)
       .slice(0, 8)
-      .map(({ food_id, name, per_100g, count, last_g, source, label, qty_text }) => ({
-        food_id, name, per_100g, count, last_g, source, label, qty_text,
+      .map(({ food_id, name, per_100g, count, last_g, source, label, qty_text, preparation }) => ({
+        food_id, name, per_100g, count, last_g, source, label, qty_text, preparation,
       }));
 
     res.json(top8);

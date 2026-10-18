@@ -34,6 +34,7 @@ const { withMemberLock } = require('../db/locks');
 const { getISTDate } = require('../utils/istDate');
 const { calcCompliance, protocolTotalFor } = require('./compliance');
 const { pickSlot, prescribedMeals, istMinutes } = require('./mealSlot');
+const { cleanPreparation } = require('./foodPreparation');
 
 const WATER_CAP_ML   = 10000;
 const WEIGHT_MIN_KG  = 20;
@@ -222,6 +223,9 @@ async function applyParsed(userId, parsed, opts = {}) {
       meal:     (f.meal && slots.includes(f.meal)) ? f.meal : dueNow,
       food_id:  f.food_id || null,
       per_100g: f.per_100g && Number(f.per_100g.calories) > 0 ? f.per_100g : null,
+      // Raw/cooked as the review carried it (from the food row or the member's
+      // label); anything else is dropped (Fixes-2h).
+      preparation: cleanPreparation(f.preparation),
       // Where this came from, so the coach view can distinguish a voice log
       // from one typed in the app. Unknown keys are ignored by every reader.
       ...(source ? { source } : {}),

@@ -29,11 +29,11 @@ export function useMemberLabels() {
   const labelMatches = useCallback((q) => {
     const k = labelKey(q);
     return labels.filter(l => labelKey(l.name).includes(k))
-      .map(l => ({ id: `label-${l.id}`, name: l.name, per_100g: l.per_100g, label: true, base_food_id: l.base_food_id || null }));
+      .map(l => ({ id: `label-${l.id}`, name: l.name, per_100g: l.per_100g, label: true, base_food_id: l.base_food_id || null, preparation: l.preparation ?? null }));
   }, [labels]);
 
-  const remember = useCallback((name, per_100g, base_food_id = null) => {
-    setLabels(prev => [{ id: `local-${Date.now()}`, name, per_100g, base_food_id },
+  const remember = useCallback((name, per_100g, base_food_id = null, preparation = null) => {
+    setLabels(prev => [{ id: `local-${Date.now()}`, name, per_100g, base_food_id, preparation: preparation ?? null },
       ...prev.filter(l => labelKey(l.name) !== labelKey(name))]);
   }, []);
 

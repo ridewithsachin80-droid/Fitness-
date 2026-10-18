@@ -21,7 +21,7 @@ import { haptic } from '../../store/settingsStore';
  */
 const r1 = (v) => String(Math.round((Number(v) || 0) * 10) / 10);
 
-export default function MacroEditor({ name, grams, per100g, foodId = null, isLabel = false, onSave, onCancel }) {
+export default function MacroEditor({ name, grams, per100g, foodId = null, isLabel = false, preparation = null, onSave, onCancel }) {
   const descriptionId = useId();
   const g = Number(grams) || 0;
   const [mode, setMode] = useState('per100');
@@ -29,6 +29,8 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
     protein: r1(per100g?.protein), carbs: r1(carbsOf(per100g)), fat: r1(per100g?.fat),
   });
   const [remember, setRemember] = useState(true);
+  // Raw or cooked: what these numbers are for (Fixes-2h). '' = not sure.
+  const [prep, setPrep] = useState(preparation === 'raw' || preparation === 'cooked' ? preparation : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -51,7 +53,7 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
     if (remember) {
       setBusy(true);
       try {
-        await saveMyLabel({ name, per_100g: next, food_id: foodId });
+        await saveMyLabel({ name, per_100g: next, food_id: foodId, preparation: prep || null });
       } catch (e) {
         setBusy(false);
         setError(e?.response?.data?.error
@@ -61,7 +63,7 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
       setBusy(false);
     }
     haptic(20);
-    onSave?.(next, { remembered: remember });
+    onSave?.(next, { remembered: remember, preparation: prep || null });
   };
 
   const forget = async () => {
@@ -97,6 +99,15 @@ export default function MacroEditor({ name, grams, per100g, foodId = null, isLab
         {field('protein', 'Protein')}
         {field('carbs', 'Carbs')}
         {field('fat', 'Fat')}
+      </div>
+
+      <div>
+        <span className="block text-eyebrow font-semibold uppercase tracking-widest text-lo mb-1">These numbers are for</span>
+        <Segmented size="sm" value={prep || 'unsure'} onChange={v => setPrep(v === 'unsure' ? '' : v)} name="These numbers are for"
+          options={[{ id: 'raw', label: 'Raw' }, { id: 'cooked', label: 'Cooked' }, { id: 'unsure', label: 'Not sure' }]} />
+        <p className="text-caption text-lo mt-1" data-testid="macro-prep-note">
+          {prep === 'raw' ? 'Weigh it before cooking.' : prep === 'cooked' ? 'Weigh it cooked, as you eat it.' : 'Most packs say per 100 g of the product as sold.'}
+        </p>
       </div>
 
       {/* Calories follow the macros, live. */}

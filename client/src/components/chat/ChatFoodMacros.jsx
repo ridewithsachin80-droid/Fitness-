@@ -21,12 +21,13 @@ import { haptic } from '../../store/settingsStore';
 /** The preview food with the member's numbers applied, its row macros
  *  recomputed for the grams on screen. Any plausibility warning is dropped:
  *  the member has just read these numbers off the pack. */
-export function foodWithLabel(f, per100g) {
+export function foodWithLabel(f, per100g, preparation) {
   const k = (Number(f.grams) || 0) / 100;
   const rest = { ...f };
   delete rest.warning;
   return {
     ...rest, per_100g: per100g, label: true, source: 'member',
+    ...(preparation !== undefined ? { preparation } : {}),
     macros: {
       ...(f.macros || {}),
       cal:  Math.round((per100g.calories || 0) * k),
@@ -59,7 +60,8 @@ export default function ChatFoodMacros({ f, disabled, onSave }) {
         <Sheet open={open} onClose={() => setOpen(false)} eyebrow="Edit macros" title={`${f.name} · ${f.grams} g`}>
           {open && (
             <MacroEditor name={f.name} grams={f.grams} per100g={f.per_100g} foodId={f.food_id || null} isLabel={!!f.label}
-              onSave={(per100g) => { onSave?.(per100g); setOpen(false); }} onCancel={() => setOpen(false)} />
+              preparation={f.preparation ?? null}
+              onSave={(per100g, how) => { onSave?.(per100g, how); setOpen(false); }} onCancel={() => setOpen(false)} />
           )}
         </Sheet>
       </span>

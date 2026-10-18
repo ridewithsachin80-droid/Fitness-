@@ -12,8 +12,9 @@ export function foodSource(food = {}) {
 /**
  * Raw or cooked: what a food's nutrition numbers are for (18 Oct 2026).
  *  1. The record's own marker first — `preparation` or `basis` on the food or
- *     its per_100g ("raw"/"uncooked" or "cooked"/"prepared"). No record carries
- *     one yet (the food table has no such column); this is ready for when it does.
+ *     its per_100g ("raw"/"uncooked" or "cooked"/"prepared"). Since Fixes-2h the
+ *     foods table and member labels store `preparation`, and each logged item,
+ *     saved meal and plan item carries a copy; foods nobody has marked stay null.
  *  2. Otherwise explicit words in the name (cooked, steamed, tadka… / raw, uncooked).
  *  3. Record and name disagree, or nothing says → unknown: the member is asked to check.
  * The preparation label and the weighing hint both read this, so they never differ.

@@ -11,6 +11,10 @@ export default function WeighingHint({ food, name }) {
   const p = preparationBasis(f);
   const text = p.from === 'conflict'
     ? `This food’s record says ${p.record} but its name says ${p.name} — check which the numbers are for, and weigh it the same way.`
+    // A stored answer (the food's record or the member's label) is said plainly;
+    // one read from the name says so, because nobody has checked it (Fixes-2h).
+    : p.from === 'name' && p.basis === 'raw' ? 'The name says raw, so these numbers are probably for the raw food — weigh it before cooking.'
+    : p.from === 'name' && p.basis === 'cooked' ? 'The name says cooked, so these numbers are probably for the cooked food — weigh it cooked, as you eat it.'
     : p.basis === 'raw' ? 'These numbers are for the raw food — weigh it before cooking.'
     : p.basis === 'cooked' ? 'These numbers are for the cooked food — weigh it cooked, as you eat it.'
     : 'Check whether these numbers are for raw or cooked, and weigh it the same way.';
