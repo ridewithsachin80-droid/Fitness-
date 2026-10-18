@@ -270,6 +270,8 @@ async function rollbackBatch(pool, batchId, userId) {
         await db.query(`UPDATE foods SET nutrient_meta = COALESCE(nutrient_meta,'{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb) WHERE id=$1`,
           [c.food_id, c.nutrient, JSON.stringify(c.before_meta)]);
       }
+      // Exactly as it was: a status map emptied by the rollback goes, as it was not there before.
+      await db.query(`UPDATE foods SET per_100g = per_100g - '_status' WHERE id=$1 AND per_100g->'_status' = '{}'::jsonb`, [c.food_id]);
       await db.query(`UPDATE nutrient_enrichment_changes SET outcome='rolled_back' WHERE id=$1`, [c.id]);
       restored++;
     }

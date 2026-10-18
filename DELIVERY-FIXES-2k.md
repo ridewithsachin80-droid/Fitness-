@@ -88,12 +88,37 @@ Backlog **B12**, and Sachin's 2k brief.
 - It publishes the inventory with the robot report on the commit: eligible foods, per-nutrient empty / uncertain 0 / old value / with-status counts, and the 40 most-logged eligible foods with their exact records.
 
 ## Results (local)
-- Gate: all suites pass, 5,994 assertions (nutrient-provenance 46, day-lib 307, adaptive 55, nutrition-contract 83, ui-tests 952).
+- Gate: all suites pass, 5,995 assertions (nutrient-provenance 47, day-lib 307, adaptive 55, nutrition-contract 83, ui-tests 952).
+- One earlier gate run had a single browser timeout in `test-timeline-meal-entry`, while the preview server and screenshot browsers shared the machine. That suite passed 80/80 on its own, and the full gate passed when rerun on its own.
 - Robot (local): 51 passed cleanly (with the new R13b), 0 retries, 0 failed.
 - 2k screens at 360 px, both themes: all checks pass (member sheet, Today link, coach Key Nutrients, admin form, save-unchanged keeps values).
 
+## 6. The pilot (proposed only): `qa/nutrient-pilot-2k/`
+- **Live inventory** (commit 8a16b38, read-only): 614 foods, **25 eligible** (AI-created, unchecked).
+  - Each has the AI's figures for fibre, sugar, vitamin C, calcium, iron, potassium and sodium, and a stored 0 for every other nutrient: those zeros are uncertain.
+  - The brief said 20 foods; all 25 are reviewed.
+- **Result:**
+  - **12 foods, 240 values proposed:** 10 from USDA SR28 records and 2 recipe calculations (ragi mudde from IFCT ragi; sweetened date paste).
+  - **2 held:** the recipe and the food disagree (cucumber-tomato salad on calories, paneer curry on protein).
+  - **11 left unknown:** vague names ("Salad", "Green Paste", "Bread/Pancake"…), or brands that need their own label (protein powder, Bournville).
+  - No AI estimates are proposed.
+- **Checks and discrepancies flagged for Sachin:**
+  - Existing AI values that disagree with the evidence by more than 30% are listed, never overwritten. Example: mudde's AI calcium 33 mg against about 105 mg from IFCT ragi.
+  - "Greens" is exactly raw spinach.
+  - Black sesame: USDA vs IFCT black gingelly.
+  - "Yogurt" is Greek-style.
+  - Chia "in water" has numbers for dry seeds.
+  - IFCT plant vitamin D2 is not used: ragi would give about 1,660 IU per 100 g.
+  - A printed-IFCT spot check is requested before approval.
+- **Data quality of the open IFCT copy:** 28 of 542 rows fail an energy check (all 14 oils at 0 kcal, some spices, one chicken row at twice its macros). Those rows are never used.
+- **Local dry run** on a copy of the 25 live records (`pilot-dry-run.log`):
+  - the real batch API accepted all 240 values, and they were applied;
+  - a member's day shows "3 of 31 targets met · 17 estimated · 11 not known", with member and coach rows identical in both themes;
+  - rollback restored all 25 records exactly.
+  - Found and fixed on the way: rollback had left an empty status map behind. It now restores byte for byte; NEW test check, mutation-checked.
+
 ## Tests (none weakened; changes stated)
-- **NEW `server/scripts/test-nutrient-provenance.js`** (real Postgres, real HTTP, 46 checks): storage, reads, server/client agreement, every enrichment rule, a full propose / apply / skip / roll back / rollback-conflict cycle, a member's earlier log untouched, permissions, the inventory changing nothing, and member/coach consistency.
+- **NEW `server/scripts/test-nutrient-provenance.js`** (real Postgres, real HTTP, 47 checks): storage, reads, server/client agreement, every enrichment rule, a full propose / apply / skip / roll back / rollback-conflict cycle, a member's earlier log untouched, permissions, the inventory changing nothing, and member/coach consistency.
 - **`test-day-lib.js` [3c], NEW, 8 checks:** statuses, estimate vs met, a recipe value below target, sodium over the limit only by an estimate, supplements, old logs read but never rewritten.
 - **`ui-tests.mjs`:**
   - a 2k panel with mixed provenance: met with "~", "Estimate", "Not known", the note, and a count matching Today;
@@ -131,6 +156,7 @@ Backlog **B12**, and Sachin's 2k brief.
 ## Files
 - **NEW:**
   - `DELIVERY-FIXES-2k.md`
+  - `qa/nutrient-pilot-2k/` (README, review table and CSV, proposals, mapping, live inventory, dry-run log, tools)
   - `server/services/nutrientStatus.js`, `server/services/nutrientEnrichment.js`
   - `server/routes/nutrientEnrichment.js`
   - `server/scripts/test-nutrient-provenance.js`

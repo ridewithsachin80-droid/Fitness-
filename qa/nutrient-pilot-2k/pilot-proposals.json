@@ -1,0 +1,4300 @@
+{
+ "label": "Fixes-2k pilot: 20 common foods",
+ "proposals": [
+  {
+   "food_id": 854,
+   "nutrient": "saturated_fat",
+   "value": 0.077,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_a",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_b1",
+   "value": 0.02,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_b2",
+   "value": 0.013,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_b3",
+   "value": 0.4,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_b5",
+   "value": 0.39,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_b6",
+   "value": 0.093,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_c",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_e",
+   "value": 0.04,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "vit_k",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "folate",
+   "value": 3,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "choline",
+   "value": 2.1,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "magnesium",
+   "value": 12,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "phosphorus",
+   "value": 43,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "zinc",
+   "value": 0.49,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "copper",
+   "value": 0.069,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "manganese",
+   "value": 0.472,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "selenium",
+   "value": 7.5,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 854,
+   "nutrient": "lycopene",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "20445",
+    "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
+   },
+   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "saturated_fat",
+   "value": 0.037,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_a",
+   "value": 835,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_b1",
+   "value": 0.066,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_b2",
+   "value": 0.058,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_b3",
+   "value": 0.983,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_b5",
+   "value": 0.273,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_b6",
+   "value": 0.138,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_e",
+   "value": 0.66,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "vit_k",
+   "value": 13.2,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "folate",
+   "value": 19,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "choline",
+   "value": 8.8,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "magnesium",
+   "value": 12,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "phosphorus",
+   "value": 35,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "zinc",
+   "value": 0.24,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "copper",
+   "value": 0.045,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "manganese",
+   "value": 0.143,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "selenium",
+   "value": 0.1,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 858,
+   "nutrient": "lycopene",
+   "value": 1,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11124",
+    "name": "Carrots, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11124)"
+   },
+   "assumptions": "Raw carrots, edible portion."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "saturated_fat",
+   "value": 0.027,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_a",
+   "value": 157,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_b1",
+   "value": 0.054,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_b2",
+   "value": 0.085,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_b3",
+   "value": 0.979,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_b5",
+   "value": 0.317,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_b6",
+   "value": 0.291,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_e",
+   "value": 1.58,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "vit_k",
+   "value": 4.9,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "folate",
+   "value": 46,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "choline",
+   "value": 5.6,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "magnesium",
+   "value": 12,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "phosphorus",
+   "value": 26,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "zinc",
+   "value": 0.25,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "copper",
+   "value": 0.017,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "manganese",
+   "value": 0.112,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "selenium",
+   "value": 0.1,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 859,
+   "nutrient": "lycopene",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11821",
+    "name": "Peppers, sweet, red, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11821)"
+   },
+   "assumptions": "Raw red bell pepper (capsicum)."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "saturated_fat",
+   "value": 0.028,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_a",
+   "value": 42,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_b1",
+   "value": 0.037,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_b2",
+   "value": 0.019,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_b3",
+   "value": 0.594,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_b5",
+   "value": 0.089,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_b6",
+   "value": 0.08,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_e",
+   "value": 0.54,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "vit_k",
+   "value": 7.9,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "folate",
+   "value": 15,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "choline",
+   "value": 6.7,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "magnesium",
+   "value": 11,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "phosphorus",
+   "value": 24,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "zinc",
+   "value": 0.17,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "copper",
+   "value": 0.059,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "manganese",
+   "value": 0.114,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "selenium",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 860,
+   "nutrient": "lycopene",
+   "value": 2573,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11529",
+    "name": "Tomatoes, red, ripe, raw, year round average",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11529)"
+   },
+   "assumptions": "Raw red ripe tomatoes, year-round average."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "saturated_fat",
+   "value": 0.02,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_a",
+   "value": 370,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_b1",
+   "value": 0.07,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_b2",
+   "value": 0.08,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_b3",
+   "value": 0.375,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_b5",
+   "value": 0.134,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_b6",
+   "value": 0.09,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_e",
+   "value": 0.22,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "vit_k",
+   "value": 126.3,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "folate",
+   "value": 38,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "choline",
+   "value": 13.6,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "magnesium",
+   "value": 13,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "phosphorus",
+   "value": 29,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "zinc",
+   "value": 0.18,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "copper",
+   "value": 0.029,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "manganese",
+   "value": 0.25,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "selenium",
+   "value": 0.6,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 861,
+   "nutrient": "lycopene",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11253",
+    "name": "Lettuce, green leaf, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11253)"
+   },
+   "assumptions": "Green leaf lettuce, raw."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "saturated_fat",
+   "value": 6.957,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_a",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_b1",
+   "value": 0.791,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_b2",
+   "value": 0.247,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_b3",
+   "value": 4.515,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_b5",
+   "value": 0.05,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_b6",
+   "value": 0.79,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_c",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_e",
+   "value": 0.25,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "vit_k",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "folate",
+   "value": 97,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "choline",
+   "value": 25.6,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "magnesium",
+   "value": 351,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "phosphorus",
+   "value": 629,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "zinc",
+   "value": 7.75,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "copper",
+   "value": 4.082,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "manganese",
+   "value": 2.46,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "selenium",
+   "value": 34.4,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 925,
+   "nutrient": "lycopene",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12023",
+    "name": "Seeds, sesame seeds, whole, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12023)"
+   },
+   "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "saturated_fat",
+   "value": 0.063,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_a",
+   "value": 469,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_b1",
+   "value": 0.078,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_b2",
+   "value": 0.189,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_b3",
+   "value": 0.724,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_b5",
+   "value": 0.065,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_b6",
+   "value": 0.195,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_e",
+   "value": 2.03,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "vit_k",
+   "value": 482.9,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "folate",
+   "value": 194,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "choline",
+   "value": 19.3,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "magnesium",
+   "value": 79,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "phosphorus",
+   "value": 49,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "zinc",
+   "value": 0.53,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "copper",
+   "value": 0.13,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "manganese",
+   "value": 0.897,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "selenium",
+   "value": 1,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 954,
+   "nutrient": "lycopene",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "11457",
+    "name": "Spinach, raw",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 11457)"
+   },
+   "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "fiber",
+   "value": 0,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "saturated_fat",
+   "value": 0.117,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "cholesterol",
+   "value": 5,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_a",
+   "value": 1,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_b1",
+   "value": 0.023,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_b2",
+   "value": 0.278,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_b3",
+   "value": 0.208,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_b5",
+   "value": 0.331,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_b6",
+   "value": 0.063,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_b12",
+   "value": 0.75,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_c",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_d",
+   "value": 0,
+   "unit": "IU",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_e",
+   "value": 0.01,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "vit_k",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "folate",
+   "value": 7,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "choline",
+   "value": 15.1,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "magnesium",
+   "value": 11,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "phosphorus",
+   "value": 135,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "zinc",
+   "value": 0.52,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "copper",
+   "value": 0.017,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "manganese",
+   "value": 0.009,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "selenium",
+   "value": 9.7,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 794,
+   "nutrient": "lycopene",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "01256",
+    "name": "Yogurt, Greek, plain, nonfat",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 01256)"
+   },
+   "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "saturated_fat",
+   "value": 3.33,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "cholesterol",
+   "value": 0,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "vit_b1",
+   "value": 0.62,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "vit_b2",
+   "value": 0.17,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "vit_b3",
+   "value": 8.83,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "vit_b12",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "vit_c",
+   "value": 1.6,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "vit_e",
+   "value": 0.5,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "folate",
+   "value": 49,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "magnesium",
+   "value": 335,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "phosphorus",
+   "value": 860,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "zinc",
+   "value": 4.58,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "copper",
+   "value": 0.924,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "manganese",
+   "value": 2.723,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 792,
+   "nutrient": "selenium",
+   "value": 55.2,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "12006",
+    "name": "Seeds, chia seeds, dried",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 12006)"
+   },
+   "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "saturated_fat",
+   "value": 18.519,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "cholesterol",
+   "value": 8,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_a",
+   "value": 2,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_b1",
+   "value": 0.025,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_b2",
+   "value": 0.05,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_b3",
+   "value": 0.725,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_b5",
+   "value": 0.297,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_b6",
+   "value": 0.042,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_b12",
+   "value": 0.23,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_e",
+   "value": 0.54,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "vit_k",
+   "value": 8.1,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "magnesium",
+   "value": 146,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "phosphorus",
+   "value": 206,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "zinc",
+   "value": 2.01,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "copper",
+   "value": 1.028,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "manganese",
+   "value": 1.419,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "selenium",
+   "value": 3,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 820,
+   "nutrient": "lycopene",
+   "value": 0,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "reference",
+   "source": {
+    "dataset": "USDA SR28",
+    "record_id": "19902",
+    "name": "Chocolate, dark, 45- 59% cacao solids",
+    "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 19902)"
+   },
+   "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  },
+  {
+   "food_id": 835,
+   "nutrient": "saturated_fat",
+   "value": 0.08165,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "g",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.317,
+      "retention": 0.85
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "omega3_ala",
+   "value": 16.63,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 68.58,
+      "retention": 0.8
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "omega6",
+   "value": 93.24,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 362,
+      "retention": 0.85
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "vit_b1",
+   "value": 0.07624,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.37,
+      "retention": 0.68
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "vit_b2",
+   "value": 0.03864,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.17,
+      "retention": 0.75
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "vit_b3",
+   "value": 0.3452,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 1.34,
+      "retention": 0.85
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "vit_b5",
+   "value": 0.0703,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.29,
+      "retention": 0.8
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "vit_b6",
+   "value": 0.01136,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.05,
+      "retention": 0.75
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "vit_e",
+   "value": 0.04364,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.16,
+      "retention": 0.9
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "vit_k",
+   "value": 0.8636,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mcg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 3,
+      "retention": 0.95
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "folate",
+   "value": 6.827,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mcg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 34.66,
+      "retention": 0.65
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "biotin",
+   "value": 0.2533,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mcg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.88,
+      "retention": 0.95
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "magnesium",
+   "value": 39.82,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 146,
+      "retention": 0.9
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "phosphorus",
+   "value": 60.45,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 210,
+      "retention": 0.95
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "zinc",
+   "value": 0.69,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 2.53,
+      "retention": 0.9
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "copper",
+   "value": 0.1827,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 0.67,
+      "retention": 0.9
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "manganese",
+   "value": 0.87,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 3.19,
+      "retention": 0.9
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 835,
+   "nutrient": "selenium",
+   "value": 4.173,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "cooked",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+   "recipe": {
+    "unit": "mcg",
+    "cooked_weight_g": 330,
+    "ingredients": [
+     {
+      "name": "Ragi flour (IFCT A010)",
+      "grams": 100,
+      "value_per_100g": 15.3,
+      "retention": 0.9
+     },
+     {
+      "name": "Water",
+      "grams": 230,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "saturated_fat",
+   "value": 0.0288,
+   "unit": "g",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "g",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.032,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_b1",
+   "value": 0.0468,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.052,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_b2",
+   "value": 0.0613,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.066,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0.019,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_b3",
+   "value": 1.147,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 1.274,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_b5",
+   "value": 0.5301,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.589,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_b6",
+   "value": 0.1485,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.165,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_c",
+   "value": 0.36,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.4,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_e",
+   "value": 0.045,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.05,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "vit_k",
+   "value": 2.43,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mcg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 2.7,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "folate",
+   "value": 17.1,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mcg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 19,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "choline",
+   "value": 5.67,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 6.3,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "magnesium",
+   "value": 38.7,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 43,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "phosphorus",
+   "value": 55.8,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 62,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "zinc",
+   "value": 0.262,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.29,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0.01,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "copper",
+   "value": 0.1861,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.206,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0.007,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "manganese",
+   "value": 0.2362,
+   "unit": "mg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 0.262,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0.004,
+      "retention": 1
+     }
+    ]
+   }
+  },
+  {
+   "food_id": 822,
+   "nutrient": "selenium",
+   "value": 2.76,
+   "unit": "mcg",
+   "basis": "per_100g",
+   "preparation": "raw",
+   "status": "recipe",
+   "source": null,
+   "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+   "recipe": {
+    "unit": "mcg",
+    "cooked_weight_g": 100,
+    "ingredients": [
+     {
+      "name": "Dates, deglet noor (USDA 09087)",
+      "grams": 90,
+      "value_per_100g": 3,
+      "retention": 1
+     },
+     {
+      "name": "Sugar, granulated (USDA 19335)",
+      "grams": 10,
+      "value_per_100g": 0.6,
+      "retention": 1
+     }
+    ]
+   }
+  }
+ ]
+}

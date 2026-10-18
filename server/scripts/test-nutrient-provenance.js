@@ -139,6 +139,8 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n))
     {
       const t1 = await food(`Zzprov${tag} Palak Sabzi`, 'ai', false, { calories: 90, protein: 3, total_carbs: 8, fat: 5, iron: null, zinc: 0, vit_c: 12, calcium: 40, _status: { vit_c: 'ai' } }, { preparation: 'cooked' });
       const t2 = await food(`Zzprov${tag} Verified Dal`, 'ai', true, { calories: 110, protein: 7, total_carbs: 18, fat: 1, iron: null });
+      const t4 = await food(`Zzprov${tag} Plain Rice`, 'ai', false, { calories: 130, protein: 2.7, total_carbs: 28, fat: 0.3, iron: 0.2, zinc: 0, vit_b12: null });
+      const before4 = JSON.stringify((await row(t4)).per_100g);
       // A member logged t1 before enrichment: their snapshot must never change.
       const snap = { name: 'Palak Sabzi', grams: 150, food_id: t1, source: 'db', per_100g: (await row(t1)).per_100g };
       await pool.query(`INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [member]);
@@ -153,6 +155,8 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n))
         { food_id: t1, nutrient: 'vit_c', value: 28, unit: 'mg', basis: 'per_100g', preparation: 'cooked', status: 'reference', source: src },
         { food_id: t2, nutrient: 'iron', value: 2, unit: 'mg', basis: 'per_100g', status: 'reference', source: { dataset: 'IFCT 2017', record_id: 'B029' } },
         { food_id: t1, nutrient: 'calcium', value: 99, unit: 'mg', basis: 'per_100g', preparation: 'cooked', status: 'reference', source: src },
+        { food_id: t4, nutrient: 'zinc', value: 0.49, unit: 'mg', basis: 'per_100g', status: 'reference', source: { dataset: 'USDA SR28', record_id: '20445', name: 'Rice, white, long-grain, regular, unenriched, cooked without salt' } },
+        { food_id: t4, nutrient: 'vit_b12', value: 0, unit: 'mcg', basis: 'per_100g', status: 'reference', source: { dataset: 'USDA SR28', record_id: '20445', name: 'Rice, white, long-grain, regular, unenriched, cooked without salt' } },
       ];
       const r = await call('POST', '/api/nutrient-enrichment/batches', A, { label: 'test pilot', proposals });
       const bid = r.data.batch?.id;
@@ -169,7 +173,7 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n))
       ck('a coach cannot apply (admin only)', coachApply.status === 403, coachApply.status);
       const ap = await call('POST', `/api/nutrient-enrichment/batches/${bid}/apply`, A, { confirm: `apply batch ${bid}` });
       const s = await row(t1);
-      ck('applied: iron 1.2 (recipe), zinc 0.46 (AI estimate), each with its provenance', ap.status === 200 && ap.data.applied === 2
+      ck('applied: iron 1.2 (recipe), zinc 0.46 (AI estimate), each with its provenance', ap.status === 200 && ap.data.applied === 4
          && Number(s.per_100g.iron) === 1.2 && s.per_100g._status.iron === 'recipe' && Number(s.per_100g.zinc) === 0.46 && s.per_100g._status.zinc === 'ai'
          && s.nutrient_meta.iron.batch_id === bid && s.nutrient_meta.iron.recipe?.cooked_weight_g === 250 && s.nutrient_meta.iron.review_status === 'pending', [ap.data, s.per_100g._status, s.nutrient_meta?.iron]);
       ck('…and nothing else on the food moved (vit C 12 still an AI estimate, calories 90)', Number(s.per_100g.vit_c) === 12 && s.per_100g._status.vit_c === 'ai' && Number(s.per_100g.calories) === 90);
@@ -179,7 +183,9 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n))
       ck('a batch applies once', again.status === 409, again.data);
       const rb = await call('POST', `/api/nutrient-enrichment/batches/${bid}/rollback`, A, {});
       const s2 = await row(t1);
-      ck('rolled back: iron empty again, zinc back to its old 0, statuses and provenance removed', rb.status === 200 && rb.data.restored === 2
+      const r4 = await row(t4);
+      ck('rollback restores a food exactly as it was, with no empty status map left behind (a USDA B12 0 had been applied as a real 0)', JSON.stringify(r4.per_100g) === before4 && !('_status' in r4.per_100g) && JSON.stringify(r4.nutrient_meta || {}) === '{}', [r4.per_100g, r4.nutrient_meta]);
+      ck('rolled back: iron empty again, zinc back to its old 0, statuses and provenance removed', rb.status === 200 && rb.data.restored === 4
          && s2.per_100g.iron === null && Number(s2.per_100g.zinc) === 0 && !s2.per_100g._status.iron && !s2.per_100g._status.zinc && !s2.nutrient_meta.iron && s2.per_100g._status.vit_c === 'ai', [rb.data, s2.per_100g]);
       // Second batch: applied, then a coach edits one value; rollback must leave the edit.
       const r2 = await call('POST', '/api/nutrient-enrichment/batches', A, { label: 'test pilot 2', proposals: proposals.slice(0, 2) });

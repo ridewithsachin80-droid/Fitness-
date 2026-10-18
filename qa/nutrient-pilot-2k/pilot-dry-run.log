@@ -1,0 +1,13 @@
+✓ copied 25 live records locally (live ids → local ids)
+✓ proposed: 240 of 240 accepted by the real batch check, 0 refused 
+✓ proposing changed no food
+✓ applied locally: 240, skipped 0
+✓ a logged copy keeps its statuses (Greens: iron "ai" (the old AI value), folate "reference", vit A "reference")
+✓ light member sheet title after the pilot: "3 of 31 targets met · 17 estimated · 11 not known"
+✓ light member rows: folate estimate | 🧬 Folate (B9)~230.2/ 400 mcgEstimate · B12 unknown | 💉 Vitamin B12≥ 1.1/ 2.4 mcgAt least · vit A unknown | 🥕 Vitamin A≥ 492/ 700 mcgAt least · calcium estimate | 🦴 Calcium~365/ 1200 mgEstimate · iron estimate | ⚙️ Iron~7/ 8 mgEstimate · zinc estimate | 🔩 Zinc~4/ 8 mgEstimate · magnesium estimate | ⚡ Magnesium~199/ 320 mgEstimate
+✓ light coach Key Nutrients rows identical to the member's (B12, calcium, iron, zinc, folate, magnesium)
+✓ dark member sheet title after the pilot: "3 of 31 targets met · 17 estimated · 11 not known"
+✓ dark member rows: folate estimate | 🧬 Folate (B9)~230.2/ 400 mcgEstimate · B12 unknown | 💉 Vitamin B12≥ 1.1/ 2.4 mcgAt least · vit A unknown | 🥕 Vitamin A≥ 492/ 700 mcgAt least · calcium estimate | 🦴 Calcium~365/ 1200 mgEstimate · iron estimate | ⚙️ Iron~7/ 8 mgEstimate · zinc estimate | 🔩 Zinc~4/ 8 mgEstimate · magnesium estimate | ⚡ Magnesium~199/ 320 mgEstimate
+✓ dark coach Key Nutrients rows identical to the member's (B12, calcium, iron, zinc, folate, magnesium)
+✓ rolled back: 240 restored, 0 conflicts
+✓ after rollback every record equals its copy before the batch (25/25)

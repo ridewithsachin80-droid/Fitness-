@@ -1,0 +1,257 @@
+[
+ {
+  "food_id": 854,
+  "kind": "reference",
+  "code": "20445",
+  "preparation": "cooked",
+  "basis_reason": "the name says cooked; 130 kcal matches cooked rice (raw is ~360)",
+  "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+ },
+ {
+  "food_id": 858,
+  "kind": "reference",
+  "code": "11124",
+  "preparation": "raw",
+  "basis_reason": "41 kcal and the AI's other figures match raw carrots",
+  "assumptions": "Raw carrots, edible portion."
+ },
+ {
+  "food_id": 859,
+  "kind": "reference",
+  "code": "11821",
+  "preparation": "raw",
+  "basis_reason": "31 kcal and vitamin C 127.7 match raw red sweet pepper",
+  "assumptions": "Raw red bell pepper (capsicum)."
+ },
+ {
+  "food_id": 860,
+  "kind": "reference",
+  "code": "11529",
+  "preparation": "raw",
+  "basis_reason": "18 kcal matches raw tomatoes",
+  "assumptions": "Raw red ripe tomatoes, year-round average."
+ },
+ {
+  "food_id": 861,
+  "kind": "reference",
+  "code": "11253",
+  "preparation": "raw",
+  "basis_reason": "15 kcal and 1.4 g protein match raw green leaf lettuce",
+  "assumptions": "Green leaf lettuce, raw."
+ },
+ {
+  "food_id": 925,
+  "kind": "reference",
+  "code": "12023",
+  "preparation": "raw",
+  "basis_reason": "the food's 573 kcal, 18 g protein and 49.7 g fat match USDA whole dried sesame exactly",
+  "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+ },
+ {
+  "food_id": 954,
+  "kind": "reference",
+  "code": "11457",
+  "preparation": "raw",
+  "basis_reason": "every existing figure (23 kcal, iron 2.7, calcium 99, potassium 558, vitamin C 28) is USDA raw spinach",
+  "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+ },
+ {
+  "food_id": 794,
+  "kind": "reference",
+  "code": "01256",
+  "preparation": "raw",
+  "basis_reason": "60 kcal with 10 g protein is non-fat Greek yogurt, not ordinary curd (about 3 g protein)",
+  "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+ },
+ {
+  "food_id": 792,
+  "kind": "reference",
+  "code": "12006",
+  "preparation": "raw",
+  "basis_reason": "486 kcal is dry chia seeds; the name says 'in water' but the numbers are for the dry seeds",
+  "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+ },
+ {
+  "food_id": 820,
+  "kind": "reference",
+  "code": "19902",
+  "preparation": "raw",
+  "basis_reason": "520 kcal is closest to 45-59% cacao dark chocolate (546); 70-85% is 598",
+  "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+ },
+ {
+  "food_id": 835,
+  "kind": "recipe",
+  "preparation": "cooked",
+  "recipe_label": "Ragi mudde: 100 g ragi flour (IFCT A010) + 230 g water, cooked to 330 g",
+  "basis_reason": "mudde is cooked ragi dough",
+  "ingredients": [
+   {
+    "code": "A010",
+    "grams": 100,
+    "method": "boiling",
+    "name": "Ragi flour (IFCT A010)"
+   },
+   {
+    "name": "Water",
+    "grams": 230,
+    "assume_zero": "all"
+   }
+  ],
+  "cooked_weight_g": 330,
+  "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure."
+ },
+ {
+  "food_id": 822,
+  "kind": "recipe",
+  "preparation": "raw",
+  "recipe_label": "90 g dates (USDA 09087) + 10 g sugar (USDA 19335)",
+  "basis_reason": "a paste of dates with added sugar, not cooked",
+  "ingredients": [
+   {
+    "code": "09087",
+    "grams": 90,
+    "method": "none",
+    "name": "Dates, deglet noor (USDA 09087)"
+   },
+   {
+    "code": "19335",
+    "grams": 10,
+    "method": "none",
+    "name": "Sugar, granulated (USDA 19335)"
+   }
+  ],
+  "cooked_weight_g": 100,
+  "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300."
+ },
+ {
+  "food_id": 793,
+  "kind": "recipe",
+  "preparation": "raw",
+  "recipe_label": "48 g cucumber + 48 g tomato + 3.5 g oil + 0.5 g salt",
+  "basis_reason": "a raw salad",
+  "ingredients": [
+   {
+    "code": "11205",
+    "grams": 48,
+    "method": "none",
+    "name": "Cucumber with peel (USDA 11205)"
+   },
+   {
+    "code": "11529",
+    "grams": 48,
+    "method": "none",
+    "name": "Tomato (USDA 11529)"
+   },
+   {
+    "code": "04042",
+    "grams": 3.5,
+    "method": "none",
+    "name": "Peanut oil (USDA 04042)"
+   },
+   {
+    "code": "02047",
+    "grams": 0.5,
+    "method": "none",
+    "name": "Salt (USDA 02047)"
+   }
+  ],
+  "cooked_weight_g": 100,
+  "assumptions": "A plain dressed salad with the oil the food's 3.5 g fat implies."
+ },
+ {
+  "food_id": 868,
+  "kind": "recipe",
+  "preparation": "cooked",
+  "recipe_label": "40 g paneer + 20 g onion + 25 g tomato + 5 g oil + 15 g water, to 100 g",
+  "basis_reason": "a home paneer curry",
+  "ingredients": [
+   {
+    "code": "L003",
+    "grams": 40,
+    "method": "boiling",
+    "name": "Paneer (IFCT L003)"
+   },
+   {
+    "code": "G017",
+    "grams": 20,
+    "method": "frying",
+    "name": "Onion (IFCT G017)"
+   },
+   {
+    "code": "D076",
+    "grams": 25,
+    "method": "boiling",
+    "name": "Tomato (IFCT D076)"
+   },
+   {
+    "code": "04042",
+    "grams": 5,
+    "method": "none",
+    "name": "Peanut oil (USDA 04042)"
+   },
+   {
+    "name": "Water",
+    "grams": 15,
+    "assume_zero": "all"
+   }
+  ],
+  "cooked_weight_g": 100,
+  "assumptions": "A typical home gravy. The recipe is an assumption; spices left out (small amounts)."
+ },
+ {
+  "food_id": 818,
+  "kind": "none",
+  "reason": "Branded protein powder: needs the product's own label (photo or text of the nutrition panel). No reference record can stand in for a brand."
+ },
+ {
+  "food_id": 821,
+  "kind": "none",
+  "reason": "Branded (Cadbury Bournville): needs the pack's nutrition panel. Not guessed from a generic dark chocolate."
+ },
+ {
+  "food_id": 823,
+  "kind": "none",
+  "reason": "'Spinach and lentil patty': the recipe varies (which lentil, binder, how much oil); no record or recipe can be checked against it."
+ },
+ {
+  "food_id": 795,
+  "kind": "none",
+  "reason": "'Green chutney': recipes vary widely (coconut, peanut, coriander, mint); the food's numbers don't identify one."
+ },
+ {
+  "food_id": 796,
+  "kind": "none",
+  "reason": "'Green vegetable curry': does not say which vegetable."
+ },
+ {
+  "food_id": 824,
+  "kind": "none",
+  "reason": "'Green paste': does not identify a food."
+ },
+ {
+  "food_id": 825,
+  "kind": "none",
+  "reason": "'Bread/Pancake': two different foods in one name."
+ },
+ {
+  "food_id": 869,
+  "kind": "none",
+  "reason": "'Green vegetable dish': does not say which vegetable."
+ },
+ {
+  "food_id": 870,
+  "kind": "none",
+  "reason": "'Green curry': does not say which vegetable or recipe."
+ },
+ {
+  "food_id": 791,
+  "kind": "none",
+  "reason": "'Salad': does not say what is in it."
+ },
+ {
+  "food_id": 953,
+  "kind": "none",
+  "reason": "'Vegetable salad': does not say which vegetables."
+ }
+]
