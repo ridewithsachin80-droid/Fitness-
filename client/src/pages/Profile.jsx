@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { calcBMR, foodKcal } from '../lib/day';
+import { calcBMR, foodKcal, waterTarget, STANDARD_LABEL } from '../lib/day';
 import { useAuthStore } from '../store/authStore';
 import { getMyProfile, updateMyProfile }  from '../api/logs';
 import { Card, SectionTitle, PageLoader, MemberBottomNav } from '../components/UI';
@@ -359,6 +359,9 @@ export default function Profile() {
             <span className="text-mid font-medium">litres per day</span>
           </div>
           <p className="text-xs text-lo mt-2">Stop 1 hour before sleep. Not during meals.</p>
+          {waterTarget(p).isDefault && (
+            <p className="text-xs text-mid mt-1" data-testid="profile-water-origin">{STANDARD_LABEL}. Your coach hasn’t set your own yet.</p>
+          )}
         </Card>
 
         {/* Fasting protocol */}

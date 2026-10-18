@@ -1,6 +1,7 @@
 import { Icon } from '../primitives';
 import { haptic } from '../../store/settingsStore';
 import { plural } from '../../constants';
+import { waterTarget, sleepTarget } from '../../lib/day';
 
 /**
  * DayStrip — the day at a glance. (The file keeps its Sprint 3 name; deploy
@@ -54,7 +55,9 @@ function Tile({ icon, label, value, unit, sub, pct, tone, onPress, active, quiet
 export default function DayStrip({ m, onOpen }) {
   const { log, protocol, kcalIn, kcalTarget, workoutKcal, coachPlan, micro, sleepText, sleepMins, terms, sheet } = m;
   const water   = log.water || 0;
-  const targetMl = protocol?.water_target || 3000;
+  const targetMl = waterTarget(protocol).ml;
+  // Fixes-2j: the bar fills against this member's own sleep target, not a fixed 8 h.
+  const sleepGoal = sleepTarget(protocol).minutes || 480;
 
   const plan = coachPlan?.todayDay;
   const workoutValue = workoutKcal > 0 ? workoutKcal : plan ? plan.day_label : '—';
@@ -73,7 +76,7 @@ export default function DayStrip({ m, onOpen }) {
         pct={(water / targetMl) * 100} tone="blue" quiet={!water} />
       <Tile icon="moon" testId="chip-sleep" label={terms.sleep} active={sheet === 'sleep'} onPress={() => onOpen('sleep')}
         value={sleepText || '—'} unit={sleepText ? '' : 'set times'}
-        pct={sleepMins != null ? (sleepMins / 480) * 100 : null} tone="ok" quiet={!sleepText} />
+        pct={sleepMins != null ? (sleepMins / sleepGoal) * 100 : null} tone="ok" quiet={!sleepText} />
       <Tile icon="dumbbell" testId="chip-workout" label="Workout" active={sheet === 'workout'} onPress={() => onOpen('workout')}
         value={workoutValue} unit={workoutUnit} sub={workoutSub} quiet={workoutValue === '—'} />
 

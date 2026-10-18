@@ -1,5 +1,5 @@
 import { Sheet, Pressable } from '../primitives';
-import { sleepMinutes, sleepTone, sleepTarget } from '../../lib/day';
+import { sleepMinutes, sleepTone, sleepTarget, STANDARD_LABEL } from '../../lib/day';
 
 export default function SleepSheet({ open, onClose, m }) {
   const { log, update, terms, protocol } = m;
@@ -14,6 +14,9 @@ export default function SleepSheet({ open, onClose, m }) {
   return (
     <Sheet size="sm" open={open} onClose={onClose} eyebrow={`${terms.sleep} target · ${target.hoursLabel}`} title={`${target.bedLabel} → ${target.wakeLabel}`}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
+      {target.isDefault && (
+        <p className="text-caption text-mid -mt-1 mb-2" data-testid="sleep-target-origin">{STANDARD_LABEL} times. Your coach hasn’t set your own yet.</p>
+      )}
       <div className="flex gap-2 pt-1">
         <div className="flex-1 min-w-0">
           <label className="block text-micro font-medium text-mute mb-1" htmlFor="sleep-bed">Bedtime</label>

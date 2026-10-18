@@ -1,3 +1,4 @@
+const { targetOrigin, waterTargetFrom, markWaterSet, clearWaterSet, STANDARD_WATER_ML } = require('../services/targetOrigin');
 const router = require('express').Router();
 const pool = require('../db/pool');
 // getISTDate was called in the morning-message routes below as if it were
@@ -183,7 +184,8 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
         `SELECT
            u.id, u.name, u.phone, u.created_at,
            pp.dob, pp.gender, pp.height_cm, pp.start_weight, pp.target_weight, pp.goal, pp.goals,
-           pp.conditions, pp.diet_notes, pp.water_target,
+           pp.conditions, pp.diet_notes, pp.water_target, pp.target_set_by,
+           pp.sleep_bed, pp.sleep_wake, pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
            pp.fasting_start, pp.fasting_end, pp.fasting_label, pp.fasting_note,
            pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
            (SELECT u2.name FROM monitor_patients mp
@@ -265,6 +267,8 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       conditions:      p.conditions || [],
       diet_notes:      p.diet_notes || null,
       water_target:    p.water_target || 3000,
+      // Fixes-2j: which targets the coach set and which are FitLife standards.
+      target_origin:   targetOrigin(p),
       monitor_name:    p.monitor_name || null,
       total_logs:      parseInt(p.total_logs) || 0,
       avg_compliance:  p.avg_compliance_30 ? Math.round(parseFloat(p.avg_compliance_30)) : null,
@@ -993,7 +997,7 @@ router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
     //   meal_plan  === GET /members/me/meal-plan  -> { date, meals }
     //   program    === GET /programs/active       -> { program, days }
     res.json({
-      profile:   profile.rows[0] || null,
+      profile:   profile.rows[0] ? { ...profile.rows[0], target_origin: targetOrigin(profile.rows[0]) } : null,
       meal_plan: { date: istToday, meals: dietPlan.timedMeals(mealPlan.rows || [], plan, istToday) },
       // Phase 2: the approved plan itself (never a draft), for Plan > Nutrition.
       // Same shape as GET /diet-plans/me -> plan. null when there is none.
@@ -1257,7 +1261,7 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     ).catch(err => console.error('marking member messages read failed:', err));
 
     res.json({
-      profile: { ...profileResult.rows[0], has_pin: pinResult.rows[0]?.has_pin ?? false },
+      profile: { ...profileResult.rows[0], has_pin: pinResult.rows[0]?.has_pin ?? false, target_origin: targetOrigin(profileResult.rows[0]) },
       logs:    logsResult.rows,
       labs:    labsResult.rows,
       notes:   notesResult.rows,
@@ -1317,6 +1321,10 @@ router.post('/', authMW, roleCheck('admin'), async (req, res) => {
         water_target,
       ]
     );
+    // Fixes-2j: only a water target the coach actually sent counts as set by them.
+    if (req.body?.water_target !== undefined && req.body.water_target !== null && req.body.water_target !== '') {
+      await client.query(`UPDATE patient_profiles SET ${markWaterSet(2)} WHERE user_id = $1`, [newUser.id, req.user.id]);
+    }
 
     // Optionally link to a monitor
     if (monitorId) {
@@ -1392,10 +1400,22 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatie
     // and the member would be shown it as their plan.
     const sleep = sleepTargetFrom(req.body || {});
     if (sleep.error) return res.status(400).json({ error: sleep.error });
+    // Fixes-2j: the water target records who set it, because its database
+    // default (3000) is otherwise indistinguishable from a coach's choice.
+    // null or '' goes back to the standard 3000 ml and forgets the record.
+    const water = req.body?.water_target !== undefined ? waterTargetFrom(req.body.water_target) : null;
+    if (water?.error) return res.status(400).json({ error: water.error });
 
     for (const field of allowed) {
       if (field === 'sleep_bed' || field === 'sleep_wake') {
         if (field in sleep) { updates.push(`${field} = $${idx++}`); values.push(sleep[field]); }
+        continue;
+      }
+      if (field === 'water_target') {
+        if (!water) continue;
+        updates.push(`water_target = $${idx++}`); values.push(water.reset ? STANDARD_WATER_ML : water.ml);
+        if (water.reset) updates.push(clearWaterSet);
+        else { updates.push(markWaterSet(idx++)); values.push(req.user.id); }
         continue;
       }
       if (req.body[field] !== undefined) {
@@ -1419,7 +1439,7 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatie
       values
     );
 
-    res.json(result.rows[0]);
+    res.json(result.rows[0] ? { ...result.rows[0], target_origin: targetOrigin(result.rows[0]) } : result.rows[0]);
   } catch (err) {
     console.error('PATCH /patients/:id/profile error:', err);
     res.status(500).json({ error: 'Failed to update profile' });

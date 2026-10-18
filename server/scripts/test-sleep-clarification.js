@@ -44,7 +44,7 @@ check('sleep question survives200-character mixed review context truncation', /4
 const filename = path.resolve(__dirname, '../routes/aiChat.js'), router = {};
 for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = () => router;
 let fixture = {}, prompts = [], queries = [];
-const pure = new Set(['../services/personName', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile', '../services/nutrients',
+const pure = new Set(['../services/personName', '../services/targetOrigin', '../services/scaleParse', '../services/macroCheck', '../services/fatProfile', '../services/nutrients',
   '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview', '../services/draftFoodReview', '../services/sleepReview']);
 const moduleFixture = { exports: {} };
 const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,

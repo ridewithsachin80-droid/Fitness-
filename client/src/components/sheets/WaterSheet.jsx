@@ -1,14 +1,19 @@
 import { Sheet, Pressable } from '../primitives';
 import { haptic } from '../../store/settingsStore';
+import { waterTarget, STANDARD_LABEL } from '../../lib/day';
 
 export default function WaterSheet({ open, onClose, m }) {
   const { log, protocol, update } = m;
   const water  = log.water || 0;
-  const target = protocol?.water_target || 3000;
+  const wt = waterTarget(protocol);
+  const target = wt.ml;
   return (
     <Sheet size="sm" open={open} onClose={onClose} eyebrow="Water" title={`Target ${(target / 1000).toFixed(1)} L`}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <p className="text-caption text-lo">Stop 1 hr before sleep · not during meals</p>
+      {wt.isDefault && (
+        <p className="text-caption text-mid mt-1" data-testid="water-target-origin">{STANDARD_LABEL}. Your coach hasn’t set your own water target yet.</p>
+      )}
       <p className="font-display text-num-lg font-semibold text-white mt-2 tabular-nums" data-testid="water-total">
         {(water / 1000).toFixed(2)}
         <span className="text-sm text-lo font-sans font-medium"> / {(target / 1000).toFixed(1)} L</span>

@@ -8,7 +8,7 @@ import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { OfflineBanner, MemberBottomNav } from '../components/UI';
 import { Eyebrow, Icon, Segmented, Skeleton, SkeletonCard, EmptyState } from '../components/primitives';
 import { WEEKDAYS, istWeekday, labelHasWeekday, isWeekdayScheduled, deriveTodayDay } from '../utils/programDay';
-import { resolveProtocolItems, AUTO_TICK_IDS, clock, sleepTarget } from '../lib/day';
+import { resolveProtocolItems, AUTO_TICK_IDS, clock, sleepTarget, protocolFromProfile, waterTarget, routineOrigin, planSourceLine, STANDARD_LABEL } from '../lib/day';
 import { formatDate } from '../constants';
 import { plural } from '../constants';
 
@@ -35,6 +35,10 @@ function fmtTime(t) {
   const hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m || 0).padStart(2, '0')} ${ampm}`;
 }
+
+// Fixes-2j: a FitLife standard value says so, instead of passing as the coach's.
+const waterSub = (w) => (w.isDefault ? `${STANDARD_LABEL} · your coach hasn\u2019t set yours yet` : 'Stop 1 hr before sleep · not during meals');
+const sleepSub = (t) => `${t.bedLabel} → ${t.wakeLabel}${t.isDefault ? ` · ${STANDARD_LABEL}` : ''}`;
 
 function Section({ eyebrow, title, children, action }) {
   return (
@@ -112,7 +116,9 @@ export default function Plan() {
       .catch(() => setError('Could not load your plan. Pull down to try again.'));
   }, []);
 
-  const protocol = data?.profile || null;
+  // Fixes-2j: the profile row calls the routine choice protocol_activities etc.
+  // Read as-is, every built-in item showed even when the coach had picked a few.
+  const protocol = protocolFromProfile(data?.profile || null);
   const days     = data?.program?.days || [];
   const program  = data?.program?.program || null;
   const meals    = data?.meal_plan?.meals || [];
@@ -126,7 +132,9 @@ export default function Plan() {
   // positive target counts; the heading names exactly what was set.
   const macros = planTargets(protocol);
   const eatTitle = targetsTitle(macros, terms);
-  const waterL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
+  const water = waterTarget(protocol);
+  const waterL = (water.ml / 1000).toFixed(1);
+  const routine = routineOrigin(protocol);
   // The member's own bedtime and wake time when the coach has set them; the
   // hours are worked out from the times, never typed in beside them.
   const sleep = sleepTarget(protocol);
@@ -172,7 +180,7 @@ export default function Plan() {
             {program?.name ? program.name : 'Your plan'}
           </h1>
           <p className="text-sm text-mid mt-1">
-            {protocol?.monitor_name ? `Set by ${protocol.monitor_name}` : 'Set by your coach'}{scheduled ? ' · weekday schedule' : ''}
+            <span data-testid="plan-source">{planSourceLine(protocol, { coachName: protocol?.monitor_name, hasCoachContent: !!(program || meals.length || dietPlan) })}</span>{scheduled ? ' · weekday schedule' : ''}
           </p>
           <Segmented className="mt-4" name="plan-view" value={view} onChange={setView}
             options={[{ id: 'today', label: 'Today' }, { id: 'week', label: 'Week' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'recovery', label: 'Recovery' }]} />
@@ -219,10 +227,10 @@ export default function Plan() {
 
             <Section eyebrow="Recover" title={`${waterL} L water · ${sleep.hoursLabel} sleep`}>
               <div data-testid="plan-today-recover">
-                <Line icon="drop" title="Water" sub="Stop 1 hr before sleep · not during meals" right={`${waterL} L`} onPress={() => goToday('water')} />
-                <Line icon="moon" title={terms.sleep} sub={`${sleep.bedLabel} → ${sleep.wakeLabel}`} right={sleep.hoursLabel} onPress={() => goToday('sleep')} />
+                <Line icon="drop" title="Water" sub={waterSub(water)} right={`${waterL} L`} onPress={() => goToday('water')} testId="plan-water" />
+                <Line icon="moon" title={terms.sleep} sub={sleepSub(sleep)} right={sleep.hoursLabel} onPress={() => goToday('sleep')} testId="plan-sleep" />
                 {activeSupplements.length > 0 && (
-                  <Line icon="pill" title={terms.supplements} sub={activeSupplements.map(s => s.label).join(' · ')}
+                  <Line icon="pill" title={terms.supplements} sub={(routine.standard.includes('supplements') ? `${STANDARD_LABEL} · ` : '') + activeSupplements.map(s => s.label).join(' · ')}
                     right={`${activeSupplements.length}`} onPress={() => goToday('protocol')} />
                 )}
               </div>
@@ -375,14 +383,21 @@ export default function Plan() {
           <>
             <Section eyebrow="Recovery" title={`${sleep.hoursLabel} sleep · ${waterL} L water`}>
               <div data-testid="plan-recovery">
-                <Line icon="moon" title={terms.sleep} sub={`${sleep.bedLabel} → ${sleep.wakeLabel}`} right={sleep.hoursLabel} />
-                <Line icon="drop" title="Water" sub="Stop 1 hr before sleep · not during meals" right={`${waterL} L`} />
+                <Line icon="moon" title={terms.sleep} sub={sleepSub(sleep)} right={sleep.hoursLabel} />
+                <Line icon="drop" title="Water" sub={waterSub(water)} right={`${waterL} L`} />
                 {scheduled && (
                   <Line icon="calendar" title="Rest days" sub={WEEKDAYS.filter(wd => !days.some(d => labelHasWeekday(d.day_label, wd))).join(' · ') || 'None — every day has a session'} />
                 )}
               </div>
             </Section>
             <Section eyebrow="Protocol" title={(() => { const n = activeActivities.length + activeACV.length + activeSupplements.length; return `${n} ${plural(n, 'item')} a day`; })()}>
+              {routine.anyStandard && (
+                <p className="text-caption text-mid mb-2" data-testid="plan-routine-standard">
+                  {routine.allStandard
+                    ? 'This is FitLife\u2019s standard daily routine. Your coach hasn\u2019t chosen yours yet.'
+                    : `Your coach chose some of this. ${routine.standard.map(g => ({ activities: 'Activities', acv: 'ACV', supplements: terms.supplements }[g])).join(' and ')}: FitLife standard.`}
+                </p>
+              )}
               <div data-testid="plan-protocol">
                 {activeActivities.map(a => <Line key={a.id} icon="run" title={a.label} sub={a.sub || (AUTO_TICK_IDS.includes(a.id) ? 'Ticks from your Workout log' : '')} />)}
                 {activeACV.map(a => <Line key={a.id} icon="drop" title={a.label} sub={a.sub || '1 tbsp in 200 ml warm water, 15 min before the meal'} />)}

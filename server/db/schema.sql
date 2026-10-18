@@ -326,6 +326,13 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_opted_out BOOLEAN D
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_bed  VARCHAR(5);
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_wake VARCHAR(5);
 
+-- Fixes-2j (18 Oct 2026): who set a target that has a database default.
+-- water_target defaults to 3000, so a stored 3000 cannot say whether a coach
+-- chose it. {"water": {"by": <user id>, "at": <time>}} is written when a coach
+-- or admin saves it, and removed when they go back to the standard.
+-- See services/targetOrigin.js. Existing rows start empty: nothing is guessed.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS target_set_by JSONB DEFAULT '{}';
+
 -- Delivery log. Needed to answer "did she actually get it?", to stop paying
 -- for a channel that silently fails, and to prove consent was honoured.
 CREATE TABLE IF NOT EXISTS message_log (

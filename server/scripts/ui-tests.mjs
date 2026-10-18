@@ -3868,6 +3868,81 @@ async function knownFixesTest() {
     }
   } catch (e) { ck('section E2 ran to the end', false, e.message); }
 
+  // ── E3. Fixes-2j: the Plan says which targets the coach set and which are
+  //        FitLife standards, and honours the coach's routine selection.
+  try {
+    const api = stub('api-38-plan-origin.js', `const get = async () => ({ data: { profile: window.__profile, program: null, meal_plan: null } }); export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import Plan from './pages/Plan.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 216, name: 'Meera Rao', role: 'patient' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__entry || '/plan']}><Plan /></MemoryRouter>);`, api);
+    const view = async (profile, entry = '/plan') => { const T = run(code, (win) => { win.__profile = profile; win.__entry = entry; }); await tick(600); return T; };
+    const txt = (T, id) => T.w.document.querySelector(`[data-testid="${id}"]`)?.textContent.replace(/\s+/g, ' ').trim() || null;
+    const protoLines = (T) => T.w.document.querySelectorAll('[data-testid="plan-protocol"] > *').length;
+
+    const std = await view({ water_target: 3000 }), stdR = await view({ water_target: 3000 }, '/plan?tab=recovery');
+    ck('nothing set: header "FitLife starting plan · your coach will personalise it", not "Set by your coach"',
+       txt(std, 'plan-source') === 'FitLife starting plan · your coach will personalise it' && !/Set by/.test(std.w.document.body.textContent), txt(std, 'plan-source'));
+    ck('nothing set: water and sleep are labelled FitLife standard',
+       /FitLife standard · your coach hasn.t set yours yet/.test(txt(std, 'plan-water') || '') && /FitLife standard/.test(txt(std, 'plan-sleep') || ''), [txt(std, 'plan-water'), txt(std, 'plan-sleep')]);
+    ck('nothing set: the routine says it is FitLife’s standard, every item listed',
+       /standard daily routine\. Your coach hasn.t chosen yours yet/.test(txt(stdR, 'plan-routine-standard') || '') && protoLines(stdR) >= 9, [txt(stdR, 'plan-routine-standard'), protoLines(stdR)]);
+
+    const set = { water_target: 3500, target_origin: { water: 'coach', sleep: 'coach', activities: 'coach', acv: 'coach', supplements: 'coach', macros: 'coach' },
+      sleep_bed: '23:00', sleep_wake: '06:30', protocol_activities: ['walk'], protocol_acv: [], protocol_supplements: ['b12'], macro_kcal: 1600 };
+    const coach = await view(set), coachR = await view(set, '/plan?tab=recovery');
+    ck('all set: header "Set by your coach", and no "FitLife standard" anywhere',
+       txt(coach, 'plan-source') === 'Set by your coach' && !/FitLife standard/.test(coach.w.document.body.textContent + coachR.w.document.body.textContent), txt(coach, 'plan-source'));
+    ck('all set: the routine shows only what the coach chose (walk + B12), no standard note (it listed every item before)',
+       protoLines(coachR) === 2 && !coachR.w.document.querySelector('[data-testid="plan-routine-standard"]'), protoLines(coachR));
+
+    const mixed = await view({ water_target: 3500, protocol_activities: ['walk'] }), mixedR = await view({ water_target: 3500, protocol_activities: ['walk'] }, '/plan?tab=recovery');
+    ck('mixed: "Set by your coach · some items are FitLife standards"; water is not labelled standard',
+       txt(mixed, 'plan-source') === 'Set by your coach · some items are FitLife standards' && !/FitLife standard/.test(txt(mixed, 'plan-water') || ''), [txt(mixed, 'plan-source'), txt(mixed, 'plan-water')]);
+    ck('mixed: the routine note names the groups still standard', /Your coach chose some of this\. ACV and Supplements: FitLife standard\./.test(txt(mixedR, 'plan-routine-standard') || ''), txt(mixedR, 'plan-routine-standard'));
+    ck('no screen errors in any case', [std, stdR, coach, coachR, mixed, mixedR].every(T => T.errors.length === 0), [std, coach, mixed].map(T => T.errors));
+  } catch (e) { ck('section E3 ran to the end', false, e.message); }
+
+  // ── E4. Fixes-2j: Today's water and sleep sheets, the checklist, the strip,
+  //        and the coach's water card.
+  try {
+    const api = stub('api-39-water-card.js', `const get = async () => ({ data: {} }); const patch = async (url, body) => { (window.__sent = window.__sent || []).push({ url, body }); return { data: { ...window.__profile, ...body, water_target: body.water_target ?? 3000, target_origin: { ...(window.__profile.target_origin || {}), water: body.water_target == null ? 'standard' : 'coach' } } }; }; export default { get, post: get, put: get, patch, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import WaterSheet from './components/sheets/WaterSheet.jsx';
+      import SleepSheet from './components/sheets/SleepSheet.jsx';
+      import DayStrip from './components/today/DayStrip.jsx';
+      import WaterTargetCard from './components/coach/WaterTargetCard.jsx';
+      const p = window.__profile;
+      const m = { log: { water: 1500, sleep: { bedtime: '23:00', waketime: '05:00' } }, protocol: p, update: () => {}, terms: { sleep: 'Sleep', kcal: 'kcal' },
+        kcalIn: 0, kcalTarget: null, workoutKcal: 0, coachPlan: null, micro: { hasData: false, met: 0, total: 31, known: 0, unknown: 0 }, sleepText: '6h', sleepMins: 360, sheet: null };
+      createRoot(document.getElementById('root')).render(<div>
+        <WaterSheet open onClose={() => {}} m={m} />
+        <SleepSheet open onClose={() => {}} m={m} />
+        <DayStrip m={m} onOpen={() => {}} />
+        <WaterTargetCard memberId={7} profile={{ name: 'Meera Rao', ...p }} />
+      </div>);`, api);
+    const T1 = run(code, (win) => { win.__profile = { water_target: 3000 }; }); await tick(500);
+    const d1 = T1.w.document, q = (d, id) => d.querySelector(`[data-testid="${id}"]`);
+    ck('standard: the water sheet and the sleep sheet say FitLife standard', /FitLife standard\. Your coach hasn.t set your own water target yet/.test(q(d1, 'water-target-origin')?.textContent || '') && /FitLife standard times/.test(q(d1, 'sleep-target-origin')?.textContent || ''),
+       [q(d1, 'water-target-origin')?.textContent, q(d1, 'sleep-target-origin')?.textContent]);
+    ck('standard: the coach card says so, and offers "Keep 3.0 L as Meera’s target"', /FitLife standard/.test(q(d1, 'water-target-note')?.textContent || '') && /Keep 3\.0 L as Meera/.test(q(d1, 'water-target-keep')?.textContent || ''), q(d1, 'water-target-note')?.textContent);
+    ck('standard: the coach card says the daily routine is the standard set', /Daily routine: FitLife standard \(every item on\)/.test(q(d1, 'routine-origin')?.textContent || ''), q(d1, 'routine-origin')?.textContent);
+    q(d1, 'water-target-keep').click(); await tick(300);
+    ck('"Keep" saves 3000 ml for this member, and the card then says it is set', JSON.stringify(T1.w.__sent) === JSON.stringify([{ url: '/members/7/profile', body: { water_target: 3000 } }]) && /Set for Meera/.test(q(d1, 'water-target-note')?.textContent || ''),
+       [T1.w.__sent, q(d1, 'water-target-note')?.textContent]);
+    const T2 = run(code, (win) => { win.__profile = { water_target: 3500, sleep_bed: '23:00', sleep_wake: '05:00', target_origin: { water: 'coach', sleep: 'coach', activities: 'coach', acv: 'coach', supplements: 'coach', macros: 'none' } }; }); await tick(500);
+    const d2 = T2.w.document;
+    ck('coach-set: no standard notes on either sheet, no "Keep" on the coach card', !q(d2, 'water-target-origin') && !q(d2, 'sleep-target-origin') && !q(d2, 'water-target-keep'), null);
+    const bar = (d) => { const tile = q(d, 'chip-sleep'); const b = [...(tile?.querySelectorAll('[style]') || [])].find(e => /width/.test(e.getAttribute('style'))); return b?.getAttribute('style'); };
+    ck('the Today sleep bar fills against the member’s own 6 h target (6 h slept = full), not a fixed 8 h (75%)', /width:\s*100%/.test(bar(d2) || ''), bar(d2));
+    ck('with the standard 8.5 h target, 6 h slept is about 71%', /width:\s*70\.5|width:\s*70\.6/.test(bar(d1) || ''), bar(d1));
+    ck('no errors', T1.errors.length === 0 && T2.errors.length === 0, [T1.errors, T2.errors]);
+  } catch (e) { ck('section E4 ran to the end', false, e.message); }
+
   // ── F. CMP-010 / CMP-011: the coach's Log Weight and program buttons open something
   try {
     const api = stub('api-37-coach.js', `

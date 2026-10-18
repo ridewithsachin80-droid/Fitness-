@@ -24,6 +24,7 @@ import TrainingSummary from '../components/TrainingSummary';
 import MetabolicInsight from '../components/MetabolicInsight';
 import DietPlanStudio from '../components/coach/DietPlanStudio';
 import SleepTargetCard from '../components/coach/SleepTargetCard';
+import WaterTargetCard from '../components/coach/WaterTargetCard';
 import MemberLabelsCard from '../components/coach/MemberLabelsCard';
 import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
@@ -952,6 +953,10 @@ export default function Coach() {
         {tab === 'training' && (<>   {/* Sleep target */}
         <Card>
           <SleepTargetCard memberId={parseInt(memberId)} profile={profile} onSaved={() => load({ quiet: true })} />
+        </Card>
+        {/* Fixes-2j: the water target, and which targets are still FitLife standards. */}
+        <Card>
+          <WaterTargetCard memberId={parseInt(memberId)} profile={profile} onSaved={() => load({ quiet: true })} />
         </Card>
         </>)}
 

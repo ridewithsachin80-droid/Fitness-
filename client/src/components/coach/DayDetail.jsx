@@ -3,7 +3,7 @@ import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../../constants';
 import { UNSORTED_MEAL, groupByMeal } from '../../utils/coachView';
 import WorkoutSessionViewer from '../WorkoutSessionViewer';
 import { calcN, rowCompliance } from '../../lib/coach/dayMath.jsx';
-import { microStatus, resolveProtocolItems } from '../../lib/day';
+import { microStatus, resolveProtocolItems, protocolFromProfile } from '../../lib/day';
 import { MicroRow, microCountTone } from '../today/DayWidgets';
 
 /**
@@ -219,10 +219,8 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                     {(log.food_items || []).some(f => Number(f?.grams) > 0) && (() => {
                       // The member's own inputs, as on their Today screen: sunlight counts toward vitamin D.
                       // The profile row names the coach's choice protocol_activities; the member's
-                      // protocol (server/routes/logs.js) calls it activities.
-                      const pf = data?.profile || {};
-                      const { activeActivities } = resolveProtocolItems({ activities: pf.protocol_activities || null,
-                        custom_activities: pf.custom_activities || [], item_overrides: pf.item_overrides || {} });
+                      // protocol (server/routes/logs.js) calls it activities. protocolFromProfile maps it.
+                      const { activeActivities } = resolveProtocolItems(protocolFromProfile(data?.profile || {}));
                       const st = microStatus({ foodItems: log.food_items || [], supplements: log.supplements || {},
                         activities: log.activities || {}, activeActivities,
                         rdaOverrides: data?.profile?.rda_overrides || {} });

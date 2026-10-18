@@ -1,3 +1,4 @@
+const { targetOrigin } = require('../services/targetOrigin');
 const router = require('express').Router();
 const pool = require('../db/pool');
 const authMW = require('../middleware/auth');
@@ -222,6 +223,8 @@ router.get('/:date', authMW, async (req, res) => {
       // default (the client's lib/day/sleep.js decides what that is).
       sleep_bed:     profile.sleep_bed     || null,
       sleep_wake:    profile.sleep_wake    || null,
+      // Fixes-2j: which of these the coach set and which are FitLife standards.
+      target_origin: targetOrigin(profile),
     };
 
     res.json(log ? { ...log, protocol } : { protocol });

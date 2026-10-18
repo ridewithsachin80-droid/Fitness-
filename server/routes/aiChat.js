@@ -35,6 +35,7 @@ const { circuitsPromptBlock, matchCircuit } = require('../services/circuits');  
 const axios  = require('axios');
 const authMW = require('../middleware/auth');
 const { firstName } = require('../services/personName');
+const { targetOrigin, waterTargetText, routineText, markWaterSet } = require('../services/targetOrigin');   // Fixes-2j
 const { cleanScalePayload } = require('../services/scaleParse');
 const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros, needsPositiveAmountClarification } = require('../services/foodReview');
 const { resolveSleepReview } = require('../services/sleepReview');
@@ -2301,7 +2302,7 @@ async function buildCoachMemberContext(member) {
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
               target_weight, start_weight,
               protocol_activities, protocol_acv, protocol_supplements,
-              custom_activities, custom_acv, custom_supplements, item_overrides
+              custom_activities, custom_acv, custom_supplements, item_overrides, target_set_by, sleep_bed, sleep_wake
          FROM patient_profiles WHERE user_id = $1`, [member.id]),
   ]);
 
@@ -2329,7 +2330,9 @@ async function buildCoachMemberContext(member) {
     }
     lines.push(`  Food logged: ${(t.food_items || []).map(f => `${f.name} ${f.grams}g`).join(', ') || 'nothing'}`);
     lines.push(`  Weight: ${t.weight_kg ? t.weight_kg + ' kg' : 'not logged today'}`);
-    lines.push(`  Water drunk: ${t.water_ml || 0} ml${p.water_target ? ` of ${p.water_target} ml target` : ' (no target set)'}`);
+    lines.push(`  Water drunk: ${t.water_ml || 0} ml of ${waterTargetText(p)}`);
+    // Fixes-2j: never let the AI say "your coach set" for a FitLife standard.
+    lines.push(`  Daily routine: ${routineText(p)}`);
     if (waterLeft !== null) lines.push(`  Water remaining: ${waterLeft} ml`);
     lines.push(`  Activities done (${act.done.length}/${act.total}): ${act.done.join(', ') || 'none'}`);
     lines.push(`  Activities still to do: ${act.left.join(', ') || 'none'}`);
@@ -2509,7 +2512,7 @@ async function buildCoachSummary(member) {
     pool.query(
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
               protocol_activities, protocol_acv, protocol_supplements,
-              custom_activities, custom_acv, custom_supplements, item_overrides
+              custom_activities, custom_acv, custom_supplements, item_overrides, target_set_by, sleep_bed, sleep_wake
          FROM patient_profiles WHERE user_id = $1`, [member.id]),
   ]);
 
@@ -2531,7 +2534,10 @@ async function buildCoachSummary(member) {
       over: kcalLeft !== null && kcalLeft < 0,
       items: (t?.food_items || []).map(f => ({ name: f.name, grams: f.grams })),
     },
-    water: { drunk: t?.water_ml || 0, target: p.water_target || null, remaining: waterLeft },
+    water: { drunk: t?.water_ml || 0, target: p.water_target || null, remaining: waterLeft,
+             // Fixes-2j: 'coach' or 'standard' (FitLife's 3000 ml, not chosen by the coach).
+             origin: targetOrigin(p)?.water || 'standard' },
+    routine_origin: targetOrigin(p),
     activities:  resolveProtocolGroup('activities',  p, t?.activities),
     acv:         resolveProtocolGroup('acv',         p, t?.acv),
     supplements: resolveProtocolGroup('supplements', p, t?.supplements),
@@ -3898,9 +3904,10 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
       }
 
       if (ops.water_target != null) {
+        // Fixes-2j: record that the coach set it (the 3000 default can't say so).
         await client.query(
-          `UPDATE patient_profiles SET water_target=$1, updated_at=NOW() WHERE user_id=$2`,
-          [ops.water_target, memberId]);
+          `UPDATE patient_profiles SET water_target=$1, ${markWaterSet(3)}, updated_at=NOW() WHERE user_id=$2`,
+          [ops.water_target, memberId, req.user.id]);
         appliedBits.push(`water ${ops.water_target}ml`);
       }
       if (ops.target_weight != null) {
