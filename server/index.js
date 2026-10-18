@@ -104,7 +104,11 @@ app.use('/api/foods',         foodsRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  // commit: which revision this server runs (Railway sets RAILWAY_GIT_COMMIT_SHA
+  // for GitHub deploys). The phone robot waits for it, so a failed deploy —
+  // the old server still answering — can no longer pass as the new one
+  // (18 Oct 2026: a build failed while the app bundle looked unchanged).
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), commit: process.env.RAILWAY_GIT_COMMIT_SHA || null });
 });
 
 // ── Digital Asset Links ────────────────────────────────────────────────

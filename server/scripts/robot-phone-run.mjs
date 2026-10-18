@@ -73,6 +73,7 @@ async function liveBundle() {
   const html = await (await fetch(`${BASE}/?robot=${Date.now()}`, { headers: { 'cache-control': 'no-cache' } })).text();
   return (html.match(/\/assets\/index-[\w-]+\.js/) || [])[0] || null;
 }
+let deployNote = null;   // what the robot confirmed the server runs (filled when waiting for a deploy)
 if (process.argv.includes('--wait-for-deploy')) {
   const want = (fs.readFileSync(path.join(ROOT, 'client/dist/index.html'), 'utf8').match(/\/assets\/index-[\w-]+\.js/) || [])[0];
   const until = Date.now() + 15 * 60e3;
@@ -89,6 +90,33 @@ if (process.argv.includes('--wait-for-deploy')) {
     process.exit(1);
   }
   console.log(`test site is serving ${want}`);
+  // The server too (18 Oct 2026). A deploy that fails to build leaves the old
+  // server running with the same app bundle, so the bundle alone cannot tell.
+  const sha = process.env.GITHUB_SHA;
+  if (sha) {
+    const deadline = Date.now() + (Number(process.env.ROBOT_DEPLOY_WAIT_MS) || 15 * 60e3);
+    let running;
+    while (Date.now() < deadline) {
+      running = await fetch(`${BASE}/health?robot=${Date.now()}`).then(r => r.json()).then(j => j.commit ?? null).catch(() => undefined);
+      if (running === null || running === sha) break;
+      console.log(`waiting for the server deploy: running ${running ? running.slice(0, 7) : '—'}, this commit ${sha.slice(0, 7)}`);
+      await new Promise(r => setTimeout(r, 20e3));
+    }
+    if (running === null) {
+      const msg = 'The test site does not report which commit it runs, so the server deploy could not be checked.';
+      console.log(msg); if (GH) console.log(`::warning title=Phone robot: server commit unknown::${ghEsc(msg)}`);
+      deployNote = 'server commit not reported';
+    } else if (running !== sha) {
+      const msg = `The test site is still running ${running ? running.slice(0, 7) : 'an unknown commit'}, not ${sha.slice(0, 7)}: the deploy failed or is stuck (check Railway). Nothing was tested.`;
+      console.log(msg); if (GH) console.log(`::error title=Phone robot: server deploy not live::${ghEsc(msg)}`);
+      fs.mkdirSync(OUT, { recursive: true });
+      fs.writeFileSync(path.join(OUT, 'report.md'), `# Phone robot — DEPLOY NOT LIVE\n\n${msg}\n`);
+      process.exit(1);
+    } else {
+      console.log(`test site server is running ${sha.slice(0, 7)}`);
+      deployNote = `server ${sha.slice(0, 7)}`;
+    }
+  }
 }
 
 // ── Results ──────────────────────────────────────────────────────────────────
@@ -697,7 +725,7 @@ async function finish(fatal = null) {
   const covered = [...new Set(results.filter(r => r.result === 'pass').flatMap(r => r.cases))].sort();
   const lines = [
     `# Phone robot — ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`,
-    '', `Site: ${BASE} · app ${live || '?'} · commit ${process.env.GITHUB_SHA?.slice(0, 7) || 'local'}`,
+    '', `Site: ${BASE} · app ${live || '?'} · commit ${process.env.GITHUB_SHA?.slice(0, 7) || 'local'}${deployNote ? ` · ${deployNote}` : ''}`,
     '', `**${n('pass')} passed cleanly · ${n('pass-retry')} passed after retry · ${n('fail')} failed · ${n('warn')} warnings**${fatal ? ` · stopped early: ${fatal}` : ''}`,
     '', '| Check | What | Workbook cases | Result | Detail |', '|---|---|---|---|---|',
     ...results.map(r => `| ${r.id} | ${r.title} | ${r.cases.join(', ')} | ${{ pass: '✅', 'pass-retry': '↻ after retry', fail: '❌', warn: '⚠️' }[r.result]} | ${String(r.detail).replace(/\|/g, '/').slice(0, 300)}${r.shot ? ` (${r.shot}${r.evidence ? ', ' + r.evidence : ''})` : ''} |`),
