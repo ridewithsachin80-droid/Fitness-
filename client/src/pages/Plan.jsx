@@ -71,6 +71,29 @@ function Line({ icon, title, sub, right, onPress, testId, tone }) {
     : <div className={cls} data-testid={testId}>{body}</div>;
 }
 
+/** The member's targets from either shape the API sends ({ macros } or the raw
+ *  macro_* columns). Only positive numbers count; null when none is set. */
+export function planTargets(protocol) {
+  if (!protocol) return null;
+  const raw = protocol.macros || { kcal: protocol.macro_kcal, pro: protocol.macro_pro, carb: protocol.macro_carb, fat: protocol.macro_fat };
+  const num = v => (Number(v) > 0 ? Number(v) : null);
+  const t = { kcal: num(raw.kcal), pro: num(raw.pro), carb: num(raw.carb), fat: num(raw.fat) };
+  return Object.values(t).some(v => v != null) ? t : null;
+}
+
+/** "1,600 kcal · 100 g protein", "1,600 kcal", "100 g protein" — only what the coach set. */
+export function targetsTitle(t, terms = { kcal: 'kcal' }) {
+  if (!t) return '';
+  const parts = [];
+  if (t.kcal) parts.push(`${t.kcal.toLocaleString('en-IN')} ${terms.kcal}`);
+  if (t.pro) parts.push(`${t.pro} g protein`);
+  if (!parts.length) {
+    if (t.carb) parts.push(`${t.carb} g carbs`);
+    if (t.fat) parts.push(`${t.fat} g fat`);
+  }
+  return parts.join(' · ');
+}
+
 export default function Plan() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -99,9 +122,10 @@ export default function Plan() {
   // /members/me/today returns the raw profile row (macro_kcal …), not the
   // { macros: { kcal … } } shape /members/me returns, so the Eat section said
   // "Targets not set yet" for every member. Accept both shapes.
-  const macros = protocol?.macros || (protocol?.macro_kcal ? {
-    kcal: protocol.macro_kcal, pro: protocol.macro_pro, carb: protocol.macro_carb, fat: protocol.macro_fat,
-  } : null);
+  // 18 Oct 2026: a coach may set protein only (or calories only). Any one
+  // positive target counts; the heading names exactly what was set.
+  const macros = planTargets(protocol);
+  const eatTitle = targetsTitle(macros, terms);
   const waterL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
   // The member's own bedtime and wake time when the coach has set them; the
   // hours are worked out from the times, never typed in beside them.
@@ -176,7 +200,7 @@ export default function Plan() {
               )}
             </Section>
 
-            <Section eyebrow="Eat" title={macros?.kcal ? `${macros.kcal.toLocaleString('en-IN')} ${terms.kcal} · ${macros.pro || '—'} g protein` : 'Targets not set yet'}
+            <Section eyebrow="Eat" title={eatTitle || 'Targets not set yet'}
               action={<button type="button" onClick={() => { haptic(10); goToday('food'); }} className="text-caption font-bold text-gold" style={{ minHeight: 32 }}>Log ›</button>}>
               {meals.length ? (
                 <div data-testid="plan-today-meals">
@@ -187,7 +211,7 @@ export default function Plan() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-mid" data-testid="plan-eat-empty">{macros?.kcal
+                <p className="text-sm text-mid" data-testid="plan-eat-empty">{macros
                   ? 'No meal plan for today. Eat to your targets and log as you go.'
                   : 'No meal plan yet. Log what you eat; your coach will set your targets.'}</p>
               )}
@@ -319,7 +343,7 @@ export default function Plan() {
 
         {data && view === 'nutrition' && !dietPlan && (
           <>
-            <Section eyebrow="Daily targets" title={macros?.kcal ? `${macros.kcal.toLocaleString('en-IN')} ${terms.kcal}` : 'Not set yet'}>
+            <Section eyebrow="Daily targets" title={macros?.kcal ? `${macros.kcal.toLocaleString('en-IN')} ${terms.kcal}` : macros ? 'No calorie target' : 'Not set yet'}>
               {macros ? (
                 <div className="grid grid-cols-3 gap-2" data-testid="plan-macros">
                   {[['Protein', macros.pro], ['Carbs', macros.carb], ['Fat', macros.fat]].map(([k, v]) => (

@@ -934,8 +934,8 @@ console.log('\n[brand] green everywhere, both themes');
   const amberHex = jsx.flatMap(f => {
     const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
     return [...code.matchAll(/#([0-9a-f]{6})\b/gi)].map(m => m[1].toLowerCase()).filter(h => AMBER_OK.has(h))
-      .map(h => `${path.relative(SRC, f)} #${h}`);
-  }).filter(x => !x.startsWith('pages/Monitor.jsx #fef3c7'));   // the printed report's own warning badge (paper, not the app)
+      .map(h => `${path.relative(SRC, f).split(path.sep).join('/')} #${h}`);   // '/' on every OS, so the exception below also matches on Windows
+  }).filter(x => x !== 'pages/Monitor.jsx #fef3c7');   // the printed report's own warning badge (paper, not the app): exactly this file and this colour
   ck('no hand-written amber hex codes in the app (only the printed report keeps its warning badge)', amberHex.length === 0, amberHex);
   const src = rel => fs.readFileSync(path.join(SRC, rel), 'utf8');
   const wl = src('components/WorkoutLog.jsx');
@@ -967,7 +967,7 @@ console.log('\n[brand] green everywhere, both themes');
   // Copy from the same phone check.
   const plan = src('pages/Plan.jsx');
   ck('Plan → Eat without targets does not tell the member to "eat to your targets"',
-     /macros\?\.kcal\s*\n?\s*\? 'No meal plan for today\. Eat to your targets and log as you go\.'\s*\n?\s*: 'No meal plan yet\. Log what you eat; your coach will set your targets\.'/.test(plan));
+     /\{macros\s*\n?\s*\? 'No meal plan for today\. Eat to your targets and log as you go\.'\s*\n?\s*: 'No meal plan yet\. Log what you eat; your coach will set your targets\.'/.test(plan));   // any target counts (protein only too); ui-tests E2 renders all four cases
   ck('food sheet top line no longer points at a mic that is not on screen', !/Tap the mic/.test(src('components/sheets/FoodSheet.jsx')));
   ck('weight chart labels the first and the latest weigh-in; the goal label sits away from the latest point',
      /ticks=\{weightTicks\}/.test(prog) && /n - 1\]/.test(prog) && /Goal \$\{targetW\}`, position: 'insideTopLeft'/.test(prog));

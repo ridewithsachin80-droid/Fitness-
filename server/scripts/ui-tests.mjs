@@ -3690,6 +3690,41 @@ async function knownFixesTest() {
     ck('Progress\'s "Your diet plan, PDF and grocery list" links to /plan?tab=nutrition', /navigate\('\/plan\?tab=nutrition'\); \}\} data-testid="progress-to-plan"/.test(srcOf('pages/Progress.jsx')));
   } catch (e) { ck('section E ran to the end', false, e.message); }
 
+  // ── E2. Plan → Eat names exactly the targets the coach set (18 Oct 2026: with
+  //        protein only, the heading still said "Targets not set yet").
+  try {
+    const api = stub('api-37-plan-targets.js', `const get = async () => ({ data: { profile: window.__profile, program: null, meal_plan: null } }); export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import Plan from './pages/Plan.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 215, name: 'Ravi Shetty', role: 'patient' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__entry || '/plan']}><Plan /></MemoryRouter>);`, api);
+    const CASES = [
+      ['neither',                    {},                                        'Targets not set yet',          /coach will set your targets/, 'Not set yet'],
+      ['calories only',              { macro_kcal: 1600 },                      '1,600 kcal',                   /Eat to your targets/,         '1,600 kcal'],
+      ['protein only (columns)',     { macro_pro: 100 },                        '100 g protein',                /Eat to your targets/,         'No calorie target'],
+      ['protein only ({ macros })',  { macros: { pro: 100 } },                  '100 g protein',                /Eat to your targets/,         'No calorie target'],
+      ['both',                       { macros: { kcal: 1600, pro: 100 } },     '1,600 kcal · 100 g protein',   /Eat to your targets/,         '1,600 kcal'],
+    ];
+    const titleOf = (doc, eyebrow) => {
+      const eb = [...doc.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim().toLowerCase() === eyebrow.toLowerCase());
+      let n = eb; while (n && !n.nextElementSibling) n = n.parentElement;
+      return n?.nextElementSibling?.textContent.trim() ?? null;
+    };
+    for (const [name, profile, title, msg, daily] of CASES) {
+      const T = run(code, (win) => { win.__profile = profile; win.__entry = '/plan'; }); await tick(600);
+      const d = T.w.document;
+      const eat = titleOf(d, 'Eat'); const empty = d.querySelector('[data-testid="plan-eat-empty"]')?.textContent || '';
+      const N = run(code, (win) => { win.__profile = profile; win.__entry = '/plan?tab=nutrition'; }); await tick(600);
+      const dt = titleOf(N.w.document, 'Daily targets');
+      ck(`Plan, ${name}: Eat says "${title}", the message agrees, Daily targets says "${daily}"`,
+         T.errors.length === 0 && eat === title && msg.test(empty) && (title === 'Targets not set yet') === /coach will set/.test(empty) && dt === daily,
+         { eat, empty, dt, errors: T.errors });
+    }
+  } catch (e) { ck('section E2 ran to the end', false, e.message); }
+
   // ── F. CMP-010 / CMP-011: the coach's Log Weight and program buttons open something
   try {
     const api = stub('api-37-coach.js', `
