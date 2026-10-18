@@ -30,6 +30,15 @@ Test branch only. Production is unchanged.
   - pushed commit `bbbbbbb` → waited, then exit 1 with that message;
   - pushed commit `aaaaaaa` → "test site server is running aaaaaaa", then the run went ahead.
 
+## Follow-up 2h.2: a bug in my own check
+- On the first live run after 2h.1, the robot reported "server commit not reported" and passed. That run did **not** confirm the deploy.
+- **Cause:** the app bundle already matched, so the robot started at once and read `/health` while Railway was still deploying. The old server has no `commit` field, and my code treated "field missing" like "site doesn't report commits".
+- **Fix:**
+  - no `commit` field (an older server) → keep waiting, then fail red on timeout;
+  - `commit: null` (new server, Railway gave no commit) → warning;
+  - matching commit → pass.
+- **Proven locally:** a proxy answering `/health` like the old server → the run waits, then exits 1 with "still running an older server … deploy failed or is stuck". The matching commit → it runs.
+
 ## Files
 - **NEW:** `DELIVERY-FIXES-2h1.md`
 - **Changed:**

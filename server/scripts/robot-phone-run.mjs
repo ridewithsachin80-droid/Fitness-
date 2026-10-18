@@ -97,7 +97,11 @@ if (process.argv.includes('--wait-for-deploy')) {
     const deadline = Date.now() + (Number(process.env.ROBOT_DEPLOY_WAIT_MS) || 15 * 60e3);
     let running;
     while (Date.now() < deadline) {
-      running = await fetch(`${BASE}/health?robot=${Date.now()}`).then(r => r.json()).then(j => j.commit ?? null).catch(() => undefined);
+      // No "commit" field at all = a server from before Fixes-2h.1 is still
+      // answering (deploy in progress or failed): keep waiting. A field that is
+      // null = the new server, but Railway did not supply the commit.
+      running = await fetch(`${BASE}/health?robot=${Date.now()}`).then(r => r.json())
+        .then(j => (j && Object.prototype.hasOwnProperty.call(j, 'commit') ? j.commit : undefined)).catch(() => undefined);
       if (running === null || running === sha) break;
       console.log(`waiting for the server deploy: running ${running ? running.slice(0, 7) : '—'}, this commit ${sha.slice(0, 7)}`);
       await new Promise(r => setTimeout(r, 20e3));
@@ -107,7 +111,7 @@ if (process.argv.includes('--wait-for-deploy')) {
       console.log(msg); if (GH) console.log(`::warning title=Phone robot: server commit unknown::${ghEsc(msg)}`);
       deployNote = 'server commit not reported';
     } else if (running !== sha) {
-      const msg = `The test site is still running ${running ? running.slice(0, 7) : 'an unknown commit'}, not ${sha.slice(0, 7)}: the deploy failed or is stuck (check Railway). Nothing was tested.`;
+      const msg = `The test site is still running ${running ? running.slice(0, 7) : 'an older server (it does not report a commit)'}, not ${sha.slice(0, 7)}: the deploy failed or is stuck (check Railway). Nothing was tested.`;
       console.log(msg); if (GH) console.log(`::error title=Phone robot: server deploy not live::${ghEsc(msg)}`);
       fs.mkdirSync(OUT, { recursive: true });
       fs.writeFileSync(path.join(OUT, 'report.md'), `# Phone robot — DEPLOY NOT LIVE\n\n${msg}\n`);
