@@ -40,7 +40,7 @@ export default function OffPlanFeed({ active, onCount, onOpen }) {
   return (
     <div className="space-y-2.5 py-2" data-testid="offplan-feed">
       {items.map(it => (
-        <div key={it.id} className="rounded-2xl border border-amber-400/40 bg-white/[0.02] p-3 flex gap-3" data-testid="offplan-card">
+        <div key={it.id} className="rounded-2xl border border-warn/40 bg-white/[0.02] p-3 flex gap-3" data-testid="offplan-card">
           <a href={it.photo_url || undefined} target="_blank" rel="noopener noreferrer" aria-label={`Plate photo, ${it.name}, ${it.meal}`}
             className="w-[72px] h-[72px] rounded-xl overflow-hidden bg-charcoal border border-hair flex items-center justify-center flex-shrink-0">
             {it.photo_url ? <img src={it.photo_url} alt="" className="w-full h-full object-cover" /> : <Icon name="food" size={22} className="text-mid" />}
@@ -52,7 +52,7 @@ export default function OffPlanFeed({ active, onCount, onOpen }) {
                 {new Date(it.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
               </span>
             </div>
-            <p className="text-caption font-semibold uppercase tracking-wider text-amber-300 mt-0.5">
+            <p className="text-caption font-semibold uppercase tracking-wider text-warn mt-0.5">
               {it.meal} · {it.outcome === 'swap' ? 'different meal' : 'photo'}
             </p>
             <p className="text-sm text-white leading-snug mt-1" data-testid="offplan-extras">

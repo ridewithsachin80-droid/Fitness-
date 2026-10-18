@@ -921,6 +921,57 @@ console.log('\n[brand] green everywhere, both themes');
   ck('the start-up theme script runs after the metas it sets', html.indexOf('theme-init.js') > html.indexOf('apple-mobile-web-app-status-bar-style'));
   const vite = fs.readFileSync(path.join(SRC, '../vite.config.js'), 'utf8');
   ck('the manifest uses the brand green and the dark ground', /theme_color: '#315D47'/.test(vite) && /background_color: '#141817'/.test(vite));
+
+  // 18 Oct 2026 (Fixes-2f): Sachin's phone showed "124 kcal" in orange on the
+  // workout sheet and amber Journey cards on Progress. Both passed the checks
+  // above: Tailwind's amber/orange classes were allowed wholesale as "warning".
+  // The rule now: amber only for warnings, and only through the `warn` token.
+  console.log('\n[brand-2f] amber only for warnings');
+  const jsx = walk(SRC).filter(f => /\.jsx?$/.test(f));
+  const palette = jsx.flatMap(f => fs.readFileSync(f, 'utf8').split('\n')
+    .map((line, i) => /\b(?:amber|yellow|orange)-\d{2,3}\b/.test(line) ? `${path.relative(SRC, f)}:${i + 1}` : null).filter(Boolean));
+  ck('no Tailwind amber / yellow / orange classes: warnings use the warn token, everything else the accent', palette.length === 0, palette.slice(0, 12));
+  const amberHex = jsx.flatMap(f => {
+    const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
+    return [...code.matchAll(/#([0-9a-f]{6})\b/gi)].map(m => m[1].toLowerCase()).filter(h => AMBER_OK.has(h))
+      .map(h => `${path.relative(SRC, f)} #${h}`);
+  }).filter(x => !x.startsWith('pages/Monitor.jsx #fef3c7'));   // the printed report's own warning badge (paper, not the app)
+  ck('no hand-written amber hex codes in the app (only the printed report keeps its warning badge)', amberHex.length === 0, amberHex);
+  const src = rel => fs.readFileSync(path.join(SRC, rel), 'utf8');
+  const wl = src('components/WorkoutLog.jsx');
+  ck('workout sheet: "Calories burned" is the accent, not a warning colour',
+     /font-display text-xl font-bold text-gold">\{e\.totalKcal\} kcal/.test(wl));
+  const prog = src('pages/Progress.jsx');
+  const cards = [...prog.matchAll(/<div className="([^"]*)" data-testid="journey-card">/g)].map(m => m[1]);
+  ck('Progress → Your Journey: six cards (the last shows when no other applies), none tinted with warn / danger', cards.length === 6 && cards.every(c => !/warn|danger/.test(c)), cards);
+  const kcalWarn = jsx.flatMap(f => fs.readFileSync(f, 'utf8').split('\n')
+    .map((line, i) => /text-warn[^"'`]*["'`]>\{[^}]*\}\s*kcal/.test(line) && !/\?/.test(line) ? `${path.relative(SRC, f)}:${i + 1}` : null).filter(Boolean));
+  // (Warnings that mention kcal — "⚠️ Macro kcal is 120 kcal away", "Not in your plan · 90 kcal" — are fine.)
+  ck('a calorie number is never painted the warning colour unless a condition chose it', kcalWarn.length === 0, kcalWarn);
+  // Carbs and fat have their own colours (they were amber and amber-500).
+  const lum = rgb => rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+    .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const vars = block => Object.fromEntries([...block.matchAll(/--fit-([a-z]+):\s*(\d+) (\d+) (\d+);/g)].map(m => [m[1], [+m[2], +m[3], +m[4]]]));
+  const [darkBlock, lightBlock] = css.split('[data-theme="light"] {');
+  const themes = { dark: vars(darkBlock), light: vars(lightBlock.split('}')[0]) };
+  const macroBad = [];
+  for (const [name, v] of Object.entries(themes)) for (const k of ['carb', 'fat']) {
+    if (!v[k]) { macroBad.push(`${name}: --fit-${k} missing`); continue; }
+    const hex = v[k].map(n => n.toString(16).padStart(2, '0')).join('');
+    for (const bg of ['base', 'surface']) if (ratio(v[k], v[bg]) < 4.5) macroBad.push(`${name} ${k} on ${bg}: ${ratio(v[k], v[bg]).toFixed(2)}:1`);
+    if (goldish(hex)) macroBad.push(`${name} ${k} #${hex} is gold-hued`);
+  }
+  ck('carb and fat colours exist in both themes, read at ≥ 4.5:1 and are not gold', macroBad.length === 0, macroBad);
+  ck('tailwind defines text-carb / text-fat', /'carb': 'rgb\(var\(--fit-carb\)/.test(vite + fs.readFileSync(path.join(SRC, '../tailwind.config.js'), 'utf8')) && /'fat': 'rgb\(var\(--fit-fat\)/.test(fs.readFileSync(path.join(SRC, '../tailwind.config.js'), 'utf8')));
+  // Copy from the same phone check.
+  const plan = src('pages/Plan.jsx');
+  ck('Plan → Eat without targets does not tell the member to "eat to your targets"',
+     /macros\?\.kcal\s*\n?\s*\? 'No meal plan for today\. Eat to your targets and log as you go\.'\s*\n?\s*: 'No meal plan yet\. Log what you eat; your coach will set your targets\.'/.test(plan));
+  ck('food sheet top line no longer points at a mic that is not on screen', !/Tap the mic/.test(src('components/sheets/FoodSheet.jsx')));
+  ck('weight chart labels the first and the latest weigh-in; the goal label sits away from the latest point',
+     /ticks=\{weightTicks\}/.test(prog) && /n - 1\]/.test(prog) && /Goal \$\{targetW\}`, position: 'insideTopLeft'/.test(prog));
+  ck('Progress title wraps instead of cutting the member’s name', /data-testid="progress-title"/.test(prog) && !/text-num font-medium text-white leading-tight mt-1 truncate/.test(prog));
 }
 
 console.log(`\n═══ LAYOUT CONTRACTS: ${pass} passed, ${fail} failed ═══`);

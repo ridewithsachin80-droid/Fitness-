@@ -124,7 +124,7 @@ export default function NotificationBell() {
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {m.flagged && (
-                          <span className="text-tiny font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded-full">
+                          <span className="text-tiny font-bold text-warn bg-warn/10 border border-warn/25 px-1.5 py-0.5 rounded-full">
                             ⚠ ACTION
                           </span>
                         )}

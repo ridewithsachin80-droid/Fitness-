@@ -36,12 +36,12 @@ export default function SwapsPanel({ memberId, memberName = '' }) {
   const kcal = (r) => Math.round(Number(r.alt_per_100g?.calories) || 0);
   const decide = (r, approve) => act(`d${r.id}`, () => api.post(`/swaps/${r.id}/decide`, { approve }));
   const Row = (r, kind) => (
-    <div key={r.id} className={`rounded-xl px-3 py-2 border ${kind === 'request' ? 'border-amber-400/40 bg-amber-400/[0.04]' : 'border-hair bg-white/[0.02]'}`} data-testid={`swap-${kind}`}>
+    <div key={r.id} className={`rounded-xl px-3 py-2 border ${kind === 'request' ? 'border-warn/40 bg-warn/[0.04]' : 'border-hair bg-white/[0.02]'}`} data-testid={`swap-${kind}`}>
       <p className="text-sm text-white leading-snug">
         <span className="text-mid">{r.food_name} →</span> {r.alt_name}
         <span className="text-caption text-mid"> · {kcal(r) ? `${kcal(r)} kcal/100 g` : 'no calories yet'}</span>
       </p>
-      {kind === 'request' && <p className="text-caption text-amber-300">{first} asked{r.note ? `: "${r.note}"` : ''}</p>}
+      {kind === 'request' && <p className="text-caption text-warn">{first} asked{r.note ? `: "${r.note}"` : ''}</p>}
       <div className="flex gap-2 mt-1.5">
         <button type="button" disabled={!!busy || !kcal(r)} onClick={() => decide(r, true)} style={{ minHeight: 36 }}
           className="flex-1 rounded-lg border border-gold text-gold text-caption font-bold disabled:opacity-40" data-testid="swap-approve">Approve</button>

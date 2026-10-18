@@ -50,7 +50,7 @@ export default function MemberCharts({ weightData, complianceData, avg30, profil
               <SectionTitle icon="📊">30-Day Compliance</SectionTitle>
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                 avg30 >= 75 ? 'bg-gold/[0.13] text-gold-light' :
-                avg30 >= 50 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400'
+                avg30 >= 50 ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400'
               }`}>avg {avg30}%</span>
             </div>
             <ResponsiveContainer width="100%" height={100}>

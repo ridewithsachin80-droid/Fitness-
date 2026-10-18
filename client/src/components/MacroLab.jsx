@@ -19,7 +19,7 @@ import { plural } from '../constants';
 const STATUS_STYLE = {
   difference:    'bg-gold/10 border-gold/35 text-white',
   no_difference: 'bg-white/[0.04] border-white/[0.12] text-mid',
-  confounded:    'bg-amber-400/[0.08] border-amber-400/30 text-amber-200',
+  confounded:    'bg-warn/[0.08] border-warn/30 text-warn',
   incomplete:    'bg-white/[0.03] border-white/[0.10] text-mid',
 };
 

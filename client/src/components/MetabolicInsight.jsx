@@ -18,7 +18,7 @@ import api from '../api/client';
 const CONF = {
   high:         { label: 'High confidence',   cls: 'text-gold-light bg-ok/10 border-ok/30' },
   moderate:     { label: 'Moderate',          cls: 'text-gold bg-gold/10 border-gold/30' },
-  low:          { label: 'Low confidence',    cls: 'text-amber-300 bg-amber-400/10 border-amber-400/30' },
+  low:          { label: 'Low confidence',    cls: 'text-warn bg-warn/10 border-warn/30' },
   insufficient: { label: 'Not enough data',   cls: 'text-mid bg-white/[0.04] border-white/[0.10]' },
 };
 
@@ -237,10 +237,10 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
                         {NUTRIENT_LABEL[g.nutrient] || g.nutrient}
                       </span>
                       <div className="w-20 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
-                        <div className="h-full rounded-full bg-amber-400"
+                        <div className="h-full rounded-full bg-warn"
                           style={{ width: `${Math.min(100, g.pct)}%` }} />
                       </div>
-                      <span className="text-caption font-bold text-amber-300 w-10 text-right">{g.pct}%</span>
+                      <span className="text-caption font-bold text-warn w-10 text-right">{g.pct}%</span>
                     </div>
                   ))}
                 </div>

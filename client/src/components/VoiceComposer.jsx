@@ -178,7 +178,7 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
       />
 
       {voice.error && (
-        <p id={errorId} role="status" aria-live="polite" aria-atomic="true" className="text-caption text-amber-400 font-medium mt-1">{voice.error}</p>
+        <p id={errorId} role="status" aria-live="polite" aria-atomic="true" className="text-caption text-warn font-medium mt-1">{voice.error}</p>
       )}
 
       {voice.canRetry && (

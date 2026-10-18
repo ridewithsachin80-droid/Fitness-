@@ -39,7 +39,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                     {burnedKcal > 0 && (
                       <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
                         netKcal <= 0 ? 'bg-gold/[0.07] border-gold/20 text-gold'
-                        : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
+                        : netKcal <= 200 ? 'bg-warn/10 border-warn/20 text-warn'
                         : 'bg-red-400/10 border-red-400/20 text-red-400'
                       }`}>
                         <div className="flex gap-3">
@@ -63,7 +63,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                             const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
                             const pct     = total > 0 ? matched / total : 0;
                             const color   = pct >= 0.8 ? 'bg-gold/10 text-gold border-gold/[0.22]'
-                                          : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
+                                          : pct >= 0.5 ? 'bg-warn/10 text-warn border-warn/25'
                                           :              'bg-red-400/10 text-red-400 border-red-400/25';
                             const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
                             return (
@@ -97,7 +97,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                             <div key={meal} className="border-b border-white/[0.05] last:border-0">
                               <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
                                 <span className={`text-eyebrow font-semibold tracking-wide ${
-                                  meal === UNSORTED_MEAL ? 'text-amber-400' : 'text-faint'
+                                  meal === UNSORTED_MEAL ? 'text-warn' : 'text-faint'
                                 }`}>
                                   {meal}{meal === UNSORTED_MEAL && ' · no meal slot'}
                                 </span>
@@ -114,7 +114,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                                     {n && (
                                       <div className="flex gap-2.5 text-right flex-shrink-0">
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-orange-400">{n.cal}</div>
+                                          <div className="text-xs font-bold text-gold">{n.cal}</div>
                                           <div className="text-eyebrow text-lo">kcal</div>
                                         </div>
                                         <div className="text-center">
@@ -122,11 +122,11 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                                           <div className="text-eyebrow text-lo">pro</div>
                                         </div>
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-amber-400">{n.carb}g</div>
+                                          <div className="text-xs font-bold text-carb">{n.carb}g</div>
                                           <div className="text-eyebrow text-lo">carb</div>
                                         </div>
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-amber-400">{n.fat}g</div>
+                                          <div className="text-xs font-bold text-fat">{n.fat}g</div>
                                           <div className="text-eyebrow text-lo">fat</div>
                                         </div>
                                       </div>
@@ -149,10 +149,10 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                             <div className="px-3 py-2.5 bg-gold/5 flex items-center justify-between border-t border-gold/[0.12]">
                               <span className="text-xs font-bold text-gold">Day Total</span>
                               <div className="flex gap-3 text-xs">
-                                <span className="font-bold text-orange-400">{t.cal} kcal</span>
+                                <span className="font-bold text-gold">{t.cal} kcal</span>
                                 <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
-                                <span className="text-amber-400">{t.carb.toFixed(1)}g C</span>
-                                <span className="text-amber-400">{t.fat.toFixed(1)}g F</span>
+                                <span className="text-carb">{t.carb.toFixed(1)}g C</span>
+                                <span className="text-fat">{t.fat.toFixed(1)}g F</span>
                               </div>
                             </div>
                           );
@@ -179,7 +179,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                                   ? 'bg-gold/[0.14] text-gold-light'
                                   : doneCount === 0
                                   ? 'bg-white/[0.05] text-lo'
-                                  : 'bg-amber-400/10 text-amber-300'
+                                  : 'bg-warn/10 text-warn'
                               }`}>{doneCount}/{group.items.length}</span>
                             </div>
                             <div className="space-y-1">
@@ -230,7 +230,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                             <span>🔬 Key Nutrients</span>
                             <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
                               met >= KEYS.length*0.8 ? 'bg-gold/[0.12] text-gold' :
-                              met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
+                              met >= KEYS.length*0.5 ? 'bg-warn/10 text-warn' : 'bg-red-400/10 text-red-400'
                             }`}>{met}/{KEYS.length} ▼</span>
                           </summary>
                           <div className="px-3 py-3 space-y-2 bg-surface">
@@ -242,8 +242,8 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                               const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
                               const val  = +raw.toFixed(dec);
                               const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-gold' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-gold' : pct>=50 ? 'text-amber-400' : 'text-red-400';
+                              const cls  = pct>=80 ? 'bg-gold' : pct>=50 ? 'bg-warn' : 'bg-red-400';
+                              const tcls = pct>=80 ? 'text-gold' : pct>=50 ? 'text-warn' : 'text-red-400';
                               return (
                                 <div key={k}>
                                   <div className="flex justify-between text-xs mb-1">

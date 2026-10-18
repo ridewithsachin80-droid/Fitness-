@@ -63,7 +63,7 @@ export function AddCoachModal({ onClose, onAdded }) {
             ))}
           </div>
           {form.role === 'admin' && (
-            <p className="text-xs text-amber-300 mt-1.5 bg-amber-400/10 px-3 py-1.5 rounded-lg">
+            <p className="text-xs text-warn mt-1.5 bg-warn/10 px-3 py-1.5 rounded-lg">
               Admin has full access including creating/managing all users.
             </p>
           )}

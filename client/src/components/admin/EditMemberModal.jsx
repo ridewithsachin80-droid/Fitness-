@@ -126,13 +126,13 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
   const colorMap = {
     emerald: 'bg-ok/[0.14] text-gold-light border-ok/25',
     blue:    'bg-blue-400/[0.14] text-blue-300 border-blue-400/25',
-    orange:  'bg-orange-400/[0.14] text-orange-300 border-orange-400/25',
-    purple:  'bg-gold/[0.14] text-amber-300 border-gold/25',
+    orange:  'bg-carb/[0.14] text-carb border-carb/25',
+    purple:  'bg-gold/[0.14] text-gold-light border-gold/25',
     rose:    'bg-rose-400/[0.14] text-rose-300 border-rose-400/25',
   };
   const dotMap = {
     emerald: 'bg-gold', blue: 'bg-blue-500',
-    orange:  'bg-orange-500',  purple: 'bg-amber-500', rose: 'bg-rose-500',
+    orange:  'bg-carb',  purple: 'bg-gold', rose: 'bg-rose-500',
   };
 
   return (
@@ -165,7 +165,7 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                   onChange={e => updateItemQty(meal.id, iIdx, parseFloat(e.target.value) || 0)}
                   className="w-16 text-xs text-center border border-white/[0.15] rounded-lg px-1 py-1" />
                 <span className="text-xs" style={{ color: 'var(--text-mid)' }}>g</span>
-                <span className="text-xs font-bold text-orange-300 w-10 text-right">{item.kcal}</span>
+                <span className="text-xs font-bold text-gold w-10 text-right">{item.kcal}</span>
                 <span className="text-xs" style={{ color: 'var(--text-mid)' }}>kcal</span>
                 <button onClick={() => removeItem(meal.id, iIdx)}
                   className="opacity-0 group-hover:opacity-100 ml-1 transition-opacity" style={{ color: 'var(--text-lo)' }}>×</button>
@@ -174,10 +174,10 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
 
             {(meal.items || []).length > 0 && (
               <div className="flex gap-3 text-xs px-1 pt-1 border-t border-white/[0.12]">
-                <span className="font-bold text-orange-400">{mealTotal.kcal} kcal</span>
+                <span className="font-bold text-gold">{mealTotal.kcal} kcal</span>
                 <span className="text-blue-300">P {mealTotal.pro.toFixed(1)}g</span>
-                <span className="text-amber-300">C {mealTotal.carb.toFixed(1)}g</span>
-                <span className="text-amber-300">F {mealTotal.fat.toFixed(1)}g</span>
+                <span className="text-carb">C {mealTotal.carb.toFixed(1)}g</span>
+                <span className="text-fat">F {mealTotal.fat.toFixed(1)}g</span>
               </div>
             )}
 
@@ -202,7 +202,7 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
                         className="w-full text-left px-3 py-2 hover:bg-ok/10 border-b border-white/[0.06] last:border-0">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-white font-medium truncate">{food.name}</span>
-                          <span className="text-xs font-bold text-orange-300 flex-shrink-0 ml-2">
+                          <span className="text-xs font-bold text-gold flex-shrink-0 ml-2">
                             {food.per_100g?.calories || 0} kcal/100g
                           </span>
                         </div>
@@ -236,10 +236,10 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
         <div className="bg-white/[0.08] border border-white/[0.1] text-white rounded-2xl px-4 py-3 space-y-2">
           <p className="text-note font-semibold text-mid">Day Total</p>
           <div className="flex gap-4 flex-wrap">
-            <span className="text-sm font-bold text-orange-400">{dayTotal.kcal} kcal</span>
+            <span className="text-sm font-bold text-gold">{dayTotal.kcal} kcal</span>
             <span className="text-sm text-blue-300">P {dayTotal.pro.toFixed(1)}g</span>
-            <span className="text-sm text-amber-300">C {dayTotal.carb.toFixed(1)}g</span>
-            <span className="text-sm text-amber-300">F {dayTotal.fat.toFixed(1)}g</span>
+            <span className="text-sm text-carb">C {dayTotal.carb.toFixed(1)}g</span>
+            <span className="text-sm text-fat">F {dayTotal.fat.toFixed(1)}g</span>
             <span className="text-sm text-gold-light">Fiber {dayTotal.fiber.toFixed(1)}g</span>
           </div>
           {/* Micronutrients */}
@@ -258,7 +258,7 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
             ].map(([label, val, target, unit, dec]) => {
               const v   = +val.toFixed(dec);
               const pct = Math.min(100, (val / target) * 100);
-              const cls = pct >= 80 ? 'text-gold-light' : pct >= 50 ? 'text-amber-300' : 'text-red-400';
+              const cls = pct >= 80 ? 'text-gold-light' : pct >= 50 ? 'text-warn' : 'text-red-400';
               return (
                 <div key={label} className="flex items-center justify-between">
                   <span className="text-xs text-mid">{label}</span>
@@ -273,7 +273,7 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
           {macrosKcal && (
             <div className="text-xs text-mid pt-1 border-t border-white/[0.15]">
               Target: {macrosKcal} kcal · Difference:{' '}
-              <span className={Math.abs(dayTotal.kcal - parseInt(macrosKcal)) <= 100 ? 'text-gold-light font-bold' : 'text-amber-300 font-bold'}>
+              <span className={Math.abs(dayTotal.kcal - parseInt(macrosKcal)) <= 100 ? 'text-gold-light font-bold' : 'text-warn font-bold'}>
                 {dayTotal.kcal - parseInt(macrosKcal) > 0 ? '+' : ''}{dayTotal.kcal - parseInt(macrosKcal)} kcal
               </span>
             </div>
@@ -669,19 +669,19 @@ export function EditMemberModal({ member, onClose, onSaved }) {
 
         {/* Live macro → kcal calculator */}
         {(p > 0 || c > 0 || f > 0) && (
-          <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-ok/10' : 'bg-amber-400/10'}`}>
+          <div className={`rounded-xl px-3 py-2.5 text-xs ${diffOk ? 'bg-ok/10' : 'bg-warn/10'}`}>
             <div className="flex justify-between items-center">
               <span className="text-mid">
                 {p}×4 + {c}×4 + {f}×9 = <span className="font-bold text-white">{fromMacros} kcal from macros</span>
               </span>
               {target > 0 && (
-                <span className={`font-bold ml-2 ${diffOk ? 'text-gold-light' : 'text-amber-300'}`}>
+                <span className={`font-bold ml-2 ${diffOk ? 'text-gold-light' : 'text-warn'}`}>
                   {diffOk ? '✓ Balanced' : `${diff > 0 ? '+' : ''}${diff} kcal off`}
                 </span>
               )}
             </div>
             {!diffOk && (
-              <p className="text-amber-300 mt-1">⚠️ Macro kcal is {absDiff} kcal away from target — adjust to match.</p>
+              <p className="text-warn mt-1">⚠️ Macro kcal is {absDiff} kcal away from target — adjust to match.</p>
             )}
           </div>
         )}
@@ -725,8 +725,8 @@ export function EditMemberModal({ member, onClose, onSaved }) {
                     value={current}
                     onChange={e => setRda(key, e.target.value)}
                     placeholder={`${meta.rda} ${meta.unit}`}
-                    className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-300 ${
-                      current ? 'border-gold/40 bg-gold/10 text-amber-300 font-semibold' : 'border-white/[0.08]'}`}
+                    className={`flex-1 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-gold ${
+                      current ? 'border-gold/40 bg-gold/10 text-gold font-semibold' : 'border-white/[0.08]'}`}
                   />
                   <span className="text-xs text-mid w-10">{meta.unit}</span>
                   {current && (
@@ -987,7 +987,7 @@ export function EditMemberModal({ member, onClose, onSaved }) {
 
           {protoTab === 'items' && (
             <>
-              <p className="text-xs text-mid bg-amber-400/10 px-3 py-2 rounded-xl">
+              <p className="text-xs text-mid bg-warn/10 px-3 py-2 rounded-xl">
                 ✅ Check/uncheck to assign. ✏️ Edit label & timing. 🗑 Delete item.
               </p>
               <ProtocolSection label="Physical Activities" icon="🏃" items={ACTIVITIES}  protoKey="activities"  />

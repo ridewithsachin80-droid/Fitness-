@@ -170,7 +170,7 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
         {sub && <div className="text-xs text-lo mt-0.5 leading-tight">{sub}</div>}
       </div>
       {checked && burnKcal > 0 && (
-        <span className="flex-shrink-0 text-xs font-semibold text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">
+        <span className="flex-shrink-0 text-xs font-semibold text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/20">
           -{burnKcal} kcal
         </span>
       )}
@@ -190,7 +190,7 @@ export function OfflineBanner() {
   }, []);
   if (justOnline) return <div className="bg-gold text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
   if (!offline) return null;
-  return <div className="bg-amber-500/90 text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
+  return <div className="bg-warn text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
 }
 
 export function Spinner({ size = 'md', color = 'emerald' }) {

@@ -538,8 +538,8 @@ function PushStatus({ onRegistered }) {
   if (perm === 'granted') {
     if (reg === 'failed') {
       return (
-        <div className="mb-3 rounded-xl px-3 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]" data-testid="push-not-registered">
-          <p className="text-xs font-semibold text-amber-300">Allowed, but this phone is not registered</p>
+        <div className="mb-3 rounded-xl px-3 py-2.5 border border-warn/30 bg-warn/[0.08]" data-testid="push-not-registered">
+          <p className="text-xs font-semibold text-warn">Allowed, but this phone is not registered</p>
           <p className="text-caption text-mid mt-1 leading-relaxed">
             Your browser allows notifications, but FitLife could not register this phone, so nothing will arrive here yet.
           </p>
@@ -559,8 +559,8 @@ function PushStatus({ onRegistered }) {
 
   if (perm === 'denied') {
     return (
-      <div className="mb-3 rounded-xl px-3 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]">
-        <p className="text-xs font-semibold text-amber-300">Notifications are blocked</p>
+      <div className="mb-3 rounded-xl px-3 py-2.5 border border-warn/30 bg-warn/[0.08]">
+        <p className="text-xs font-semibold text-warn">Notifications are blocked</p>
         <p className="text-caption text-mid mt-1 leading-relaxed">
           Your browser is blocking them, so your evening recap and coach messages
           won't arrive. To turn them back on: tap the lock icon in the address

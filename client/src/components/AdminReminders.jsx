@@ -315,7 +315,7 @@ export default function AdminReminders({ members = [] }) {
                 {devicesLoading ? (
                   <div style={{ fontSize: 12, color: '#888' }}>Loading…</div>
                 ) : !devices[member.id]?.length ? (
-                  <div style={{ fontSize: 12, color: '#f59e0b' }}>
+                  <div style={{ fontSize: 12, color: 'rgb(var(--fit-warn))' }}>
                     ⚠️ No devices registered. This member won't receive any reminders until they
                     open the app on their own phone and allow notifications when prompted.
                   </div>

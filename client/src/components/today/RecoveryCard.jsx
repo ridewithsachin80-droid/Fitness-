@@ -20,7 +20,7 @@ function Stat({ label, value, unit, delta, testId }) {
       <p className="font-display text-num-sm font-semibold text-white tabular-nums leading-tight mt-0.5">
         {value}{unit && <span className="text-caption text-lo font-sans font-medium"> {unit}</span>}
       </p>
-      {delta && <p className={`text-caption tabular-nums ${delta.good ? 'text-gold-light' : delta.bad ? 'text-amber-300' : 'text-mute'}`}>{delta.text}</p>}
+      {delta && <p className={`text-caption tabular-nums ${delta.good ? 'text-gold-light' : delta.bad ? 'text-warn' : 'text-mute'}`}>{delta.text}</p>}
     </div>
   );
 }

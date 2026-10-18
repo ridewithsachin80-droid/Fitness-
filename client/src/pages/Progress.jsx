@@ -100,7 +100,7 @@ function PastLogModal({ log, onClose }) {
           {log.compliance_pct != null && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               log.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
-              log.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' :
+              log.compliance_pct >= 50 ? 'bg-warn/[0.14] text-warn' :
               'bg-red-400/[0.14] text-red-400'}`}>
               {log.compliance_pct}% compliance
             </span>
@@ -127,7 +127,7 @@ function PastLogModal({ log, onClose }) {
             <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 ACV</p>
             <div className="flex flex-wrap gap-1.5">
               {checkedAcv.map(a => (
-                <span key={a.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
+                <span key={a.id} className="text-xs bg-gold/[0.08] text-gold border border-gold/15 px-2.5 py-1 rounded-full font-medium">
                   {a.label}
                 </span>
               ))}
@@ -139,7 +139,7 @@ function PastLogModal({ log, onClose }) {
         {foodItems.length > 0 && (
           <div>
             <p className="text-xs font-bold text-lo tracking-wider mb-2">
-              🥗 Food {kcal > 0 && <span className="font-normal text-orange-300 normal-case">· {kcal} kcal</span>}
+              🥗 Food {kcal > 0 && <span className="font-normal text-gold normal-case">· {kcal} kcal</span>}
             </p>
             <div className="space-y-1">
               {foodItems.map((item, i) => (
@@ -168,7 +168,7 @@ function PastLogModal({ log, onClose }) {
             <p className="text-xs font-bold text-lo tracking-wider mb-2">💊 Supplements</p>
             <div className="flex flex-wrap gap-1.5">
               {checkedSupps.map(s => (
-                <span key={s.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
+                <span key={s.id} className="text-xs bg-gold/[0.08] text-gold border border-gold/15 px-2.5 py-1 rounded-full font-medium">
                   {s.label}
                 </span>
               ))}
@@ -184,7 +184,7 @@ function PastLogModal({ log, onClose }) {
               {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
               {sleep.bedtime && sleep.waketime && ' → '}
               {sleep.waketime && `Wake ${sleep.waketime?.slice(0,5)}`}
-              {sleep.quality && <span className="ml-2 text-amber-400">{'★'.repeat(sleep.quality)}</span>}
+              {sleep.quality && <span className="ml-2 text-gold">{'★'.repeat(sleep.quality)}</span>}
             </p>
           </div>
         )}
@@ -318,6 +318,13 @@ export default function Progress() {
   const weightData = weightAll
     .filter(l => l.log_date >= rangeFrom)
     .map(l => ({ date: shortDate(l.log_date), weight: Number(l.weight_kg) }));
+  // X-axis labels: always the first and the latest weigh-in, plus up to two
+  // between (18 Oct 2026: "every Nth" skipped today's date on a phone).
+  const weightTicks = (() => {
+    const n = weightData.length;
+    const idx = n <= 4 ? weightData.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((2 * (n - 1)) / 3), n - 1];
+    return [...new Set(idx)].map(i => weightData[i].date);
+  })();
   // Change over the selected window: first weigh-in in range → latest
   const rangeDelta = weightData.length > 1
     ? +(weightData[weightData.length - 1].weight - weightData[0].weight).toFixed(1)
@@ -414,7 +421,7 @@ export default function Progress() {
           <div className="flex items-end justify-between gap-3 mt-2">
             <div className="min-w-0">
               <Eyebrow tone="gold">Progress</Eyebrow>
-              <h1 className="font-display text-num font-medium text-white leading-tight mt-1 truncate">{firstName(user?.name) ? `${firstName(user.name)}\u2019s` : 'Your'} journey</h1>
+              <h1 className="font-display text-num font-medium text-white leading-tight mt-1 break-words" data-testid="progress-title">{firstName(user?.name) ? `${firstName(user.name)}\u2019s` : 'Your'} journey</h1>
             </div>
             <Segmented size="sm" name="range" value={range} onChange={setRange} className="w-[168px] flex-shrink-0"
               options={[{ id: '7', label: '7d' }, { id: '30', label: '30d' }, { id: '90', label: '90d' }]} />
@@ -464,12 +471,12 @@ export default function Progress() {
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false}
-                    interval={Math.max(0, Math.floor(weightData.length / 4))} />
+                    ticks={weightTicks} interval={0} />
                   <YAxis domain={['auto', 'auto']} hide />
                   <Tooltip content={<WeightTip />} cursor={{ stroke: accent(0.35) }} />
                   {targetW && (
                     <ReferenceLine y={targetW} stroke="var(--accent)" strokeDasharray="4 4"
-                      label={{ value: `Goal ${targetW}`, position: 'insideTopRight', fontSize: 9, fill: 'var(--accent)' }} />
+                      label={{ value: `Goal ${targetW}`, position: 'insideTopLeft', fontSize: 9, fill: 'var(--accent)' }} />
                   )}
                   <Area type="monotone" dataKey="weight" stroke={accent()} strokeWidth={2.5} fill="url(#goldFill)"
                     dot={weightData.length <= 14 ? { fill: accent(), r: 3, strokeWidth: 0 } : false} activeDot={{ r: 5, fill: accent(0.6) }} />
@@ -524,35 +531,42 @@ export default function Progress() {
           <SectionTitle icon="🌟">Your Journey</SectionTitle>
           <div className="space-y-2 text-sm text-mid">
             {streak >= 7 && (
-              <div className="flex items-center gap-2 bg-orange-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">🔥</span>
                 <span><strong>{streak}-day streak!</strong> You're building an unstoppable habit.</span>
               </div>
             )}
             {lostKg !== null && lostKg >= 1 && (
-              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">🏆</span>
                 <span><strong>{lostKg} kg lost</strong> since you started. Keep going!</span>
               </div>
             )}
             {avg30 >= 80 && (
-              <div className="flex items-center gap-2 bg-blue-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-info/[0.08] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">⭐</span>
                 <span><strong>{avg30}% compliance</strong> over 30 days — outstanding consistency.</span>
               </div>
             )}
             {journeyPct !== null && journeyPct >= 25 && (
-              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">🎯</span>
                 <span><strong>{journeyPct}%</strong> of the way to your {targetW} kg goal!</span>
               </div>
             )}
             {streak < 3 && avg30 < 50 && (
-              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.04] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">💪</span>
                 <span>{streak >= 1
                   ? `Every day counts. Log today to keep your ${streak}-day streak going.`
                   : 'Every day counts. Log today and start your streak!'}</span>
+              </div>
+            )}
+            {/* 18 Oct 2026: with none of the above, the section was a heading over nothing. */}
+            {!(streak >= 7 || (lostKg !== null && lostKg >= 1) || avg30 >= 80 || (journeyPct !== null && journeyPct >= 25) || (streak < 3 && avg30 < 50)) && (
+              <div className="flex items-center gap-2 bg-gold/[0.04] px-3 py-2 rounded-xl" data-testid="journey-card">
+                <span className="text-lg">🌱</span>
+                <span>Keep logging. Your milestones show up here: streaks, kg lost and how close you are to your goal.</span>
               </div>
             )}
           </div>
@@ -772,7 +786,7 @@ export default function Progress() {
                     </div>
                     <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${
-                        pct >= 75 ? 'bg-gold-deep' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'
+                        pct >= 75 ? 'bg-gold-deep' : pct >= 50 ? 'bg-warn' : 'bg-red-400'
                       }`} style={{ width: `${pct || 0}%` }} />
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -780,7 +794,7 @@ export default function Progress() {
                         <span className="text-xs font-semibold text-faint">{log.weight_kg}kg</span>
                       )}
                       <span className={`text-xs font-bold w-10 text-right ${
-                        pct >= 75 ? 'text-gold-deep' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
+                        pct >= 75 ? 'text-gold-deep' : pct >= 50 ? 'text-warn' : 'text-red-400'
                       }`}>{pct != null ? `${pct}%` : '—'}</span>
                       <svg className="w-3.5 h-3.5 text-ghost group-hover:text-mid transition-colors"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -95,7 +95,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
               { v: totals.session_count,                        l: 'Sessions',   c: 'text-gold-light' },
               { v: `${(totals.volume_kg / 1000).toFixed(1)}t`,  l: 'Volume',     c: 'text-blue-300' },
               { v: `${totals.cardio_min}m`,                     l: 'Cardio',     c: 'text-gold-light' },
-              { v: totalKcal.toLocaleString(),                  l: 'Kcal burned', c: 'text-orange-400' },
+              { v: totalKcal.toLocaleString(),                  l: 'Kcal burned', c: 'text-gold' },
             ].map(s => (
               <div key={s.l} className="bg-white/[0.04] border border-hair rounded-xl px-3 py-2">
                 <p className={`text-base font-extrabold ${s.c}`}>{s.v}</p>
@@ -115,7 +115,7 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
               const pb = s.volume_kg > 0 && s.volume_kg === best.volume_kg;
               return (
                 <div key={i} className="flex-1 flex flex-col justify-end items-center gap-1" title={`${fmtDate(s.date)} · ${s.volume_kg} kg`}>
-                  <div className={`w-full rounded-t transition-all ${pb ? 'bg-amber-400' : 'bg-gold'}`}
+                  <div className={`w-full rounded-t transition-all ${pb ? 'bg-info' : 'bg-gold'}`}
                     style={{ height: `${Math.max(4, (s.volume_kg / maxVolume) * 100)}%` }} />
                 </div>
               );
@@ -132,13 +132,13 @@ export default function TrainingSummary({ memberId = null, bodyWeightKg = 0, ref
               <div key={i} className="bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2">
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-caption font-bold text-bright">{fmtDate(s.date)}</span>
-                  <span className="text-caption font-bold text-orange-400">{s.totalKcal} kcal</span>
+                  <span className="text-caption font-bold text-gold">{s.totalKcal} kcal</span>
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-eyebrow text-mute">
                   {s.sets > 0 && (
                     <span>💪 {s.sets} sets · {s.volume_kg.toLocaleString()} kg
                       {s.volume_kg === best.volume_kg && s.volume_kg > 0 && (
-                        <span className="text-amber-400 font-bold"> · PB</span>
+                        <span className="text-info font-bold"> · PB</span>
                       )}
                     </span>
                   )}

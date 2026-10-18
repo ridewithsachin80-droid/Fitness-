@@ -2420,7 +2420,8 @@ async function weeklyTest() {
   ck('the coach sees the week, the brief and that only they see it', B.errors.length === 0 && /Week brief · .*28 Sep.*4 Oct/.test(bq('weekly-brief').textContent) && /stress was high/.test(bq('brief-text').textContent) && /Only you see this/.test(bq('weekly-brief').textContent), B.errors.join('|'));
   ck('the numbers under it: days, kcal, weight, workouts', /5\/7/.test(bq('brief-facts').textContent) && /1400/.test(bq('brief-facts').textContent) && /-0.8 kg/.test(bq('brief-facts').textContent));
   const stress = [...bq('brief-checkin').querySelectorAll('span')].find(x => /Stress 5\/5/.test(x.textContent));
-  ck('the check-in answers, a worrying one marked, and the note', !!stress && /amber/.test(stress.className) && /Wedding at home/.test(bq('brief-checkin').textContent));
+  // 18 Oct 2026 (2f): warnings use the `warn` token (same colour amber-300/400 drew); "amber" no longer appears in class names.
+  ck('the check-in answers, a worrying one marked (warning colour), and the note', !!stress && /(^|\s)(text|border)-warn\b/.test(stress.className) && /Wedding at home/.test(bq('brief-checkin').textContent));
   bq('brief-refresh').click(); await tick(300);
   ck('Refresh writes it again; a brief without the AI says so', B.w.__posts.some(p => /\/weekly\/brief\/12$/.test(p.url)) && /The AI was unavailable/.test(bq('weekly-brief').textContent));
 }
@@ -3668,7 +3669,7 @@ async function knownFixesTest() {
     ck('vitamin D rising 20 → 35 (good) reads "↑ from 20" (it read "↓")', m.some(x => /Vitamin D/.test(x) && /↑ from 20/.test(x)), m);
     ck('LDL falling 150 → 120 (good) reads "↓ from 150"; glucose rising (bad) reads "↑ from 95"', m.some(x => /LDL/.test(x) && /↓ from 150/.test(x)) && m.some(x => /Glucose/.test(x) && /↑ from 95/.test(x)), m);
     const tone = (name) => [...D.w.document.querySelectorAll('[data-testid="lab-marker"]')].find(x => x.textContent.includes(name)).lastElementChild.className;
-    ck('good moves are gold, bad moves amber, whichever way the number went', /gold-light/.test(tone('Vitamin D')) && /gold-light/.test(tone('LDL')) && /amber/.test(tone('Glucose')));
+    ck('good moves are the accent, bad moves the warning colour, whichever way the number went', /gold-light/.test(tone('Vitamin D')) && /gold-light/.test(tone('LDL')) && /(^|\s)text-warn\b/.test(tone('Glucose')) && !/warn/.test(tone('LDL')));
   } catch (e) { ck('section D ran to the end', false, e.message); }
 
   // ── E. PRG-007: the link from Progress opens Plan on Nutrition

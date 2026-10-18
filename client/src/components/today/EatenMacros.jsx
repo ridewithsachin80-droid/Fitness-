@@ -14,8 +14,8 @@
  */
 const CELLS = [
   { k: 'pro',  label: 'Protein', bar: 'bg-blue-400' },
-  { k: 'carb', label: 'Carbs',   bar: 'bg-amber-400' },
-  { k: 'fat',  label: 'Fat',     bar: 'bg-amber-500' },
+  { k: 'carb', label: 'Carbs',   bar: 'bg-carb' },
+  { k: 'fat',  label: 'Fat',     bar: 'bg-fat' },
 ];
 
 export function MacroCells({ eaten, targets, testId = 'eaten-macros' }) {
@@ -28,7 +28,7 @@ export function MacroCells({ eaten, targets, testId = 'eaten-macros' }) {
           <div key={c.k} className="min-w-0" data-testid={`${testId}-${c.k}`}>
             <div className="text-eyebrow font-semibold uppercase tracking-widest text-lo">{c.label}</div>
             <div className="tabular-nums whitespace-nowrap leading-tight">
-              <span className={`font-display font-semibold text-sm ${t && v > t ? 'text-amber-300' : 'text-white'}`}>{v}</span>
+              <span className={`font-display font-semibold text-sm ${t && v > t ? 'text-warn' : 'text-white'}`}>{v}</span>
               <span className="text-caption text-lo">{t ? ` / ${t} g` : ' g'}</span>
             </div>
             {t && (

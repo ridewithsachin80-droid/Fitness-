@@ -24,9 +24,9 @@ export default function WeightSheet({ open, onClose, m }) {
         </p>
       )}
       {weightWarning && (
-        <div className="mt-3 flex items-start gap-2 bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2" role="alert">
-          <Icon name="warning" size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-400 leading-relaxed">{weightWarning}</p>
+        <div className="mt-3 flex items-start gap-2 bg-warn/10 border border-warn/20 rounded-xl px-3 py-2" role="alert">
+          <Icon name="warning" size={16} className="text-warn flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-warn leading-relaxed">{weightWarning}</p>
         </div>
       )}
     </Sheet>

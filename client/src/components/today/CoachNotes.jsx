@@ -32,10 +32,10 @@ export default function CoachNotes({ m }) {
       <div className="space-y-2">
         {unreadNotes.slice(0, 3).map(n => (
           <div key={n.id} data-testid="coach-note" className={`rounded-2xl px-4 py-3 border ${
-            n.flagged ? 'bg-amber-500/[0.06] border-amber-500/20' : 'bg-white/[0.03] border-hair'}`}>
+            n.flagged ? 'bg-warn/[0.06] border-warn/20' : 'bg-white/[0.03] border-hair'}`}>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {n.flagged && (
-                <span className="text-eyebrow font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">Action needed</span>
+                <span className="text-eyebrow font-bold text-warn bg-warn/10 border border-warn/25 px-2 py-0.5 rounded-full">Action needed</span>
               )}
               <span className="text-caption text-mid">
                 {n.monitor_name} · {new Date(n.note_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}

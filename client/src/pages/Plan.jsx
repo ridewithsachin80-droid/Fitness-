@@ -187,7 +187,9 @@ export default function Plan() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-mid">No meal plan for today. Eat to your targets and log as you go.</p>
+                <p className="text-sm text-mid" data-testid="plan-eat-empty">{macros?.kcal
+                  ? 'No meal plan for today. Eat to your targets and log as you go.'
+                  : 'No meal plan yet. Log what you eat; your coach will set your targets.'}</p>
               )}
             </Section>
 

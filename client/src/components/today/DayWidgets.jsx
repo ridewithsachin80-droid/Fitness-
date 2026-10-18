@@ -182,7 +182,7 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
       {/* Net calorie banner */}
       {burnTotal > 0 && (
         <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl mb-3 ${
-          netKcal <= 0 ? 'bg-gold/[0.07] text-gold-light' : 'bg-orange-400/[0.08] text-orange-400'}`}>
+          netKcal <= 0 ? 'bg-gold/[0.07] text-gold-light' : 'bg-warn/[0.08] text-warn'}`}>
           <div className="flex gap-3">
             <span>🍽 Eaten <strong>{Math.round(totals.kcal)}</strong></span>
             <span>Burned <strong>{burnTotal}</strong></span>
@@ -235,7 +235,7 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
           <span className="text-faint font-medium">🔬 Key Nutrients</span>
           <span className={`px-2 py-0.5 rounded-full font-bold ${
             quickMet >= quickTotal * 0.8 ? 'bg-gold/[0.13] text-gold-light' :
-            quickMet >= quickTotal * 0.5 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400'
+            quickMet >= quickTotal * 0.5 ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400'
           }`}>{`${quickMet}/${quickTotal}`} met · see below ↓</span>
         </div>
       )}
@@ -275,14 +275,14 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
     const isUpper = meta.upper;
     const good = isUpper ? (pct <= 100) : (pct >= 80);
     const warn = isUpper ? (pct > 80 && pct <= 100) : (pct >= 50 && pct < 80);
-    const barCls  = good ? 'bg-gold-deep' : warn ? 'bg-amber-400' : isUpper ? 'bg-red-500' : 'bg-red-400';
-    const textCls = good ? 'text-gold-deep' : warn ? 'text-amber-400' : 'text-red-400';
-    const badgeCls= good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400';
+    const barCls  = good ? 'bg-gold-deep' : warn ? 'bg-warn' : isUpper ? 'bg-red-500' : 'bg-red-400';
+    const textCls = good ? 'text-gold-deep' : warn ? 'text-warn' : 'text-red-400';
+    const badgeCls= good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400';
     return (
       <div key={key}>
         <div className="flex items-center justify-between text-xs mb-1">
           <span className="text-mid font-medium">{meta.icon} {meta.label}
-            {rdaOverrides[key] && <span className="ml-1 text-amber-400 text-xs">★</span>}
+            {rdaOverrides[key] && <span className="ml-1 text-gold text-xs">★</span>}
           </span>
           <div className="flex items-center gap-1.5">
             <span className={`font-bold ${textCls}`}>{val}</span>
@@ -316,10 +316,10 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
       <div className="flex items-center justify-between mb-3">
         <SectionTitle icon="🔬">Nutrition Summary</SectionTitle>
         <div className="flex items-center gap-2">
-          {hasOverrides && <span className="text-xs text-amber-400 font-semibold">★ custom targets</span>}
+          {hasOverrides && <span className="text-xs text-gold font-semibold">★ custom targets</span>}
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
             totalMet >= totalAll*0.8 ? 'bg-gold/[0.13] text-gold-light' :
-            totalMet >= totalAll*0.5 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400'
+            totalMet >= totalAll*0.5 ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400'
           }`}>{`${totalMet}/${totalAll}`}</span>
         </div>
       </div>
@@ -335,7 +335,7 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
             className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
               tab===id ? 'bg-surface text-gold-light shadow-sm' : 'text-faint hover:text-white'}`}>
             <div className="text-xs font-bold">{label}</div>
-            <div className={`text-xs font-semibold ${met===total?'text-gold-deep':met>=total*0.5?'text-amber-400':'text-red-400'}`}>
+            <div className={`text-xs font-semibold ${met===total?'text-gold-deep':met>=total*0.5?'text-warn':'text-red-400'}`}>
               {met + "/" + total}
             </div>
           </button>
@@ -430,13 +430,13 @@ export function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
 
           const badge = fullyLogged
             ? { label:'✓ Logged', cls:'bg-gold/[0.13] text-gold-light' }
-            : isCurrent ? { label:'⏰ Now', cls:'bg-amber-400/[0.14] text-amber-400' }
+            : isCurrent ? { label:'⏰ Now', cls:'bg-gold/[0.14] text-gold' }
             : { label:meal.time?meal.time.slice(0,5):'', cls:'bg-charcoal text-faint' };
 
           return (
             <div key={meal.id} className={`rounded-2xl border overflow-hidden transition-all ${
               fullyLogged ? 'border-gold/[0.22] bg-gold/[0.035]' :
-              isCurrent   ? 'border-amber-400/25 bg-amber-400/[0.04]' : 'border-hair bg-surface'}`}>
+              isCurrent   ? 'border-gold/40 bg-gold/[0.04]' : 'border-hair bg-surface'}`}>
 
               <button className="w-full text-left px-4 py-3 flex items-center gap-3" onClick={() => handleOpen(meal)}>
                 <div className="flex-1 min-w-0">
@@ -445,7 +445,7 @@ export function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                   </div>
                   <p className="text-xs text-lo mt-0.5">
-                    {(meal.items||[]).length} items · <span className="font-bold text-orange-300">{mealKcal} kcal</span>
+                    {(meal.items||[]).length} items · <span className="font-bold text-gold">{mealKcal} kcal</span>
                     {isOpen && checkedCount>0 && <span className="text-gold-deep font-semibold ml-2">· {checkedCount} selected · {checkedKcal} kcal</span>}
                   </p>
                 </div>
@@ -483,10 +483,10 @@ export function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                             {alreadyIn && <span className="text-xs text-gold-deep font-semibold ml-1.5">already logged</span>}
                           </div>
                           <div className="flex gap-1.5 text-xs flex-shrink-0">
-                            <span className={`font-bold ${isChecked?'text-orange-300':'text-lo'}`}>{item.kcal} kcal</span>
+                            <span className={`font-bold ${isChecked?'text-gold':'text-lo'}`}>{item.kcal} kcal</span>
                             <span className={isChecked?'text-blue-300':'text-ghost'}>P {item.pro}g</span>
-                            <span className={isChecked?'text-amber-400':'text-ghost'}>C {item.carb}g</span>
-                            <span className={isChecked?'text-amber-400':'text-ghost'}>F {item.fat}g</span>
+                            <span className={isChecked?'text-carb':'text-ghost'}>C {item.carb}g</span>
+                            <span className={isChecked?'text-fat':'text-ghost'}>F {item.fat}g</span>
                           </div>
                         </button>
                       );

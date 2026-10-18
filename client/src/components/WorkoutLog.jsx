@@ -413,7 +413,7 @@ export default function WorkoutLog({ date }) {
         <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgb(var(--fit-accent)/0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
-          <span className="block text-caption text-mute leading-tight truncate">"Bench press 3 sets of 20kg" or "5 km walk in 1 hour"</span>
+          <span className="block text-caption text-mute leading-tight">"Bench press 3×10 at 20 kg" or "5 km walk"</span>
         </span>
       </button>
 
@@ -496,7 +496,7 @@ export default function WorkoutLog({ date }) {
           <input
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
-            placeholder="Search exercises… e.g. Bench Press"
+            placeholder="Search exercises"
             className="w-full px-3 py-2.5 bg-surface border border-white/[0.1] rounded-xl text-sm
               text-bright placeholder-dim focus:outline-none focus:ring-2 focus:ring-gold/30"
           />
@@ -728,7 +728,7 @@ export default function WorkoutLog({ date }) {
             <div className="bg-gold/[0.08] border border-gold/[0.22] rounded-xl px-3.5 py-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-caption font-bold text-gold-light tracking-wider">Calories burned</span>
-                <span className="font-display text-xl font-bold text-orange-400">{e.totalKcal} kcal</span>
+                <span className="font-display text-xl font-bold text-gold">{e.totalKcal} kcal</span>
               </div>
               <div className="space-y-0.5">
                 {e.sets > 0 && (
@@ -747,7 +747,7 @@ export default function WorkoutLog({ date }) {
                 )}
               </div>
               {!bodyWeightKg && (
-                <p className="text-eyebrow text-amber-300/80 mt-1.5">
+                <p className="text-eyebrow text-warn/80 mt-1.5">
                   Log today's weight for an accurate cardio estimate.
                 </p>
               )}

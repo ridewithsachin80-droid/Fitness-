@@ -668,7 +668,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                           disabled={!a.resolved || m.applied}
                           className={`w-full text-left bg-charcoal border rounded-xl px-3.5 py-3 transition-all ${
                             !a.resolved
-                              ? 'border-amber-500/30 opacity-80'
+                              ? 'border-warn/30 opacity-80'
                               : a.on
                               ? 'border-gold/40 active:scale-[0.99]'
                               : 'border-white/[0.05] opacity-40'
@@ -688,7 +688,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                               )}
                             </div>
                             {!a.resolved && (
-                              <span className="text-tiny font-bold text-amber-400 bg-amber-500/[0.10] border border-amber-500/30 rounded-full px-2 py-0.5 flex-shrink-0">
+                              <span className="text-tiny font-bold text-warn bg-warn/[0.10] border border-warn/30 rounded-full px-2 py-0.5 flex-shrink-0">
                                 NOT FOUND
                               </span>
                             )}
@@ -701,7 +701,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                             ))}
                           </div>
                           {!a.resolved && (
-                            <p className="text-eyebrow text-amber-400/80 mt-1.5">
+                            <p className="text-eyebrow text-warn/80 mt-1.5">
                               No member by this name — check spelling and resend.
                             </p>
                           )}

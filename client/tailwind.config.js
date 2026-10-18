@@ -69,6 +69,8 @@ export default {
         'warn': 'rgb(var(--fit-warn) / <alpha-value>)',
         'danger': 'rgb(var(--fit-danger) / <alpha-value>)',
         'info': 'rgb(var(--fit-info) / <alpha-value>)',
+        'carb': 'rgb(var(--fit-carb) / <alpha-value>)',
+        'fat': 'rgb(var(--fit-fat) / <alpha-value>)',
         'hair': 'rgb(var(--fit-line) / <alpha-value>)',
         'hair-med': 'rgb(var(--fit-line) / <alpha-value>)',
         'hair-hi': 'rgb(var(--fit-line) / <alpha-value>)',

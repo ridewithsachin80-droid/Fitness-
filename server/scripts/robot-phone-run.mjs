@@ -107,6 +107,10 @@ async function shot(page, name) {
 }
 async function check(id, title, cases, fn, { soft = false, page = null } = {}) {
   const t0 = Date.now(); currentCheck = id;
+  // One person, one phone: the screen being tested is the one in front. A tab
+  // left in the background gets no animation frames, so a screen that fades in
+  // (the login page after sign-out, 18 Oct 2026) never finishes appearing.
+  if (page) await page.bringToFront().catch(() => {});
   const retried = () => retries.filter(r => r.check === id);
   try {
     const detail = await fn();
@@ -119,8 +123,10 @@ async function check(id, title, cases, fn, { soft = false, page = null } = {}) {
     let evidence = null;
     if (page) try { evidence = `${String(++shotN).padStart(2, '0')}-${id}-fail.txt`; fs.writeFileSync(path.join(OUT, evidence),
       `${await page.evaluate(() => location.href)}\n\n${await page.evaluate(() => document.body.innerText)}`); } catch { evidence = null; }
-    results.push({ id, title, cases, result: soft ? 'warn' : 'fail', detail: e.message, shot: file, evidence, ms: Date.now() - t0 });
-    console.log(`  ${soft ? '⚠' : '✗'} ${id} ${title} — ${e.message}`);
+    // e.soft: "nothing to check here" (a warning), as opposed to a real failure.
+    const asWarn = soft || e.soft === true;
+    results.push({ id, title, cases, result: asWarn ? 'warn' : 'fail', detail: e.message, shot: file, evidence, ms: Date.now() - t0 });
+    console.log(`  ${asWarn ? '⚠' : '✗'} ${id} ${title} — ${e.message}`);
   }
   currentCheck = null;
 }
@@ -512,6 +518,25 @@ for (const theme of ['light', 'dark']) {
     }, { page: A });
   }
   await A.setViewport(PHONE);
+  // 18 Oct 2026 (Fixes-2f): Sachin's phone showed amber Journey cards. They were
+  // an 8% tint, below what goldOnScreen looks at, and amber counted as "warning".
+  await check(`S-${theme}-journey`, `Progress → Your Journey cards are green or blue, never amber (${theme})`, ['RDS-008'], async () => {
+    await gotoPath(A, '/progress'); await wait(1500);
+    const cards = await A.evaluate(() => [...document.querySelectorAll('[data-testid="journey-card"]')].map(c => {
+      c.scrollIntoView({ block: 'center' });
+      const m = getComputedStyle(c).backgroundColor.match(/rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+      const [R, G, B] = m ? [m[1], m[2], m[3]].map(v => v / 255) : [0, 0, 0];
+      const mx = Math.max(R, G, B), d = mx - Math.min(R, G, B);
+      let h = !d ? -1 : mx === R ? ((G - B) / d) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4;
+      h = h < 0 && d ? h * 60 + 360 : d ? (h * 60 + 360) % 360 : -1;
+      return { hue: Math.round(h), bg: getComputedStyle(c).backgroundColor, text: c.textContent.trim().slice(0, 30) };
+    }));
+    if (!cards.length) throw Object.assign(new Error('no Journey cards on screen for this member, so nothing was checked'), { soft: true });
+    const warm = cards.filter(c => c.hue >= 20 && c.hue <= 60);
+    must(!warm.length, `amber card: ${warm.map(c => `"${c.text}" ${c.bg}`).join(' | ')}`);
+    await shot(A, `${theme}-journey`);
+    return `${cards.length} card(s): ${cards.map(c => c.hue).join(', ')}° hue`;
+  }, { page: A });
   await check(`S-${theme}-sheets`, `AI panel and food sheet (${theme}): fit, no gold`, ['TOD-023', 'RDS-016', 'RDS-008'], async () => {
     await gotoPath(A, '/'); await openAI(A);
     must(await noSidewaysScroll(A), 'AI panel is wider than the screen');

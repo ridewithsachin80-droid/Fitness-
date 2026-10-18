@@ -78,8 +78,8 @@ export function PushModal({ members, onClose }) {
               <p className="text-xs text-mid mt-1">{form.body.length}/140 characters</p>
             </div>
 
-            <div className="bg-amber-400/10 border border-amber-400/25 rounded-xl px-3 py-2">
-              <p className="text-xs text-amber-300 font-medium">
+            <div className="bg-warn/10 border border-warn/25 rounded-xl px-3 py-2">
+              <p className="text-xs text-warn font-medium">
                 ⚠ Only members with push notifications enabled will receive this.
               </p>
             </div>

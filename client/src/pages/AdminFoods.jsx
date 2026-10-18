@@ -426,13 +426,13 @@ export default function AdminFoods() {
                       style={{ minHeight: 30 }}
                       className={`text-caption font-bold px-3 rounded-lg border transition-colors ${
                         flaggedOnly
-                          ? 'bg-amber-400/[0.08] border-amber-300 text-amber-400'
+                          ? 'bg-warn/[0.08] border-warn text-warn'
                           : 'bg-surface border-hair-med text-faint'
                       }`}>
                       {flaggedOnly ? '⚠ Showing only mismatched' : '⚠ Only mismatched macros'}
                     </button>
                     {!flaggedOnly && review.flagged_in_page > 0 && (
-                      <span className="text-caption text-amber-400 font-semibold">
+                      <span className="text-caption text-warn font-semibold">
                         {review.flagged_in_page} of these {review.page_size} look wrong
                       </span>
                     )}
@@ -480,19 +480,19 @@ export default function AdminFoods() {
                             reading before tapping Verify: it is arithmetic, not
                             an opinion, and it is usually right. */}
                         {mc.status === 'suspect' && (
-                          <div className="bg-amber-400/[0.08] border border-amber-400/25 rounded-xl px-3 py-2 mb-3">
+                          <div className="bg-warn/[0.08] border border-warn/25 rounded-xl px-3 py-2 mb-3">
                             {/* The heading follows the reason. "These numbers
                                 disagree with each other" is wrong for a masala
                                 dosa whose numbers agree perfectly and are simply
                                 too low — the coach would look for a mismatch
                                 that isn't there. */}
-                            <p className="text-caption font-bold text-amber-800">
+                            <p className="text-caption font-bold text-warn">
                               {f.checks?.lighter_than_base ? '⚠ Lighter than the plain version of itself'
                                : f.checks?.cooking === 'suspect' && f.checks?.macro === 'ok'
                                  ? '⚠ Cooked dish with no cooking fat'
                                  : '⚠ These numbers disagree with each other'}
                             </p>
-                            <p className="text-caption text-amber-400 leading-snug mt-0.5">
+                            <p className="text-caption text-warn leading-snug mt-0.5">
                               {mc.reason}
                               {mc.delta_pct != null ? ` — off by ${mc.delta_pct}%.` : '.'}
                               {' '}Fix it before verifying, or it skews every member who logs this.
@@ -512,7 +512,7 @@ export default function AdminFoods() {
 
                         <p className="text-caption text-faint mb-3">
                           {f.members > 0
-                            ? <>Logged by <span className="font-bold text-amber-400">{f.members} {plural(f.members, 'member')}</span>, {f.times_logged}× in total.</>
+                            ? <>Logged by <span className="font-bold text-warn">{f.members} {plural(f.members, 'member')}</span>, {f.times_logged}× in total.</>
                             : <>Nobody has logged this yet.</>}
                         </p>
 

@@ -150,7 +150,7 @@ export default function VoicePilotPanel({ collapsible = false }) {
                         {[['Gemini', s.gemini, s.gemini_problem], ['Whisper', s.whisper, s.whisper_problem]].map(([label, text, problem]) => (
                           <p key={label} className="text-mid break-words">{label}: {text != null
                             ? <span className="text-white">{text || '(heard nothing)'}</span>
-                            : <span className="text-amber-300">no answer{problem && problem !== 'no answer' ? ` — ${problem}` : ''}</span>}</p>
+                            : <span className="text-warn">no answer{problem && problem !== 'no answer' ? ` — ${problem}` : ''}</span>}</p>
                         ))}
                       </div>
                     </td></tr>

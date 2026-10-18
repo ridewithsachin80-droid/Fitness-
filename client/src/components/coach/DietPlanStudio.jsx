@@ -27,7 +27,7 @@ const dayList = (ws) => (ws.length === 7 ? 'every day' : ws.map(w => DAYS[w]).jo
 const kcalOf = (it) => Math.round((Number(it.grams) || 0) * (Number(it.per_100g?.calories) || 0) / 100);
 
 function Notice({ tone = 'warn', children }) {
-  const c = tone === 'error' ? 'border-red-400/30 bg-red-400/[0.08] text-red-300' : 'border-amber-400/30 bg-amber-400/[0.08] text-amber-200';
+  const c = tone === 'error' ? 'border-red-400/30 bg-red-400/[0.08] text-red-300' : 'border-warn/30 bg-warn/[0.08] text-warn';
   return <p className={`text-caption leading-relaxed rounded-xl px-3 py-2 border ${c}`}>{children}</p>;
 }
 
@@ -258,8 +258,8 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                 member's own targets in one tap. Never filled in silently: with a
                 carb target the carb check starts blocking approval. */}
             {missing.length > 0 && !dirtyTargets && (
-              <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/[0.08] px-3 py-2.5" data-testid="targets-missing">
-                <p className="text-caption text-amber-200 leading-snug">
+              <div className="mt-2 rounded-xl border border-warn/30 bg-warn/[0.08] px-3 py-2.5" data-testid="targets-missing">
+                <p className="text-caption text-warn leading-snug">
                   No {missing.map(([k]) => (k === 'carbs' ? 'carb' : k)).join(' or ')} target on this plan.
                   {missing.some(([k]) => k === 'carbs') ? ' The carb check cannot run without one, and ' : ' '}
                   {first} will see "—" on their plan.
@@ -299,7 +299,7 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
                     <span className="flex-1 text-caption text-white leading-snug">
                       {it.name}
                       {/* Per-food calories, so "120 g brown rice = 434 kcal" is seen before approving. */}
-                      <span className={`block ${kcalOf(it) > 0 ? 'text-mid' : 'text-amber-300'}`}>
+                      <span className={`block ${kcalOf(it) > 0 ? 'text-mid' : 'text-warn'}`}>
                         {kcalOf(it) > 0 ? `${kcalOf(it)} kcal` : 'no calorie figure'}
                       </span>
                       {/* Fixed = compulsory: Fit to target leaves these grams alone. */}
@@ -420,7 +420,7 @@ export default function DietPlanStudio({ memberId, memberName, onApplied }) {
               <p className="text-caption text-gold mt-1">Version {data.upcoming.version} takes over on {formatDate(data.upcoming.effective_from)}.</p>
             )}
             {(inForce.targets?.carbs == null || inForce.targets?.fat == null) && (
-              <p className="text-caption text-amber-300 mt-1" data-testid="inforce-targets-missing">
+              <p className="text-caption text-warn mt-1" data-testid="inforce-targets-missing">
                 This plan has no {[inForce.targets?.carbs == null && 'carb', inForce.targets?.fat == null && 'fat'].filter(Boolean).join(' or ')} target, so {first} sees "—" for it. Tap Revise this plan to add one.
               </p>
             )}

@@ -47,7 +47,7 @@ export default function FoodSheet({ open, onClose, m }) {
         <PrescribedMeals mealPlan={protocol.meal_plan} foodItems={log.food} onLogMeal={logMeal} />
       )}
       <div id="section-food">
-        <p className="text-caption text-lo mb-2">Tap the mic to log by voice · each food says whether to weigh it raw or cooked</p>
+        <p className="text-caption text-lo mb-2">Each food you add says whether to weigh it raw or cooked</p>
         <FoodLog mealTarget={m.foodTarget} mealHeadingRef={mealHeadingRef} items={log.food} onChange={v => update('food', v)} calorieTarget={kcalTarget} />
       </div>
     </Sheet>

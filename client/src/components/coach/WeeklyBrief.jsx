@@ -52,7 +52,7 @@ export default function WeeklyBrief({ memberId }) {
           <>
             <div className="flex flex-wrap gap-1.5">
               {qs.map(q => ci.answers?.[q.key] ? (
-                <span key={q.key} className={`text-caption rounded-full px-2.5 py-0.5 border ${(q.key === 'stress' ? ci.answers[q.key] >= 4 : ci.answers[q.key] <= 2) ? 'border-amber-400/50 text-amber-300' : 'border-white/[0.12] text-white'}`}>
+                <span key={q.key} className={`text-caption rounded-full px-2.5 py-0.5 border ${(q.key === 'stress' ? ci.answers[q.key] >= 4 : ci.answers[q.key] <= 2) ? 'border-warn/50 text-warn' : 'border-white/[0.12] text-white'}`}>
                   {q.label} {ci.answers[q.key]}/5
                 </span>
               ) : null)}

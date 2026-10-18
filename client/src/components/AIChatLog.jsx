@@ -767,7 +767,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                       )}
 
                       {m.lab.needs_review > 0 && !m.applied && (
-                        <p className="text-eyebrow text-amber-300 mb-2 leading-relaxed">
+                        <p className="text-eyebrow text-warn mb-2 leading-relaxed">
                           ⚠ {m.lab.needs_review} {plural(m.lab.needs_review, 'row')} came out unclear —
                           check the highlighted ones against your report before saving.
                         </p>
@@ -778,7 +778,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                           <div key={ri}
                             className={`bg-charcoal border rounded-xl px-3 py-2 ${
                               r.confidence === 'low' || r.value === null
-                                ? 'border-amber-400/35' : 'border-white/[0.06]'
+                                ? 'border-warn/35' : 'border-white/[0.06]'
                             } ${r.on ? '' : 'opacity-40'}`}>
                             <div className="flex items-center gap-2">
                               <button
@@ -799,7 +799,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                                     ? { ...x, value: e.target.value === '' ? null : parseFloat(e.target.value), on: e.target.value !== '' } : x) }))}
                                 style={{ width: 62, minHeight: 28 }}
                                 className={`rounded-md px-1 text-center text-caption border bg-surface text-white
-                                  ${r.value === null ? 'border-amber-400/50' : 'border-white/[0.12]'}`} />
+                                  ${r.value === null ? 'border-warn/50' : 'border-white/[0.12]'}`} />
                               <span className="text-eyebrow text-lo w-12 truncate">{r.unit || ''}</span>
                             </div>
                             {(r.ref_min != null || r.ref_max != null) && (
@@ -818,7 +818,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                             {m.weightLogged != null && ` · ${m.weightLogged} kg ${m.weightQueued ? 'waiting to sync' : 'logged for today'}`}
                           </p>
                           {m.labNotice && (
-                            <p className="text-caption text-amber-200 mt-1 leading-relaxed">{m.labNotice}</p>
+                            <p className="text-caption text-warn mt-1 leading-relaxed">{m.labNotice}</p>
                           )}
                         </div>
                       ) : (

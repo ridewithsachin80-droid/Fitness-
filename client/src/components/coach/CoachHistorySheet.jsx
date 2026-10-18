@@ -18,7 +18,7 @@ export default function CoachHistorySheet({ log, onClose }) {
                   {foodItems.length > 0 && (
                     <div>
                       <p className="text-xs font-bold text-lo tracking-wider mb-2">
-                        🥗 Food {totalKcal > 0 && <span className="font-normal text-orange-300 normal-case">· {totalKcal} kcal</span>}
+                        🥗 Food {totalKcal > 0 && <span className="font-normal text-gold normal-case">· {totalKcal} kcal</span>}
                       </p>
                       <div className="space-y-1">
                         {foodItems.map((item, i) => {
@@ -29,7 +29,7 @@ export default function CoachHistorySheet({ log, onClose }) {
                                 <span className="text-white font-medium">{item.name}</span>
                                 <span className="text-xs text-lo ml-1">{item.grams}g{item.meal ? ` · ${item.meal}` : ''}</span>
                               </div>
-                              {n && <span className="shrink-0 text-xs font-bold text-orange-300">{n.cal} kcal</span>}
+                              {n && <span className="shrink-0 text-xs font-bold text-gold">{n.cal} kcal</span>}
                             </div>
                           );
                         })}

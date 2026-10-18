@@ -84,7 +84,7 @@ export default function WeeklyReportCard() {
             {d.latestWeight} kg
           </span>
           {d.weekDelta != null && (
-            <span className={`text-sm font-semibold ${d.weekDelta < 0 ? 'text-gold-light' : d.weekDelta > 0 ? 'text-amber-400' : 'text-mid'}`}>
+            <span className={`text-sm font-semibold ${d.weekDelta < 0 ? 'text-gold-light' : d.weekDelta > 0 ? 'text-warn' : 'text-mid'}`}>
               {d.weekDelta < 0 ? '▼' : d.weekDelta > 0 ? '▲' : '—'} {Math.abs(d.weekDelta)} this week
             </span>
           )}

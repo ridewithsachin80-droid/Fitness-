@@ -32,7 +32,7 @@ export default function SleepSheet({ open, onClose, m }) {
       </div>
       {mins != null && (
         <div data-testid="sleep-duration" className={`mt-3 text-center text-caption font-bold py-2 rounded-xl ${
-          tone === 'great' ? 'bg-ok/10 text-gold-light' : tone === 'short' ? 'bg-amber-400/10 text-amber-300' : 'bg-white/[0.04] text-mid'}`}>
+          tone === 'great' ? 'bg-ok/10 text-gold-light' : tone === 'short' ? 'bg-warn/10 text-warn' : 'bg-white/[0.04] text-mid'}`}>
           {Math.floor(mins / 60)}h {mins % 60}m{tone === 'great' ? ' — great sleep' : tone === 'short' ? ' — try for 7+ hours' : ''}
         </div>
       )}

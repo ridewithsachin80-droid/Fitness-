@@ -14,6 +14,9 @@
 
 import { useState, useEffect } from 'react';
 import api from '../api/client';
+import { themeColor } from '../utils/themeColor';
+// The theme's warning colour as #rrggbb (chip() appends hex alpha to it).
+const warnHex = () => '#' + themeColor('--fit-warn').match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('');
 
 const MACRO_KEYS = [
   { key:'calories',    label:'Calories',  unit:'kcal', color:'var(--accent)' },
@@ -208,7 +211,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
             <span style={chip(accent)}>✨ AI Identified</span>
             <span style={chip(
               food.data_confidence === 'high' ? '#4ADE80' :
-              food.data_confidence === 'medium' ? '#F59E0B' : '#EF4444'
+              food.data_confidence === 'medium' ? warnHex() : '#EF4444'
             )}>
               {food.data_confidence === 'high' ? '✓ High confidence' : '~ Medium confidence'}
             </span>

@@ -122,7 +122,7 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
             <span className={`flex items-center gap-1.5 text-sm ${c.on ? 'text-white' : 'text-lo'}`}>
               <Icon name={icon} size={14} className={`${tone} flex-shrink-0`} />{name}
             </span>
-            <span className={`block text-caption ${extra ? 'text-amber-300' : 'text-mid'}`}>{sub}</span>
+            <span className={`block text-caption ${extra ? 'text-warn' : 'text-mid'}`}>{sub}</span>
           </span>
         </label>
         <input type="number" inputMode="decimal" min="0" max="2000" value={c.grams} disabled={!c.on} aria-label={`${name} grams`}
@@ -165,7 +165,7 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
           return row({ k: `p${i}`, name: r.name, per100g: r.per_100g, sub: s.text(r), tone: s.tone, icon: s.icon });
         })}
         {res.extras.map((r, i) => (
-          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, extra: true, icon: 'plus', tone: 'text-amber-300', sub: `Not in your plan · ${r.kcal} ${kcalWord}` })
+          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, extra: true, icon: 'plus', tone: 'text-warn', sub: `Not in your plan · ${r.kcal} ${kcalWord}` })
         ))}
         {extrasKcal > EXTRA_FLAG_KCAL && <p className="text-caption text-mid pt-1" data-testid="plate-coach-note">Your coach will see the extras.</p>}
         {res.photo_saved && <p className="text-caption text-lo pt-1">Only you and your coach can see this photo.</p>}
@@ -185,7 +185,7 @@ export default function PlatePhotoSheet({ job, onClose, onRetake, m }) {
           {res.meal} is {res.planned.map(p => p.name.toLowerCase()).join(', ')}. Here&rsquo;s what I can see:
         </p>
         {res.extras.map((r, i) => (
-          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, extra: true, icon: 'plus', tone: 'text-amber-300', sub: `About ${r.grams} g · ${r.kcal} ${kcalWord}` })
+          row({ k: `x${i}`, name: r.name, per100g: r.per_100g, extra: true, icon: 'plus', tone: 'text-warn', sub: `About ${r.grams} g · ${r.kcal} ${kcalWord}` })
         ))}
         <Pressable variant="primary" className="w-full" disabled={!plate.length} onPress={() => save('extra')} data-testid="plate-as-extra">
           Log as an extra snack · {kcal(plate).toLocaleString('en-IN')} {kcalWord}

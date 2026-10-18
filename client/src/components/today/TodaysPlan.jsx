@@ -120,7 +120,7 @@ export default function TodaysPlan({ m, onOpen }) {
             </Tap>
           )}
           {balance != null && (
-            <span className={`text-caption tabular-nums ${balance > 0 ? 'text-amber-300' : 'text-mid'}`} data-testid="plan-balance">
+            <span className={`text-caption tabular-nums ${balance > 0 ? 'text-warn' : 'text-mid'}`} data-testid="plan-balance">
               {/* Against the estimated day's burn (BMR × 1.2 + workout), not the coach's
                   target — it said "target" and was a different number (MAC-014, 10 Oct 2026). */}
               {balance > 0 ? `${balance.toLocaleString('en-IN')} kcal above estimated burn` : `${Math.abs(balance).toLocaleString('en-IN')} kcal below estimated burn`}

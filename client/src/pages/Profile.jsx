@@ -49,7 +49,7 @@ function bmiLabel(b) {
   const v = parseFloat(b);
   if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-300 bg-blue-400/10 border-blue-400/20' };
   if (v < 25)   return { label: 'Healthy',     cls: 'text-gold-light bg-gold/10 border-gold/20' };
-  if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-300 bg-amber-400/10 border-amber-400/20' };
+  if (v < 30)   return { label: 'Overweight',  cls: 'text-warn bg-warn/10 border-warn/20' };
   return             { label: 'Obese',          cls: 'text-red-300 bg-red-400/10 border-red-400/20' };
 }
 
@@ -337,9 +337,9 @@ export default function Profile() {
             )}
             <div className="grid grid-cols-2 gap-2 mt-2">
               {[
-                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-orange-400/[0.08] border-orange-400/[0.16] text-orange-300' },
+                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-gold/[0.08] border-gold/[0.16] text-gold' },
                 { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-blue-400/[0.08] border-blue-400/[0.16] text-blue-300' },
-                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-amber-400/[0.08] border-amber-400/[0.16] text-amber-300' },
+                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-carb/[0.08] border-carb/[0.16] text-carb' },
                 { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-gold/[0.08] border-gold/[0.16] text-gold' },
               ].filter(m => m.value).map(m => (
                 <div key={m.label} className={`rounded-xl border px-3 py-2.5 text-center ${m.color}`}>
@@ -487,21 +487,21 @@ export default function Profile() {
                 ))}
                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-white/[0.06]">
                   <span className="text-mid">Food eaten today</span>
-                  <span className="font-bold text-orange-400">{totalIn} kcal</span>
+                  <span className="font-bold text-gold">{totalIn} kcal</span>
                 </div>
               </div>
 
               {logged ? (
                 <div className={`rounded-xl px-3.5 py-3 border ${
                   balance > 0
-                    ? 'bg-amber-400/[0.08] border-amber-400/25'
+                    ? 'bg-warn/[0.08] border-warn/25'
                     : 'bg-ok/[0.08] border-ok/25'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className={`text-sm font-bold ${balance > 0 ? 'text-amber-300' : 'text-gold-light'}`}>
+                    <span className={`text-sm font-bold ${balance > 0 ? 'text-warn' : 'text-gold-light'}`}>
                       {balance > 0 ? 'Surplus' : 'Deficit'}
                     </span>
-                    <span className={`font-display text-xl font-bold ${balance > 0 ? 'text-amber-300' : 'text-gold-light'}`}>
+                    <span className={`font-display text-xl font-bold ${balance > 0 ? 'text-warn' : 'text-gold-light'}`}>
                       {balance > 0 ? '+' : ''}{balance} kcal
                     </span>
                   </div>
@@ -540,7 +540,7 @@ export default function Profile() {
               </span>
             </div>
             <div className="mt-3 h-2 bg-white/[0.08] rounded-full overflow-hidden">
-              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-gold via-amber-400 to-red-500" />
+              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-gold via-warn to-red-400" />
             </div>
             <div className="flex justify-between text-xs text-lo mt-1">
               <span>18.5</span><span>25</span><span>30</span><span>35+</span>

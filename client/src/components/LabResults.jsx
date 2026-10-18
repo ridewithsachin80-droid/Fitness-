@@ -32,8 +32,8 @@ const COMMON = [
 ];
 
 const STATE_STYLE = {
-  low:    'text-amber-300 bg-amber-400/10 border-amber-400/30',
-  high:   'text-amber-300 bg-amber-400/10 border-amber-400/30',
+  low:    'text-warn bg-warn/10 border-warn/30',
+  high:   'text-warn bg-warn/10 border-warn/30',
   normal: 'text-gold-light bg-ok/10 border-ok/30',
 };
 
@@ -119,8 +119,8 @@ export default function LabResults({ memberId = null, memberName = '' }) {
     <div>
       {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
       {notice && (
-        <div className="bg-amber-400/[0.08] border border-amber-400/30 rounded-xl px-3 py-2.5 mb-3">
-          <p className="text-caption text-amber-200 leading-relaxed">{notice}</p>
+        <div className="bg-warn/[0.08] border border-warn/30 rounded-xl px-3 py-2.5 mb-3">
+          <p className="text-caption text-warn leading-relaxed">{notice}</p>
         </div>
       )}
 
@@ -329,7 +329,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
               )}
 
               {(insight.raise_with_doctor || []).length > 0 && (
-                <p className="text-caption text-amber-300 leading-relaxed mb-2">
+                <p className="text-caption text-warn leading-relaxed mb-2">
                   Raise with their doctor: {insight.raise_with_doctor.join(', ')}
                 </p>
               )}
@@ -371,7 +371,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
                 // whether that is good (fix, 10 Oct 2026, LAB-005: vitamin D
                 // rising 20 → 35 showed "↓" because the arrow meant "improved").
                 const arrow = c.to > c.from ? '↑' : c.to < c.from ? '↓' : '→';
-                const tone  = c.direction === 'improved' ? 'text-gold-light' : c.direction === 'worsened' ? 'text-amber-300' : 'text-mid';
+                const tone  = c.direction === 'improved' ? 'text-gold-light' : c.direction === 'worsened' ? 'text-warn' : 'text-mid';
                 return (
                   <div key={i} className="flex items-baseline gap-2 py-1 border-b border-hair last:border-b-0" data-testid="lab-marker">
                     <span className="min-w-0 flex-1 text-sm text-white truncate">{c.test_name}</span>
@@ -403,7 +403,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
                 <span className="text-note font-bold text-white">{c.test_name}</span>
                 <span className={`text-eyebrow font-bold tracking-wider ${
                   c.direction === 'improved' ? 'text-gold-light'
-                  : c.direction === 'worsened' ? 'text-amber-300' : 'text-mid'}`}>
+                  : c.direction === 'worsened' ? 'text-warn' : 'text-mid'}`}>
                   {c.direction}
                 </span>
               </div>
@@ -444,7 +444,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
                       <span className="text-white text-right">{ctx.cardio_minutes} min</span></>
                   )}
                   <><span className="text-lo">Days logged</span>
-                    <span className={`text-right ${ctx.coverage_pct < 50 ? 'text-amber-300' : 'text-white'}`}>
+                    <span className={`text-right ${ctx.coverage_pct < 50 ? 'text-warn' : 'text-white'}`}>
                       {ctx.coverage_pct}%</span></>
                 </div>
 
@@ -455,7 +455,7 @@ export default function LabResults({ memberId = null, memberName = '' }) {
                   </p>
                 )}
                 {ctx.coverage_pct < 50 && (
-                  <p className="text-eyebrow text-amber-300/90 mt-1.5 leading-relaxed">
+                  <p className="text-eyebrow text-warn/90 mt-1.5 leading-relaxed">
                     Only {ctx.coverage_pct}% of this window was logged, so the figures
                     above describe a fraction of it.
                   </p>

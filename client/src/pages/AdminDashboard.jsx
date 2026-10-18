@@ -368,8 +368,8 @@ export default function AdminDashboard() {
 
               {complianceLens === 'today' && (overview.today_detail || []).map(m => {
                 const pct = m.compliance_pct || 0;
-                const color = pct >= 75 ? 'bg-gold' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-red-400' : 'bg-white/[0.08]';
-                const textColor = pct >= 75 ? 'text-gold-light' : pct >= 50 ? 'text-amber-300' : pct > 0 ? 'text-red-400' : 'text-mid';
+                const color = pct >= 75 ? 'bg-gold' : pct >= 50 ? 'bg-warn' : pct > 0 ? 'bg-red-400' : 'bg-white/[0.08]';
+                const textColor = pct >= 75 ? 'text-gold-light' : pct >= 50 ? 'text-warn' : pct > 0 ? 'text-red-400' : 'text-mid';
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] last:border-0">
                     <div className="flex-1 min-w-0">
@@ -397,7 +397,7 @@ export default function AdminDashboard() {
                     <span className="text-xs text-mid">{m.days_logged} days</span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                       pct >= 75 ? 'bg-ok/[0.14] text-gold-light' :
-                      pct >= 50 ? 'bg-amber-400/[0.14] text-amber-300' : 'bg-red-400/10 text-red-400'
+                      pct >= 50 ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/10 text-red-400'
                     }`}>{Math.round(pct)}%</span>
                   </div>
                 );
@@ -450,7 +450,7 @@ export default function AdminDashboard() {
                 const noLog = m.last_logged !== today;
                 const initials = m.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
                 const pct = m.last_compliance;
-                const ringColor = pct == null ? '#4A4E5A' : pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171';
+                const ringColor = pct == null ? '#4A4E5A' : pct >= 75 ? '#34d399' : pct >= 50 ? 'rgb(var(--fit-warn))' : '#f87171';
                 const start  = parseFloat(m.start_weight);
                 const latest = parseFloat(m.latest_weight);
                 const goal   = parseFloat(m.target_weight);
@@ -461,7 +461,7 @@ export default function AdminDashboard() {
                 return (
                   <div key={m.id}
                     className={`relative bg-surface rounded-2xl border p-4 shadow-card
-                      ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-amber-400/35' : 'border-hair'}`}>
+                      ${!m.active ? 'opacity-50 border-white/[0.08]' : noLog ? 'border-warn/35' : 'border-hair'}`}>
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/coach/${m.id}`)}>
                       <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-display font-bold text-sm text-gold-light"
                         style={{ background: 'linear-gradient(135deg,var(--bg-surface),var(--bg-surface))',
@@ -472,14 +472,14 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-bold text-white truncate">{m.name}</h3>
                           {!m.active && <span className="text-tiny font-bold bg-white/[0.06] text-mid px-2 py-0.5 rounded-full">INACTIVE</span>}
-                          {noLog && m.active && <span className="text-tiny font-bold text-amber-300 bg-amber-400/10 border border-amber-400/25 px-2 py-0.5 rounded-full">NO LOG</span>}
-                          {m.has_pin === false && m.active && <span className="text-tiny font-bold text-amber-300">🔑 NO PIN</span>}
+                          {noLog && m.active && <span className="text-tiny font-bold text-warn bg-warn/10 border border-warn/25 px-2 py-0.5 rounded-full">NO LOG</span>}
+                          {m.has_pin === false && m.active && <span className="text-tiny font-bold text-warn">🔑 NO PIN</span>}
                         </div>
                         <p className="text-eyebrow text-mid mt-0.5 truncate">
                           📱 {m.phone}
                           {m.monitor_name
                             ? <span className="text-gold-light"> · 🏋️ {m.monitor_name}</span>
-                            : <span className="text-amber-300"> · ⚠ Unassigned</span>}
+                            : <span className="text-warn"> · ⚠ Unassigned</span>}
                         </p>
                       </div>
                       {/* Compliance ring */}
@@ -504,7 +504,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between text-eyebrow text-mid mb-1.5">
                           <span>{start} → <b className="text-white">{Number.isFinite(latest) ? latest : '—'}</b> → {goal} kg</span>
                           {lost != null && lost > 0 && <span className="font-extrabold text-gold-light">−{lost} kg</span>}
-                          {lost != null && lost < 0 && <span className="font-extrabold text-amber-300">+{Math.abs(lost)} kg</span>}
+                          {lost != null && lost < 0 && <span className="font-extrabold text-warn">+{Math.abs(lost)} kg</span>}
                         </div>
                         <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
                           <div className="h-full rounded-full transition-all"
@@ -603,7 +603,7 @@ export default function AdminDashboard() {
                         <h3 className="font-bold text-white">{m.name}</h3>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${
                           m.role === 'admin'
-                            ? 'bg-amber-400/[0.14] text-amber-300'
+                            ? 'bg-warn/[0.14] text-warn'
                             : 'bg-blue-400/[0.14] text-blue-300'
                         }`}>
                           {m.role === 'admin' ? 'admin' : 'coach'}
@@ -677,11 +677,11 @@ export default function AdminDashboard() {
                     monitor_assigned:  { icon: '🔗', color: 'bg-gold/10 border-gold/25 text-gold' },
                     coach_assigned:    { icon: '🔗', color: 'bg-gold/10 border-gold/25 text-gold' },
                     member_deleted:    { icon: '🗑', color: 'bg-red-400/10 border-red-400/30 text-red-300' },
-                    member_toggled:    { icon: '⚡', color: 'bg-amber-400/10 border-amber-400/25 text-amber-300' },
-                    monitor_toggled:   { icon: '⚡', color: 'bg-amber-400/10 border-amber-400/25 text-amber-300' },
-                    coach_toggled:     { icon: '⚡', color: 'bg-amber-400/10 border-amber-400/25 text-amber-300' },
-                    pin_reset:         { icon: '🔑', color: 'bg-orange-400/10 border-orange-400/25 text-orange-300' },
-                    pin_set:           { icon: '🔑', color: 'bg-orange-400/10 border-orange-400/25 text-orange-300' },
+                    member_toggled:    { icon: '⚡', color: 'bg-warn/10 border-warn/25 text-warn' },
+                    monitor_toggled:   { icon: '⚡', color: 'bg-warn/10 border-warn/25 text-warn' },
+                    coach_toggled:     { icon: '⚡', color: 'bg-warn/10 border-warn/25 text-warn' },
+                    pin_reset:         { icon: '🔑', color: 'bg-warn/10 border-warn/25 text-warn' },
+                    pin_set:           { icon: '🔑', color: 'bg-warn/10 border-warn/25 text-warn' },
                     member_updated:      { icon: '✏️', color: 'bg-white/[0.04] border-hair text-mid' },
                     coach_remind:        { icon: '🔔', color: 'bg-gold/10 border-gold/25 text-gold' },
                     coach_weekly_summary:{ icon: '📊', color: 'bg-gold/10 border-gold/25 text-gold' },

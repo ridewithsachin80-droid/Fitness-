@@ -136,7 +136,7 @@ export function SetPinModal({ memberId, memberName, onClose, onSaved }) {
           </div>
         ) : (
           <>
-            <p className="text-xs text-faint bg-amber-400/[0.08] border border-amber-400/15 rounded-xl px-3 py-2">
+            <p className="text-xs text-faint bg-warn/[0.08] border border-warn/15 rounded-xl px-3 py-2">
               Share this PIN with the member in person. They use it with their phone number to log in.
             </p>
             {[
@@ -684,7 +684,7 @@ export default function Coach() {
             </div>
             {delta !== null && (
               <div className="text-right flex-shrink-0">
-                <div className={`font-display text-2xl font-semibold ${parseFloat(delta) > 0 ? 'text-gold-light' : 'text-amber-300'}`}>
+                <div className={`font-display text-2xl font-semibold ${parseFloat(delta) > 0 ? 'text-gold-light' : 'text-warn'}`}>
                   {parseFloat(delta) > 0 ? '↓' : '↑'} {Math.abs(parseFloat(delta))} kg
                 </div>
                 <div className="text-xs text-gold-light">lost so far</div>
@@ -698,7 +698,7 @@ export default function Coach() {
               className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl
                 transition-colors border ${profile.has_pin
                   ? 'text-white bg-white/[0.06] hover:bg-white/20 border-white/20'
-                  : 'text-amber-900 bg-amber-400 hover:bg-amber-300 border-amber-300'}`}>
+                  : 'text-charcoal bg-warn hover:bg-warn/90 border-warn'}`}>
               🔑 {profile.has_pin ? 'Reset PIN' : '⚠ Set PIN (required to login)'}
             </button>
                         <button onClick={() => setActionTab('message')} data-testid="open-message"
@@ -756,7 +756,7 @@ export default function Coach() {
             {activeLog && (
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                 (activeLog.compliance_pct||0) >= 75 ? 'bg-gold/[0.12] text-gold' :
-                (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
+                (activeLog.compliance_pct||0) >= 50 ? 'bg-warn/10 text-warn' :
                                                       'bg-red-400/10 text-red-400'
               }`}>{activeLog.compliance_pct||0}%</span>
             )}
@@ -774,7 +774,7 @@ export default function Coach() {
                   const isToday = log.log_date === todayIST;
                   const isActive = log.log_date === activeDate;
                   const pct = log.compliance_pct || 0;
-                  const dotColor = pct >= 75 ? 'var(--accent)' : pct >= 50 ? '#fbbf24' : '#f87171';
+                  const dotColor = pct >= 75 ? 'var(--accent)' : pct >= 50 ? 'rgb(var(--fit-warn))' : '#f87171';
                   const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
                   return (
                     <button key={log.log_date}
@@ -1012,7 +1012,7 @@ export default function Coach() {
                       <div className="text-sm font-bold text-white">{formatDate(d)}</div>
                       <div className="text-caption text-lo">
                         {rows.length} {plural(rows.length, 'result')}
-                        {flagged > 0 && <span className="text-amber-400"> · {flagged} outside range</span>}
+                        {flagged > 0 && <span className="text-warn"> · {flagged} outside range</span>}
                         {rows[0]?.lab_name && ` · ${rows[0].lab_name}`}
                       </div>
                     </div>
@@ -1234,7 +1234,7 @@ export default function Coach() {
                     <p className="text-eyebrow text-lo leading-tight truncate" title={m.name}>{m.name}</p>
                     <p className="text-sm font-bold text-white leading-tight mt-0.5">{m.latest}</p>
                     {m.change != null && (
-                      <p className={`text-eyebrow leading-tight ${m.change > 0 ? 'text-amber-400' : 'text-gold'}`}>
+                      <p className={`text-eyebrow leading-tight ${m.change > 0 ? 'text-warn' : 'text-gold'}`}>
                         {m.change > 0 ? '↑' : '↓'} {Math.abs(m.change)}
                       </p>
                     )}

@@ -53,12 +53,12 @@ function statusColor(group, tab) {
 
 const STATUS_STYLES = {
   good:  'border-gold/30 bg-gold/[0.08]',
-  ok:    'border-amber-400/25 bg-amber-400/[0.06]',
+  ok:    'border-warn/25 bg-warn/[0.06]',
   stale: 'border-hair bg-white/[0.02]',
 };
 const STATUS_DOT = {
   good:  'bg-gold',
-  ok:    'bg-amber-400',
+  ok:    'bg-warn',
   stale: 'bg-ghost',
 };
 
@@ -89,7 +89,7 @@ export default function MuscleCoverage({ memberId, refreshTick = 0 }) {
           Muscle Coverage
         </SectionTitle>
         {staleCount > 0 && (
-          <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+          <span className="text-xs font-bold text-warn bg-warn/10 px-2 py-0.5 rounded-full">
             {staleCount} need attention
           </span>
         )}

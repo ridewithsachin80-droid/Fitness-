@@ -33,7 +33,7 @@ export default function DaySummary({ s }) {
           <span className="text-lo"> · {p.done.length}/{p.total}</span>
         </p>
         {p.left.length > 0 && (
-          <p className="text-sm text-amber-300 leading-relaxed mt-0.5">
+          <p className="text-sm text-warn leading-relaxed mt-0.5">
             left: {p.left.join(', ')}
           </p>
         )}
@@ -51,7 +51,7 @@ export default function DaySummary({ s }) {
           <span className="text-lo"> · P {f.protein}g · C {f.carbs}g · F {f.fat}g</span>
         </p>
         {f.target != null && (
-          <p className={`text-sm mt-0.5 ${f.over ? 'text-red-400' : 'text-amber-300'}`}>
+          <p className={`text-sm mt-0.5 ${f.over ? 'text-red-400' : 'text-warn'}`}>
             {f.over
               ? `${Math.abs(f.remaining)} kcal over the ${f.target} target`
               : `${f.remaining} kcal left of ${f.target}`}
@@ -70,7 +70,7 @@ export default function DaySummary({ s }) {
           {w.target != null && <span className="text-lo"> of {w.target} ml</span>}
         </p>
         {w.remaining != null && w.remaining > 0 && (
-          <p className="text-sm text-amber-300 mt-0.5">{w.remaining} ml to go</p>
+          <p className="text-sm text-warn mt-0.5">{w.remaining} ml to go</p>
         )}
         {w.remaining === 0 && w.target != null && (
           <p className="text-sm text-gold-light mt-0.5">target met</p>
@@ -91,7 +91,7 @@ export default function DaySummary({ s }) {
       )}
 
       {!s.logged_anything && (
-        <p className="text-sm text-amber-300 mt-2 leading-relaxed">
+        <p className="text-sm text-warn mt-2 leading-relaxed">
           Nothing logged today yet.
         </p>
       )}

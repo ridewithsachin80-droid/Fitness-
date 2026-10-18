@@ -112,8 +112,8 @@ const TRACKERS = [
     name: 'Polar',
     subtitle: 'Sports Watch',
     emoji: '🎯',
-    color: '#f59e0b',
-    glow: 'rgba(245,158,11,0.25)',
+    color: '#0ea5e9',
+    glow: 'rgba(14,165,233,0.25)',
     border: 'rgba(245,158,11,0.3)',
     bg: 'rgba(245,158,11,0.06)',
     metrics: ['Heart Rate', 'Training Load', 'VO₂ Max', 'Sleep'],
@@ -388,7 +388,7 @@ export default function DeviceConnect() {
             </span>
           )}
           {ble.liveMetrics.battery != null && (
-            <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 14 }}>
+            <span style={{ color: 'rgb(var(--fit-mid))', fontWeight: 700, fontSize: 14 }}>
               🔋 {ble.liveMetrics.battery}%
             </span>
           )}
@@ -488,9 +488,9 @@ export default function DeviceConnect() {
           </div>
           <span style={{
             fontSize: 11, fontWeight: 700,
-            color: hcActive ? '#f59e0b' : '#22c55e',
-            background: hcActive ? 'rgba(245,158,11,0.1)' : 'rgba(34,197,94,0.1)',
-            border: `1px solid ${hcActive ? 'rgba(245,158,11,0.25)' : 'rgba(34,197,94,0.25)'}`,
+            color: hcActive ? '#60a5fa' : '#22c55e',
+            background: hcActive ? 'rgba(96,165,250,0.1)' : 'rgba(34,197,94,0.1)',
+            border: `1px solid ${hcActive ? 'rgba(96,165,250,0.25)' : 'rgba(34,197,94,0.25)'}`,
             borderRadius: 20, padding: '3px 10px', flexShrink: 0,
           }}>{hcActive ? 'Syncing' : 'Sync Now'}</span>
         </div>
@@ -669,7 +669,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
               {liveMetrics.heart_rate && <span style={{ color: '#22c55e', fontSize: 13, fontWeight: 700 }}>❤️ {liveMetrics.heart_rate} bpm</span>}
               {liveMetrics.spo2 && <span style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700 }}>🩸 {liveMetrics.spo2}%</span>}
               {liveMetrics.hrv && <span style={{ color: '#a78bfa', fontSize: 13, fontWeight: 700 }}>📊 HRV {liveMetrics.hrv}ms</span>}
-              {liveMetrics.battery != null && <span style={{ color: '#f59e0b', fontSize: 13, fontWeight: 700 }}>🔋 {liveMetrics.battery}%</span>}
+              {liveMetrics.battery != null && <span style={{ color: 'rgb(var(--fit-mid))', fontSize: 13, fontWeight: 700 }}>🔋 {liveMetrics.battery}%</span>}
             </div>
           )}
 

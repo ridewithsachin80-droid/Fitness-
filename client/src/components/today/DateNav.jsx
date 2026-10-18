@@ -21,7 +21,7 @@ export default function DateNav({ date, isToday, onPrev, onNext, onToday, compac
         </button>
         <div className="text-center">
           <p className="text-sm font-semibold text-white" data-testid="date-label">{compact ? new Date(date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : isToday ? 'Today' : formatDate(date)}</p>
-          {!isToday && <p className="text-eyebrow text-amber-400 font-medium mt-0.5">Editing past entry</p>}
+          {!isToday && <p className="text-eyebrow text-warn font-medium mt-0.5">Editing past entry</p>}
         </div>
         <button type="button" onClick={() => { haptic(8); onNext(); }} disabled={isToday} aria-label="Next day"
           style={{ minWidth: 44, minHeight: 44 }}

@@ -15,7 +15,7 @@ import { Icon, Eyebrow, SkeletonText } from '../primitives';
  */
 const TONE = {
   high:      { bar: 'bg-red-400',   text: 'text-red-400',   label: 'High priority' },
-  attention: { bar: 'bg-amber-400', text: 'text-amber-300', label: 'Needs attention' },
+  attention: { bar: 'bg-warn', text: 'text-warn', label: 'Needs attention' },
   watch:     { bar: 'bg-gold',      text: 'text-gold-light', label: 'Watch' },
   ok:        { bar: 'bg-ok',        text: 'text-ok',        label: 'On track' },
 };
