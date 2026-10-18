@@ -3,7 +3,7 @@ import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../../constants';
 import { UNSORTED_MEAL, groupByMeal } from '../../utils/coachView';
 import WorkoutSessionViewer from '../WorkoutSessionViewer';
 import { calcN, rowCompliance } from '../../lib/coach/dayMath.jsx';
-import { microStatus } from '../../lib/day';
+import { microStatus, resolveProtocolItems } from '../../lib/day';
 import { MicroRow, microCountTone } from '../today/DayWidgets';
 
 /**
@@ -217,7 +217,14 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                     {/* Key nutrients collapsible — the member's own rule (Fixes-2i): the same
                         supplements maths, and unknown values are "not known", never zero. */}
                     {(log.food_items || []).some(f => Number(f?.grams) > 0) && (() => {
+                      // The member's own inputs, as on their Today screen: sunlight counts toward vitamin D.
+                      // The profile row names the coach's choice protocol_activities; the member's
+                      // protocol (server/routes/logs.js) calls it activities.
+                      const pf = data?.profile || {};
+                      const { activeActivities } = resolveProtocolItems({ activities: pf.protocol_activities || null,
+                        custom_activities: pf.custom_activities || [], item_overrides: pf.item_overrides || {} });
                       const st = microStatus({ foodItems: log.food_items || [], supplements: log.supplements || {},
+                        activities: log.activities || {}, activeActivities,
                         rdaOverrides: data?.profile?.rda_overrides || {} });
                       const KEYS = ['vit_b12','vit_d','vit_c','calcium','iron','magnesium','zinc','folate','omega3_epa','omega3_dha','fiber'];
                       const met = KEYS.filter(k => st.rows[k]?.status === 'met').length;

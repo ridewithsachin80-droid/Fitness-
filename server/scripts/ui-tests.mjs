@@ -3592,6 +3592,19 @@ async function fixes2bTest() {
        /microStatus\(/.test(dd) && /<MicroRow /.test(dd) && !/calcMicrosFromItems\(/.test(dd));
     ck('the Today tile says "not known for these foods" when nothing is known, and "· N not known" otherwise',
        /not known for these foods/.test(strip) && /not known` : ''/.test(strip));
+    // Every place that counts micronutrients passes the same inputs, so the
+    // counts agree: sunlight (activities) and the coach's targets (rdaOverrides).
+    // The coach's view left out sunlight, and the Food sheet badge the targets.
+    const callers = [['components/coach/DayDetail.jsx', 'microStatus'], ['components/today/DayWidgets.jsx', 'microStatus'], ['hooks/useTodayModel.js', 'countMicrosMet']];
+    const missing = callers.flatMap(([f, fn]) => {
+      const src = fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+      return [...src.matchAll(new RegExp(`${fn}\\(\\{([\\s\\S]*?)\\}\\)`, 'g'))].map(m => m[1])
+        .filter(a => !['activities', 'activeActivities', 'rdaOverrides'].every(k => new RegExp(`\\b${k}\\b`).test(a)))
+        .map(a => `${f}: ${a.replace(/\s+/g, ' ').slice(0, 80)}`);
+    });
+    ck('every micronutrient count passes sunlight, the active activities and the coach’s targets', missing.length === 0, missing);
+    const foodSheet = fs.readFileSync(path.join(CLIENT_SRC, 'components/sheets/FoodSheet.jsx'), 'utf8');
+    ck('the Food sheet hands the coach’s targets to its nutrient badge', /<MacroProgress[\s\S]*?rdaOverrides=\{protocol\?\.rda_overrides/.test(foodSheet));
   } catch (e) { ck('coach nutrients check ran', false, e.message); }
 
   // Fixes-2h: raw/cooked from the food search reaches the logged item.

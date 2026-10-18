@@ -34,6 +34,7 @@ export default function FoodSheet({ open, onClose, m }) {
             activeActivities={activeActivities}
             activities={log.activities || {}}
             overrides={protocol?.item_overrides || {}}
+            rdaOverrides={protocol?.rda_overrides || {}}
             weightKg={weightKg}
           />
         </div>

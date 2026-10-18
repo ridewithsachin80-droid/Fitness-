@@ -42,8 +42,18 @@ For each nutrient, the day's total is then:
   - a note under the tabs: "Some foods you logged don't list every nutrient. Those totals show as “at least” or “not known”, never as zero.";
   - tab counts show "· N?" when some are unknown.
 - **Count badges are neutral when anything is unknown.** Red and amber now mean a known shortfall only.
-- **Coach → member → day → Key Nutrients** uses the same calculation and the same rows as the member's sheet ("0/11 · 11 not known"). This also ends the coach/member mismatch on the multivitamin.
+- **Coach → member → day → Key Nutrients** uses the same calculation, the same inputs (food, supplements, sunlight, the coach's targets) and the same rows as the member's sheet ("0/11 · 11 not known"). This also ends the coach/member mismatch on the multivitamin.
 - **Coach AI "<food> nutrition" answer:** "fibre not known · Iron not known · calcium not known · vitamin C not known" for a food whose record has none of them, instead of "0 mg".
+
+## Follow-up after the first push (9778124): two counts still disagreed
+Reviewing the evidence screenshots, I found that my first push did not fully deliver "the coach sees what the member sees":
+- **Coach Key Nutrients left out sunlight.** A member who ticked sunlight saw "Vitamin D 1000 / 800 IU · 125%"; the coach saw "Not known". The coach view now takes the member's active activities the same way Today does. The profile names the coach's choice `protocol_activities`, and the member's protocol calls it `activities`, so the view maps one to the other.
+- **The Food sheet's nutrient badge left out the coach's adjusted targets.** For a member with adjusted targets, it could show a different count from the Nutrition sheet and the Today link. It now receives them.
+- **Proof (local, same member and day, sunlight ticked):**
+  - sunlight in the coach's plan: the coach's 11 rows are identical to the member's own sheet, with vitamin D at 125% met;
+  - sunlight not in the plan: identical again, with vitamin D "Not known";
+  - **on the 9778124 build** the same check fails: member "125% met", coach "Not known".
+- **Gate check added (ui-tests):** every place that counts micronutrients passes sunlight, the active activities and the coach's targets, and the Food sheet passes the targets. It fails on 9778124 and passes now.
 
 ## Found while verifying: the start-up recovery screen (fixed here)
 The local robot failed 11 checks with a gold "Reload app" button. The cause was not 2i: it was there before.
@@ -88,7 +98,7 @@ The local robot failed 11 checks with a gold "Reload app" button. The cause was 
   - `client/src/main.jsx`
   - `client/src/lib/day/macros.js`
   - `client/src/components/today/DayWidgets.jsx`, `DayStrip.jsx`, `TodaysPlan.jsx`
-  - `client/src/components/sheets/NutritionSheet.jsx`
+  - `client/src/components/sheets/NutritionSheet.jsx`, `FoodSheet.jsx`
   - `client/src/components/coach/DayDetail.jsx`
   - `client/src/components/ErrorBoundary.jsx`
   - `client/src/pages/Today.jsx`

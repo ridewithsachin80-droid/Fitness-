@@ -164,11 +164,11 @@ export function FastingBar({ fasting }) {
 
 // ─── Macro + Micro Progress ───────────────────────────────────────────────────
 
-export function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, weightKg, workoutKcal = 0 }) {
+export function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, rdaOverrides = {}, weightKg, workoutKcal = 0 }) {
   const totals     = calcFoodMacros(foodItems);
   // Quick count badge for MacroProgress — full detail in standalone NutritionSummary.
   // Same rule as the panel and the Today tile: unknown is never counted as zero (Fixes-2i).
-  const mst = microStatus({ foodItems, supplements, activities, activeActivities });
+  const mst = microStatus({ foodItems, supplements, activities, activeActivities, rdaOverrides });
   const hasMicroData = mst.hasData;
   const { met: quickMet, unknown: quickUnknown, total: quickTotal } = quickMicroCount(mst);
 
