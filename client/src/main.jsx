@@ -63,4 +63,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // Tell the index.html watchdog the app is alive, and reset the one-shot
 // chunk-retry guard so the NEXT stale-deploy event can heal itself too.
 window.__fitlifeBooted = true;
+// 18 Oct 2026: on a slow phone the watchdog can fire (10 s) just before the app
+// arrives. The "couldn't load" screen then stayed on top of a working app.
+// Booting late is still booting, so take it down.
+{ const fb = document.getElementById('boot-fallback'); if (fb) fb.style.display = 'none'; }
 sessionStorage.removeItem('fl-chunk-retry');

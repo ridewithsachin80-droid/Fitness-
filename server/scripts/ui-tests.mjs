@@ -1881,6 +1881,54 @@ async function cspTest() {
     });
     ck('the "Reload app" button calls the recovery (no blocked onclick)', clicked === 1, clicked);
 
+    // Fixes-2i (18 Oct 2026). The local robot caught the "couldn't load" screen
+    // left on top of a working app: the app took just over the watchdog's 10 s
+    // to start, and nothing took the screen down afterwards. It was also still
+    // gold, and dark only. Hold the app's main file back for 11.5 s, as a slow
+    // phone would, in each theme.
+    const lum = c => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    for (const theme of ['light', 'dark']) {
+      // The page above already loaded the app: skip its service worker and the
+      // browser cache, or the held-back file is served from them and never held.
+      const slow = await browser.newPage();
+      await slow.setBypassServiceWorker(true);
+      await slow.setCacheEnabled(false);
+      await slow.evaluateOnNewDocument(t => {
+        try { localStorage.setItem('fitlife-settings-v2', JSON.stringify({ state: { theme: t }, version: 0 })); } catch {}
+        Object.defineProperty(navigator, 'serviceWorker', { value: undefined });
+      }, theme);
+      await slow.setRequestInterception(true);
+      slow.on('request', req => {
+        if (/\/assets\/index-[^/]+\.js$/.test(new URL(req.url()).pathname)) setTimeout(() => req.continue().catch(() => {}), 11500);
+        else req.continue().catch(() => {});
+      });
+      // Not awaited: the page's load waits for the held-back app file itself.
+      const nav = slow.goto(origin + '/login', { waitUntil: 'load', timeout: 40000 }).catch(() => {});
+      // Poll by hand: a waitForFunction set up before the page commits is lost with about:blank.
+      let during = { shown: false };
+      for (const until = Date.now() + 15000; Date.now() < until && !during.shown;) {
+        await new Promise(r => setTimeout(r, 250));
+        during = await slow.evaluate(() => {
+          const fb = document.getElementById('boot-fallback'); if (!fb) return { shown: false };
+          const b = fb.querySelector('button'), p = fb.querySelector('p'), cs = e => getComputedStyle(e);
+          return { shown: cs(fb).display !== 'none', booted: !!window.__fitlifeBooted, theme: document.documentElement.dataset.theme,
+            bg: cs(fb).backgroundColor, text: cs(p).color, btn: cs(b).backgroundColor, btnText: cs(b).color };
+        }).catch(() => ({ shown: false }));
+      }
+      ck(`slow start (${theme}): the recovery screen appears after 10 s, while the app is still loading`, during.shown && !during.booted && during.theme === theme, JSON.stringify(during));
+      ck(`slow start (${theme}): the recovery screen has no gold`, during.shown && !/212, 175, 55/.test(JSON.stringify(during)), JSON.stringify(during));
+      ck(`slow start (${theme}): its button is the green accent`, during.shown && during.btn === (theme === 'dark' ? 'rgb(183, 215, 194)' : 'rgb(49, 93, 71)'), during.btn);
+      const rt = during.shown ? [ratio(during.text, during.bg), ratio(during.btnText, during.btn)] : [0, 0];
+      ck(`slow start (${theme}): text and button text are readable (≥ 4.5:1)`, rt[0] >= 4.5 && rt[1] >= 4.5, { text: rt[0].toFixed(2), button: rt[1].toFixed(2) });
+      await nav;
+      await slow.waitForFunction(() => window.__fitlifeBooted === true, { timeout: 20000 }).catch(() => {});
+      await new Promise(r => setTimeout(r, 300));
+      const after = await slow.evaluate(() => ({ booted: !!window.__fitlifeBooted, shown: getComputedStyle(document.getElementById('boot-fallback')).display !== 'none', root: document.getElementById('root').childElementCount }));
+      ck(`slow start (${theme}): once the app arrives, the recovery screen goes away`, after.booted && !after.shown && after.root > 0, after);
+      await slow.close();
+    }
+
     // Phase 3 photos. A blob: image (the member's own plate preview) must load,
     // and the policy must allow the R2 photo host (signed links). Before the
     // fix the coach's Off plan card showed a broken image.
@@ -3508,6 +3556,43 @@ async function fixes2bTest() {
       /^These numbers are for the cooked food/.test(t('m')) && /^The name says cooked, so these numbers are probably for the cooked food/.test(t('c'))
       && /^The name says raw/.test(t('r')) && H.w.document.querySelector('#c [data-from]').dataset.from === 'name', [t('m'), t('c'), t('r')]);
   } catch (e) { ck('weighing hint section ran to the end', false, e.message); }
+
+  // Fixes-2i: unknown nutrient values are "not known", never zero — panel, tile and coach agree.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { NutritionSummary } from './components/today/DayWidgets.jsx';
+      import { countMicrosMet } from './lib/day/index.js';
+      const zero = { calories: 150, protein: 5, total_carbs: 20, fat: 5, fiber: 0, vit_b12: 0, iron: 0, sodium: 0, calcium: 0 };
+      const foods = [
+        { name: 'Dal', grams: 100, per_100g: { calories: 110, vit_b12: 0, vit_c: 2, iron: 2, calcium: 20, sodium: 300, fiber: 4 } },
+        { name: 'Curry (AI)', grams: 100, per_100g: zero },
+      ];
+      window.__count = countMicrosMet({ foodItems: foods });
+      createRoot(document.getElementById('root')).render(<NutritionSummary foodItems={foods} supplements={{}} activities={{}} activeActivities={[]} />);`);
+    const N = run(code); await tick(400);
+    const nd = N.w.document;
+    const row = k => nd.querySelector(`[data-testid="micro-row"][data-key="${k}"]`);
+    const tab = re => [...nd.querySelectorAll('button')].find(b => re.test(b.textContent));
+    ck('panel: the note says some foods do not list every nutrient (never shown as zero)', /never as zero/.test(nd.querySelector('[data-testid="micro-unknown-note"]')?.textContent || ''));
+    ck('panel: B12 (measured 0 in the dal, unknown in the curry) reads "—" and "Not known", not 0 and red',
+       row('vit_b12')?.dataset.status === 'unknown' && /—/.test(row('vit_b12').textContent) && /Not known/.test(row('vit_b12').textContent) && !/text-red/.test(row('vit_b12').innerHTML), row('vit_b12')?.textContent);
+    tab(/Minerals/)?.click(); await tick(120);
+    ck('panel: iron reads "≥ 2" and "At least" (a minimum), not "2 / 18 · 11%" in red', row('iron')?.dataset.status === 'unknown' && /≥ 2/.test(row('iron').textContent) && /At least/.test(row('iron').textContent), row('iron')?.textContent);
+    ck('panel: sodium is not shown as safely under its limit ("At least", no green)', row('sodium')?.dataset.status === 'unknown' && /At least/.test(row('sodium').textContent) && !/bg-gold-deep/.test(row('sodium').innerHTML), row('sodium')?.textContent);
+    const badge = nd.querySelector('[data-testid="micro-summary"]')?.textContent || '';
+    ck('panel header and the Today tile count agree (same met, same not known)', badge === `${N.w.__count.met}/${N.w.__count.total} · ${N.w.__count.unknown} not known`, [badge, N.w.__count]);
+    const badgeEl = nd.querySelector('[data-testid="micro-summary"]');
+    ck('with nutrients not known, the count is neutral, not red ("not known" is not "failing")', !/red-400|text-warn/.test(badgeEl?.className || '') && /text-mid/.test(badgeEl?.className || ''), badgeEl?.className);
+  } catch (e) { ck('unknown-nutrients section ran to the end', false, e.message); }
+  try {
+    const dd = fs.readFileSync(path.join(CLIENT_SRC, 'components/coach/DayDetail.jsx'), 'utf8');
+    const strip = fs.readFileSync(path.join(CLIENT_SRC, 'components/today/DayStrip.jsx'), 'utf8');
+    ck('the coach\u2019s Key Nutrients use the member\u2019s rule (microStatus + MicroRow), not the old zero-filling copy',
+       /microStatus\(/.test(dd) && /<MicroRow /.test(dd) && !/calcMicrosFromItems\(/.test(dd));
+    ck('the Today tile says "not known for these foods" when nothing is known, and "· N not known" otherwise',
+       /not known for these foods/.test(strip) && /not known` : ''/.test(strip));
+  } catch (e) { ck('coach nutrients check ran', false, e.message); }
 
   // Fixes-2h: raw/cooked from the food search reaches the logged item.
   try {

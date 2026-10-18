@@ -131,7 +131,7 @@ export default function TodaysPlan({ m, onOpen }) {
             <Icon name="spark" size={12} />What to eat
           </Tap>
           <Tap onPress={() => onOpen('nutrition')} testId="chip-nutrition">
-            <Icon name="pill" size={12} />{micro.hasData ? `${micro.met}/${micro.total} nutrients` : 'Nutrients'}
+            <Icon name="pill" size={12} />{micro.hasData && micro.known > 0 ? `${micro.met}/${micro.total} nutrients` : 'Nutrients'}
           </Tap>
         </div>
       </Row>

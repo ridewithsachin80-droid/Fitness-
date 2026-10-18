@@ -127,12 +127,60 @@ console.log('\n[2] calcMicros / supplements / activities');
 // ── 3. Targets met ───────────────────────────────────────────────────────────
 console.log('\n[3] countMicrosMet');
 {
+  // Changed 18 Oct 2026 (Fixes-2i, "unknown is not zero"). These three used to
+  // expect 19 / hasData:false / 20. 130 g of this day (chapati, unknownfood) has
+  // no nutrient values, so sodium can no longer be called "under its limit": it
+  // was counted met only because the unknown part was read as 0 mg. Every other
+  // target is unchanged; the extra checks below pin exactly that.
   const r = day.countMicrosMet({ foodItems: foods, supplements: sup, activities: acts, activeActivities: active });
-  ck('19 of 31 targets met', r.met === 19 && r.total === 31 && r.hasData === true, r);
+  ck('18 of 31 targets met, 13 not known (sodium is no longer "under the limit" with 130 g of the day unknown)',
+     r.met === 18 && r.unknown === 13 && r.known === 18 && r.total === 31 && r.hasData === true, r);
+  const st = day.microStatus({ foodItems: foods, supplements: sup, activities: acts, activeActivities: active });
+  ck('…sodium: "unknown", an at-least 1100 mg; with only the two foods whose sodium is known it is "met" again',
+     st.rows.sodium.status === 'unknown' && st.rows.sodium.atLeast && near(st.rows.sodium.value, 1100)
+     && day.microStatus({ foodItems: foods.slice(0, 2), supplements: sup, activities: acts, activeActivities: active }).rows.sodium.status === 'met', st.rows.sodium);
   const none = day.countMicrosMet({ foodItems: [{ name: 'chapati', grams: 80 }] });
-  ck('no per_100g food → hasData false, met 0', eq(none, { met: 0, total: 31, hasData: false }), none);
+  ck('a food with no nutrient values: food was logged (hasData), nothing is met, all 31 are not known — never "0 of everything"',
+     eq(none, { met: 0, unknown: 31, known: 0, total: 31, hasData: true }), none);
+  ck('nothing logged at all → hasData false', day.countMicrosMet({ foodItems: [] }).hasData === false);
   const ov = day.countMicrosMet({ foodItems: foods, supplements: sup, activities: acts, activeActivities: active, rdaOverrides: { calcium: '10' } });
-  ck('coach RDA override (calcium 10) flips one more target → 20', ov.met === 20, ov);
+  ck('coach RDA override (calcium 10) flips one more target → 19 (calcium: an at-least amount that already meets it)', ov.met === 19, ov);
+}
+
+// ── 3b. Unknown is not zero (Fixes-2i) ──────────────────────────────────────
+console.log('\n[3b] unknown nutrient values are not zero');
+{
+  // What the server stores for an AI food that only had macros: every micro 0.
+  const zeroFilled = { calories: 150, protein: 5, total_carbs: 20, fat: 5, fiber: 0, vit_a: 0, vit_b12: 0, vit_c: 0, calcium: 0, iron: 0, sodium: 0, omega3_ala: 0, lycopene: 0 };
+  const kz = day.microKnown(zeroFilled);
+  ck('a record with every micronutrient at 0 knows none of them (the server used to fill gaps with 0)',
+     ['vit_a', 'vit_b12', 'calcium', 'iron', 'sodium', 'fiber', 'omega3_ala', 'lycopene'].every(k => kz[k] === false), kz);
+  const detailed = { calories: 60, vit_c: 30, vit_b12: 0, calcium: 40, iron: 0, sodium: 5, fiber: 0, omega3_ala: 0 };
+  const kd = day.microKnown(detailed);
+  ck('a 0 inside a group the record fills is measured: B12 0 (vitamins known), iron 0 (minerals known), fiber 0 (detailed record)',
+     kd.vit_b12 === true && kd.iron === true && kd.fiber === true, kd);
+  ck('…but a group the record leaves at 0 is still unknown (fats: omega-3 0 with no fat data)', kd.omega3_ala === false, kd);
+  ck('a key the record does not have, or an explicit null, is unknown', kd.vit_a === false && day.microKnown({ vit_c: 30, vit_a: null }).vit_a === false);
+  ck('no record at all → nothing known', Object.values(day.microKnown(null)).every(v => v === false));
+
+  const known = { name: 'Dal', grams: 100, per_100g: { calories: 110, vit_b12: 0, vit_c: 2, iron: 2, calcium: 20, sodium: 300, fiber: 4 } };
+  const blank = { name: 'Curry (AI)', grams: 100, per_100g: zeroFilled };
+  const S1 = day.microStatus({ foodItems: [known] });
+  ck('everything eaten knows it: iron 2 mg of 18 is "below"; B12 measured 0 is "zero"; sodium 300 is "met" (under the cap)',
+     S1.rows.iron.status === 'below' && S1.rows.vit_b12.status === 'zero' && S1.rows.sodium.status === 'met' && S1.rows.iron.coverage === 'full', [S1.rows.iron, S1.rows.vit_b12, S1.rows.sodium]);
+  const S2 = day.microStatus({ foodItems: [known, blank] });
+  ck('add a food whose iron is unknown: iron becomes "unknown", an at-least 2 mg — never "below"',
+     S2.rows.iron.status === 'unknown' && S2.rows.iron.atLeast && S2.rows.iron.coverage === 'partial', S2.rows.iron);
+  ck('…B12 is no longer a measured zero either; it is "not known" (nothing to show)', S2.rows.vit_b12.status === 'unknown' && !S2.rows.vit_b12.atLeast, S2.rows.vit_b12);
+  ck('…and sodium can no longer be "under the limit"', S2.rows.sodium.status === 'unknown', S2.rows.sodium);
+  const salty = { name: 'Pickle', grams: 100, per_100g: { calories: 30, sodium: 2500, calcium: 10 } };
+  ck('sodium already over its cap from the known foods is "over", whatever is unknown', day.microStatus({ foodItems: [salty, blank] }).rows.sodium.status === 'over');
+  const lots = { name: 'Spinach', grams: 300, per_100g: { calories: 23, iron: 2.7, calcium: 99, vit_c: 28 } };
+  ck('a partly-unknown total that already meets the target is "met" (a minimum is enough)', day.microStatus({ foodItems: [lots, blank], rdaOverrides: { iron: '8' } }).rows.iron.status === 'met');
+  ck('a supplement alone can meet a target the foods do not know (B12 1000 mcg)', day.microStatus({ foodItems: [blank], supplements: { b12: true } }).rows.vit_b12.status === 'met');
+  const c = day.countMicrosMet({ foodItems: [known, blank] }), st2 = day.microStatus({ foodItems: [known, blank] });
+  ck('the Today tile count and the panel come from one rule (met, unknown, known agree)', c.met === st2.met && c.unknown === st2.unknown && c.known === c.total - c.unknown, { c, st: [st2.met, st2.unknown] });
+  ck('grams of 0 do not make anything unknown', day.microStatus({ foodItems: [known, { ...blank, grams: 0 }] }).rows.iron.status === 'below');
 }
 
 // ── 4. Energy ───────────────────────────────────────────────────────────────

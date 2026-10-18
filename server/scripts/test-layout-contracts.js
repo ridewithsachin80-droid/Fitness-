@@ -919,6 +919,20 @@ console.log('\n[brand] green everywhere, both themes');
      /theme: 'system'/.test(store) && /prefers-color-scheme/.test(store) && /prefers-color-scheme/.test(init));
   const html = fs.readFileSync(path.join(SRC, '../index.html'), 'utf8');
   ck('the start-up theme script runs after the metas it sets', html.indexOf('theme-init.js') > html.indexOf('apple-mobile-web-app-status-bar-style'));
+  // 18 Oct 2026 (Fixes-2i): the "couldn't load" screen in index.html was still
+  // gold. The scans above only read client/src. Read the page shell and the
+  // public scripts and styles too.
+  const PUB = path.join(SRC, '../public');
+  const shell = [path.join(SRC, '../index.html'), ...walk(PUB).filter(f => /\.(js|css|html)$/.test(f))];
+  const shellGold = shell.flatMap(f => {
+    const code = fs.readFileSync(f, 'utf8');
+    const hits = [...code.matchAll(/#([0-9a-f]{6})\b/gi)].map(m => m[1].toLowerCase()).filter(h => goldish(h) && !AMBER_OK.has(h));
+    return (gold.test(code) || hits.length) ? [`${path.relative(path.join(SRC, '..'), f)} ${hits.map(h => '#' + h).join(' ')}`] : [];
+  });
+  ck('no gold in index.html or client/public either (the start-up and recovery screens)', shellGold.length === 0, shellGold);
+  ck('the recovery screen has a dark-theme version', /html\[data-theme="dark"\] #boot-fallback button \{ background: #b7d7c2/.test(html));
+  const eb = fs.readFileSync(path.join(SRC, 'components/ErrorBoundary.jsx'), 'utf8');
+  ck('the crash screen takes its colours from the theme (no fixed near-white text)', !/color: '#/.test(eb) && /color: 'var\(--text-hi\)'/.test(eb));
   const vite = fs.readFileSync(path.join(SRC, '../vite.config.js'), 'utf8');
   ck('the manifest uses the brand green and the dark ground', /theme_color: '#315D47'/.test(vite) && /background_color: '#141817'/.test(vite));
 

@@ -697,7 +697,14 @@ await check('R15', 'Another member sees none of it', ['RPR-005', 'SEC-001', 'COH
 await check('R16', 'Sign out on a shared phone, next member sees only their own day', ['RPR-007', 'LOG-013', 'SEC-006'], async () => {
   await gotoPath(A, '/profile'); await wait(1500);
   await tap(A, 'account-signout');
-  await A.waitForSelector('input[type=tel]', { timeout: 20e3 });
+  // 18 Oct 2026 (Fixes-2i): sign-out shows the login screen, then loads /login
+  // afresh (authStore.js). A wait running when that load lands is cut short
+  // ("Waiting for selector failed" after ~9 s, 3 of 14 local runs). Keep
+  // waiting through it, within the same 20 s.
+  for (const until = Date.now() + 20e3; ;) {
+    try { await A.waitForSelector('input[type=tel]', { timeout: Math.max(1000, until - Date.now()) }); break; }
+    catch (e) { if (Date.now() >= until) throw e; await wait(300); }
+  }
   must(await A.$eval('input[type=password]', el => el.value === ''), 'the PIN box is not empty after sign-out');
   await memberLogin(A, ACC.b); // the same browser, now Member Two
   const txt = await bodyText(A);

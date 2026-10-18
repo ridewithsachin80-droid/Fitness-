@@ -92,7 +92,7 @@ export default function Today() {
             <div className="member-links">
               <button type="button" className="member-link" onClick={() => openSheet('protocol')} data-testid="plan-recover"><Icon name="check" size={18} /><span>Daily checklist <small>· {m.protocolDone} of {m.protocolTotal} done</small></span><Icon name="chevron-right" size={15} /></button>
               <button type="button" className="member-link" onClick={() => navigate('/plan')}><Icon name="calendar" size={18} /><span>View your complete plan <small>· meals, training & recovery</small></span><Icon name="chevron-right" size={15} /></button>
-              <button type="button" className="member-link" onClick={() => openSheet('nutrition')} data-testid="chip-nutrition"><Icon name="pill" size={18} /><span>Nutrition & micronutrients{m.micro?.hasData ? <small> · {m.micro.met}/{m.micro.total} met</small> : null}</span><Icon name="chevron-right" size={15} /></button>
+              <button type="button" className="member-link" onClick={() => openSheet('nutrition')} data-testid="chip-nutrition"><Icon name="pill" size={18} /><span>Nutrition & micronutrients{m.micro?.hasData && m.micro.known > 0 ? <small> · {m.micro.met}/{m.micro.total} met{m.micro.unknown ? ` · ${m.micro.unknown} not known` : ''}</small> : null}</span><Icon name="chevron-right" size={15} /></button>
               <button type="button" className="member-link" onClick={() => openSheet('mealidea')} data-testid="chip-mealidea"><Icon name="food" size={18} /><span>What could I eat next?</span><Icon name="chevron-right" size={15} /></button>
             </div>
             </Collapsible>

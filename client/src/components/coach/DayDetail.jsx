@@ -1,8 +1,10 @@
 import { StatPill } from '../UI';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS } from '../../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../../constants';
 import { UNSORTED_MEAL, groupByMeal } from '../../utils/coachView';
 import WorkoutSessionViewer from '../WorkoutSessionViewer';
-import { calcN, calcMicrosFromItems, rowCompliance } from '../../lib/coach/dayMath.jsx';
+import { calcN, rowCompliance } from '../../lib/coach/dayMath.jsx';
+import { microStatus } from '../../lib/day';
+import { MicroRow, microCountTone } from '../today/DayWidgets';
 
 /**
  * DayDetail — every tick, macro and note for one day, as the coach sees it
@@ -212,50 +214,23 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
 
                     <WorkoutSessionViewer memberId={parseInt(memberId)} date={activeDate} refreshTick={workoutTick} />
 
-                    {/* Key nutrients collapsible */}
-                    {(log.food_items || []).some(f => f.per_100g) && (() => {
-                      const rdaOv = data?.profile?.rda_overrides || {};
-                      const micros = calcMicrosFromItems(log.food_items, log.supplements);
+                    {/* Key nutrients collapsible — the member's own rule (Fixes-2i): the same
+                        supplements maths, and unknown values are "not known", never zero. */}
+                    {(log.food_items || []).some(f => Number(f?.grams) > 0) && (() => {
+                      const st = microStatus({ foodItems: log.food_items || [], supplements: log.supplements || {},
+                        rdaOverrides: data?.profile?.rda_overrides || {} });
                       const KEYS = ['vit_b12','vit_d','vit_c','calcium','iron','magnesium','zinc','folate','omega3_epa','omega3_dha','fiber'];
-                      const met  = KEYS.filter(k => {
-                        const meta = RDA_TARGETS[k];
-                        if (!meta) return false;
-                        const rda = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
-                        return (micros[k]||0) / rda >= 0.8;
-                      }).length;
+                      const met = KEYS.filter(k => st.rows[k]?.status === 'met').length;
+                      const unk = KEYS.filter(k => st.rows[k]?.status === 'unknown').length;
                       return (
-                        <details className="border border-hair rounded-xl overflow-hidden">
+                        <details className="border border-hair rounded-xl overflow-hidden" data-testid="coach-key-nutrients">
                           <summary className="px-3 py-2.5 text-xs font-semibold text-faint cursor-pointer
                             hover:text-gold list-none flex justify-between items-center bg-surface">
                             <span>🔬 Key Nutrients</span>
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
-                              met >= KEYS.length*0.8 ? 'bg-gold/[0.12] text-gold' :
-                              met >= KEYS.length*0.5 ? 'bg-warn/10 text-warn' : 'bg-red-400/10 text-red-400'
-                            }`}>{met}/{KEYS.length} ▼</span>
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${microCountTone(met, KEYS.length, unk)}`}>{met}/{KEYS.length}{unk ? ` · ${unk} not known` : ''} ▼</span>
                           </summary>
                           <div className="px-3 py-3 space-y-2 bg-surface">
-                            {KEYS.map(k => {
-                              const meta = RDA_TARGETS[k];
-                              if (!meta) return null;
-                              const rda  = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
-                              const raw  = micros[k] || 0;
-                              const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
-                              const val  = +raw.toFixed(dec);
-                              const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-gold' : pct>=50 ? 'bg-warn' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-gold' : pct>=50 ? 'text-warn' : 'text-red-400';
-                              return (
-                                <div key={k}>
-                                  <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-faint">{meta.icon} {meta.label}</span>
-                                    <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit}</span>
-                                  </div>
-                                  <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full transition-all ${cls}`} style={{width:`${pct}%`}} />
-                                  </div>
-                                </div>
-                              );
-                            })}
+                            {KEYS.map(k => <MicroRow key={k} r={st.rows[k]} custom={!!data?.profile?.rda_overrides?.[k]} />)}
                           </div>
                         </details>
                       );

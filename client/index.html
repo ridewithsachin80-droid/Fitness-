@@ -28,12 +28,16 @@
     <style>
       html, body { background: #f8f9f6; margin: 0; }
       html[data-theme="dark"], html[data-theme="dark"] body { background: #141817; }
-      #boot-fallback { display: none; position: fixed; inset: 0; background: #121316;
-        color: #EDEDF0; font-family: system-ui, sans-serif; text-align: center;
+      /* Recovery screen, in the green brand for both themes (18 Oct 2026; it was still gold). */
+      #boot-fallback { display: none; position: fixed; inset: 0; background: #f8f9f6;
+        color: #203026; font-family: system-ui, sans-serif; text-align: center;
         padding: 40vh 24px 0; z-index: 9999; }
-      #boot-fallback p { color: #9EA3B0; font-size: 14px; margin: 0 0 20px; }
-      #boot-fallback button { background: #D4AF37; color: #121316; border: 0;
+      #boot-fallback p { color: #526657; font-size: 14px; margin: 0 0 20px; }
+      #boot-fallback button { background: #315d47; color: #fffef8; border: 0;
         border-radius: 999px; padding: 12px 28px; font-size: 15px; font-weight: 600; }
+      html[data-theme="dark"] #boot-fallback { background: #141817; color: #f2f4ec; }
+      html[data-theme="dark"] #boot-fallback p { color: #adbdb1; }
+      html[data-theme="dark"] #boot-fallback button { background: #b7d7c2; color: #141817; }
     </style>
   </head>
   <body>

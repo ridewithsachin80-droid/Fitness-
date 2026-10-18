@@ -3306,10 +3306,16 @@ async function answerFoodQuestion(qText) {
   const f = rows[0];
   const n = f.per_100g || {};
   const r = (v) => Math.round((+v || 0) * 10) / 10;
+  // Unknown is not zero (Fixes-2i): missing values were stored as 0, so a 0 is
+  // only reported when the record fills that group (as the member app does).
+  const has = (keys) => keys.some(k => +n[k] > 0);
+  const minerals = has(['calcium', 'iron', 'magnesium', 'phosphorus', 'potassium', 'sodium', 'zinc']);
+  const vitamins = has(['vit_a', 'vit_b1', 'vit_b2', 'vit_b12', 'vit_c', 'vit_d', 'vit_e', 'folate']);
+  const v = (k, unit, known) => (known ? `${r(n[k])}${unit}` : 'not known');
   const lines = [
     `${f.name} — per 100g: ${r(n.calories)} kcal, ${r(n.protein)}g protein, ` +
-    `${r(n.total_carbs)}g carbs, ${r(n.fat)}g fat, ${r(n.fiber)}g fibre.`,
-    `Iron ${r(n.iron)}mg · calcium ${r(n.calcium)}mg · vitamin C ${r(n.vit_c)}mg.`,
+    `${r(n.total_carbs)}g carbs, ${r(n.fat)}g fat, fibre ${v('fiber', 'g', +n.fiber > 0 || minerals || vitamins)}.`,
+    `Iron ${v('iron', 'mg', minerals)} · calcium ${v('calcium', 'mg', minerals)} · vitamin C ${v('vit_c', 'mg', vitamins)}.`,
     f.verified ? 'Verified.' : `From ${f.source === 'ai' ? 'an AI estimate' : f.source}, not yet verified.`,
   ];
 

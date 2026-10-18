@@ -13,12 +13,37 @@ import { accent, themeColor } from '../../utils/themeColor';
  * No behaviour change. The maths they call lives in lib/day.
  */
 import { useEffect, useState } from 'react';
-import { RDA_TARGETS } from '../../constants';
 import { Card, SectionTitle } from '../UI';
 import {
-  calcFoodMacros, calcMicros, addSupplementMicros, addActivityMicros,
+  calcFoodMacros, microStatus,
   MICRO_VITAMINS, MICRO_MINERALS, MICRO_SPECIALS, QUICK_MICRO_KEYS, timeToMin,
 } from '../../lib/day';
+
+/** The quick "key nutrients" count, read from the shared status (Fixes-2i). EPA and DHA count as one. */
+export function quickMicroCount(st) {
+  const keys = QUICK_MICRO_KEYS.filter(k => k !== 'omega3_dha');
+  let met = 0, unknown = 0;
+  for (const k of keys) {
+    const r = st.rows[k]; if (!r) continue;
+    if (k === 'omega3_epa') {
+      const d = st.rows.omega3_dha;
+      const v = r.value + (d?.value || 0);
+      if ((v / r.rda) * 100 >= 80) met++;
+      else if (r.coverage !== 'full' || d?.coverage !== 'full') unknown++;
+    } else if (r.status === 'met') met++;
+    else if (r.status === 'unknown') unknown++;
+  }
+  return { met, unknown, total: keys.length };
+}
+
+/** Colour for a "met / total" count (Fixes-2i): red or amber only when the shortfall is KNOWN.
+ *  With unknowns and under 80% met it is neutral — "not known" is not "failing". */
+export function microCountTone(met, total, unknown = 0, { bg = true } = {}) {
+  if (met >= total * 0.8) return bg ? 'bg-gold/[0.13] text-gold-light' : 'text-gold-deep';
+  if (unknown > 0) return bg ? 'bg-white/[0.06] text-mid' : 'text-mid';
+  if (met >= total * 0.5) return bg ? 'bg-warn/[0.14] text-warn' : 'text-warn';
+  return bg ? 'bg-red-400/[0.08] text-red-400' : 'text-red-400';
+}
 
 export function ComplianceRing({ pct }) {
   const r = 26, circ = 2 * Math.PI * r;
@@ -141,21 +166,11 @@ export function FastingBar({ fasting }) {
 
 export function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, weightKg, workoutKcal = 0 }) {
   const totals     = calcFoodMacros(foodItems);
-  const rawMicros  = calcMicros(foodItems);
-  const withSupps  = addSupplementMicros(rawMicros, supplements);
-  const micros     = addActivityMicros(withSupps, activities, activeActivities);
-  const hasMicroData = foodItems.some(f => f.per_100g);
-
-  // Quick count badge for MacroProgress — full detail in standalone NutritionSummary
-  const quickMet = hasMicroData ? QUICK_MICRO_KEYS.filter(key => {
-    const meta = RDA_TARGETS[key];
-    if (!meta) return false;
-    const val = key === 'omega3_epa' ? (micros.omega3_epa + micros.omega3_dha)
-               : key === 'omega3_dha' ? 0   // counted in epa
-               : micros[key] || 0;
-    return (val / (meta.rda)) * 100 >= 80;
-  }).length : 0;
-  const quickTotal = QUICK_MICRO_KEYS.filter(k => k !== 'omega3_dha').length;
+  // Quick count badge for MacroProgress — full detail in standalone NutritionSummary.
+  // Same rule as the panel and the Today tile: unknown is never counted as zero (Fixes-2i).
+  const mst = microStatus({ foodItems, supplements, activities, activeActivities });
+  const hasMicroData = mst.hasData;
+  const { met: quickMet, unknown: quickUnknown, total: quickTotal } = quickMicroCount(mst);
 
   // Exercise burn now comes from the Workout log (passed in), not from
   // protocol checkboxes — those are compliance only.
@@ -233,10 +248,7 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
       {hasMicroData && (
         <div className="mt-3 pt-3 border-t border-hair flex items-center justify-between text-xs">
           <span className="text-faint font-medium">🔬 Key Nutrients</span>
-          <span className={`px-2 py-0.5 rounded-full font-bold ${
-            quickMet >= quickTotal * 0.8 ? 'bg-gold/[0.13] text-gold-light' :
-            quickMet >= quickTotal * 0.5 ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400'
-          }`}>{`${quickMet}/${quickTotal}`} met · see below ↓</span>
+          <span className={`px-2 py-0.5 rounded-full font-bold ${microCountTone(quickMet, quickTotal, quickUnknown)}`} data-testid="quick-micros">{`${quickMet}/${quickTotal}`} met{quickUnknown ? ` · ${quickUnknown} not known` : ''} · see below ↓</span>
         </div>
       )}
     </Card>
@@ -247,68 +259,59 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
 
 // Micro-nutrient key groups — shared by the hero tile and the summary panel so
 // the "20/31" badge and the panel can never disagree.
+/** One nutrient row. Status comes from microStatus (Fixes-2i). Exported for the coach's day view. */
+export function MicroRow({ r, custom = false }) {
+  if (!r) return null;
+  const dec = ['vit_b12','folate','biotin','vit_b1','vit_b2','vit_b5','vit_b6','copper','manganese','selenium'].includes(r.key) ? 1 : 0;
+  const val = +r.value.toFixed(dec);
+  const pct = Math.min(100, r.pct);
+  const unknown = r.status === 'unknown';
+  const good = r.status === 'met';
+  const warn = !unknown && !r.upper && r.status === 'below' && r.pct >= 50;
+  const barCls  = unknown ? 'bg-white/[0.18]' : good ? 'bg-gold-deep' : warn ? 'bg-warn' : r.upper ? 'bg-red-500' : 'bg-red-400';
+  const textCls = unknown ? 'text-mid' : good ? 'text-gold-deep' : warn ? 'text-warn' : 'text-red-400';
+  const badgeCls= unknown ? 'bg-white/[0.06] text-mid' : good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400';
+  const shown = unknown ? (r.value > 0 ? `≥ ${val}` : '—') : val;
+  const badge = unknown ? (r.value > 0 ? 'At least' : 'Not known')
+    : r.status === 'over' ? `⚠️ ${Math.round(r.pct)}%`
+    : r.upper ? `${Math.round(r.pct)}%`
+    : `${Math.round(r.pct)}%`;
+  return (
+    <div data-testid="micro-row" data-key={r.key} data-status={r.status} data-coverage={r.coverage}>
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className="text-mid font-medium">{r.icon} {r.label}
+          {custom && <span className="ml-1 text-gold text-xs">★</span>}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`font-bold ${textCls}`}>{shown}</span>
+          <span className="text-lo">/ {r.rda} {r.unit}{r.upper ? ' max' : ''}</span>
+          <span className={`font-bold px-1.5 py-0.5 rounded-full text-xs ${badgeCls}`}>{badge}</span>
+        </div>
+      </div>
+      <div className="h-1.5 bg-charcoal rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${barCls}`} style={{ width: `${unknown && r.value === 0 ? 0 : pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function NutritionSummary({ foodItems, supplements, activities, activeActivities, rdaOverrides = {} }) {
   const [tab, setTab] = useState('vitamins');
 
-  const rawMicros  = calcMicros(foodItems);
-  const withSupps  = addSupplementMicros(rawMicros, supplements);
-  const micros     = addActivityMicros(withSupps, activities, activeActivities);
-  const hasMicros  = foodItems.some(f => f.per_100g);
-  if (!hasMicros) return null;
+  // One rule for this panel, the Today tile and the coach's day view (Fixes-2i):
+  // a value nobody knows is "not known", and a partly-known total is "at least".
+  const st = microStatus({ foodItems, supplements, activities, activeActivities, rdaOverrides });
+  if (!st.hasData) return null;
 
   const VITAMINS = MICRO_VITAMINS, MINERALS = MICRO_MINERALS, SPECIALS = MICRO_SPECIALS;
 
-  const getRda = (key) => {
-    const meta = RDA_TARGETS[key];
-    if (!meta) return null;
-    const override = rdaOverrides[key];
-    return { ...meta, rda: override ? parseFloat(override) : meta.rda };
-  };
+  const renderRows = (keys) => keys.map(key => <MicroRow key={key} r={st.rows[key]} custom={!!rdaOverrides[key]} />);
 
-  const renderRows = (keys) => keys.map(key => {
-    const meta = getRda(key);
-    if (!meta) return null;
-    const raw  = micros[key] || 0;
-    const dec  = ['vit_b12','folate','biotin','vit_b1','vit_b2','vit_b5','vit_b6','copper','manganese','selenium'].includes(key) ? 1 : 0;
-    const val  = +raw.toFixed(dec);
-    const pct  = Math.min(100, (raw / meta.rda) * 100);
-    const isUpper = meta.upper;
-    const good = isUpper ? (pct <= 100) : (pct >= 80);
-    const warn = isUpper ? (pct > 80 && pct <= 100) : (pct >= 50 && pct < 80);
-    const barCls  = good ? 'bg-gold-deep' : warn ? 'bg-warn' : isUpper ? 'bg-red-500' : 'bg-red-400';
-    const textCls = good ? 'text-gold-deep' : warn ? 'text-warn' : 'text-red-400';
-    const badgeCls= good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400';
-    return (
-      <div key={key}>
-        <div className="flex items-center justify-between text-xs mb-1">
-          <span className="text-mid font-medium">{meta.icon} {meta.label}
-            {rdaOverrides[key] && <span className="ml-1 text-gold text-xs">★</span>}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className={`font-bold ${textCls}`}>{val}</span>
-            <span className="text-lo">/ {meta.rda} {meta.unit}</span>
-            <span className={`font-bold px-1.5 py-0.5 rounded-full text-xs ${badgeCls}`}>
-              {isUpper && pct > 100 ? '⚠️ ' : ''}{Math.round(pct)}%
-            </span>
-          </div>
-        </div>
-        <div className="h-1.5 bg-charcoal rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-500 ${barCls}`} style={{width:`${pct}%`}} />
-        </div>
-      </div>
-    );
-  });
-
-  const metCount = (keys) => keys.filter(key => {
-    const meta = getRda(key);
-    if (!meta) return false;
-    const pct = ((micros[key]||0) / meta.rda) * 100;
-    return meta.upper ? pct <= 100 : pct >= 80;
-  }).length;
-
-  const vMet = metCount(VITAMINS), mMet = metCount(MINERALS), sMet = metCount(SPECIALS);
-  const totalMet = vMet + mMet + sMet;
-  const totalAll = VITAMINS.length + MINERALS.length + SPECIALS.length;
+  const count = (keys, s) => keys.filter(k => st.rows[k]?.status === s).length;
+  const vMet = count(VITAMINS, 'met'), mMet = count(MINERALS, 'met'), sMet = count(SPECIALS, 'met');
+  const vUnk = count(VITAMINS, 'unknown'), mUnk = count(MINERALS, 'unknown'), sUnk = count(SPECIALS, 'unknown');
+  const totalMet = st.met;
+  const totalAll = st.total;
   const hasOverrides = Object.keys(rdaOverrides).length > 0;
 
   return (
@@ -317,30 +320,33 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
         <SectionTitle icon="🔬">Nutrition Summary</SectionTitle>
         <div className="flex items-center gap-2">
           {hasOverrides && <span className="text-xs text-gold font-semibold">★ custom targets</span>}
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-            totalMet >= totalAll*0.8 ? 'bg-gold/[0.13] text-gold-light' :
-            totalMet >= totalAll*0.5 ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400'
-          }`}>{`${totalMet}/${totalAll}`}</span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${microCountTone(totalMet, totalAll, st.unknown)}`} data-testid="micro-summary">{`${totalMet}/${totalAll}`}{st.unknown ? ` · ${st.unknown} not known` : ''}</span>
         </div>
       </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-charcoal p-1 rounded-xl mb-4">
         {[
-          ['vitamins', `💊 Vitamins`,  vMet, VITAMINS.length],
-          ['minerals', `⛏ Minerals`,  mMet, MINERALS.length],
-          ['specials', `🌿 Specials`,  sMet, SPECIALS.length],
-        ].map(([id, label, met, total]) => (
+          ['vitamins', `💊 Vitamins`,  vMet, VITAMINS.length, vUnk],
+          ['minerals', `⛏ Minerals`,  mMet, MINERALS.length, mUnk],
+          ['specials', `🌿 Specials`,  sMet, SPECIALS.length, sUnk],
+        ].map(([id, label, met, total, unk]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
               tab===id ? 'bg-surface text-gold-light shadow-sm' : 'text-faint hover:text-white'}`}>
             <div className="text-xs font-bold">{label}</div>
-            <div className={`text-xs font-semibold ${met===total?'text-gold-deep':met>=total*0.5?'text-warn':'text-red-400'}`}>
-              {met + "/" + total}
+            <div className={`text-xs font-semibold ${microCountTone(met, total, unk, { bg: false })}`}>
+              {met + "/" + total}{unk ? <span className="text-lo font-medium">{` · ${unk}?`}</span> : null}
             </div>
           </button>
         ))}
       </div>
+
+      {st.unknown > 0 && (
+        <p className="text-caption text-mid mb-3 leading-snug" data-testid="micro-unknown-note">
+          Some foods you logged don’t list every nutrient. Those totals show as “at least” or “not known”, never as zero.
+        </p>
+      )}
 
       <div className="space-y-3">
         {tab==='vitamins' && renderRows(VITAMINS)}
