@@ -3396,6 +3396,32 @@ async function fixes2bTest() {
       }
     } catch (e) { ck(`open=${sheet} section ran to the end`, false, e.message); }
   }
+  // 18 Oct 2026: desktop dialogs. From 768 px the sheet is a centred dialog
+  // sized to its content; phones keep the bottom sheet; switching re-styles the
+  // SAME panel, so typed text survives a resize.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { useState } from 'react';
+      import { Sheet } from './components/primitives';
+      const listeners = new Set(); window.__wide = true;
+      window.matchMedia = (q) => ({ get matches() { return window.__wide; }, media: q, addEventListener: (_, f) => listeners.add(f), removeEventListener: (_, f) => listeners.delete(f) });
+      window.__resize = (wide) => { window.__wide = wide; listeners.forEach(f => f()); };
+      function App() { const [v, setV] = useState(''); return <Sheet open size="sm" onClose={() => {}} title="Water" footer={<button>Done</button>}>
+        <input data-testid="typed" value={v} onChange={e => setV(e.target.value)} /></Sheet>; }
+      createRoot(document.getElementById('root')).render(<App />);`);
+    const D = run(code); await tick(600);
+    const d = D.w.document, layout = () => d.querySelector('[data-sheet-layout]')?.dataset.sheetLayout, panel = () => d.querySelector('[role="dialog"]');
+    ck('desktop: the sheet opens as a centred dialog, 440 px wide for a small panel, no drag handle', layout() === 'dialog' && panel().style.maxWidth === '440px' && !d.querySelector('.cursor-grab'), [layout(), panel()?.style.maxWidth]);
+    const input = d.querySelector('[data-testid="typed"]');
+    Object.getOwnPropertyDescriptor(D.w.HTMLInputElement.prototype, 'value').set.call(input, '71.3');
+    input.dispatchEvent(new D.w.Event('input', { bubbles: true })); await tick(100);
+    D.w.__resize(false); await tick(400);
+    ck('narrowed to a phone: the same panel becomes a bottom sheet with its drag handle', layout() === 'sheet' && !!d.querySelector('.cursor-grab'), layout());
+    ck('…and what was typed is still there, in the very same input (nothing remounted)', d.querySelector('[data-testid="typed"]') === input && input.value === '71.3', input.value);
+    D.w.__resize(true); await tick(400);
+    ck('back to desktop: dialog again, text kept', layout() === 'dialog' && d.querySelector('[data-testid="typed"]').value === '71.3');
+  } catch (e) { ck('desktop dialog section ran to the end', false, e.message); }
   // 17 Oct 2026: Meal ideas has one explicit screen per situation. Before, no
   // targets showed a heading and "Done" only, and a failed request looked like
   // "no food history". Each case mounts the real sheet in the browser.
@@ -3452,16 +3478,22 @@ async function fixes2bTest() {
   try {
     const sheet = fs.readFileSync(path.join(CLIENT_SRC, 'components/sheets/FoodSheet.jsx'), 'utf8');
     ck('the food sheet no longer says "Enter weight before cooking" to everyone', !/Enter weight before cooking/.test(sheet));
+    const brief = fs.readFileSync(path.join(CLIENT_SRC, 'components/coach/WeeklyBrief.jsx'), 'utf8');
+    ck('the coach week brief wraps long unbroken text (it pushed the member page wider than a phone)', /data-testid="brief-text"/.test(brief) && /brief-text|break-words/.test(brief) && /overflowWrap: 'anywhere'/.test(brief));
     const code = await bundle(`
       import { createRoot } from 'react-dom/client';
       import WeighingHint from './components/food/WeighingHint.jsx';
       createRoot(document.getElementById('root')).render(<div>
         <div id="c"><WeighingHint name="Rice (Cooked)" /></div><div id="r"><WeighingHint name="Oats (Raw)" /></div>
-        <div id="u"><WeighingHint name="Paneer" /></div><div id="n"><WeighingHint name="" /></div></div>);`);
+        <div id="u"><WeighingHint name="Paneer" /></div><div id="n"><WeighingHint name="" /></div>
+        <div id="m"><WeighingHint food={{ name: 'Poha', preparation: 'cooked' }} /></div>
+        <div id="x"><WeighingHint food={{ name: 'Oats (Raw)', preparation: 'cooked' }} /></div></div>);`);
     const H = run(code); await tick(300);
     const t = id => H.w.document.querySelector(`#${id}`).textContent;
     ck('weighing hint: cooked food → weigh it cooked; raw → weigh before cooking; unknown → check raw or cooked; no food → nothing',
       /weigh it cooked/.test(t('c')) && /weigh it before cooking/.test(t('r')) && /Check whether these numbers are for raw or cooked/.test(t('u')) && t('n') === '', [t('c'), t('r'), t('u'), t('n')]);
+    ck('weighing hint: the record’s marker is used first (Poha marked cooked → weigh it cooked)', /weigh it cooked/.test(t('m')) && H.w.document.querySelector('#m [data-from]').dataset.from === 'record');
+    ck('weighing hint: record and name disagree → it says so and asks the member to check', /record says cooked but its name says raw/.test(t('x')) && /check which the numbers are for/.test(t('x')), t('x'));
   } catch (e) { ck('weighing hint section ran to the end', false, e.message); }
   // MAC-003 (17 Oct 2026): a macro over the coach's target turns amber on
   // Today, as it did on production's Eat row; the others stay as they are.

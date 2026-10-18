@@ -38,7 +38,8 @@ export default function WeeklyBrief({ memberId }) {
         <button type="button" onClick={() => { haptic(8); load(true); }} disabled={busy} style={{ minHeight: 36 }}
           className="text-caption font-semibold text-gold disabled:opacity-50" data-testid="brief-refresh">{busy ? 'Writing…' : 'Refresh'}</button>
       </div>
-      <p className="text-sm text-white leading-relaxed whitespace-pre-line" data-testid="brief-text">{b.text}</p>
+      {/* break-words (18 Oct 2026): one long unbroken line (a link, odd AI output) pushed the coach's page wider than a phone. */}
+      <p className="text-sm text-white leading-relaxed whitespace-pre-line break-words" style={{ overflowWrap: 'anywhere' }} data-testid="brief-text">{b.text}</p>
       <p className="text-caption text-lo mt-1">{b.source === 'ai' ? 'Written by the AI from the numbers below. Only you see this.' : 'The AI was unavailable: these are the numbers in plain words. Only you see this.'}</p>
       <div className="grid grid-cols-4 gap-1.5 mt-2" data-testid="brief-facts">
         {stat('days logged', `${f.days_logged ?? 0}/7`)}

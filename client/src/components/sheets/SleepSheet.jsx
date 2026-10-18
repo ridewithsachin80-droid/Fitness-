@@ -12,7 +12,7 @@ export default function SleepSheet({ open, onClose, m }) {
   const mins = sleepMinutes(log.sleep?.bedtime, log.sleep?.waketime);
   const tone = sleepTone(mins);
   return (
-    <Sheet open={open} onClose={onClose} eyebrow={`${terms.sleep} target · ${target.hoursLabel}`} title={`${target.bedLabel} → ${target.wakeLabel}`}
+    <Sheet size="sm" open={open} onClose={onClose} eyebrow={`${terms.sleep} target · ${target.hoursLabel}`} title={`${target.bedLabel} → ${target.wakeLabel}`}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <div className="flex gap-2 pt-1">
         <div className="flex-1 min-w-0">

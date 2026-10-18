@@ -338,6 +338,18 @@ console.log('\n[7d2] weighingBasis');
   ck('"Rice (Cooked)", "Idli (Steamed)", "Dal Tadka" → weigh it cooked', ['Rice (Cooked)', 'Idli (Steamed)', 'Dal Tadka'].every(n => prov.weighingBasis(n) === 'cooked'));
   ck('"Oats (Raw)", "Toor dal uncooked" → weigh it raw', ['Oats (Raw)', 'Toor dal uncooked'].every(n => prov.weighingBasis(n) === 'raw'));
   ck('a name that does not say (Banana, Paneer, "") → unknown, so the member is asked to check', ['Banana (Ripe)', 'Paneer', '', null].every(n => prov.weighingBasis(n) === null));
+  // 18 Oct 2026: the record's own marker first, the name only as a fallback.
+  const P = prov.preparationBasis;
+  ck('record marker wins when the name is silent ("Poha" with preparation: cooked → cooked, from the record)', eq(P({ name: 'Poha', preparation: 'cooked' }), { basis: 'cooked', from: 'record' }));
+  ck('the marker may sit in per_100g too (basis: "uncooked" → raw)', eq(P({ name: 'Moong dal', per_100g: { basis: 'uncooked' } }), { basis: 'raw', from: 'record' }));
+  ck('no marker → the name decides ("Rice (Cooked)" → cooked, from the name)', eq(P({ name: 'Rice (Cooked)', per_100g: { calories: 130 } }), { basis: 'cooked', from: 'name' }));
+  ck('record and name disagree ("Oats (Raw)" marked cooked) → unknown: the member is asked to check', P({ name: 'Oats (Raw)', preparation: 'cooked' }).from === 'conflict' && prov.weighingBasis({ name: 'Oats (Raw)', preparation: 'cooked' }) === null);
+  ck('an unrecognised marker ("as sold") is ignored, not guessed', eq(P({ name: 'Paneer', preparation: 'as sold' }), { basis: null, from: null }));
+  const foodsX = [{ name: 'Idli (Steamed)' }, { name: 'Oats (Raw)' }, { name: 'Paneer' }, { name: 'Poha', preparation: 'cooked' }, { name: 'Oats (Raw)', preparation: 'cooked' }];
+  const want = { cooked: 'Cooked weight', raw: 'Raw weight' };
+  ck('the preparation label always agrees with the weighing rule (incl. "Idli (Steamed)", which the old label called "not specified")',
+    foodsX.every(f => { const p = P(f), l = prov.preparationLabel(f);
+      return p.from === 'conflict' ? l === 'Check: raw or cooked?' : p.basis ? l === want[p.basis] : l === 'Preparation not specified'; }), foodsX.map(f => prov.preparationLabel(f)));
 }
 
 // ── 7e. suggestLoad — double progression ────────────────────────────────────

@@ -53,6 +53,18 @@ These are the "Phone only" rows in column Q of the workbook.
    - with a login missing, the run is **BLOCKED**: it fails red and says nothing was tested (changed 17 Oct from a green "skipped");
    - pointed at production, it refuses.
 
+## Retries and evidence (added 18 Oct)
+- A check that only worked on a second tap is **not** counted as a clean pass. The report shows "passed cleanly" and "passed after retry" separately, and only clean passes count as covered workbook cases.
+- Every retry is listed in a **Retries** table with:
+  - the screen it was on;
+  - the panel it meant to open;
+  - what the first tap hit (or what covered the tile);
+  - whether the page reloaded in between;
+  - what the retry did.
+- Each retry also shows as a yellow "Robot retry" warning on the GitHub run.
+- When a check fails, the robot saves a screenshot **and** a `.txt` file with the page address and text. The account-isolation checks (R15, R16) still fail at once; they are never retried.
+- When no retries happen, the report says "Retries: none — every interaction worked first time."
+
 ## Setup (Sachin, once)
 1. On the **test site** (admin), create:
    - **Auto Member** (member);

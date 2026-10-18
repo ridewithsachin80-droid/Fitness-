@@ -790,7 +790,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget, mealTarge
               className="px-3 py-2.5 text-ghost hover:text-mute text-lg leading-none"
               aria-label="Close">×</button>
           </div>
-          <WeighingHint name={selected?.name || query} />
+          <WeighingHint food={selected?.name ? selected : { name: query }} />
         </div>
       )}
     </div>

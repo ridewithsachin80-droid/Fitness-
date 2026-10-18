@@ -14,7 +14,7 @@ export default function FoodSheet({ open, onClose, m }) {
   const mealHeadingRef = useRef(null);
   const { log, protocol, update, logMeal, loading, activeActivities, workoutKcal, weightKg, kcalTarget, eaten, terms, isToday } = m;
   return (
-    <Sheet open={open && !loading} onClose={onClose} snap="full" eyebrow="Food" title={m.foodTarget?.label || "What did you eat?"} initialFocusRef={mealHeadingRef}
+    <Sheet size="lg" open={open && !loading} onClose={onClose} snap="full" eyebrow="Food" title={m.foodTarget?.label || "What did you eat?"} initialFocusRef={mealHeadingRef}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       {/* 16 Oct 2026: the day's totals on one line, the bars folded away, so the
           foods come first. Opening "Macros & nutrients" shows everything as before. */}

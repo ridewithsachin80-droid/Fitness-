@@ -7,7 +7,7 @@ import { Sheet, Pressable, Icon } from '../primitives';
 export default function WeightSheet({ open, onClose, m }) {
   const { log, update, weightWarning, validateWeight, weightDelta, yesterdayWeight } = m;
   return (
-    <Sheet open={open} onClose={onClose} eyebrow="Morning weight" title="After washroom, before food"
+    <Sheet size="sm" open={open} onClose={onClose} eyebrow="Morning weight" title="After washroom, before food"
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <div className="flex items-center gap-3 pt-1">
         <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5"

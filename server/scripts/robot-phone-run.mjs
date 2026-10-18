@@ -95,22 +95,34 @@ if (process.argv.includes('--wait-for-deploy')) {
 fs.mkdirSync(OUT, { recursive: true });
 const results = [];
 const pageErrors = [];
+// Every interaction that needed a second try (18 Oct 2026): where, what was
+// intended, what the first try actually hit, and what the retry did. A check
+// that only passed because of a retry is reported as "passed after retry".
+const retries = [];
+let currentCheck = null;
 let shotN = 0;
 async function shot(page, name) {
   const file = `${String(++shotN).padStart(2, '0')}-${name}.png`;
   try { await page.screenshot({ path: path.join(OUT, file) }); return file; } catch { return null; }
 }
 async function check(id, title, cases, fn, { soft = false, page = null } = {}) {
-  const t0 = Date.now();
+  const t0 = Date.now(); currentCheck = id;
+  const retried = () => retries.filter(r => r.check === id);
   try {
     const detail = await fn();
-    results.push({ id, title, cases, result: 'pass', detail: detail || '', ms: Date.now() - t0 });
-    console.log(`  ✓ ${id} ${title}${detail ? ' — ' + detail : ''}`);
+    const result = retried().length ? 'pass-retry' : 'pass';
+    results.push({ id, title, cases, result, detail: detail || '', ms: Date.now() - t0 });
+    console.log(`  ${result === 'pass' ? '✓' : '↻'} ${id} ${title}${result === 'pass-retry' ? ' — PASSED AFTER RETRY' : ''}${detail ? ' — ' + detail : ''}`);
   } catch (e) {
     const file = page ? await shot(page, `${id}-fail`) : null;
-    results.push({ id, title, cases, result: soft ? 'warn' : 'fail', detail: e.message, shot: file, ms: Date.now() - t0 });
+    // Keep the evidence: what was on screen, as text, next to the screenshot.
+    let evidence = null;
+    if (page) try { evidence = `${String(++shotN).padStart(2, '0')}-${id}-fail.txt`; fs.writeFileSync(path.join(OUT, evidence),
+      `${await page.evaluate(() => location.href)}\n\n${await page.evaluate(() => document.body.innerText)}`); } catch { evidence = null; }
+    results.push({ id, title, cases, result: soft ? 'warn' : 'fail', detail: e.message, shot: file, evidence, ms: Date.now() - t0 });
     console.log(`  ${soft ? '⚠' : '✗'} ${id} ${title} — ${e.message}`);
   }
+  currentCheck = null;
 }
 const must = (cond, msg) => { if (!cond) throw new Error(msg); };
 
@@ -132,6 +144,7 @@ async function newPage(label) {
   await page.setUserAgent(UA);
   await page.setViewport(PHONE);
   page.on('pageerror', e => pageErrors.push(`${label}: ${e.message.slice(0, 200)}`));
+  page.__loads = 0; page.on('load', () => { page.__loads++; });
   page.setDefaultTimeout(20e3);
   return page;
 }
@@ -143,7 +156,10 @@ async function tap(page, id) {
   // Like a person: bring it to the middle of the screen first. The logging bar
   // and the tabs are fixed at the bottom and would otherwise take the tap.
   await el.evaluate(e => e.scrollIntoView({ block: 'center', inline: 'center' })); await wait(250);
-  try { await el.click(); } catch { await el.evaluate(e => e.click()); }
+  try { await el.click(); } catch (err) {
+    await el.evaluate(e => e.click());
+    retries.push({ check: currentCheck, action: `tap ${id}`, intended: id, first: { route: await page.evaluate(() => location.pathname), error: `real tap failed: ${err.message.slice(0, 100)}`, pageReloaded: false }, retry: 'clicked through the page code' });
+  }
 }
 async function tapText(page, re, sel = 'button,a,[role=button]') {
   const ok = await page.evaluate((src, flags, sel) => {
@@ -283,10 +299,27 @@ async function deleteFoods(page, re) {
   await settle();
 }
 async function sheetSet(page, chip, steps) {
-  // Like a person: if the screen was still settling and the tap missed, tap again (R15 was flaky on 17 Oct).
+  // Like a person: if the tap missed, tap again — but RECORD it (18 Oct 2026):
+  // route, intended panel, what the first tap hit, whether the page had
+  // reloaded, and what the retry did. Reported apart from clean passes.
   const opened = () => page.waitForSelector('[role=dialog][aria-modal=true]', { visible: true, timeout: 5000 }).then(() => true, () => false);
+  const loadsBefore = page.__loads || 0;
   await tap(page, chip);
-  if (!(await opened())) { await wait(1500); await tap(page, chip); must(await opened(), `tapping ${chip} twice did not open its panel`); }
+  if (!(await opened())) {
+    const first = await page.evaluate(t => {
+      const el = document.querySelector(`[data-testid="${t}"]`); const r = el?.getBoundingClientRect();
+      const hit = r ? document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) : null;
+      const name = e => e ? `${e.tagName.toLowerCase()}${e.dataset?.testid ? '[' + e.dataset.testid + ']' : ''}.${String(e.className || '').split(' ')[0]}` : 'nothing';
+      return { route: location.pathname + location.search, tileFound: !!el, tileCovered: !!(el && hit && hit !== el && !el.contains(hit)), hit: name(hit),
+        dialogs: document.querySelectorAll('[role=dialog]').length };
+    }, chip).catch(e => ({ error: e.message.slice(0, 120) }));
+    const reloaded = (page.__loads || 0) > loadsBefore;
+    await wait(1500); await tap(page, chip);
+    const second = await opened();
+    retries.push({ check: currentCheck, action: `open ${chip}`, intended: `${chip} panel`, first: { ...first, pageReloaded: reloaded }, retry: second ? 'opened' : 'still not open' });
+    console.log(`    ↻ retry in ${currentCheck}: ${chip} — first tap: ${JSON.stringify(first)}${reloaded ? ' (page had reloaded)' : ''}; retry ${second ? 'opened it' : 'failed'}`);
+    must(second, `tapping ${chip} twice did not open its panel`);
+  }
   await wait(600); await steps(); await tapText(page, /^Done$/); await wait(600);
 }
 
@@ -557,7 +590,11 @@ await check('R13', 'Coach signs in; home and the member page load', ['SMK-006', 
   must(!/Auto Member Two/.test(await bodyText(C)), 'the coach can see Auto Member Two, who is not assigned to them');
   await tapText(C, /^Auto Member$|Auto Member(?! Two)/, 'a,button,[role=button],li,div[class*="cursor-pointer"]');
   await waitFor(C, () => /\/coach\/\d+/.test(location.pathname), null, 20e3);
-  for (const t of ['Nutrition', 'Training', 'Labs', 'Today']) { await tapText(C, new RegExp(`^${t}$`)).catch(() => {}); await wait(900); }
+  for (const t of ['Nutrition', 'Training', 'Labs', 'Today']) {
+    await tapText(C, new RegExp(`^${t}$`)).catch(() => {}); await wait(900);
+    // 18 Oct 2026: a long unbroken line in the week brief pushed this page wider than the phone.
+    must(await noSidewaysScroll(C), `the coach's member page (${t} tab) is wider than the phone (${await C.evaluate(() => document.documentElement.scrollWidth)} px)`);
+  }
   must(!/Something went wrong/i.test(await bodyText(C)), 'the member page shows an error');
 }, { page: C });
 
@@ -611,23 +648,27 @@ await finish();
 async function finish(fatal = null) {
   await browser.close().catch(() => {});
   const n = k => results.filter(r => r.result === k).length;
+  // Only clean passes count as covered; a check that needed a retry is listed apart.
   const covered = [...new Set(results.filter(r => r.result === 'pass').flatMap(r => r.cases))].sort();
   const lines = [
     `# Phone robot — ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`,
     '', `Site: ${BASE} · app ${live || '?'} · commit ${process.env.GITHUB_SHA?.slice(0, 7) || 'local'}`,
-    '', `**${n('pass')} passed · ${n('fail')} failed · ${n('warn')} warnings**${fatal ? ` · stopped early: ${fatal}` : ''}`,
+    '', `**${n('pass')} passed cleanly · ${n('pass-retry')} passed after retry · ${n('fail')} failed · ${n('warn')} warnings**${fatal ? ` · stopped early: ${fatal}` : ''}`,
     '', '| Check | What | Workbook cases | Result | Detail |', '|---|---|---|---|---|',
-    ...results.map(r => `| ${r.id} | ${r.title} | ${r.cases.join(', ')} | ${{ pass: '✅', fail: '❌', warn: '⚠️' }[r.result]} | ${String(r.detail).replace(/\|/g, '/').slice(0, 300)}${r.shot ? ` (${r.shot})` : ''} |`),
+    ...results.map(r => `| ${r.id} | ${r.title} | ${r.cases.join(', ')} | ${{ pass: '✅', 'pass-retry': '↻ after retry', fail: '❌', warn: '⚠️' }[r.result]} | ${String(r.detail).replace(/\|/g, '/').slice(0, 300)}${r.shot ? ` (${r.shot}${r.evidence ? ', ' + r.evidence : ''})` : ''} |`),
+    ...(retries.length ? ['', `## Retries (${retries.length})`, '', '| Check | Action | First try | Page reloaded? | Retry |', '|---|---|---|---|---|',
+      ...retries.map(r => `| ${r.check} | ${r.action} | ${String(r.first.error || `route ${r.first.route}; tile ${r.first.tileFound ? 'found' : 'missing'}${r.first.tileCovered ? ', covered by ' + r.first.hit : ''}; dialogs ${r.first.dialogs}`).replace(/\|/g, '/')} | ${r.first.pageReloaded ? 'yes' : 'no'} | ${r.retry} |`)] : ['', 'Retries: none — every interaction worked first time.']),
     '', `Workbook cases covered by passing checks (${covered.length}): ${covered.join(', ')}`,
     '', 'Not covered (real phone only): microphone, camera, installing the app and its icon, keyboard over inputs, push notifications, how it feels.',
   ];
   fs.writeFileSync(path.join(OUT, 'report.md'), lines.join('\n') + '\n');
-  fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ base: BASE, live, results, pageErrors, covered }, null, 2));
+  fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ base: BASE, live, results, retries, pageErrors, covered }, null, 2));
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
   if (GH) {
     for (const r of results.filter(r => r.result === 'fail').slice(0, 9)) console.log(`::error title=Robot ${r.id} failed::${ghEsc(`${r.title} — ${r.detail} [${r.cases.join(', ')}]`)}`);
-    console.log(`::notice title=Phone robot::${ghEsc(`${n('pass')} passed, ${n('fail')} failed, ${n('warn')} warnings on ${live || BASE}. Cases covered: ${covered.length}.${fatal ? ' Stopped early: ' + fatal : ''}`)}`);
+    for (const r of retries.slice(0, 5)) console.log(`::warning title=Robot retry in ${r.check}::${ghEsc(`${r.action}: first try ${JSON.stringify(r.first)}; retry ${r.retry}`)}`);
+    console.log(`::notice title=Phone robot::${ghEsc(`${n('pass')} passed cleanly, ${n('pass-retry')} passed after retry, ${n('fail')} failed, ${n('warn')} warnings on ${live || BASE}. Cases covered: ${covered.length}.${fatal ? ' Stopped early: ' + fatal : ''}`)}`);
   }
-  console.log(`\n${fatal ? '✗ ' + fatal + '\n' : ''}Robot: ${n('pass')} passed, ${n('fail')} failed, ${n('warn')} warnings → ${path.relative(ROOT, OUT)}/report.md`);
+  console.log(`\n${fatal ? '✗ ' + fatal + '\n' : ''}Robot: ${n('pass')} passed cleanly, ${n('pass-retry')} passed after retry, ${n('fail')} failed, ${n('warn')} warnings → ${path.relative(ROOT, OUT)}/report.md`);
   process.exit(fatal || n('fail') ? 1 : 0);
 }

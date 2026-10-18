@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import useModalScope, { ModalScopeContext } from '../../hooks/useModalScope';
@@ -24,14 +24,37 @@ import { haptic } from '../../store/settingsStore';
  *
  * Content scrolls inside the sheet; the sheet itself is at most 92% of the
  * visible height. Pass `snap="full"` for editors that want the whole screen.
+ *
+ * Desktop (18 Oct 2026): from 768 px wide the same sheet opens as a centred
+ * dialog sized to its content — `size` "sm" (water, weight, sleep), "md"
+ * (default) or "lg" (food, workout) — fading in instead of sliding, no drag
+ * handle, at most the window height less 48 px, content scrolling and the
+ * footer always visible. Phones keep the bottom sheet. Switching between the
+ * two (resizing, zooming) re-styles the SAME panel; nothing is remounted, so
+ * anything typed stays.
  */
+const DESKTOP = '(min-width: 768px)';
+const WIDTH = { sm: 440, md: 560, lg: 720 };
+function useWide() {
+  const query = () => typeof window !== 'undefined' && !!window.matchMedia?.(DESKTOP).matches;
+  const [wide, setWide] = useState(query);
+  useEffect(() => {
+    const mq = window.matchMedia?.(DESKTOP);
+    if (!mq) return undefined;
+    const on = () => setWide(mq.matches);
+    on(); mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return wide;
+}
 export default function Sheet(props) {
   if (typeof document === 'undefined') return null;
   return createPortal(<AnimatePresence>{props.open && <SheetSurface key="sheet" {...props} />}</AnimatePresence>, document.body);
 }
 
-function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer, className = '', layerClassName = 'z-[80]', initialFocusRef }) {
+function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', size = 'md', footer, className = '', layerClassName = 'z-[80]', initialFocusRef }) {
   const reduce = useReducedMotion();
+  const wide = useWide();
   const present = useIsPresent();
   const panelRef = useRef(null), rootRef = useRef(null), contentRef = useRef(null);
   const modal = useModalScope({ open: present, roots: [rootRef], focusRef: panelRef, onClose,
@@ -53,13 +76,15 @@ function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer
     const vv = window.visualViewport;
     const apply = () => {
       const h = vv ? vv.height : window.innerHeight;
-      if (panelRef.current) panelRef.current.style.maxHeight = `${Math.round(h * (snap === 'full' ? 0.98 : 0.92))}px`;
+      if (panelRef.current) panelRef.current.style.maxHeight = wide
+        ? `${Math.max(240, Math.round(h - 48))}px`
+        : `${Math.round(h * (snap === 'full' ? 0.98 : 0.92))}px`;
     };
     apply();
     vv?.addEventListener('resize', apply);
     window.addEventListener('resize', apply);
     return () => { vv?.removeEventListener('resize', apply); window.removeEventListener('resize', apply); };
-  }, [present, snap]);
+  }, [present, snap, wide]);
 
   // Position once after the viewport height is applied. Do not move the list
   // again when foods, macros or the keyboard change while the editor is open.
@@ -79,7 +104,8 @@ function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer
       <ModalScopeContext.Provider value={modal.scopeId}>
         <div ref={rootRef} data-modal-scope="sheet" data-modal-exiting={!present ? "" : undefined} onKeyDown={modal.onKeyDown}
           inert={!present ? true : undefined} aria-hidden={!present ? 'true' : undefined}
-          className={`fixed inset-0 ${layerClassName} flex flex-col justify-end`} role="presentation">
+          data-sheet-layout={wide ? 'dialog' : 'sheet'}
+          className={`fixed inset-0 ${layerClassName} flex flex-col ${wide ? 'items-center justify-center p-6' : 'justify-end'}`} role="presentation">
           <motion.div
             key="backdrop"
             className="absolute inset-0 bg-black/60"
@@ -91,23 +117,25 @@ function SheetSurface({ onClose, title, eyebrow, children, snap = 'auto', footer
             ref={panelRef}
             role="dialog" aria-modal="true" aria-label={title || 'Sheet'}
             tabIndex={-1}
-            className={`relative mx-auto w-full max-w-md bg-surface border-t border-x border-hair-med
-              rounded-t-3xl shadow-float flex flex-col outline-none ${className}`}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-            initial={reduce ? { opacity: 0 } : { y: '100%' }}
-            animate={reduce ? { opacity: 1 } : { y: 0 }}
-            exit={reduce ? { opacity: 0 } : { y: '100%' }}
-            transition={reduce ? { duration: 0.15 } : { type: 'spring', stiffness: 420, damping: 40 }}
-            drag={reduce ? false : 'y'}
+            className={`relative mx-auto w-full max-w-md bg-surface border-hair-med shadow-float flex flex-col outline-none
+              ${wide ? 'border rounded-3xl' : 'border-t border-x rounded-t-3xl'} ${className}`}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)', ...(wide ? { maxWidth: WIDTH[size] || WIDTH.md } : null) }}
+            initial={reduce || wide ? { opacity: 0, scale: reduce ? 1 : 0.97 } : { y: '100%' }}
+            animate={reduce || wide ? { opacity: 1, scale: 1 } : { y: 0 }}
+            exit={reduce || wide ? { opacity: 0, scale: reduce ? 1 : 0.97 } : { y: '100%' }}
+            transition={reduce ? { duration: 0.15 } : wide ? { duration: 0.16 } : { type: 'spring', stiffness: 420, damping: 40 }}
+            drag={reduce || wide ? false : 'y'}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, info) => {
               if (info.offset.y > 90 || info.velocity.y > 600) close();
             }}>
             {/* grab handle */}
-            <div className="flex justify-center pt-2.5 pb-1 cursor-grab active:cursor-grabbing" aria-hidden="true">
-              <div className="w-10 h-1 rounded-full bg-white/[0.2]" />
-            </div>
+            {wide ? <div className="pt-4" aria-hidden="true" /> : (
+              <div className="flex justify-center pt-2.5 pb-1 cursor-grab active:cursor-grabbing" aria-hidden="true">
+                <div className="w-10 h-1 rounded-full bg-white/[0.2]" />
+              </div>
+            )}
 
             {(title || eyebrow) && (
               <div className="flex items-start justify-between gap-3 px-5 pt-1 pb-3">

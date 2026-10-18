@@ -9,22 +9,36 @@ export function foodSource(food = {}) {
   return 'Nutrition source not recorded';
 }
 
-export function preparationLabel(food = {}) {
-  if (/\braw\b/i.test(food.name || '')) return 'Raw weight';
-  if (/\bcooked\b/i.test(food.name || '')) return 'Cooked weight';
-  return 'Preparation not specified';
-}
-
 /**
- * Raw or cooked: what the food's nutrition numbers are for, read from its name
- * (17 Oct 2026). The food sheet used to tell everyone "Enter weight before
- * cooking", which is wrong for the many foods whose numbers are for the cooked
- * dish (cooked rice, dal tadka, steamed idli). Only explicit words count; when
- * the name does not say, the answer is null and the member is asked to check.
+ * Raw or cooked: what a food's nutrition numbers are for (18 Oct 2026).
+ *  1. The record's own marker first — `preparation` or `basis` on the food or
+ *     its per_100g ("raw"/"uncooked" or "cooked"/"prepared"). No record carries
+ *     one yet (the food table has no such column); this is ready for when it does.
+ *  2. Otherwise explicit words in the name (cooked, steamed, tadka… / raw, uncooked).
+ *  3. Record and name disagree, or nothing says → unknown: the member is asked to check.
+ * The preparation label and the weighing hint both read this, so they never differ.
  */
-export function weighingBasis(name = '') {
-  const n = String(name || '');
-  if (/\b(raw|uncooked)\b/i.test(n)) return 'raw';
-  if (/\b(cooked|boiled|steamed|fried|roasted|grilled|baked|tadka|curry|gravy|sabzi)\b/i.test(n)) return 'cooked';
-  return null;
+const RAW_WORDS = /\b(raw|uncooked)\b/i;
+const COOKED_WORDS = /\b(cooked|boiled|steamed|fried|roasted|grilled|baked|tadka|curry|gravy|sabzi)\b/i;
+const markerBasis = (v) => {
+  const t = String(v ?? '').trim().toLowerCase();
+  return /^(raw|uncooked)$/.test(t) ? 'raw' : /^(cooked|prepared)$/.test(t) ? 'cooked' : null;
+};
+export function preparationBasis(food = {}) {
+  const f = typeof food === 'string' ? { name: food } : (food || {});
+  const record = markerBasis(f.preparation ?? f.basis ?? f.per_100g?.preparation ?? f.per_100g?.basis);
+  const n = String(f.name || '');
+  const byName = RAW_WORDS.test(n) ? 'raw' : COOKED_WORDS.test(n) ? 'cooked' : null;
+  if (record && byName && record !== byName) return { basis: null, from: 'conflict', record, name: byName };
+  if (record) return { basis: record, from: 'record' };
+  if (byName) return { basis: byName, from: 'name' };
+  return { basis: null, from: null };
+}
+/** 'raw' | 'cooked' | null — a name or a food. */
+export const weighingBasis = (food) => preparationBasis(food).basis;
+
+export function preparationLabel(food = {}) {
+  const p = preparationBasis(food);
+  if (p.from === 'conflict') return 'Check: raw or cooked?';
+  return p.basis === 'raw' ? 'Raw weight' : p.basis === 'cooked' ? 'Cooked weight' : 'Preparation not specified';
 }

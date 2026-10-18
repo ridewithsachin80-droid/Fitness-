@@ -6,7 +6,7 @@ export default function WaterSheet({ open, onClose, m }) {
   const water  = log.water || 0;
   const target = protocol?.water_target || 3000;
   return (
-    <Sheet open={open} onClose={onClose} eyebrow="Water" title={`Target ${(target / 1000).toFixed(1)} L`}
+    <Sheet size="sm" open={open} onClose={onClose} eyebrow="Water" title={`Target ${(target / 1000).toFixed(1)} L`}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <p className="text-caption text-lo">Stop 1 hr before sleep · not during meals</p>
       <p className="font-display text-num-lg font-semibold text-white mt-2 tabular-nums" data-testid="water-total">
