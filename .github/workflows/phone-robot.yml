@@ -6,7 +6,10 @@ name: Phone robot (test site)
 #   FITLIFE_ROBOT_MEMBER_PHONE, FITLIFE_ROBOT_MEMBER_PIN,
 #   FITLIFE_ROBOT_MEMBER2_PHONE, FITLIFE_ROBOT_MEMBER2_PIN,
 #   FITLIFE_ROBOT_COACH_EMAIL, FITLIFE_ROBOT_COACH_PASSWORD
-# Without them the run is skipped with a warning. Never point it at production.
+# Without them the run is BLOCKED (red): nothing was tested. Never point it at production.
+# After the robot: every file of this build is compared byte for byte with the
+# live site, and the full report is published on the commit as the check
+# "Phone robot report" (readable in the commit's checks and through the API).
 on:
   push:
     branches: [test]
@@ -15,6 +18,10 @@ on:
 concurrency:
   group: phone-robot
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
 
 jobs:
   robot:
@@ -39,6 +46,28 @@ jobs:
           FITLIFE_ROBOT_COACH_EMAIL: ${{ secrets.FITLIFE_ROBOT_COACH_EMAIL }}
           FITLIFE_ROBOT_COACH_PASSWORD: ${{ secrets.FITLIFE_ROBOT_COACH_PASSWORD }}
         run: node scripts/robot-phone-run.mjs --wait-for-deploy
+      - name: Check the live files byte for byte
+        if: always()
+        working-directory: server
+        env:
+          ROBOT_BASE_URL: https://fitness-test.up.railway.app
+        run: node scripts/check-live-assets.mjs
+      - name: Publish the report on the commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          f=qa/robot-results
+          { cat "$f/report.md" 2>/dev/null || echo "# Phone robot: no report (the run stopped before writing one)"
+            echo; cat "$f/live-assets.md" 2>/dev/null || echo "Live file check: did not run."; } > "$RUNNER_TEMP/summary.md"
+          head -c 60000 "$RUNNER_TEMP/summary.md" > "$RUNNER_TEMP/summary-cut.md"
+          title=$(grep -m1 '^\*\*' "$f/report.md" 2>/dev/null | tr -d '*' | cut -c1-200)
+          gh api "repos/${{ github.repository }}/check-runs" \
+            -f name='Phone robot report' -f head_sha="${{ github.sha }}" \
+            -f status=completed -f conclusion=neutral \
+            -f "output[title]=${title:-Phone robot report}" \
+            -F "output[summary]=@$RUNNER_TEMP/summary-cut.md" > /dev/null
+          echo "Published the report as the check 'Phone robot report'."
       - name: Keep the report and screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -73,6 +73,24 @@ The six member panels now open as **centred dialogs on a computer** (768 px and 
 
 The week brief overflow was seen with a fake AI reply locally. Whether real AI replies ever contain such long unbroken lines on the live site is not confirmed. The wrap fix is harmless either way.
 
+## 7. Unfinished
+- **Saving raw/cooked on food records is not built.** The app can read a preparation field, but:
+  - no column stores it;
+  - nothing fills it in (not the admin food screen, not the AI, not imports);
+  - no record has one today.
+  Until it is stored and filled, the food name decides. Building it needs your OK: a new column (add-only), a way to set it, and filling in the existing foods.
+- **Real-phone checks** (microphone, camera, phone keyboard, installing the app) must pass before asking for production approval.
+- **Production is unchanged.**
+
+## 8. Evidence added 18 Oct (no app change)
+- The robot workflow now does two more things after each run:
+  1. It compares every file of the build (`index.html`, `sw.js` and all 33 files it loads) **byte for byte** with what the test site serves.
+  2. It publishes the full robot report, together with that comparison, on the commit as the check **"Phone robot report"**. Anyone can read it on GitHub without downloading the artifact zip.
+- Proven locally:
+  - 35 of 35 files identical against a copy of the build;
+  - one changed byte in the app file is caught and fails the check.
+- **NEW** `server/scripts/check-live-assets.mjs`; changed `.github/workflows/phone-robot.yml`.
+
 ## Files
 - **NEW:** `DELIVERY-FIXES-2e.md`
 - **Changed:**
