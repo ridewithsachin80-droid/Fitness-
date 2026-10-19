@@ -74,6 +74,7 @@ export default function VoicePilotSheet({ open, onClose, onChanged }) {
             <li>Your voice is recorded and turned into text by two speech services (Google Gemini and Whisper on Groq).</li>
             <li>Only your coach hears the recordings. They are stored privately and deleted after 90 days.</li>
             <li>Nothing you record is added to your food log.</li>
+            <li>This is a test of the speech services. FitLife does not learn or store a model of your voice from it.</li>
             <li>You can stop at any time and delete every recording at once.</li>
           </ul>
           <Pressable variant="primary" className="w-full" onPress={consent} data-testid="vp-agree">I agree, let's start</Pressable>

@@ -8,6 +8,8 @@
  *     GET    /api/voice-pilot/results          per phrase, each engine's hit rate; every sample with both transcripts
  *     GET    /api/voice-pilot/results.csv      the same as one file to send on: members as codes, no names, no audio
  *     POST   /api/voice-pilot/results/retry    ask an engine again for the stored recordings it did not answer
+ *     POST   /api/voice-pilot/results/rerun    { setting: 'kn'|'en'|'auto' } Whisper again on stored recordings, kept BESIDE the original (Fixes-2m)
+ *     GET    /api/voice-pilot/results.xlsx     the same file as an Excel workbook: no text-encoding step to go wrong (Fixes-2m)
  *   Member:
  *     GET    /api/voice-pilot/me               invited?, consented?, phrases and what is recorded
  *     POST   /api/voice-pilot/consent
@@ -26,6 +28,7 @@ const authMW    = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 const storage   = require('../services/storage');
 const V         = require('../services/voicePilot');
+const X         = require('../services/xlsxLite');
 
 router.use(authMW);
 const coachOnly = roleCheck('monitor', 'admin');
@@ -46,6 +49,24 @@ async function deleteAll(memberId) {
     await pool.query(`DELETE FROM voice_samples WHERE id=$1`, [r.id]);
   }
   return rows.length;
+}
+
+// Fixes-2m: what the coach needs to read a transcript: which script it is in,
+// Kannada script spelled out in English letters, the meaning checks, and what
+// Whisper was asked for and used.
+const latinOf = (t) => (t && V.scriptOf(t) === 'kannada' ? V.kannadaToLatin(t) : null);
+const describe = (r) => ({
+  gemini_script: V.scriptOf(r.gemini_text), whisper_script: V.scriptOf(r.whisper_text),
+  gemini_latin: latinOf(r.gemini_text), whisper_latin: latinOf(r.whisper_text),
+  gemini_checks: V.meaningChecks(r.phrase_id, r.gemini_text), whisper_checks: V.meaningChecks(r.phrase_id, r.whisper_text),
+  whisper_setting: r.whisper_text == null ? null : (r.whisper_setting || 'auto'), whisper_language: r.whisper_language || null,
+});
+async function rerunsFor(ids) {
+  const out = new Map();
+  if (!ids.length) return out;
+  const { rows } = await pool.query(`SELECT * FROM voice_sample_reruns WHERE sample_id = ANY($1::int[]) ORDER BY setting, engine`, [ids]);
+  for (const r of rows) { if (!out.has(r.sample_id)) out.set(r.sample_id, []); out.get(r.sample_id).push(r); }
+  return out;
 }
 
 // ── Coach / admin ────────────────────────────────────────────────────────────
@@ -94,12 +115,16 @@ router.get('/results', coachOnly, async (req, res) => {
   try {
     const m = mine(req.user, 's');
     const { rows } = await pool.query(
-      `SELECT s.id, s.patient_id, u.name, s.phrase_id, s.object_key, s.duration_ms, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.gemini_error, s.whisper_error, s.created_at
+      `SELECT s.id, s.patient_id, u.name, s.phrase_id, s.object_key, s.duration_ms, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.gemini_error, s.whisper_error,
+              s.whisper_setting, s.whisper_language, s.created_at
          FROM voice_samples s JOIN users u ON u.id = s.patient_id
         WHERE 1=1 ${m.sql.replace('$1', `$${m.args.length}`)} ORDER BY s.phrase_id, u.name`, m.args);
-    res.json({ ...V.summarise(rows), samples: rows.map(r => ({ id: r.id, member_id: r.patient_id, name: r.name, phrase_id: r.phrase_id,
+    const reruns = await rerunsFor(rows.map(r => r.id));
+    res.json({ ...V.summarise(rows), checks: V.checksSummary(rows), samples: rows.map(r => ({ id: r.id, member_id: r.patient_id, name: r.name, phrase_id: r.phrase_id,
       duration_ms: r.duration_ms, gemini: r.gemini_text, whisper: r.whisper_text, gemini_score: r.gemini_score, whisper_score: r.whisper_score,
       gemini_problem: r.gemini_text == null ? (r.gemini_error || 'no answer') : null, whisper_problem: r.whisper_text == null ? (r.whisper_error || 'no answer') : null,
+      ...describe(r), reruns: (reruns.get(r.id) || []).map(x => ({ engine: x.engine, setting: x.setting, text: x.text, language: x.language, score: x.score,
+        problem: x.text == null ? (x.error || 'no answer') : null, script: V.scriptOf(x.text), latin: latinOf(x.text), checks: V.meaningChecks(r.phrase_id, x.text), at: x.created_at })),
       audio_url: link(r.object_key), at: r.created_at })) });
   } catch (err) { fail(res, err); }
 });
@@ -132,6 +157,7 @@ router.post('/results/retry', coachOnly, async (req, res) => {
           fixed++;
           await pool.query(`UPDATE voice_samples SET ${engine}_text=$1, ${engine}_score=$2, ${engine}_error=NULL WHERE id=$3`,
             [t.text, V.score(r.phrase_id, t.text), r.id]);
+          if (engine === 'whisper') await pool.query(`UPDATE voice_samples SET whisper_setting=$1, whisper_language=$2 WHERE id=$3`, [t.setting || null, t.language || null, r.id]);
         } else {
           problems.push(`${engine === 'gemini' ? 'Gemini' : 'Whisper'}: ${t.error || 'no answer'}`);
           await pool.query(`UPDATE voice_samples SET ${engine}_error=$1 WHERE id=$2`, [t.error || null, r.id]);
@@ -142,13 +168,76 @@ router.post('/results/retry', coachOnly, async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// Fixes-2m: ask Whisper AGAIN about stored recordings with one setting (the
+// language fixed to Kannada, to English, or left to guess), to compare with
+// what it first wrote. The original result is never changed: the answer is
+// kept beside it (voice_sample_reruns), with its own keyword score and meaning
+// checks. Recordings that already have an answer for that setting are skipped.
+// One call at a time, at most 20 a tap. Evaluation only: it changes nothing a
+// member sees and chooses no engine.
+const RERUN_SETTINGS = ['kn', 'en', 'auto'];
+router.post('/results/rerun', coachOnly, async (req, res) => {
+  try {
+    const setting = String(req.body?.setting || '');
+    if (!RERUN_SETTINGS.includes(setting)) return res.status(400).json({ error: 'Which setting? kn, en or auto.' });
+    const m = mine(req.user, 's');
+    const { rows } = await pool.query(
+      `SELECT s.id, s.phrase_id, s.object_key, s.mime_type FROM voice_samples s
+        WHERE s.object_key IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM voice_sample_reruns x WHERE x.sample_id = s.id AND x.engine = 'whisper' AND x.setting = '${setting}' AND x.text IS NOT NULL)
+          ${m.sql.replace('$1', `$${m.args.length}`)}
+        ORDER BY s.created_at LIMIT 21`, m.args);
+    const batch = rows.slice(0, 20);
+    let asked = 0, answered = 0; const problems = [];
+    for (const r of batch) {
+      let audio;
+      try { const buf = await storage.getObject(r.object_key); audio = buf ? buf.toString('base64') : null; } catch (e) { audio = null; }
+      if (!audio) { problems.push('The recording could not be read from storage.'); continue; }
+      asked++;
+      const t = await V.transcribeOne('whisper', audio, r.mime_type || 'audio/webm', { language: setting });
+      if (t.text != null) answered++; else problems.push(`Whisper: ${t.error || 'no answer'}`);
+      await pool.query(
+        `INSERT INTO voice_sample_reruns (sample_id, engine, setting, text, language, score, error) VALUES ($1,'whisper',$2,$3,$4,$5,$6)
+         ON CONFLICT (sample_id, engine, setting) DO UPDATE SET text=EXCLUDED.text, language=EXCLUDED.language, score=EXCLUDED.score, error=EXCLUDED.error, created_at=NOW()`,
+        [r.id, setting, t.text, t.text != null ? (t.language || null) : null, t.text != null ? V.score(r.phrase_id, t.text) : null, t.text == null ? (t.error || null) : null]);
+    }
+    res.json({ ok: true, setting, asked, answered, more: rows.length > batch.length, problems: [...new Set(problems)].slice(0, 3) });
+  } catch (err) { fail(res, err); }
+});
+
+const exportQuery = (m) => pool.query(
+  `SELECT s.id, s.patient_id, s.phrase_id, s.duration_ms, s.mime_type, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.gemini_error, s.whisper_error,
+          s.whisper_setting, s.whisper_language, s.created_at
+     FROM voice_samples s WHERE 1=1 ${m.sql.replace('$1', `$${m.args.length}`)}`, m.args);
+
+// Fixes-2m: the results as an Excel workbook. Text is stored as UTF-8 inside the
+// file, so Kannada and Tamil cannot be misread the way the 19 Oct CSV was.
+// Sheet 2 lists the re-runs (same member codes), beside the originals.
+router.get('/results.xlsx', coachOnly, async (req, res) => {
+  try {
+    const { rows } = await exportQuery(mine(req.user, 's'));
+    const ids = [...new Set(rows.map(r => r.patient_id))].sort((a, b) => a - b);
+    const code = new Map(ids.map((id, i) => [id, `M${i + 1}`]));
+    const reruns = await rerunsFor(rows.map(r => r.id));
+    const re = [['member', 'line_id', 'engine', 'setting', 'heard', 'keyword_score', 'meaning_checks', 'script', 'language_used', 'problem', 'asked_at']];
+    for (const r of rows) for (const x of reruns.get(r.id) || []) {
+      re.push([code.get(r.patient_id), r.phrase_id, x.engine, x.setting, x.text, x.text == null ? 'no answer' : Math.round((Number(x.score) || 0) * 100) + '%',
+        V.checksText(V.meaningChecks(r.phrase_id, x.text)), x.text == null ? '' : (V.SCRIPT_LABEL[V.scriptOf(x.text)] || ''), x.language || '', x.text == null ? (x.error || 'no answer') : '',
+        new Date(x.created_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC']);
+    }
+    const day = new Date().toISOString().slice(0, 10);
+    const buf = X.workbook([{ name: 'Recordings', rows: [V.HEAD, ...V.resultRows(rows)] }, { name: 'Re-runs', rows: re }]);
+    res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Cache-Control': 'no-store',
+      'Content-Disposition': `attachment; filename="FitLife-Voice-Pilot-${day}.xlsx"` });
+    res.send(buf);
+  } catch (err) { fail(res, err); }
+});
+
 // One file to send on: every recording, members as codes, no names, no audio.
 router.get('/results.csv', coachOnly, async (req, res) => {
   try {
     const m = mine(req.user, 's');
-    const { rows } = await pool.query(
-      `SELECT s.patient_id, s.phrase_id, s.duration_ms, s.mime_type, s.gemini_text, s.whisper_text, s.gemini_score, s.whisper_score, s.gemini_error, s.whisper_error, s.created_at
-         FROM voice_samples s WHERE 1=1 ${m.sql.replace('$1', `$${m.args.length}`)}`, m.args);
+    const { rows } = await exportQuery(m);
     const day = new Date().toISOString().slice(0, 10);
     res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
       'Content-Disposition': `attachment; filename="FitLife-Voice-Pilot-${day}.csv"` });
@@ -198,15 +287,19 @@ router.post('/sample', member, async (req, res) => {
     const t = await V.transcribeBoth(audio, mt);
     const { rows: [old] } = await pool.query(`SELECT object_key FROM voice_samples WHERE patient_id=$1 AND phrase_id=$2`, [req.user.id, phrase.id]);
     await pool.query(
-      `INSERT INTO voice_samples (patient_id, phrase_id, object_key, mime_type, duration_ms, gemini_text, whisper_text, gemini_score, whisper_score, gemini_error, whisper_error)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO voice_samples (patient_id, phrase_id, object_key, mime_type, duration_ms, gemini_text, whisper_text, gemini_score, whisper_score, gemini_error, whisper_error, whisper_setting, whisper_language)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        ON CONFLICT (patient_id, phrase_id) DO UPDATE SET object_key=EXCLUDED.object_key, mime_type=EXCLUDED.mime_type, duration_ms=EXCLUDED.duration_ms,
          gemini_text=EXCLUDED.gemini_text, whisper_text=EXCLUDED.whisper_text, gemini_score=EXCLUDED.gemini_score, whisper_score=EXCLUDED.whisper_score,
-         gemini_error=EXCLUDED.gemini_error, whisper_error=EXCLUDED.whisper_error,
-         created_at=NOW(), delete_after=NOW() + INTERVAL '90 days'`,
+         gemini_error=EXCLUDED.gemini_error, whisper_error=EXCLUDED.whisper_error, whisper_setting=EXCLUDED.whisper_setting, whisper_language=EXCLUDED.whisper_language,
+         created_at=NOW(), delete_after=NOW() + INTERVAL '90 days'
+       RETURNING id`,
       [req.user.id, phrase.id, key, mt, Math.min(60000, Math.max(0, parseInt(req.body?.duration_ms) || 0)) || null,
        t.gemini, t.whisper, t.gemini == null ? null : V.score(phrase.id, t.gemini), t.whisper == null ? null : V.score(phrase.id, t.whisper),
-       t.gemini == null ? (t.errors?.gemini || null) : null, t.whisper == null ? (t.errors?.whisper || null) : null]);
+       t.gemini == null ? (t.errors?.gemini || null) : null, t.whisper == null ? (t.errors?.whisper || null) : null,
+       t.whisper_setting || null, t.whisper == null ? null : (t.whisper_language || null)]);
+    // A new recording of the line: the re-runs were about the old audio, so they go.
+    if (old?.object_key && old.object_key !== key) await pool.query(`DELETE FROM voice_sample_reruns WHERE sample_id IN (SELECT id FROM voice_samples WHERE patient_id=$1 AND phrase_id=$2)`, [req.user.id, phrase.id]);
     if (old?.object_key && old.object_key !== key) storage.deleteObject(old.object_key).catch(() => {});
     res.json({ ok: true, heard: t.gemini || t.whisper || null });
   } catch (err) { fail(res, err); }

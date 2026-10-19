@@ -43,21 +43,147 @@ const PHRASES = [
   { id: 'f02', say: 'Your own words: your weight and one workout', means: 'Any way you like, Kannada, English or both', keys: [], free: true },
 ];
 
+// ── Meaning checks (Fixes-2m) ───────────────────────────────────────────────
+// The keyword score asks "were the key words heard?". It cannot tell "no sugar"
+// from "sugar", "2 idli" from "3 idli", 72.5 kg from 725, or lunch from dinner.
+// These checks ask those questions separately, per recording and per engine.
+// They are an evaluation of the engines only: nothing here chooses an engine,
+// and the app's default engine is not taken from them.
+//   quantity  the expected number sits right before (or just after) the item
+//   decimal   a decimal number survives whole (72.5, not 725 or 72)
+//   negation  the item AND a "no" word are heard (no sugar ≠ sugar)
+//   meal      the meal or time of day
+//   date      the day (today / last night), and not the other one
+const NUM = { 1: '1|ondu|one|a', 2: '2|eradu|two', 3: '3|mooru|three', 7: '7|elu|yelu|seven', 10: '10|hattu|ten', 40: '40|nalavattu|forty', 100: '100|nooru|hundred' };
+const MEAL = { morning: 'belagge|belage|morning|breakfast|brekfast|tindi', breakfast: 'breakfast|brekfast|tindi|belagge', lunch: 'lunch|lanch|madhyahna|oota|afternoon', dinner: 'dinner|dinnar|raatri|ratri|night', snack: 'snack|snyak|sanje|evening', evening: 'sanje|evening|snack' };
+const TODAY = 'ivattu|ivathu|indu|today', LASTNIGHT = 'nenne|yesterday|last night';
+const CHECKS = {
+  k01: [{ kind: 'meal', label: 'morning', any: MEAL.morning }, { kind: 'quantity', label: '2 idli', item: 'idli|idly', n: NUM[2] }, { kind: 'quantity', label: '1 bowl sambar', item: 'bowl|baul', n: NUM[1] }],
+  k02: [{ kind: 'meal', label: 'breakfast', any: MEAL.breakfast }, { kind: 'quantity', label: '1 plate upma', item: 'plate|plet', n: NUM[1], also: 'upma|uppittu' }, { kind: 'quantity', label: '1 cup coffee', item: 'cup|kap', n: NUM[1], also: 'coffee|kaafi|kapi|kafi' }],
+  k03: [{ kind: 'meal', label: 'lunch', any: MEAL.lunch }, { kind: 'quantity', label: '1 ragi mudde', item: 'ragi|mudde', n: NUM[1] }],
+  k04: [{ kind: 'meal', label: 'lunch', any: MEAL.lunch }, { kind: 'quantity', label: '2 chapati', item: 'chapati|chapathi|chappathi', n: NUM[2] }],
+  k05: [{ kind: 'meal', label: 'evening', any: MEAL.evening }],
+  k06: [{ kind: 'date', label: 'today', any: TODAY, not: LASTNIGHT }, { kind: 'quantity', label: '3 litres', item: 'litre|liter|ltr', n: NUM[3] }],
+  k07: [{ kind: 'meal', label: 'dinner', any: MEAL.dinner }, { kind: 'quantity', label: '1 egg', item: 'motte|egg', n: NUM[1] }],
+  k08: [{ kind: 'meal', label: 'dinner', any: MEAL.dinner }, { kind: 'quantity', label: '2 jowar rotti', item: 'jolada|jowar|rotti|roti', n: NUM[2] }],
+  k09: [{ kind: 'meal', label: 'snack', any: MEAL.snack }, { kind: 'quantity', label: '10 almonds', item: 'badami|almond', n: NUM[10] }],
+  k11: [{ kind: 'date', label: 'today', any: TODAY, not: LASTNIGHT }, { kind: 'decimal', label: '72.5 kg', ok: ['72\\.5', '72 point 5', '72 point aidu', 'eppattu eradu point aidu', 'eppattu eradu point 5', 'seventy two point five'], bad: ['725'] }],
+  k12: [{ kind: 'quantity', label: '40 minutes', item: 'nimisha|minute|minutes|min', n: NUM[40] }],
+  k13: [{ kind: 'quantity', label: '3 sets', item: 'set|sets', n: NUM[3] }, { kind: 'quantity', label: '10 reps', item: 'rep|reps', n: NUM[10] }],
+  k14: [{ kind: 'date', label: 'last night', any: LASTNIGHT, not: TODAY }, { kind: 'quantity', label: '7 hours', item: 'gante|hour|hours', n: NUM[7] }],
+  k17: [{ kind: 'quantity', label: '2 rice rotti', item: 'rotti|roti', n: NUM[2] }],
+  k18: [{ kind: 'negation', label: 'no sugar', item: 'sakkare|sugar', no: 'haakilla|hakilla|illa|no|without|not|bina|nahi' }],
+  k20: [{ kind: 'quantity', label: '100 grams', item: 'gram|grams|g', n: NUM[100] }],
+};
+
+// ── Scripts (Fixes-2m) ──────────────────────────────────────────────────────
+// 19 Oct, first real pilot recording: Whisper (language not set) took Kannada
+// speech for Tamil and wrote it in Tamil script, which the key words (English
+// letters) can never match. Since then the pilot asks Whisper for Kannada, and
+// Whisper writes Kannada in Kannada script; to score that fairly it is spelled
+// out in English letters first (below). A Tamil, Telugu or Hindi script answer
+// is never converted: it is the wrong language, and it is labelled as such.
+const SCRIPTS = [['kannada', /[\u0C80-\u0CFF]/g], ['tamil', /[\u0B80-\u0BFF]/g], ['telugu', /[\u0C00-\u0C7F]/g], ['devanagari', /[\u0900-\u097F]/g], ['malayalam', /[\u0D00-\u0D7F]/g], ['latin', /[A-Za-z]/g]];
+/** The writing system of a transcript: 'latin', 'kannada', 'tamil'…, 'mixed' or null (empty). */
+function scriptOf(text) {
+  const t = String(text || '');
+  const counts = SCRIPTS.map(([name, re]) => [name, (t.match(re) || []).length]).filter(([, n]) => n > 0);
+  if (!counts.length) return null;
+  counts.sort((a, b) => b[1] - a[1]);
+  const total = counts.reduce((x, [, n]) => x + n, 0);
+  return counts[0][1] / total >= 0.8 ? counts[0][0] : 'mixed';
+}
+const SCRIPT_LABEL = { latin: 'English letters', kannada: 'Kannada script', tamil: 'Tamil script', telugu: 'Telugu script', devanagari: 'Devanagari (Hindi) script', malayalam: 'Malayalam script', mixed: 'mixed scripts' };
+
+// Kannada script → English letters, the way members spell it (idli, eradu,
+// sambar, kaafi). Simplified on purpose: retroflex and dental letters fall
+// together (ಡ/ದ → d), as they do in everyday spelling.
+const KN_V = { 'ಅ': 'a', 'ಆ': 'aa', 'ಇ': 'i', 'ಈ': 'ee', 'ಉ': 'u', 'ಊ': 'oo', 'ಋ': 'ru', 'ಎ': 'e', 'ಏ': 'e', 'ಐ': 'ai', 'ಒ': 'o', 'ಓ': 'o', 'ಔ': 'au' };
+const KN_C = { 'ಕ': 'k', 'ಖ': 'kh', 'ಗ': 'g', 'ಘ': 'gh', 'ಙ': 'n', 'ಚ': 'ch', 'ಛ': 'chh', 'ಜ': 'j', 'ಝ': 'jh', 'ಞ': 'n', 'ಟ': 't', 'ಠ': 'th', 'ಡ': 'd', 'ಢ': 'dh', 'ಣ': 'n',
+  'ತ': 't', 'ಥ': 'th', 'ದ': 'd', 'ಧ': 'dh', 'ನ': 'n', 'ಪ': 'p', 'ಫ': 'f', 'ಬ': 'b', 'ಭ': 'bh', 'ಮ': 'm', 'ಯ': 'y', 'ರ': 'r', 'ಱ': 'r', 'ಲ': 'l', 'ಳ': 'l', 'ೞ': 'l',
+  'ವ': 'v', 'ಶ': 'sh', 'ಷ': 'sh', 'ಸ': 's', 'ಹ': 'h' };
+const KN_M = { 'ಾ': 'aa', 'ಿ': 'i', 'ೀ': 'ee', 'ು': 'u', 'ೂ': 'oo', 'ೃ': 'ru', 'ೆ': 'e', 'ೇ': 'e', 'ೈ': 'ai', 'ೊ': 'o', 'ೋ': 'o', 'ೌ': 'au' };
+const VIRAMA = '್';
+function kannadaToLatin(text) {
+  const t = [...String(text || '').normalize('NFC')];
+  let out = '';
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i], nx = t[i + 1];
+    if (KN_V[c]) out += KN_V[c];
+    else if (KN_C[c]) {
+      out += KN_C[c];
+      if (nx === VIRAMA) i++;
+      else if (KN_M[nx]) { out += KN_M[nx]; i++; }
+      else if (nx !== '಼') out += 'a';
+    }
+    else if (c === 'ಂ') out += /^[ಪಫಬಭಮ]/.test(nx || '') ? 'm' : 'n';
+    else if (c === 'ಃ') out += 'h';
+    else if (c >= '೦' && c <= '೯') out += String(c.charCodeAt(0) - 0x0CE6);
+    else if (c === '಼' || c === '\u200c' || c === '\u200d') continue;
+    else out += c;
+  }
+  return out;
+}
+
 const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-z0-9.\u0C80-\u0CFF ]+/g, ' ').replace(/\s+/g, ' ').trim();
+// Spelling-level matching for a transliterated answer only: long vowels and
+// "ph" fall together (saambaar = sambar, neeru = niru, kaafi = kafi).
+const loose = (s) => s.replace(/ee/g, 'i').replace(/oo/g, 'u').replace(/aa/g, 'a').replace(/ii/g, 'i').replace(/uu/g, 'u').replace(/ph/g, 'f');
+/**
+ * The text a transcript is matched as, and how. A transcript in English
+ * letters is matched exactly as before Fixes-2m (so every stored score stays
+ * what it was); one with Kannada script is spelled out and matched loosely.
+ */
+function prepared(transcript) {
+  const raw = String(transcript || '');
+  if (!/[\u0C80-\u0CFF]/.test(raw)) return { t: ` ${norm(raw)} `, f: (w) => norm(w) };
+  return { t: ` ${loose(norm(kannadaToLatin(raw)))} `, f: (w) => loose(norm(w)) };
+}
 
 /** Share of a phrase's key words heard in a transcript (0..1), or null for free phrases. */
 function score(phraseId, transcript) {
   const p = PHRASES.find(x => x.id === phraseId);
   if (!p || !p.keys.length) return null;
-  const t = ` ${norm(transcript)} `;
+  const { t, f } = prepared(transcript);
   if (!t.trim()) return 0;
   const hit = p.keys.filter(k => k.split('|').some(v => {
-    const w = norm(v);
+    const w = f(v);
     return /^\d+$/.test(w) ? new RegExp(`(^|[^0-9])${w}([^0-9]|$)`).test(t) : t.includes(w);
   }));
   return Math.round((hit.length / p.keys.length) * 100) / 100;
 }
+
+/**
+ * The meaning checks for one transcript: [{ kind, label, pass }] (empty when
+ * the line has none). A missing transcript has no checks.
+ */
+function meaningChecks(phraseId, transcript) {
+  const list = CHECKS[phraseId] || [];
+  if (transcript == null) return [];
+  const { t, f } = prepared(transcript);
+  const words = t.trim().split(' ').filter(Boolean);
+  const alts = (spec) => spec.split('|').map(f).filter(Boolean);
+  const hasWord = (spec) => alts(spec).some(v => (v.includes(' ') ? t.includes(` ${v} `) : words.includes(v) || (v.length > 3 && words.some(w => w.startsWith(v)))));
+  return list.map(c => {
+    let pass = false;
+    if (c.kind === 'meal') pass = hasWord(c.any);
+    else if (c.kind === 'date') pass = hasWord(c.any) && !hasWord(c.not);
+    else if (c.kind === 'negation') pass = hasWord(c.item) && hasWord(c.no);
+    else if (c.kind === 'decimal') {
+      pass = c.ok.some(v => new RegExp(`(^|[^0-9.])${v.includes('\\') ? v : f(v)}([^0-9]|$)`).test(t)) && !c.bad.some(v => new RegExp(`(^|[^0-9])${v}([^0-9]|$)`).test(t));
+    } else if (c.kind === 'quantity') {
+      const item = alts(c.item), nums = alts(c.n);
+      const at = words.map((w, i) => (item.some(v => w === v || (v.length > 3 && w.startsWith(v))) ? i : -1)).filter(i => i >= 0);
+      // the number right before the item (up to 2 words: "eradu jolada rotti"), or right after ("akki rotti eradu")
+      pass = at.some(i => [i - 1, i - 2, i + 1].some(j => j >= 0 && j < words.length && nums.includes(words[j])))
+        && (!c.also || hasWord(c.also));
+    }
+    return { kind: c.kind, label: c.label, pass };
+  });
+}
+/** "breakfast ✓ · 1 plate upma ✗" — for the file and the coach's view. */
+const checksText = (list) => (list || []).map(c => `${c.label} ${c.pass ? '✓' : '✗'}`).join(' · ');
 
 const PROMPT = `Transcribe this voice note exactly as spoken.
 The speaker is in Karnataka, logging food, water, sleep, weight or exercise in
@@ -77,18 +203,29 @@ async function gemini(audio, mimeType, env = process.env) {
   }, { headers: { 'content-type': 'application/json' }, timeout: 30000 });
   return String((r.data.candidates?.[0]?.content?.parts || []).map(p => p.text).join('') || '').trim().slice(0, 1000);
 }
-async function whisper(audio, mimeType, env = process.env) {
+// Fixes-2m: Whisper is told the language. Left to guess, it took the first
+// real Kannada recording (19 Oct) for Tamil and wrote Tamil script. 'kn' is the
+// pilot's language; VOICE_PILOT_WHISPER_LANGUAGE can change it ('auto' = guess,
+// as before). verbose_json returns the language Whisper used, which is stored.
+const whisperLanguage = (env = process.env) => {
+  const v = String(env.VOICE_PILOT_WHISPER_LANGUAGE || 'kn').trim().toLowerCase();
+  return /^[a-z]{2}$/.test(v) ? v : 'auto';
+};
+async function whisper(audio, mimeType, env = process.env, language = whisperLanguage(env)) {
   if (!env.GROQ_API_KEY) return null;
   const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
   const fd = new FormData();
   fd.append('file', new Blob([Buffer.from(audio, 'base64')], { type: mimeType }), `sample.${ext}`);
   fd.append('model', 'whisper-large-v3');
   fd.append('temperature', '0');
-  fd.append('response_format', 'json');
+  fd.append('response_format', 'verbose_json');
+  if (language && language !== 'auto') fd.append('language', language);
   fd.append('prompt', WHISPER_PROMPT);
   const r = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', fd,
     { headers: { Authorization: `Bearer ${env.GROQ_API_KEY}` }, timeout: 30000 });
-  return String(r.data?.text || '').trim().slice(0, 1000);
+  const text = String(r.data?.text || '').trim().slice(0, 1000);
+  // The language Whisper reports using ("kannada", "tamil", "kn"…), as given; the setting it was asked for.
+  return { text, language: r.data?.language ? String(r.data.language).slice(0, 20) : null, setting: language || 'auto' };
 }
 
 /**
@@ -108,11 +245,12 @@ const RETRY_MS = () => Number(process.env.VOICE_PILOT_RETRY_MS ?? 800);
 
 async function once(name, keyName, fn, audio, mimeType) {
   if (!process.env[keyName]) return { text: null, error: `${keyName} is not set` };
-  try { return { text: await fn(audio, mimeType), error: null }; }
+  const wrap = (v) => (v && typeof v === 'object' ? { text: v.text, language: v.language ?? null, setting: v.setting ?? null, error: null } : { text: v, error: null });
+  try { return wrap(await fn(audio, mimeType)); }
   catch (e1) {
     if (passing(e1)) {
       await new Promise(r => setTimeout(r, RETRY_MS()));
-      try { return { text: await fn(audio, mimeType), error: null }; }
+      try { return wrap(await fn(audio, mimeType)); }
       catch (e2) { console.error(`voice pilot: ${name} gave no answer (after a retry):`, reason(e2)); return { text: null, error: reason(e2) }; }
     }
     console.error(`voice pilot: ${name} gave no answer:`, reason(e1));
@@ -130,13 +268,14 @@ async function transcribeBoth(audio, mimeType) {
     once('gemini', 'GEMINI_API_KEY', gemini, audio, mimeType),
     once('whisper', 'GROQ_API_KEY', whisper, audio, mimeType),
   ]);
-  return { gemini: g.text, whisper: w.text, errors: { gemini: g.error, whisper: w.error } };
+  return { gemini: g.text, whisper: w.text, errors: { gemini: g.error, whisper: w.error },
+           whisper_language: w.language ?? null, whisper_setting: w.text != null ? (w.setting ?? null) : null };
 }
 
 /** One engine only, for trying a stored recording again. engine: 'gemini' | 'whisper'. */
-async function transcribeOne(engine, audio, mimeType) {
+async function transcribeOne(engine, audio, mimeType, { language } = {}) {
   if (engine === 'gemini') return once('gemini', 'GEMINI_API_KEY', gemini, audio, mimeType);
-  if (engine === 'whisper') return once('whisper', 'GROQ_API_KEY', whisper, audio, mimeType);
+  if (engine === 'whisper') return once('whisper', 'GROQ_API_KEY', (a, m) => whisper(a, m, process.env, language || whisperLanguage()), audio, mimeType);
   return { text: null, error: 'unknown engine' };
 }
 
@@ -171,37 +310,73 @@ function summarise(rows) {
 }
 
 /**
- * The pilot results as a CSV file for Sachin to send on. One row per
- * recording. Members appear as codes (M1, M2…), never by name; the codes are
- * the same in every download (ordered by member id). Audio is not included.
- * Cells that a spreadsheet would run as a formula (= + - @) are made plain text.
+ * The pilot results as rows for a file to send on. One row per recording.
+ * Members appear as codes (M1, M2…), never by name; the codes are the same in
+ * every download (ordered by member id). Audio is not included.
+ *
+ * Fixes-2m: the scores are named for what they are, KEYWORD scores; the
+ * meaning checks, the script each engine wrote in and the language Whisper
+ * used are added at the end (the original columns keep their order).
  */
-function resultsCsv(rows, { now = new Date() } = {}) {
+const HEAD = ['member', 'line_id', 'line', 'meaning', 'own_words', 'gemini_heard', 'whisper_heard', 'gemini_keyword_score', 'whisper_keyword_score', 'seconds', 'audio_type', 'recorded_at', 'gemini_problem', 'whisper_problem',
+  'gemini_meaning_checks', 'whisper_meaning_checks', 'gemini_script', 'whisper_script', 'whisper_language_asked', 'whisper_language_used'];
+function resultRows(rows) {
   const ids = [...new Set((rows || []).map(r => r.patient_id))].sort((a, b) => a - b);
   const code = new Map(ids.map((id, i) => [id, `M${i + 1}`]));
+  const audio = (m) => (/mp4|m4a|aac/.test(m || '') ? 'mp4 (usually iPhone)' : /webm|ogg/.test(m || '') ? 'webm (usually Android)' : (m || ''));
+  // A scored line an engine did not answer is a miss (0%), the same as in the panel.
+  const sc = (r, k, isFree) => (isFree ? '' : r[`${k}_text`] == null ? 'no answer' : Math.round((Number(r[`${k}_score`]) || 0) * 100) + '%');
+  const scr = (t) => (t == null ? '' : SCRIPT_LABEL[scriptOf(t)] || '');
+  const byPhrase = new Map(PHRASES.map((p, i) => [p.id, { p, i }]));
+  const sorted = [...(rows || [])].sort((a, b) => (byPhrase.get(a.phrase_id)?.i ?? 99) - (byPhrase.get(b.phrase_id)?.i ?? 99) || code.get(a.patient_id).localeCompare(code.get(b.patient_id), undefined, { numeric: true }));
+  return sorted.map(r => {
+    const p = byPhrase.get(r.phrase_id)?.p;
+    return [code.get(r.patient_id), r.phrase_id, p?.say || '', p?.means || '', p?.free ? 'yes' : 'no',
+      r.gemini_text, r.whisper_text,
+      sc(r, 'gemini', !!p?.free), sc(r, 'whisper', !!p?.free),
+      r.duration_ms ? (Number(r.duration_ms) / 1000).toFixed(1) : '', audio(r.mime_type),
+      r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '',
+      r.gemini_text == null ? (r.gemini_error || 'no answer') : '', r.whisper_text == null ? (r.whisper_error || 'no answer') : '',
+      checksText(meaningChecks(r.phrase_id, r.gemini_text)), checksText(meaningChecks(r.phrase_id, r.whisper_text)),
+      scr(r.gemini_text), scr(r.whisper_text),
+      // Recordings from before 20 Oct 2026 were sent with no language (Whisper guessed).
+      r.whisper_text == null ? '' : (r.whisper_setting || 'not set (Whisper guessed)'), r.whisper_language || (r.whisper_text == null ? '' : 'not recorded')];
+  });
+}
+
+/** The same rows as a CSV file. Cells a spreadsheet would run as a formula (= + - @) are made plain text. */
+function resultsCsv(rows) {
   const cell = (v) => {
     let t = v == null ? '' : String(v);
     if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
     return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
-  const audio = (m) => (/mp4|m4a|aac/.test(m || '') ? 'mp4 (usually iPhone)' : /webm|ogg/.test(m || '') ? 'webm (usually Android)' : (m || ''));
-  const head = ['member', 'line_id', 'line', 'meaning', 'own_words', 'gemini_heard', 'whisper_heard', 'gemini_score', 'whisper_score', 'seconds', 'audio_type', 'recorded_at', 'gemini_problem', 'whisper_problem'];
-  // A scored line an engine did not answer is a miss (0%), the same as in the panel.
-  const sc = (r, k, isFree) => (isFree ? '' : r[`${k}_text`] == null ? 'no answer' : Math.round((Number(r[`${k}_score`]) || 0) * 100) + '%');
-  const lines = [head.join(',')];
-  const byPhrase = new Map(PHRASES.map((p, i) => [p.id, { p, i }]));
-  const sorted = [...(rows || [])].sort((a, b) => (byPhrase.get(a.phrase_id)?.i ?? 99) - (byPhrase.get(b.phrase_id)?.i ?? 99) || code.get(a.patient_id).localeCompare(code.get(b.patient_id), undefined, { numeric: true }));
-  for (const r of sorted) {
-    const p = byPhrase.get(r.phrase_id)?.p;
-    lines.push([code.get(r.patient_id), r.phrase_id, p?.say || '', p?.means || '', p?.free ? 'yes' : 'no',
-      r.gemini_text, r.whisper_text,
-      sc(r, 'gemini', !!p?.free), sc(r, 'whisper', !!p?.free),
-      r.duration_ms ? (Number(r.duration_ms) / 1000).toFixed(1) : '', audio(r.mime_type),
-      r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '',
-      r.gemini_text == null ? (r.gemini_error || 'no answer') : '', r.whisper_text == null ? (r.whisper_error || 'no answer') : ''].map(cell).join(','));
-  }
-  // Excel opens UTF-8 correctly only with the byte-order mark.
+  const lines = [HEAD.join(','), ...resultRows(rows).map(r => r.map(cell).join(','))];
+  // Excel opens UTF-8 correctly only with the byte-order mark. (Some spreadsheet
+  // programs still ignore it: the 19 Oct file came back as Windows-1252 text.
+  // results.xlsx has no such step, so it is the file to open.)
   return '\ufeff' + lines.join('\r\n') + '\r\n';
 }
 
-module.exports = { PHRASES, score, transcribeBoth, transcribeOne, summarise, resultsCsv, reason, PROMPT, WHISPER_PROMPT, norm };
+/**
+ * Keyword score and meaning checks per engine, over the recordings given.
+ * Evaluation only: too few recordings say nothing about which engine to use.
+ */
+function checksSummary(rows) {
+  const out = {};
+  for (const k of ['gemini', 'whisper']) {
+    const by = {};
+    for (const r of rows || []) {
+      if (r[`${k}_text`] == null) continue;
+      for (const c of meaningChecks(r.phrase_id, r[`${k}_text`])) {
+        by[c.kind] = by[c.kind] || { passed: 0, total: 0 };
+        by[c.kind].total++; if (c.pass) by[c.kind].passed++;
+      }
+    }
+    out[k] = by;
+  }
+  return out;
+}
+
+module.exports = { PHRASES, CHECKS, score, transcribeBoth, transcribeOne, summarise, resultsCsv, resultRows, HEAD, reason, PROMPT, WHISPER_PROMPT, norm,
+  scriptOf, SCRIPT_LABEL, kannadaToLatin, meaningChecks, checksText, checksSummary, whisperLanguage };

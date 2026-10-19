@@ -1016,6 +1016,26 @@ CREATE TABLE IF NOT EXISTS voice_samples (
 -- be told apart from "busy", "key missing" or "audio type not accepted".
 ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS gemini_error  VARCHAR(200);
 ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS whisper_error VARCHAR(200);
+-- Fixes-2m: which language Whisper was asked for ('kn'; NULL = not set, it
+-- guessed, as for every recording before 20 Oct 2026) and the language it
+-- reports using. The 19 Oct recordings were guessed as Tamil.
+ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS whisper_setting  VARCHAR(20);
+ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS whisper_language VARCHAR(20);
+-- Fixes-2m: an engine asked AGAIN about a stored recording with another
+-- setting (e.g. Whisper with the language fixed to Kannada), kept beside the
+-- original result, which is never changed. Deleted with the recording.
+CREATE TABLE IF NOT EXISTS voice_sample_reruns (
+  id          SERIAL PRIMARY KEY,
+  sample_id   INT NOT NULL REFERENCES voice_samples(id) ON DELETE CASCADE,
+  engine      VARCHAR(20) NOT NULL,
+  setting     VARCHAR(20) NOT NULL,
+  text        TEXT,
+  language    VARCHAR(20),
+  score       REAL,
+  error       VARCHAR(200),
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (sample_id, engine, setting)
+);
 
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they

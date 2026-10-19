@@ -19,6 +19,13 @@
  *   F. A switched-off account cannot be invited.
  *   D. Recordings are private, links expire; withdrawing or being removed
  *      deletes every recording at once; after 90 days they are deleted.
+ *   G. (Fixes-2m, after the 19 Oct real recordings) Whisper is told the
+ *      language and its reported language is stored; a Tamil-script answer is
+ *      labelled, never "fixed"; Kannada script is spelled out to be scored;
+ *      English-letter scores are exactly as before; meaning checks (sugar vs no
+ *      sugar, quantities, decimal weight, meal, day) are separate from the
+ *      keyword score; re-runs sit beside the original, which never changes;
+ *      the Excel file and the CSV carry the exact UTF-8 text.
  */
 if (!process.env.DATABASE_URL?.includes('localhost') && !process.env.ALLOW_TEST_DB) {
   console.error('Refusing to run: DATABASE_URL is not localhost.'); process.exit(1);
@@ -32,6 +39,7 @@ require(axiosPath);
 const realAxios = require.cache[axiosPath].exports;
 const heard = { gemini: 'Belagge eradu idli mattu ondu bowl sambar thinde', whisper: 'Belage eradu idly mattu ondu bowl sambhar' };
 let down = { gemini: false, whisper: false }, calls = { gemini: 0, whisper: 0 }, lastGeminiPrompt = '', lastWhisperPrompt = '';
+let lastWhisperForm = null, whisperLanguageReply = undefined;   // Fixes-2m: what Whisper was asked; what it says it used
 // failOnce: the next call fails with "busy" (503), the one after works. hard: a 400, which no retry can fix.
 const failOnce = { gemini: 0, whisper: 0 }, hard = { gemini: false, whisper: false };
 const boom = (status, message) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status, data: { error: { message } } } });
@@ -46,10 +54,11 @@ const stubbedPost = async (url, body, cfg) => {
   }
   if (u.includes('api.groq.com/openai/v1/audio/transcriptions')) {
     calls.whisper++; lastWhisperPrompt = body?.get ? body.get('prompt') : '';
+    lastWhisperForm = body?.get ? { language: body.get('language'), response_format: body.get('response_format'), model: body.get('model') } : null;
     if (hard.whisper) throw boom(400, 'Unsupported audio type');
     if (failOnce.whisper > 0) { failOnce.whisper--; throw boom(503, 'Service busy'); }
     if (down.whisper) throw boom(500, 'Internal error, Bearer gsk_SECRET456 rejected');
-    return { data: { text: heard.whisper } };
+    return { data: whisperLanguageReply === undefined ? { text: heard.whisper } : { text: heard.whisper, language: whisperLanguageReply } };
   }
   return realAxios.post(url, body, cfg);
 };
@@ -203,12 +212,16 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     const rows = f.text.replace(/^\ufeff/, '').trim().split('\r\n');
     ck('Download results: a CSV file, named with the date', f.status === 200 && /^text\/csv/.test(f.type) && /attachment; filename="FitLife-Voice-Pilot-\d{4}-\d{2}-\d{2}\.csv"/.test(f.disp), [f.status, f.type, f.disp]);
     ck('it opens in Excel with Kannada and quotes intact (UTF-8 mark at the start)', f.bytes[0] === 0xEF && f.bytes[1] === 0xBB && f.bytes[2] === 0xBF);
-    ck('a header and one row per recording', rows[0] === 'member,line_id,line,meaning,own_words,gemini_heard,whisper_heard,gemini_score,whisper_score,seconds,audio_type,recorded_at,gemini_problem,whisper_problem' && rows.length === 3, rows);
+    // Changed 19 Oct 2026 (Fixes-2m): the two score columns are named for what they are, KEYWORD scores
+    // (Sachin's request), and six columns are added at the end. The original columns keep their order.
+    ck('a header and one row per recording', rows[0] === 'member,line_id,line,meaning,own_words,gemini_heard,whisper_heard,gemini_keyword_score,whisper_keyword_score,seconds,audio_type,recorded_at,gemini_problem,whisper_problem,gemini_meaning_checks,whisper_meaning_checks,gemini_script,whisper_script,whisper_language_asked,whisper_language_used' && rows.length === 3, rows);
     ck('members as codes, never names', /^M1,k01,/.test(rows[1]) && !/Padmini/.test(f.text));
     ck('both transcripts and both scores', rows[1].includes(heard.gemini) && rows[1].includes(',100%,67%,') , rows[1]);
     ck('the phone\'s audio type, said plainly', /webm \(usually Android\)/.test(rows[1]) && /mp4 \(usually iPhone\)/.test(f.text));
     ck('a transcript a spreadsheet would run as a formula is made plain text', f.text.includes(",'=cmd(1),") && !/,=cmd/.test(f.text), rows[2]);
-    ck('the file says "no answer" as the score, and why, for the line Whisper missed', /^M1,k15,/.test(rows[2]) && rows[2].includes(',0%,no answer,') && rows[2].endsWith(',,"500: Internal error, Bearer … rejected"') && !/SECRET/.test(f.text), rows[2]);
+    // Changed 19 Oct 2026 (Fixes-2m): the reason is no longer the LAST cell (six columns follow it), so
+    // the check looks for it followed by the new columns; the same reason must be there.
+    ck('the file says "no answer" as the score, and why, for the line Whisper missed', /^M1,k15,/.test(rows[2]) && rows[2].includes(',0%,no answer,') && rows[2].includes(',,"500: Internal error, Bearer … rejected",') && !/SECRET/.test(f.text), rows[2]);
     ck('no audio, no links in the file', !/r2|http|X-Amz/i.test(f.text));
     ck('another coach gets only the header (none of these members)', (await get(O)).text.replace(/^\ufeff/, '').trim().split('\r\n').length === 1);
     ck('a member cannot download it', (await get(M)).status === 403);
@@ -243,6 +256,115 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     }
   }
 
+  console.log('\n[3b] Fixes-2m: language, scripts, meaning checks, re-runs, the files');
+  {
+    const TAMIL = 'விளைகே இரடு இட்ளி, ஒந்து போல் சாம்பா திந்தே.';   // Whisper's real 19 Oct answer to k01
+    const SHEET = 'à®µà®¿à®³à¯ˆà®•à¯‡ à®‡à®°à®Ÿà¯\x81 à®‡à®Ÿà¯\x8dà®³à®¿, à®’à®¨à¯\x8dà®¤à¯\x81 à®ªà¯‹à®²à¯\x8d à®šà®¾à®®à¯\x8dà®ªà®¾ à®¤à®¿à®¨à¯\x8dà®¤à¯‡.';   // the same cell in Sachin's converted spreadsheet
+    // The 19 Oct cell is exactly this text's UTF-8 bytes read as Windows-1252 (bytes Windows leaves undefined pass through).
+    const cp1252 = (buf) => { const hi = '€\x81‚ƒ„…†‡ˆ‰Š‹Œ\x8dŽ\x8f\x90‘’“”•–—˜™š›œ\x9džŸ'; return [...buf].map(b => (b >= 0x80 && b < 0xA0 ? hi[b - 0x80] : String.fromCharCode(b))).join(''); };
+    ck('trace: the spreadsheet cell is the stored Tamil text, read as Windows-1252 — one wrong decoding step, after FitLife', cp1252(Buffer.from(TAMIL, 'utf8')) === SHEET);
+    ck('…and that text is Tamil script (Whisper took Kannada speech for Tamil); its keyword score is 0, as stored',
+       V.scriptOf(TAMIL) === 'tamil' && V.score('k01', TAMIL) === 0);
+    // Whisper is now told the language, and says which it used.
+    whisperLanguageReply = 'kannada';
+    const KN = 'ಬೆಳಗ್ಗೆ ಎರಡು ಇಡ್ಲಿ ಮತ್ತು ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್ ತಿಂದೆ';
+    const usual = heard.whisper; heard.whisper = KN;
+    let r = await call('POST', '/api/voice-pilot/sample', M, { phrase_id: 'k06', audio: AUDIO, mimeType: 'audio/webm' });
+    heard.whisper = usual;
+    ck('Whisper is asked for Kannada ("kn") with a reply that says which language it used (verbose_json)', r.status === 200 && lastWhisperForm?.language === 'kn' && lastWhisperForm?.response_format === 'verbose_json' && lastWhisperForm?.model === 'whisper-large-v3', lastWhisperForm);
+    const k06 = (await pool.query(`SELECT * FROM voice_samples WHERE phrase_id='k06'`)).rows[0];
+    ck('the language asked and the language used are stored with the recording', k06.whisper_setting === 'kn' && k06.whisper_language === 'kannada', k06);
+    ck('Kannada script is spelled out in English letters to be scored (ಇಡ್ಲಿ → idli, ಎರಡು → eradu, ಸಾಂಬಾರ್ → saambaar)',
+       V.kannadaToLatin(KN) === 'belagge eradu idli mattu ondu baul saambaar tinde' && V.score('k01', KN) === 1, V.kannadaToLatin(KN));
+    ck('a Kannada-script answer gets the meaning checks too (morning ✓, 2 idli ✓, 1 bowl ✓)', V.checksText(V.meaningChecks('k01', KN)) === 'morning ✓ · 2 idli ✓ · 1 bowl sambar ✓');
+    ck('VOICE_PILOT_WHISPER_LANGUAGE can set another language or "auto" (Whisper guesses, as before 20 Oct)',
+       V.whisperLanguage({ VOICE_PILOT_WHISPER_LANGUAGE: 'auto' }) === 'auto' && V.whisperLanguage({ VOICE_PILOT_WHISPER_LANGUAGE: 'en' }) === 'en' && V.whisperLanguage({}) === 'kn' && V.whisperLanguage({ VOICE_PILOT_WHISPER_LANGUAGE: 'x;y' }) === 'auto');
+    // English-letter answers score EXACTLY as before Fixes-2m (the 2k–2l scorer, frozen here).
+    const oldNorm = (t) => String(t || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9.\u0C80-\u0CFF ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const oldScore = (id, tr) => { const p = V.PHRASES.find(x => x.id === id); if (!p || !p.keys.length) return null; const t = ` ${oldNorm(tr)} `; if (!t.trim()) return 0;
+      const hit = p.keys.filter(k => k.split('|').some(v => { const w = oldNorm(v); return /^\d+$/.test(w) ? new RegExp(`(^|[^0-9])${w}([^0-9]|$)`).test(t) : t.includes(w); })); return Math.round((hit.length / p.keys.length) * 100) / 100; };
+    const corpus = [];
+    for (const p of V.PHRASES) corpus.push(p.say, p.means, p.say.toLowerCase(), p.say.split(' ').slice(0, 3).join(' '), p.say.replace(/a/g, 'aa'), p.say.replace(/ee/g, 'i'), '');
+    corpus.push('Belagge eradu idli ondu bowl sambar tinde', 'Breakfast ge ondu plate uppittu ondu cup coffee.', 'breakfast 1 cup coffee', heard.whisper, 'Ondu masala dose', '12 idli sambar', TAMIL);
+    const moved = [];
+    for (const p of V.PHRASES) for (const t of corpus) if (oldScore(p.id, t) !== V.score(p.id, t)) moved.push([p.id, t]);
+    ck(`English-letter (and Tamil) answers score exactly as before: ${V.PHRASES.length * corpus.length} line × answer pairs, none moved`, moved.length === 0, moved.slice(0, 3));
+    ck('the real 19 Oct answers keep their stored scores (Gemini 100%, 100%; Whisper 0%, 50%)',
+       V.score('k01', 'Belagge eradu idli ondu bowl sambar tinde') === 1 && V.score('k02', 'Breakfast ge ondu plate uppittu ondu cup coffee.') === 1 && V.score('k01', TAMIL) === 0 && V.score('k02', 'breakfast 1 cup coffee') === 0.5);
+
+    // Meaning checks: separate from the keyword score.
+    const C2 = (id, t) => V.checksText(V.meaningChecks(id, t));
+    ck('sugar vs no sugar: "sakkare haakilla" / "no sugar" pass; "sakkare haakide" / "tea with sugar" fail — the keyword score cannot tell them apart (both 100%)',
+       C2('k18', 'Tea-ge sakkare haakilla') === 'no sugar ✓' && C2('k18', 'tea no sugar') === 'no sugar ✓' && C2('k18', 'Tea-ge sakkare haakide') === 'no sugar ✗' && C2('k18', 'tea with sugar') === 'no sugar ✗'
+       && V.score('k18', 'tea with sugar') === 1 && V.score('k18', 'Tea-ge sakkare haakilla') === 1);
+    ck('quantities: "eradu idli" passes, "mooru idli" fails although the keyword score is the same', C2('k01', 'belagge eradu idli ondu bowl sambar') === 'morning ✓ · 2 idli ✓ · 1 bowl sambar ✓' && /2 idli ✗/.test(C2('k01', 'belagge mooru idli ondu bowl sambar 2')) && V.score('k01', 'belagge mooru idli ondu bowl sambar 2') === 1);
+    ck('the real Whisper upma answer: breakfast ✓, upma ✗ (it was left out), coffee ✓', C2('k02', 'breakfast 1 cup coffee') === 'breakfast ✓ · 1 plate upma ✗ · 1 cup coffee ✓');
+    ck('decimal weight: 72.5 and "eppattu eradu point aidu" pass; 725 and 72 fail', /72\.5 kg ✓/.test(C2('k11', 'ivattu weight 72.5 kg')) && /72\.5 kg ✓/.test(C2('k11', 'Ivattu belagge nanna tooka eppattu eradu point aidu kg'))
+       && /72\.5 kg ✗/.test(C2('k11', 'ivattu weight 725 kg')) && /72\.5 kg ✗/.test(C2('k11', 'ivattu weight 72 kg')));
+    ck('meals: lunch passes for a lunch line, dinner does not', /lunch ✓/.test(C2('k04', 'Lunch-ge eradu chapati')) && /lunch ✗/.test(C2('k04', 'dinner-ge eradu chapati')));
+    ck('days: "nenne raatri" passes for last night; "ivattu" (today) fails it, and passes the today line', /last night ✓/.test(C2('k14', 'Nenne raatri elu gante nidde')) && /last night ✗/.test(C2('k14', 'ivattu elu gante nidde')) && /today ✓/.test(C2('k06', 'Ivattu mooru litre neeru')));
+    ck('a line with no checks, and an engine with no answer, have none', V.meaningChecks('k10', 'whey protein haalu').length === 0 && V.meaningChecks('k01', null).length === 0);
+    const res2 = (await call('GET', '/api/voice-pilot/results', C)).data;
+    const s06 = res2.samples.find(x => x.phrase_id === 'k06');
+    ck('results: each recording says its script, Kannada in English letters, the meaning checks, and Whisper\'s language', s06.whisper_script === 'kannada' && s06.whisper_latin === V.kannadaToLatin(KN) && s06.whisper_setting === 'kn' && s06.whisper_language === 'kannada' && Array.isArray(s06.gemini_checks) && s06.gemini_checks.length === 2, s06);
+    ck('results: a summary of meaning checks per engine', res2.checks && res2.checks.gemini && typeof res2.checks.gemini === 'object', res2.checks);
+
+    // Re-runs: beside the original, never over it.
+    await pool.query(`UPDATE voice_samples SET whisper_text=$1, whisper_score=0, whisper_setting=NULL, whisper_language=NULL WHERE phrase_id='k01'`, [TAMIL]);
+    const before01 = (await pool.query(`SELECT whisper_text, whisper_score, gemini_text, gemini_score FROM voice_samples WHERE phrase_id='k01'`)).rows[0];
+    {
+      // k01 now stands for a recording made before 20 Oct: Whisper's real Tamil answer, no language stored.
+      const s01 = (await call('GET', '/api/voice-pilot/results', C)).data.samples.find(x => x.phrase_id === 'k01');
+      ck('an older recording (no language stored) reads "auto" (Whisper guessed) and "Tamil script"', s01.whisper_setting === 'auto' && s01.whisper_language === null && s01.whisper_script === 'tamil' && s01.whisper_latin === null, s01);
+    }
+    heard.whisper = KN; whisperLanguageReply = 'kannada';
+    const c0 = { ...calls };
+    r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn' });
+    heard.whisper = usual;
+    const after01 = (await pool.query(`SELECT whisper_text, whisper_score, gemini_text, gemini_score FROM voice_samples WHERE phrase_id='k01'`)).rows[0];
+    const rr = (await pool.query(`SELECT x.* FROM voice_sample_reruns x JOIN voice_samples s ON s.id = x.sample_id WHERE s.phrase_id='k01'`)).rows;
+    ck('re-run (Kannada): Whisper asked once per stored recording, with language kn; Gemini not asked', r.status === 200 && r.data.asked === 3 && r.data.answered === 3 && calls.whisper - c0.whisper === 3 && calls.gemini === c0.gemini && lastWhisperForm.language === 'kn', [r.data, calls, c0]);
+    ck('…the original Tamil answer and its 0 are untouched; the new answer is stored beside it, scored 100%', JSON.stringify(before01) === JSON.stringify(after01) && after01.whisper_text === TAMIL
+       && rr.length === 1 && rr[0].setting === 'kn' && rr[0].text === KN && Number(rr[0].score) === 1 && rr[0].language === 'kannada', [after01, rr]);
+    ck('…asking again with the same setting asks nobody', (await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn' })).data.asked === 0);
+    whisperLanguageReply = 'english';
+    r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'en' });
+    ck('re-run (English): a second setting is kept separately', r.data.asked === 3 && lastWhisperForm.language === 'en' && (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_reruns`)).rows[0].n === 6);
+    whisperLanguageReply = 'kannada';
+    r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'auto' });
+    ck('re-run "auto": no language is sent (Whisper guesses, as on 19 Oct)', r.data.asked === 3 && lastWhisperForm.language === null);
+    ck('re-run: an unknown setting is refused; another coach touches none; a member cannot', (await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'ta' })).status === 400
+       && (await call('POST', '/api/voice-pilot/results/rerun', O, { setting: 'kn' })).data.asked === 0 && (await call('POST', '/api/voice-pilot/results/rerun', M, { setting: 'kn' })).status === 403);
+    const res3 = (await call('GET', '/api/voice-pilot/results', C)).data.samples.find(x => x.phrase_id === 'k01');
+    ck('results show the re-runs under the recording, with script, score and checks', res3.reruns.length === 3 && res3.reruns.find(x => x.setting === 'kn').script === 'kannada' && res3.reruns.find(x => x.setting === 'kn').checks.length === 3 && res3.whisper === TAMIL && res3.whisper_script === 'tamil', res3.reruns);
+
+    // The files: exact UTF-8 text.
+    const csv = await fetch(`http://127.0.0.1:${port}/api/voice-pilot/results.csv`, { headers: { Authorization: 'Bearer ' + C } });
+    const cbytes = Buffer.from(await csv.arrayBuffer());
+    ck('CSV: UTF-8 mark, and the Tamil answer as its exact UTF-8 bytes; labelled "Tamil script"', cbytes.slice(0, 3).equals(Buffer.from([0xEF, 0xBB, 0xBF])) && cbytes.includes(Buffer.from(TAMIL, 'utf8')) && cbytes.toString('utf8').includes(',Tamil script,'));
+    const X = require('../services/xlsxLite');
+    const xr = await fetch(`http://127.0.0.1:${port}/api/voice-pilot/results.xlsx`, { headers: { Authorization: 'Bearer ' + C } });
+    const xbuf = Buffer.from(await xr.arrayBuffer());
+    const parts = X.unzipStored(xbuf);
+    const sheet1 = parts['xl/worksheets/sheet1.xml'].toString('utf8'), sheet2 = parts['xl/worksheets/sheet2.xml'].toString('utf8');
+    ck('Excel file: right type and name; a real workbook (zip, CRCs check) with two sheets', xr.status === 200 && /spreadsheetml\.sheet/.test(xr.headers.get('content-type')) && /filename="FitLife-Voice-Pilot-\d{4}-\d{2}-\d{2}\.xlsx"/.test(xr.headers.get('content-disposition'))
+       && /<sheet name="Recordings"/.test(parts['xl/workbook.xml'].toString()) && /<sheet name="Re-runs"/.test(parts['xl/workbook.xml'].toString()));
+    ck('Excel file: the Tamil and Kannada text stored exactly (UTF-8 XML), headers say "keyword_score"', sheet1.includes(TAMIL) && sheet2.includes(KN) && sheet1.includes('>gemini_keyword_score<') && sheet2.includes('>keyword_score<'));
+    const cellText = (x) => (x.match(/<t xml:space="preserve">[^<]*/g) || []).join('\n');
+    ck('Excel file: every value is text, so "=cmd(1)" can never run as a formula; members as codes, no names, no links',
+       !/<f>|<f /.test(sheet1) && sheet1.includes('>=cmd(1)<') && !/Padmini/.test(sheet1 + sheet2) && !/http|X-Amz/i.test(cellText(sheet1) + cellText(sheet2)) && /<t xml:space="preserve">M1</.test(sheet2));
+    ck('Excel file: another coach gets only the headers; a member cannot download it', (X.unzipStored(Buffer.from(await (await fetch(`http://127.0.0.1:${port}/api/voice-pilot/results.xlsx`, { headers: { Authorization: 'Bearer ' + O } })).arrayBuffer()))['xl/worksheets/sheet1.xml'].toString().match(/<row /g) || []).length === 1
+       && (await fetch(`http://127.0.0.1:${port}/api/voice-pilot/results.xlsx`, { headers: { Authorization: 'Bearer ' + M } })).status === 403);
+    // Recording the line again: the re-runs were about the old audio, so they go.
+    await call('POST', '/api/voice-pilot/sample', M, { phrase_id: 'k01', audio: Buffer.from('third-take').toString('base64') });
+    ck('recording a line again removes the re-runs of the old recording (the others stay)', (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_reruns x JOIN voice_samples s ON s.id = x.sample_id WHERE s.phrase_id='k01'`)).rows[0].n === 0
+       && (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_reruns`)).rows[0].n === 6);
+    whisperLanguageReply = undefined;
+    // Leave the store as section [4] expects it (two recordings): k06 was added here.
+    const k06key = (await pool.query(`SELECT object_key FROM voice_samples WHERE phrase_id='k06'`)).rows[0].object_key;
+    await storage.deleteObject(k06key); await pool.query(`DELETE FROM voice_samples WHERE phrase_id='k06'`);
+  }
+
   console.log('\n[4] stopping, removing, 90 days');
   {
     R2.down = true;
@@ -250,6 +372,7 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     R2.down = false;
     let r = await call('POST', '/api/voice-pilot/withdraw', M);
     ck('the member stops: every recording deleted from storage and the database', r.status === 200 && R2.objects.size === 0 && (await pool.query(`SELECT COUNT(*)::int n FROM voice_samples`)).rows[0].n === 0);
+    ck('…and every re-run with them (Fixes-2m)', (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_reruns`)).rows[0].n === 0);
     ck('and they are no longer in the pilot', (await call('GET', '/api/voice-pilot/me', M)).data.invited === false);
     await call('POST', '/api/voice-pilot/invite', C, { member_id: member });
     ck('invited again after stopping, they must agree again', (await call('GET', '/api/voice-pilot/me', M)).data.consented === false

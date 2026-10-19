@@ -340,9 +340,9 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
           </p>
           {prior.n < 3 ? (
             <p className="text-caption text-mid leading-relaxed">
-              {prior.basis}. Once three members have a well-measured metabolism, new
-              members will start from a figure calibrated to your clinic instead of
-              the textbook formula.
+              {prior.basis}. Once three members have a well-measured metabolism, a new
+              member's starting estimate here will use your clinic's figure instead of
+              the textbook formula. It changes no targets unless you apply them.
             </p>
           ) : (
             <p className="text-caption text-white leading-relaxed">
@@ -351,8 +351,8 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
                 {Math.abs(Math.round((prior.factor - 1) * 100))}%{' '}
                 {prior.factor > 1 ? 'low' : 'high'}
               </span>{' '}
-              for your members — {prior.basis}. New members inherit that correction
-              from day one.
+              for your members — {prior.basis}. A new member's starting estimate on
+              this screen uses that correction; it changes no targets unless you apply them.
             </p>
           )}
         </div>

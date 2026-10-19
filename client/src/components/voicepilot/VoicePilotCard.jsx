@@ -21,7 +21,7 @@ export default function VoicePilotCard() {
           <span className="min-w-0 flex-1">
             <Eyebrow tone="gold">Your coach asked</Eyebrow>
             <span className="block text-sm font-semibold text-white">Kannada voice test{data.consented ? ` · ${left} lines left` : ''}</span>
-            <span className="block text-caption text-mid">Read out short lines so FitLife learns how you speak.</span>
+            <span className="block text-caption text-mid">Read out short lines to test how well two speech services understand Kannada.</span>
           </span>
           <Icon name="chevron-right" size={16} className="text-lo" />
         </button>

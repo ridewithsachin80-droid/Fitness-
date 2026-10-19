@@ -2586,6 +2586,56 @@ async function voicePilotTest() {
   ck('for a coach it starts folded, with the scores still on the header', CP.errors.length === 0 && !!cq('vp-toggle') && !cq('vp-invite') && /Gemini 100%/.test(cq('vp-overall')?.textContent || ''), CP.errors.join('|'));
   cq('vp-toggle').click(); await tick(100);
   ck('opened: Download results is there, and the invite list is the coach\'s own members', !!cq('vp-download') && CP.w.__coachList === true && [...CP.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Coach Member'));
+
+  // Fixes-2m (19 Oct real recordings): keyword score named as such; meaning checks; scripts; re-runs; Excel file; honest wording.
+  {
+    const TAMIL = 'விளைகே இரடு இட்ளி, ஒந்து போல் சாம்பா திந்தே.', KN = 'ಬೆಳಗ್ಗೆ ಎರಡು ಇಡ್ಲಿ';
+    const api2 = stub('api-vp-2m.js', `
+      window.__posts = []; window.__gets = [];
+      const get = async (url, cfg) => { window.__gets.push({ url, cfg });
+        if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [{ patient_id: 12, name: 'Ragavendra', active: true, consented_at: '2026-10-19', recorded: 2 }] } };
+        if (/\\/voice-pilot\\/results$/.test(url)) return { data: { overall: { gemini: 100, whisper: 25, samples: 2, gemini_answered: 2, whisper_answered: 2 },
+          checks: { gemini: { meal: { passed: 2, total: 2 }, quantity: { passed: 5, total: 5 } }, whisper: { meal: { passed: 1, total: 2 }, quantity: { passed: 1, total: 5 } } },
+          phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: 100, whisper: 0 }],
+          samples: [{ id: 1, phrase_id: 'k01', name: 'Ragavendra', gemini: 'Belagge eradu idli ondu bowl sambar tinde', gemini_score: 1, whisper: ${JSON.stringify(TAMIL)}, whisper_score: 0,
+            gemini_script: 'latin', whisper_script: 'tamil', gemini_latin: null, whisper_latin: null, whisper_setting: 'auto', whisper_language: null,
+            gemini_checks: [{ kind: 'meal', label: 'morning', pass: true }, { kind: 'quantity', label: '2 idli', pass: true }], whisper_checks: [{ kind: 'meal', label: 'morning', pass: false }],
+            reruns: [{ engine: 'whisper', setting: 'kn', text: ${JSON.stringify(KN)}, score: 0.67, script: 'kannada', latin: 'belagge eradu idli', language: 'kannada', checks: [{ kind: 'quantity', label: '2 idli', pass: true }] }],
+            audio_url: null }] } };
+        if (/\\/admin\\/members$/.test(url)) return { data: [] };
+        if (/results\\.xlsx$/.test(url)) return { data: new Blob(['PK'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Voice-Pilot-2026-10-19.xlsx"' } };
+        return { data: {} }; };
+      const post = async (url, body) => { window.__posts.push({ url, body });
+        if (/rerun$/.test(url)) return { data: { ok: true, setting: body.setting, asked: 2, answered: 2, more: false, problems: [] } };
+        return { data: { ok: true } }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const panel2 = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 1, name: 'Admin', role: 'admin' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, api2);
+    const Q = run(panel2, prep()); await tick(400);
+    const qq = (id) => Q.w.document.querySelector(`[data-testid="${id}"]`);
+    ck('2m: the percentages are labelled "Keyword score" (headline and table)', Q.errors.length === 0 && /^Keyword score: Gemini 100% · Whisper 25% · 2 recordings$/.test((qq('vp-overall')?.textContent || '').trim()) && /Keyword score/.test(qq('vp-head-score')?.textContent || ''), [Q.errors.join('|'), qq('vp-overall')?.textContent]);
+    ck('2m: it says what the keyword score cannot tell (sugar vs no sugar) and points to the meaning checks', /keyword score is the share of a line's key words/.test(qq('vp-explain')?.textContent || '') && /"sugar" scores the same as "no sugar"/.test(qq('vp-explain').textContent));
+    ck('2m: it says the test teaches FitLife nobody\'s voice, and that 2 recordings are far too few to choose an engine', /does not teach FitLife anyone's voice/.test(qq('vp-not-learning')?.textContent || '') && /2 recordings are far too few to choose one/.test(qq('vp-not-learning').textContent), qq('vp-not-learning')?.textContent);
+    ck('2m: meaning checks per engine (passed of checked)', /Gemini: meal 2\/2 · quantities 5\/5/.test(qq('vp-checks-gemini')?.textContent || '') && /Whisper: meal 1\/2 · quantities 1\/5/.test(qq('vp-checks-whisper')?.textContent || ''), qq('vp-checks')?.textContent);
+    qq('vp-row').click(); await tick(100);
+    const sx = qq('vp-sample')?.textContent || '';
+    ck('2m: the Tamil answer is shown as written, labelled "Tamil script: wrong language", with its keyword score and what Whisper was asked', sx.includes(TAMIL) && /Tamil script: wrong language/.test(qq('vp-script-whisper')?.textContent || '') && /Whisper · keyword score 0%/.test(sx)
+       && /Language asked: not set \(Whisper guesses\) · used: not recorded/.test(qq('vp-whisper-lang')?.textContent || '') && qq('vp-sample-whisper').querySelector('[lang="ta"]'), sx);
+    ck('2m: meaning checks per recording', /Meaning: morning ✓ · 2 idli ✓/.test(qq('vp-checks-line-gemini')?.textContent || '') && /Meaning: morning ✗/.test(qq('vp-checks-line-whisper')?.textContent || ''));
+    ck('2m: the re-run sits under the original, Kannada script spelled out', /Whisper again, language Kannada · keyword score 67%/.test(qq('vp-rerun')?.textContent || '') && /Kannada script · in English letters: belagge eradu idli/.test(qq('vp-rerun').textContent) && sx.includes(TAMIL), qq('vp-rerun')?.textContent);
+    qq('vp-rerun-kn').click(); await tick(300);
+    ck('2m: "Whisper · Kannada" asks the server to re-run with kn and says what came back', Q.w.__posts.some(p => /\/voice-pilot\/results\/rerun$/.test(p.url) && p.body.setting === 'kn') && /Whisper \(language Kannada\) answered 2 of 2/.test(qq('vp-rerun-result')?.textContent || ''), qq('vp-rerun-result')?.textContent);
+    Q.w.__downloads = []; Q.w.HTMLAnchorElement.prototype.click = function () { Q.w.__downloads.push(this.download); };
+    qq('vp-download-xlsx').click(); await tick(300);
+    const xget = Q.w.__gets.find(g => /results\.xlsx$/.test(g.url));
+    ck('2m: "Download results (Excel)" fetches the .xlsx as a file and saves it with the server\'s name; the CSV stays as a second choice', /Download results \(Excel\)/.test(qq('vp-download-xlsx').textContent) && xget?.cfg?.responseType === 'blob' && Q.w.__downloads[0] === 'FitLife-Voice-Pilot-2026-10-19.xlsx' && /or as CSV/.test(qq('vp-download')?.textContent || ''), [xget?.cfg, Q.w.__downloads]);
+    const cardSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotCard.jsx'), 'utf8'), sheetSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotSheet.jsx'), 'utf8');
+    ck('2m: the member card no longer says FitLife "learns how you speak"; the consent says it does not', !/learns how you speak/.test(cardSrc) && /test how well two speech services understand Kannada/.test(cardSrc) && /FitLife does not learn or store a model of your voice/.test(sheetSrc));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
