@@ -112,6 +112,11 @@ A proposal, not built: `FitLife-Supplement-Accounting-Proposal.md` in the projec
 - **`ui-tests.mjs`:** 10 new checks.
 - **NEW `test-learning-features.js`:** 6 checks, on real Postgres with the real parse. Added to the gate.
 - **Mutation checks:** 13 rules broken on purpose; each turned a test red.
+- **`test-timeline-meal-entry.mjs`, the wait only:**
+  - The GitHub gate on ce3fcda failed in this suite: a 390 px "Lunch" click landed on "Other". It is the same suite that flaked once in 2k and once in 2l, and it is not code 2m touched.
+  - **Cause:** the test clicked a row 150 ms after scrolling it into view, so the real mouse click could land on the neighbouring row while the list was still moving.
+  - **Change:** it now waits until the row stops moving, then makes the same real click. No check changed.
+  - **Not reproduced here:** 80/80 on 6 local runs, 3 of them under heavy CPU load, both before and after. So this fixes the race the failure shows; it is not proof against every cause. Still watched as D6.
 
 ## Real-provider results
 **Only the 19 Oct recordings so far** (keyword scores as stored: Gemini 100% and 100%; Whisper 0% and 50%). The Kannada and English re-runs on those two recordings need a tap on the live test app. See the delivery message.

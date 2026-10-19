@@ -31,14 +31,20 @@ const css=readBuiltCss(path.join(ROOT,'client/dist'));
 const shell=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body><main id="root"></main></body></html>`;
 const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(shell)});await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await puppeteer.launch({executablePath:await browserExecutable(chromium),args:[...chromium.args,'--no-sandbox','--disable-dev-shm-usage'],headless:true});
-const pause=(ms=500)=>new Promise(r=>setTimeout(r,ms));let pass=0,fail=0;const ck=(name,ok,detail)=>{console.log(`  ${ok?'✓':'✗'} ${name}${!ok?' '+JSON.stringify(detail):''}`);ok?pass++:fail++};
+const pause=(ms=500)=>new Promise(r=>setTimeout(r,ms));
+// 19 Oct 2026 (Fixes-2m): click a row only once it has stopped moving. The fixed
+// 150 ms pause raced the scroll: on a busy machine (and on GitHub, ce3fcda) the
+// real mouse click landed on the neighbouring row while the list was still
+// settling ("Other" instead of "Lunch"). The click is still a real pointer click
+// at the row's position; only the wait changed. No check was changed.
+const settled=async(el)=>{let last=null,same=0;for(let i=0;i<60&&same<3;i++){await new Promise(r=>setTimeout(r,50));const t=await el.evaluate(e=>Math.round(e.getBoundingClientRect().top));same=t===last?same+1:0;last=t;}await new Promise(r=>setTimeout(r,100));};let pass=0,fail=0;const ck=(name,ok,detail)=>{console.log(`  ${ok?'✓':'✗'} ${name}${!ok?' '+JSON.stringify(detail):''}`);ok?pass++:fail++};
 try{
 for(const width of [390,1280])for(const theme of ['light','dark']){
  const page=await browser.newPage();await page.setViewport({width,height:850,deviceScaleFactor:1});await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.addScriptTag({content:code});await page.waitForSelector('[data-testid=home-log-details]');await page.evaluate(t=>window.settings.getState().setTheme(t),theme);await pause(500);
  const click=async sel=>{await page.focus(sel);await page.keyboard.press('Enter');};const label=`${width}px ${theme}`;
  await click('[data-testid=home-log-details] > button');await page.waitForSelector('[data-testid=row-meal]');
  for(const [row,group,title] of [[1,'Lunch','lunch'],[3,'Other','Unsorted'],[2,'Tea [late]','Tea [late]']]){
-  const rows=await page.$$('[data-testid=row-meal]');await rows[row].evaluate(e=>e.scrollIntoView({block:'center'}));await pause(150);await rows[row].click();await page.waitForSelector('[data-food-meal-target]');await pause(700);
+  const rows=await page.$$('[data-testid=row-meal]');await rows[row].evaluate(e=>e.scrollIntoView({block:'center'}));await settled(rows[row]);await rows[row].click();await page.waitForSelector('[data-food-meal-target]');await pause(700);
   const g=await page.evaluate(()=>{const h=document.querySelector('[data-food-meal-target]'),sc=h.closest('[role=dialog]').querySelector('.overflow-y-auto');return{group:h.parentElement.dataset.foodMeal,focused:document.activeElement===h,top:h.getBoundingClientRect().top,scrollTop:sc.scrollTop,scrollRect:sc.getBoundingClientRect().toJSON(),all:document.querySelectorAll('[data-food-meal]').length,heading:document.querySelector('[role=dialog]').getAttribute('aria-label')}});
   ck(label+' '+group+' targets intended section',g.group===group&&g.heading===title,g);
   ck(label+' '+group+' heading is focused and visible',g.focused&&g.top>=g.scrollRect.top-2&&g.top<g.scrollRect.bottom,g);
@@ -52,7 +58,7 @@ for(const width of [390,1280])for(const theme of ['light','dark']){
  await page.keyboard.press('Escape');await pause(500);
  await page.evaluate(()=>window.logs.setState({date:'2026-10-10'}));await pause(400);
  // 16 Oct 2026: past days now show the AI logging bar too; bring the row to the middle first, as a member would scroll.
- {const r=(await page.$$('[data-testid=row-meal]'))[1];await r.evaluate(e=>e.scrollIntoView({block:'center'}));await pause(200);await r.click();}await pause(700);
+ {const r=(await page.$$('[data-testid=row-meal]'))[1];await r.evaluate(e=>e.scrollIntoView({block:'center'}));await settled(r);await r.click();}await pause(700);
  ck(label+' historical meal opens selected group',await page.$eval('[data-food-meal-target]',e=>e.parentElement.dataset.foodMeal==='Lunch'));
  await page.evaluate(()=>window.logs.setState({date:'2026-10-09'}));await pause(150);
  ck(label+' changed date clears stale target',await page.$('[data-food-meal-target]')===null);
