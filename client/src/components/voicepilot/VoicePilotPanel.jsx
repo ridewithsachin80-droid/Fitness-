@@ -14,10 +14,12 @@ const pct = (v) => (v == null ? '—' : `${v}%`);
 // One engine's headline: its score over every scored recording (no answer is a
 // miss), and how many recordings it answered when that is not all of them.
 // Fixes-2m: what each check kind is called on screen, in a fixed order.
-const CHECK_KINDS = [['meal', 'meal'], ['date', 'day'], ['quantity', 'quantities'], ['decimal', 'decimal weight'], ['negation', 'no sugar']];
+const CHECK_KINDS = [['meal', 'meal'], ['date', 'day'], ['quantity', 'quantities'], ['weight', 'weight'], ['decimal', 'decimal weight'], ['negation', 'no sugar']];
 const SCRIPT = { latin: null, kannada: 'Kannada script', tamil: 'Tamil script: wrong language', telugu: 'Telugu script: wrong language', devanagari: 'Hindi script: wrong language', malayalam: 'Malayalam script: wrong language', mixed: 'mixed scripts' };
 const LANG = { kn: 'Kannada', en: 'English', auto: 'not set (Whisper guesses)' };
-const checksLine = (list) => (list || []).map(c => `${c.label} ${c.pass ? '✓' : '✗'}`).join(' · ');
+// ✓ passed · ✗ failed · ? unverified (the transcript says conflicting things). Fixes-2n.
+const mark = (c) => (c.result === 'pass' || (c.result == null && c.pass) ? '✓' : c.result === 'unverified' ? '?' : '✗');
+const checksLine = (list) => (list || []).map(c => `${c.label} ${mark(c)}`).join(' · ');
 const engine = (name, score, answered, total) => {
   const a = answered ?? total;
   if (!total) return `${name} —`;
@@ -106,7 +108,7 @@ export default function VoicePilotPanel({ collapsible = false }) {
         )}
       </div>
       {open && (<>
-      <p className="text-caption text-mid leading-snug" data-testid="vp-explain">Invite 5 to 10 members. Each reads out {res?.phrases?.length || 22} lines; both speech engines write down what they heard. The <b className="text-white">keyword score</b> is the share of a line's key words each engine wrote down; a recording an engine did not answer counts as a miss. It does not say whether the meaning was right ("sugar" scores the same as "no sugar"): the meaning checks below do that.</p>
+      <p className="text-caption text-mid leading-snug" data-testid="vp-explain">Invite 5 to 10 members. Each reads out {res?.phrases?.length || 22} lines; both speech engines write down what they heard. The <b className="text-white">keyword score</b> is the share of a line's key words each engine wrote down; a recording an engine did not answer counts as a miss. It does not say whether the meaning was right ("sugar" scores the same as "no sugar"). The rule checks below look at a few things in each line (sugar or no sugar, quantities, the weight, the meal, the day); they are limited, rule-based checks, not a guarantee of meaning.</p>
       <p className="text-caption text-lo leading-snug" data-testid="vp-not-learning">This is a test of the two speech services. It does not teach FitLife anyone's voice, and the app's speech engine is not chosen from it{res?.overall?.samples < 100 ? ` — ${res?.overall?.samples || 0} ${res?.overall?.samples === 1 ? 'recording is' : 'recordings are'} far too few to choose one` : ''}.</p>
       <div className="flex gap-2">
         <select value={pick} onChange={e => setPick(e.target.value)} aria-label="Member to invite" style={{ minHeight: 40 }}
@@ -135,7 +137,7 @@ export default function VoicePilotPanel({ collapsible = false }) {
             className="w-full rounded-xl border border-gold text-gold text-sm font-bold disabled:opacity-50">{dl === 'busy' ? 'Making the file…' : 'Download results (Excel)'}</button>
           <button type="button" onClick={() => download('csv')} disabled={dl === 'busy'} style={{ minHeight: 36 }} data-testid="vp-download"
             className="w-full text-caption text-mid underline disabled:opacity-50">or as CSV</button>
-          <p className="text-caption text-lo leading-snug">One file, every recording: what each engine heard, its keyword score and meaning checks. Members show as M1, M2…, no names, no audio. Check the "own words" lines for anything private before you send it on.</p>
+          <p className="text-caption text-lo leading-snug">One file, every recording: what each engine heard, its keyword score and rule checks. Members show as M1, M2…, no names, no audio. Check the "own words" lines for anything private before you send it on.</p>
           {dl && dl !== 'busy' && <p className="text-caption text-red-300">{dl}</p>}
         </>
       )}
@@ -163,10 +165,10 @@ export default function VoicePilotPanel({ collapsible = false }) {
       )}
       {res?.checks && ['gemini', 'whisper'].some(k => Object.keys(res.checks[k] || {}).length) && (
         <div className="text-caption leading-snug" data-testid="vp-checks">
-          <p className="text-lo font-semibold">Meaning checks (passed of checked)</p>
+          <p className="text-lo font-semibold">Rule checks (✓ passed of checked · ? unverified)</p>
           {[['gemini', 'Gemini'], ['whisper', 'Whisper']].map(([k, label]) => (
             <p key={k} className="text-mid" data-testid={`vp-checks-${k}`}><span className="text-white">{label}:</span>{' '}
-              {CHECK_KINDS.filter(([kind]) => res.checks[k]?.[kind]).map(([kind, name]) => `${name} ${res.checks[k][kind].passed}/${res.checks[k][kind].total}`).join(' · ') || 'none yet'}</p>
+              {CHECK_KINDS.filter(([kind]) => res.checks[k]?.[kind]).map(([kind, name]) => `${name} ${res.checks[k][kind].passed}/${res.checks[k][kind].total}${res.checks[k][kind].unverified ? ` (${res.checks[k][kind].unverified} ?)` : ''}`).join(' · ') || 'none yet'}</p>
           ))}
         </div>
       )}
@@ -207,7 +209,7 @@ export default function VoicePilotPanel({ collapsible = false }) {
                                 : <span className="text-warn">no answer{problem && problem !== 'no answer' ? ` — ${problem}` : ''}</span>}</p>
                               {script && <p className="text-lo" data-testid={`vp-script-${k}`}>{script}{latin ? ` · in English letters: ${latin}` : ''}</p>}
                               {k === 'whisper' && text != null && <p className="text-lo" data-testid="vp-whisper-lang">Language asked: {LANG[s.whisper_setting] || s.whisper_setting} · used: {s.whisper_language || 'not recorded'}</p>}
-                              {s[`${k}_checks`]?.length > 0 && <p className="text-lo" data-testid={`vp-checks-line-${k}`}>Meaning: {checksLine(s[`${k}_checks`])}</p>}
+                              {s[`${k}_checks`]?.length > 0 && <p className="text-lo" data-testid={`vp-checks-line-${k}`}>Rule checks: {checksLine(s[`${k}_checks`])}</p>}
                             </div>
                           );
                         })}
@@ -217,7 +219,7 @@ export default function VoicePilotPanel({ collapsible = false }) {
                               ? <span className="text-white">{x.text || '(heard nothing)'}</span> : <span className="text-warn">no answer{x.problem && x.problem !== 'no answer' ? ` — ${x.problem}` : ''}</span>}</p>
                             {SCRIPT[x.script] && <p className="text-lo">{SCRIPT[x.script]}{x.latin ? ` · in English letters: ${x.latin}` : ''}</p>}
                             {x.language && <p className="text-lo">Language used: {x.language}</p>}
-                            {x.checks?.length > 0 && <p className="text-lo">Meaning: {checksLine(x.checks)}</p>}
+                            {x.checks?.length > 0 && <p className="text-lo">Rule checks: {checksLine(x.checks)}</p>}
                           </div>
                         ))}
                       </div>

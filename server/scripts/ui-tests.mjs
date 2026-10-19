@@ -2525,7 +2525,9 @@ async function voicePilotTest() {
   const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
   ck('an invited member sees the card', errors.length === 0 && /Kannada voice test/.test(q('vp-card')?.textContent || ''), errors.join('|'));
   q('vp-card').click(); await tick(400);
-  ck('first they read what is recorded, who hears it, 90 days, nothing logged, stop any time', !!q('vp-consent') && /Only your coach hears the recordings/.test(q('vp-consent').textContent)
+  // Changed 19 Oct 2026 (Fixes-2n): the server lets assigned coaches AND administrators play the recordings
+  // (routes/voicePilot.js, coachOnly + mine()); the consent now says so (reviewer). Still checks who hears them.
+  ck('first they read what is recorded, who hears it, 90 days, nothing logged, stop any time', !!q('vp-consent') && /Your assigned coach and authorised FitLife administrators can listen to the recordings/.test(q('vp-consent').textContent) && !/Only your coach/.test(q('vp-consent').textContent)
      && /deleted after 90 days/.test(q('vp-consent').textContent) && /Nothing you record is added to your food log/.test(q('vp-consent').textContent) && /stop at any time/.test(q('vp-consent').textContent));
   q('vp-agree').click(); await tick(300);
   ck('agreeing is sent, then the lines show with what they mean', w.__posts.some(p => /consent$/.test(p.url)) && !!q('vp-phrases') && /This morning I ate two idli/.test(q('vp-phrases').textContent));
@@ -2600,7 +2602,7 @@ async function voicePilotTest() {
           samples: [{ id: 1, phrase_id: 'k01', name: 'Ragavendra', gemini: 'Belagge eradu idli ondu bowl sambar tinde', gemini_score: 1, whisper: ${JSON.stringify(TAMIL)}, whisper_score: 0,
             gemini_script: 'latin', whisper_script: 'tamil', gemini_latin: null, whisper_latin: null, whisper_setting: 'auto', whisper_language: null,
             gemini_checks: [{ kind: 'meal', label: 'morning', pass: true }, { kind: 'quantity', label: '2 idli', pass: true }], whisper_checks: [{ kind: 'meal', label: 'morning', pass: false }],
-            reruns: [{ engine: 'whisper', setting: 'kn', text: ${JSON.stringify(KN)}, score: 0.67, script: 'kannada', latin: 'belagge eradu idli', language: 'kannada', checks: [{ kind: 'quantity', label: '2 idli', pass: true }] }],
+            reruns: [{ engine: 'whisper', setting: 'kn', text: ${JSON.stringify(KN)}, score: 0.67, script: 'kannada', latin: 'belagge eradu idli', language: 'kannada', checks: [{ kind: 'quantity', label: '2 idli', pass: true }, { kind: 'quantity', label: '1 bowl sambar', result: 'unverified', pass: false }] }],
             audio_url: null }] } };
         if (/\\/admin\\/members$/.test(url)) return { data: [] };
         if (/results\\.xlsx$/.test(url)) return { data: new Blob(['PK'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Voice-Pilot-2026-10-19.xlsx"' } };
@@ -2625,7 +2627,8 @@ async function voicePilotTest() {
     const sx = qq('vp-sample')?.textContent || '';
     ck('2m: the Tamil answer is shown as written, labelled "Tamil script: wrong language", with its keyword score and what Whisper was asked', sx.includes(TAMIL) && /Tamil script: wrong language/.test(qq('vp-script-whisper')?.textContent || '') && /Whisper · keyword score 0%/.test(sx)
        && /Language asked: not set \(Whisper guesses\) · used: not recorded/.test(qq('vp-whisper-lang')?.textContent || '') && qq('vp-sample-whisper').querySelector('[lang="ta"]'), sx);
-    ck('2m: meaning checks per recording', /Meaning: morning ✓ · 2 idli ✓/.test(qq('vp-checks-line-gemini')?.textContent || '') && /Meaning: morning ✗/.test(qq('vp-checks-line-whisper')?.textContent || ''));
+    // Changed 19 Oct 2026 (Fixes-2n): the line is labelled "Rule checks", not "Meaning" (reviewer: limited, rule-based checks).
+    ck('2m: rule checks per recording', /Rule checks: morning ✓ · 2 idli ✓/.test(qq('vp-checks-line-gemini')?.textContent || '') && /Rule checks: morning ✗/.test(qq('vp-checks-line-whisper')?.textContent || ''));
     ck('2m: the re-run sits under the original, Kannada script spelled out', /Whisper again, language Kannada · keyword score 67%/.test(qq('vp-rerun')?.textContent || '') && /Kannada script · in English letters: belagge eradu idli/.test(qq('vp-rerun').textContent) && sx.includes(TAMIL), qq('vp-rerun')?.textContent);
     qq('vp-rerun-kn').click(); await tick(300);
     ck('2m: "Whisper · Kannada" asks the server to re-run with kn and says what came back', Q.w.__posts.some(p => /\/voice-pilot\/results\/rerun$/.test(p.url) && p.body.setting === 'kn') && /Whisper \(language Kannada\) answered 2 of 2/.test(qq('vp-rerun-result')?.textContent || ''), qq('vp-rerun-result')?.textContent);
@@ -2635,6 +2638,8 @@ async function voicePilotTest() {
     ck('2m: "Download results (Excel)" fetches the .xlsx as a file and saves it with the server\'s name; the CSV stays as a second choice', /Download results \(Excel\)/.test(qq('vp-download-xlsx').textContent) && xget?.cfg?.responseType === 'blob' && Q.w.__downloads[0] === 'FitLife-Voice-Pilot-2026-10-19.xlsx' && /or as CSV/.test(qq('vp-download')?.textContent || ''), [xget?.cfg, Q.w.__downloads]);
     const cardSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotCard.jsx'), 'utf8'), sheetSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotSheet.jsx'), 'utf8');
     ck('2m: the member card no longer says FitLife "learns how you speak"; the consent says it does not', !/learns how you speak/.test(cardSrc) && /test how well two speech services understand Kannada/.test(cardSrc) && /FitLife does not learn or store a model of your voice/.test(sheetSrc));
+    ck('2n: an unverified (conflicting) check shows "?", not ✓ or ✗', /1 bowl sambar \?/.test(qq('vp-rerun')?.textContent || '') && /2 idli ✓/.test(qq('vp-rerun').textContent), qq('vp-rerun')?.textContent);
+    ck('2n: the panel calls them limited, rule-based checks, not a guarantee of meaning', /limited, rule-based checks, not a guarantee of meaning/.test(qq('vp-explain')?.textContent || '') && /Rule checks \(✓ passed of checked · \? unverified\)/.test(qq('vp-checks')?.textContent || ''));
   }
 }
 

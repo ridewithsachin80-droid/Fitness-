@@ -43,38 +43,156 @@ const PHRASES = [
   { id: 'f02', say: 'Your own words: your weight and one workout', means: 'Any way you like, Kannada, English or both', keys: [], free: true },
 ];
 
-// ── Meaning checks (Fixes-2m) ───────────────────────────────────────────────
+// ── Rule checks (Fixes-2m; rebuilt in Fixes-2n after the 19 Oct review) ────
 // The keyword score asks "were the key words heard?". It cannot tell "no sugar"
-// from "sugar", "2 idli" from "3 idli", 72.5 kg from 725, or lunch from dinner.
-// These checks ask those questions separately, per recording and per engine.
-// They are an evaluation of the engines only: nothing here chooses an engine,
-// and the app's default engine is not taken from them.
-//   quantity  the expected number sits right before (or just after) the item
-//   decimal   a decimal number survives whole (72.5, not 725 or 72)
-//   negation  the item AND a "no" word are heard (no sugar ≠ sugar)
-//   meal      the meal or time of day
-//   date      the day (today / last night), and not the other one
-const NUM = { 1: '1|ondu|one|a', 2: '2|eradu|two', 3: '3|mooru|three', 7: '7|elu|yelu|seven', 10: '10|hattu|ten', 40: '40|nalavattu|forty', 100: '100|nooru|hundred' };
-const MEAL = { morning: 'belagge|belage|morning|breakfast|brekfast|tindi', breakfast: 'breakfast|brekfast|tindi|belagge', lunch: 'lunch|lanch|madhyahna|oota|afternoon', dinner: 'dinner|dinnar|raatri|ratri|night', snack: 'snack|snyak|sanje|evening', evening: 'sanje|evening|snack' };
+// from "sugar", "2 idli" from "3 idli", 72.5 kg from 725 or from 72.5 pounds,
+// or lunch from dinner. These checks ask those questions separately, per
+// recording and per engine. They are LIMITED, RULE-BASED checks of a few
+// phrases, not a judgment of meaning. Nothing here chooses an engine.
+//
+// 2m bound too loosely (the reviewer's five false passes): "no" anywhere made
+// "no sugar" pass ("tea with sugar no milk"); a number next to ANY bowl passed
+// "1 bowl sambar" ("one bowl rice"); the next item's number counted ("1 idli
+// 2 bowls sambar" passed "2 idli"); 72.5 POUNDS passed "72.5 kg"; and "one
+// plate rice … two plates upma" passed "1 plate upma". Since 2n the number,
+// its unit or container, the food and the "no" are read from the SAME phrase:
+//   quantity  phrases "<number> [unit] [of] <food>" (or "<food> [unit] <number>"
+//             at the end of a phrase, as in "akki rotti eradu") are read out of
+//             the transcript; the check looks only at the phrases for its food
+//             (and unit). All of them say the expected number → pass; none →
+//             fail; some do and some don't → UNVERIFIED (conflicting).
+//   weight    the same, with a weight unit: kg passes, pounds fail, a bare
+//             number is unverified.
+//   negation  each mention of the item is "negated" only if a "no" word sits
+//             directly before it (no / without / zero sugar) or directly after
+//             it (sakkare illa / haakilla / nahi / not added). All negated →
+//             pass; none → fail; mixed → unverified.
+//   meal/day  the expected word is heard and no other meal (day) is; both →
+//             unverified.
+// Each check returns { kind, label, result: 'pass'|'fail'|'unverified', pass }.
+const MEAL_WORDS = { morning: 'belagge|belage|morning|breakfast|brekfast|tindi', breakfast: 'breakfast|brekfast|tindi|belagge|belage|morning', lunch: 'lunch|lanch|madhyahna|afternoon', dinner: 'dinner|dinnar|raatri|ratri|night', evening: 'sanje|evening|snack|snyak', snack: 'snack|snyak|sanje|evening' };
+const ALL_MEALS = [...new Set(Object.values(MEAL_WORDS).join('|').split('|'))];
+const meal = (label, key) => ({ kind: 'meal', label, any: MEAL_WORDS[key], others: ALL_MEALS.filter(w => !MEAL_WORDS[key].split('|').includes(w)).join('|') });
 const TODAY = 'ivattu|ivathu|indu|today', LASTNIGHT = 'nenne|yesterday|last night';
+const F = { idli: 'idli|idly|itli|idlis', sambar: 'sambar|sambhar|saambar|sambaru', upma: 'upma|uppittu|uppit', coffee: 'coffee|kaafi|kapi|kafi|kaapi', mudde: 'mudde|ragi', chapati: 'chapati|chapathi|chappathi|chapatis', egg: 'motte|egg|eggs',
+  rotti: 'rotti|roti|rottis|rotis', almond: 'badami|almond|almonds', neeru: 'neeru|water' };
+const U = { bowl: 'bowl|bowls|baul', plate: 'plate|plates|plet', cup: 'cup|cups|kap', litre: 'litre|litres|liter|liters|ltr|litar', minute: 'nimisha|minute|minutes|min|mins', set: 'set|sets', rep: 'rep|reps',
+  hour: 'gante|hour|hours|hrs', gram: 'gram|grams|g|gm|gms', kg: 'kg|kgs|kilo|kilos|kilogram|kilograms', pound: 'pound|pounds|lb|lbs' };
 const CHECKS = {
-  k01: [{ kind: 'meal', label: 'morning', any: MEAL.morning }, { kind: 'quantity', label: '2 idli', item: 'idli|idly', n: NUM[2] }, { kind: 'quantity', label: '1 bowl sambar', item: 'bowl|baul', n: NUM[1] }],
-  k02: [{ kind: 'meal', label: 'breakfast', any: MEAL.breakfast }, { kind: 'quantity', label: '1 plate upma', item: 'plate|plet', n: NUM[1], also: 'upma|uppittu' }, { kind: 'quantity', label: '1 cup coffee', item: 'cup|kap', n: NUM[1], also: 'coffee|kaafi|kapi|kafi' }],
-  k03: [{ kind: 'meal', label: 'lunch', any: MEAL.lunch }, { kind: 'quantity', label: '1 ragi mudde', item: 'ragi|mudde', n: NUM[1] }],
-  k04: [{ kind: 'meal', label: 'lunch', any: MEAL.lunch }, { kind: 'quantity', label: '2 chapati', item: 'chapati|chapathi|chappathi', n: NUM[2] }],
-  k05: [{ kind: 'meal', label: 'evening', any: MEAL.evening }],
-  k06: [{ kind: 'date', label: 'today', any: TODAY, not: LASTNIGHT }, { kind: 'quantity', label: '3 litres', item: 'litre|liter|ltr', n: NUM[3] }],
-  k07: [{ kind: 'meal', label: 'dinner', any: MEAL.dinner }, { kind: 'quantity', label: '1 egg', item: 'motte|egg', n: NUM[1] }],
-  k08: [{ kind: 'meal', label: 'dinner', any: MEAL.dinner }, { kind: 'quantity', label: '2 jowar rotti', item: 'jolada|jowar|rotti|roti', n: NUM[2] }],
-  k09: [{ kind: 'meal', label: 'snack', any: MEAL.snack }, { kind: 'quantity', label: '10 almonds', item: 'badami|almond', n: NUM[10] }],
-  k11: [{ kind: 'date', label: 'today', any: TODAY, not: LASTNIGHT }, { kind: 'decimal', label: '72.5 kg', ok: ['72\\.5', '72 point 5', '72 point aidu', 'eppattu eradu point aidu', 'eppattu eradu point 5', 'seventy two point five'], bad: ['725'] }],
-  k12: [{ kind: 'quantity', label: '40 minutes', item: 'nimisha|minute|minutes|min', n: NUM[40] }],
-  k13: [{ kind: 'quantity', label: '3 sets', item: 'set|sets', n: NUM[3] }, { kind: 'quantity', label: '10 reps', item: 'rep|reps', n: NUM[10] }],
-  k14: [{ kind: 'date', label: 'last night', any: LASTNIGHT, not: TODAY }, { kind: 'quantity', label: '7 hours', item: 'gante|hour|hours', n: NUM[7] }],
-  k17: [{ kind: 'quantity', label: '2 rice rotti', item: 'rotti|roti', n: NUM[2] }],
-  k18: [{ kind: 'negation', label: 'no sugar', item: 'sakkare|sugar', no: 'haakilla|hakilla|illa|no|without|not|bina|nahi' }],
-  k20: [{ kind: 'quantity', label: '100 grams', item: 'gram|grams|g', n: NUM[100] }],
+  k01: [meal('morning', 'morning'), { kind: 'quantity', label: '2 idli', n: 2, food: F.idli }, { kind: 'quantity', label: '1 bowl sambar', n: 1, unit: U.bowl, food: F.sambar }],
+  k02: [meal('breakfast', 'breakfast'), { kind: 'quantity', label: '1 plate upma', n: 1, unit: U.plate, food: F.upma }, { kind: 'quantity', label: '1 cup coffee', n: 1, unit: U.cup, food: F.coffee }],
+  k03: [meal('lunch', 'lunch'), { kind: 'quantity', label: '1 ragi mudde', n: 1, food: F.mudde }],
+  k04: [meal('lunch', 'lunch'), { kind: 'quantity', label: '2 chapati', n: 2, food: F.chapati }],
+  k05: [meal('evening', 'evening')],
+  k06: [{ kind: 'date', label: 'today', any: TODAY, others: LASTNIGHT }, { kind: 'quantity', label: '3 litres', n: 3, unit: U.litre }],
+  k07: [meal('dinner', 'dinner'), { kind: 'quantity', label: '1 egg', n: 1, food: F.egg }],
+  k08: [meal('dinner', 'dinner'), { kind: 'quantity', label: '2 jowar rotti', n: 2, food: F.rotti }],
+  k09: [meal('snack', 'snack'), { kind: 'quantity', label: '10 almonds', n: 10, food: F.almond }],
+  k11: [{ kind: 'date', label: 'today', any: TODAY, others: LASTNIGHT }, { kind: 'weight', label: '72.5 kg', n: 72.5, unit: U.kg, wrong: U.pound }],
+  k12: [{ kind: 'quantity', label: '40 minutes', n: 40, unit: U.minute }],
+  k13: [{ kind: 'quantity', label: '3 sets', n: 3, unit: U.set }, { kind: 'quantity', label: '10 reps', n: 10, unit: U.rep }],
+  k14: [{ kind: 'date', label: 'last night', any: LASTNIGHT, others: TODAY }, { kind: 'quantity', label: '7 hours', n: 7, unit: U.hour }],
+  k17: [{ kind: 'quantity', label: '2 rice rotti', n: 2, food: F.rotti }],
+  k18: [{ kind: 'negation', label: 'no sugar', item: 'sakkare|sugar|cheeni|chini|shakkar', pre: 'no|without|zero|bina|bin', post: 'haakilla|hakilla|haakalla|illa|nahi|not|beda|haakbedi' }],
+  k20: [{ kind: 'quantity', label: '100 grams', n: 100, unit: U.gram }],
 };
+
+// Numbers as members say them: digits, English words, Kannada words, "point".
+const NUM_WORDS = {
+  ondu: 1, eradu: 2, mooru: 3, naalku: 4, nalku: 4, aidu: 5, aaru: 6, elu: 7, yelu: 7, entu: 8, ombattu: 9, hattu: 10, nooru: 100,
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, hundred: 100,
+};
+const TENS = { ippattu: 20, muvattu: 30, moovattu: 30, nalavattu: 40, aivattu: 50, aravattu: 60, eppattu: 70, embattu: 80, tombattu: 90,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const FILLERS = new Set(['of', 'full', 'small', 'big', 'medium', 'hot', 'cold', 'the', 'masala', 'plain']);
+const SEP = '|';
+
+function meaningChecks(phraseId, transcript) {
+  const list = CHECKS[phraseId] || [];
+  if (transcript == null) return [];
+  const raw = String(transcript);
+  const kn = /[ಀ-೿]/.test(raw);
+  const f = kn ? (w) => loose(norm(w)) : (w) => norm(w);
+  // Phrase breaks: commas, semicolons, full stops (not decimal points), "and", "then", "mattu", "aamele".
+  let text = (kn ? kannadaToLatin(raw) : raw).toLowerCase()
+    .replace(/(\d)\.(\d)/g, '$1․$2')                   // keep 72.5 together
+    .replace(/[,;:!?()]|\.(?=\s|$)/g, ` ${SEP} `).replace(/․/g, '.');
+  const toks = [];
+  for (const w0 of text.split(/\s+/)) {
+    if (!w0) continue;
+    if (w0 === SEP) { toks.push(SEP); continue; }
+    for (const w1 of w0.split(/[-–]/)) {            // "breakfast-ge" → breakfast, ge
+      const w = kn ? loose(norm(w1)) : norm(w1);
+      if (!w) continue;
+      if (['and', 'then', 'mattu', 'amele', 'aamele', 'also', 'plus'].includes(w)) toks.push(SEP); else toks.push(w);
+    }
+  }
+  const lex = (spec) => spec.split('|').map(f).filter(Boolean);
+  const is = (tok, spec) => tok !== SEP && lex(spec).some(v => tok === v || (v.length > 3 && tok.startsWith(v)));
+  const nw = Object.fromEntries(Object.entries(NUM_WORDS).map(([k, v]) => [f(k), v]));
+  const tw = Object.fromEntries(Object.entries(TENS).map(([k, v]) => [f(k), v]));
+  const one = (tok) => (/^\d+(\.\d+)?$/.test(tok) ? Number(tok) : nw[tok] ?? null);
+  // A number starting at i: { value, len }.
+  const numberAt = (i, allowA) => {
+    const t = toks[i]; if (t == null || t === SEP) return null;
+    let value = null, len = 0;
+    if (tw[t] != null) { value = tw[t]; len = 1; const u = nw[toks[i + 1]]; if (u != null && u < 10) { value += u; len = 2; } }
+    else if (one(t) != null) { value = one(t); len = 1; }
+    else if (allowA && t === 'a') { value = 1; len = 1; }
+    if (value == null) return null;
+    if (toks[i + len] === 'point') { const d = one(toks[i + len + 1]); if (d != null && d < 10 && Number.isInteger(d)) { value = Number(`${Math.floor(value)}.${d}`); len += 2; } }
+    return { value, len };
+  };
+  const anyUnit = Object.values(U).join('|');
+  // Read out the quantity phrases.
+  const phrases = [];
+  for (let i = 0; i < toks.length; i++) {
+    const n = numberAt(i, true); if (!n) continue;
+    let j = i + n.len, unit = null; const food = [];
+    while (j < toks.length && FILLERS.has(toks[j]) && toks[j] !== 'of') j++;   // "2 big plates"
+    if (j < toks.length && is(toks[j], anyUnit)) { unit = toks[j]; j++; }
+    while (j < toks.length && FILLERS.has(toks[j])) j++;
+    for (let k = 0; k < 2 && j < toks.length && toks[j] !== SEP && !numberAt(j, false); k++, j++) food.push(toks[j]);
+    if (!unit && !food.length) {
+      // "akki rotti eradu", "paneer nooru gram": the number closes the phrase, its food came first.
+      for (let b = i - 1; b >= 0 && b >= i - 3 && toks[b] !== SEP && !numberAt(b, false); b--) { if (!unit && is(toks[b], anyUnit)) unit = toks[b]; else food.unshift(toks[b]); }
+    } else if (unit && !food.length) {
+      for (let b = i - 1; b >= 0 && b >= i - 2 && toks[b] !== SEP && !numberAt(b, false); b--) food.unshift(toks[b]);
+    }
+    phrases.push({ value: n.value, unit, food });
+    i += n.len - 1;
+  }
+  const result = (r) => r;
+  const judge = (good, bad) => (good && !bad ? 'pass' : good && bad ? 'unverified' : 'fail');
+  const hasAny = (spec) => toks.some(t => is(t, spec)) || spec.split('|').some(v => v.includes(' ') && ` ${toks.join(' ')} `.includes(` ${f(v)} `));
+  return list.map(c => {
+    let r = 'fail';
+    if (c.kind === 'meal' || c.kind === 'date') r = judge(hasAny(c.any), hasAny(c.others));
+    else if (c.kind === 'negation') {
+      const at = toks.map((t, i) => (is(t, c.item) ? i : -1)).filter(i => i >= 0);
+      const neg = at.map(i => (i > 0 && is(toks[i - 1], c.pre)) || (i > 1 && toks[i - 1] === 'added' && is(toks[i - 2], c.pre))
+        || (i + 1 < toks.length && is(toks[i + 1], c.post)) || (i + 2 < toks.length && toks[i + 1] === 'added' && is(toks[i + 2], c.post)));
+      r = !at.length ? 'fail' : judge(neg.some(Boolean), neg.some(x => !x));
+    } else if (c.kind === 'quantity' || c.kind === 'weight') {
+      const mine = phrases.filter(p => (c.food ? p.food.some(t => is(t, c.food)) : true)
+        && (c.kind === 'weight' ? (p.unit ? (is(p.unit, c.unit) || is(p.unit, c.wrong)) : p.value === c.n)
+            : c.unit ? (c.food ? true : p.unit && is(p.unit, c.unit)) : true)
+        && (c.food || c.unit || c.kind === 'weight'));
+      if (c.kind === 'weight') {
+        const ok = mine.some(p => p.value === c.n && p.unit && is(p.unit, c.unit));
+        const wrong = mine.some(p => !(p.value === c.n && p.unit && is(p.unit, c.unit)) && p.unit);
+        const bare = mine.some(p => !p.unit && p.value === c.n);
+        r = ok ? (wrong ? 'unverified' : 'pass') : wrong ? 'fail' : bare ? 'unverified' : 'fail';
+      } else {
+        const fits = (p) => p.value === c.n && (!c.unit || (p.unit && is(p.unit, c.unit)));
+        r = !mine.length ? 'fail' : judge(mine.some(fits), mine.some(p => !fits(p)));
+      }
+    }
+    return { kind: c.kind, label: c.label, result: result(r), pass: r === 'pass' };
+  });
+}
+/** "breakfast ✓ · 1 plate upma ✗ · 2 idli ?" — ? = unverified (conflicting). */
+const checksText = (list) => (list || []).map(c => `${c.label} ${c.result === 'pass' || (c.result == null && c.pass) ? '✓' : c.result === 'unverified' ? '?' : '✗'}`).join(' · ');
 
 // ── Scripts (Fixes-2m) ──────────────────────────────────────────────────────
 // 19 Oct, first real pilot recording: Whisper (language not set) took Kannada
@@ -153,37 +271,6 @@ function score(phraseId, transcript) {
   }));
   return Math.round((hit.length / p.keys.length) * 100) / 100;
 }
-
-/**
- * The meaning checks for one transcript: [{ kind, label, pass }] (empty when
- * the line has none). A missing transcript has no checks.
- */
-function meaningChecks(phraseId, transcript) {
-  const list = CHECKS[phraseId] || [];
-  if (transcript == null) return [];
-  const { t, f } = prepared(transcript);
-  const words = t.trim().split(' ').filter(Boolean);
-  const alts = (spec) => spec.split('|').map(f).filter(Boolean);
-  const hasWord = (spec) => alts(spec).some(v => (v.includes(' ') ? t.includes(` ${v} `) : words.includes(v) || (v.length > 3 && words.some(w => w.startsWith(v)))));
-  return list.map(c => {
-    let pass = false;
-    if (c.kind === 'meal') pass = hasWord(c.any);
-    else if (c.kind === 'date') pass = hasWord(c.any) && !hasWord(c.not);
-    else if (c.kind === 'negation') pass = hasWord(c.item) && hasWord(c.no);
-    else if (c.kind === 'decimal') {
-      pass = c.ok.some(v => new RegExp(`(^|[^0-9.])${v.includes('\\') ? v : f(v)}([^0-9]|$)`).test(t)) && !c.bad.some(v => new RegExp(`(^|[^0-9])${v}([^0-9]|$)`).test(t));
-    } else if (c.kind === 'quantity') {
-      const item = alts(c.item), nums = alts(c.n);
-      const at = words.map((w, i) => (item.some(v => w === v || (v.length > 3 && w.startsWith(v))) ? i : -1)).filter(i => i >= 0);
-      // the number right before the item (up to 2 words: "eradu jolada rotti"), or right after ("akki rotti eradu")
-      pass = at.some(i => [i - 1, i - 2, i + 1].some(j => j >= 0 && j < words.length && nums.includes(words[j])))
-        && (!c.also || hasWord(c.also));
-    }
-    return { kind: c.kind, label: c.label, pass };
-  });
-}
-/** "breakfast ✓ · 1 plate upma ✗" — for the file and the coach's view. */
-const checksText = (list) => (list || []).map(c => `${c.label} ${c.pass ? '✓' : '✗'}`).join(' · ');
 
 const PROMPT = `Transcribe this voice note exactly as spoken.
 The speaker is in Karnataka, logging food, water, sleep, weight or exercise in
@@ -315,11 +402,11 @@ function summarise(rows) {
  * every download (ordered by member id). Audio is not included.
  *
  * Fixes-2m: the scores are named for what they are, KEYWORD scores; the
- * meaning checks, the script each engine wrote in and the language Whisper
+ * rule checks (Fixes-2n name; limited checks, not a guarantee of meaning), the script each engine wrote in and the language Whisper
  * used are added at the end (the original columns keep their order).
  */
 const HEAD = ['member', 'line_id', 'line', 'meaning', 'own_words', 'gemini_heard', 'whisper_heard', 'gemini_keyword_score', 'whisper_keyword_score', 'seconds', 'audio_type', 'recorded_at', 'gemini_problem', 'whisper_problem',
-  'gemini_meaning_checks', 'whisper_meaning_checks', 'gemini_script', 'whisper_script', 'whisper_language_asked', 'whisper_language_used'];
+  'gemini_rule_checks', 'whisper_rule_checks', 'gemini_script', 'whisper_script', 'whisper_language_asked', 'whisper_language_used'];
 function resultRows(rows) {
   const ids = [...new Set((rows || []).map(r => r.patient_id))].sort((a, b) => a - b);
   const code = new Map(ids.map((id, i) => [id, `M${i + 1}`]));
@@ -359,7 +446,7 @@ function resultsCsv(rows) {
 }
 
 /**
- * Keyword score and meaning checks per engine, over the recordings given.
+ * Rule checks per engine (passed / unverified / total), over the recordings given.
  * Evaluation only: too few recordings say nothing about which engine to use.
  */
 function checksSummary(rows) {
@@ -369,8 +456,8 @@ function checksSummary(rows) {
     for (const r of rows || []) {
       if (r[`${k}_text`] == null) continue;
       for (const c of meaningChecks(r.phrase_id, r[`${k}_text`])) {
-        by[c.kind] = by[c.kind] || { passed: 0, total: 0 };
-        by[c.kind].total++; if (c.pass) by[c.kind].passed++;
+        by[c.kind] = by[c.kind] || { passed: 0, unverified: 0, total: 0 };
+        by[c.kind].total++; if (c.result === 'pass') by[c.kind].passed++; else if (c.result === 'unverified') by[c.kind].unverified++;
       }
     }
     out[k] = by;

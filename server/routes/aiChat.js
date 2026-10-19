@@ -1335,7 +1335,7 @@ Return ONLY raw JSON, no markdown fences:
 // Gemini transcribes the recorded audio instead — same inline_data pattern and
 // same models as /photo. The client falls back to its on-device text if this
 // endpoint fails, so errors here degrade, never break.
-const { voiceTranscriptionPrompt, whisperTranscriptionPrompt } = require('../services/voiceLanguage');
+const { voiceTranscriptionPrompt, whisperTranscriptionPrompt, whisperFallbackSettings, reviewWhisper } = require('../services/voiceLanguage');
 router.post('/voice-transcribe', async (req, res) => {
   const { audio, mimeType, langHint } = req.body;
 
@@ -1367,7 +1367,13 @@ router.post('/voice-transcribe', async (req, res) => {
     fd.append('file', new Blob([Buffer.from(audio, 'base64')], { type: mt }), `voice.${ext}`);
     fd.append('model', 'whisper-large-v3');
     fd.append('temperature', '0');
-    fd.append('response_format', 'json');
+    // Fixes-2n (B18): the member's language choice sets Whisper's language
+    // (kn-IN → kn, hi-IN → hi; en-IN left to detect mixed speech), and the
+    // reply comes with Whisper's own language and confidence numbers, which
+    // services/voiceLanguage.reviewWhisper checks before anything is used.
+    fd.append('response_format', 'verbose_json');
+    const { language } = whisperFallbackSettings(langHint);
+    if (language) fd.append('language', language);
     // Whisper's prompt parameter biases style — nudge it toward Roman-script
     // Hinglish with food words kept as spoken, matching the Gemini output.
     fd.append('prompt', whisperTranscriptionPrompt(langHint));
@@ -1375,7 +1381,7 @@ router.post('/voice-transcribe', async (req, res) => {
       'https://api.groq.com/openai/v1/audio/transcriptions', fd,
       { headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, timeout: 25000 }
     );
-    return String(r.data?.text || '').trim();
+    return reviewWhisper(r.data, langHint);
   }
 
   const prompt = voiceTranscriptionPrompt(langHint);
@@ -1410,8 +1416,16 @@ router.post('/voice-transcribe', async (req, res) => {
 
     if (transcript === null) {
       try {
-        transcript = await groqWhisper();
-        if (transcript !== null) engine = 'groq/whisper-large-v3';
+        const w = await groqWhisper();
+        if (w && !w.ok) {
+          // An answer in the wrong language or script, or one Whisper itself was
+          // unsure of, is never handed on: the member keeps the recording to
+          // retry, or types. No preview is made from it, so nothing can be saved.
+          console.warn('voice-transcribe: fallback answer refused:', w.reason);
+          return res.json({ transcript: '', rejected: w.reason,
+            message: "Couldn't hear that clearly in your chosen language. Retry this recording, or type your log." });
+        }
+        if (w) { transcript = w.text; engine = 'groq/whisper-large-v3'; }
       } catch (e) { lastErr = e; }
     }
 

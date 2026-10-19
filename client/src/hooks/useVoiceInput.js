@@ -142,7 +142,12 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
       if (!transcript) {
         failedTakeRef.current = take;
         setCanRetry(true);
-        setError("Couldn't make out the words. Retry this recording, or discard it and speak closer to the microphone.");
+        // Fixes-2n (B18): the server refuses a fallback answer in another language
+        // or script, or one the engine itself was unsure of. Nothing is sent on;
+        // the take is kept for Retry.
+        setError(data?.rejected === 'wrong_script' || data?.rejected === 'wrong_language'
+          ? "That came back in a different language from the one you chose. Retry this recording, check your voice language, or type your log."
+          : "Couldn't make out the words. Retry this recording, or discard it and speak closer to the microphone.");
       } else {
         clearTake();
         optsRef.current.onFinal?.(transcript);

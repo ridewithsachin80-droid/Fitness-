@@ -219,7 +219,7 @@ router.get('/results.xlsx', coachOnly, async (req, res) => {
     const ids = [...new Set(rows.map(r => r.patient_id))].sort((a, b) => a - b);
     const code = new Map(ids.map((id, i) => [id, `M${i + 1}`]));
     const reruns = await rerunsFor(rows.map(r => r.id));
-    const re = [['member', 'line_id', 'engine', 'setting', 'heard', 'keyword_score', 'meaning_checks', 'script', 'language_used', 'problem', 'asked_at']];
+    const re = [['member', 'line_id', 'engine', 'setting', 'heard', 'keyword_score', 'rule_checks', 'script', 'language_used', 'problem', 'asked_at']];
     for (const r of rows) for (const x of reruns.get(r.id) || []) {
       re.push([code.get(r.patient_id), r.phrase_id, x.engine, x.setting, x.text, x.text == null ? 'no answer' : Math.round((Number(x.score) || 0) * 100) + '%',
         V.checksText(V.meaningChecks(r.phrase_id, x.text)), x.text == null ? '' : (V.SCRIPT_LABEL[V.scriptOf(x.text)] || ''), x.language || '', x.text == null ? (x.error || 'no answer') : '',

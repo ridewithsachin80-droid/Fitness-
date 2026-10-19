@@ -274,6 +274,13 @@ async function voiceCases(code,composerCode,chatCode){
   gate.resolve({data:{transcript:'ಎರಡು ಇಡ್ಲಿ'}});await until(()=>A.w.__final.length===1,'retried words');
   ck('retried transcript reaches the consumer once',A.w.__final[0]==='ಎರಡು ಇಡ್ಲಿ');
   ck('successful retry releases the retained take',!A.w.__voice.canRetry&&!A.w.__voice.transcribing);
+  // Fixes-2n (B18): the server refused the fallback answer (wrong language): nothing reaches the
+  // consumer (no preview, nothing to save), the take is kept for Retry, and the member is told why.
+  gate=deferred();A.w.__voice.start();await until(()=>A.w.__voice.listening,'recording again');A.w.__voice.stop();
+  await until(()=>requests(A,'/ai-chat/voice-transcribe').length===3,'third transcription');
+  gate.resolve({data:{transcript:'',rejected:'wrong_script',message:'x'}});await until(()=>A.w.__voice.canRetry,'refused take kept');
+  ck('2n: a refused fallback answer reaches no consumer and keeps the take for Retry',A.w.__final.length===1&&A.w.__voice.canRetry&&!A.w.__voice.transcribing);
+  ck('2n: …and says it came back in a different language, with Retry, voice language or typing as the way out',/different language from the one you chose/.test(A.w.__voice.error||'')&&/Retry/.test(A.w.__voice.error)&&/type your log/.test(A.w.__voice.error),A.w.__voice.error);
  }finally{A.close()}
  for(const boundary of ['discard','account','session','context','midnight','unmount']){
   const B=mount(code);await until(()=>B.w.__voice,'voice boundary');

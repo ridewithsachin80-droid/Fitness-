@@ -214,7 +214,9 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('it opens in Excel with Kannada and quotes intact (UTF-8 mark at the start)', f.bytes[0] === 0xEF && f.bytes[1] === 0xBB && f.bytes[2] === 0xBF);
     // Changed 19 Oct 2026 (Fixes-2m): the two score columns are named for what they are, KEYWORD scores
     // (Sachin's request), and six columns are added at the end. The original columns keep their order.
-    ck('a header and one row per recording', rows[0] === 'member,line_id,line,meaning,own_words,gemini_heard,whisper_heard,gemini_keyword_score,whisper_keyword_score,seconds,audio_type,recorded_at,gemini_problem,whisper_problem,gemini_meaning_checks,whisper_meaning_checks,gemini_script,whisper_script,whisper_language_asked,whisper_language_used' && rows.length === 3, rows);
+    // Changed again 19 Oct 2026 (Fixes-2n): the reviewer asked that the checks be described as limited
+    // rule checks, not meaning, so the two columns are renamed *_rule_checks. Still compared exactly.
+    ck('a header and one row per recording', rows[0] === 'member,line_id,line,meaning,own_words,gemini_heard,whisper_heard,gemini_keyword_score,whisper_keyword_score,seconds,audio_type,recorded_at,gemini_problem,whisper_problem,gemini_rule_checks,whisper_rule_checks,gemini_script,whisper_script,whisper_language_asked,whisper_language_used' && rows.length === 3, rows);
     ck('members as codes, never names', /^M1,k01,/.test(rows[1]) && !/Padmini/.test(f.text));
     ck('both transcripts and both scores', rows[1].includes(heard.gemini) && rows[1].includes(',100%,67%,') , rows[1]);
     ck('the phone\'s audio type, said plainly', /webm \(usually Android\)/.test(rows[1]) && /mp4 \(usually iPhone\)/.test(f.text));
@@ -363,6 +365,46 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     // Leave the store as section [4] expects it (two recordings): k06 was added here.
     const k06key = (await pool.query(`SELECT object_key FROM voice_samples WHERE phrase_id='k06'`)).rows[0].object_key;
     await storage.deleteObject(k06key); await pool.query(`DELETE FROM voice_samples WHERE phrase_id='k06'`);
+  }
+
+  console.log('\n[3c] Fixes-2n: rule checks bind the number, unit, food and "no" to the same phrase (19 Oct review)');
+  {
+    const R = (id, t, label) => (V.meaningChecks(id, t).find(c => c.label === label) || {}).result;
+    // The reviewer's five false passes, each with a correct counterpart.
+    const cases = [
+      ['k18', 'tea with sugar no milk', 'no sugar', 'fail', 'tea with no sugar and no milk', 'pass'],
+      ['k01', 'morning 2 idli one bowl rice', '1 bowl sambar', 'fail', 'morning 2 idli one bowl sambar', 'pass'],
+      ['k01', 'morning 1 idli 2 bowls sambar', '2 idli', 'fail', 'morning 2 idli 1 bowl sambar', 'pass'],
+      ['k11', 'today weight 72.5 pounds', '72.5 kg', 'fail', 'today weight 72.5 kg', 'pass'],
+      ['k02', 'breakfast one plate rice then two plates upma one cup coffee', '1 plate upma', 'fail', 'breakfast two plates rice then one plate upma one cup coffee', 'pass'],
+    ];
+    const wrong = cases.flatMap(([id, bad, label, want, good, want2]) => [[id, bad, label, want, R(id, bad, label)], [id, good, label, want2, R(id, good, label)]]).filter(x => x[3] !== x[4]);
+    ck('the reviewer\'s five false passes now fail, and their correct counterparts pass (10 cases)', wrong.length === 0, wrong);
+    // Kannada script: the same rules after spelling it out.
+    ck('Kannada script: "ಎರಡು ಇಡ್ಲಿ … ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್" passes; "ಮೂರು ಇಡ್ಲಿ … ಒಂದು ಬೌಲ್ ಅನ್ನ" fails both; "ಸಕ್ಕರೆ ಹಾಕಿಲ್ಲ" passes, "ಸಕ್ಕರೆ ಹಾಕಿದೆ" fails',
+       V.checksText(V.meaningChecks('k01', 'ಬೆಳಗ್ಗೆ ಎರಡು ಇಡ್ಲಿ ಮತ್ತು ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್ ತಿಂದೆ')) === 'morning ✓ · 2 idli ✓ · 1 bowl sambar ✓'
+       && V.checksText(V.meaningChecks('k01', 'ಬೆಳಗ್ಗೆ ಮೂರು ಇಡ್ಲಿ ಒಂದು ಬೌಲ್ ಅನ್ನ')) === 'morning ✓ · 2 idli ✗ · 1 bowl sambar ✗'
+       && R('k18', 'ಟೀಗೆ ಸಕ್ಕರೆ ಹಾಕಿಲ್ಲ', 'no sugar') === 'pass' && R('k18', 'ಟೀಗೆ ಸಕ್ಕರೆ ಹಾಕಿದೆ', 'no sugar') === 'fail');
+    // Conflicting text stays unverified, never a pass.
+    ck('conflicting text is UNVERIFIED, not passed: "2 idli and 3 idli", "no sugar in tea but sugar in coffee", "72.5 kg, last week 74 kg", a bare "72.5", "breakfast … lunch"',
+       R('k01', 'morning 2 idli and 3 idli one bowl sambar', '2 idli') === 'unverified' && R('k18', 'no sugar in tea but sugar in coffee', 'no sugar') === 'unverified'
+       && R('k11', 'today weight 72.5 kg, last week 74 kg', '72.5 kg') === 'unverified' && R('k11', 'today 72.5', '72.5 kg') === 'unverified'
+       && R('k02', 'breakfast and lunch one plate upma', 'breakfast') === 'unverified');
+    ck('…and shows as "?" in the text form', V.checksText(V.meaningChecks('k01', 'morning 2 idli and 3 idli one bowl sambar')) === 'morning ✓ · 2 idli ? · 1 bowl sambar ✓');
+    ck('with no "and"/"then"/comma between them, one item\'s number never runs into the next: "one plate rice two plates upma" fails "1 plate upma"; "one bowl rice two bowl sambar" fails "1 bowl sambar"',
+       R('k02', 'breakfast one plate rice two plates upma one cup coffee', '1 plate upma') === 'fail' && R('k01', 'morning one bowl rice two bowl sambar', '1 bowl sambar') === 'fail');
+    ck('a container must be the right one ("1 cup sambar" is not "1 bowl sambar"); a food never heard fails', R('k01', 'morning 2 idli 1 cup sambar', '1 bowl sambar') === 'fail' && R('k02', 'breakfast 1 cup coffee', '1 plate upma') === 'fail');
+    ck('spoken numbers: "eppattu eradu point aidu kg" is 72.5 kg; "two idli, a bowl of sambar"; "akki rotti eradu" (number after the food); "nooru gram"',
+       R('k11', 'Ivattu belagge nanna tooka eppattu eradu point aidu kg', '72.5 kg') === 'pass' && R('k01', 'morning two idli, a bowl of sambar', '2 idli') === 'pass' && R('k01', 'morning two idli, a bowl of sambar', '1 bowl sambar') === 'pass'
+       && R('k17', 'Akki rotti eradu, kaayi chutney jote', '2 rice rotti') === 'pass' && R('k20', 'Paneer nooru gram, soppina palya jote', '100 grams') === 'pass');
+    const lines = V.PHRASES.filter(p => !p.free && V.CHECKS[p.id]);
+    const own = lines.filter(p => V.meaningChecks(p.id, p.say).some(c => c.result !== 'pass')).map(p => [p.id, V.checksText(V.meaningChecks(p.id, p.say))]);
+    ck(`every line's own words pass its rule checks (${lines.length} lines) — the checks are not stricter than the script`, own.length === 0, own);
+    ck('the summary counts unverified separately', JSON.stringify(V.checksSummary([{ phrase_id: 'k01', gemini_text: 'morning 2 idli and 3 idli one bowl sambar', whisper_text: null }]).gemini.quantity) === '{"passed":1,"unverified":1,"total":2}');
+    // Rule checks change nothing stored: raw answers and keyword scores.
+    const rowsNow = (await pool.query(`SELECT phrase_id, gemini_text, whisper_text, gemini_score, whisper_score FROM voice_samples ORDER BY id`)).rows;
+    ck('raw answers and stored keyword scores are untouched by the rule checks (reading results changes no row)',
+       JSON.stringify(rowsNow) === JSON.stringify((await (async () => { await call('GET', '/api/voice-pilot/results', C); return (await pool.query(`SELECT phrase_id, gemini_text, whisper_text, gemini_score, whisper_score FROM voice_samples ORDER BY id`)).rows; })())));
   }
 
   console.log('\n[4] stopping, removing, 90 days');
