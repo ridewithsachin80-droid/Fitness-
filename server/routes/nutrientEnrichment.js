@@ -4,12 +4,15 @@
  *   GET  /api/nutrient-enrichment/inventory         coach/admin, read-only
  *   POST /api/nutrient-enrichment/batches           admin: propose a batch (changes no food)
  *   GET  /api/nutrient-enrichment/batches/:id       coach/admin: the review rows
+ *   POST /api/nutrient-enrichment/batches/:id/approve admin, with { confirm: "approve batch <id>" } (Fixes-2l)
  *   POST /api/nutrient-enrichment/batches/:id/apply admin, with { confirm: "apply batch <id>" }
  *   POST /api/nutrient-enrichment/batches/:id/rollback admin
  *
- * Applying is deliberately awkward: admin only, a typed confirmation, at most
- * 20 foods per batch, and a pilot must be reviewed and approved by Sachin
- * before any batch is applied on the live test or production database.
+ * Applying is deliberately awkward: admin only, approval first (who approved
+ * and the approved revision are recorded; apply refuses any other revision),
+ * a typed confirmation, at most 20 foods per batch, and a pilot must be
+ * reviewed and approved by Sachin before any batch is applied on the live
+ * test or production database.
  */
 const router = require('express').Router();
 const pool = require('../db/pool');
@@ -54,6 +57,13 @@ router.get('/batches/:id', role('monitor', 'admin'), async (req, res) => {
     console.error('GET /nutrient-enrichment/batches/:id error:', err);
     res.status(500).json({ error: 'Could not load the batch' });
   }
+});
+
+router.post('/batches/:id/approve', role('admin'), async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (req.body?.confirm !== `approve batch ${id}`) return res.status(400).json({ error: `Type "approve batch ${id}" to confirm` });
+  try { res.json(await E.approveBatch(pool, id, req.user.id)); }
+  catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 
 router.post('/batches/:id/apply', role('admin'), async (req, res) => {

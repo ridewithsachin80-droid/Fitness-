@@ -26,6 +26,62 @@
  * logged with (see services/foodPropagate.js, which is opt-in and not used here).
  */
 const { MICRO_KEYS } = require('./nutrientStatus');
+const crypto = require('crypto');
+
+// ── Strict numbers (Fixes-2l, review item 1) ────────────────────────────────
+// Number(null), Number(''), Number('  '), Number(false) and Number([]) are all
+// 0, so the 2k validator accepted each of them as a reference value of zero —
+// reintroducing the missing-versus-zero problem through the enrichment path.
+// Every numeric input is now required to be an explicit finite number, or a
+// string in plain decimal form. Nothing else converts; nothing defaults to 0.
+const NUM_RE = /^-?(\d+(\.\d+)?|\.\d+)$/;
+function finiteNum(x, what) {
+  if (typeof x === 'number') {
+    if (!Number.isFinite(x)) throw new Error(`${what} must be a finite number (got ${x})`);
+    return x;
+  }
+  if (typeof x === 'string') {
+    const s = x.trim();
+    if (s === '' || !NUM_RE.test(s)) throw new Error(`${what} must be a plain number (got "${x}")`);
+    const n = Number(s);
+    if (!Number.isFinite(n)) throw new Error(`${what} must be a finite number (got "${x}")`);
+    return n;
+  }
+  throw new Error(`${what} must be a number (got ${x === null ? 'null' : Array.isArray(x) ? 'an array' : typeof x})`);
+}
+
+// ── Pinned source extracts (Fixes-2l, review item 6) ────────────────────────
+// A reference amount is accepted only when it matches a reviewed extract of
+// the source pinned in the repo (server/data/nutrient-ref-extracts.json):
+// dataset release, record id, nutrient, unit and per-100 g value. Recipe
+// ingredient values and retention factors are checked against the same file.
+// Structural validity (a real-looking dataset name and record id) is no longer
+// enough to carry an amount.
+let REFS_CACHE;
+function loadRefs() {
+  if (REFS_CACHE !== undefined) return REFS_CACHE;
+  try { REFS_CACHE = require('../data/nutrient-ref-extracts.json'); }
+  catch { REFS_CACHE = null; }
+  return REFS_CACHE;
+}
+/** Test suites only: replace the pinned file for the rest of the process
+ *  (pass undefined to go back to the real file). The app never calls this. */
+function _setRefsForTests(refs) { REFS_CACHE = refs; }
+
+// A pinned record is only as good as its transcription. Each record carries
+// `official_check`: null until someone has compared it with the official
+// source (the NIN IFCT 2017 PDF; USDA FoodData Central for SR28 records), then
+// { result: 'match', against, by, date, … }. A reference amount, or a recipe
+// ingredient, resting on an unchecked record is refused; so is a retention
+// factor while the factor table itself is unchecked. Pinning a record makes it
+// verifiable; the official check makes it usable.
+function requireChecked(rec, label) {
+  const c = rec && rec.official_check;
+  if (!c || c.result !== 'match')
+    throw new Error(`the pinned extract of ${label} has not been checked against the official source yet (official_check)`);
+}
+/** Values agree within rounding: 0.5% or an absolute 0.002 in the app unit. */
+const sameAmount = (a, b) => Math.abs(a - b) <= Math.max(0.002, Math.abs(b) * 0.005);
 
 /** The unit each nutrient is stored in (matches client RDA_TARGETS and the admin form). */
 const APP_UNITS = {
@@ -85,16 +141,52 @@ function fillability(food, key) {
  */
 function recipePer100(recipe) {
   const ings = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
-  const cooked = Number(recipe?.cooked_weight_g);
   if (!ings.length) throw new Error('recipe has no ingredients');
-  if (!(cooked > 0)) throw new Error('recipe needs the cooked weight (yield)');
+  const cooked = finiteNum(recipe?.cooked_weight_g, 'the cooked weight (yield)');
+  if (!(cooked > 0)) throw new Error('recipe needs the cooked weight (yield) above 0');
   let total = 0;
   for (const i of ings) {
-    const g = Number(i.grams), v = Number(i.value_per_100g), r = i.retention === undefined ? 1 : Number(i.retention);
-    if (!(g >= 0) || !(v >= 0) || !(r >= 0 && r <= 1)) throw new Error(`bad ingredient ${i.name || '?'}`);
+    const g = finiteNum(i.grams, `ingredient "${i.name || '?'}" grams`);
+    const v = finiteNum(i.value_per_100g, `ingredient "${i.name || '?'}" value_per_100g`);
+    // An absent retention factor means "none lost" (the documented default, 1).
+    // A retention that IS given must itself be a valid fraction: an invalid one
+    // is refused, never silently turned into the default or into 0.
+    const r = i.retention === undefined ? 1 : finiteNum(i.retention, `ingredient "${i.name || '?'}" retention`);
+    if (g < 0 || v < 0 || r < 0 || r > 1) throw new Error(`bad ingredient ${i.name || '?'}`);
     total += g / 100 * v * r;
   }
   return total / cooked * 100;
+}
+
+/**
+ * A recipe's inputs checked against the pinned source extracts: every
+ * ingredient that contributes must name its pinned record (`code`,
+ * "<dataset>|<record_id>") and its value must match that record; a retention
+ * factor below 1 must name its method and match the pinned IFCT factor.
+ * Ingredients that contribute nothing (water) state value 0 explicitly.
+ */
+function checkRecipeSources(key, recipe, refs, opts = {}) {
+  for (const i of recipe.ingredients) {
+    const v = finiteNum(i.value_per_100g, `ingredient "${i.name || '?'}" value_per_100g`);
+    if (v > 0) {
+      if (!i.code) throw new Error(`ingredient "${i.name || '?'}" contributes ${key} but names no pinned source record (code)`);
+      const rec = refs.records?.[i.code];
+      if (!rec) throw new Error(`ingredient record ${i.code} is not in the pinned source extracts`);
+      const pinned = rec.values?.[key];
+      if (pinned === undefined || pinned === null) throw new Error(`the pinned extract of ${i.code} has no ${key} value`);
+      if (!sameAmount(v, finiteNum(pinned, `pinned ${i.code} ${key}`)))
+        throw new Error(`ingredient "${i.name || '?'}" ${key} ${v} does not match the pinned ${i.code} value ${pinned}`);
+      if (!opts.dryRun) requireChecked(rec, i.code);
+    }
+    if (i.retention !== undefined && finiteNum(i.retention, 'retention') < 1) {
+      if (!i.retention_method) throw new Error(`ingredient "${i.name || '?'}" has a retention factor but names no method`);
+      const pinnedR = refs.retention_factors?.[`${key}|${i.retention_method}`];
+      if (pinnedR === undefined) throw new Error(`no pinned retention factor for ${key} (${i.retention_method})`);
+      if (!sameAmount(Number(i.retention), finiteNum(pinnedR, 'pinned retention factor')))
+        throw new Error(`retention ${i.retention} for "${i.name || '?'}" does not match the pinned ${key}|${i.retention_method} factor ${pinnedR}`);
+      if (!opts.dryRun) requireChecked({ official_check: refs.retention_factors_check }, 'the retention-factor table');
+    }
+  }
 }
 
 /**
@@ -104,23 +196,39 @@ function recipePer100(recipe) {
  *     preparation: 'raw' | 'cooked', status: 'reference' | 'recipe' | 'ai',
  *     source: { dataset, record_id, name, url }, assumptions, recipe }
  */
-function checkProposal(food, pr) {
+function checkProposal(food, pr, opts = {}) {
   const key = pr.nutrient;
   if (!MICRO_KEYS.includes(key)) throw new Error(`"${key}" is not a nutrient this app stores`);
   if (!['reference', 'recipe', 'ai'].includes(pr.status)) throw new Error('status must be reference, recipe or ai');
-  let value = Number(pr.value);
-  if (!Number.isFinite(value) || value < 0) throw new Error('value must be a number, 0 or more');
+  let value = finiteNum(pr.value, 'value');            // 2l: null/blank/false/[] no longer read as 0
+  if (value < 0) throw new Error('value must be a number, 0 or more');
   value = toAppUnit(key, value, pr.unit);
   if (pr.basis === 'per_serving') {
-    const s = Number(pr.serving_g);
-    if (!(s > 0)) throw new Error('per-serving value needs serving_g');
+    const s = finiteNum(pr.serving_g, 'serving_g');
+    if (!(s > 0)) throw new Error('per-serving value needs serving_g above 0');
     value = value * 100 / s;
   } else if (pr.basis !== 'per_100g') throw new Error('basis must be per_100g or per_serving');
+
+  // 2l: a reference or recipe value stands on a food whose identity someone
+  // confirmed (which vegetable, which yogurt, fortified or not, whose recipe).
+  // Closeness to an old AI number is not confirmation. Candidates are refused.
+  // opts.dryRunCandidates is TOOL-ONLY (the pilot generator): it validates a
+  // candidate's numbers for the review table without passing the two human
+  // gates (confirmed identity; official check of the pinned record). The API
+  // routes never set it, so neither gate can be skipped through the app.
+  if (['reference', 'recipe'].includes(pr.status) && !opts.dryRunCandidates) {
+    if (pr.identity !== 'confirmed' || !pr.identity_confirmed_by)
+      throw new Error('the food’s identity is a candidate: confirm the food, preparation and brand/variety (identity: "confirmed", identity_confirmed_by) before this value can be proposed');
+  }
 
   // Raw or cooked must match what the food's numbers are for (Fixes-2h).
   if (pr.preparation && !['raw', 'cooked'].includes(pr.preparation)) throw new Error('preparation must be raw or cooked');
   if (food.preparation && pr.preparation && food.preparation !== pr.preparation)
     throw new Error(`the food's numbers are for the ${food.preparation} food; this value is for ${pr.preparation}`);
+
+  // The pinned source extracts in the repo. Tests may inject their own; null
+  // is allowed only when a caller explicitly opts out (nothing in the app does).
+  const refs = opts.refs !== undefined ? opts.refs : loadRefs();
 
   if (pr.status === 'reference') {
     const ds = pr.source?.dataset;
@@ -129,21 +237,45 @@ function checkProposal(food, pr) {
     // The open copy of IFCT 2017 writes 0 for both "none" and "not analysed", so an
     // IFCT 0 proves nothing. USDA SR28 leaves "not analysed" blank, so its 0 is a value.
     if (value === 0 && ds === 'IFCT 2017') throw new Error('an IFCT 0 is not used: this copy of the table cannot tell "none" from "not analysed"');
+    // 2l: the amount itself is checked against the pinned extract of the source.
+    // A real dataset name with a fabricated amount is refused.
+    if (!refs) throw new Error('no pinned source extracts are available (server/data/nutrient-ref-extracts.json); a reference amount cannot be verified');
+    const rec = refs.records?.[`${ds}|${pr.source.record_id}`];
+    if (!rec) throw new Error(`${ds} record ${pr.source.record_id} is not in the pinned source extracts; pin a reviewed extract before proposing from it`);
+    const pinned = rec.values?.[key];
+    if (pinned === undefined || pinned === null) throw new Error(`the pinned extract of ${ds} ${pr.source.record_id} has no ${key} value`);
+    if (!sameAmount(value, finiteNum(pinned, `pinned ${ds} ${pr.source.record_id} ${key}`)))
+      throw new Error(`${key} ${+value.toFixed(3)} does not match the pinned ${ds} ${pr.source.record_id} value ${pinned}`);
+    if (!opts.dryRunCandidates) requireChecked(rec, `${ds} ${pr.source.record_id}`);
   }
   if (pr.status === 'recipe') {
     const calc = recipePer100(pr.recipe);
     const conv = toAppUnit(key, calc, pr.recipe.unit || pr.unit);
     if (Math.abs(conv - value) > Math.max(0.01, value * 0.02)) throw new Error(`recipe working gives ${+conv.toFixed(3)}, not ${+value.toFixed(3)}`);
+    // 2l: the working's own inputs are checked against the pinned ingredient
+    // records and retention factors, not only against themselves.
+    if (!refs) throw new Error('no pinned source extracts are available (server/data/nutrient-ref-extracts.json); recipe inputs cannot be verified');
+    checkRecipeSources(key, pr.recipe, refs, { dryRun: !!opts.dryRunCandidates });
   }
   if (pr.status === 'ai' && pr.source?.dataset && REFERENCE_DATASETS.includes(pr.source.dataset))
     throw new Error('an AI estimate cannot claim a reference dataset');
 
   const meta = {
     status: pr.status,
-    source: pr.source ? { dataset: pr.source.dataset || null, record_id: pr.source.record_id || null, name: pr.source.name || null, url: pr.source.url || null } : null,
+    source: pr.source ? (() => {
+      const ds = pr.source.dataset || null;
+      const dsInfo = (refs && ds && refs.datasets?.[ds]) || {};
+      const defs = (refs && ds && refs.nutrient_definitions?.[ds]) || {};
+      return { dataset: ds, record_id: pr.source.record_id || null, name: pr.source.name || null,
+               url: pr.source.url || dsInfo.official_source || null,          // 2l: a source URL or archive reference on every value
+               release: dsInfo.release || null,                                  // 2l: the exact dataset release
+               definition: defs[key] || defs._other || null, unit: APP_UNITS[key],   // 2l: nutrient definition and unit
+               official_check: (refs && ds && refs.records?.[`${ds}|${pr.source.record_id}`]?.official_check) || null };   // 2l: who checked the pinned record, against what
+    })() : null,
     basis: pr.preparation || food.preparation || null,
     assumptions: pr.assumptions || null,
     recipe: pr.status === 'recipe' ? pr.recipe : undefined,
+    identity: pr.identity || null, identity_confirmed_by: pr.identity_confirmed_by || null,
     date: new Date().toISOString().slice(0, 10),
     reviewer: null, review_status: 'pending',
   };
@@ -193,9 +325,49 @@ async function createBatch(db, { label, proposals, userId, notes = null }) {
   return { batch: b, review };
 }
 
+/** The exact content a reviewer approves: a hash over the batch's proposed
+ *  changes (food, nutrient, value, status, source). Apply refuses the batch
+ *  if its content no longer matches the approved revision. */
+// Keys sorted at every level, so the same content always hashes the same.
+const stable = (v) => Array.isArray(v) ? `[${v.map(stable).join(',')}]`
+  : v && typeof v === 'object' ? `{${Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}`
+  : JSON.stringify(v === undefined ? null : v);
+function batchRevision(changes) {
+  // The whole proposal counts: value, status AND everything stored with it
+  // (source, release, recipe working, assumptions, identity confirmation).
+  const rows = changes
+    .filter(c => c.outcome === 'proposed')
+    .map(c => [Number(c.food_id), c.nutrient, c.after_value === null || c.after_value === undefined ? null : Number(c.after_value), c.after_status, c.after_meta || null])
+    .sort((a, b) => a[0] - b[0] || String(a[1]).localeCompare(String(b[1])));
+  return crypto.createHash('sha256').update(stable(rows)).digest('hex');
+}
+
 /**
- * Apply a proposed batch. Re-checks every value inside one transaction (a food
- * may have changed since it was proposed); nothing is written over.
+ * Record a review approval on a proposed batch (Fixes-2l). Who approved and
+ * the exact revision they approved are stored; apply only accepts that
+ * revision. Approval does not change any food.
+ */
+async function approveBatch(pool, batchId, userId) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows: [b] } = await db.query(`SELECT * FROM nutrient_enrichment_batches WHERE id = $1 FOR UPDATE`, [batchId]);
+    if (!b) throw Object.assign(new Error('batch not found'), { status: 404 });
+    if (b.status !== 'proposed') throw Object.assign(new Error(`batch is ${b.status}, not proposed`), { status: 409 });
+    const { rows: changes } = await db.query(`SELECT * FROM nutrient_enrichment_changes WHERE batch_id = $1`, [batchId]);
+    const revision = batchRevision(changes);
+    await db.query(`UPDATE nutrient_enrichment_batches SET approved_by=$2, approved_at=NOW(), approved_revision=$3 WHERE id=$1`,
+      [batchId, userId || null, revision]);
+    await db.query('COMMIT');
+    return { approved: true, revision, proposed: changes.filter(c => c.outcome === 'proposed').length };
+  } catch (e) { await db.query('ROLLBACK').catch(() => {}); throw e; }
+  finally { db.release(); }
+}
+
+/**
+ * Apply an approved batch. Re-checks every value inside one transaction (a food
+ * may have changed since it was proposed); nothing is written over. The batch
+ * must carry an approval, and its content must still be the approved revision.
  */
 async function applyBatch(pool, batchId, userId) {
   const db = await pool.connect();
@@ -204,7 +376,12 @@ async function applyBatch(pool, batchId, userId) {
     const { rows: [b] } = await db.query(`SELECT * FROM nutrient_enrichment_batches WHERE id = $1 FOR UPDATE`, [batchId]);
     if (!b) throw Object.assign(new Error('batch not found'), { status: 404 });
     if (b.status !== 'proposed') throw Object.assign(new Error(`batch is ${b.status}, not proposed`), { status: 409 });
+    if (!b.approved_by || !b.approved_revision)
+      throw Object.assign(new Error('batch is not approved: a reviewer must approve it before it can be applied'), { status: 409 });
     const { rows: changes } = await db.query(`SELECT * FROM nutrient_enrichment_changes WHERE batch_id = $1 AND outcome = 'proposed' ORDER BY id`, [batchId]);
+    const { rows: allChanges } = await db.query(`SELECT * FROM nutrient_enrichment_changes WHERE batch_id = $1`, [batchId]);
+    if (batchRevision(allChanges) !== b.approved_revision)
+      throw Object.assign(new Error('the proposals changed after they were approved; review and approve the batch again'), { status: 409 });
     let applied = 0, skipped = 0;
     for (const c of changes) {
       const { rows: [food] } = await db.query(`SELECT ${FOOD_COLS} FROM foods WHERE id = $1 FOR UPDATE`, [c.food_id]);
@@ -216,7 +393,10 @@ async function applyBatch(pool, batchId, userId) {
           [c.id, !el.eligible ? el.reason : !fl.ok ? fl.reason : 'the value changed after the batch was proposed']);
         skipped++; continue;
       }
-      const meta = { ...c.after_meta, batch_id: batchId };
+      // 2l: at apply, the stored "pending" review state is reconciled with the
+      // approval that let the batch through: who approved, and which revision.
+      const meta = { ...c.after_meta, batch_id: batchId,
+                     review_status: 'approved', reviewer: b.approved_by, approved_at: b.approved_at, approved_revision: b.approved_revision };
       await db.query(
         `UPDATE foods
             SET per_100g = jsonb_set(jsonb_set(per_100g, ARRAY[$2::text], to_jsonb($3::numeric)),
@@ -336,4 +516,5 @@ async function inventory(db, { top = 30, days = 120 } = {}) {
 }
 
 module.exports = { APP_UNITS, REFERENCE_DATASETS, MAX_FOODS_PER_BATCH, toAppUnit, eligibility, fillability, recipePer100, checkProposal,
+                   finiteNum, checkRecipeSources, batchRevision, approveBatch, _setRefsForTests,
                    createBatch, applyBatch, rollbackBatch, inventory };

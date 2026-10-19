@@ -1,17 +1,40 @@
 // Dry run of the 2k pilot on a LOCAL copy of the 25 live records (never the live database):
 // copy → propose (real API) → apply (real API) → log a day → screenshots → roll back → compare.
-import fs from 'fs'; import { createRequire } from 'module'; import { execFileSync } from 'child_process';
-const require = createRequire('/home/claude/fitness-/server/package.json');
+//
+//   node pilot-local.mjs <outdir> [inventory.jsonl] [pilot-proposals.json]
+//
+// Fixes-2l (review item 7): every path resolves from this script's location
+// (repo = three levels up) and the repo's own pilot files are the defaults.
+// The local server, database and secret are environment settings with the
+// defaults used in the handoff: PILOT_BASE (http://localhost:4104),
+// PGHOST (/tmp), PGPORT (5433), PGDATABASE (fitlife_ux), JWT_SECRET (uxsecret).
+// It refuses to run against anything but a local database.
+//
+// Since 2l every pilot value is a CANDIDATE (identity unconfirmed), and the
+// server refuses candidates. To exercise propose → approve → apply → rollback
+// on the LOCAL copy, this dry run marks candidates as confirmed by
+// "local dry run (not a real confirmation)". That label is stored on the
+// local copy only and is never a confirmation of the real food.
+import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url'; import { createRequire } from 'module'; import { execFileSync } from 'child_process';
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, '../../..');
+const require = createRequire(path.join(REPO, 'server', 'package.json'));
 const jwt = require('jsonwebtoken');
-const puppeteer = createRequire('/home/claude/t3/server/package.json')('puppeteer-core');
-const S = process.env.PILOT_DATA || '/tmp/pilot-data';   // holds ifctpkg/ and sr28/ (see README)
-const OUT = process.argv[2]; fs.mkdirSync(OUT, { recursive: true });
-const BASE = 'http://localhost:4104';
-const sql = q => execFileSync('psql', ['-h', '/tmp', '-p', '5433', '-U', 'postgres', '-d', 'fitlife_ux', '-qAtc', q], { encoding: 'utf8' }).trim();
-const { MICRO_KEYS } = require('/home/claude/fitness-/server/services/nutrientStatus.js');
-const inv = fs.readFileSync('/home/claude/deliver2k/live-inventory.jsonl', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
-const { proposals } = JSON.parse(fs.readFileSync(`${S}/pilot/pilot-proposals.json`, 'utf8'));
-const A = 'Bearer ' + jwt.sign({ id: 1, role: 'admin', name: 'Local admin' }, 'uxsecret', { expiresIn: '1h' });
+const puppeteer = require('puppeteer-core');
+const OUT = process.argv[2]; if (!OUT) { console.error('usage: node pilot-local.mjs <outdir> [inventory.jsonl] [pilot-proposals.json]'); process.exit(2); }
+fs.mkdirSync(OUT, { recursive: true });
+const BASE = process.env.PILOT_BASE || 'http://localhost:4104';
+const PG = { host: process.env.PGHOST || '/tmp', port: process.env.PGPORT || '5433', db: process.env.PGDATABASE || 'fitlife_ux' };
+if (!/^(\/|localhost$|127\.0\.0\.1$)/.test(PG.host) || !/^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(BASE)) { console.error('Refusing: this dry run only runs against a local server and database.'); process.exit(1); }
+const sql = q => execFileSync('psql', ['-h', PG.host, '-p', PG.port, '-U', 'postgres', '-d', PG.db, '-qAtc', q], { encoding: 'utf8' }).trim();
+const { MICRO_KEYS } = require(path.join(REPO, 'server', 'services', 'nutrientStatus.js'));
+const invFile = process.argv[3] || path.join(HERE, '..', 'live-inventory-8a16b38.jsonl');
+const propFile = process.argv[4] || path.join(HERE, '..', 'pilot-proposals.json');
+const inv = fs.readFileSync(invFile, 'utf8').split('\n').filter(l => l.trim().startsWith('{')).map(l => JSON.parse(l));
+const pf = JSON.parse(fs.readFileSync(propFile, 'utf8'));
+const DRY = 'local dry run (not a real confirmation)';
+const proposals = [...(pf.proposals || []), ...(pf.candidates || []).map(p => ({ ...p, identity: 'confirmed', identity_confirmed_by: DRY }))];
+const A = 'Bearer ' + jwt.sign({ id: 1, role: 'admin', name: 'Local admin' }, process.env.JWT_SECRET || 'uxsecret', { expiresIn: '1h' });
 const call = async (method, p, body) => { const r = await fetch(BASE + p, { method, headers: { Authorization: A, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, data: await r.json().catch(() => ({})) }; };
 const log = []; const say = (ok, m) => { log.push(`${ok ? '✓' : '✗'} ${m}`); console.log(`${ok ? '✓' : '✗'} ${m}`); };
 const idMap = new Map(); const before = new Map();
@@ -32,20 +55,34 @@ try {
   const r = await call('POST', '/api/nutrient-enrichment/batches', { label: 'Fixes-2k pilot (local dry run)', proposals: local });
   batchId = r.data.batch?.id;
   const prop = (r.data.review || []).filter(x => x.outcome === 'proposed').length, skip = (r.data.review || []).filter(x => x.outcome !== 'proposed');
-  say(r.status === 201 && prop === proposals.length && skip.length === 0, `proposed: ${prop} of ${proposals.length} accepted by the real batch check, ${skip.length} refused ${skip.slice(0, 3).map(x => x.food + ' ' + x.nutrient + ': ' + x.reason).join('; ')}`);
+  // 2l: with candidates marked confirmed for this LOCAL copy, the only thing
+  // still allowed to refuse a value is the official-check gate: a value whose
+  // pinned record nobody has checked against the official source. Anything
+  // refused for another reason is a failure.
+  const unchecked = skip.filter(x => /has not been checked against the official source/.test(x.reason || ''));
+  const other = skip.filter(x => !unchecked.includes(x));
+  const byRec = {}; for (const x of unchecked) { const m = /extract of (.+?) has not/.exec(x.reason); byRec[m ? m[1] : '?'] = (byRec[m ? m[1] : '?'] || 0) + 1; }
+  say(r.status === 201 && prop + unchecked.length === proposals.length && other.length === 0,
+      `proposed: ${prop} of ${proposals.length} accepted by the real batch check; ${unchecked.length} refused because their pinned record is not yet checked against the official source (${Object.entries(byRec).map(([k, n]) => `${k}: ${n}`).join(', ')}); ${other.length} refused for any other reason${other.length ? ': ' + other.slice(0, 3).map(x => x.food + ' ' + x.nutrient + ': ' + x.reason).join('; ') : ''}`);
   const unchanged = [...before].every(([id, b]) => sql(`select per_100g::text || '|' || coalesce(nutrient_meta::text,'') from foods where id=${id}`) === b);
   say(unchanged, 'proposing changed no food');
-  // 3. Apply (local only).
+  // 3. Approve (2l: records who and which revision), then apply (local only).
+  const unapproved = await call('POST', `/api/nutrient-enrichment/batches/${batchId}/apply`, { confirm: `apply batch ${batchId}` });
+  say(unapproved.status === 409 && /not approved/.test(unapproved.data.error || ''), `apply before approval is refused (${unapproved.status})`);
+  const apv = await call('POST', `/api/nutrient-enrichment/batches/${batchId}/approve`, { confirm: `approve batch ${batchId}` });
+  say(apv.status === 200 && apv.data.revision, `approved revision ${String(apv.data.revision || '').slice(0, 12)}…`);
   const ap = await call('POST', `/api/nutrient-enrichment/batches/${batchId}/apply`, { confirm: `apply batch ${batchId}` });
-  say(ap.status === 200 && ap.data.applied === proposals.length, `applied locally: ${ap.data.applied}, skipped ${ap.data.skipped}`);
+  say(ap.status === 200 && ap.data.applied === prop, `applied locally: ${ap.data.applied}, skipped ${ap.data.skipped}`);
   // 4. A member's day from the enriched foods, as the app copies them (GET /foods/:id carries the statuses).
   const pick = async (liveId, grams, meal) => { const g = await call('GET', `/api/foods/${idMap.get(liveId)}`); return { name: g.data.name, grams, meal, food_id: g.data.id, source: 'db', per_100g: g.data.per_100g }; };
   const items = [await pick(854, 150, 'Lunch'), await pick(954, 100, 'Lunch'), await pick(835, 200, 'Dinner'), await pick(794, 150, 'Breakfast'), await pick(860, 50, 'Lunch')];
-  const st = items[1].per_100g._status || {};
-  say(st.iron === 'ai' && st.folate === 'reference' && st.vit_a === 'reference', `a logged copy keeps its statuses (Greens: iron "${st.iron}" (the old AI value), folate "${st.folate}", vit A "${st.vit_a}")`);
+  // 2l: rice (854) is the food whose record is checked, so it carries the applied values.
+  const st = items[0].per_100g._status || {};
+  say(st.zinc === 'reference' && st.iron === 'ai', `a logged copy keeps its statuses (rice: zinc "${st.zinc}" (applied reference), iron "${st.iron}" (the old AI value))`);
   sql(`insert into daily_logs (patient_id, log_date, food_items) values (6, (now() at time zone 'Asia/Kolkata')::date, '${JSON.stringify(items).replace(/'/g, "''")}'::jsonb) on conflict (patient_id, log_date) do update set food_items = excluded.food_items`);
-  // 5. Screens.
-  const b = await puppeteer.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'], headless: true });
+  // 5. Screens (optional in 2l: PILOT_SCREENS=1; they need seeded, onboarded local accounts).
+  if (process.env.PILOT_SCREENS === '1') {
+  const b = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'], headless: true });
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const VIEW = { width: 360, height: 800, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
   const clickText = (p, re) => p.evaluate((src) => { const r = new RegExp(src); const el = [...document.querySelectorAll('button')].find(b => r.test(b.textContent.trim())); el?.scrollIntoView({ block: 'center' }); el?.click(); return !!el; }, re.source);
@@ -83,10 +120,11 @@ try {
     await c.browserContext().close();
   }
   await b.close();
+  } else say(true, 'screens not run in this dry run (set PILOT_SCREENS=1 with onboarded local accounts); the member and coach screens are covered by ui-tests and the delivery screenshots');
   // 6. Roll back and compare every record with its copy.
   const rb = await call('POST', `/api/nutrient-enrichment/batches/${batchId}/rollback`, {});
   const diff = [...before].filter(([id, bf]) => sql(`select per_100g::text || '|' || coalesce(nutrient_meta::text,'') from foods where id=${id}`) !== bf.replace(/\|$/, '|{}') && sql(`select per_100g::text || '|' || coalesce(nutrient_meta::text,'') from foods where id=${id}`) !== bf);
-  say(rb.status === 200 && rb.data.restored === proposals.length && rb.data.conflicts === 0, `rolled back: ${rb.data.restored} restored, ${rb.data.conflicts} conflicts`);
+  say(rb.status === 200 && rb.data.restored === prop && rb.data.conflicts === 0, `rolled back: ${rb.data.restored} restored, ${rb.data.conflicts} conflicts`);
   if (diff.length) { const id = diff[0][0]; fs.writeFileSync(`${OUT}/diff-before.json`, before.get(id)); fs.writeFileSync(`${OUT}/diff-after.json`, sql(`select per_100g::text || '|' || coalesce(nutrient_meta::text,'') from foods where id=${id}`)); }
   say(diff.length === 0, `after rollback every record equals its copy before the batch (${before.size - diff.length}/${before.size})${diff.length ? ' — differ: ' + diff.map(d => d[0]).join(',') : ''}`);
 } finally {

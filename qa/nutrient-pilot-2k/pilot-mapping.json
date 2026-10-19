@@ -5,7 +5,10 @@
   "code": "20445",
   "preparation": "cooked",
   "basis_reason": "the name says cooked; 130 kcal matches cooked rice (raw is ~360)",
-  "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+  "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the rice type and whether it is fortified (India distributes fortified rice; this member's rice may or may not be)."
  },
  {
   "food_id": 858,
@@ -13,7 +16,10 @@
   "code": "11124",
   "preparation": "raw",
   "basis_reason": "41 kcal and the AI's other figures match raw carrots",
-  "assumptions": "Raw carrots, edible portion."
+  "assumptions": "Raw carrots, edible portion.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the raw/cooked state and the food type before assigning the reference profile."
  },
  {
   "food_id": 859,
@@ -21,7 +27,10 @@
   "code": "11821",
   "preparation": "raw",
   "basis_reason": "31 kcal and vitamin C 127.7 match raw red sweet pepper",
-  "assumptions": "Raw red bell pepper (capsicum)."
+  "assumptions": "Raw red bell pepper (capsicum).",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the raw/cooked state and the food type before assigning the reference profile."
  },
  {
   "food_id": 860,
@@ -29,7 +38,10 @@
   "code": "11529",
   "preparation": "raw",
   "basis_reason": "18 kcal matches raw tomatoes",
-  "assumptions": "Raw red ripe tomatoes, year-round average."
+  "assumptions": "Raw red ripe tomatoes, year-round average.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the raw/cooked state and the food type before assigning the reference profile."
  },
  {
   "food_id": 861,
@@ -37,7 +49,10 @@
   "code": "11253",
   "preparation": "raw",
   "basis_reason": "15 kcal and 1.4 g protein match raw green leaf lettuce",
-  "assumptions": "Green leaf lettuce, raw."
+  "assumptions": "Green leaf lettuce, raw.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the raw/cooked state and the food type before assigning the reference profile."
  },
  {
   "food_id": 925,
@@ -45,7 +60,10 @@
   "code": "12023",
   "preparation": "raw",
   "basis_reason": "the food's 573 kcal, 18 g protein and 49.7 g fat match USDA whole dried sesame exactly",
-  "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009."
+  "assumptions": "USDA does not separate black from white sesame. IFCT 2017 has black gingelly seeds (H009): 508 kcal, calcium 1664 mg vs USDA 975 mg. USDA chosen to match the food's existing numbers; reviewer may prefer IFCT H009.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Choose the reference from the actual variety, processing and hull state, not by preference or closeness to old AI values."
  },
  {
   "food_id": 954,
@@ -53,7 +71,10 @@
   "code": "11457",
   "preparation": "raw",
   "basis_reason": "every existing figure (23 kcal, iron 2.7, calcium 99, potassium 558, vitamin C 28) is USDA raw spinach",
-  "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach."
+  "assumptions": "The name is only 'Greens'; its numbers are exactly raw spinach. Needs the coach to confirm it is spinach.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Coach confirms which vegetable 'Greens' is and its preparation. Matching the old numbers to spinach is not confirmation that it is spinach."
  },
  {
   "food_id": 794,
@@ -61,7 +82,10 @@
   "code": "01256",
   "preparation": "raw",
   "basis_reason": "60 kcal with 10 g protein is non-fat Greek yogurt, not ordinary curd (about 3 g protein)",
-  "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g)."
+  "assumptions": "Plain non-fat Greek yogurt. The food's fat (2 g) is higher than the record's (0.4 g).",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm Greek-style non-fat yogurt vs ordinary dahi, with brand and fat level. Rename or split the food before applying any profile."
  },
  {
   "food_id": 792,
@@ -69,7 +93,10 @@
   "code": "12006",
   "preparation": "raw",
   "basis_reason": "486 kcal is dry chia seeds; the name says 'in water' but the numbers are for the dry seeds",
-  "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged."
+  "assumptions": "Values per 100 g of dry seeds, as the food's existing numbers are. Soaked weight is not what is logged.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Resolve dry-seed grams vs soaked-mixture grams. A dry-seed profile must not attach to a food members may weigh after soaking."
  },
  {
   "food_id": 820,
@@ -77,7 +104,10 @@
   "code": "19902",
   "preparation": "raw",
   "basis_reason": "520 kcal is closest to 45-59% cacao dark chocolate (546); 70-85% is 598",
-  "assumptions": "Cacao percentage not given; 45-59% chosen from the calories."
+  "assumptions": "Cacao percentage not given; 45-59% chosen from the calories.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the product or cacao percentage. Choosing 45-59% cacao because its energy is closest to the old estimate is not enough."
  },
  {
   "food_id": 835,
@@ -99,7 +129,10 @@
    }
   ],
   "cooked_weight_g": 330,
-  "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure."
+  "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the member's recipe and cooked yield, or create a clearly named standard-recipe entry. 100 g flour to 330 g cooked is an assumption."
  },
  {
   "food_id": 822,
@@ -122,7 +155,10 @@
    }
   ],
   "cooked_weight_g": 100,
-  "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300."
+  "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the recipe or product. The 90:10 dates-to-sugar ratio is assumed; keep it illustrative or as a separate standard recipe until confirmed."
  },
  {
   "food_id": 793,
@@ -157,7 +193,10 @@
    }
   ],
   "cooked_weight_g": 100,
-  "assumptions": "A plain dressed salad with the oil the food's 3.5 g fat implies."
+  "assumptions": "A plain dressed salad with the oil the food's 3.5 g fat implies.",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the recipe, ingredient quantities and prepared yield."
  },
  {
   "food_id": 868,
@@ -197,7 +236,10 @@
    }
   ],
   "cooked_weight_g": 100,
-  "assumptions": "A typical home gravy. The recipe is an assumption; spices left out (small amounts)."
+  "assumptions": "A typical home gravy. The recipe is an assumption; spices left out (small amounts).",
+  "identity": "candidate",
+  "identity_confirmed_by": null,
+  "confirmation_needed": "Confirm the recipe, ingredient quantities and prepared yield."
  },
  {
   "food_id": 818,

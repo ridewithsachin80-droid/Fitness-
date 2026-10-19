@@ -1,13 +1,10 @@
 ✓ copied 25 live records locally (live ids → local ids)
-✓ proposed: 240 of 240 accepted by the real batch check, 0 refused 
+✓ proposed: 22 of 240 accepted by the real batch check; 218 refused because their pinned record is not yet checked against the official source (USDA SR28 11124: 21, USDA SR28 11821: 21, USDA SR28 11529: 21, USDA SR28 11253: 21, USDA SR28 12023: 22, USDA SR28 11457: 21, USDA SR28 01256: 23, USDA SR28 12006: 15, USDA SR28 19902: 18, IFCT 2017|A010: 18, USDA SR28|09087: 17); 0 refused for any other reason
 ✓ proposing changed no food
-✓ applied locally: 240, skipped 0
-✓ a logged copy keeps its statuses (Greens: iron "ai" (the old AI value), folate "reference", vit A "reference")
-✓ light member sheet title after the pilot: "3 of 31 targets met · 17 estimated · 11 not known"
-✓ light member rows: folate estimate | 🧬 Folate (B9)~230.2/ 400 mcgEstimate · B12 unknown | 💉 Vitamin B12≥ 1.1/ 2.4 mcgAt least · vit A unknown | 🥕 Vitamin A≥ 492/ 700 mcgAt least · calcium estimate | 🦴 Calcium~365/ 1200 mgEstimate · iron estimate | ⚙️ Iron~7/ 8 mgEstimate · zinc estimate | 🔩 Zinc~4/ 8 mgEstimate · magnesium estimate | ⚡ Magnesium~199/ 320 mgEstimate
-✓ light coach Key Nutrients rows identical to the member's (B12, calcium, iron, zinc, folate, magnesium)
-✓ dark member sheet title after the pilot: "3 of 31 targets met · 17 estimated · 11 not known"
-✓ dark member rows: folate estimate | 🧬 Folate (B9)~230.2/ 400 mcgEstimate · B12 unknown | 💉 Vitamin B12≥ 1.1/ 2.4 mcgAt least · vit A unknown | 🥕 Vitamin A≥ 492/ 700 mcgAt least · calcium estimate | 🦴 Calcium~365/ 1200 mgEstimate · iron estimate | ⚙️ Iron~7/ 8 mgEstimate · zinc estimate | 🔩 Zinc~4/ 8 mgEstimate · magnesium estimate | ⚡ Magnesium~199/ 320 mgEstimate
-✓ dark coach Key Nutrients rows identical to the member's (B12, calcium, iron, zinc, folate, magnesium)
-✓ rolled back: 240 restored, 0 conflicts
+✓ apply before approval is refused (409)
+✓ approved revision f414c9954ee3…
+✓ applied locally: 22, skipped 0
+✓ a logged copy keeps its statuses (rice: zinc "reference" (applied reference), iron "ai" (the old AI value))
+✓ screens not run in this dry run (set PILOT_SCREENS=1 with onboarded local accounts); the member and coach screens are covered by ui-tests and the delivery screenshots
+✓ rolled back: 22 restored, 0 conflicts
 ✓ after rollback every record equals its copy before the batch (25/25)

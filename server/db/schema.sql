@@ -1199,3 +1199,9 @@ CREATE TABLE IF NOT EXISTS nutrient_enrichment_changes (
   UNIQUE (batch_id, food_id, nutrient)
 );
 CREATE INDEX IF NOT EXISTS idx_nec_batch ON nutrient_enrichment_changes(batch_id);
+-- Fixes-2l: a batch records who approved it and the exact revision they
+-- approved (a hash of its proposed changes). Apply refuses a batch without an
+-- approval, and refuses one whose content no longer matches that revision.
+ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_by INT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_revision TEXT;

@@ -217,7 +217,8 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                     {/* Key nutrients collapsible — the member's own rule (Fixes-2i): the same
                         supplements maths, and unknown values are "not known", never zero. */}
                     {(log.food_items || []).some(f => Number(f?.grams) > 0) && (() => {
-                      // The member's own inputs, as on their Today screen: sunlight counts toward vitamin D.
+                      // The member's own inputs, as on their Today screen. Since Fixes-2l sunlight is
+                      // an activity record only — microStatus no longer counts it as vitamin D intake.
                       // The profile row names the coach's choice protocol_activities; the member's
                       // protocol (server/routes/logs.js) calls it activities. protocolFromProfile maps it.
                       const { activeActivities } = resolveProtocolItems(protocolFromProfile(data?.profile || {}));

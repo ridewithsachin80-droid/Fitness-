@@ -278,13 +278,23 @@ export function MicroRow({ r, custom = false }) {
   const barCls  = neutral ? 'bg-white/[0.18]' : good ? 'bg-gold-deep' : warn ? 'bg-warn' : r.upper ? 'bg-red-500' : 'bg-red-400';
   const textCls = neutral ? 'text-mid' : good ? 'text-gold-deep' : warn ? 'text-warn' : 'text-red-400';
   const badgeCls= neutral ? 'bg-white/[0.06] text-mid' : good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400';
-  const approx = r.approx ? '~' : '';
-  const shown = unknown ? (r.value > 0 ? `≥ ${approx}${val}` : '—') : `${approx}${val}`;
-  const badge = unknown ? (r.value > 0 ? 'At least' : 'Not known')
+  // Fixes-2l: a lower bound ("≥") rests on confirmed amounts only. When
+  // estimates contributed too, their subtotal is shown apart (+~N), never
+  // folded into the guaranteed minimum. Confirmed, estimated and unknown
+  // stay three separate quantities.
+  const confVal = +r.confirmed.toFixed(dec);
+  const estVal = +r.estimated.toFixed(dec);
+  const shown = unknown
+    ? (r.confirmed > 0 ? `≥ ${confVal}${r.approx ? ` +~${estVal}` : ''}` : r.approx ? `~${estVal}` : '—')
+    : `${r.approx ? '~' : ''}${val}`;
+  const badge = unknown ? (r.confirmed > 0 ? 'At least' : r.approx ? 'Estimate' : 'Not known')
     : est ? 'Estimate'
     : r.status === 'over' ? `⚠️ ${Math.round(r.pct)}%`
     : r.upper ? `${Math.round(r.pct)}%`
     : `${Math.round(r.pct)}%`;
+  // On a partly-unknown row the bar shows only what is guaranteed (confirmed).
+  const confPct = r.rda > 0 ? Math.min(100, (r.confirmed / r.rda) * 100) : 0;
+  const barPct = unknown ? confPct : pct;
   return (
     <div data-testid="micro-row" data-key={r.key} data-status={r.status} data-coverage={r.coverage} data-approx={r.approx ? '1' : '0'}>
       <div className="flex items-center justify-between text-xs mb-1">
@@ -298,7 +308,7 @@ export function MicroRow({ r, custom = false }) {
         </div>
       </div>
       <div className="h-1.5 bg-charcoal rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${barCls}`} style={{ width: `${unknown && r.value === 0 ? 0 : pct}%` }} />
+        <div className={`h-full rounded-full transition-all duration-500 ${barCls}`} style={{ width: `${barPct}%` }} />
       </div>
     </div>
   );
@@ -360,7 +370,7 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
       )}
       {Object.values(st.rows).some(r => r.approx) && (
         <p className="text-caption text-mid mb-3 leading-snug" data-testid="micro-estimate-note">
-          Values marked ~ include estimates (from a recipe or the AI). A target reached only with estimates shows as “Estimate”, not as met.
+          Rows marked ~ have estimated amounts in them (from a recipe or the AI). Estimates never count toward a guaranteed minimum, and a target reached only with estimates shows as “Estimate”, not as met.
         </p>
       )}
 
@@ -371,7 +381,7 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
       </div>
 
       <p className="text-xs text-lo mt-3 italic">
-        * Includes food + supplements + sunlight. ★ = clinically adjusted target.
+        * Includes food + supplements. Sunlight stays on your activity list — it isn’t a measured vitamin D amount. ★ = clinically adjusted target.
       </p>
     </Card>
   );

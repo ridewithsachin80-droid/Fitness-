@@ -3128,6 +3128,15 @@ async function honestStatesTest() {
   RUN_WINDOWS.splice(0).forEach(win => win.close());
   const MC3 = run(mi, (win) => { win.__coach = true; win.__gaps = []; win.__unknown = []; }); await tick(400);
   ck('nothing low and nothing unknown: no section', MC3.errors.length === 0 && !mq(MC3, 'micro-block'));
+  // Fixes-2l: a gap resting on recipe or AI estimates is labelled an estimate, not a confirmed shortfall.
+  const MC4 = run(mi, (win) => { win.__coach = true; win.__unknown = [];
+    win.__gaps = [{ nutrient: 'iron', avg: 9, rda: 18, pct: 50, coverage: 88, basis: 'estimate' }, { nutrient: 'fiber', avg: 14, rda: 30, pct: 47, coverage: 92, basis: 'confirmed' }]; }); await tick(400);
+  ck('2l: an estimate-based gap reads "~50%" with an "Estimate" tag; a confirmed gap stays plain "47%"; the caption says why',
+     MC4.errors.length === 0 && /~50%/.test(mq(MC4, 'micro-gap-iron')?.textContent || '') && !!mq(MC4, 'micro-gap-estimate-iron')
+     && /47%/.test(mq(MC4, 'micro-gap-fiber')?.textContent || '') && !/~47%/.test(mq(MC4, 'micro-gap-fiber')?.textContent || '') && !mq(MC4, 'micro-gap-estimate-fiber')
+     && /not a confirmed shortfall/.test(mq(MC4, 'micro-caption')?.textContent || ''), [mq(MC4, 'micro-gap-iron')?.textContent, mq(MC4, 'micro-caption')?.textContent]);
+  ck('2l: the estimate gap is neutral (amber stays for confirmed warnings only); the confirmed gap keeps its amber',
+     !/text-warn|bg-warn/.test(mq(MC4, 'micro-gap-iron')?.innerHTML || 'text-warn') && /text-warn/.test(mq(MC4, 'micro-gap-fiber')?.innerHTML || ''), mq(MC4, 'micro-gap-iron')?.innerHTML);
 
   // ── E. In real Chrome at phone widths ──────────────────────────────────────
   try {
@@ -3615,6 +3624,41 @@ async function fixes2bTest() {
        badge === `${N.w.__count.met}/${N.w.__count.total} · ${N.w.__count.estimate} estimated · ${N.w.__count.unknown} not known` && N.w.__count.estimate >= 1, [badge, N.w.__count]);
   } catch (e) { ck('2k provenance panel section ran to the end', false, e.message); }
 
+  // Fixes-2l (19 Oct review): on the real panel, a guaranteed minimum shows only
+  // confirmed amounts; an estimated subtotal is shown apart; estimated zeros
+  // stay estimates; sunlight does not fill vitamin D.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { NutritionSummary } from './components/today/DayWidgets.jsx';
+      const foods = [
+        { name: 'Dal', grams: 100, source: 'db', per_100g: { calories: 110, zinc: 2, _status: { zinc: 'recorded' } } },
+        { name: 'Palak (AI)', grams: 100, source: 'ai', per_100g: { calories: 90, iron: 10, zinc: 10 } },
+        { name: 'Rasam (recipe)', grams: 100, source: 'db', per_100g: { calories: 40, sodium: 0, calcium: 0, _status: { sodium: 'recipe', calcium: 'recipe' } } },
+        { name: 'Sabzi (no data)', grams: 100, source: 'db', per_100g: { calories: 60 } },
+      ];
+      createRoot(document.getElementById('root')).render(<NutritionSummary foodItems={foods} supplements={{}} activities={{ sun: true }} activeActivities={[{ id: 'sun', vitD_iu: 1000 }]} rdaOverrides={{ iron: '18', zinc: '20' }} />);`);
+    const N = run(code); await tick(400);
+    const nd = N.w.document;
+    const row = k => nd.querySelector(`[data-testid="micro-row"][data-key="${k}"]`);
+    const tab = re => [...nd.querySelectorAll('button')].find(b => re.test(b.textContent));
+    ck('2l panel: ticked sunlight does not fill vitamin D — "Not known", never met (2k: 1000 IU confirmed, met)',
+       row('vit_d')?.dataset.status === 'unknown' && /Not known/.test(row('vit_d').textContent) && !/1000/.test(row('vit_d').textContent), row('vit_d')?.textContent);
+    ck('2l panel: the footnote no longer says sunlight is included', /Sunlight stays on your activity list/.test(nd.body.textContent) && !/food \+ supplements \+ sunlight/.test(nd.body.textContent));
+    tab(/Minerals/)?.click(); await tick(120);
+    const iron = row('iron')?.textContent || '';
+    ck('2l panel: AI iron 10 with unknown iron elsewhere reads "~10 · Estimate" — no "≥", no "At least" (2k: "≥ ~10 · At least")',
+       row('iron')?.dataset.status === 'unknown' && /~10/.test(iron) && /Estimate/.test(iron) && !/≥|At least/.test(iron), iron);
+    const zinc = row('zinc')?.textContent || '';
+    ck('2l panel: zinc reads "≥ 2 +~10 · At least" — the minimum is the confirmed 2; the AI 10 is shown apart',
+       /≥ 2 \+~10/.test(zinc) && /At least/.test(zinc) && !/≥ ~?12/.test(zinc), zinc);
+    ck('2l panel: on a partly-unknown row the bar shows only the confirmed part (zinc 2 of 20 → 10%, not 60%)',
+       Math.abs(parseFloat(row('zinc')?.querySelector('[style]')?.style.width || '0') - 10) < 0.5, row('zinc')?.querySelector('[style]')?.style.width);
+    ck('2l panel: sodium 0 from a recipe, with unknown sodium elsewhere, is not "safely under the limit" (no green, ~0 · Estimate)',
+       row('sodium')?.dataset.approx === '1' && !/bg-gold-deep|text-gold-deep/.test(row('sodium').innerHTML) && /Estimate/.test(row('sodium').textContent), row('sodium')?.textContent);
+    ck('2l panel: the note says estimates never count toward a guaranteed minimum', /never count toward a guaranteed minimum/.test(nd.querySelector('[data-testid="micro-estimate-note"]')?.textContent || ''));
+  } catch (e) { ck('2l lower-bound panel section ran to the end', false, e.message); }
+
   // Fixes-2k: the admin food form keeps "not recorded" blank and says each value's status.
   try {
     const src = fs.readFileSync(path.join(CLIENT_SRC, 'pages/AdminFoods.jsx'), 'utf8');
@@ -3634,8 +3678,10 @@ async function fixes2bTest() {
     ck('the Today tile says "not known for these foods" when nothing is known, and "· N not known" otherwise',
        /not known for these foods/.test(strip) && /not known` : ''/.test(strip));
     // Every place that counts micronutrients passes the same inputs, so the
-    // counts agree: sunlight (activities) and the coach's targets (rdaOverrides).
-    // The coach's view left out sunlight, and the Food sheet badge the targets.
+    // counts agree: the activities and the coach's targets (rdaOverrides).
+    // (Since Fixes-2l sunlight no longer adds to vitamin D inside microStatus,
+    // but every caller still hands over the same inputs so no view can drift.)
+    // The coach's view once left out activities, and the Food sheet badge the targets.
     const callers = [['components/coach/DayDetail.jsx', 'microStatus'], ['components/today/DayWidgets.jsx', 'microStatus'], ['hooks/useTodayModel.js', 'countMicrosMet']];
     const missing = callers.flatMap(([f, fn]) => {
       const src = fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');

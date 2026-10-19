@@ -1,8 +1,11 @@
 // Reference lookup for the 2k pilot: IFCT 2017 (open transcription, ifct2017 npm 2.1.2)
 // and USDA SR28 ABBREV (fda-nutrient-database npm 1.0.2). Values returned per 100 g,
 // in the app's units. IFCT zeros are reported as null (ambiguous in this copy).
-import fs from 'fs';
-const S = process.env.PILOT_DATA || '/tmp/pilot-data';   // holds ifctpkg/ and sr28/ (see README)
+import fs from 'fs'; import os from 'os'; import path from 'path';
+// Where the downloaded reference packages live (ifctpkg/ and sr28/, see README).
+// Default: the system temp folder, so no machine-specific path is baked in.
+export const PILOT_DATA = process.env.PILOT_DATA || path.join(os.tmpdir(), 'pilot-data');
+const S = PILOT_DATA;
 function parseCSV(s) { const rows = []; let r = [], f = '', q = false; for (let i = 0; i < s.length; i++) { const c = s[i]; if (q) { if (c === '"') { if (s[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; } else { if (c === '"') q = true; else if (c === ',') { r.push(f); f = ''; } else if (c === '\n') { r.push(f); rows.push(r); r = []; f = ''; } else if (c !== '\r') f += c; } } if (f || r.length) { r.push(f); rows.push(r); } return rows; }
 
 // IFCT: values in g per 100 g edible portion; energy in kJ.
@@ -51,5 +54,20 @@ export function find(q, { ds = 'both', limit = 8 } = {}) {
   return [...(ds !== 'sr' ? ifct.filter(hit) : []), ...(ds !== 'ifct' ? sr.filter(hit) : [])].slice(0, limit);
 }
 export const byCode = (code) => ifct.find(r => r.code === code) || sr.find(r => r.code === code);
+
+// IFCT 2017 retention factors per cooking method (fraction kept), keyed by app
+// nutrient. One copy here (Fixes-2l) so pilot.mjs and pin-refs.mjs agree.
+export const RF_COL = { fiber: 'fibtg', sugar: 'fsugar', saturated_fat: 'fasat', trans_fat: 'fatrn', cholesterol: 'cholc', calcium: 'ca', iron: 'fe', magnesium: 'mg', phosphorus: 'p', potassium: 'k', sodium: 'na', zinc: 'zn', copper: 'cu', manganese: 'mn', selenium: 'se',
+  vit_c: 'vitc', vit_b1: 'thia', vit_b2: 'ribf', vit_b3: 'nia', vit_b5: 'pantac', vit_b6: 'vitb6c', folate: 'folsum', biotin: 'biot', vit_e: 'vite', vit_k: 'vitk1', lycopene: 'lycpn', vit_d: 'chocal',
+  omega3_ala: 'f18d3n3', omega3_epa: 'f20d5n3', omega3_dha: 'f22d6n3', omega6: 'f18d2cn6' };
+const rfRows = parseCSV(fs.readFileSync(`${S}/ifctpkg/x/package/retentionfactors/index.csv`, 'utf8'));
+const RFH = rfRows[0];
+export const RF_METHODS = RFH.slice(1);
+export function retention(key, method) {
+  if (!method || method === 'none') return 1;
+  const row = rfRows.find(r => r[0] === RF_COL[key]); const i = RFH.indexOf(method);
+  if (!row || i < 0) return null;
+  return Number(row[i]);
+}
 
 if (process.argv[2]) for (const r of find(process.argv.slice(2).join(' '))) console.log(`${r.dataset} ${r.code} | ${r.name} | ${r.kcal} kcal P${r.protein} F${r.fat} C${r.carbs} | ${Object.entries(r.values).map(([k, v]) => `${k} ${v}`).join(', ')}`);

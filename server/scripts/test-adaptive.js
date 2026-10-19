@@ -135,6 +135,15 @@ function simulate({ days, trueTDEE, intake, startW, noise = 0.8, foodEvery = 1, 
     const refB12 = (f) => ({ ...f, per_100g: { ...f.per_100g, vit_b12: 0, _status: { vit_b12: 'reference' } } });
     const tr = byName(analyse(days(10, [refB12(rice), refB12(dal), ghee])).micro_gaps);
     ck('a B12 zero taken from a reference record IS a true zero and IS reported (0%)', tr.vit_b12 && tr.vit_b12.pct === 0, tr.vit_b12);
+    // Fixes-2l (19 Oct review, item 2): the coach's gap advice keeps estimate provenance.
+    ck('2l: a gap built on confirmed figures says so (basis "confirmed")', tr.vit_b12.basis === 'confirmed' && tg.calcium.basis === 'confirmed', [tr.vit_b12.basis, tg.calcium.basis]);
+    const recB12 = (f) => ({ ...f, per_100g: { ...f.per_100g, vit_b12: 0, _status: { vit_b12: 'recipe' } } });
+    const te = byName(analyse(days(10, [recB12(rice), recB12(dal), ghee])).micro_gaps);
+    ck('2l: a 0% B12 "gap" resting only on recipe-estimated zeros is marked basis "estimate" — not a confirmed shortfall', te.vit_b12 && te.vit_b12.basis === 'estimate', te.vit_b12);
+    const tm = byName(analyse(days(10, [refB12(rice), recB12(dal), ghee])).micro_gaps);
+    ck('2l: reference rice + recipe-estimated dal → basis "mixed"', tm.vit_b12 && tm.vit_b12.basis === 'mixed', tm.vit_b12);
+    const aiDal = { ...dal, source: 'ai' };
+    ck('2l: an old logged item from the AI (no statuses) counts as an estimate too', byName(analyse(days(10, [rice, aiDal, ghee])).micro_gaps).calcium?.basis === 'mixed');
     ck('ghee carries no minerals and that is a fact, so it does not lower the mineral coverage', tg.calcium.coverage === 100 && hasFigure(ghee.per_100g, 'iron') === true && hasFigure(ghee.per_100g, 'vit_e') === false);
     ck('nothing is both a gap and unknown', table.micro_gaps.every(g => !tu[g.nutrient]));
     ck('unknowns are listed least-covered first', table.micro_unknown.every((u, i) => i === 0 || u.coverage >= table.micro_unknown[i - 1].coverage), table.micro_unknown.map(u => u.coverage));

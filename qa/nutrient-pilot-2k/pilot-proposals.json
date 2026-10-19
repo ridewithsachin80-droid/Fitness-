@@ -1,6 +1,8 @@
 {
  "label": "Fixes-2k pilot: 20 common foods",
- "proposals": [
+ "identity_state": "all candidates — none ready to apply",
+ "proposals": [],
+ "candidates": [
   {
    "food_id": 854,
    "nutrient": "saturated_fat",
@@ -9,13 +11,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -25,13 +29,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -41,13 +47,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -57,13 +65,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -73,13 +83,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -89,13 +101,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -105,13 +119,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -121,13 +137,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -137,13 +155,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -153,13 +173,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -169,13 +191,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -185,13 +209,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -201,13 +227,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -217,13 +245,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -233,13 +263,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -249,13 +281,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -265,13 +299,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -281,13 +317,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -297,13 +335,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -313,13 +353,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -329,13 +371,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 854,
@@ -345,13 +389,15 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "20445",
     "name": "Rice, white, long-grain, regular, unenriched, cooked without salt",
     "url": "https://fdc.nal.usda.gov/ (SR Legacy, NDB 20445)"
    },
-   "assumptions": "Plain white rice, cooked in water without salt. Unenriched record chosen: rice in India is not fortified."
+   "assumptions": "Plain white rice, cooked in water without salt. The unenriched USDA record is a candidate only: fortification status is NOT assumed (India runs a fortified-rice distribution programme), so it must be confirmed for this food before any value is proposed."
   },
   {
    "food_id": 858,
@@ -361,6 +407,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -377,6 +425,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -393,6 +443,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -409,6 +461,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -425,6 +479,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -441,6 +497,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -457,6 +515,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -473,6 +533,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -489,6 +551,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -505,6 +569,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -521,6 +587,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -537,6 +605,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -553,6 +623,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -569,6 +641,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -585,6 +659,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -601,6 +677,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -617,6 +695,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -633,6 +713,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -649,6 +731,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -665,6 +749,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -681,6 +767,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11124",
@@ -697,6 +785,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -713,6 +803,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -729,6 +821,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -745,6 +839,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -761,6 +857,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -777,6 +875,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -793,6 +893,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -809,6 +911,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -825,6 +929,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -841,6 +947,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -857,6 +965,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -873,6 +983,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -889,6 +1001,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -905,6 +1019,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -921,6 +1037,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -937,6 +1055,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -953,6 +1073,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -969,6 +1091,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -985,6 +1109,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -1001,6 +1127,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -1017,6 +1145,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11821",
@@ -1033,6 +1163,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1049,6 +1181,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1065,6 +1199,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1081,6 +1217,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1097,6 +1235,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1113,6 +1253,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1129,6 +1271,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1145,6 +1289,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1161,6 +1307,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1177,6 +1325,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1193,6 +1343,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1209,6 +1361,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1225,6 +1379,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1241,6 +1397,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1257,6 +1415,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1273,6 +1433,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1289,6 +1451,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1305,6 +1469,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1321,6 +1487,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1337,6 +1505,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1353,6 +1523,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11529",
@@ -1369,6 +1541,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1385,6 +1559,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1401,6 +1577,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1417,6 +1595,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1433,6 +1613,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1449,6 +1631,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1465,6 +1649,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1481,6 +1667,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1497,6 +1685,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1513,6 +1703,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1529,6 +1721,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1545,6 +1739,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1561,6 +1757,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1577,6 +1775,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1593,6 +1793,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1609,6 +1811,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1625,6 +1829,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1641,6 +1847,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1657,6 +1865,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1673,6 +1883,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1689,6 +1901,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11253",
@@ -1705,6 +1919,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1721,6 +1937,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1737,6 +1955,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1753,6 +1973,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1769,6 +1991,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1785,6 +2009,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1801,6 +2027,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1817,6 +2045,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1833,6 +2063,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1849,6 +2081,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1865,6 +2099,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1881,6 +2117,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1897,6 +2135,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1913,6 +2153,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1929,6 +2171,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1945,6 +2189,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1961,6 +2207,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1977,6 +2225,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -1993,6 +2243,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -2009,6 +2261,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -2025,6 +2279,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -2041,6 +2297,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12023",
@@ -2057,6 +2315,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2073,6 +2333,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2089,6 +2351,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2105,6 +2369,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2121,6 +2387,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2137,6 +2405,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2153,6 +2423,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2169,6 +2441,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2185,6 +2459,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2201,6 +2477,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2217,6 +2495,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2233,6 +2513,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2249,6 +2531,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2265,6 +2549,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2281,6 +2567,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2297,6 +2585,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2313,6 +2603,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2329,6 +2621,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2345,6 +2639,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2361,6 +2657,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2377,6 +2675,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "11457",
@@ -2393,6 +2693,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2409,6 +2711,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2425,6 +2729,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2441,6 +2747,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2457,6 +2765,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2473,6 +2783,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2489,6 +2801,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2505,6 +2819,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2521,6 +2837,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2537,6 +2855,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2553,6 +2873,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2569,6 +2891,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2585,6 +2909,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2601,6 +2927,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2617,6 +2945,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2633,6 +2963,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2649,6 +2981,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2665,6 +2999,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2681,6 +3017,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2697,6 +3035,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2713,6 +3053,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2729,6 +3071,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2745,6 +3089,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "01256",
@@ -2761,6 +3107,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2777,6 +3125,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2793,6 +3143,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2809,6 +3161,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2825,6 +3179,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2841,6 +3197,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2857,6 +3215,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2873,6 +3233,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2889,6 +3251,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2905,6 +3269,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2921,6 +3287,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2937,6 +3305,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2953,6 +3323,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2969,6 +3341,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -2985,6 +3359,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "12006",
@@ -3001,6 +3377,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3017,6 +3395,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3033,6 +3413,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3049,6 +3431,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3065,6 +3449,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3081,6 +3467,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3097,6 +3485,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3113,6 +3503,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3129,6 +3521,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3145,6 +3539,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3161,6 +3557,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3177,6 +3575,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3193,6 +3593,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3209,6 +3611,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3225,6 +3629,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3241,6 +3647,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3257,6 +3665,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3273,6 +3683,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "reference",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": {
     "dataset": "USDA SR28",
     "record_id": "19902",
@@ -3289,6 +3701,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3299,13 +3713,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.317,
-      "retention": 0.85
+      "retention": 0.85,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3318,6 +3736,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3328,13 +3748,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 68.58,
-      "retention": 0.8
+      "retention": 0.8,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3347,6 +3771,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3357,13 +3783,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 362,
-      "retention": 0.85
+      "retention": 0.85,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3376,6 +3806,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3386,13 +3818,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.37,
-      "retention": 0.68
+      "retention": 0.68,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3405,6 +3841,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3415,13 +3853,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.17,
-      "retention": 0.75
+      "retention": 0.75,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3434,6 +3876,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3444,13 +3888,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 1.34,
-      "retention": 0.85
+      "retention": 0.85,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3463,6 +3911,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3473,13 +3923,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.29,
-      "retention": 0.8
+      "retention": 0.8,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3492,6 +3946,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3502,13 +3958,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.05,
-      "retention": 0.75
+      "retention": 0.75,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3521,6 +3981,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3531,13 +3993,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.16,
-      "retention": 0.9
+      "retention": 0.9,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3550,6 +4016,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3560,13 +4028,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 3,
-      "retention": 0.95
+      "retention": 0.95,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3579,6 +4051,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3589,13 +4063,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 34.66,
-      "retention": 0.65
+      "retention": 0.65,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3608,6 +4086,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3618,13 +4098,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.88,
-      "retention": 0.95
+      "retention": 0.95,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3637,6 +4121,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3647,13 +4133,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 146,
-      "retention": 0.9
+      "retention": 0.9,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3666,6 +4156,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3676,13 +4168,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 210,
-      "retention": 0.95
+      "retention": 0.95,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3695,6 +4191,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3705,13 +4203,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 2.53,
-      "retention": 0.9
+      "retention": 0.9,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3724,6 +4226,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3734,13 +4238,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 0.67,
-      "retention": 0.9
+      "retention": 0.9,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3753,6 +4261,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3763,13 +4273,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 3.19,
-      "retention": 0.9
+      "retention": 0.9,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3782,6 +4296,8 @@
    "basis": "per_100g",
    "preparation": "cooked",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "Usual home recipe: 1 part ragi flour to about 2.3 parts water by weight, stirred and cooked to about 330 g. IFCT boiling retention factors. Gives 97 kcal per 100 g, the food's own figure.",
    "recipe": {
@@ -3792,13 +4308,17 @@
       "name": "Ragi flour (IFCT A010)",
       "grams": 100,
       "value_per_100g": 15.3,
-      "retention": 0.9
+      "retention": 0.9,
+      "code": "IFCT 2017|A010",
+      "retention_method": "boiling"
      },
      {
       "name": "Water",
       "grams": 230,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": null,
+      "retention_method": "none"
      }
     ]
    }
@@ -3811,6 +4331,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -3821,13 +4343,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.032,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -3840,6 +4366,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -3850,13 +4378,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.052,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -3869,6 +4401,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -3879,13 +4413,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.066,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0.019,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -3898,6 +4436,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -3908,13 +4448,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 1.274,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -3927,6 +4471,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -3937,13 +4483,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.589,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -3956,6 +4506,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -3966,13 +4518,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.165,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -3985,6 +4541,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -3995,13 +4553,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.4,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4014,6 +4576,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4024,13 +4588,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.05,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4043,6 +4611,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4053,13 +4623,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 2.7,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4072,6 +4646,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4082,13 +4658,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 19,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4101,6 +4681,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4111,13 +4693,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 6.3,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4130,6 +4716,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4140,13 +4728,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 43,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4159,6 +4751,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4169,13 +4763,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 62,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4188,6 +4786,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4198,13 +4798,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.29,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0.01,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4217,6 +4821,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4227,13 +4833,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.206,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0.007,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4246,6 +4856,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4256,13 +4868,17 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 0.262,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0.004,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
@@ -4275,6 +4891,8 @@
    "basis": "per_100g",
    "preparation": "raw",
    "status": "recipe",
+   "identity": "candidate",
+   "identity_confirmed_by": null,
    "source": null,
    "assumptions": "'Sweetened' read as about 10% added sugar; gives 293 kcal vs the food's 300.",
    "recipe": {
@@ -4285,16 +4903,21 @@
       "name": "Dates, deglet noor (USDA 09087)",
       "grams": 90,
       "value_per_100g": 3,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|09087",
+      "retention_method": "none"
      },
      {
       "name": "Sugar, granulated (USDA 19335)",
       "grams": 10,
       "value_per_100g": 0.6,
-      "retention": 1
+      "retention": 1,
+      "code": "USDA SR28|19335",
+      "retention_method": "none"
      }
     ]
    }
   }
- ]
+ ],
+ "candidate_rule": "A candidate becomes a proposal only when its mapping carries identity: \"confirmed\" and identity_confirmed_by (Sachin or a coach), after the food, preparation, brand/variety and recipe basis are confirmed. The server refuses candidates."
 }

@@ -89,6 +89,9 @@ const RDA = {
 };
 
 const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+const { nutrientStatus } = require('./nutrientStatus');
+// Fixes-2l: a logged item from the AI or a photo reads its old unlabelled values as AI estimates (as the client does).
+const AI_ITEM_SOURCES = new Set(['ai', 'ai-estimate', 'photo']);
 
 
 /** Refined oil, ghee, sugar: nothing but fat or carbohydrate, and genuinely no minerals. */
@@ -112,11 +115,15 @@ function hasFigure(p, k) {
 /**
  * Nutrition for one day's food_items, using the per_100g carried on each.
  * `known[k]` is the calories that came from food with a figure for nutrient k.
+ * `est[k]` (Fixes-2l) is the part of `known[k]` whose figure is a recipe or
+ * AI estimate — counted by calories, not by the figure, so an estimated 0
+ * still marks the nutrient as resting on estimates.
  */
 function dayNutrition(foodItems = []) {
   const t = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
   const micros = {};
   const known = {};
+  const est = {};
   for (const it of foodItems) {
     const p = it?.per_100g;
     if (!p) continue;
@@ -129,10 +136,14 @@ function dayNutrition(foodItems = []) {
     for (const k of Object.keys(RDA)) {
       if (k === 'protein') continue;
       micros[k] = (micros[k] || 0) + num(p[k]) * f;
-      if (hasFigure(p, k)) known[k] = (known[k] || 0) + kcal;
+      if (hasFigure(p, k)) {
+        known[k] = (known[k] || 0) + kcal;
+        const st = nutrientStatus(p, k, { aiSourced: AI_ITEM_SOURCES.has(it.source) });
+        if (st === 'recipe' || st === 'ai') est[k] = (est[k] || 0) + kcal;
+      }
     }
   }
-  return { ...t, micros, known };
+  return { ...t, micros, known, est };
 }
 
 /** Centred moving average; window must be odd. Ends use what's available. */
@@ -253,14 +264,19 @@ function analyse(logs = [], opts = {}) {
         ? Math.min(1, perDay.reduce((s, d) => s + (d.known[k] || 0), 0) / totalKcal) : 0;
       // The part with no figure is assumed as rich as the part with one.
       const estimate = coverage >= MIN_COVERAGE ? counted / coverage : null;
-      return { nutrient: k, rda, counted, coverage, estimate };
+      // Fixes-2l: is this average built on confirmed figures, estimates, or both?
+      const knownKcal = perDay.reduce((s, d) => s + (d.known[k] || 0), 0);
+      const estKcal = perDay.reduce((s, d) => s + (d.est?.[k] || 0), 0);
+      const basis = estKcal <= 0 ? 'confirmed' : estKcal >= knownKcal ? 'estimate' : 'mixed';
+      return { nutrient: k, rda, counted, coverage, estimate, basis };
     });
 
   const enoughFoodDays = foodDays >= MIN_DAYS_MICRO;
   const gaps = !enoughFoodDays ? [] : microRows
     .filter(r => r.estimate != null)
     .map(r => ({ nutrient: r.nutrient, avg: +r.estimate.toFixed(1), rda: r.rda,
-                 pct: Math.round((r.estimate / r.rda) * 100), coverage: Math.round(r.coverage * 100) }))
+                 pct: Math.round((r.estimate / r.rda) * 100), coverage: Math.round(r.coverage * 100),
+                 basis: r.basis }))   // 2l: 'estimate' / 'mixed' gaps are shown as estimates, not a confirmed shortfall
     .filter(g => g.pct < GAP_BELOW_PCT)
     .sort((a, b) => a.pct - b.pct)
     .slice(0, 6);

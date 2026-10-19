@@ -10,7 +10,7 @@ import { adminResetPin, adminSendPush, getAuditLog, adminDeleteMember, markMessa
 import { Card, SectionTitle } from '../UI';
 import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, roleLabel, plural } from '../../constants';
 import { StatCard, Modal, Field, assignableCoaches } from './AdminAtoms';
-import { microCoverage } from '../../lib/day';
+import { microCoverage, microCell } from '../../lib/day';
 
 // because the tab is rendered conditionally — hook count changes between renders.
 export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
@@ -258,21 +258,22 @@ export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
               ['🔩 Zinc',       dayTotal.zinc,      8,    'mg',  1, ['zinc']],
               ['🧬 Folate',     dayTotal.folate,    400,  'mcg', 0, ['folate']],
               ['🍌 Potassium',  dayTotal.potassium, 2600, 'mg',  0, ['potassium']],
-            ].map(([label, val, target, unit, dec, keys]) => {
-              // Fixes-2k: the same rule as the member's panel. Food with no value for the
-              // nutrient makes the total a minimum ("≥"); estimates are marked "~". Neither is red.
-              const c = keys.reduce((o, k) => ({ unknownGrams: Math.max(o.unknownGrams, planCov[k]?.unknownGrams || 0), estimated: o.estimated + (planCov[k]?.estimated || 0) }), { unknownGrams: 0, estimated: 0 });
-              const v   = +val.toFixed(dec);
-              const pct = Math.min(100, (val / target) * 100);
-              const unsure = (c.unknownGrams > 0 || c.estimated > 0) && pct < 80;
-              const cls = unsure ? 'text-mid' : pct >= 80 ? 'text-gold-light' : pct >= 50 ? 'text-warn' : 'text-red-400';
-              const shown = c.unknownGrams > 0 && val === 0 ? '—' : `${c.unknownGrams > 0 && pct < 80 ? '≥ ' : ''}${c.estimated > 0 ? '~' : ''}${v}`;
+            ].map(([label, , target, unit, dec, keys]) => {
+              // Fixes-2l: the member panel's rule (lib/day microCell). A target counts
+              // as reached on confirmed amounts only; "≥" is the confirmed amount; an
+              // estimated subtotal is shown apart ("+~N"), and "~" marks any estimate,
+              // even an estimated 0. Unknown or estimated rows are never red.
+              const cell = microCell(keys.map(k => planCov[k]), target, dec);
+              const cls = cell.tone === 'met' ? 'text-gold-light' : cell.tone === 'unsure' ? 'text-mid' : cell.tone === 'warn' ? 'text-warn' : 'text-red-400';
+              const unsure = cell.tone === 'unsure';
+              const shown = cell.shown;
+              const pct = cell.pct;
               return (
-                <div key={label} className="flex items-center justify-between" data-testid="plan-micro" data-unsure={unsure ? '1' : '0'}>
-                  <span className="text-xs text-mid">{label}</span>
-                  <span className={`text-xs font-bold ${cls}`}>
+                <div key={label} className="flex items-start justify-between gap-2" data-testid="plan-micro" data-unsure={unsure ? '1' : '0'}>
+                  <span className="text-xs text-mid whitespace-nowrap shrink-0">{label}</span>
+                  <span className={`text-xs font-bold text-right min-w-0 ${cls}`}>
                     {shown} <span className="text-mid font-normal">{unit}</span>
-                    {shown !== '—' && <span className="text-mid ml-1">({Math.round(pct)}%)</span>}
+                    {pct !== null && <span className="text-mid ml-1">({Math.round(pct)}%)</span>}
                   </span>
                 </div>
               );
