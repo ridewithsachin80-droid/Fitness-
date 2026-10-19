@@ -179,7 +179,17 @@ cleanup() {
     pg_run "pg_ctl -D $PGDATA stop -m fast" >/dev/null 2>&1
   fi
 }
-trap cleanup EXIT
+# One EXIT trap for both jobs (19 Oct 2026). A second `trap … EXIT` replaces
+# the first, so the GitHub failure annotation above never ran and two gate
+# failures on GitHub arrived with no detail. Annotate first, then stop Postgres,
+# and keep the original exit code.
+on_exit() {
+  local code=$?
+  if declare -F gh_annotate >/dev/null; then (exit "$code"); gh_annotate; fi
+  cleanup
+  exit "$code"
+}
+trap on_exit EXIT
 
 # ── Rebuild the database from schema.sql ─────────────────────────────────────
 # Dropped and recreated every run, so this also verifies that schema.sql still
