@@ -21,6 +21,8 @@ const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console
     if (name === '../services/digests') return { computeDayTotals: () => ({}) };
     if (name === '../services/dietPlan') return { memberPlanLines: async () => [] };
     if (name === './programs') return { loadProgramDays: async () => [] };
+    // Fixes-2p: the test-only voice fallback switch, as production sees it: off.
+    if (name === '../services/voiceFallbackTest') return { skipsGemini: async () => false, record: async () => {} };
     if (name === 'crypto') return require('crypto');
     if (pure.has(name)) return require(path.resolve(path.dirname(filename), name));
     throw new Error(`Unexpected dependency ${name}`);

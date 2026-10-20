@@ -1,5 +1,6 @@
 import StorageCheck from '../components/admin/StorageCheck';
 import VoicePilotPanel from '../components/voicepilot/VoicePilotPanel';
+import VoiceFallbackTestPanel from '../components/admin/VoiceFallbackTestPanel';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -179,6 +180,8 @@ export default function AdminDashboard() {
           <StorageCheck />
           {/* Phase 8: the Kannada voice test. */}
           <VoicePilotPanel />
+          {/* Fixes-2p (B18): try the real Whisper backup on one test account. Test server only. */}
+          <VoiceFallbackTestPanel />
         </div>
       </div>
 

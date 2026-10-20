@@ -99,6 +99,7 @@ app.use('/api/progress-photos', require('./routes/progressPhotos'));  // Phase 4
 app.use('/api/swaps',         require('./routes/swaps'));  // Phase 6: approved food swaps
 app.use('/api/weekly',        require('./routes/weekly'));  // Phase 7: check-in + coach brief
 app.use('/api/voice-pilot',   require('./routes/voicePilot'));  // Phase 8: Kannada voice pilot
+app.use('/api/voice-fallback-test', require('./routes/voiceFallbackTest'));  // Fixes-2p: test server only, admin only
 app.use('/api/member-foods',  require('./routes/memberFoods')); // a member's own food labels (10 Oct 2026)
 app.use('/api/foods',         foodsRoutes);
 app.use('/api/nutrient-enrichment', require('./routes/nutrientEnrichment'));   // Fixes-2k pilot

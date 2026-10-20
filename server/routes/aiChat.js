@@ -1336,6 +1336,7 @@ Return ONLY raw JSON, no markdown fences:
 // same models as /photo. The client falls back to its on-device text if this
 // endpoint fails, so errors here degrade, never break.
 const { voiceTranscriptionPrompt, whisperTranscriptionPrompt, whisperFallbackSettings, reviewWhisper } = require('../services/voiceLanguage');
+const fallbackTest = require('../services/voiceFallbackTest');
 router.post('/voice-transcribe', async (req, res) => {
   const { audio, mimeType, langHint } = req.body;
 
@@ -1381,16 +1382,21 @@ router.post('/voice-transcribe', async (req, res) => {
       'https://api.groq.com/openai/v1/audio/transcriptions', fd,
       { headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, timeout: 25000 }
     );
-    return reviewWhisper(r.data, langHint);
+    // Fixes-2p: Whisper's raw answer travels with the decision, for the test-server record only.
+    return { ...reviewWhisper(r.data, langHint), raw: r.data, languageSent: language || null };
   }
 
   const prompt = voiceTranscriptionPrompt(langHint);
+  // Fixes-2p (B18): on the TEST server only, the one account an administrator named
+  // skips Gemini, so the real Whisper fallback can be tried without changing the
+  // shared provider settings (services/voiceFallbackTest.js). Off everywhere else.
+  const fbTest = await fallbackTest.skipsGemini(req.user);
 
   try {
     const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
     let transcript = null, engine = null, lastErr;
 
-    if (GEMINI_API_KEY) {
+    if (GEMINI_API_KEY && !fbTest) {
       for (const model of models) {
         try {
           const response = await axios.post(
@@ -1417,6 +1423,7 @@ router.post('/voice-transcribe', async (req, res) => {
     if (transcript === null) {
       try {
         const w = await groqWhisper();
+        if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: w?.languageSent, raw: w?.raw, result: w, error: w ? null : 'Whisper is not set up on this server' });
         if (w && !w.ok) {
           // An answer in the wrong language or script, or one Whisper itself was
           // unsure of, is never handed on: the member keeps the recording to
@@ -1426,7 +1433,10 @@ router.post('/voice-transcribe', async (req, res) => {
             message: "Couldn't hear that clearly in your chosen language. Retry this recording, or type your log." });
         }
         if (w) { transcript = w.text; engine = 'groq/whisper-large-v3'; }
-      } catch (e) { lastErr = e; }
+      } catch (e) {
+        if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: whisperFallbackSettings(langHint).language || null, error: e.response?.data?.error?.message || e.message });
+        lastErr = e;
+      }
     }
 
     if (transcript === null) throw lastErr || new Error('No transcription engine available');

@@ -181,6 +181,8 @@ const TODAY_API_STUB = `
     ];
     const get = async (url, opts) => {
       window.__calls.push(url);
+      // Fixes-2p: a test may slow the day's load to widen a timing window on purpose.
+      if (window.__logDelayMs && /^\\/logs\\/\\d/.test(url)) await new Promise(r => setTimeout(r, window.__logDelayMs));
       const hit = routes.find(([re]) => re.test(url));
       return { data: hit ? hit[1](opts) : {} };
     };
@@ -374,7 +376,21 @@ async function navigationFlow() {
  link('Food & saved meals').click();await waitFor(()=>q('plan-eat')&&d.querySelector('[role="dialog"]'),'food deep link');
  ck('More opens the existing food sheet directly',d.querySelector('[role="dialog"]').textContent.includes('Add food item'));
  w.__click('Done');await tick(300);w.__click('More');await waitFor(()=>link('Coach & check-ins'),'return to More');
- link('Coach & check-ins').click();await waitFor(()=>q('home-insight-details')?.dataset.open==='1','coach disclosure');
+ // Fixes-2p (20 Oct 2026): coming back to Today, the day's leftover content showed for a
+ // moment and was then swapped for the loading placeholder, so a tap on it was lost (the
+ // gate's intermittent "entries disclosure" time-out). A mutation observer records every
+ // "Logged today" section ever put on the page, however briefly: there must be exactly one,
+ // put there after the day loaded, and it must stay. The load is slowed so a regression
+ // also shows as a visibly replaced section.
+ w.__logDelayMs=400;
+ {const seen=new Set(),add=n=>{if(n.nodeType!==1)return;if(n.matches?.('[data-testid="home-log-details"]'))seen.add(n);n.querySelectorAll?.('[data-testid="home-log-details"]').forEach(e=>seen.add(e));};
+  const mo=new w.MutationObserver(rs=>rs.forEach(r=>r.addedNodes.forEach(add)));mo.observe(d.body,{childList:true,subtree:true});
+  link('Coach & check-ins').click();
+  const t0=Date.now();while(Date.now()-t0<3000&&!(seen.size&&!w.__logStore.getState().loading&&Date.now()-t0>700))await tick(20);
+  await tick(50);mo.disconnect();const now=q('home-log-details');
+  ck('back on Today, no leftover content is shown while the day reloads (a tap on it cannot be lost)',seen.size===1&&!!now&&seen.has(now),JSON.stringify({sectionsShown:seen.size,stays:!!now&&seen.has(now)}));}
+ w.__logDelayMs=0;
+ await waitFor(()=>q('home-insight-details')?.dataset.open==='1','coach disclosure');
  ck('More opens coach tools while keeping other sections collapsed',q('home-plan-details').dataset.open==='0'&&q('home-log-details').dataset.open==='0'&&!!q('ai-read'));
  // The day's entries are on Today itself now (not a More row): open them there.
  q('home-log-details').querySelector('button').click();await waitFor(()=>q('home-log-details')?.dataset.open==='1','entries disclosure');

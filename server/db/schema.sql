@@ -1037,6 +1037,35 @@ CREATE TABLE IF NOT EXISTS voice_sample_reruns (
   UNIQUE (sample_id, engine, setting)
 );
 
+-- ── Fixes-2p: voice fallback test (TEST SERVER ONLY) ────────────────────────
+-- On the test server only (Railway deploys it from the 'test' branch, so
+-- RAILWAY_GIT_BRANCH = 'test'), an administrator may name ONE account whose
+-- voice notes skip Gemini and go straight to the Whisper fallback, so the real
+-- fallback can be tried without touching the shared provider settings. It
+-- turns itself off 24 hours after it is set. Production never reads it.
+CREATE TABLE IF NOT EXISTS voice_fallback_test_account (
+  id        INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  user_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  set_by    INT REFERENCES users(id) ON DELETE SET NULL,
+  set_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Every try made through it: what Whisper actually returned (text, language,
+-- per-section confidence numbers) and what FitLife decided. No audio is kept.
+CREATE TABLE IF NOT EXISTS voice_fallback_test_runs (
+  id                SERIAL PRIMARY KEY,
+  user_id           INT REFERENCES users(id) ON DELETE CASCADE,
+  lang_hint         VARCHAR(10),
+  language_sent     VARCHAR(10),
+  whisper_text      TEXT,
+  whisper_language  VARCHAR(30),
+  segments          JSONB,
+  accepted          BOOLEAN,
+  reason            VARCHAR(30),
+  transcript        TEXT,
+  error             VARCHAR(200),
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

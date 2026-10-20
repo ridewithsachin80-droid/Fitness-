@@ -97,6 +97,8 @@ const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console
     if (name === '../services/memberFoods') return { findLabel: async () => null };
     if (name === '../services/digests') return { computeDayTotals: () => ({}) };
     if (name === './programs') return { loadProgramDays: async () => [] };
+    // Fixes-2p: the test-only voice fallback switch, as production sees it: off.
+    if (name === '../services/voiceFallbackTest') return { skipsGemini: async () => false, record: async () => {} };
     if (name === 'crypto') return require('crypto');
     if (pureModules.has(name)) return require(path.resolve(path.dirname(filename), name));
     throw new Error(`Blocked dependency in isolated parser: ${name}`);

@@ -55,7 +55,13 @@ export default function useTodayModel() {
   usePush();
   useOfflineSync();
 
-  useEffect(() => { setDate(today()); }, []);
+  // Fixes-2p: until this visit's own load has begun, the store still holds the
+  // day as it was when the member last left Today. Showing that for a frame let a
+  // tap land on content that was swapped for the loading placeholder a moment
+  // later: the tap was lost and a section the member opened snapped shut (seen
+  // on the way back from More). Show the placeholder from the first frame instead.
+  const [visitLoadStarted, setVisitLoadStarted] = useState(false);
+  useEffect(() => { setDate(today()); setVisitLoadStarted(true); }, []);
 
   // Compare with the day before the SELECTED entry, not always yesterday.
   const [yesterdayWeight, setYesterdayWeight] = useState(null);
@@ -701,7 +707,7 @@ export default function useTodayModel() {
     // identity & settings
     user, terms, ageMode, avatarIdx, avatar: AVATARS_LIST[avatarIdx] || AVATARS_LIST[0],
     // store
-    date, isToday, log, protocol, loading, saving, saved, queued, error,
+    date, isToday, log, protocol, loading: loading || !visitLoadStarted, saving, saved, queued, error,
     update, setDate, goPrevDay, goNextDay, goToday,
     autoSaved, detailSection, setDetailSection, retrySave: flushPendingSave,
     // protocol items

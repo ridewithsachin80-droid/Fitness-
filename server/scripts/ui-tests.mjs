@@ -362,6 +362,15 @@ export default {
       { id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', means: 'A bowl of kosambari and bisi bele bath', recorded: true, heard: 'Ondu bowl kosambari mattu bisi bele bath, swalpa majjige kooda kudide nenne raatri ele gante aada mele' },
       { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false }] });
     if (u.includes('/voice-pilot/members')) return ok({ members: [{ patient_id: 1, name: 'Mrs. Venkataramana Reddy Lakshmi', consented_at: 'x', recorded: 18 }], phrases: 22 });
+    // Fixes-2p: the test-only voice backup switch, on, with the longest names and texts.
+    if (u.includes('/voice-fallback-test')) return ok({ available: true, hours: 24,
+      account: { user_id: 1, name: 'Mrs. Venkataramana Reddy Lakshmi (test account)', set_at: '2026-10-20T08:00:00Z', ends_at: '2026-10-21T08:00:00Z' },
+      runs: [{ id: 2, created_at: '2026-10-20T08:05:00Z', name: 'Mrs. Venkataramana Reddy Lakshmi (test account)', lang_hint: 'kn-IN', language_sent: 'kn',
+               whisper_text: 'ಬೆಳಗ್ಗೆ ಎರಡು ಇಡ್ಲಿ ಮತ್ತು ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್, weight 82.5 kg, ondu cup coffee sakkare haakilla', whisper_language: 'kannada',
+               segments: [{}, {}], accepted: false, reason: 'unsure', transcript: null, error: null },
+             { id: 1, created_at: '2026-10-20T08:02:00Z', name: 'Mrs. Venkataramana Reddy Lakshmi (test account)', lang_hint: 'en-IN', language_sent: null,
+               whisper_text: '2 idli, 1 bowl sambar, weight 82.5 kg', whisper_language: 'english', segments: [{}], accepted: true, reason: null,
+               transcript: '2 idli, 1 bowl sambar, weight 82.5 kg and a long walk of forty five minutes around Kempambudhi lake', error: null }] });
     if (u.includes('/voice-pilot/results')) return ok({ overall: { gemini: 84, whisper: 71, samples: 120 },
       phrases: [{ id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', samples: 6, gemini: 92, whisper: 58 }], samples: [] });
     if (u.includes('/weekly/brief/')) return ok({ questions: [{ key: 'stress', label: 'Stress' }, { key: 'plan', label: 'Sticking to the plan' }],
@@ -545,6 +554,9 @@ const OVERFLOW_PAGES = [
      const P = () => <div className="p-4"><p>Today</p><VS open onClose={() => {}} /></div>;`],
   ['VoicePilotPanel', `import VP from './components/voicepilot/VoicePilotPanel.jsx';
      const P = () => <div className="p-4"><VP /></div>;`],
+  // Fixes-2p: the admin's test-only voice backup switch, on, with recorded tries.
+  ['VoiceFallbackTestPanel', `import VF from './components/admin/VoiceFallbackTestPanel.jsx';
+     const P = () => <div className="p-4"><VF /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   // 10 Oct 2026: macros eaten (plan and no plan), the macro editor in the
@@ -1886,6 +1898,10 @@ async function cspTest() {
     // to start, and nothing took the screen down afterwards. It was also still
     // gold, and dark only. Hold the app's main file back for 11.5 s, as a slow
     // phone would, in each theme.
+    // Fixes-2p (20 Oct 2026): the file was let go on a fixed 11.5 s timer, which left the
+    // test 1.5 s to see the 10 s screen; under load it missed it ("booted: true" in the gate
+    // log). Now the file is held until the screen has been seen (30 s at most), so there is
+    // no window to miss, and the screen must not come up before about 10 s either.
     const lum = c => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
     const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
     for (const theme of ['light', 'dark']) {
@@ -1899,15 +1915,19 @@ async function cspTest() {
         Object.defineProperty(navigator, 'serviceWorker', { value: undefined });
       }, theme);
       await slow.setRequestInterception(true);
+      let release, released = false;
+      const held = new Promise(r => { release = () => { if (!released) { released = true; r(); } }; });
+      const cap = setTimeout(() => release(), 30000);
       slow.on('request', req => {
-        if (/\/assets\/index-[^/]+\.js$/.test(new URL(req.url()).pathname)) setTimeout(() => req.continue().catch(() => {}), 11500);
+        if (/\/assets\/index-[^/]+\.js$/.test(new URL(req.url()).pathname)) held.then(() => req.continue().catch(() => {}));
         else req.continue().catch(() => {});
       });
+      const navStart = Date.now();
       // Not awaited: the page's load waits for the held-back app file itself.
       const nav = slow.goto(origin + '/login', { waitUntil: 'load', timeout: 40000 }).catch(() => {});
       // Poll by hand: a waitForFunction set up before the page commits is lost with about:blank.
       let during = { shown: false };
-      for (const until = Date.now() + 15000; Date.now() < until && !during.shown;) {
+      for (const until = Date.now() + 28000; Date.now() < until && !during.shown;) {
         await new Promise(r => setTimeout(r, 250));
         during = await slow.evaluate(() => {
           const fb = document.getElementById('boot-fallback'); if (!fb) return { shown: false };
@@ -1916,11 +1936,14 @@ async function cspTest() {
             bg: cs(fb).backgroundColor, text: cs(p).color, btn: cs(b).backgroundColor, btnText: cs(b).color };
         }).catch(() => ({ shown: false }));
       }
+      const shownAfterMs = Date.now() - navStart;
       ck(`slow start (${theme}): the recovery screen appears after 10 s, while the app is still loading`, during.shown && !during.booted && during.theme === theme, JSON.stringify(during));
+      ck(`slow start (${theme}): and not before about 10 s`, during.shown && shownAfterMs >= 9500, `${shownAfterMs} ms`);
       ck(`slow start (${theme}): the recovery screen has no gold`, during.shown && !/212, 175, 55/.test(JSON.stringify(during)), JSON.stringify(during));
       ck(`slow start (${theme}): its button is the green accent`, during.shown && during.btn === (theme === 'dark' ? 'rgb(183, 215, 194)' : 'rgb(49, 93, 71)'), during.btn);
       const rt = during.shown ? [ratio(during.text, during.bg), ratio(during.btnText, during.btn)] : [0, 0];
       ck(`slow start (${theme}): text and button text are readable (≥ 4.5:1)`, rt[0] >= 4.5 && rt[1] >= 4.5, { text: rt[0].toFixed(2), button: rt[1].toFixed(2) });
+      release(); clearTimeout(cap);
       await nav;
       await slow.waitForFunction(() => window.__fitlifeBooted === true, { timeout: 20000 }).catch(() => {});
       await new Promise(r => setTimeout(r, 300));
@@ -2477,6 +2500,54 @@ async function weeklyTest() {
 // ═══════════════════════════════════════════════════════════════════════════
 // 32. Phase 8 — Kannada voice pilot: the member records, the coach compares
 // ═══════════════════════════════════════════════════════════════════════════
+async function voiceFallbackTestPanelTest() {
+  console.log('\n[32b] Voice backup test switch (Fixes-2p, admin, test server only)');
+  const api = stub('api-vft.js', `
+    window.__puts = []; window.__dels = [];
+    let account = window.__account || null;
+    const runs = [
+      { id: 2, created_at: '2026-10-20T08:05:00Z', name: 'Test Member', lang_hint: 'kn-IN', language_sent: 'kn', whisper_text: '2 idli, weight 82.5 kg', whisper_language: 'kannada', segments: [{}, {}], accepted: false, reason: 'unsure', transcript: null, error: null },
+      { id: 1, created_at: '2026-10-20T08:02:00Z', name: 'Test Member', lang_hint: 'en-IN', language_sent: null, whisper_text: '1 cup coffee', whisper_language: 'english', segments: [{}], accepted: true, reason: null, transcript: '1 cup coffee', error: null },
+      { id: 0, created_at: '2026-10-20T08:01:00Z', name: 'Test Member', lang_hint: 'hi-IN', language_sent: 'hi', whisper_text: null, whisper_language: null, segments: [], accepted: null, reason: null, transcript: null, error: 'Whisper is busy' }];
+    const get = async (url) => {
+      if (/\\/voice-fallback-test$/.test(url)) return { data: window.__unavailable
+        ? { available: false, message: 'This switch only works on the test server, so members on the live app are never affected.', account: null, runs: [] }
+        : { available: true, hours: 24, account, runs: window.__noRuns ? [] : runs } };
+      if (/\\/admin\\/members$/.test(url)) return { data: [{ id: 21, name: 'Test Member', active: true }, { id: 22, name: 'Old Account', active: false }] };
+      return { data: {} }; };
+    const put = async (url, body) => { window.__puts.push({ url, body }); account = { user_id: body.user_id, name: 'Test Member', set_at: '2026-10-20T08:00:00Z', ends_at: '2026-10-21T08:00:00Z' }; return { data: { ok: true, account } }; };
+    const del = async (url) => { window.__dels.push(url); if (/test$/.test(url)) account = null; return { data: { ok: true } }; };
+    export default { get, post: put, put, patch: put, delete: del };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import VF from './components/admin/VoiceFallbackTestPanel.jsx';
+    createRoot(document.getElementById('root')).render(<VF />);`, api);
+  {
+    const { w, errors } = run(code, (win) => { win.__unavailable = true; }); await tick(300);
+    const q = (id) => w.document.querySelector(`[data-testid="${id}"]`);
+    ck('on the live server the card is one line: off, and why; no switch to press', errors.length === 0 && /Off on this server/.test(q('vft-off')?.textContent || '') && /test server/.test(q('vft-off').textContent) && !q('vft-pick') && !q('vft-turn-on'), errors.join('|'));
+  }
+  {
+    const { w, errors } = run(code, (win) => { win.confirm = () => true; }); await tick(300);
+    const d = w.document, q = (id) => d.querySelector(`[data-testid="${id}"]`);
+    ck('on the test server it explains: one test account, 24 hours, skips Gemini, the normal app after that, no one else, not a real member',
+      errors.length === 0 && /one test account/.test(q('vft-explain').textContent) && /24 hours/.test(q('vft-explain').textContent) && /skip Gemini/.test(q('vft-explain').textContent)
+        && /Retry, the preview and Apply/.test(q('vft-explain').textContent) && /No one else is affected/.test(q('vft-explain').textContent) && /Don't pick a real member/.test(q('vft-explain').textContent), errors.join('|'));
+    ck('switched-off accounts are not offered', ![...q('vft-pick').options].some(o => o.textContent === 'Old Account') && q('vft-turn-on').disabled);
+    const sel = q('vft-pick'); sel.value = '21'; sel.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(50);
+    q('vft-turn-on').click(); await tick(300);
+    ck('Turn on sends that account; the card then says who and until when', w.__puts[0]?.url === '/voice-fallback-test' && w.__puts[0].body.user_id === 21 && /On for Test Member until/.test(q('vft-on')?.textContent || ''));
+    const runsText = q('vft-runs').textContent;
+    ck('each try says what happened in plain words: refused and why (with what Whisper heard), accepted text, or no answer',
+      /Refused: Whisper wasn't sure of part of it\. The member saw Retry \/ type\./.test(runsText) && /Whisper heard: “2 idli, weight 82\.5 kg”/.test(runsText)
+        && /Accepted: “1 cup coffee”/.test(runsText) && /No answer: Whisper is busy/.test(runsText) && /Whisper told: kn/.test(runsText) && /Whisper told: not set/.test(runsText));
+    q('vft-turn-off').click(); await tick(300);
+    ck('Turn off ends it', w.__dels.includes('/voice-fallback-test') && !q('vft-on') && !!q('vft-pick'));
+    q('vft-clear').click(); await tick(200);
+    ck('Clear asks, then deletes the tries', w.__dels.includes('/voice-fallback-test/runs'));
+  }
+}
+
 async function voicePilotTest() {
   console.log('\n[32] Kannada voice pilot (Phase 8)');
   const api = stub('api-vp.js', `
@@ -4320,6 +4391,7 @@ async function overflowTest() {
     await runTest("swapsTest", swapsTest);
     await runTest("weeklyTest", weeklyTest);
     await runTest("voicePilotTest", voicePilotTest);
+    await runTest("voiceFallbackTestPanelTest", voiceFallbackTestPanelTest);
     await runTest("reviewFixesTest", reviewFixesTest);
     await runTest("phase8cTest", phase8cTest);
     await runTest("honestStatesTest", honestStatesTest);
