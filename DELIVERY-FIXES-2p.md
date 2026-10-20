@@ -28,7 +28,25 @@ The 2o gate's first UI run had 5 failures that passed on rerun. Each was reprodu
 - **Stronger, not weaker:** a new check makes sure the screen does **not** come up before about 10 seconds. Mutation check: a watchdog at 2 seconds → both themes red.
 - **Changed test:** "slow start" in `ui-tests.mjs`. Its timing changed from a fixed 11.5 s release to release-after-seen; every existing assertion is kept, and one is added. Reason above.
 
-**Still tracked** (backlog B20): if either failure appears again on GitHub or locally, the evidence goes to the backlog. A rerun alone is not treated as a fix.
+### c. Found on GitHub after the first 2p push (864590c): gate red, two suites
+**test-modal-accessibility "quick reopen" — a test race.**
+- **What it does:** the test pressed Escape, then reopened the child Sheet in a second browser round trip, and expected the closing Sheet to be reused.
+- **The race:** on a slow runner the 0.2 s exit can finish in between, so a new Sheet mounts and the check fails.
+- **Proof:** a 450 ms gap added locally gives exactly this failure, and only this one.
+- **Fix:** still a real Escape key. The reopen now happens inside the page the moment the Sheet is seen exiting, and a new check proves it really was exiting.
+- **Result:** with the same 450 ms gap it now passes; 4 runs under load all pass this check.
+
+**ui-tests — the cause is not visible.**
+- **What the annotation showed:** only a passing check whose name contains "✗". The gate's annotation pattern matched it, and nothing else.
+- **Why it's not visible:** GitHub's log storage is not reachable from the build environment, and the gate keeps no artifact.
+- **Locally:** the same commit passes (989).
+- **Fix to the reporting** (`test-local.sh`): the ui-tests annotation now matches failure lines only. When there are none (a crash, the 600 s time limit, a missing summary), it sends the reason and the last lines of the log. The next failure will show its cause.
+
+**Also seen, only under artificial load:** "light/dark pin has labelled fields and 44 px close control" in test-modal-accessibility failed in 2 of about 9 runs under four busy CPU loops. It has never failed in a gate.
+- When it failed, a separate measurement a moment earlier showed a 44 px button and labelled fields, so the cause is not yet known.
+- Not changed blind; tracked.
+
+**Still tracked** (backlog B20): any recurrence of these, on GitHub or locally, goes to the backlog with its evidence. A rerun alone is not treated as a fix.
 
 ## 2. Voice fallback test switch (B18), test server only
 **Why:** Whisper writes down a member's voice note only when Gemini fails. A real Gemini failure can't be produced on demand without changing the shared provider settings, which would affect every member.
@@ -86,6 +104,8 @@ The 2o gate's first UI run had 5 failures that passed on rerun. Each was reprodu
 
 **Changed tests** (no test was deleted or weakened):
 - **"slow start"** (section 1b).
+- **test-modal-accessibility "quick reopen"** (section 1c): the reopen is triggered in the page while the Sheet exits. Its assertions are kept, and one is added.
+- **test-local.sh:** the GitHub annotation for ui-tests (reporting only).
 - **The fixture stub in four suites:** `test-mixed-request-answer`, `test-sleep-clarification`, `test-draft-food-edits` and `test-food-clarifications`.
   - They load `routes/aiChat.js` in a sandbox that only allows listed dependencies.
   - Each gained one stub for the new `services/voiceFallbackTest`, returning "switch off", as production sees it.
