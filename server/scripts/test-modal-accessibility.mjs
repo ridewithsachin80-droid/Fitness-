@@ -104,7 +104,17 @@ async function sheetKeyboard(){const page=await pageFor();try{
  await click(page,'#open-child');await wait(page,()=>document.activeElement.closest('[aria-label="Child fixture"]'));
  ck('nested Sheet makes the parent inert while its own controls remain active',await page.evaluate(()=>!!document.querySelector('[aria-label="Parent fixture"]').closest('[inert]')&&!document.querySelector('#child-first').closest('[inert]')));
  await page.focus('#child-last');await page.keyboard.press('Tab');ck('nested Sheet traps Tab within the top dialog',(await active(page)).dialog==='Child fixture'&&(await active(page)).close);
- await page.evaluate(()=>{window.__childBeforeExit=document.querySelector('[aria-label="Child fixture"]')});await page.keyboard.press('Escape');await page.evaluate(()=>window.__control.openChild());
+ // Fixes-2p (20 Oct 2026): the reopen used to be a second browser round trip after the Escape. On a slow
+ // GitHub runner the 0.2 s exit could finish in between, so a NEW Sheet mounted and this check failed
+ // (reproduced locally with a 450 ms gap). Still a real Escape key; the reopen now happens inside the page
+ // as soon as the Sheet is seen exiting, and the check also proves it was exiting at that moment.
+ await page.evaluate(()=>{window.__childBeforeExit=document.querySelector('[aria-label="Child fixture"]');window.__reopenedWhileExiting=null;
+  window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;const t0=performance.now();const poll=()=>{const root=window.__childBeforeExit?.closest('[data-modal-scope]');
+   if(root?.hasAttribute('data-modal-exiting')){window.__reopenedWhileExiting=document.contains(window.__childBeforeExit);window.__control.openChild();}
+   else if(performance.now()-t0<2000)requestAnimationFrame(poll);else{window.__reopenedWhileExiting=false;window.__control.openChild();}};requestAnimationFrame(poll);},{capture:true,once:true});});
+ await page.keyboard.press('Escape');
+ await wait(page,()=>window.__reopenedWhileExiting!==null);
+ ck('the reopen happened while the Sheet was still exiting (a quick reopen)',await page.evaluate(()=>window.__reopenedWhileExiting===true));
  await wait(page,()=>document.activeElement.closest('[aria-label="Child fixture"]')&&!document.querySelector('#child-first').closest('[inert]'));
  ck('quick reopen reuses the exiting Sheet without stale inert or aria-hidden',await page.evaluate(()=>document.querySelector('[aria-label="Child fixture"]')===window.__childBeforeExit&&!document.querySelector('#child-first').closest('[inert],[aria-hidden="true"]')));
  ck('quickly reopened child receives top-modal focus',(await active(page)).dialog==='Child fixture');

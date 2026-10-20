@@ -76,7 +76,15 @@ $(grep -E -B2 -A3 '✗|Error' "${RESULTS_DIR}/ui-tests.log" | head -40)"
       log="${RESULTS_DIR:-}/$s.log"
       [ -f "$log" ] && echo "::error title=Gate: $s failed::$(enc "$(grep -E '✗|Error|AssertionError|Timeout' "$log" | head -6)")"
     done
-    [ -f "${RESULTS_DIR:-}/ui-tests.log" ] && grep -q '✗' "${RESULTS_DIR}/ui-tests.log" && echo "::error title=Gate: ui-tests failed::$(enc "$(grep -E '✗' "${RESULTS_DIR}/ui-tests.log" | head -6)")"
+    # Fixes-2p (20 Oct 2026): on 864590c ui-tests failed on GitHub and this line showed only a PASSING
+    # check whose name contains "✗" (the old pattern matched it), with no cause. Match failure lines only,
+    # and when there are none (a crash, a time limit, a missing summary) send the end of the log instead.
+    if [ "${ui_failed:-0}" = "1" ] && [ -f "${RESULTS_DIR:-}/ui-tests.log" ]; then
+      ui_fail_lines=$(grep -E '^\s*✗' "${RESULTS_DIR}/ui-tests.log" | head -6)
+      echo "::error title=Gate: ui-tests failed (${ui_reason:-see log})::$(enc "${ui_fail_lines:-$(grep -E 'Error|ERR_|Killed|heap|Timed out|Timeout' "${RESULTS_DIR}/ui-tests.log" | head -3)
+── last lines ──
+$(tail -8 "${RESULTS_DIR}/ui-tests.log")}")"
+    fi
     [ -z "$failed_suites" ] && echo "::error title=Test gate failed (exit $code)::$(enc "${body:-no ✗ line printed}")"
     [ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '### Test gate failed\n\n```\n%s\n```\n' "$body" >> "$GITHUB_STEP_SUMMARY"
   }
@@ -321,9 +329,11 @@ else
     n=$(grep -c '✓' "$uilog")
     if ! grep -Eq '^✅ ui-tests: [1-9][0-9]* passed, 0 failed$' "$uilog"; then
       printf "  %-24s %s\n" "ui-tests" "✗ missing successful completion summary"
+      ui_failed=1; ui_reason="no completion summary"
       failed=$((failed + 1))
     elif [ "$n" -eq 0 ]; then
       printf "  %-24s %s\n" "ui-tests" "✗ exited 0 having asserted nothing"
+      ui_failed=1; ui_reason="asserted nothing"
       failed=$((failed + 1))
     else
       printf "  %-24s %s\n" "ui-tests" "✓ $n assertions"
@@ -331,6 +341,7 @@ else
     fi
   else
     ui_status=$?
+    ui_failed=1; ui_reason="exit $ui_status$([ "$ui_status" = 124 ] && echo ', 600 s time limit')"
     printf "  %-24s %s\n" "ui-tests" "✗ FAILED (exit $ui_status)"
     grep -E '✗|could not run' "$uilog" | head -8 | sed 's/^/        /'
     # Uncaught exceptions, heap failures and signals do not necessarily include
