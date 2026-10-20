@@ -1,5 +1,5 @@
 name: Voice evidence robot (test site, REAL speech providers)
-# Fixes-2r (20 Oct 2026). Collects the real-provider evidence for B18 (everyday
+# Fixes-2r (20 Oct 2026), corrected in 2s. Collects the real-provider evidence for B18 (everyday
 # Whisper fallback) and B19 (Kannada pilot re-run) on fitness-test. See
 # server/scripts/robot-voice-evidence.mjs for exactly what it does.
 #
@@ -7,8 +7,10 @@ name: Voice evidence robot (test site, REAL speech providers)
 # (each run calls the real Gemini/Whisper, so it is never automatic), or when
 # someone presses "Re-run all jobs" on a run of it. Never production.
 # Needs repository secrets FITLIFE_ROBOT_ADMIN_EMAIL / FITLIFE_ROBOT_ADMIN_PASSWORD
-# (an admin on the TEST site) plus the phone robot's FITLIFE_ROBOT_MEMBER_PHONE /
-# FITLIFE_ROBOT_MEMBER_PIN. Without them the run is BLOCKED (red): nothing tested.
+# (an admin on the TEST site) and FITLIFE_ROBOT_VOICE_MEMBER_PHONE / _PIN: a member
+# named "Voice Robot" used ONLY by this robot, so it never shares an account or a
+# day with the phone robot. Without them the run is BLOCKED (red): nothing tested.
+# It blocks unless the test server reports exactly this commit.
 # The report is published on the commit as the check "Voice evidence report".
 on:
   push:
@@ -22,7 +24,6 @@ concurrency:
 permissions:
   contents: read
   checks: write
-  actions: read
 
 jobs:
   voice:
@@ -38,26 +39,19 @@ jobs:
       - name: Install server packages (the browser comes with them)
         working-directory: server
         run: npm install --no-audit --no-fund
-      - name: Wait for the phone robot on this commit (both use "Auto Member")
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          seen=""
-          for i in $(seq 1 90); do
-            s=$(gh run list -R "$GITHUB_REPOSITORY" --workflow phone-robot.yml --commit "$GITHUB_SHA" --json status --jq '.[0].status' 2>/dev/null || true)
-            [ -n "$s" ] && seen=1
-            if [ "$s" = "completed" ]; then echo "phone robot finished"; break; fi
-            if [ -z "$seen" ] && [ "$i" -ge 15 ]; then echo "no phone robot run for this commit after 5 minutes: going ahead"; break; fi
-            echo "phone robot: ${s:-not started yet}"; sleep 20
-          done
       - name: Run the voice evidence robot on fitness-test.up.railway.app
         working-directory: server
         env:
           ROBOT_BASE_URL: https://fitness-test.up.railway.app
           FITLIFE_ROBOT_ADMIN_EMAIL: ${{ secrets.FITLIFE_ROBOT_ADMIN_EMAIL }}
           FITLIFE_ROBOT_ADMIN_PASSWORD: ${{ secrets.FITLIFE_ROBOT_ADMIN_PASSWORD }}
+          FITLIFE_ROBOT_VOICE_MEMBER_PHONE: ${{ secrets.FITLIFE_ROBOT_VOICE_MEMBER_PHONE }}
+          FITLIFE_ROBOT_VOICE_MEMBER_PIN: ${{ secrets.FITLIFE_ROBOT_VOICE_MEMBER_PIN }}
+          ROBOT_VOICE_MEMBER_NAME: Voice Robot
+          ROBOT_EXPECT_COMMIT: ${{ github.sha }}
+          # Only to refuse a run whose voice account is one of the phone robot's.
           FITLIFE_ROBOT_MEMBER_PHONE: ${{ secrets.FITLIFE_ROBOT_MEMBER_PHONE }}
-          FITLIFE_ROBOT_MEMBER_PIN: ${{ secrets.FITLIFE_ROBOT_MEMBER_PIN }}
+          FITLIFE_ROBOT_MEMBER2_PHONE: ${{ secrets.FITLIFE_ROBOT_MEMBER2_PHONE }}
         run: node scripts/robot-voice-evidence.mjs
       - name: Publish the report on the commit
         if: always()

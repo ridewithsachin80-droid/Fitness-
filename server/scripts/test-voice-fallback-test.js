@@ -180,6 +180,7 @@ const seg = (text, avg_logprob, no_speech_prob, compression_ratio = 1.1) => ({ s
       ck('"Turn off" ends it at once', d.status === 200 && vOff.data.transcript === 'gemini heard: 2 idli' && (await http('GET', '/api/voice-fallback-test', ADMIN, 'admin')).data.account === null);
       const g2 = await http('GET', '/api/voice-fallback-test', ADMIN, 'admin');
       ck('the recorded tries stay after turning off, newest first, with names', g2.data.runs.length === 4 && g2.data.runs[0].name === `FB Test B ${tag}` && g2.data.runs[0].transcript === '1 cup coffee');
+      ck('each try names its account id (Fixes-2s: the evidence robot keeps only its own)', g2.data.runs.every(r => Number.isInteger(r.user_id)) && g2.data.runs[0].user_id === B && g2.data.runs.some(r => r.user_id === A));
       const x = await http('GET', '/api/voice-fallback-test/runs.xlsx', ADMIN, 'admin');
       const files = X.unzipStored(x.data);
       const s1 = files['xl/worksheets/sheet1.xml'].toString('utf8'), s2 = files['xl/worksheets/sheet2.xml'].toString('utf8');

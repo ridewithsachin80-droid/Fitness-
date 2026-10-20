@@ -22,7 +22,8 @@ const OFF = 'This switch only works on the test server, so members on the live a
 
 async function runs(limit = 50) {
   const { rows } = await pool.query(
-    `SELECT r.id, r.created_at, u.name, r.lang_hint, r.language_sent, r.whisper_text, r.whisper_language,
+    // Fixes-2s: user_id lets the evidence robot keep only its own account's tries.
+    `SELECT r.id, r.user_id, r.created_at, u.name, r.lang_hint, r.language_sent, r.whisper_text, r.whisper_language,
             r.segments, r.accepted, r.reason, r.transcript, r.error
        FROM voice_fallback_test_runs r LEFT JOIN users u ON u.id = r.user_id
       ORDER BY r.created_at DESC, r.id DESC LIMIT $1`, [limit]);

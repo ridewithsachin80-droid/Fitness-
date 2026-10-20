@@ -1,0 +1,159 @@
+/**
+ * scripts/test-voice-evidence-sim.mjs — Fixes-2s: the voice evidence robot,
+ * run for real (browser, app build, server, Postgres) against this computer
+ * with CANNED providers (scripts/sim/voice-evidence-providers.cjs). Every
+ * result here is SIMULATED; it proves the robot's behaviour, not recognition.
+ *
+ * Scenarios:
+ *   A  normal: the voice account already has food and a weight; another
+ *      account's try lands during the run. Expect COMPLETE; previews checked;
+ *      only PASS saved and read back; Retry identical; clean-up leaves the day
+ *      exactly as before; switch verified off; only this run's tries reported.
+ *   B  wrong previews (roti and dal added): nothing saved; still COMPLETE.
+ *   C  the switch held by another account: BLOCKED; nothing changed.
+ *   D  turning the switch off fails: FAILED, with the manual instructions.
+ *   E  a re-run changes an original answer: FAILED.
+ *
+ * Needs: Postgres on 5433 (as the gate), espeak-ng, ffmpeg, the bundled Chromium
+ * and client/dist. On demand (≈15 min), not part of the gate:
+ *   node scripts/test-voice-evidence-sim.mjs [A B C D E]
+ */
+import { spawn, spawnSync, execFileSync } from 'child_process';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SRV = path.join(HERE, '..');
+const require = createRequire(import.meta.url);
+const bcrypt = require('bcryptjs'); const { Client } = require('pg');
+const PG = process.env.SIM_PG || 'postgres://postgres@localhost:5433';
+const DB = 'fitlife_voice_sim', PORT = 3997, BASE = `http://localhost:${PORT}`;
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-sim-'));
+let pass = 0, fail = 0;
+const ck = (n, c, e) => { c ? (pass++, console.log('  ✓ ' + n)) : (fail++, console.log('  ✗ ' + n + ' ' + JSON.stringify(e ?? '').slice(0, 400))); };
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+const AUDIO = path.join(TMP, 'k01.webm');
+execFileSync('espeak-ng', ['-v', 'kn', '-w', path.join(TMP, 'k01.wav'), 'ಬೆಳಗ್ಗೆ ಎರಡು ಇಡ್ಲಿ ಮತ್ತು ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್ ತಿಂದೆ']);
+execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', path.join(TMP, 'k01.wav'), '-c:a', 'libopus', AUDIO]);
+
+const OLD = [{ id: 'old-1', name: 'Idli', qty_text: '2 idli', grams: 80, meal: 'Breakfast', per_100g: { calories: 130 } }, { id: 'old-2', name: 'Coffee', qty_text: '1 cup', grams: 150, meal: 'Breakfast', per_100g: { calories: 40 } }];
+const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+
+async function freshDb({ occupied = false } = {}) {
+  const admin = new Client({ connectionString: `${PG}/postgres` }); await admin.connect();
+  await admin.query(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`); await admin.query(`CREATE DATABASE ${DB}`); await admin.end();
+  execFileSync('psql', [`${PG}/${DB}`, '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.join(SRV, 'db/schema.sql')], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const c = new Client({ connectionString: `${PG}/${DB}` }); await c.connect();
+  const user = async (name, role, extra) => (await c.query(`INSERT INTO users (name, phone, email, password, role) VALUES ($1,$2,$3,$4,$5) RETURNING id`, [name, extra.phone || null, extra.email || null, await bcrypt.hash(extra.secret, 8), role])).rows[0].id;
+  const ids = {
+    admin: await user('Sim Admin', 'admin', { email: 'admin@sim.test', secret: 'Admin#Sim1' }),
+    voice: await user('Voice Robot', 'patient', { phone: '9000000101', secret: '2468' }),
+    pilot: await user('Pilot Member', 'patient', { phone: '9000000102', secret: '1111' }),
+    other: await user('Other Tester', 'patient', { phone: '9000000103', secret: '1111' }),
+  };
+  for (const id of [ids.voice, ids.pilot, ids.other]) await c.query('INSERT INTO patient_profiles (user_id) VALUES ($1)', [id]);
+  await c.query(`INSERT INTO daily_logs (patient_id, log_date, weight_kg, food_items, saved_at) VALUES ($1, $2, 81, $3, NOW() - INTERVAL '1 hour')`, [ids.voice, todayIST(), JSON.stringify(OLD)]);
+  for (const [ph, at, g, w, sc] of [['k01', '2026-10-19T05:30:00Z', 'Belagge eradu idli ondu bowl sambar tinde', 'விளைகே இரடு இட்ளி', 0], ['k02', '2026-10-19T05:40:00Z', 'Breakfast ge ondu plate uppittu ondu cup coffee.', 'breakfast 1 cup coffee', 0.5],
+    ['f01', '2026-10-19T05:50:00Z', 'my private own words', 'my private own words', 1], ['k03', '2026-10-20T05:00:00Z', 'other day', 'other day', 1]])
+    await c.query(`INSERT INTO voice_samples (patient_id, phrase_id, object_key, mime_type, duration_ms, gemini_text, whisper_text, gemini_score, whisper_score, created_at) VALUES ($1,$2,$3,'audio/webm',3000,$4,$5,1,$6,$7)`, [ids.pilot, ph, `voice-pilot/${ids.pilot}/${ph}`, g, w, sc, at]);
+  if (occupied) await c.query(`INSERT INTO voice_fallback_test_account (id, user_id, set_by) VALUES (1, $1, $2)`, [ids.other, ids.admin]);
+  return { c, ids };
+}
+async function startServer(flags) {
+  const child = spawn(process.execPath, ['-r', path.join(HERE, 'sim/voice-evidence-providers.cjs'), 'index.js'], { cwd: SRV,
+    env: { ...process.env, NODE_ENV: 'production', PORT: String(PORT), DATABASE_URL: `${PG}/${DB}`, JWT_SECRET: 'sim-secret', JWT_REFRESH_SECRET: 'sim-refresh',
+      RAILWAY_GIT_BRANCH: 'test', GEMINI_API_KEY: 'sim', GROQ_API_KEY: 'sim', CLIENT_URL: BASE, SIM_AUDIO_FILE: AUDIO, ...flags }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = ''; child.stdout.on('data', d => { log += d; }); child.stderr.on('data', d => { log += d; });
+  for (let i = 0; i < 40; i++) { try { if ((await fetch(`${BASE}/health`)).ok) return { child, log: () => log }; } catch {} await wait(500); }
+  child.kill(); throw new Error('the simulated server did not start:\n' + log.slice(-800));
+}
+// Not spawnSync: the scenario must be able to act while the robot runs.
+async function robot(extra = {}) {
+  const out = fs.mkdtempSync(path.join(TMP, 'out-'));
+  const child = spawn(process.execPath, [path.join(HERE, 'robot-voice-evidence.mjs')], {
+    env: { ...process.env, ROBOT_SIMULATION: '1', ROBOT_BASE_URL: BASE, ROBOT_OUT: out, GITHUB_ACTIONS: '', GITHUB_SHA: '',
+      FITLIFE_ROBOT_ADMIN_EMAIL: 'admin@sim.test', FITLIFE_ROBOT_ADMIN_PASSWORD: 'Admin#Sim1', FITLIFE_ROBOT_VOICE_MEMBER_PHONE: '9000000101', FITLIFE_ROBOT_VOICE_MEMBER_PIN: '2468', ...extra } });
+  let text = ''; child.stdout.on('data', d => { text += d; }); child.stderr.on('data', d => { text += d; });
+  const killer = setTimeout(() => child.kill(), 900e3);
+  const status = await new Promise(r => child.on('close', r)); clearTimeout(killer);
+  const r = { status, stdout: text, stderr: '' };
+  const res = fs.existsSync(path.join(out, 'results.json')) ? JSON.parse(fs.readFileSync(path.join(out, 'results.json'), 'utf8')) : null;
+  return { code: r.status, out, res, rep: fs.existsSync(path.join(out, 'report.md')) ? fs.readFileSync(path.join(out, 'report.md'), 'utf8') : '', stdout: r.stdout + r.stderr };
+}
+const dayNow = async (c, id) => (await c.query(`SELECT weight_kg, food_items FROM daily_logs WHERE patient_id=$1 AND log_date=$2`, [id, todayIST()])).rows[0];
+// The database stores JSON keys in its own order: compare with keys sorted.
+const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canon(v[k])}`).join(',')}}` : JSON.stringify(v));
+// Empty fields left out: saving a day makes the app add food_id: null to older entries (not a change).
+const noNulls = (f) => Object.fromEntries(Object.entries(f).filter(([, v]) => v != null));
+const sameDay = (d) => d && Number(d.weight_kg) === 81 && canon(d.food_items.map(noNulls)) === canon(OLD.map(noNulls));
+const noNames = (rep) => !/Pilot Member|Other Tester|Voice Robot/.test(rep);
+
+const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E'];
+for (const sc of want) {
+  const flags = { B: { SIM_WRONG_PREVIEW: '1' }, D: { SIM_FAIL_SWITCH_OFF: '1' }, E: { SIM_TAMPER_ORIGINALS: '1' } }[sc] || {};
+  const { c, ids } = await freshDb({ occupied: sc === 'C' });
+  const srv = await startServer(flags);
+  try {
+    if (sc === 'A') {
+      console.log('\n[A] normal run (SIMULATED): pre-existing food kept, only PASS previews saved, scoped evidence');
+      // Another account's try during the run must stay out of this run's evidence.
+      setTimeout(() => c.query(`INSERT INTO voice_fallback_test_runs (user_id, lang_hint, whisper_text, accepted, transcript) VALUES ($1, 'en-IN', 'someone else', true, 'someone else')`, [ids.other]).catch(() => {}), 20e3);
+      const r = await robot();
+      const v = r.res?.verdict || {};
+      ck('run COMPLETE, exit 0', r.code === 0 && v.run === 'COMPLETE', { code: r.code, v, tail: r.stdout.slice(-600) });
+      const p1 = r.res?.part1 || {};
+      ck('Part 1: only the 2 approved 19 Oct scripted recordings (not the own-words line, not 20 Oct); originals unchanged; Kannada re-runs present',
+        p1.approved_count === 2 && p1.samples?.map(s => s.phrase_id).join() === 'k01,k02' && p1.samples.every(s => s.original_unchanged && s.whisper_kn?.text) && p1.export_ok, p1);
+      ck('2a: 4 real-recording tries (2 recordings × Kannada / English)', r.res?.part2?.real?.length === 4, r.res?.part2?.real);
+      const cs = Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
+      ck('S1–S3: preview PASS, saved, "Saved" confirmed, read back PASS', ['S1', 'S2', 'S3'].every(k => cs[k]?.quality === 'PASS' && cs[k].saved && cs[k].save_confirmed && cs[k].readback?.result === 'PASS'), ['S1', 'S2', 'S3'].map(k => cs[k]));
+      ck('S4: refused as expected; Retry re-sent the identical recording (SHA-256 match)', cs.S4?.quality === 'PASS' && cs.S4.retry?.identical === true, cs.S4);
+      ck('S5: the canned preview adds sambar → quality FAIL, not saved, run still COMPLETE', cs.S5?.quality === 'FAIL' && !cs.S5.saved && /not saved/.test(cs.S5.save_note), cs.S5);
+      ck('clean-up: the day is exactly as before (earlier idli and coffee intact, weight back to 81)', r.res?.cleanup?.ok && sameDay(await dayNow(c, ids.voice)), { cleanup: r.res?.cleanup, day: await dayNow(c, ids.voice) });
+      ck('switch verified off', r.res?.switch_off?.verified === true && !(await c.query('SELECT 1 FROM voice_fallback_test_account')).rows.length);
+      ck('only this run\'s tries reported; the other account\'s try excluded', r.res?.runs?.length > 0 && !r.res.runs.some(x => x.whisper_text === 'someone else') && r.res.runs_excluded >= 1 && !r.res.part2.scope_problem, { n: r.res?.runs?.length, ex: r.res?.runs_excluded });
+      ck('labelled SIMULATED in the report, the Excel name and every screenshot\'s banner; no member names', /^> \*\*SIMULATED RUN/.test(r.rep) && fs.readdirSync(r.out).some(f => /SIMULATED\.xlsx$/.test(f)) && noNames(r.rep) && fs.readdirSync(r.out).filter(f => f.endsWith('.png')).length >= 5, fs.readdirSync(r.out));
+      ck('the pilot originals in the database are untouched', (await c.query(`SELECT whisper_score FROM voice_samples WHERE phrase_id IN ('k01','k02') ORDER BY phrase_id`)).rows.map(x => Number(x.whisper_score)).join() === '0,0.5');
+    }
+    if (sc === 'B') {
+      console.log('\n[B] wrong previews (SIMULATED): nothing saved, run still COMPLETE');
+      const r = await robot();
+      const cs = Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
+      ck('S1 and S2 previews FAIL (roti and dal added) and are NOT saved; S3 (roti and dal really said) PASS, saved and read back',
+        ['S1', 'S2'].every(k => cs[k]?.quality === 'FAIL' && !cs[k].saved && /not saved: preview FAIL/.test(cs[k].save_note)) && cs.S3?.quality === 'PASS' && cs.S3.saved && cs.S3.readback?.result === 'PASS',
+        ['S1', 'S2', 'S3'].map(k => [k, cs[k]?.quality, cs[k]?.save_note]));
+      ck('the reasons name the unexpected items', /unexpected Roti/.test(cs.S1?.quality_reasons?.join()) && /unexpected Dal/.test(cs.S1?.quality_reasons?.join()), cs.S1?.quality_reasons);
+      ck('run COMPLETE (quality failures are reported, not hidden, and not a collection failure); day as before', r.code === 0 && r.res?.verdict?.run === 'COMPLETE' && sameDay(await dayNow(c, ids.voice)), { code: r.code, v: r.res?.verdict });
+    }
+    if (sc === 'C') {
+      console.log('\n[C] switch held by another account (SIMULATED): BLOCKED, nothing changed');
+      const r = await robot();
+      ck('BLOCKED, exit 3, saying the switch is in use', r.code === 3 && /in use by another account/.test(r.rep), r.rep.slice(0, 500));
+      ck('the other account still holds the switch; no tries; no re-runs; the day unchanged',
+        (await c.query('SELECT user_id FROM voice_fallback_test_account')).rows[0]?.user_id === ids.other && !(await c.query('SELECT 1 FROM voice_fallback_test_runs')).rows.length
+          && !(await c.query('SELECT 1 FROM voice_sample_reruns')).rows.length && sameDay(await dayNow(c, ids.voice)));
+      ck('the blocked report names no one', noNames(r.rep));
+    }
+    if (sc === 'D') {
+      console.log('\n[D] turning the switch off fails (SIMULATED): FAILED with manual instructions');
+      const r = await robot();
+      ck('FAILED, exit 1, "switch NOT confirmed off"', r.code === 1 && r.res?.verdict?.run === 'FAILED' && /NOT confirmed off/.test(r.res.verdict.failures.join()), r.res?.verdict);
+      ck('the report says how to turn it off by hand and mentions the 24-hour fallback', /Turn it off by hand/.test(r.rep) && /24 hours/.test(r.rep));
+      ck('clean-up still ran: the day is as before', sameDay(await dayNow(c, ids.voice)));
+      await c.query('DELETE FROM voice_fallback_test_account');
+    }
+    if (sc === 'E') {
+      console.log('\n[E] a re-run changes an original answer (SIMULATED): FAILED');
+      const r = await robot();
+      ck('FAILED, exit 1, naming the changed original', r.code === 1 && /original answers of k01 changed/.test(r.res?.verdict?.failures?.join()), r.res?.verdict);
+      ck('switch verified off and the day as before, even so', r.res?.switch_off?.verified && sameDay(await dayNow(c, ids.voice)));
+    }
+  } catch (e) { ck(`scenario ${sc} completed`, false, e.stack); }
+  finally { srv.child.kill(); await c.end(); await wait(800); }
+}
+console.log(`\nVoice evidence robot (SIMULATED end to end): ${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
