@@ -177,6 +177,38 @@ const server = app.listen(0, '127.0.0.1');
     viaWhisper(verbose('idli idli idli idli idli idli idli idli', 'english', [{ avg_logprob: -0.2, no_speech_prob: 0.02, compression_ratio: 3.4 }]));
     w = await request('both', { audio, langHint: 'en-IN' });
     ck('2n: a looping, repeated answer is refused', w.data.transcript === '' && w.data.rejected === 'repetitive');
+    // ── Fixes-2o: each spoken section judged on its own (2n review) ────────────
+    const seg = (text, avg_logprob, no_speech_prob, compression_ratio = 1.1, start = 0, end = 4) => ({ start, end, text, avg_logprob, no_speech_prob, compression_ratio });
+    // The reviewer's exact response: a clear "2 idli" section hid an uncertain weight (mean log-prob -0.95).
+    viaWhisper({ data: { text: '2 idli, weight 82.5 kg', language: 'english', segments: [
+      { start: 0, end: 4, text: '2 idli,', avg_logprob: -0.1, no_speech_prob: 0.01, compression_ratio: 1.1 },
+      { start: 5, end: 9, text: 'weight 82.5 kg', avg_logprob: -1.8, no_speech_prob: 0.95, compression_ratio: 1.1 }] } });
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: the reviewer\'s mixed-confidence answer is refused as a whole (2n accepted it): no transcript, no preview, retry or type', w.status === 200 && w.data.transcript === '' && w.data.rejected === 'unsure' && /retry|type/i.test(w.data.message) && !Object.hasOwn(w.data, 'engine'), w.data);
+    viaWhisper(verbose('2 idli, 1 bowl sambar, weight 82.5 kg', 'english', [seg('2 idli,', -0.2, 0.02), seg(' 1 bowl sambar,', -0.35, 0.03), seg(' weight 82.5 kg', -0.3, 0.02)]));
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: clear speech in several sections is accepted exactly, quantities and decimal included', w.data.transcript === '2 idli, 1 bowl sambar, weight 82.5 kg' && !w.data.rejected);
+    viaWhisper(verbose('2 idli, weight 82.5 kg', 'english', [seg('2 idli,', -0.2, 0.02), seg(' … ', -1.9, 0.97), seg('', -2.0, 0.99), seg(' weight 82.5 kg', -0.3, 0.02)]));
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: empty pause sections (no letters or digits) do not block otherwise clear speech', w.data.transcript === '2 idli, weight 82.5 kg' && !w.data.rejected);
+    viaWhisper(verbose('2 idli, weight 82.5 kg', 'english', [seg('2 idli,', -1.3, 0.2), seg('weight 82.5 kg', -1.5, 0.3)]));
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: all sections uncertain → refused', w.data.transcript === '' && w.data.rejected === 'unsure');
+    viaWhisper(verbose('Thank you. Thank you.', 'english', [seg('Thank you.', -1.1, 0.93), seg(' Thank you.', -1.3, 0.96)]));
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: all sections look like words made from silence → refused as no speech', w.data.transcript === '' && w.data.rejected === 'no_speech');
+    viaWhisper(verbose('2 idli, weight 82.5 kg', 'english', [seg('2 idli,', -0.1, 0.01), seg('weight 82.5 kg', -1.2, 0.05)]));
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: a single unsure section holding a decimal weight refuses the whole answer (not just averaged away)', w.data.transcript === '' && w.data.rejected === 'unsure');
+    viaWhisper(verbose('walked 40 minutes, 2 roti', 'english', [seg('walked 40 minutes,', -0.2, 0.02), seg(' 2 roti', -0.5, 0.85)]));
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: a section with a quantity that looks like words from silence (no-speech 0.85) refuses the whole answer; nothing is dropped quietly', w.data.transcript === '' && w.data.rejected === 'unsure');
+    viaWhisper(verbose('2 idli, 3 roti 3 roti 3 roti 3 roti', 'english', [seg('2 idli,', -0.1, 0.01), seg(' 3 roti 3 roti 3 roti 3 roti', -0.3, 0.05, 3.1)]));
+    w = await request('both', { audio, langHint: 'en-IN' });
+    ck('2o: one looping section is not hidden by a clear one → refused', w.data.transcript === '' && w.data.rejected === 'repetitive');
+    viaWhisper(verbose('ಎರಡು ಇಡ್ಲಿ, weight 82.5 kg', 'kannada', [seg('ಎರಡು ಇಡ್ಲಿ,', -0.3, 0.02), seg(' weight 82.5 kg', -1.6, 0.1)]));
+    w = await request('both', { audio, langHint: 'kn-IN' });
+    ck('2o: the same per-section rule for a Kannada answer', w.data.transcript === '' && w.data.rejected === 'unsure');
     clear(call => call.kind === 'gemini' ? geminiResponse('2 ragi mudde') : verbose(TAMIL, 'tamil'));
     w = await request('both', { audio, langHint: 'kn-IN' });
     ck('2n: when Gemini answers, Whisper is not asked and nothing changes', w.data.transcript === '2 ragi mudde' && providerCalls.length === 1 && providerCalls[0].kind === 'gemini');

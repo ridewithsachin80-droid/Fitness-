@@ -32,7 +32,8 @@ function whisperTranscriptionPrompt(value) {
 //               Kannada; forcing 'en' makes Whisper translate those words.
 //   • The answer is then checked, and refused (the member is asked to retry
 //     or type) when it is in a script or language the member's choice does
-//     not cover, or when Whisper's own numbers say it was unsure. The limits
+//     not cover, or when Whisper's own numbers say ANY spoken section was
+//     unsure (checked section by section since Fixes-2o). The limits
 //     are Whisper's own documented defaults (no_speech 0.6, log-prob -1.0,
 //     compression ratio 2.4); they need tuning on real recordings.
 //   • An accepted answer is passed on EXACTLY as written (quantities, units,
@@ -64,16 +65,24 @@ function reviewWhisper(data, langHint) {
   if (letters.length && foreign.length / letters.length > 0.1) return { ok: false, reason: 'wrong_script' };
   const reported = String(data?.language || '').trim().toLowerCase();
   if (reported && !allow.languages.includes(reported)) return { ok: false, reason: 'wrong_language' };
+  // Fixes-2o: every MEANINGFUL section is judged on its own. 2n averaged the
+  // log-probability over the clip, so one clear section ("2 idli", -0.1) hid an
+  // uncertain one ("weight 82.5 kg", -1.8, no-speech 0.95): mean -0.95 passed.
+  // A section with no letters or digits (a pause) is ignored; a section whose
+  // text is not given is judged too (it cannot be shown to be a pause). If ANY
+  // meaningful section is unsure, looks like words made from silence, or
+  // loops, the whole answer is refused: no part is dropped quietly and none
+  // is handed on as accepted.
   const segs = Array.isArray(data?.segments) ? data.segments.filter(s => s && typeof s === 'object') : [];
-  if (segs.length) {
-    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
-    const lp = segs.map(s => num(s.avg_logprob)).filter(v => v != null);
-    const ns = segs.map(s => num(s.no_speech_prob)).filter(v => v != null);
-    const cr = segs.map(s => num(s.compression_ratio)).filter(v => v != null);
-    const meanLp = lp.length ? lp.reduce((a, b) => a + b, 0) / lp.length : null;
-    if (ns.length === segs.length && ns.every(v => v > 0.6) && (meanLp == null || meanLp < -1.0)) return { ok: false, reason: 'no_speech' };
-    if (meanLp != null && meanLp < -1.0) return { ok: false, reason: 'unsure' };
-    if (cr.some(v => v > 2.4)) return { ok: false, reason: 'repetitive' };
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  const meaningful = segs.filter(s => typeof s.text !== 'string' || /[\p{L}\p{N}]/u.test(s.text));
+  if (meaningful.length) {
+    const silent = (s) => num(s.no_speech_prob) != null && num(s.no_speech_prob) > 0.6;
+    const unsure = (s) => num(s.avg_logprob) != null && num(s.avg_logprob) < -1.0;
+    const loops = (s) => num(s.compression_ratio) != null && num(s.compression_ratio) > 2.4;
+    if (meaningful.every(silent)) return { ok: false, reason: 'no_speech' };
+    if (meaningful.some(loops)) return { ok: false, reason: 'repetitive' };
+    if (meaningful.some(s => unsure(s) || silent(s))) return { ok: false, reason: 'unsure' };
   }
   return { ok: true, text };
 }
