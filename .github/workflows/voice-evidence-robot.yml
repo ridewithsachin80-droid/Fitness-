@@ -1,0 +1,84 @@
+name: Voice evidence robot (test site, REAL speech providers)
+# Fixes-2r (20 Oct 2026). Collects the real-provider evidence for B18 (everyday
+# Whisper fallback) and B19 (Kannada pilot re-run) on fitness-test. See
+# server/scripts/robot-voice-evidence.mjs for exactly what it does.
+#
+# It runs ONLY when qa/voice-evidence/REQUEST.md changes on the test branch
+# (each run calls the real Gemini/Whisper, so it is never automatic), or when
+# someone presses "Re-run all jobs" on a run of it. Never production.
+# Needs repository secrets FITLIFE_ROBOT_ADMIN_EMAIL / FITLIFE_ROBOT_ADMIN_PASSWORD
+# (an admin on the TEST site) plus the phone robot's FITLIFE_ROBOT_MEMBER_PHONE /
+# FITLIFE_ROBOT_MEMBER_PIN. Without them the run is BLOCKED (red): nothing tested.
+# The report is published on the commit as the check "Voice evidence report".
+on:
+  push:
+    branches: [test]
+    paths: ['qa/voice-evidence/REQUEST.md']
+
+concurrency:
+  group: voice-evidence
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: write
+  actions: read
+
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the speech tools (computer voice, audio conversion)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg
+      - name: Install server packages (the browser comes with them)
+        working-directory: server
+        run: npm install --no-audit --no-fund
+      - name: Wait for the phone robot on this commit (both use "Auto Member")
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          seen=""
+          for i in $(seq 1 90); do
+            s=$(gh run list -R "$GITHUB_REPOSITORY" --workflow phone-robot.yml --commit "$GITHUB_SHA" --json status --jq '.[0].status' 2>/dev/null || true)
+            [ -n "$s" ] && seen=1
+            if [ "$s" = "completed" ]; then echo "phone robot finished"; break; fi
+            if [ -z "$seen" ] && [ "$i" -ge 15 ]; then echo "no phone robot run for this commit after 5 minutes: going ahead"; break; fi
+            echo "phone robot: ${s:-not started yet}"; sleep 20
+          done
+      - name: Run the voice evidence robot on fitness-test.up.railway.app
+        working-directory: server
+        env:
+          ROBOT_BASE_URL: https://fitness-test.up.railway.app
+          FITLIFE_ROBOT_ADMIN_EMAIL: ${{ secrets.FITLIFE_ROBOT_ADMIN_EMAIL }}
+          FITLIFE_ROBOT_ADMIN_PASSWORD: ${{ secrets.FITLIFE_ROBOT_ADMIN_PASSWORD }}
+          FITLIFE_ROBOT_MEMBER_PHONE: ${{ secrets.FITLIFE_ROBOT_MEMBER_PHONE }}
+          FITLIFE_ROBOT_MEMBER_PIN: ${{ secrets.FITLIFE_ROBOT_MEMBER_PIN }}
+        run: node scripts/robot-voice-evidence.mjs
+      - name: Publish the report on the commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          f=qa/voice-evidence-results
+          { cat "$f/report.md" 2>/dev/null || echo "# Voice evidence robot: no report (the run stopped before writing one)"; } > "$RUNNER_TEMP/summary.md"
+          head -c 60000 "$RUNNER_TEMP/summary.md" > "$RUNNER_TEMP/summary-cut.md"
+          title=$(grep -m1 '^\*\*' "$f/report.md" 2>/dev/null | tr -d '*' | cut -c1-200)
+          gh api "repos/${{ github.repository }}/check-runs" \
+            -f name='Voice evidence report' -f head_sha="${{ github.sha }}" \
+            -f status=completed -f conclusion=neutral \
+            -f "output[title]=${title:-Voice evidence report}" \
+            -F "output[summary]=@$RUNNER_TEMP/summary-cut.md" > /dev/null
+          echo "Published the report as the check 'Voice evidence report'."
+      - name: Keep the report, Excel files and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-evidence
+          path: qa/voice-evidence-results
+          if-no-files-found: ignore
+          retention-days: 30
