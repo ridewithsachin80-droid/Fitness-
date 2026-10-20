@@ -188,6 +188,48 @@ const seg = (text, avg_logprob, no_speech_prob, compression_ratio = 1.1) => ({ s
       const c = await http('DELETE', '/api/voice-fallback-test/runs', ADMIN, 'admin');
       ck('"Clear" deletes the recorded tries', c.data.deleted === 4 && await runCount() === 0);
     }
+
+    console.log('\n[6] the record keeps an unknown confidence value unknown (Fixes-2q, 2p review)');
+    {
+      const T = require('../services/voiceFallbackTest');
+      const unknown = { null: null, blank: '', spaces: '  ', false: false, true: true, text: 'abc', NaN: NaN, Infinity: Infinity, array: [5], hex: '0x1A', object: {} };
+      const bad = Object.entries(unknown).filter(([, v]) => T.num(v) !== null).map(([k, v]) => `${k} → ${T.num(v)}`);
+      ck('null, blank, false, true, words, NaN, Infinity, a list, hex and an object are all recorded as unknown (null), never 0 or 1', bad.length === 0, bad);
+      ck('a genuine 0 stays 0; -0.3 stays -0.3; decimal text ("-0.3", "0", "1e-3") is read as its number',
+        T.num(0) === 0 && T.num(-0.3) === -0.3 && T.num('-0.3') === -0.3 && T.num('0') === 0 && T.num('1e-3') === 0.001);
+      const secs = T.sectionsOf({ segments: [{ start: 0, end: 2, text: 'a', avg_logprob: null, no_speech_prob: '', compression_ratio: false }, { start: 2, end: 4, text: 'b', avg_logprob: 0, no_speech_prob: 0, compression_ratio: 0 }, { text: 'c' }] });
+      ck('per section: null/blank/false fields → null; genuine zeros → 0; missing fields → null',
+        secs[0].avg_logprob === null && secs[0].no_speech_prob === null && secs[0].compression_ratio === null
+          && secs[1].avg_logprob === 0 && secs[1].no_speech_prob === 0 && secs[1].compression_ratio === 0
+          && secs[2].avg_logprob === null && secs[2].start === null, secs);
+
+      // Through the real route and database: what is stored and exported for the named account.
+      // An earlier try (written before this fix, with zeros) must stay exactly as it was.
+      await pool.query(`INSERT INTO voice_fallback_test_runs (user_id, lang_hint, whisper_text, segments, accepted, transcript) VALUES ($1, 'en-IN', 'old try', $2, true, 'old try')`,
+        [A, JSON.stringify([{ start: 0, end: 1, text: 'old try', avg_logprob: 0, no_speech_prob: 0, compression_ratio: 0 }])]);
+      await http('PUT', '/api/voice-fallback-test', ADMIN, 'admin', { user_id: A });
+      whisperReply = () => ({ data: { text: '2 idli', language: 'english', segments: [
+        { start: 0, end: 2, text: '2 idli', avg_logprob: -0.2, no_speech_prob: null, compression_ratio: '' },
+        { start: 2, end: 3, text: ' ', avg_logprob: false, no_speech_prob: 0, compression_ratio: 1.1 }] } });
+      const v = await voice(A);
+      const r = await lastRun();
+      ck('the voice decision is unchanged by the fix (the same accepted text as before)', v.data.transcript === '2 idli' && r.accepted === true, v.data);
+      ck('stored: unknown values are null, the genuine 0 is 0, real numbers kept',
+        r.segments[0].avg_logprob === -0.2 && r.segments[0].no_speech_prob === null && r.segments[0].compression_ratio === null
+          && r.segments[1].avg_logprob === null && r.segments[1].no_speech_prob === 0 && r.segments[1].compression_ratio === 1.1, r.segments);
+      const old = (await pool.query(`SELECT segments FROM voice_fallback_test_runs WHERE whisper_text = 'old try'`)).rows[0];
+      const want = { start: 0, end: 1, text: 'old try', avg_logprob: 0, no_speech_prob: 0, compression_ratio: 0 };   // (the database stores keys in its own order)
+      ck('an earlier recorded try is left exactly as it was', old.segments.length === 1 && Object.keys(want).length === Object.keys(old.segments[0]).length && Object.entries(want).every(([k, val]) => old.segments[0][k] === val), old.segments);
+      const x = await http('GET', '/api/voice-fallback-test/runs.xlsx', ADMIN, 'admin');
+      const s2 = X.unzipStored(x.data)['xl/worksheets/sheet2.xml'].toString('utf8');
+      const rowOf = (n) => (s2.match(new RegExp(`<row r="${n}">(.*?)</row>`)) || [])[1] || '';
+      // Sheet "Sections", newest try first: row 2 = "2 idli" section 1, row 3 = its section 2.
+      const cells = (row) => [...row.matchAll(/<c r="([A-Z]+)\d+"[^>]*?(?:\/>|>(?:<is><t[^>]*>(.*?)<\/t><\/is>)?<\/c>)/g)].reduce((o, m) => (o[m[1]] = m[2] ?? '', o), {});
+      const s1 = cells(rowOf(2)), sB = cells(rowOf(3));
+      ck('the Excel file shows an unknown value as an empty cell and a genuine 0 as 0',
+        s1.F === '-0.2' && s1.G === '' && s1.H === '' && sB.F === '' && sB.G === '0' && sB.H === '1.1', { s1, sB });
+      await http('DELETE', '/api/voice-fallback-test', ADMIN, 'admin');
+    }
   } catch (e) { ck('suite completed', false, e.stack); }
   finally {
     await pool.query(`DELETE FROM voice_fallback_test_account`); await pool.query(`DELETE FROM voice_fallback_test_runs`);

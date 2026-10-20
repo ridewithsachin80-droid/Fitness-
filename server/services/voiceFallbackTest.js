@@ -46,7 +46,16 @@ async function skipsGemini(user) {
   catch (e) { console.warn('voice fallback test: check failed:', e.message); return false; }
 }
 
-const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+// Fixes-2q (2p review): Number(v) turned null, '', false (and true, [5]) into numbers, so an
+// unknown confidence value was recorded as 0 (or 1). The record is raw evidence: keep only real
+// finite numbers (genuine 0 stays 0) or text that is plainly a decimal number; anything else is
+// unknown (null). Recording only: reviewWhisper's accept/refuse decision is separate and unchanged.
+const DECIMAL = /^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/;
+const num = (v) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string' && DECIMAL.test(v)) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+  return null;
+};
 /** Keep what a reviewer needs from Whisper's answer: the text and per-section numbers. */
 function sectionsOf(raw) {
   const segs = Array.isArray(raw?.segments) ? raw.segments.slice(0, 60) : [];
@@ -70,4 +79,4 @@ async function record(userId, { langHint, languageSent, raw, result, error }) {
   } catch (e) { console.warn('voice fallback test: could not record:', e.message); }
 }
 
-module.exports = { available, current, skipsGemini, record, sectionsOf, HOURS };
+module.exports = { available, current, skipsGemini, record, sectionsOf, num, HOURS };
