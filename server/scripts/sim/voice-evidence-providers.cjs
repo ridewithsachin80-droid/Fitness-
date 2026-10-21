@@ -9,7 +9,9 @@
  * Switches (environment): SIM_AUDIO_FILE (the stored "recording"),
  * SIM_WRONG_PREVIEW=1 (the parse adds roti and dal to every preview),
  * SIM_FAIL_SWITCH_OFF=1 (turning the voice backup switch off fails),
- * SIM_TAMPER_ORIGINALS=1 (a re-run also changes an original answer).
+ * SIM_TAMPER_ORIGINALS=1 (a re-run also changes an original answer),
+ * SIM_EXTRA_WATER=1 (every parse also adds 1000 ml of water nobody said),
+ * SIM_PARSE_FAIL_WEIGHT=1 (the parse fails for any message with "82.5": no preview appears).
  */
 const path = require('path'), http = require('http'), fs = require('fs');
 const SRV = path.join(__dirname, '../..');
@@ -51,13 +53,14 @@ axios.post = async (url, body) => {
   if (String(url).includes('api.groq.com/openai/v1/chat/completions')) {
     const prompt = (body?.messages || []).map(m => m.content).join('\n');
     const said = (prompt.match(/Member's message: "([^"]*)"/) || [])[1] || '';
+    if (process.env.SIM_PARSE_FAIL_WEIGHT === '1' && /82\.5/.test(said)) { const e = new Error('simulated AI outage'); e.response = { status: 503, data: { error: { message: 'simulated' } } }; throw e; }
     const foods = [];
     if (/idli|ಇಡ್ಲಿ/i.test(said)) foods.push(food('Idli', '2 idli', 100));
     if (/sambar|ಸಾಂಬಾರ್/i.test(said)) foods.push(food('Sambar', '1 bowl', 200));
     if (/roti|रोटी/i.test(said)) foods.push(food('Roti', '2 roti', 80));
     if (/dal|दाल/i.test(said)) foods.push(food('Dal', '1 katori', 150));
     if (process.env.SIM_WRONG_PREVIEW === '1') { if (!foods.some(f => f.name === 'Roti')) foods.push(food('Roti', '2 roti', 80)); if (!foods.some(f => f.name === 'Dal')) foods.push(food('Dal', '1 katori', 150)); }
-    return { data: { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ weight_kg: /82\.5/.test(said) ? 82.5 : null, activities: [], acv: [], supplements: [], water_ml_add: null, sleep: null, foods, workouts: [], corrections: [], reply: 'Got it.' }) } }] } };
+    return { data: { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ weight_kg: /82\.5/.test(said) ? 82.5 : null, activities: [], acv: [], supplements: [], water_ml_add: process.env.SIM_EXTRA_WATER === '1' ? 1000 : null, sleep: null, foods, workouts: [], corrections: [], reply: 'Got it.' }) } }] } };
   }
   throw new Error('simulation: blocked ' + url);
 };

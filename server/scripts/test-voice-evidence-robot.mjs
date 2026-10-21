@@ -112,13 +112,18 @@ console.log('\n[6] clean-up removes only this run\'s entries and restores the we
 
 console.log('\n[7] the verdict: collection kept apart from recognition quality');
 {
+  // Changed in Fixes-2t: the verdict now requires every one of the 5 cases with its stages
+  // (transcription, preview or explicit refusal, quality, save + read-back or verified no-save),
+  // so the "good run" fixture carries all five. The assertions below are unchanged.
+  const saved = (id) => ({ id, collected: true, transcribed: true, status: 200, outcome: 'preview', transcript: 'x', quality: 'PASS', saved: true, save_confirmed: true, readback: { result: 'PASS', reasons: [] } });
   const good = () => ({
-    part1: { approved_count: 2, export_ok: true, samples: [{ phrase_id: 'k01', original_unchanged: true, whisper_kn: { text: 'x' } }, { phrase_id: 'k02', original_unchanged: true, whisper_kn: { text: 'y' } }] },
-    part2: { collected: true, real: [{}, {}, {}, {}], cases: [{ id: 'S1', collected: true, quality: 'PASS', saved: true, save_confirmed: true, readback: { result: 'PASS', reasons: [] } },
-      { id: 'S4', collected: true, quality: 'PASS', retry: { identical: true } }] },
+    part1: { approved_count: 2, export_ok: true, unapproved_touched: [], samples: [{ phrase_id: 'k01', original_unchanged: true, whisper_kn: { text: 'x' } }, { phrase_id: 'k02', original_unchanged: true, whisper_kn: { text: 'y' } }] },
+    part2: { collected: true, real: [1, 2, 3, 4].map(() => ({ phrase_id: 'k01', voice_language: 'kn-IN', status: 200, transcript: 'x' })), cases: [saved('S1'), saved('S2'), saved('S3'),
+      { id: 'S4', collected: true, transcribed: true, status: 200, outcome: 'refused', rejected: 'no_speech', quality: 'PASS', retry: { identical: true }, no_save_verified: true },
+      { id: 'S5', collected: true, transcribed: true, status: 200, outcome: 'preview', transcript: 'x', quality: 'FAIL', no_save_verified: true }] },
     cleanup: { ok: true, problems: [] }, switch_off: { verified: true, detail: 'off' }, errors: [] });
   let v = L.verdict(good()); ck('everything collected, site left as found → COMPLETE, exit 0', v.run === 'COMPLETE' && v.exitCode === 0, v);
-  let r = good(); r.part2.cases[0].quality = 'FAIL'; r.part2.cases[0].saved = false; delete r.part2.cases[0].readback; delete r.part2.cases[0].save_confirmed;
+  let r = good(); r.part2.cases[0].quality = 'FAIL'; r.part2.cases[0].saved = false; delete r.part2.cases[0].readback; delete r.part2.cases[0].save_confirmed; r.part2.cases[0].no_save_verified = true;
   v = L.verdict(r); ck('a wrong preview, accurately collected and not saved → still COMPLETE (quality FAIL is reported, never an acceptance)', v.run === 'COMPLETE', v);
   r = good(); r.part1.samples[0].original_unchanged = false; v = L.verdict(r); ck('changed originals → FAILED, exit 1', v.run === 'FAILED' && v.exitCode === 1 && /k01 changed/.test(v.failures.join()), v);
   r = good(); r.part1.samples[1].whisper_kn = null; v = L.verdict(r); ck('a missing Kannada re-run → INCOMPLETE, exit 1', v.run === 'INCOMPLETE' && v.exitCode === 1, v);
@@ -126,7 +131,7 @@ console.log('\n[7] the verdict: collection kept apart from recognition quality')
   r = good(); r.part1.approved_count = 1; v = L.verdict(r); ck('only 1 of the 2 approved recordings → INCOMPLETE', v.run === 'INCOMPLETE', v);
   r = good(); r.part2.cases[0].save_confirmed = false; v = L.verdict(r); ck('no "Saved" confirmation → FAILED', v.run === 'FAILED' && /did not confirm/.test(v.failures.join()), v);
   r = good(); r.part2.cases[0].readback = { result: 'FAIL', reasons: ['weight 85 kg instead of 82.5 kg'] }; v = L.verdict(r); ck('saved entries differing from the preview → FAILED', v.run === 'FAILED' && /85 kg/.test(v.failures.join()), v);
-  r = good(); r.part2.cases[1].retry = { identical: false, detail: 'Retry sent nothing' }; v = L.verdict(r); ck('Retry not re-sending the identical recording → FAILED', v.run === 'FAILED' && /Retry/.test(v.failures.join()), v);
+  r = good(); r.part2.cases[3].retry = { identical: false, detail: 'Retry sent nothing' }; v = L.verdict(r); ck('Retry not re-sending the identical recording → FAILED', v.run === 'FAILED' && /Retry/.test(v.failures.join()), v);
   r = good(); r.switch_off = { verified: false, detail: 'still on' }; v = L.verdict(r); ck('switch not confirmed off → FAILED', v.run === 'FAILED' && /NOT confirmed off/.test(v.failures.join()), v);
   r = good(); r.cleanup = { ok: false, problems: ['1 entry left over'] }; v = L.verdict(r); ck('clean-up not equal to before → FAILED', v.run === 'FAILED' && /left over/.test(v.failures.join()), v);
   r = good(); r.part2.scope_problem = "this run's recorded tries: 7, expected 6"; v = L.verdict(r); ck('an unexpected extra try in this run\'s window → FAILED', v.run === 'FAILED', v);
@@ -134,9 +139,53 @@ console.log('\n[7] the verdict: collection kept apart from recognition quality')
   r = good(); r.part2.real = [{}]; v = L.verdict(r); ck('missing real-recording tries → INCOMPLETE', v.run === 'INCOMPLETE', v);
   // The reviewer's controlled result: it printed "Completed", exit 0.
   r = good(); r.part1.samples[0].original_unchanged = false; r.part1.samples[1].whisper_kn = null; r.part1.export_ok = false;
-  r.part2.cases[0].quality = 'FAIL'; r.part2.cases[1].retry = { identical: false }; r.switch_off = { verified: false, detail: 'x' }; r.cleanup = { ok: false, problems: ['totals differ'] };
+  r.part2.cases[0].quality = 'FAIL'; r.part2.cases[3].retry = { identical: false }; r.switch_off = { verified: false, detail: 'x' }; r.cleanup = { ok: false, problems: ['totals differ'] };
   v = L.verdict(r); ck('the reviewer\'s controlled bad result → FAILED, exit 1 (was "Completed", 0)', v.run === 'FAILED' && v.exitCode === 1 && v.failures.length >= 4, v);
   v = L.verdict({ blocked: 'missing secrets' }); ck('BLOCKED → exit 3', v.run === 'BLOCKED' && v.exitCode === 3);
+
+  console.log('\n[9] Fixes-2t: the 2s review\'s exact examples');
+  // Gap 2: a preview timeout after transcription (the reviewer's S1 fields verbatim).
+  r = good(); r.part2.cases[0] = { id: 'S1', collected: true, status: 200, transcript: '2 idli, 1 bowl sambar, weight 82.5 kg', error: 'Waiting for preview Save card failed: timeout after 90000ms' };
+  v = L.verdict(r); ck('S1 with a preview timeout after transcription (collected=true, error set) → NOT COMPLETE (was COMPLETE, 0)', v.run !== 'COMPLETE' && v.exitCode === 1 && /S1: Waiting for preview/.test(v.incomplete.join()), v);
+  r = good(); r.part2.cases[0] = { ...saved('S1'), transcribed: true, error: 'the preview appeared but its data was not captured' }; v = L.verdict(r);
+  ck('an error at any later stage keeps the run from COMPLETE, even with other fields filled', v.run !== 'COMPLETE', v);
+  r = good(); delete r.part2.cases[0].quality; v = L.verdict(r); ck('no quality judgement → INCOMPLETE', v.run === 'INCOMPLETE' && /no quality judgement/.test(v.incomplete.join()), v);
+  r = good(); delete r.part2.cases[0].readback; v = L.verdict(r); ck('saved but not read back → INCOMPLETE', v.run === 'INCOMPLETE' && /no read-back/.test(v.incomplete.join()), v);
+  r = good(); delete r.part2.cases[4].no_save_verified; v = L.verdict(r); ck('not saved and not verified that nothing was saved → INCOMPLETE', v.run === 'INCOMPLETE' && /not verified that nothing was saved/.test(v.incomplete.join()), v);
+  r = good(); r.part2.cases[4].no_save_verified = false; r.part2.cases[4].no_save_detail = ['added Idli']; v = L.verdict(r); ck('the day changed although nothing was saved → FAILED', v.run === 'FAILED' && /added Idli/.test(v.failures.join()), v);
+  r = good(); r.part2.cases.splice(1, 1); v = L.verdict(r); ck('a missing case (S2) → INCOMPLETE', v.run === 'INCOMPLETE' && /S2: case missing/.test(v.incomplete.join()), v);
+  r = good(); r.part2.cases[3] = { ...r.part2.cases[3], status: 502, outcome: 'error', rejected: null }; v = L.verdict(r);
+  ck('an HTTP 502 is a provider error, not a refusal → INCOMPLETE (never counted as the expected silence refusal)', v.run === 'INCOMPLETE' && /HTTP 502/.test(v.incomplete.join()), v);
+  r = good(); r.part2.cases[3] = { ...r.part2.cases[3], status: 200, outcome: 'error', rejected: null }; v = L.verdict(r);
+  ck('a 200 with no words and no reason is also an error, not a refusal', v.run === 'INCOMPLETE' && /without a reason/.test(v.incomplete.join()), v);
+  r = good(); delete r.part2.cases[3].retry; v = L.verdict(r); ck('the expected Retry never exercised → INCOMPLETE', v.run === 'INCOMPLETE' && /Retry not exercised/.test(v.incomplete.join()), v);
+  r = good(); r.part2.real[1] = { phrase_id: 'k01', voice_language: 'en-IN', status: 502 }; v = L.verdict(r); ck('a real-recording try answered with HTTP 502 → INCOMPLETE (not a refusal)', v.run === 'INCOMPLETE' && /HTTP 502/.test(v.incomplete.join()), v);
+  // Gap 1: unapproved recordings re-run.
+  r = good(); r.part1.unapproved_touched = ['f01 (id 3)', 'k03 (id 4)']; v = L.verdict(r); ck('re-runs on unapproved recordings (f01, other-day k03) → FAILED', v.run === 'FAILED' && /f01/.test(v.failures.join()) && /k03/.test(v.failures.join()), v);
+  // Gap 3: everything Save would apply.
+  const s1 = { foods: [{ name: 'Idli', qty_text: '2 idli' }, { name: 'Sambar', qty_text: '1 bowl' }], weight_kg: 82.5 };
+  let e = L.evaluatePreview(S.S1.expect, { ...s1, water_ml_add: 1000 });
+  ck('correct S1 foods and 82.5 kg plus an unspoken water_ml_add 1000 → FAIL (was PASS)', e.result === 'FAIL' && /water \+1000 ml/.test(e.reasons.join()), e);
+  ck('…and without the water → PASS', L.evaluatePreview(S.S1.expect, { ...s1, water_ml_add: null, activities: [], acv: [], supplements: [], corrections: [], workouts: [], sleep: null, notes: '', reply: 'ok', totals: { cal: 1 } }).result === 'PASS');
+  for (const [k, v2] of [['sleep', { bedtime: '22:30' }], ['activities', [{ id: 'walk' }]], ['acv', [{ id: 'acv1' }]], ['supplements', [{ id: 'b12' }]], ['corrections', [{ name: 'Idli', grams: 120 }]], ['workouts', [{ name: 'Squat' }]], ['notes', 'felt tired'], ['sent_to_coach', true], ['draft_edit', { id: 1 }]]) {
+    e = L.evaluatePreview(S.S1.expect, { ...s1, [k]: v2 }); ck(`an unspoken ${k} in the preview → FAIL, not saved`, e.result === 'FAIL', e);
+  }
+  e = L.evaluatePreview(S.S1.expect, { ...s1, body_fat: 22 }); ck('a field the robot does not recognise → UNVERIFIED, not saved', e.result === 'UNVERIFIED' && /body_fat/.test(e.reasons.join()), e);
+  e = L.evaluatePreview(S.S1.expect, { ...s1, unresolved_foods: [{ name: 'chutney' }] }); ck('something heard but not included → UNVERIFIED', e.result === 'UNVERIFIED', e);
+  const base0 = { food_items: [], weight_kg: 81, water_ml: 0, sleep: {}, activities: {}, acv: {}, supplements: {}, notes: '' };
+  let c2 = L.verifyCleanup(base0, { ...base0, water_ml: 1000 }); ck('baseline water 0 vs final water 1000 → clean-up FAILED (was ok)', !c2.ok && /water_ml/.test(c2.problems.join()), c2);
+  const plan2 = L.planCleanup(base0, { ...base0, water_ml: 1000, notes: 'x', sleep: { bedtime: '22:30' } }, []);
+  ck('the day written back restores water, notes and sleep to the baseline', plan2.water_ml === 0 && plan2.notes === '' && JSON.stringify(plan2.sleep) === '{}', plan2);
+  for (const k of ['sleep', 'activities', 'acv', 'supplements']) { c2 = L.verifyCleanup(base0, { ...base0, [k]: { x: true } }); ck(`a changed ${k} → clean-up FAILED`, !c2.ok, c2); }
+  // Count-aware clean-up for entries without ids (the reviewer's two cases).
+  const X0 = { name: 'Dal', qty_text: '1 katori', grams: 150 };
+  const plan3 = L.planCleanup({ ...base0, food_items: [X0] }, { ...base0, food_items: [X0, { ...X0 }] }, [L.itemKey(X0)]);
+  ck('one earlier entry plus one identical new entry → only the new one removed, the earlier kept (was: both removed)', plan3.food_items.length === 1 && plan3.removed === 1, plan3);
+  c2 = L.verifyCleanup({ ...base0, food_items: [X0, { ...X0 }] }, { ...base0, food_items: [X0] });
+  ck('baseline with two identical entries, final day with one → the missing entry reported (was: ok)', !c2.ok && /1 entry from before the run/.test(c2.problems.join()), c2);
+  c2 = L.verifyCleanup({ ...base0, food_items: [X0] }, { ...base0, food_items: [X0, { ...X0 }] });
+  ck('baseline one, final two identical → the extra entry reported', !c2.ok && /left over/.test(c2.problems.join()), c2);
+  ck('missingEntries counts duplicates', L.missingEntries([X0, X0, X0], [X0]).length === 2 && L.missingEntries([X0], [X0, X0]).length === 0);
 }
 
 console.log('\n[8] the real robot script blocks before any sign-in, browser or provider call');

@@ -13,6 +13,8 @@
  *   C  the switch held by another account: BLOCKED; nothing changed.
  *   D  turning the switch off fails: FAILED, with the manual instructions.
  *   E  a re-run changes an original answer: FAILED.
+ *   F  every preview also adds 1000 ml water nobody said (Fixes-2t): nothing saved, water unchanged.
+ *   G  the preview never appears after transcription (Fixes-2t): not COMPLETE.
  *
  * Needs: Postgres on 5433 (as the gate), espeak-ng, ffmpeg, the bundled Chromium
  * and client/dist. On demand (≈15 min), not part of the gate:
@@ -92,9 +94,9 @@ const noNulls = (f) => Object.fromEntries(Object.entries(f).filter(([, v]) => v 
 const sameDay = (d) => d && Number(d.weight_kg) === 81 && canon(d.food_items.map(noNulls)) === canon(OLD.map(noNulls));
 const noNames = (rep) => !/Pilot Member|Other Tester|Voice Robot/.test(rep);
 
-const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E'];
+const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 for (const sc of want) {
-  const flags = { B: { SIM_WRONG_PREVIEW: '1' }, D: { SIM_FAIL_SWITCH_OFF: '1' }, E: { SIM_TAMPER_ORIGINALS: '1' } }[sc] || {};
+  const flags = { B: { SIM_WRONG_PREVIEW: '1' }, D: { SIM_FAIL_SWITCH_OFF: '1' }, E: { SIM_TAMPER_ORIGINALS: '1' }, F: { SIM_EXTRA_WATER: '1' }, G: { SIM_PARSE_FAIL_WEIGHT: '1' } }[sc] || {};
   const { c, ids } = await freshDb({ occupied: sc === 'C' });
   const srv = await startServer(flags);
   try {
@@ -117,6 +119,12 @@ for (const sc of want) {
       ck('switch verified off', r.res?.switch_off?.verified === true && !(await c.query('SELECT 1 FROM voice_fallback_test_account')).rows.length);
       ck('only this run\'s tries reported; the other account\'s try excluded', r.res?.runs?.length > 0 && !r.res.runs.some(x => x.whisper_text === 'someone else') && r.res.runs_excluded >= 1 && !r.res.part2.scope_problem, { n: r.res?.runs?.length, ex: r.res?.runs_excluded });
       ck('labelled SIMULATED in the report, the Excel name and every screenshot\'s banner; no member names', /^> \*\*SIMULATED RUN/.test(r.rep) && fs.readdirSync(r.out).some(f => /SIMULATED\.xlsx$/.test(f)) && noNames(r.rep) && fs.readdirSync(r.out).filter(f => f.endsWith('.png')).length >= 5, fs.readdirSync(r.out));
+      // Fixes-2t: the re-run reached ONLY the approved recordings.
+      const rr = (await c.query(`SELECT s.phrase_id FROM voice_sample_reruns x JOIN voice_samples s ON s.id = x.sample_id ORDER BY 1`)).rows.map(x => x.phrase_id);
+      ck('the re-run touched only k01 and k02: no re-run row for the own-words f01 or the other-day k03; report says the others were not reprocessed',
+        rr.join() === 'k01,k02' && /asked 2, answered 2/.test(r.res?.part1?.screen_message || '') && r.res?.part1?.unapproved_touched?.length === 0 && r.res.part1.unapproved_count === 2, { rr, p1: r.res?.part1 });
+      ck('every case passed through all its stages (transcribed; preview or explicit refusal; quality; saved + read back, or day verified unchanged)',
+        (r.res?.part2?.cases || []).every(x => x.transcribed && ['preview', 'refused'].includes(x.outcome) && x.quality && (x.saved ? x.save_confirmed && x.readback?.result === 'PASS' : x.no_save_verified === true)), r.res?.part2?.cases?.map(x => [x.id, x.outcome, x.quality, x.saved, x.no_save_verified]));
       ck('the pilot originals in the database are untouched', (await c.query(`SELECT whisper_score FROM voice_samples WHERE phrase_id IN ('k01','k02') ORDER BY phrase_id`)).rows.map(x => Number(x.whisper_score)).join() === '0,0.5');
     }
     if (sc === 'B') {
@@ -151,6 +159,23 @@ for (const sc of want) {
       const r = await robot();
       ck('FAILED, exit 1, naming the changed original', r.code === 1 && /original answers of k01 changed/.test(r.res?.verdict?.failures?.join()), r.res?.verdict);
       ck('switch verified off and the day as before, even so', r.res?.switch_off?.verified && sameDay(await dayNow(c, ids.voice)));
+    }
+    if (sc === 'F') {
+      console.log('\n[F] every preview adds 1000 ml water nobody said (SIMULATED): nothing saved, water unchanged');
+      const r = await robot();
+      const cs = Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
+      ck('S1, S2, S3 previews FAIL with "unexpected change: water +1000 ml" and are NOT saved', ['S1', 'S2', 'S3'].every(k => cs[k]?.quality === 'FAIL' && /water \+1000 ml/.test((cs[k].quality_reasons || []).join()) && !cs[k].saved), ['S1', 'S2', 'S3'].map(k => [k, cs[k]?.quality, cs[k]?.quality_reasons]));
+      ck('each verified that the day did not change; run COMPLETE (a quality failure, collected)', ['S1', 'S2', 'S3'].every(k => cs[k]?.no_save_verified === true) && r.res?.verdict?.run === 'COMPLETE', r.res?.verdict);
+      const d = (await c.query(`SELECT water_ml FROM daily_logs WHERE patient_id=$1 AND log_date=$2`, [ids.voice, todayIST()])).rows[0];
+      ck('the voice account\'s water is still 0 and the day as before', Number(d?.water_ml || 0) === 0 && sameDay(await dayNow(c, ids.voice)), d);
+    }
+    if (sc === 'G') {
+      console.log('\n[G] the preview never appears after transcription (SIMULATED): never COMPLETE');
+      const r = await robot();
+      const cs = Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
+      ck('S1 was transcribed, then stopped with an error; no quality, nothing saved', cs.S1?.transcribed === true && !!cs.S1.error && !cs.S1.quality && !cs.S1.saved, cs.S1);
+      ck('the run is INCOMPLETE (not COMPLETE), exit 1, naming S1 "after transcription"', r.code === 1 && r.res?.verdict?.run === 'INCOMPLETE' && /S1: .*after transcription/.test(r.res.verdict.incomplete.join()), r.res?.verdict);
+      ck('clean-up and switch-off still done; day as before', r.res?.switch_off?.verified && sameDay(await dayNow(c, ids.voice)));
     }
   } catch (e) { ck(`scenario ${sc} completed`, false, e.stack); }
   finally { srv.child.kill(); await c.end(); await wait(800); }

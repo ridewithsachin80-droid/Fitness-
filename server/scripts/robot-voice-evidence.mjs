@@ -77,7 +77,7 @@ function writeReport() {
     report.blocked ? '' : `**Recognition quality (not an acceptance): ${['PASS', 'FAIL', 'UNVERIFIED'].map(k => `${q[k] || 0} ${k}`).join(' · ')}** — "Run COMPLETE" means the evidence was collected and the site left as found; it does not mean the voice features passed.`, '',
     ...(report.blocked ? [`Nothing was changed on the site. Reason: ${cell(report.blocked)}`] : []),
     ...(p1 ? [`## Part 1${sim} — B19: Whisper · Kannada on the approved 19 Oct recordings (REAL human recordings)`, '',
-      `Approved recordings: ${p1.approved_count}. Screen said: "${cell(p1.screen_message)}". Results Excel export: ${p1.export_ok ? 'available' : 'NOT available'}.`, '',
+      `Approved recordings: ${p1.approved_count}. Re-run requested for those only: ${cell(p1.screen_message)}. Other recordings (${p1.unapproved_count ?? '—'}): ${p1.unapproved_touched?.length ? `**re-runs CHANGED: ${p1.unapproved_touched.join(', ')}**` : 're-runs unchanged (none reprocessed)'}. Results Excel export: ${p1.export_ok ? 'available' : 'NOT available'}.`, '',
       '| Line | Said | Original Gemini | Original Whisper | Originals unchanged | Whisper · Kannada now | Script | In English letters | Keyword score | Rule checks |', '|---|---|---|---|---|---|---|---|---|---|',
       ...p1.samples.map(s => `| ${s.phrase_id} | ${cell(s.say)} | ${cell(s.original.gemini)} (${pct(s.original.gemini_score)}) | ${cell(s.original.whisper)} (${pct(s.original.whisper_score)}) | ${s.original_unchanged ? 'yes' : '**NO**'} | ${cell(s.whisper_kn?.text ?? s.whisper_kn?.problem)} | ${cell(s.whisper_kn?.script)} | ${cell(s.whisper_kn?.latin)} | ${pct(s.whisper_kn?.score)} | ${cell((s.whisper_kn?.checks || []).map(k => `${k.label} ${k.result === 'pass' ? '✓' : k.result === 'unverified' ? '?' : '✗'}`).join(', '))} |`), ''] : []),
     ...(p2.collected || p2.cases.length ? [`## Part 2${sim} — B18: everyday fallback (Gemini skipped for the voice test account only)`, '',
@@ -86,9 +86,9 @@ function writeReport() {
       '| Line | Voice language | HTTP | Transcript passed on | Refused (reason) |', '|---|---|---|---|---|',
       ...p2.real.map(r => `| ${r.phrase_id} | ${r.voice_language} | ${r.status} | ${cell(r.transcript)} | ${cell(r.rejected)} |`), '',
       `### 2b${sim}. COMPUTER VOICE (espeak-ng) through the app's microphone and screen`, '',
-      '| Case | Voice language | Said | Expected | Server | Preview (structured) | Quality | Saved / read back |', '|---|---|---|---|---|---|---|---|',
-      ...p2.cases.map(c => `| ${c.id} | ${c.lang} | ${cell(c.say)} | ${cell(c.plain)} | ${c.error && !c.collected ? 'NOT COLLECTED: ' + cell(c.error) : c.transcript ? `accepted: "${cell(c.transcript)}"` : `refused: ${cell(c.rejected)} (${c.status ?? '—'})`} | ${cell(c.preview_text)}${c.retry ? ` · Retry: ${c.retry.identical ? 'identical recording re-sent (SHA-256 match)' : `NOT identical (${cell(c.retry.detail)})`}` : ''} | **${c.quality || '—'}**${c.quality_reasons?.length ? ': ' + cell(c.quality_reasons.join('; ')) : ''} | ${cell(c.save_note)}${c.readback ? ` · read back: ${c.readback.result}${c.readback.reasons.length ? ' (' + cell(c.readback.reasons.join('; ')) + ')' : ''}` : ''} |`), ''] : []),
-    ...(report.cleanup ? [`## Clean-up${sim}`, '', `Removed ${report.cleanup.removed} entr${report.cleanup.removed === 1 ? 'y' : 'ies'} this run created${report.cleanup.weight_restored ? '; weight restored to what it was' : ''}. Day equal to before the run: **${report.cleanup.ok ? 'yes' : 'NO — ' + cell(report.cleanup.problems.join('; '))}**. Entries that existed before the run: ${report.cleanup.baseline_items}, untouched.`, ''] : []),
+      '| Case | Voice language | Said | Expected | Server | Preview (structured) | Quality | Saved / read back / nothing saved |', '|---|---|---|---|---|---|---|---|',
+      ...p2.cases.map(c => `| ${c.id} | ${c.lang} | ${cell(c.say)} | ${cell(c.plain)} | ${!c.transcribed ? 'NO ANSWER' : c.outcome === 'preview' ? `accepted: "${cell(c.transcript)}"` : c.outcome === 'refused' ? `refused: ${cell(c.rejected)}` : `ERROR (HTTP ${c.status ?? '—'}, not a refusal)`}${c.error ? ` · **stopped: ${cell(c.error)}**` : ''} | ${cell(c.preview_text)}${c.retry ? ` · Retry: ${c.retry.identical ? 'identical recording re-sent (SHA-256 match)' : `NOT identical (${cell(c.retry.detail)})`}` : ''} | **${c.quality || '—'}**${c.quality_reasons?.length ? ': ' + cell(c.quality_reasons.join('; ')) : ''} | ${cell(c.save_note)}${c.readback ? ` · read back: ${c.readback.result}${c.readback.reasons.length ? ' (' + cell(c.readback.reasons.join('; ')) + ')' : ''}` : ''}${c.no_save_verified === true ? ' · day unchanged ✓' : c.no_save_verified === false ? ` · **day CHANGED: ${cell(c.no_save_detail.join('; '))}**` : ''} |`), ''] : []),
+    ...(report.cleanup ? [`## Clean-up${sim}`, '', `Removed ${report.cleanup.removed} entr${report.cleanup.removed === 1 ? 'y' : 'ies'} this run created${report.cleanup.weight_restored ? '; weight restored to what it was' : ''}${report.cleanup.other_fields_restored?.length ? `; also restored: ${cell(report.cleanup.other_fields_restored.join('; '))}` : ''}. Compared with before the run: every entry (duplicates counted), weight, water, sleep, activities, ACV, supplements, notes, and the day's workouts. Day equal to before the run: **${report.cleanup.ok ? 'yes' : 'NO — ' + cell(report.cleanup.problems.join('; '))}**. Entries that existed before the run: ${report.cleanup.baseline_items}, untouched.`, ''] : []),
     ...(report.switch_off && !report.switch_off.verified ? ['## ⚠️ Voice backup switch NOT confirmed off', '', `Detail: ${cell(report.switch_off.detail)}. **Turn it off by hand:** Admin → Voice backup test → Turn off. If that is not possible it turns itself off 24 hours after it was set.`, ''] : []),
     ...(report.runs?.length ? [`### What Whisper returned${sim} (this run's tries only; section numbers in the Excel file)`, '',
       '| Try | Voice language | Told | Whisper text (raw) | Language reported | Decision | Sections (log-prob / no-speech / compression) |', '|---|---|---|---|---|---|---|',
@@ -148,10 +148,11 @@ async function api(kind, method, url, body, raw = false) {
 const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const DAY = todayIST();
 const dayOf = async () => { const r = await api('member', 'GET', `/api/logs/${DAY}`); if (r.status !== 200) throw new Error(`reading the voice account's day replied ${r.status}`); return r.data || {}; };
-const snapshot = (d) => JSON.parse(JSON.stringify({ food_items: d.food_items || [], weight_kg: d.weight_kg ?? null }));
+const snapshot = (d) => L.daySnapshot(d);   // every field of the day a Save can reach (Fixes-2t)
+const workoutsOf = async () => { const r = await api('member', 'GET', `/api/workouts?date=${DAY}`); if (r.status !== 200) throw new Error(`reading the voice account's workouts replied ${r.status}`); return L.canon(r.data); };
 
 // ── 2. Preflight: nothing changes until all of this holds ───────────────────
-let voiceMember, baseline, runsBefore, approved, originals;
+let voiceMember, baseline, baselineWorkouts, runsBefore, approved, originals, rerunsBefore;
 try {
   await login('admin'); await login('member');
   const members = await api('admin', 'GET', '/api/admin/members');
@@ -166,12 +167,18 @@ try {
   if (sw.data.account && sw.data.account.user_id !== voiceMember.id) block(`the voice backup switch is in use by another account until ${sw.data.account.ends_at}; not replacing someone else's test.`);
   if (sw.data.account) report.notes.push('the switch was already on for the voice account (an earlier run); this run takes it over and turns it off at the end');
   runsBefore = new Set((sw.data.runs || []).map(r => r.id));
+  // The tries list must name each try's account (Fixes-2s server); an older server would mix accounts.
+  if ((sw.data.runs || []).some(r => !Object.prototype.hasOwnProperty.call(r, 'user_id'))) block('the server\'s tries list has no account id (an older server is running), so this run\'s evidence could not be separated.');
   const res = await api('admin', 'GET', '/api/voice-pilot/results');
   if (res.status !== 200) block(`the voice pilot results replied ${res.status}.`);
   approved = L.approvedSamples(res.data.samples);
+  // Fixes-2t: the approved set is validated BEFORE anything changes: exactly the 2 scripted lines of 19 Oct.
+  if (approved.length !== 2) block(`expected exactly the 2 approved 19 Oct recordings, found ${approved.length}; nothing was re-run.`);
+  rerunsBefore = Object.fromEntries((res.data.samples || []).map(s => [s.id, L.canon(s.reruns || [])]));
   originals = Object.fromEntries(approved.map(s => [s.id, { gemini: s.gemini, gemini_score: s.gemini_score, whisper: s.whisper, whisper_score: s.whisper_score }]));
   report.phrases = Object.fromEntries((res.data.phrases || []).map(p => [p.id, p.say]));
   baseline = snapshot(await dayOf());
+  baselineWorkouts = await workoutsOf();
 } catch (e) { block(`preflight: ${e.message}`); }
 const runStart = new Date().toISOString();
 
@@ -270,23 +277,29 @@ try {
 
   // Part 1 (B19)
   try {
+    // Fixes-2t: not the dashboard button (it re-runs every recording); a request naming ONLY the approved ones.
+    const ids = approved.map(a => a.id), answers = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await api('admin', 'POST', '/api/voice-pilot/results/rerun', { setting: 'kn', sample_ids: ids });
+      if (r.status !== 200) throw new Error(`the scoped re-run replied ${r.status}: ${JSON.stringify(r.data).slice(0, 120)}`);
+      answers.push(r.data);
+      const stray = (r.data.sample_ids || []).filter(x => !ids.includes(x));
+      if (stray.length) throw new Error(`the server re-ran recordings that were not asked for: ${stray.join(', ')}`);
+      if (!r.data.more) break;
+    }
+    const msg = answers.map(d => `asked ${d.asked}, answered ${d.answered}${d.problems?.length ? ` (${d.problems.join('; ')})` : ''}`).join('; ');
     const A = await newPage('admin');
     await uiAdminLogin(A);
-    await A.waitForSelector('[data-testid="vp-rerun-kn"]', { visible: true, timeout: 30e3 });
-    for (let i = 0; i < 6; i++) {
-      const resp = A.waitForResponse(r => /\/api\/voice-pilot\/results\/rerun$/.test(r.url()) && r.request().method() === 'POST', { timeout: 200e3 });
-      await A.$eval('[data-testid="vp-rerun-kn"]', b => { b.scrollIntoView({ block: 'center' }); b.click(); });
-      const d = await (await resp).json().catch(() => ({}));
-      if (!d.more) break; await wait(1500);
-    }
-    await wait(1500);
-    const msg = await A.$eval('[data-testid="vp-rerun-result"]', e => e.textContent.trim()).catch(() => null);
-    await shot(A, 'B19-after-rerun');
+    await A.waitForSelector('[data-testid="vp-panel"]', { visible: true, timeout: 30e3 }).catch(() => {});
+    await shot(A, 'B19-panel-after-rerun');
     const after = await api('admin', 'GET', '/api/voice-pilot/results');
     const byId = new Map((after.data.samples || []).map(s => [s.id, s]));
     const x = await api('admin', 'GET', '/api/voice-pilot/results.xlsx', null, true);
     let exportOk = false; try { exportOk = x.status === 200 && !!X.unzipStored(x.buf)['xl/worksheets/sheet2.xml']; } catch { exportOk = false; }
-    report.part1 = { approved_count: approved.length, screen_message: msg, export_ok: exportOk,
+    // Every other recording's re-runs must be exactly as before.
+    const unapproved = (after.data.samples || []).filter(x => !approved.some(a => a.id === x.id));
+    const touched = unapproved.filter(x => L.canon(x.reruns || []) !== (rerunsBefore[x.id] ?? L.canon([]))).map(x => `${x.phrase_id} (id ${x.id})`);
+    report.part1 = { approved_count: approved.length, screen_message: msg, export_ok: exportOk, unapproved_count: unapproved.length, unapproved_touched: touched,
       samples: approved.map(a => { const s = byId.get(a.id) || {};
         const now = { gemini: s.gemini, gemini_score: s.gemini_score, whisper: s.whisper, whisper_score: s.whisper_score };
         const kn = (s.reruns || []).find(r => r.engine === 'whisper' && r.setting === 'kn');
@@ -324,7 +337,7 @@ try {
   const M = await newPage('member');
   await uiMemberLogin(M);
   for (const c of L.CASES) {
-    const row = { id: c.id, lang: c.lang, say: c.say, plain: c.plain, collected: false };
+    const row = { id: c.id, lang: c.lang, say: c.say, plain: c.plain, collected: false, transcribed: false };
     report.part2.cases.push(row);
     const sent = [], answered = [], parsed = [];
     const onReq = r => { if (r.method() === 'POST' && /\/api\/ai-chat\/voice-transcribe$/.test(r.url())) { try { sent.push(L.sha256(JSON.parse(r.postData() || '{}').audio)); } catch { sent.push(null); } } };
@@ -335,6 +348,7 @@ try {
     };
     try {
       const a = makeAudio(c);
+      const dayAtStart = snapshot(await dayOf());   // for the "nothing was saved" check
       await M.evaluate(() => document.querySelector('[aria-label="Close AI assistant"]')?.click()); await wait(700);
       await M.$eval('[data-testid="ai-type"]', b => b.click());
       await M.waitForSelector('[data-testid="composer-input"]', { visible: true, timeout: 15e3 });
@@ -350,32 +364,47 @@ try {
       for (let i = 0; i < 80 && !answered.length; i++) await wait(500);
       must(answered.length, 'the app sent no recording to the server within 40 s');
       const t = answered[0].data || {};
-      Object.assign(row, { collected: true, status: answered[0].status, transcript: t.transcript ?? null, rejected: t.rejected ?? null, audio_sha256: (sent[0] || '').slice(0, 16) });
-      if (t.transcript) {
+      Object.assign(row, { collected: true, transcribed: true, status: answered[0].status, transcript: t.transcript ?? null, rejected: t.rejected ?? null, audio_sha256: (sent[0] || '').slice(0, 16) });
+      // An explicit refusal is a 200 with no words AND a reason; anything else without words is an error, not a refusal.
+      row.outcome = answered[0].status !== 200 ? 'error' : t.transcript ? 'preview' : t.rejected ? 'refused' : 'error';
+      const verifyNoSave = async () => {
+        await M.evaluate(() => document.querySelector('[aria-label="Close AI assistant"]')?.click()); await wait(3000);
+        const now = snapshot(await dayOf());
+        const detail = [...L.missingEntries(dayAtStart.food_items, now.food_items).map(f => `missing ${f.name}`), ...L.missingEntries(now.food_items, dayAtStart.food_items).map(f => `added ${f.name}`), ...L.changedFields(dayAtStart, now)];
+        row.no_save_verified = detail.length === 0; row.no_save_detail = detail;
+      };
+      if (row.outcome === 'error') { row.save_note = 'nothing to save (provider/HTTP error, not a refusal)'; await shot(M, `${c.id}-error-answer`); await verifyNoSave(); }
+      else if (t.transcript) {
         await waitFor(M, n => document.querySelectorAll('[data-testid="ai-card-save"]').length > n, cards, 90e3);
         await waitFor(M, () => { const b = [...document.querySelectorAll('[data-testid="ai-card-save"]')].pop(); return b && !b.disabled; }, null, 30e3);
         const pz = parsed[parsed.length - 1]?.data || {};
+        if (!parsed.length) throw new Error('the preview appeared but its data was not captured');
         const items = { foods: (pz.foods || []).map(f => ({ name: f.name, qty_text: f.qty_text, grams: f.grams })), weight_kg: pz.weight_kg ?? null };
-        row.preview_text = [items.weight_kg != null ? `weight ${items.weight_kg} kg` : null, ...items.foods.map(f => `${f.name} — ${f.qty_text || '?'} (${f.grams ?? '?'} g)`)].filter(Boolean).join('; ') || '(no items)';
-        const ev = L.evaluateItems(c.expect, items);
+        const extra = L.unexpectedChanges(pz);
+        row.preview_text = [items.weight_kg != null ? `weight ${items.weight_kg} kg` : null, ...items.foods.map(f => `${f.name} — ${f.qty_text || '?'} (${f.grams ?? '?'} g)`), ...extra.changes].filter(Boolean).join('; ') || '(no items)';
+        // Everything Save would apply is judged, not only foods and weight (Fixes-2t).
+        const ev = L.evaluatePreview(c.expect, pz);
         row.quality = ev.result; row.quality_reasons = ev.reasons;
         await shot(M, `${c.id}-preview`);
         if (c.save && ev.result === 'PASS') {
-          const dayBefore = await dayOf(); const before = dayBefore.food_items || [];
+          const dayBefore = snapshot(await dayOf()); const before = dayBefore.food_items;
           const n = await M.$$eval('[data-testid="ai-card-save-status"]', s => s.length);
           await M.evaluate(() => [...document.querySelectorAll('[data-testid="ai-card-save"]')].pop().click());
           row.save_confirmed = await waitFor(M, n => { const s = [...document.querySelectorAll('[data-testid="ai-card-save-status"]')]; return s.length > n && /^Saved/.test(s.pop().textContent.trim()); }, n, 45e3).then(() => true, () => false);
           await M.evaluate(() => document.querySelector('[aria-label="Close AI assistant"]')?.click()); await wait(6000);
-          const dayAfter = await dayOf();
-          const created = L.addedItems(before, dayAfter.food_items || []);
+          const dayAfter = snapshot(await dayOf());
+          const created = L.addedItems(before, dayAfter.food_items);
           created.forEach(f => createdKeys.push(L.itemKey(f)));
           row.saved = true;
           // The weight is one value for the whole day: judge only what THIS save changed.
-          const wb = dayBefore.weight_kg == null ? null : Number(dayBefore.weight_kg), wa = dayAfter.weight_kg == null ? null : Number(dayAfter.weight_kg);
+          const wb = dayBefore.weight_kg, wa = dayAfter.weight_kg;
           row.readback = L.evaluateItems(c.expect, { foods: created, weight_kg: wa !== wb ? wa : null });
+          // …and nothing else on the day changed: earlier entries intact, no other field touched.
+          const lost = L.missingEntries(before, dayAfter.food_items), other = L.changedFields(dayBefore, dayAfter, { except: ['weight_kg'] });
+          if (lost.length || other.length) row.readback = { result: 'FAIL', reasons: [...row.readback.reasons, ...lost.map(f => `earlier entry changed or removed: ${f.name}`), ...other.map(x => `also changed: ${x}`)] };
           row.save_note = row.save_confirmed ? `Saved (${created.length} entr${created.length === 1 ? 'y' : 'ies'} created)` : 'NO "Saved" confirmation';
           await shot(M, `${c.id}-day`);
-        } else row.save_note = c.save ? `not saved: preview ${ev.result}` : 'not saved (by design)';
+        } else { row.save_note = c.save ? `not saved: preview ${ev.result}` : 'not saved (by design)'; await verifyNoSave(); }
       } else {
         row.quality = c.expect.refused ? 'PASS' : c.refusalAllowed ? (c.id === 'S5' ? 'PASS' : 'UNVERIFIED') : 'FAIL';
         row.quality_reasons = [c.expect.refused ? 'refused as expected' : c.refusalAllowed ? 'refused (allowed; nothing recognised to check)' : 'refused clear speech'];
@@ -393,12 +422,13 @@ try {
             transcript: answered[had]?.data?.transcript ?? null, rejected: answered[had]?.data?.rejected ?? null };
         }
         await M.$eval('[data-testid="voice-discard-take"]', b => b.click()).catch(() => {});
+        await verifyNoSave();
       }
     } catch (e) { row.error = e.message; await shot(M, `${c.id}-error`); }
     row.sent_count = sent.length;
     M.off('request', onReq); M.off('response', onResp);
     await M.evaluate(() => { window.__micB64 = null; }).catch(() => {});
-    console.log(`  ${c.id} ${c.lang}: ${row.transcript ? `"${row.transcript}"` : row.collected ? `refused (${row.rejected || row.status})` : `NOT COLLECTED (${row.error})`} · quality ${row.quality || '—'} · ${row.save_note || ''}`);
+    console.log(`  ${c.id} ${c.lang}: ${row.outcome === 'preview' ? `"${row.transcript}"` : row.outcome === 'refused' ? `refused (${row.rejected})` : row.outcome === 'error' ? `ERROR (HTTP ${row.status})` : 'no answer'}${row.error ? ` · ERROR: ${row.error}` : ''} · quality ${row.quality || '—'} · ${row.save_note || ''}`);
     await wait(2000);
   }
   report.part2.collected = true;
@@ -412,15 +442,18 @@ try {
   try {
     const current = await dayOf();
     const plan = L.planCleanup(baseline, current, createdKeys);
-    const weightChanged = (current.weight_kg == null ? null : Number(current.weight_kg)) !== (baseline.weight_kg == null ? null : Number(baseline.weight_kg));
-    if (plan.removed || weightChanged) {
-      const body = { weight_kg: plan.weight_kg, activities: current.activities || {}, acv: current.acv || {}, food_items: plan.food_items, water_ml: current.water_ml || 0,
-        supplements: current.supplements || {}, sleep: current.sleep || {}, notes: current.notes || '', base_saved_at: current.saved_at };
+    const otherFields = L.changedFields(baseline, snapshot(current));
+    const weightChanged = otherFields.some(x => x.startsWith('weight_kg'));
+    if (plan.removed || otherFields.length) {
+      // Every field back to what it was before the run; entries only this run's removed (Fixes-2t).
+      const body = { weight_kg: plan.weight_kg, activities: plan.activities, acv: plan.acv, food_items: plan.food_items, water_ml: plan.water_ml,
+        supplements: plan.supplements, sleep: plan.sleep, notes: plan.notes, base_saved_at: current.saved_at };
       const w = await api('member', 'POST', `/api/logs/${DAY}`, body);
       if (w.status !== 200) throw new Error(`writing the day back replied ${w.status}`);
     }
     const v = L.verifyCleanup(baseline, snapshot(await dayOf()));
-    report.cleanup = { ...v, removed: plan.removed, weight_restored: weightChanged, baseline_items: baseline.food_items.length };
+    if ((await workoutsOf()) !== baselineWorkouts) { v.ok = false; v.problems.push('the day\'s workouts changed'); }
+    report.cleanup = { ...v, removed: plan.removed, weight_restored: weightChanged, other_fields_restored: otherFields.filter(x => !x.startsWith('weight_kg')), baseline_items: baseline.food_items.length };
   } catch (e) { report.cleanup = { ok: false, problems: [e.message], removed: 0, baseline_items: baseline?.food_items?.length ?? 0 }; }
   // The switch: off, and verified off, with a few tries.
   if (switchOn) {

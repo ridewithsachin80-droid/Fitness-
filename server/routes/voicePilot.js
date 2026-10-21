@@ -8,7 +8,7 @@
  *     GET    /api/voice-pilot/results          per phrase, each engine's hit rate; every sample with both transcripts
  *     GET    /api/voice-pilot/results.csv      the same as one file to send on: members as codes, no names, no audio
  *     POST   /api/voice-pilot/results/retry    ask an engine again for the stored recordings it did not answer
- *     POST   /api/voice-pilot/results/rerun    { setting: 'kn'|'en'|'auto' } Whisper again on stored recordings, kept BESIDE the original (Fixes-2m)
+ *     POST   /api/voice-pilot/results/rerun    { setting: 'kn'|'en'|'auto', sample_ids? } Whisper again on stored recordings, kept BESIDE the original (Fixes-2m); sample_ids limits it to those (Fixes-2t)
  *     GET    /api/voice-pilot/results.xlsx     the same file as an Excel workbook: no text-encoding step to go wrong (Fixes-2m)
  *   Member:
  *     GET    /api/voice-pilot/me               invited?, consented?, phrases and what is recorded
@@ -181,12 +181,21 @@ router.post('/results/rerun', coachOnly, async (req, res) => {
     const setting = String(req.body?.setting || '');
     if (!RERUN_SETTINGS.includes(setting)) return res.status(400).json({ error: 'Which setting? kn, en or auto.' });
     const m = mine(req.user, 's');
+    // Fixes-2t: automation may name exactly which recordings to re-run (the voice
+    // evidence robot sends only the approved ones, so no other recording reaches
+    // the provider or gets a re-run row). Without sample_ids, as before: all.
+    const args = [...m.args]; let only = '';
+    if (req.body?.sample_ids !== undefined) {
+      const ids = req.body.sample_ids;
+      if (!Array.isArray(ids) || !ids.length || ids.length > 20 || !ids.every(n => Number.isInteger(n) && n > 0)) return res.status(400).json({ error: 'sample_ids must list 1 to 20 recording ids.' });
+      args.push([...new Set(ids)]); only = `AND s.id = ANY($${args.length}::int[])`;
+    }
     const { rows } = await pool.query(
       `SELECT s.id, s.phrase_id, s.object_key, s.mime_type FROM voice_samples s
         WHERE s.object_key IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM voice_sample_reruns x WHERE x.sample_id = s.id AND x.engine = 'whisper' AND x.setting = '${setting}' AND x.text IS NOT NULL)
-          ${m.sql.replace('$1', `$${m.args.length}`)}
-        ORDER BY s.created_at LIMIT 21`, m.args);
+          ${m.sql.replace('$1', `$${m.args.length}`)} ${only}
+        ORDER BY s.created_at LIMIT 21`, args);
     const batch = rows.slice(0, 20);
     let asked = 0, answered = 0; const problems = [];
     for (const r of batch) {
@@ -201,7 +210,7 @@ router.post('/results/rerun', coachOnly, async (req, res) => {
          ON CONFLICT (sample_id, engine, setting) DO UPDATE SET text=EXCLUDED.text, language=EXCLUDED.language, score=EXCLUDED.score, error=EXCLUDED.error, created_at=NOW()`,
         [r.id, setting, t.text, t.text != null ? (t.language || null) : null, t.text != null ? V.score(r.phrase_id, t.text) : null, t.text == null ? (t.error || null) : null]);
     }
-    res.json({ ok: true, setting, asked, answered, more: rows.length > batch.length, problems: [...new Set(problems)].slice(0, 3) });
+    res.json({ ok: true, setting, asked, answered, more: rows.length > batch.length, problems: [...new Set(problems)].slice(0, 3), sample_ids: batch.map(r => r.id) });
   } catch (err) { fail(res, err); }
 });
 

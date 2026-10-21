@@ -337,6 +337,26 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('re-run "auto": no language is sent (Whisper guesses, as on 19 Oct)', r.data.asked === 3 && lastWhisperForm.language === null);
     ck('re-run: an unknown setting is refused; another coach touches none; a member cannot', (await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'ta' })).status === 400
        && (await call('POST', '/api/voice-pilot/results/rerun', O, { setting: 'kn' })).data.asked === 0 && (await call('POST', '/api/voice-pilot/results/rerun', M, { setting: 'kn' })).status === 403);
+    // Fixes-2t: a re-run limited to named recordings touches no other recording.
+    {
+      await pool.query(`DELETE FROM voice_sample_reruns WHERE setting = 'kn'`);
+      heard.whisper = KN; whisperLanguageReply = 'kannada';   // the same answers as the Kannada re-run above, so later checks see the same rows
+      const all = (await pool.query(`SELECT s.id, s.phrase_id FROM voice_samples s ORDER BY s.created_at`)).rows;
+      const pick = all.find(x => x.phrase_id === 'k01').id;
+      const c1 = { ...calls };
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', sample_ids: [pick] });
+      const knRows = (await pool.query(`SELECT sample_id FROM voice_sample_reruns WHERE setting = 'kn'`)).rows.map(x => x.sample_id);
+      ck('re-run limited to sample_ids: only that recording reaches Whisper and gets a re-run row; the others none', r.status === 200 && r.data.asked === 1 && calls.whisper - c1.whisper === 1
+         && JSON.stringify(r.data.sample_ids) === JSON.stringify([pick]) && knRows.length === 1 && knRows[0] === pick, [r.data, knRows, calls.whisper - c1.whisper]);
+      const bad = await Promise.all([{ sample_ids: [] }, { sample_ids: 'all' }, { sample_ids: [1.5] }, { sample_ids: [-3] }, { sample_ids: Array.from({ length: 21 }, (_, i) => i + 1) }]
+        .map(b => call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', ...b })));
+      ck('…an empty, non-list, fractional, negative or over-20 sample_ids is refused (400), nothing asked', bad.every(x => x.status === 400) && calls.whisper - c1.whisper === 1);
+      const none = await call('POST', '/api/voice-pilot/results/rerun', O, { setting: 'kn', sample_ids: all.map(x => x.id) });
+      ck('…another coach naming these recordings still touches none of them', none.status === 200 && none.data.asked === 0);
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn' });
+      ck('…without sample_ids the button still asks for every remaining recording (unchanged)', r.data.asked === all.length - 1);
+      heard.whisper = usual;
+    }
     const res3 = (await call('GET', '/api/voice-pilot/results', C)).data.samples.find(x => x.phrase_id === 'k01');
     ck('results show the re-runs under the recording, with script, score and checks', res3.reruns.length === 3 && res3.reruns.find(x => x.setting === 'kn').script === 'kannada' && res3.reruns.find(x => x.setting === 'kn').checks.length === 3 && res3.whisper === TAMIL && res3.whisper_script === 'tamil', res3.reruns);
 

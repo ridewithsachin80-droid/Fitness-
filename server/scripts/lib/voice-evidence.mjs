@@ -149,21 +149,91 @@ export function addedItems(before, after) {
   for (const f of after || []) { const k = itemKey(f); if (left.get(k)) left.set(k, left.get(k) - 1); else out.push(f); }
   return out;
 }
-/** The day to write back: current items minus the ones this run created; the weight as it was. */
-export function planCleanup(baseline, current, createdKeys) {
-  const created = new Set(createdKeys);
-  const food_items = (current?.food_items || []).filter(f => !created.has(itemKey(f)));
-  return { food_items, weight_kg: baseline?.weight_kg ?? null, removed: (current?.food_items || []).filter(f => created.has(itemKey(f))).length };
+// ── 3b. What a Save may change (Fixes-2t) ───────────────────────────────────
+/**
+ * The parse result is everything the app's Save would apply: water, sleep,
+ * activities, ACV, supplements, notes, corrections to earlier entries,
+ * workouts, foods, weight. The robot allows ONLY the expected new foods (and
+ * the weight where it was said). Any other change → FAIL, never saved.
+ * Fields the robot does not recognise, or something heard but not included,
+ * → UNVERIFIED, never saved.
+ */
+const KNOWN_PARSE_KEYS = new Set(['advice', 'reply', 'weight_kg', 'activities', 'acv', 'supplements', 'water_ml_add', 'sleep', 'unresolved_sleep', 'notes', 'foods',
+  'unresolved_foods', 'corrections', 'workouts', 'totals', 'aiProvider', 'aiModel', 'question', 'mixed_question', 'mixed_answer', 'coach_message', 'sent_to_coach', 'draft_edit']);
+const filled = (v) => (Array.isArray(v) ? v.length > 0 : v && typeof v === 'object' ? Object.values(v).some(filled) : v != null && v !== '' && v !== false && v !== 0);
+export function unexpectedChanges(parsed = {}) {
+  const changes = [];
+  if (Number(parsed.water_ml_add) > 0) changes.push(`water +${parsed.water_ml_add} ml`);
+  for (const k of ['activities', 'acv', 'supplements', 'corrections', 'workouts']) if (filled(parsed[k])) changes.push(`${k} (${parsed[k].length})`);
+  if (parsed.sleep && (parsed.sleep.bedtime || parsed.sleep.waketime)) changes.push('sleep');
+  if (typeof parsed.notes === 'string' && parsed.notes.trim()) changes.push('notes');
+  if (parsed.sent_to_coach) changes.push('a message sent to the coach');
+  if (filled(parsed.draft_edit)) changes.push('an edit to an earlier draft');
+  const unknown = Object.keys(parsed).filter(k => !KNOWN_PARSE_KEYS.has(k) && filled(parsed[k]));
+  const unresolved = filled(parsed.unresolved_foods) || parsed.unresolved_sleep === true;
+  return { changes, unknown, unresolved };
 }
-/** After clean-up the day must equal the baseline: same items, same weight. */
+/** The whole preview: the expected items AND nothing else that Save would apply. */
+export function evaluatePreview(expect, parsed = {}) {
+  const base = evaluateItems(expect, { foods: parsed.foods || [], weight_kg: parsed.weight_kg ?? null });
+  const u = unexpectedChanges(parsed);
+  let result = base.result; const reasons = [...base.reasons];
+  if (u.changes.length) { result = 'FAIL'; reasons.push(...u.changes.map(c => `unexpected change: ${c}`)); }
+  if (result !== 'FAIL' && u.unknown.length) { result = 'UNVERIFIED'; reasons.push(`unrecognised field(s): ${u.unknown.join(', ')}`); }
+  if (result !== 'FAIL' && u.unresolved) { result = 'UNVERIFIED'; reasons.push('something was heard but not included'); }
+  return { result, reasons };
+}
+
+// ── 4b. The whole day, as Save can change it (Fixes-2t) ─────────────────────
+const noNulls = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.entries(o).filter(([, v]) => v != null)) : {});
+/** Every field of the day a permitted Save can reach, normalised for comparison. */
+export function daySnapshot(d = {}) {
+  return {
+    food_items: JSON.parse(JSON.stringify(d.food_items || [])),
+    weight_kg: d.weight_kg == null || d.weight_kg === '' ? null : Number(d.weight_kg),
+    water_ml: Number(d.water_ml) || 0,
+    sleep: noNulls(d.sleep), activities: noNulls(d.activities), acv: noNulls(d.acv), supplements: noNulls(d.supplements),
+    notes: typeof d.notes === 'string' ? d.notes : '',
+  };
+}
+const counts = (list) => { const m = new Map(); for (const f of list || []) { const k = entryOf(f); m.set(k, (m.get(k) || 0) + 1); } return m; };
+/** Entries of `a` missing from `b`, counting duplicates (two identical entries are two). */
+export function missingEntries(a, b) {
+  const have = counts(b); const out = [];
+  for (const f of a || []) { const k = entryOf(f); if (have.get(k)) have.set(k, have.get(k) - 1); else out.push(f); }
+  return out;
+}
+/** Fields other than the food list that differ between two snapshots. */
+export function changedFields(before, after, { except = [] } = {}) {
+  const out = [];
+  for (const k of ['weight_kg', 'water_ml', 'sleep', 'activities', 'acv', 'supplements', 'notes']) {
+    if (except.includes(k)) continue;
+    if (canon(before[k]) !== canon(after[k])) out.push(`${k} ${canon(before[k])} → ${canon(after[k])}`);
+  }
+  return out;
+}
+/**
+ * The day to write back: the current entries minus exactly the ones this run
+ * created (one per recorded creation, newest first, so an identical earlier
+ * entry survives), and every other field as it was before the run.
+ */
+export function planCleanup(baseline, current, createdKeys) {
+  const want = new Map(); for (const k of createdKeys || []) want.set(k, (want.get(k) || 0) + 1);
+  const items = [...(current?.food_items || [])], kept = []; let removed = 0;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const k = itemKey(items[i]);
+    if (want.get(k)) { want.set(k, want.get(k) - 1); removed++; } else kept.unshift(items[i]);
+  }
+  const b = daySnapshot(baseline);
+  return { food_items: kept, removed, weight_kg: b.weight_kg, water_ml: b.water_ml, sleep: b.sleep, activities: b.activities, acv: b.acv, supplements: b.supplements, notes: b.notes };
+}
+/** After clean-up the whole day must equal the baseline, duplicates counted. */
 export function verifyCleanup(baseline, after) {
-  const problems = [];
-  const b = (baseline?.food_items || []).map(entryOf).sort(), a = (after?.food_items || []).map(entryOf).sort();
-  const missing = b.filter(x => !a.includes(x)), extra = a.filter(x => !b.includes(x));
+  const b = daySnapshot(baseline), a = daySnapshot(after), problems = [];
+  const missing = missingEntries(b.food_items, a.food_items), extra = missingEntries(a.food_items, b.food_items);
   if (missing.length) problems.push(`${missing.length} entr${missing.length === 1 ? 'y' : 'ies'} from before the run changed or missing`);
   if (extra.length) problems.push(`${extra.length} entr${extra.length === 1 ? 'y' : 'ies'} left over`);
-  const bw = baseline?.weight_kg == null ? null : Number(baseline.weight_kg), aw = after?.weight_kg == null ? null : Number(after.weight_kg);
-  if (bw !== aw) problems.push(`weight ${aw ?? 'empty'} instead of ${bw ?? 'empty'}`);
+  problems.push(...changedFields(b, a).map(x => x.replace(/^weight_kg /, 'weight ')));
   return { ok: problems.length === 0, problems };
 }
 
@@ -175,6 +245,10 @@ export function verifyCleanup(baseline, after) {
  *   quality  — what the providers and the app actually did, per case
  *              (PASS / FAIL / UNVERIFIED). A poor transcript, accurately
  *              collected, is a quality FAIL, not a run failure. Never an acceptance.
+ * Fixes-2t: every expected case must pass through each of its stages —
+ * transcription; a preview or an EXPLICIT refusal (an HTTP or provider error
+ * is not a refusal); a quality judgement; then save + read-back, or a verified
+ * no-save; Retry where required. An error at any stage keeps the run from COMPLETE.
  */
 export function verdict(r) {
   const failures = [], incomplete = [];
@@ -187,17 +261,36 @@ export function verdict(r) {
       if (s.original_unchanged === false) failures.push(`original answers of ${s.phrase_id} changed`);
       if (!s.whisper_kn || s.whisper_kn.text == null) incomplete.push(`no Kannada re-run answer for ${s.phrase_id}${s.whisper_kn?.problem ? ` (${s.whisper_kn.problem})` : ''}`);
     }
+    if (p1.unapproved_touched?.length) failures.push(`re-run reached unapproved recording(s): ${p1.unapproved_touched.join(', ')}`);
     if (!p1.export_ok) incomplete.push('the results Excel export was not available');
   }
   const p2 = r.part2 || {};
   if (!p2.collected) incomplete.push('everyday fallback not collected');
   else {
-    if ((p2.real || []).length !== 2 * (p1?.approved_count || 0)) incomplete.push(`real-recording tries: ${(p2.real || []).length} of ${2 * (p1?.approved_count || 0)}`);
-    for (const c of p2.cases || []) {
-      if (!c.collected) incomplete.push(`${c.id}: ${c.error || 'no server answer captured'}`);
-      if (c.save_confirmed === false) failures.push(`${c.id}: the app did not confirm the save`);
-      if (c.readback && c.readback.result !== 'PASS' && c.saved) failures.push(`${c.id}: saved entries do not match what was previewed (${c.readback.reasons.join('; ')})`);
-      if (c.retry && !c.retry.identical) failures.push(`${c.id}: Retry did not re-send the identical recording`);
+    const want = 2 * (p1?.approved_count || 0);
+    if ((p2.real || []).length !== want) incomplete.push(`real-recording tries: ${(p2.real || []).length} of ${want}`);
+    for (const t of p2.real || []) if (t.status !== 200 || (!t.transcript && !t.rejected)) incomplete.push(`real recording ${t.phrase_id} (${t.voice_language}): ${t.status !== 200 ? `HTTP ${t.status}` : 'empty answer without a reason'} — not a refusal`);
+    const byId = new Map((p2.cases || []).map(c => [c.id, c]));
+    for (const spec of CASES) {
+      const c = byId.get(spec.id);
+      if (!c) { incomplete.push(`${spec.id}: case missing`); continue; }
+      if (c.error) incomplete.push(`${spec.id}: ${c.error}${c.transcribed ? ' (after transcription)' : ''}`);
+      if (!c.transcribed) { if (!c.error) incomplete.push(`${spec.id}: no transcription answer`); continue; }
+      if (c.outcome === 'error') { incomplete.push(`${spec.id}: ${c.status !== 200 ? `HTTP ${c.status}` : 'empty answer without a reason'} — a provider error, not a refusal`); continue; }
+      if (c.outcome !== 'preview' && c.outcome !== 'refused') { incomplete.push(`${spec.id}: no preview and no explicit refusal`); continue; }
+      if (!c.quality) incomplete.push(`${spec.id}: no quality judgement`);
+      const mustSave = c.outcome === 'preview' && spec.save && c.quality === 'PASS';
+      if (mustSave) {
+        if (c.save_confirmed === false) failures.push(`${spec.id}: the app did not confirm the save`);
+        else if (c.save_confirmed !== true) incomplete.push(`${spec.id}: save not completed`);
+        if (c.readback && c.readback.result !== 'PASS') failures.push(`${spec.id}: saved entries do not match what was previewed (${c.readback.reasons.join('; ')})`);
+        else if (!c.readback && c.save_confirmed !== false) incomplete.push(`${spec.id}: no read-back`);
+      } else if (c.no_save_verified === false) failures.push(`${spec.id}: the day changed although nothing was saved (${(c.no_save_detail || []).join('; ')})`);
+      else if (c.no_save_verified !== true) incomplete.push(`${spec.id}: not verified that nothing was saved`);
+      if (spec.retry && c.outcome === 'refused') {
+        if (!c.retry) incomplete.push(`${spec.id}: Retry not exercised`);
+        else if (!c.retry.identical) failures.push(`${spec.id}: Retry did not re-send the identical recording`);
+      }
     }
     if (p2.scope_problem) failures.push(p2.scope_problem);
   }
