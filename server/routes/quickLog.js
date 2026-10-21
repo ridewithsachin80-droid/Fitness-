@@ -27,6 +27,7 @@ const router  = require('express').Router();
 const crypto  = require('crypto');
 const pool    = require('../db/pool');
 const authMW  = require('../middleware/auth');
+const { generatedText } = require('../services/voiceLanguage');
 
 const { parseMemberMessage }   = require('./aiChat');
 const { buildParseContext, calorieTargetFor } = require('../services/memberParse');
@@ -117,6 +118,13 @@ router.post('/', tokenAuth, async (req, res) => {
 
   if (text.length < 2) {
     return res.json({ ok: false, reply: 'I did not catch that. Try again.' });
+  }
+  // Fixes-2u (B18): the phone's dictation sends text, not audio, so the speech
+  // check cannot run here; a sentence that is nothing but subtitle/credit
+  // boilerplate ("Thanks for watching") is still not a log, and this path saves
+  // with no preview. Same narrow rule as the in-app voice notes.
+  if (generatedText(text)) {
+    return res.json({ ok: false, reply: 'I did not catch that. Try again.', rejected: 'generated_text' });
   }
   // ── The same sentence, again ──────────────────────────────────────────────
   // A phone shortcut that times out waiting for the AI sends the request

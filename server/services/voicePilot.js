@@ -312,7 +312,10 @@ async function whisper(audio, mimeType, env = process.env, language = whisperLan
     { headers: { Authorization: `Bearer ${env.GROQ_API_KEY}` }, timeout: 30000 });
   const text = String(r.data?.text || '').trim().slice(0, 1000);
   // The language Whisper reports using ("kannada", "tamil", "kn"…), as given; the setting it was asked for.
-  return { text, language: r.data?.language ? String(r.data.language).slice(0, 20) : null, setting: language || 'auto' };
+  // Fixes-2u: Whisper's own section numbers travel too (evidence only; the pilot never refuses an answer).
+  const segments = Array.isArray(r.data?.segments) ? r.data.segments.slice(0, 50).map(x => ({ start: x?.start ?? null, end: x?.end ?? null,
+    avg_logprob: x?.avg_logprob ?? null, no_speech_prob: x?.no_speech_prob ?? null, compression_ratio: x?.compression_ratio ?? null })) : null;
+  return { text, language: r.data?.language ? String(r.data.language).slice(0, 20) : null, setting: language || 'auto', segments };
 }
 
 /**
@@ -332,7 +335,7 @@ const RETRY_MS = () => Number(process.env.VOICE_PILOT_RETRY_MS ?? 800);
 
 async function once(name, keyName, fn, audio, mimeType) {
   if (!process.env[keyName]) return { text: null, error: `${keyName} is not set` };
-  const wrap = (v) => (v && typeof v === 'object' ? { text: v.text, language: v.language ?? null, setting: v.setting ?? null, error: null } : { text: v, error: null });
+  const wrap = (v) => (v && typeof v === 'object' ? { text: v.text, language: v.language ?? null, setting: v.setting ?? null, segments: v.segments ?? null, error: null } : { text: v, error: null });
   try { return wrap(await fn(audio, mimeType)); }
   catch (e1) {
     if (passing(e1)) {
@@ -377,9 +380,14 @@ async function transcribeOne(engine, audio, mimeType, { language } = {}) {
  * understood the member. `*_answered` says how many it did answer.
  * An engine with no answers at all (its key is not set) has no score: null.
  */
+/** Fixes-2u: text with at least one visible character. '' and whitespace are an EMPTY answer, not a transcript. */
+const nonBlank = (t) => typeof t === 'string' && /\S/.test(t);
 function summarise(rows) {
   const all = rows || [];
-  const did = (r, k) => (`${k}_text` in r ? r[`${k}_text`] != null : r[`${k}_score`] != null);
+  // Fixes-2u: an empty or blank answer is a recognition failure, not an answer: it counts as 0
+  // (it stays in the average) and not as "answered". `*_empty` says how many came back empty.
+  const did = (r, k) => (`${k}_text` in r ? nonBlank(r[`${k}_text`]) : r[`${k}_score`] != null);
+  const empty = (r, k) => `${k}_text` in r && r[`${k}_text`] != null && !nonBlank(r[`${k}_text`]);
   const pct = (list, k) => {
     if (!list.length || !list.some(r => did(r, k))) return null;
     return Math.round((list.reduce((x, r) => x + (did(r, k) ? Number(r[`${k}_score`]) || 0 : 0), 0) / list.length) * 100);
@@ -388,12 +396,14 @@ function summarise(rows) {
     const mine = all.filter(r => r.phrase_id === p.id);
     return { id: p.id, say: p.say, means: p.means, free: !!p.free, samples: mine.length,
       gemini: p.free ? null : pct(mine, 'gemini'), whisper: p.free ? null : pct(mine, 'whisper'),
-      gemini_answered: mine.filter(r => did(r, 'gemini')).length, whisper_answered: mine.filter(r => did(r, 'whisper')).length };
+      gemini_answered: mine.filter(r => did(r, 'gemini')).length, whisper_answered: mine.filter(r => did(r, 'whisper')).length,
+      gemini_empty: mine.filter(r => empty(r, 'gemini')).length, whisper_empty: mine.filter(r => empty(r, 'whisper')).length };
   });
   const free = new Set(PHRASES.filter(p => p.free).map(p => p.id));
   const scored = all.filter(r => !free.has(r.phrase_id) && PHRASES.some(p => p.id === r.phrase_id));
   return { phrases, overall: { gemini: pct(scored, 'gemini'), whisper: pct(scored, 'whisper'), samples: all.length, scored: scored.length,
-    gemini_answered: all.filter(r => did(r, 'gemini')).length, whisper_answered: all.filter(r => did(r, 'whisper')).length } };
+    gemini_answered: all.filter(r => did(r, 'gemini')).length, whisper_answered: all.filter(r => did(r, 'whisper')).length,
+    gemini_empty: all.filter(r => empty(r, 'gemini')).length, whisper_empty: all.filter(r => empty(r, 'whisper')).length } };
 }
 
 /**
@@ -412,7 +422,7 @@ function resultRows(rows) {
   const code = new Map(ids.map((id, i) => [id, `M${i + 1}`]));
   const audio = (m) => (/mp4|m4a|aac/.test(m || '') ? 'mp4 (usually iPhone)' : /webm|ogg/.test(m || '') ? 'webm (usually Android)' : (m || ''));
   // A scored line an engine did not answer is a miss (0%), the same as in the panel.
-  const sc = (r, k, isFree) => (isFree ? '' : r[`${k}_text`] == null ? 'no answer' : Math.round((Number(r[`${k}_score`]) || 0) * 100) + '%');
+  const sc = (r, k, isFree) => (isFree ? '' : r[`${k}_text`] == null ? 'no answer' : !nonBlank(r[`${k}_text`]) ? '0% (empty answer)' : Math.round((Number(r[`${k}_score`]) || 0) * 100) + '%');
   const scr = (t) => (t == null ? '' : SCRIPT_LABEL[scriptOf(t)] || '');
   const byPhrase = new Map(PHRASES.map((p, i) => [p.id, { p, i }]));
   const sorted = [...(rows || [])].sort((a, b) => (byPhrase.get(a.phrase_id)?.i ?? 99) - (byPhrase.get(b.phrase_id)?.i ?? 99) || code.get(a.patient_id).localeCompare(code.get(b.patient_id), undefined, { numeric: true }));
@@ -423,7 +433,8 @@ function resultRows(rows) {
       sc(r, 'gemini', !!p?.free), sc(r, 'whisper', !!p?.free),
       r.duration_ms ? (Number(r.duration_ms) / 1000).toFixed(1) : '', audio(r.mime_type),
       r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '',
-      r.gemini_text == null ? (r.gemini_error || 'no answer') : '', r.whisper_text == null ? (r.whisper_error || 'no answer') : '',
+      r.gemini_text == null ? (r.gemini_error || 'no answer') : !nonBlank(r.gemini_text) ? 'empty answer' : '',
+      r.whisper_text == null ? (r.whisper_error || 'no answer') : !nonBlank(r.whisper_text) ? 'empty answer' : '',
       checksText(meaningChecks(r.phrase_id, r.gemini_text)), checksText(meaningChecks(r.phrase_id, r.whisper_text)),
       scr(r.gemini_text), scr(r.whisper_text),
       // Recordings from before 20 Oct 2026 were sent with no language (Whisper guessed).
@@ -465,5 +476,5 @@ function checksSummary(rows) {
   return out;
 }
 
-module.exports = { PHRASES, CHECKS, score, transcribeBoth, transcribeOne, summarise, resultsCsv, resultRows, HEAD, reason, PROMPT, WHISPER_PROMPT, norm,
+module.exports = { PHRASES, CHECKS, score, transcribeBoth, transcribeOne, summarise, nonBlank, resultsCsv, resultRows, HEAD, reason, PROMPT, WHISPER_PROMPT, norm,
   scriptOf, SCRIPT_LABEL, kannadaToLatin, meaningChecks, checksText, checksSummary, whisperLanguage };

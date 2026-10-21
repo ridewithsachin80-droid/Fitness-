@@ -250,7 +250,7 @@ fi
 # for reading, not for wiring.
 LOGIC_SUITES="test-ci-completion test-mixed-request-answer test-sleep-clarification test-draft-food-edits test-ai-draft-food-edits test-food-clarifications test-voice-phase2 test-coach-view test-rename-contracts smoke-routes test-member-questions \
 test-coach-program test-coach-questions test-image-routing \
-test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic test-ci55-regressions"
+test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic test-ci55-regressions test-speech-presence"
 
 DB_SUITES="test-reliable-writes test-workout-merge test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \

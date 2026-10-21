@@ -281,6 +281,19 @@ async function voiceCases(code,composerCode,chatCode){
   gate.resolve({data:{transcript:'',rejected:'wrong_script',message:'x'}});await until(()=>A.w.__voice.canRetry,'refused take kept');
   ck('2n: a refused fallback answer reaches no consumer and keeps the take for Retry',A.w.__final.length===1&&A.w.__voice.canRetry&&!A.w.__voice.transcribing);
   ck('2n: …and says it came back in a different language, with Retry, voice language or typing as the way out',/different language from the one you chose/.test(A.w.__voice.error||'')&&/Retry/.test(A.w.__voice.error)&&/type your log/.test(A.w.__voice.error),A.w.__voice.error);
+  // Fixes-2u: the server found no speech in the recording (first real run, S4: silence). Nothing reaches
+  // the consumer, the take is kept, Retry re-sends the identical take, and the member is told plainly.
+  A.w.__voice.discardTake();await tick();
+  gate=deferred();A.w.__voice.start();await until(()=>A.w.__voice.listening,'recording a fourth take');A.w.__voice.stop();
+  await until(()=>requests(A,'/ai-chat/voice-transcribe').length===4,'fourth transcription');
+  const take4=JSON.stringify(requests(A,'/ai-chat/voice-transcribe')[3].body);
+  gate.resolve({data:{transcript:'',rejected:'no_speech_detected',message:'x'}});await until(()=>A.w.__voice.canRetry,'no-speech take kept');
+  ck('2u: a recording with no speech in it reaches no consumer (no preview, nothing to save) and the take is kept',A.w.__final.length===1&&A.w.__voice.canRetry&&!A.w.__voice.transcribing);
+  ck('2u: …the member is told no speech was caught, with Retry or typing as the way out',/Didn't catch any speech/.test(A.w.__voice.error||'')&&/Retry/.test(A.w.__voice.error)&&/type your log/.test(A.w.__voice.error),A.w.__voice.error);
+  gate=deferred();A.w.__voice.retry();await until(()=>requests(A,'/ai-chat/voice-transcribe').length===5,'no-speech retry');
+  ck('2u: Retry re-sends the identical take (same bytes, same language)',JSON.stringify(requests(A,'/ai-chat/voice-transcribe')[4].body)===take4);
+  gate.resolve({data:{transcript:'Transcription by ESO. Translation by —'}});await until(()=>A.w.__voice.canRetry&&!A.w.__voice.transcribing,'credits refused');
+  ck('2u: credit text from a server without the check is not passed on either; the take stays for Retry',A.w.__final.length===1&&A.w.__voice.canRetry&&/Didn't catch any speech/.test(A.w.__voice.error||''),A.w.__voice.error);
  }finally{A.close()}
  for(const boundary of ['discard','account','session','context','midnight','unmount']){
   const B=mount(code);await until(()=>B.w.__voice,'voice boundary');
@@ -419,6 +432,24 @@ async function lateRecognitionCases(composerCode){
  }finally{A.close()}
 }
 
+// Fixes-2u: on-device words that are only subtitle/credit text are not used; the recording goes
+// to the server instead (where it is checked for speech). Real on-device words are still used as before.
+async function onDeviceCreditCases(composerCode){
+ const A=mount(composerCode,{},w=>{
+  w.SpeechRecognition=class{constructor(){w.__recognition=this}start(){}stop(){}abort(){}addEventListener(){}removeEventListener(){}};
+  w.__apiHandler=e=>e.url==='/ai-chat/voice-transcribe'?Promise.resolve({data:{transcript:'',rejected:'no_speech_detected',message:'x'}}):Promise.resolve({data:[]});
+ });await until(()=>A.w.__composer,'credit composer');
+ try{
+  A.w.__composer.startRecording();await until(()=>A.w.document.querySelector('[aria-label="Stop recording"]'),'credit recording');
+  A.w.__recognition.onresult({results:[Object.assign([{transcript:'Thanks for watching.'}],{isFinal:true})]});await tick();
+  A.w.document.querySelector('[aria-label="Stop recording"]').click();
+  await until(()=>requests(A,'/ai-chat/voice-transcribe').length===1,'credit text sent as audio instead');
+  await tick(300);
+  const box=A.q('voice-composer')?.querySelector('textarea');
+  ck('2u: on-device "Thanks for watching." is not used as the member\'s words; the recording goes to the server instead',requests(A,'/ai-chat/voice-transcribe').length===1&&!(box?.value||'').includes('Thanks for watching')&&A.w.__sent.length===0,box?.value);
+ }finally{A.close()}
+}
+
 async function consumerCases(workoutCode,coachCode){
  const workoutRow=(A,name)=>[...A.w.document.querySelectorAll('span')].find(e=>e.textContent===name)?.closest('div.border');
  const A=mount(workoutCode,{},w=>{w.__apiHandler=e=>Promise.resolve({data:e.url==='/workouts'&&e.method==='get'?{session:null,exercises:[{exercise_id:101,exercise_name:'Exercise A',sets:[]},{exercise_id:102,exercise_name:'Exercise B',sets:[]}],cardio:[]}:e.url==='/programs/active'?{program:null,days:[]}:[]})});
@@ -524,6 +555,7 @@ try{
  await section('Voice take retry, discard and capture fallback',()=>voiceCases(voiceCode,composerCode,chatCode));
  await section('Voice edits, busy parser and manual FoodLog recovery',()=>voiceDraftCases(chatCode,composerCode,foodCode));
  await section('Recognition stop-flush edits',()=>lateRecognitionCases(composerCode));
+ await section('On-device credit text (Fixes-2u)',()=>onDeviceCreditCases(composerCode));
  await section('Workout and coach voice consumers',()=>consumerCases(workoutCode,coachCode));
  if(!process.env.PHASE2_SKIP_BROWSER)await section('Chromium light/dark mobile layout',()=>browserCases(chatCode,composerCode));
 } catch(e){ck('phase2 suite setup',false,e.stack)}

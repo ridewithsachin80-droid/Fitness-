@@ -231,6 +231,40 @@ const seg = (text, avg_logprob, no_speech_prob, compression_ratio = 1.1) => ({ s
         s1.F === '-0.2' && s1.G === '' && s1.H === '' && sB.F === '' && sB.G === '0' && sB.H === '1.1', { s1, sB });
       await http('DELETE', '/api/voice-fallback-test', ADMIN, 'admin');
     }
+
+    console.log('\n[7] Fixes-2u: a recording with no speech is refused before Whisper, and recorded; each try keeps its exact request');
+    {
+      const fx = (f) => require('fs').readFileSync(require('path').join(__dirname, 'fixtures', 'voice', f)).toString('base64');
+      await pool.query(`DELETE FROM voice_fallback_test_runs`);
+      await http('PUT', '/api/voice-fallback-test', ADMIN, 'admin', { user_id: A });
+      calls.length = 0;
+      whisperReply = () => { throw new Error('a silent recording must not reach Whisper'); };
+      const silent = await http('POST', '/api/ai-chat/voice-transcribe', A, 'patient', { audio: fx('silence-digital.webm'), mimeType: 'audio/webm', langHint: 'en-IN' });
+      let r = await lastRun();
+      ck('silence on the named account: refused (no_speech_detected), Whisper never called, the try recorded with the speech check and "Whisper not called"',
+        silent.data.rejected === 'no_speech_detected' && silent.data.transcript === '' && calls.length === 0 && r && r.accepted === false && r.reason === 'no_speech_detected'
+          && r.speech?.status === 'no_speech' && r.speech.voiced_ms === 0 && r.config?.provider_called === false && r.whisper_text === null, { d: silent.data, r });
+      whisperReply = () => ({ data: { text: ' 2 idli, 1 bowl sambar, weight 82.5 kg.', language: 'english', segments: [seg(' 2 idli, 1 bowl sambar, weight 82.5 kg.', -0.23, 0.04, 0.83)] } });
+      const spoken = await http('POST', '/api/ai-chat/voice-transcribe', A, 'patient', { audio: fx('speech-en.webm'), mimeType: 'audio/webm', langHint: 'en-IN' });
+      r = await lastRun();
+      const sha = require('crypto').createHash('sha256').update(fx('speech-en.webm')).digest('hex').slice(0, 16);
+      ck('speech on the named account: goes to Whisper and is accepted; the try records the speech check and the exact request (model, format, language, prompt hash, audio hash)',
+        spoken.data.transcript === '2 idli, 1 bowl sambar, weight 82.5 kg.' && r.speech?.status === 'speech' && r.speech.voiced_ms > 1000
+          && r.config?.model === 'whisper-large-v3' && r.config.response_format === 'verbose_json' && r.config.path === 'everyday' && r.config.language === null
+          && /^[0-9a-f]{16}$/.test(r.config.prompt_sha256) && r.config.audio_sha256 === sha, r);
+      whisperReply = () => ({ data: { text: ' Transcription by ESO. Translation by —', language: 'english', segments: [seg(' Transcription by ESO. Translation by —', -0.4477262, 0.18652344, 1.025)] } });
+      const s4 = await http('POST', '/api/ai-chat/voice-transcribe', A, 'patient', { audio: fx('speech-en.webm'), mimeType: 'audio/webm', langHint: 'en-IN' });
+      r = await lastRun();
+      ck('the S4 credits reply is refused (generated_text) and recorded with Whisper\'s raw text, so the evidence keeps it',
+        s4.data.rejected === 'generated_text' && r.accepted === false && r.reason === 'generated_text' && r.whisper_text === ' Transcription by ESO. Translation by —', r);
+      const g = await http('GET', '/api/voice-fallback-test', ADMIN, 'admin');
+      ck('the tries list carries the speech check and the request for each try', g.data.runs.length === 3 && g.data.runs.every(x => x.speech && x.config) && g.data.runs[2].config.provider_called === false);
+      const x = await http('GET', '/api/voice-fallback-test/runs.xlsx', ADMIN, 'admin');
+      const s1 = X.unzipStored(x.data)['xl/worksheets/sheet1.xml'].toString('utf8');
+      ck('the Excel file adds speech_check, speech_voiced_ms, recording_ms, whisper_called, prompt_sha256 and audio_sha256 at the end (earlier columns unchanged)',
+        ['speech_check', 'speech_voiced_ms', 'recording_ms', 'whisper_called', 'prompt_sha256', 'audio_sha256'].every(h => s1.includes(h)) && s1.indexOf('sections') < s1.indexOf('speech_check') && s1.includes('no_speech') && s1.includes(sha));
+      await http('DELETE', '/api/voice-fallback-test', ADMIN, 'admin');
+    }
   } catch (e) { ck('suite completed', false, e.stack); }
   finally {
     await pool.query(`DELETE FROM voice_fallback_test_account`); await pool.query(`DELETE FROM voice_fallback_test_runs`);

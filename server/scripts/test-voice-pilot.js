@@ -40,6 +40,7 @@ const realAxios = require.cache[axiosPath].exports;
 const heard = { gemini: 'Belagge eradu idli mattu ondu bowl sambar thinde', whisper: 'Belage eradu idly mattu ondu bowl sambhar' };
 let down = { gemini: false, whisper: false }, calls = { gemini: 0, whisper: 0 }, lastGeminiPrompt = '', lastWhisperPrompt = '';
 let lastWhisperForm = null, whisperLanguageReply = undefined;   // Fixes-2m: what Whisper was asked; what it says it used
+const whisperQueue = [];   // Fixes-2u: answers for the next Whisper calls, in order ('' = an empty answer; { hard: true } = a 400 no retry fixes)
 // failOnce: the next call fails with "busy" (503), the one after works. hard: a 400, which no retry can fix.
 const failOnce = { gemini: 0, whisper: 0 }, hard = { gemini: false, whisper: false };
 const boom = (status, message) => Object.assign(new Error(`Request failed with status code ${status}`), { response: { status, data: { error: { message } } } });
@@ -58,7 +59,9 @@ const stubbedPost = async (url, body, cfg) => {
     if (hard.whisper) throw boom(400, 'Unsupported audio type');
     if (failOnce.whisper > 0) { failOnce.whisper--; throw boom(503, 'Service busy'); }
     if (down.whisper) throw boom(500, 'Internal error, Bearer gsk_SECRET456 rejected');
-    return { data: whisperLanguageReply === undefined ? { text: heard.whisper } : { text: heard.whisper, language: whisperLanguageReply } };
+    const next = whisperQueue.length ? whisperQueue.shift() : heard.whisper;
+    if (next && typeof next === 'object' && next.hard) throw boom(400, 'Unsupported audio type');
+    return { data: whisperLanguageReply === undefined ? { text: next } : { text: next, language: whisperLanguageReply } };
   }
   return realAxios.post(url, body, cfg);
 };
@@ -357,6 +360,72 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
       ck('…without sample_ids the button still asks for every remaining recording (unchanged)', r.data.asked === all.length - 1);
       heard.whisper = usual;
     }
+    // Fixes-2u: an empty answer is not an answer. The first real run (21 Oct) got an empty
+    // Whisper·Kannada answer for k01, counted as "answered 2 of 2" and never asked again.
+    {
+      whisperLanguageReply = 'kannada';
+      const all = (await pool.query(`SELECT s.id, s.phrase_id, s.object_key FROM voice_samples s ORDER BY s.created_at`)).rows;
+      const A = all.find(x => x.phrase_id === 'k01').id, others = all.filter(x => x.id !== A), B = others[0].id, Cx = others[1].id;
+      const knOf = async (id) => (await pool.query(`SELECT * FROM voice_sample_reruns WHERE sample_id=$1 AND setting='kn'`, [id])).rows[0];
+      // Only the attempts made from here on (the re-runs above made attempts too).
+      const startId = (await pool.query(`SELECT COALESCE(MAX(id), 0)::int m FROM voice_sample_rerun_attempts`)).rows[0].m;
+      const attemptsOf = async (id) => (await pool.query(`SELECT * FROM voice_sample_rerun_attempts WHERE sample_id=$1 AND setting='kn' AND id > $2 ORDER BY attempted_at, id`, [id, startId])).rows;
+      // The route asks in recording order; give A the empty answer whatever that order is.
+      const order = (await pool.query(`SELECT id FROM voice_samples WHERE id = ANY($1) ORDER BY created_at`, [[A, B]])).rows.map(x => x.id);
+      const totalReruns = async () => (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_reruns`)).rows[0].n;
+      const before = await totalReruns();
+      // A row from BEFORE this fix: an empty answer with no attempt history (exactly k01 on 21 Oct).
+      await pool.query(`UPDATE voice_sample_reruns SET text='', score=0, language='kannada', created_at='2026-10-21T08:15:31Z' WHERE sample_id=$1 AND setting='kn'`, [Cx]);
+      await pool.query(`DELETE FROM voice_sample_reruns WHERE setting='kn' AND sample_id = ANY($1)`, [[A, B]]);
+      const c2 = { ...calls };
+      whisperQueue.push(...order.map(id => (id === A ? '' : KN)));
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', sample_ids: [A, B] });
+      ck('2u: the reviewer\'s count — 2 requested, 2 provider responses, 1 with words, 1 empty (it was "answered 2 of 2")', r.status === 200 && r.data.asked === 2 && r.data.responses === 2
+         && r.data.answered === 1 && r.data.empty === 1 && r.data.errors === 0 && calls.whisper - c2.whisper === 2 && r.data.problems.some(p => /empty answer/.test(p)), r.data);
+      let a = await attemptsOf(A);
+      ck('2u: the empty answer is stored as it came (text "") and kept as an attempt, outcome "empty", with the exact request (model, verbose_json, kn, prompt hash, audio hash)',
+         (await knOf(A)).text === '' && a.length === 1 && a[0].outcome === 'empty' && a[0].source === 'rerun' && a[0].text === '' && a[0].config.model === 'whisper-large-v3'
+         && a[0].config.response_format === 'verbose_json' && a[0].config.language === 'kn' && a[0].config.path === 'pilot' && /^[0-9a-f]{16}$/.test(a[0].config.prompt_sha256) && /^[0-9a-f]{16}$/.test(a[0].config.audio_sha256), a);
+      ck('2u: …the answer with words is an attempt too (outcome "transcript")', (await attemptsOf(B))[0]?.outcome === 'transcript');
+      const c3 = { ...calls };
+      whisperQueue.push(KN);
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', sample_ids: [A, B] });
+      a = await attemptsOf(A);
+      ck('2u: asking again: the empty one IS asked again (it used to be skipped); the one with words is not', r.data.asked === 1 && JSON.stringify(r.data.sample_ids) === JSON.stringify([A]) && calls.whisper - c3.whisper === 1 && r.data.answered === 1, r.data);
+      ck('2u: …the first empty answer is still in the history, then the new one (empty → words); the latest row now has the words', a.length === 2 && a[0].outcome === 'empty' && a[0].text === '' && a[1].outcome === 'transcript' && a[1].text === KN && (await knOf(A)).text === KN, a);
+      // The pre-fix empty row (no history): asking again keeps it first.
+      whisperQueue.push(KN);
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', sample_ids: [Cx] });
+      a = await attemptsOf(Cx);
+      ck('2u: an empty answer from before this fix (no history) is kept as "earlier answer kept" before the new attempt replaces it', r.data.asked === 1 && a.length === 2 && a[0].source === 'kept_from_latest' && a[0].outcome === 'empty' && a[0].text === ''
+         && new Date(a[0].attempted_at).toISOString() === '2026-10-21T08:15:31.000Z' && a[1].source === 'rerun' && a[1].outcome === 'transcript', a);
+      // Whitespace only is empty too; an error is neither a response nor empty.
+      await pool.query(`DELETE FROM voice_sample_reruns WHERE setting='kn' AND sample_id = ANY($1)`, [[B]]);
+      whisperQueue.push(' \n  ');
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', sample_ids: [B] });
+      ck('2u: a whitespace-only answer counts as empty, not as an answer', r.data.responses === 1 && r.data.answered === 0 && r.data.empty === 1, r.data);
+      whisperQueue.push({ hard: true });
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', sample_ids: [B] });
+      ck('2u: a provider error is counted as an error (no response), and the empty answer before it stays in the history', r.data.asked === 1 && r.data.responses === 0 && r.data.errors === 1 && r.data.empty === 0
+         && (await attemptsOf(B)).map(x => x.outcome).join('>') === 'transcript>empty>error', [r.data, (await attemptsOf(B)).map(x => x.outcome)]);
+      const shown = (await call('GET', '/api/voice-pilot/results', C)).data.samples.find(x => x.id === B).reruns.find(x => x.setting === 'kn');
+      ck('2u: the results tell an error ("no answer — 400…") apart from an empty answer, with every attempt listed (newest last)', shown.text === null && /^400: /.test(shown.problem) && shown.empty === false
+         && shown.attempts.slice(-3).map(x => x.outcome).join('>') === 'transcript>empty>error', shown);
+      whisperQueue.push(KN);
+      r = await call('POST', '/api/voice-pilot/results/rerun', C, { setting: 'kn', sample_ids: [B] });
+      ck('2u: …and the errored one is asked again too; the row count is back where it was', r.data.answered === 1 && await totalReruns() === before, [r.data, await totalReruns(), before]);
+      // The summaries, the file and the panel numbers count an empty ORIGINAL answer as a failure, in the average.
+      const rows = [{ phrase_id: 'k01', gemini_text: 'Belagge eradu idli ondu bowl sambar tinde', gemini_score: 1, whisper_text: '', whisper_score: 0 },
+        { phrase_id: 'k01', gemini_text: 'eradu idli', gemini_score: 1, whisper_text: 'eradu idli ondu bowl', whisper_score: 0.5 },
+        { phrase_id: 'k01', gemini_text: 'idli', gemini_score: 1, whisper_text: null, whisper_score: null }];
+      const sum = V.summarise(rows).overall;
+      ck('2u: summaries — an empty answer is not "answered" (1 of 3, 1 empty) and stays in the average as 0 (17%, not 50%)', sum.whisper_answered === 1 && sum.whisper_empty === 1 && sum.whisper === 17 && sum.gemini_answered === 3, sum);
+      const fileRows = V.resultRows(rows.map((x, i) => ({ ...x, patient_id: 9, created_at: null, duration_ms: null, mime_type: 'audio/webm', id: i })));
+      const iScore = V.HEAD.indexOf('whisper_keyword_score'), iProb = V.HEAD.indexOf('whisper_problem');
+      ck('2u: the file shows "0% (empty answer)" / "empty answer" for the empty one, "no answer" for the missing one, and the score for the one that left a food out',
+         fileRows[0][iScore] === '0% (empty answer)' && fileRows[0][iProb] === 'empty answer' && fileRows[2][iScore] === 'no answer' && fileRows[1][iScore] === '50%' && fileRows[1][iProb] === '', fileRows.map(x => [x[iScore], x[iProb]]));
+      whisperLanguageReply = 'kannada';
+    }
     const res3 = (await call('GET', '/api/voice-pilot/results', C)).data.samples.find(x => x.phrase_id === 'k01');
     ck('results show the re-runs under the recording, with script, score and checks', res3.reruns.length === 3 && res3.reruns.find(x => x.setting === 'kn').script === 'kannada' && res3.reruns.find(x => x.setting === 'kn').checks.length === 3 && res3.whisper === TAMIL && res3.whisper_script === 'tamil', res3.reruns);
 
@@ -372,6 +441,9 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('Excel file: right type and name; a real workbook (zip, CRCs check) with two sheets', xr.status === 200 && /spreadsheetml\.sheet/.test(xr.headers.get('content-type')) && /filename="FitLife-Voice-Pilot-\d{4}-\d{2}-\d{2}\.xlsx"/.test(xr.headers.get('content-disposition'))
        && /<sheet name="Recordings"/.test(parts['xl/workbook.xml'].toString()) && /<sheet name="Re-runs"/.test(parts['xl/workbook.xml'].toString()));
     ck('Excel file: the Tamil and Kannada text stored exactly (UTF-8 XML), headers say "keyword_score"', sheet1.includes(TAMIL) && sheet2.includes(KN) && sheet1.includes('>gemini_keyword_score<') && sheet2.includes('>keyword_score<'));
+    const sheet3 = parts['xl/worksheets/sheet3.xml']?.toString('utf8') || '';
+    ck('2u: Excel file sheet 3 "Re-run attempts": every attempt, outcomes empty/transcript/error, the earlier answer kept, the request\'s hashes; members as codes',
+       /<sheet name="Re-run attempts"/.test(parts['xl/workbook.xml'].toString()) && ['>empty<', '>transcript<', '>error<', '>earlier answer kept<', '>prompt_sha256<', '>whisper-large-v3<'].every(t => sheet3.includes(t)) && !/Padmini/.test(sheet3) && /<t xml:space="preserve">M1</.test(sheet3));
     const cellText = (x) => (x.match(/<t xml:space="preserve">[^<]*/g) || []).join('\n');
     ck('Excel file: every value is text, so "=cmd(1)" can never run as a formula; members as codes, no names, no links',
        !/<f>|<f /.test(sheet1) && sheet1.includes('>=cmd(1)<') && !/Padmini/.test(sheet1 + sheet2) && !/http|X-Amz/i.test(cellText(sheet1) + cellText(sheet2)) && /<t xml:space="preserve">M1</.test(sheet2));
@@ -381,6 +453,8 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     await call('POST', '/api/voice-pilot/sample', M, { phrase_id: 'k01', audio: Buffer.from('third-take').toString('base64') });
     ck('recording a line again removes the re-runs of the old recording (the others stay)', (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_reruns x JOIN voice_samples s ON s.id = x.sample_id WHERE s.phrase_id='k01'`)).rows[0].n === 0
        && (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_reruns`)).rows[0].n === 6);
+    ck('2u: …and its attempt history with them (it was about the old audio)', (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_rerun_attempts x JOIN voice_samples s ON s.id = x.sample_id WHERE s.phrase_id='k01'`)).rows[0].n === 0
+       && (await pool.query(`SELECT COUNT(*)::int n FROM voice_sample_rerun_attempts`)).rows[0].n > 0);
     whisperLanguageReply = undefined;
     // Leave the store as section [4] expects it (two recordings): k06 was added here.
     const k06key = (await pool.query(`SELECT object_key FROM voice_samples WHERE phrase_id='k06'`)).rows[0].object_key;

@@ -49,16 +49,40 @@ const SCRIPT_RANGES = { latin: /[A-Za-z]/, devanagari: /[ऀ-ॿ]/, kannada: /[�
 function whisperFallbackSettings(langHint) {
   return { language: WHISPER_LANGUAGE[normalizeVoiceLang(langHint)] || '' };
 }
+// ── Fixes-2u: words a speech engine invents from silence ─────────────────────
+// Whisper was trained on subtitled video, so on silence or noise it can write
+// the credits it saw there. The first real run (21 Oct 2026, S4: 6 s of silence)
+// came back "Transcription by ESO. Translation by —", reported English with
+// log-prob -0.448, no-speech 0.187, compression 1.025: confident numbers, so the
+// confidence check passed it. This guard is deliberately narrow: it refuses an
+// answer only when EVERY sentence in it is credit/subtitle boilerplate of this
+// kind. Ordinary words are never stripped out, and an answer that also has real
+// content is passed on unchanged (the recording's own speech check, in
+// services/speechPresence.js, is what stops silence).
+const GENERATED_CREDITS = [
+  /^(?:transcri(?:ption|bed|pt)|translat(?:ion|ed)|subtit(?:les?|led|ling)|captions?|captioned|sous-titr\w*|untertitel\w*|sottotitoli\w*)(?:\s+(?:by|from|of|par|von|di))?(?:\s+\S.{0,47})?$/iu,
+  /^(?:thank\s+you\s+(?:very\s+much\s+|so\s+much\s+)?for\s+watching|thanks\s+for\s+watching|please\s+(?:like\s+and\s+)?subscribe(?:\s+to\s+.{0,30})?|like\s+and\s+subscribe|(?:subtitles\s+by\s+the\s+)?amara\.?org(?:\s+community)?)$/iu,
+];
+/** True when the whole text is generated credit/subtitle boilerplate (and nothing else). Pure. */
+function generatedText(text) {
+  const t = String(text || '').trim();
+  if (!t) return false;
+  const sentences = t.split(/(?<=[.!?\u0964])\s+|\s*[\r\n]+\s*/u)
+    .map(x => x.replace(/^[\s"'\u201c\u201d(\[]+/u, '').replace(/[\s.!?\u0964,;:\u2014\u2013\-\u2026"'\u201c\u201d()\[\]]+$/u, '').trim())
+    .filter(Boolean);
+  return sentences.length > 0 && sentences.every(x => GENERATED_CREDITS.some(rx => rx.test(x)));
+}
 /**
  * Check a Whisper verbose_json reply for this member's language choice.
  * → { ok: true, text } or { ok: false, reason }, reason one of:
- *   'empty' · 'wrong_script' · 'wrong_language' · 'no_speech' · 'unsure' · 'repetitive'
+ *   'empty' · 'generated_text' (Fixes-2u) · 'wrong_script' · 'wrong_language' · 'no_speech' · 'unsure' · 'repetitive'
  */
 function reviewWhisper(data, langHint) {
   const lang = normalizeVoiceLang(langHint);
   const allow = ALLOWED[lang];
   const text = String(data?.text || '').trim();
   if (!text) return { ok: false, reason: 'empty' };
+  if (generatedText(text)) return { ok: false, reason: 'generated_text' };
   // Every letter must belong to a script the choice covers (digits, spaces and punctuation are free).
   const letters = [...text].filter(ch => /\p{L}|\p{M}/u.test(ch));
   const foreign = letters.filter(ch => !allow.scripts.some(sc => SCRIPT_RANGES[sc].test(ch)) && !/\p{M}/u.test(ch));
@@ -86,4 +110,4 @@ function reviewWhisper(data, langHint) {
   }
   return { ok: true, text };
 }
-module.exports = { normalizeVoiceLang, voiceTranscriptionPrompt, whisperTranscriptionPrompt, whisperFallbackSettings, reviewWhisper };
+module.exports = { normalizeVoiceLang, voiceTranscriptionPrompt, whisperTranscriptionPrompt, whisperFallbackSettings, reviewWhisper, generatedText, GENERATED_CREDITS };

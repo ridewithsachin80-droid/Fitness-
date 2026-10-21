@@ -15,10 +15,21 @@
  *   E  a re-run changes an original answer: FAILED.
  *   F  every preview also adds 1000 ml water nobody said (Fixes-2t): nothing saved, water unchanged.
  *   G  the preview never appears after transcription (Fixes-2t): not COMPLETE.
+ *   H  (Fixes-2u) like the real Voice Robot: no day saved yet, and the pilot's
+ *      Whisper re-run of k01 answers with no words. Then a second run.
+ *   I  (Fixes-2u) the AI answers S1 in chat with no log card: a recorded outcome.
+ *   J  (Fixes-2u) a microphone that delivers nothing: S1's first attempt and both
+ *      of S3's. INVALID captures are repeated once, never counted.
+ *
+ * Changed in Fixes-2u (scenario A): S5 (a voice buried under loud noise) is now
+ * refused by the server's speech check before any provider, so it is a refusal
+ * (allowed for S5) instead of the canned preview FAIL; the re-run line reads
+ * "2 requested · 2 provider responses · 2 with words · 0 empty · 0 errors"
+ * instead of "asked 2, answered 2". Both follow from the reviewed 2u changes.
  *
  * Needs: Postgres on 5433 (as the gate), espeak-ng, ffmpeg, the bundled Chromium
  * and client/dist. On demand (≈15 min), not part of the gate:
- *   node scripts/test-voice-evidence-sim.mjs [A B C D E]
+ *   node scripts/test-voice-evidence-sim.mjs [A B C D E F G H I J]
  */
 import { spawn, spawnSync, execFileSync } from 'child_process';
 import fs from 'fs';
@@ -45,7 +56,7 @@ execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', path.join(TMP, 'k01.wa
 const OLD = [{ id: 'old-1', name: 'Idli', qty_text: '2 idli', grams: 80, meal: 'Breakfast', per_100g: { calories: 130 } }, { id: 'old-2', name: 'Coffee', qty_text: '1 cup', grams: 150, meal: 'Breakfast', per_100g: { calories: 40 } }];
 const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 
-async function freshDb({ occupied = false } = {}) {
+async function freshDb({ occupied = false, noDay = false } = {}) {
   const admin = new Client({ connectionString: `${PG}/postgres` }); await admin.connect();
   await admin.query(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`); await admin.query(`CREATE DATABASE ${DB}`); await admin.end();
   execFileSync('psql', [`${PG}/${DB}`, '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.join(SRV, 'db/schema.sql')], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -58,7 +69,7 @@ async function freshDb({ occupied = false } = {}) {
     other: await user('Other Tester', 'patient', { phone: '9000000103', secret: '1111' }),
   };
   for (const id of [ids.voice, ids.pilot, ids.other]) await c.query('INSERT INTO patient_profiles (user_id) VALUES ($1)', [id]);
-  await c.query(`INSERT INTO daily_logs (patient_id, log_date, weight_kg, food_items, saved_at) VALUES ($1, $2, 81, $3, NOW() - INTERVAL '1 hour')`, [ids.voice, todayIST(), JSON.stringify(OLD)]);
+  if (!noDay) await c.query(`INSERT INTO daily_logs (patient_id, log_date, weight_kg, food_items, saved_at) VALUES ($1, $2, 81, $3, NOW() - INTERVAL '1 hour')`, [ids.voice, todayIST(), JSON.stringify(OLD)]);
   for (const [ph, at, g, w, sc] of [['k01', '2026-10-19T05:30:00Z', 'Belagge eradu idli ondu bowl sambar tinde', 'விளைகே இரடு இட்ளி', 0], ['k02', '2026-10-19T05:40:00Z', 'Breakfast ge ondu plate uppittu ondu cup coffee.', 'breakfast 1 cup coffee', 0.5],
     ['f01', '2026-10-19T05:50:00Z', 'my private own words', 'my private own words', 1], ['k03', '2026-10-20T05:00:00Z', 'other day', 'other day', 1]])
     await c.query(`INSERT INTO voice_samples (patient_id, phrase_id, object_key, mime_type, duration_ms, gemini_text, whisper_text, gemini_score, whisper_score, created_at) VALUES ($1,$2,$3,'audio/webm',3000,$4,$5,1,$6,$7)`, [ids.pilot, ph, `voice-pilot/${ids.pilot}/${ph}`, g, w, sc, at]);
@@ -92,12 +103,16 @@ const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(',')}]` : v && ty
 // Empty fields left out: saving a day makes the app add food_id: null to older entries (not a change).
 const noNulls = (f) => Object.fromEntries(Object.entries(f).filter(([, v]) => v != null));
 const sameDay = (d) => d && Number(d.weight_kg) === 81 && canon(d.food_items.map(noNulls)) === canon(OLD.map(noNulls));
-const noNames = (rep) => !/Pilot Member|Other Tester|Voice Robot/.test(rep);
+const noNames = (rep) => !/Pilot Member|Other Tester|Voice Robot|Sim Admin/.test(rep);
+const EMPTY_FLAG = path.join(TMP, 'empty-k01');
+const casesOf = (r) => Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
+// Every file the robot wrote: no names anywhere (report, results, workbook strings).
+const outputsNameFree = (out) => fs.readdirSync(out).filter(f => /\.(md|json|xlsx)$/.test(f)).every(f => noNames(fs.readFileSync(path.join(out, f), 'latin1')));
 
-const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 for (const sc of want) {
-  const flags = { B: { SIM_WRONG_PREVIEW: '1' }, D: { SIM_FAIL_SWITCH_OFF: '1' }, E: { SIM_TAMPER_ORIGINALS: '1' }, F: { SIM_EXTRA_WATER: '1' }, G: { SIM_PARSE_FAIL_WEIGHT: '1' } }[sc] || {};
-  const { c, ids } = await freshDb({ occupied: sc === 'C' });
+  const flags = { B: { SIM_WRONG_PREVIEW: '1' }, D: { SIM_FAIL_SWITCH_OFF: '1' }, E: { SIM_TAMPER_ORIGINALS: '1' }, F: { SIM_EXTRA_WATER: '1' }, G: { SIM_PARSE_FAIL_WEIGHT: '1' }, H: { SIM_EMPTY_PILOT_K01_FILE: EMPTY_FLAG }, I: { SIM_CHAT_REPLY: '1' } }[sc] || {};
+  const { c, ids } = await freshDb({ occupied: sc === 'C', noDay: sc === 'H' });
   const srv = await startServer(flags);
   try {
     if (sc === 'A') {
@@ -114,7 +129,11 @@ for (const sc of want) {
       const cs = Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
       ck('S1–S3: preview PASS, saved, "Saved" confirmed, read back PASS', ['S1', 'S2', 'S3'].every(k => cs[k]?.quality === 'PASS' && cs[k].saved && cs[k].save_confirmed && cs[k].readback?.result === 'PASS'), ['S1', 'S2', 'S3'].map(k => cs[k]));
       ck('S4: refused as expected; Retry re-sent the identical recording (SHA-256 match)', cs.S4?.quality === 'PASS' && cs.S4.retry?.identical === true, cs.S4);
-      ck('S5: the canned preview adds sambar → quality FAIL, not saved, run still COMPLETE', cs.S5?.quality === 'FAIL' && !cs.S5.saved && /not saved/.test(cs.S5.save_note), cs.S5);
+      // Changed in Fixes-2u: the S5 recording (voice buried under loud noise) is refused by the server's speech check before any provider.
+      ck('S5: refused by the server\'s speech check (no_speech_detected; allowed for S5), nothing saved, run still COMPLETE', cs.S5?.outcome === 'refused' && cs.S5.rejected === 'no_speech_detected' && cs.S5.quality === 'PASS' && !cs.S5.saved && cs.S5.no_save_verified === true, cs.S5);
+      ck('S4 (silence) refused by the speech check BEFORE any provider (no Whisper text in its try)', cs.S4?.rejected === 'no_speech_detected' && (r.res?.runs || []).filter(x => x.reason === 'no_speech_detected').every(x => !x.whisper_text && x.config?.provider_called === false), { s4: cs.S4, runs: r.res?.runs?.map(x => [x.id, x.reason, x.whisper_text]) });
+      ck('S3: "1 katori dal" shown as "1 bowl" (150 g) passed by the dal portion rule, saved and read back, wording and grams kept in a note', cs.S3?.quality === 'PASS' && /said "1 katori", shown "1 bowl" at 150 g/.test((cs.S3.quality_notes || []).join()) && cs.S3.readback?.result === 'PASS', cs.S3);
+      ck('every case: one attempt, capture VALID (the actual upload decoded and matched to its source), page closed', ['S1', 'S2', 'S3', 'S4', 'S5'].every(k => cs[k]?.attempts?.length === 1 && cs[k].attempts[0].capture?.valid === true && cs[k].attempts[0].page_closed && cs[k].attempts[0].recorder_ready && cs[k].attempts[0].stop_ok), ['S1', 'S2', 'S3', 'S4', 'S5'].map(k => [k, cs[k]?.attempts?.map(a => [a.capture?.reasons, a.recorder_ready, a.stop_ok])]));
       ck('clean-up: the day is exactly as before (earlier idli and coffee intact, weight back to 81)', r.res?.cleanup?.ok && sameDay(await dayNow(c, ids.voice)), { cleanup: r.res?.cleanup, day: await dayNow(c, ids.voice) });
       ck('switch verified off', r.res?.switch_off?.verified === true && !(await c.query('SELECT 1 FROM voice_fallback_test_account')).rows.length);
       ck('only this run\'s tries reported; the other account\'s try excluded', r.res?.runs?.length > 0 && !r.res.runs.some(x => x.whisper_text === 'someone else') && r.res.runs_excluded >= 1 && !r.res.part2.scope_problem, { n: r.res?.runs?.length, ex: r.res?.runs_excluded });
@@ -122,7 +141,9 @@ for (const sc of want) {
       // Fixes-2t: the re-run reached ONLY the approved recordings.
       const rr = (await c.query(`SELECT s.phrase_id FROM voice_sample_reruns x JOIN voice_samples s ON s.id = x.sample_id ORDER BY 1`)).rows.map(x => x.phrase_id);
       ck('the re-run touched only k01 and k02: no re-run row for the own-words f01 or the other-day k03; report says the others were not reprocessed',
-        rr.join() === 'k01,k02' && /asked 2, answered 2/.test(r.res?.part1?.screen_message || '') && r.res?.part1?.unapproved_touched?.length === 0 && r.res.part1.unapproved_count === 2, { rr, p1: r.res?.part1 });
+        rr.join() === 'k01,k02' && /2 requested · 2 provider responses · 2 with words · 0 empty · 0 errors/.test(r.res?.part1?.screen_message || '') && r.res?.part1?.unapproved_touched?.length === 0 && r.res.part1.unapproved_count === 2, { rr, p1: r.res?.part1 });
+      const card = fs.readdirSync(r.out).find(f => /B19-voice-test-card\.png$/.test(f));
+      ck('the B19 screenshot is the voice-test card only, names removed (taken, not skipped); no name in any written file', !!card && !/not taken/.test((r.res?.notes || []).join()) && outputsNameFree(r.out), { card, notes: r.res?.notes });
       ck('every case passed through all its stages (transcribed; preview or explicit refusal; quality; saved + read back, or day verified unchanged)',
         (r.res?.part2?.cases || []).every(x => x.transcribed && ['preview', 'refused'].includes(x.outcome) && x.quality && (x.saved ? x.save_confirmed && x.readback?.result === 'PASS' : x.no_save_verified === true)), r.res?.part2?.cases?.map(x => [x.id, x.outcome, x.quality, x.saved, x.no_save_verified]));
       ck('the pilot originals in the database are untouched', (await c.query(`SELECT whisper_score FROM voice_samples WHERE phrase_id IN ('k01','k02') ORDER BY phrase_id`)).rows.map(x => Number(x.whisper_score)).join() === '0,0.5');
@@ -176,6 +197,45 @@ for (const sc of want) {
       ck('S1 was transcribed, then stopped with an error; no quality, nothing saved', cs.S1?.transcribed === true && !!cs.S1.error && !cs.S1.quality && !cs.S1.saved, cs.S1);
       ck('the run is INCOMPLETE (not COMPLETE), exit 1, naming S1 "after transcription"', r.code === 1 && r.res?.verdict?.run === 'INCOMPLETE' && /S1: .*after transcription/.test(r.res.verdict.incomplete.join()), r.res?.verdict);
       ck('clean-up and switch-off still done; day as before', r.res?.switch_off?.verified && sameDay(await dayNow(c, ids.voice)));
+    }
+    if (sc === 'H') {
+      console.log('\n[H] like the real Voice Robot: no day saved yet; the k01 re-run answers with no words (SIMULATED)');
+      fs.writeFileSync(EMPTY_FLAG, '1');
+      const r = await robot();
+      const cs = casesOf(r), p1 = r.res?.part1 || {};
+      ck('first run S1 reproduced: the save writes the app\'s blank sleep template, which is NOT a change (raw values kept, rule explained); read back PASS',
+        cs.S1?.readback?.result === 'PASS' && /blank template/.test(cs.S1.normalisation || '') && !(cs.S1.readback.unrelated || []).length, cs.S1);
+      ck('the re-run counts: 2 requested · 2 provider responses · 1 with words · 1 empty · 0 errors', /2 requested · 2 provider responses · 1 with words · 1 empty · 0 errors/.test(p1.screen_message || ''), p1.screen_message);
+      ck('k01\'s empty answer is shown as an empty answer (evidence), and the run is not INCOMPLETE because of it', p1.samples?.[0]?.whisper_kn?.empty === true && r.res?.verdict?.run === 'COMPLETE', { k01: p1.samples?.[0], v: r.res?.verdict });
+      ck('clean-up: the day equal to before (no entries, no weight; sleep as it was)', r.res?.cleanup?.ok === true && !(((await dayNow(c, ids.voice))?.food_items) || []).length, r.res?.cleanup);
+      fs.rmSync(EMPTY_FLAG);
+      const r2 = await robot();
+      const q = r2.res?.part1 || {};
+      ck('second run: k01 (empty) is asked again within the approved scope; k02 (an answer with words) is not', /1 requested · 1 provider responses · 1 with words · 0 empty/.test(q.screen_message || '') && (q.not_asked || []).join() === 'k02', q);
+      const att = q.samples?.[0]?.attempts || [];
+      ck('k01\'s attempt history keeps the first empty answer and the new one, oldest first', att.length >= 2 && att[0].outcome === 'empty' && att[att.length - 1].outcome === 'transcript', att);
+      const db = (await c.query(`SELECT a.outcome, a.source, a.config FROM voice_sample_rerun_attempts a JOIN voice_samples s ON s.id = a.sample_id WHERE s.phrase_id = 'k01' ORDER BY a.attempted_at, a.id`)).rows;
+      ck('…in the database too, with the exact request (model, language kn, prompt and audio hashes)', db.some(x => x.outcome === 'empty') && db.some(x => x.outcome === 'transcript' && x.config?.language === 'kn' && x.config?.prompt_sha256 && x.config?.audio_sha256), db);
+      ck('the pilot originals are untouched', (await c.query(`SELECT whisper_score FROM voice_samples WHERE phrase_id IN ('k01','k02') ORDER BY phrase_id`)).rows.map(x => Number(x.whisper_score)).join() === '0,0.5');
+    }
+    if (sc === 'I') {
+      console.log('\n[I] the AI answers S1 in chat, no log card (SIMULATED): a recorded outcome, never a refusal');
+      const r = await robot();
+      const cs = casesOf(r);
+      ck('S1: outcome chat_reply with the reply recorded; quality FAIL; nothing saved, the day verified unchanged', cs.S1?.outcome === 'chat_reply' && /Nothing new to log/.test(cs.S1.reply || '') && cs.S1.quality === 'FAIL' && !cs.S1.saved && cs.S1.no_save_verified === true, cs.S1);
+      ck('the run counts it as collected (COMPLETE), the quality failure reported', r.res?.verdict?.run === 'COMPLETE' && /chat reply, no log card/.test(r.rep), r.res?.verdict);
+      ck('day as before; switch verified off', sameDay(await dayNow(c, ids.voice)) && r.res?.switch_off?.verified);
+    }
+    if (sc === 'J') {
+      console.log('\n[J] a microphone that delivers nothing (SIMULATED): INVALID captures repeated once, never counted');
+      const r = await robot({ ROBOT_SIM_BREAK_CAPTURE: 'S1:1,S3:1,S3:2' });
+      const cs = casesOf(r);
+      ck('S1: attempt 1 INVALID (the upload does not follow the source sound), attempt 2 valid and counted (PASS, saved, read back)',
+        cs.S1?.attempts?.length === 2 && cs.S1.attempts[0].capture?.valid === false && cs.S1.attempts[1].capture?.valid === true && cs.S1.quality === 'PASS' && cs.S1.readback?.result === 'PASS', cs.S1?.attempts?.map(a => a.capture));
+      ck('S3: INVALID on both attempts → no quality, not counted; the run is INCOMPLETE naming S3', cs.S3?.invalid === true && !cs.S3.quality && r.res?.verdict?.run === 'INCOMPLETE' && /S3: capture INVALID/.test(r.res.verdict.incomplete.join()), { s3: cs.S3, v: r.res?.verdict });
+      ck('the report\'s quality totals leave the INVALID capture out', /1 INVALID capture\(s\), not counted/.test(r.rep), r.rep.split('\n').find(l => /Recognition quality/.test(l)));
+      ck('every recording sent is still accounted for in this run\'s tries (INVALID ones included)', !r.res?.part2?.scope_problem, r.res?.part2?.scope_problem);
+      ck('day as before; switch verified off', sameDay(await dayNow(c, ids.voice)) && r.res?.switch_off?.verified);
     }
   } catch (e) { ck(`scenario ${sc} completed`, false, e.stack); }
   finally { srv.child.kill(); await c.end(); await wait(800); }

@@ -1,5 +1,5 @@
 /**
- * scripts/lib/voice-evidence.mjs — the voice evidence robot's decisions (Fixes-2s).
+ * scripts/lib/voice-evidence.mjs — the voice evidence robot's decisions (Fixes-2s, 2t, 2u).
  *
  * Everything here is pure (or takes its network function as an argument), so
  * each failure case the 2r review listed can be tested without a site:
@@ -87,13 +87,33 @@ export function parseQty(text) {
   return { n, unit };
 }
 
+// ── Fixes-2u: food-specific portion rules (first-run review, S3) ─────────────
+// The app's parse prompt says "1 katori/bowl dal≈150g", and a member's own
+// learned portions (GET /api/ai-chat/portions) come before any generic value.
+// So "1 katori dal" previewed as "1 bowl dal" at the same estimate is accepted
+// FOR DAL ONLY; katori and bowl are not equal for every food or every member.
+// Units outside a family (a cup is not a bowl) still fail as before.
+export const PORTION_RULES = Object.freeze([
+  { food: 'dal', spoken: 'katori', shown: 'bowl', grams_each: 150, source: 'the app\'s parse prompt: "1 katori/bowl dal≈150g"' },
+]);
+const UNIT_FAMILIES = [['katori', 'bowl']];
+const sameFamily = (a, b) => UNIT_FAMILIES.some(f => f.includes(a) && f.includes(b));
+const FOOD_WORDS = { dal: /^(?:dal|daal|dhal)$/ };
+/** The member's own learned grams for one portion of this food in either container of the rule, or null. */
+export function memberPortionGrams(portions, food, rule) {
+  const words = FOOD_WORDS[food]; if (!words || !Array.isArray(portions)) return null;
+  const hit = portions.find(p => { const [u, ...rest] = String(p?.phrase || '').toLowerCase().trim().split(/\s+/); return [rule.spoken, rule.shown].includes(u) && words.test(rest.join(' ')); });
+  const g = Number(hit?.grams); return hit && Number.isFinite(g) && g > 0 ? g : null;
+}
+
 /**
  * Compare structured items (preview from the parse, or entries read back after
  * saving) with a case's expectation. PASS only when every expected food is
  * there with the right count and unit, nothing else is, and the weight matches.
+ * opts.portions: the member's own learned portions (Fixes-2u, for PORTION_RULES).
  */
-export function evaluateItems(expect, { foods = [], weight_kg = null } = {}) {
-  const reasons = []; let fail = false, unverified = false;
+export function evaluateItems(expect, { foods = [], weight_kg = null } = {}, opts = {}) {
+  const reasons = [], notes = []; let fail = false, unverified = false;
   const used = new Set();
   for (const e of expect.foods || []) {
     const i = foods.findIndex((f, k) => !used.has(k) && e.re.test(String(f.name || '')));
@@ -104,6 +124,18 @@ export function evaluateItems(expect, { foods = [], weight_kg = null } = {}) {
     if (q.n !== e.n) { fail = true; reasons.push(`${e.key}: ${q.n} instead of ${e.n}`); }
     if (e.unit) {
       if (!q.unit) { unverified = true; reasons.push(`${e.key}: no unit ("${foods[i].qty_text}"), expected ${e.unit}`); }
+      else if (q.unit !== e.unit && sameFamily(q.unit, e.unit)) {
+        const rule = PORTION_RULES.find(r => r.food === e.key && r.spoken === e.unit && r.shown === q.unit);
+        if (!rule) { unverified = true; reasons.push(`${e.key}: ${q.unit} instead of ${e.unit}, and no portion rule maps these for ${e.key}`); }
+        else {
+          const own = memberPortionGrams(opts.portions, e.key, rule), per = own ?? rule.grams_each, want = per * e.n;
+          const g = foods[i].grams == null || foods[i].grams === '' ? null : Number(foods[i].grams);
+          const basis = own != null ? `the member's own ${own} g portion` : `the ${rule.grams_each} g default (${rule.source})`;
+          if (g == null || !Number.isFinite(g)) { unverified = true; reasons.push(`${e.key}: shown as ${q.unit} with no grams, so the ${want} g portion cannot be checked`); }
+          else if (Math.abs(g - want) > 0.5) { fail = true; reasons.push(`${e.key}: ${q.n} ${q.unit} at ${g} g, not ${want} g (${basis})`); }
+          else notes.push(`${e.key}: said "${e.n} ${e.unit}", shown "${q.n} ${q.unit}" at ${g} g — accepted by the dal portion rule using ${basis}; an app estimate, not a measurement of the member's bowl`);
+        }
+      }
       else if (q.unit !== e.unit) { fail = true; reasons.push(`${e.key}: ${q.unit} instead of ${e.unit}`); }
     }
   }
@@ -113,7 +145,7 @@ export function evaluateItems(expect, { foods = [], weight_kg = null } = {}) {
     if (w == null) { fail = true; reasons.push(`weight missing (expected ${expect.weight} kg)`); }
     else if (Math.abs(w - expect.weight) > 1e-6) { fail = true; reasons.push(`weight ${w} kg instead of ${expect.weight} kg`); }
   } else if (w != null) { fail = true; reasons.push(`unexpected weight ${w} kg`); }
-  return { result: fail ? 'FAIL' : unverified ? 'UNVERIFIED' : 'PASS', reasons };
+  return { result: fail ? 'FAIL' : unverified ? 'UNVERIFIED' : 'PASS', reasons, notes };
 }
 
 export const sha256 = (b64) => crypto.createHash('sha256').update(Buffer.from(String(b64 || ''), 'base64')).digest('hex');
@@ -174,27 +206,75 @@ export function unexpectedChanges(parsed = {}) {
   return { changes, unknown, unresolved };
 }
 /** The whole preview: the expected items AND nothing else that Save would apply. */
-export function evaluatePreview(expect, parsed = {}) {
-  const base = evaluateItems(expect, { foods: parsed.foods || [], weight_kg: parsed.weight_kg ?? null });
+export function evaluatePreview(expect, parsed = {}, opts = {}) {
+  const base = evaluateItems(expect, { foods: parsed.foods || [], weight_kg: parsed.weight_kg ?? null }, opts);
   const u = unexpectedChanges(parsed);
   let result = base.result; const reasons = [...base.reasons];
   if (u.changes.length) { result = 'FAIL'; reasons.push(...u.changes.map(c => `unexpected change: ${c}`)); }
   if (result !== 'FAIL' && u.unknown.length) { result = 'UNVERIFIED'; reasons.push(`unrecognised field(s): ${u.unknown.join(', ')}`); }
   if (result !== 'FAIL' && u.unresolved) { result = 'UNVERIFIED'; reasons.push('something was heard but not included'); }
-  return { result, reasons };
+  return { result, reasons, notes: base.notes };
+}
+
+// ── 3c. Outcomes that are not a preview (Fixes-2u) ──────────────────────────
+/** An explicit refusal (HTTP 200, no words, a reason). */
+export function judgeRefusal(spec) {
+  if (spec.expect?.refused) return { result: 'PASS', reasons: ['refused as expected'] };
+  if (spec.refusalAllowed) return spec.id === 'S5' ? { result: 'PASS', reasons: ['refused (allowed; nothing recognised to check)'] } : { result: 'UNVERIFIED', reasons: ['refused (allowed; nothing recognised to check)'] };
+  return { result: 'FAIL', reasons: ['refused clear speech'] };
+}
+/**
+ * The transcript was accepted and the AI answered in chat with no new log card
+ * (first run, S4: "Nothing new to log there…"). A real outcome, recorded with
+ * the reply, but never a refusal and never a pass for a case that expected one.
+ */
+export function judgeChatReply(spec) {
+  if (spec.expect?.refused) return { result: 'FAIL', reasons: ['the recording should have been refused; words were accepted and the AI answered in chat instead (a chat reply is not a refusal)'] };
+  return { result: 'FAIL', reasons: ['no preview: the AI answered in chat instead of showing the items'] };
 }
 
 // ── 4b. The whole day, as Save can change it (Fixes-2t) ─────────────────────
 const noNulls = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.entries(o).filter(([, v]) => v != null)) : {});
-/** Every field of the day a permitted Save can reach, normalised for comparison. */
+/**
+ * Fixes-2u: the app's own "no sleep recorded" value. A day the member has never
+ * saved loads as {bedtime:'', waketime:'', quality:0} (client emptyLog / mapServerLog),
+ * and any save writes that back; the coach view shows quality 0 as "—". For
+ * comparison ONLY that exact template (and {}) counts as empty: real times, a
+ * non-zero quality or any other field are compared as they are. Raw values are kept.
+ */
+export const BLANK_SLEEP = Object.freeze({ bedtime: '', waketime: '', quality: 0 });
+export function isBlankSleep(s) {
+  if (s == null) return true;
+  if (typeof s !== 'object' || Array.isArray(s)) return false;
+  const o = noNulls(s), k = Object.keys(o);
+  return k.length === 0 || (k.length === 3 && o.bedtime === '' && o.waketime === '' && o.quality === 0);
+}
+/** Every field of the day a permitted Save can reach, normalised for comparison (raw sleep kept as sleep_raw). */
 export function daySnapshot(d = {}) {
   return {
     food_items: JSON.parse(JSON.stringify(d.food_items || [])),
     weight_kg: d.weight_kg == null || d.weight_kg === '' ? null : Number(d.weight_kg),
     water_ml: Number(d.water_ml) || 0,
-    sleep: noNulls(d.sleep), activities: noNulls(d.activities), acv: noNulls(d.acv), supplements: noNulls(d.supplements),
+    sleep: isBlankSleep(d.sleep) ? {} : noNulls(d.sleep), activities: noNulls(d.activities), acv: noNulls(d.acv), supplements: noNulls(d.supplements),
     notes: typeof d.notes === 'string' ? d.notes : '',
+    sleep_raw: d.sleep === undefined ? null : JSON.parse(JSON.stringify(d.sleep)),
   };
+}
+/** A note when the blank-sleep rule made two different raw values compare equal (for the report). */
+export function sleepNormalisation(before, after) {
+  const rb = canon(noNulls(before?.sleep_raw)), ra = canon(noNulls(after?.sleep_raw));
+  if (rb === ra || canon(before?.sleep) !== canon(after?.sleep)) return null;
+  return `sleep: the app's blank template {bedtime:'', waketime:'', quality:0} was treated as empty (raw ${rb} → ${ra}); no real sleep value changed`;
+}
+/**
+ * Fixes-2u: read-back after a save, with the two different failures kept apart:
+ * the saved items differ from their preview, or an unrelated day field changed.
+ */
+export function readbackResult(expect, { created = [], weight_kg = null, lost = [], unrelated = [] } = {}, opts = {}) {
+  const items = evaluateItems(expect, { foods: created, weight_kg }, opts);
+  const extra = [...lost.map(f => `earlier entry changed or removed: ${f.name}`), ...unrelated];
+  const result = items.result !== 'PASS' ? items.result : extra.length ? 'FAIL' : 'PASS';
+  return { result, items, unrelated: extra, reasons: [...items.reasons, ...extra.map(x => `also changed: ${x}`)], notes: items.notes };
 }
 const counts = (list) => { const m = new Map(); for (const f of list || []) { const k = entryOf(f); m.set(k, (m.get(k) || 0) + 1); } return m; };
 /** Entries of `a` missing from `b`, counting duplicates (two identical entries are two). */
@@ -225,7 +305,9 @@ export function planCleanup(baseline, current, createdKeys) {
     if (want.get(k)) { want.set(k, want.get(k) - 1); removed++; } else kept.unshift(items[i]);
   }
   const b = daySnapshot(baseline);
-  return { food_items: kept, removed, weight_kg: b.weight_kg, water_ml: b.water_ml, sleep: b.sleep, activities: b.activities, acv: b.acv, supplements: b.supplements, notes: b.notes };
+  // Sleep goes back exactly as it was (the raw value; the blank template stays the template).
+  const sleep = b.sleep_raw && typeof b.sleep_raw === 'object' && !Array.isArray(b.sleep_raw) ? noNulls(b.sleep_raw) : b.sleep;
+  return { food_items: kept, removed, weight_kg: b.weight_kg, water_ml: b.water_ml, sleep, activities: b.activities, acv: b.acv, supplements: b.supplements, notes: b.notes };
 }
 /** After clean-up the whole day must equal the baseline, duplicates counted. */
 export function verifyCleanup(baseline, after) {
@@ -235,6 +317,81 @@ export function verifyCleanup(baseline, after) {
   if (extra.length) problems.push(`${extra.length} entr${extra.length === 1 ? 'y' : 'ies'} left over`);
   problems.push(...changedFields(b, a).map(x => x.replace(/^weight_kg /, 'weight ')));
   return { ok: problems.length === 0, problems };
+}
+
+// ── 4c. Did the intended sound reach the recording? (Fixes-2u) ─────────────
+// First run, S5: Whisper heard nothing of what was played, and nothing showed
+// whether the sound ever reached the app's recording. A different hash or a
+// plausible length proves nothing. Now the ACTUAL uploaded recording is decoded
+// and compared with the source sound: their loudness envelopes (20 ms frames,
+// dB, floor -60) must line up (Pearson r >= 0.6 at the best delay, 0-4 s late
+// or up to 0.5 s early) over at least 90% of the source's sounding part, where the recording must be sounding too. Silence
+// must arrive as silence. Transcoding changes bytes, not the envelope.
+const FLOOR_DB = -60;
+/** Loudness per frame (dB, clamped at -60) of 16 kHz mono samples. */
+export function envelopeDb(pcm, rate = 16000, frameMs = 20) {
+  const n = Math.round(rate * frameMs / 1000), out = [];
+  for (let i = 0; i + n <= pcm.length; i += n) {
+    let e = 0; for (let j = 0; j < n; j++) { const v = pcm[i + j] / 32768; e += v * v; }
+    const db = e > 0 ? 10 * Math.log10(e / n) : -120; out.push(Math.max(FLOOR_DB, db));
+  }
+  return out;
+}
+const pearson = (a, b) => {
+  const n = Math.min(a.length, b.length); if (n < 5) return null;
+  let sa = 0, sb = 0; for (let i = 0; i < n; i++) { sa += a[i]; sb += b[i]; }
+  const ma = sa / n, mb = sb / n; let num = 0, da = 0, db = 0;
+  for (let i = 0; i < n; i++) { const x = a[i] - ma, y = b[i] - mb; num += x * y; da += x * x; db += y * y; }
+  return da > 0 && db > 0 ? num / Math.sqrt(da * db) : null;
+};
+/**
+ * source / captured: { env (envelopeDb), duration_ms, speech (speechPresence.analyse) }.
+ * → { valid, reasons, correlation, lag_ms, coverage }
+ */
+export function captureCheck({ source, captured, kind } = {}) {
+  if (!captured || !Array.isArray(captured.env) || !captured.env.length) return { valid: false, reasons: ['no captured recording to check'], correlation: null, lag_ms: null, coverage: 0 };
+  const loud = (env) => env.some(x => x > -45);
+  if (kind === 'silence') {
+    const ok = !loud(captured.env) && !(captured.speech && captured.speech.speech);
+    return { valid: ok, reasons: ok ? ['silence was played and silence was captured'] : ['silence was played but the recording has sound in it'], correlation: null, lag_ms: null, coverage: ok ? 1 : 0 };
+  }
+  const s = source?.env || [];
+  const active = s.map((x, i) => (x > -45 ? i : -1)).filter(i => i >= 0);
+  if (!active.length) return { valid: false, reasons: ['the source sound is silent (nothing to compare)'], correlation: null, lag_ms: null, coverage: 0 };
+  const first = active[0], last = active[active.length - 1];
+  let best = { r: -2, lag: 0 };
+  for (let lag = -25; lag <= 200; lag++) {            // frames of 20 ms: -0.5 s … +4 s
+    const a = [], b = [];
+    for (let i = 0; i < s.length; i++) { const j = i + lag; if (j >= 0 && j < captured.env.length) { a.push(s[i]); b.push(captured.env[j]); } }
+    const r = pearson(a, b); if (r != null && r > best.r) best = { r, lag };
+  }
+  // Covered = the capture is actually SOUNDING where the source sounds (its own level: within 40 dB of its peak).
+  const capPeak = Math.max(...captured.env), capOn = Math.max(-58, capPeak - 40);
+  const covered = active.filter(i => { const j = i + best.lag; return j >= 0 && j < captured.env.length && captured.env[j] > capOn; }).length / active.length;
+  const reasons = [];
+  if (best.r < 0.6) reasons.push(`the recording does not follow the source sound (best match r = ${best.r < -1 ? 'none' : best.r.toFixed(2)})`);
+  if (covered < 0.9) reasons.push(`the recording carries only ${Math.round(covered * 100)}% of the source sound (it stopped early, started late or went quiet)`);
+  if (!reasons.length) reasons.push(`the recording follows the source sound (r = ${best.r.toFixed(2)}, ${best.lag * 20} ms later, ${Math.round(covered * 100)}% covered)`);
+  return { valid: best.r >= 0.6 && covered >= 0.9, reasons, correlation: best.r < -1 ? null : Number(best.r.toFixed(3)), lag_ms: best.lag * 20, coverage: Number(covered.toFixed(3)),
+    source_span_ms: (last - first + 1) * 20 };
+}
+
+// ── 4d. Names never leave the robot (Fixes-2u, first-run review item 7) ─────
+// The first run's admin screenshot showed members' names and went into a public
+// artifact. Every output is now checked against the names the admin can see.
+const escRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** A name of several words matches in any case; a one-word name only as written
+ * (a member called "Test" must not turn the report's word "test" into "[member]"). */
+export function nameRe(n) { return new RegExp(`\\b${escRe(n)}\\b`, /\s/.test(n) ? 'gi' : 'g'); }
+/** Names to watch: unique, 2+ characters, longest first, the robot's own account excluded. */
+export function nameList(names, own) {
+  return [...new Set((names || []).map(n => String(n || '').trim()).filter(n => n.length >= 2 && n !== own))].sort((a, b) => b.length - a.length);
+}
+/** Replace every listed name with "[member]". → { text, hits } */
+export function redactNames(t, names) {
+  let out = String(t); let hits = 0;
+  for (const n of names || []) out = out.replace(nameRe(n), () => { hits++; return '[member]'; });
+  return { text: out, hits };
 }
 
 // ── 5. The verdict ───────────────────────────────────────────────────────────
@@ -259,6 +416,7 @@ export function verdict(r) {
     if (p1.approved_count !== 2) incomplete.push(`expected the 2 approved 19 Oct recordings, found ${p1.approved_count}`);
     for (const s of p1.samples || []) {
       if (s.original_unchanged === false) failures.push(`original answers of ${s.phrase_id} changed`);
+      // An EMPTY answer ('' — Whisper replied with no words) is evidence of a recognition failure, not missing collection.
       if (!s.whisper_kn || s.whisper_kn.text == null) incomplete.push(`no Kannada re-run answer for ${s.phrase_id}${s.whisper_kn?.problem ? ` (${s.whisper_kn.problem})` : ''}`);
     }
     if (p1.unapproved_touched?.length) failures.push(`re-run reached unapproved recording(s): ${p1.unapproved_touched.join(', ')}`);
@@ -274,17 +432,24 @@ export function verdict(r) {
     for (const spec of CASES) {
       const c = byId.get(spec.id);
       if (!c) { incomplete.push(`${spec.id}: case missing`); continue; }
+      // Fixes-2u: a case whose every attempt had an INVALID capture has no evidence; it is excluded from the quality totals.
+      if (c.invalid) { incomplete.push(`${spec.id}: capture INVALID on every attempt (${(c.invalid_reasons || []).join('; ')}) — no valid evidence; not counted in the quality totals`); continue; }
       if (c.error) incomplete.push(`${spec.id}: ${c.error}${c.transcribed ? ' (after transcription)' : ''}`);
       if (!c.transcribed) { if (!c.error) incomplete.push(`${spec.id}: no transcription answer`); continue; }
       if (c.outcome === 'error') { incomplete.push(`${spec.id}: ${c.status !== 200 ? `HTTP ${c.status}` : 'empty answer without a reason'} — a provider error, not a refusal`); continue; }
-      if (c.outcome !== 'preview' && c.outcome !== 'refused') { incomplete.push(`${spec.id}: no preview and no explicit refusal`); continue; }
+      if (c.outcome === 'chat_reply' && c.reply == null) { incomplete.push(`${spec.id}: the AI's chat reply was not recorded`); continue; }
+      if (!['preview', 'refused', 'chat_reply'].includes(c.outcome)) { incomplete.push(`${spec.id}: no preview, no chat reply and no explicit refusal`); continue; }
       if (!c.quality) incomplete.push(`${spec.id}: no quality judgement`);
       const mustSave = c.outcome === 'preview' && spec.save && c.quality === 'PASS';
       if (mustSave) {
         if (c.save_confirmed === false) failures.push(`${spec.id}: the app did not confirm the save`);
         else if (c.save_confirmed !== true) incomplete.push(`${spec.id}: save not completed`);
-        if (c.readback && c.readback.result !== 'PASS') failures.push(`${spec.id}: saved entries do not match what was previewed (${c.readback.reasons.join('; ')})`);
-        else if (!c.readback && c.save_confirmed !== false) incomplete.push(`${spec.id}: no read-back`);
+        // Fixes-2u: the two different read-back failures are reported apart.
+        if (c.readback) {
+          const items = c.readback.items || { result: c.readback.result, reasons: c.readback.reasons || [] };
+          if (items.result !== 'PASS') failures.push(`${spec.id}: saved items differ from their preview (${items.reasons.join('; ')})`);
+          if (c.readback.items && c.readback.unrelated?.length) failures.push(`${spec.id}: an unrelated day field changed (${c.readback.unrelated.join('; ')})`);
+        } else if (c.save_confirmed !== false) incomplete.push(`${spec.id}: no read-back`);
       } else if (c.no_save_verified === false) failures.push(`${spec.id}: the day changed although nothing was saved (${(c.no_save_detail || []).join('; ')})`);
       else if (c.no_save_verified !== true) incomplete.push(`${spec.id}: not verified that nothing was saved`);
       if (spec.retry && c.outcome === 'refused') {

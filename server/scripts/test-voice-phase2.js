@@ -212,6 +212,45 @@ const server = app.listen(0, '127.0.0.1');
     clear(call => call.kind === 'gemini' ? geminiResponse('2 ragi mudde') : verbose(TAMIL, 'tamil'));
     w = await request('both', { audio, langHint: 'kn-IN' });
     ck('2n: when Gemini answers, Whisper is not asked and nothing changes', w.data.transcript === '2 ragi mudde' && providerCalls.length === 1 && providerCalls[0].kind === 'gemini');
+    // ── Fixes-2u: the recording itself is checked for speech (first real run, S4) ──
+    // Real audio files (scripts/fixtures/voice): computer voices, silence, noise,
+    // tones. The check runs before any provider, whichever engine would answer.
+    const fx = (f) => require('fs').readFileSync(require('path').join(__dirname, 'fixtures', 'voice', f)).toString('base64');
+    for (const [f, what] of [['silence-digital.webm', '6 s of silence (S4)'], ['noise-loud-pink.webm', 'loud noise'], ['noise-white.webm', 'white noise'], ['hum-mains.webm', 'mains hum'], ['tone-beeps.webm', 'beeps']]) {
+      clear(() => { throw Error('A recording with no speech must not reach a provider'); });
+      const r = await request('both', { audio: fx(f), mimeType: 'audio/webm;codecs=opus', langHint: 'en-IN' });
+      ck(`2u: ${what} → refused before any provider: no transcript, no preview, the take kept for Retry (no_speech_detected)`, r.status === 200 && r.data.transcript === '' && r.data.rejected === 'no_speech_detected'
+        && providerCalls.length === 0 && /Retry|type/.test(r.data.message) && r.data.speech?.status === 'no_speech', r.data);
+    }
+    clear(() => { throw Error('A recording with no speech must not reach a provider'); });
+    let u = await request('whisper', { audio: fx('silence-digital.webm'), mimeType: 'audio/webm', langHint: 'kn-IN' });
+    ck('2u: …also when Whisper is the only engine (the fallback path)', u.data.rejected === 'no_speech_detected' && providerCalls.length === 0);
+    ck('2u: the refusal names no vendor or engine to the member', !/gemini|groq|whisper|provider|api.?key|secret/i.test(JSON.stringify({ t: u.data.transcript, m: u.data.message })));
+    for (const [f, lang, what] of [['speech-en.webm', 'en-IN', 'English speech'], ['speech-quiet.webm', 'en-IN', 'quiet speech'], ['speech-noise-as-loud.webm', 'en-IN', 'speech over noise as loud as the voice'],
+      ['speech-mixed.webm', 'en-IN', 'mixed Hinglish speech'], ['speech-kn.webm', 'kn-IN', 'Kannada speech'], ['speech-hi.webm', 'hi-IN', 'Hindi speech'], ['speech-short.webm', 'en-IN', 'a short "Do idli"']]) {
+      clear(() => geminiResponse('2 idli, 1 bowl sambar'));
+      const r = await request('both', { audio: fx(f), mimeType: 'audio/webm;codecs=opus', langHint: lang });
+      ck(`2u: ${what} → goes to the provider with the unchanged recording and is passed on`, r.data.transcript === '2 idli, 1 bowl sambar' && providerCalls.length === 1
+        && providerCalls[0].payload.contents[0].parts[1].inline_data.data === fx(f) && r.data.speech?.status === 'speech', r.data);
+    }
+    clear(() => geminiResponse('2 idli, 1 bowl sambar'));
+    u = await request('both', { audio: fx('speech-en-iphone.m4a'), mimeType: 'audio/mp4', langHint: 'en-IN' });
+    ck('2u: an iPhone (mp4/AAC) recording with speech is checked and passed on', u.data.transcript === '2 idli, 1 bowl sambar' && u.data.speech?.status === 'speech');
+    clear(() => geminiResponse('2 idli'));
+    u = await request('both', { audio, langHint: 'en-IN' });
+    ck('2u: bytes the check cannot decode carry on to the provider exactly as before (status "undecodable")', u.data.transcript === '2 idli' && providerCalls.length === 1 && u.data.speech?.status === 'undecodable');
+    // The exact S4 Whisper reply, on audio that DOES contain speech (so only the text guard can stop it).
+    viaWhisper({ data: { text: ' Transcription by ESO. Translation by —', language: 'english',
+      segments: [{ start: 0, end: 29.98, text: ' Transcription by ESO. Translation by —', avg_logprob: -0.4477262, no_speech_prob: 0.18652344, compression_ratio: 1.025 }] } });
+    u = await request('both', { audio: fx('speech-en.webm'), langHint: 'en-IN' });
+    ck('2u: the first run\'s exact S4 Whisper reply is refused as generated text (it was accepted): no transcript, retry/type message', u.data.transcript === '' && u.data.rejected === 'generated_text'
+      && /Retry|type/.test(u.data.message) && !Object.hasOwn(u.data, 'engine'), u.data);
+    clear(() => geminiResponse('Thanks for watching!'));
+    u = await request('both', { audio: fx('speech-en.webm'), langHint: 'en-IN' });
+    ck('2u: the same guard applies to a Gemini answer that is only credit text', u.data.transcript === '' && u.data.rejected === 'generated_text');
+    clear(() => geminiResponse('2 idli. Thanks for watching.'));
+    u = await request('both', { audio: fx('speech-en.webm'), langHint: 'en-IN' });
+    ck('2u: real content with a credit sentence is passed on unchanged (nothing is stripped out)', u.data.transcript === '2 idli. Thanks for watching.' && !u.data.rejected);
     ck('voice transcription does not query or mutate the database', databaseCalls === 0);
   } catch (err) {
     fail++;

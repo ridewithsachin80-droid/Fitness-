@@ -64,18 +64,22 @@ function sectionsOf(raw) {
 }
 
 /** Record one try. Never throws: recording must not break the member's voice note. */
-async function record(userId, { langHint, languageSent, raw, result, error }) {
+async function record(userId, { langHint, languageSent, raw, result, error, speech, config }) {
+  // Fixes-2u: speech = the recording's own speech check; config = the exact request (no audio, no words).
+  const sp = speech ? { status: speech.status, voiced_ms: speech.voiced_ms ?? null, longest_run_ms: speech.longest_run_ms ?? null, f0_spread_hz: speech.f0_spread_hz ?? null,
+    duration_ms: speech.duration_ms ?? null, peak_dbfs: speech.peak_dbfs ?? null, background_dbfs: speech.background_dbfs ?? null, version: speech.version || null, error: speech.error || null } : null;
   try {
     await pool.query(
-      `INSERT INTO voice_fallback_test_runs (user_id, lang_hint, language_sent, whisper_text, whisper_language, segments, accepted, reason, transcript, error)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO voice_fallback_test_runs (user_id, lang_hint, language_sent, whisper_text, whisper_language, segments, accepted, reason, transcript, error, speech, config)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [userId, langHint ? String(langHint).slice(0, 10) : null, languageSent || null,
        typeof raw?.text === 'string' ? raw.text.slice(0, 2000) : null,
        typeof raw?.language === 'string' ? raw.language.slice(0, 30) : null,
        JSON.stringify(sectionsOf(raw)),
        result ? !!result.ok : null, result && !result.ok ? String(result.reason || '').slice(0, 30) : null,
        result?.ok ? String(result.text || '').slice(0, 1000) : null,
-       error ? String(error).slice(0, 200) : null]);
+       error ? String(error).slice(0, 200) : null,
+       sp ? JSON.stringify(sp) : null, config ? JSON.stringify(config) : null]);
   } catch (e) { console.warn('voice fallback test: could not record:', e.message); }
 }
 

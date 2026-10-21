@@ -212,5 +212,105 @@ console.log('\n[8] the real robot script blocks before any sign-in, browser or p
   ck('a simulated run labels its report SIMULATED from the first line, even when blocked', r.code === 3 && /^> \*\*SIMULATED RUN — NOT REAL RESULTS/.test(r.rep) && /Voice evidence robot \(SIMULATED\)/.test(r.rep) && /SIMULATED — canned providers/.test(r.rep), r.rep.slice(0, 300));
 }
 
+console.log('\n[10] Fixes-2u: the first real run\'s exact problems (21 Oct, run 39560221828 #2)');
+{
+  const { createRequire } = await import('module');
+  const SP = createRequire(import.meta.url)('../services/speechPresence');
+  const S = (id) => L.CASES.find(c => c.id === id);
+  // ── Blank sleep: only the exact template counts as empty ──
+  const before = L.daySnapshot({ food_items: [], sleep: {} });
+  const after = L.daySnapshot({ food_items: [], sleep: { bedtime: '', quality: 0, waketime: '' } });
+  ck('first run S1: sleep {} → {bedtime:"",quality:0,waketime:""} is no change (the app\'s blank template)', L.changedFields(before, after).length === 0, L.changedFields(before, after));
+  ck('…the raw values are kept and the report explains the rule', before.sleep_raw && after.sleep_raw.quality === 0 && /blank template/.test(L.sleepNormalisation(before, after) || ''), L.sleepNormalisation(before, after));
+  ck('…and the same save now reads back PASS (items right, nothing unrelated changed)', L.readbackResult(S('S1').expect, { created: [{ name: 'Idli', qty_text: '2 pieces', grams: 80 }, { name: 'Sambar', qty_text: '1 bowl', grams: 150 }], weight_kg: 82.5, lost: [], unrelated: L.changedFields(before, after, { except: ['weight_kg'] }) }).result === 'PASS');
+  const changedTo = (sl) => L.changedFields(before, L.daySnapshot({ food_items: [], sleep: sl }));
+  ck('a real bedtime is a change', changedTo({ bedtime: '22:30', waketime: '', quality: 0 }).length === 1);
+  ck('a non-zero quality is a change', changedTo({ bedtime: '', waketime: '', quality: 3 }).length === 1);
+  ck('an extra field next to the template is a change', changedTo({ bedtime: '', waketime: '', quality: 0, naps: 1 }).length === 1);
+  ck('a zero elsewhere (activities {walk: 0}) is still a change', L.changedFields(before, L.daySnapshot({ food_items: [], sleep: {}, activities: { walk: 0 } })).length === 1);
+  ck('clean-up writes sleep back exactly as it was (template stays template)', JSON.stringify(L.planCleanup({ food_items: [], sleep: { bedtime: '', waketime: '', quality: 0 } }, { food_items: [] }, []).sleep) === JSON.stringify({ bedtime: '', waketime: '', quality: 0 }));
+  // ── Read-back: two different failures, reported apart ──
+  const saved = (id, rb) => ({ id, collected: true, transcribed: true, status: 200, outcome: 'preview', transcript: 'x', quality: 'PASS', saved: true, save_confirmed: true, readback: rb });
+  const good = () => ({ part1: { approved_count: 2, export_ok: true, unapproved_touched: [], samples: [{ phrase_id: 'k01', original_unchanged: true, whisper_kn: { text: '' } }, { phrase_id: 'k02', original_unchanged: true, whisper_kn: { text: 'y' } }] },
+    part2: { collected: true, real: [1, 2, 3, 4].map(() => ({ phrase_id: 'k01', voice_language: 'kn-IN', status: 200, transcript: 'x' })), cases: [saved('S1', { result: 'PASS', reasons: [] }), saved('S2', { result: 'PASS', reasons: [] }), saved('S3', { result: 'PASS', reasons: [] }),
+      { id: 'S4', collected: true, transcribed: true, status: 200, outcome: 'refused', rejected: 'no_speech_detected', quality: 'PASS', retry: { identical: true }, no_save_verified: true },
+      { id: 'S5', collected: true, transcribed: true, status: 200, outcome: 'refused', rejected: 'no_speech_detected', quality: 'PASS', no_save_verified: true }] },
+    cleanup: { ok: true, problems: [] }, switch_off: { verified: true }, errors: [] });
+  ck('an EMPTY pilot answer (k01 \'\') is evidence of a recognition failure, not missing collection → COMPLETE', L.verdict(good()).run === 'COMPLETE', L.verdict(good()));
+  let r = good(); r.part2.cases[0].readback = L.readbackResult(S('S1').expect, { created: [{ name: 'Idli', qty_text: '1 piece', grams: 40 }, { name: 'Sambar', qty_text: '1 bowl', grams: 150 }], weight_kg: 82.5 });
+  let v = L.verdict(r); ck('saved items differ from the preview → "saved items differ" (FAILED)', v.run === 'FAILED' && /S1: saved items differ from their preview/.test(v.failures.join()) && !/unrelated/.test(v.failures.join()), v.failures);
+  r = good(); r.part2.cases[0].readback = L.readbackResult(S('S1').expect, { created: [{ name: 'Idli', qty_text: '2 pieces', grams: 80 }, { name: 'Sambar', qty_text: '1 bowl', grams: 150 }], weight_kg: 82.5, unrelated: ['water_ml 0 → 1000'] });
+  v = L.verdict(r); ck('an unrelated field changed → "an unrelated day field changed" (FAILED), not "items differ"', v.run === 'FAILED' && /S1: an unrelated day field changed \(water_ml 0 → 1000\)/.test(v.failures.join()) && !/items differ/.test(v.failures.join()), v.failures);
+  // ── Chat-only reply (first run S4) ──
+  const j = L.judgeChatReply(S('S4'));
+  ck('S4 accepted then answered in chat → quality FAIL, and a chat reply is not a refusal', j.result === 'FAIL' && /not a refusal/.test(j.reasons.join()), j);
+  ck('a case that expected a preview but got a chat reply → FAIL', L.judgeChatReply(S('S1')).result === 'FAIL');
+  const chat = { id: 'S4', collected: true, transcribed: true, status: 200, outcome: 'chat_reply', transcript: 'Transcription by ESO. Translation by —', reply: 'Nothing new to log there — it may already be in today\'s log.', quality: 'FAIL', quality_reasons: j.reasons, no_save_verified: true };
+  r = good(); r.part2.cases[3] = chat; v = L.verdict(r);
+  ck('a recorded chat reply with the day verified unchanged → collected (COMPLETE), quality FAIL kept', v.run === 'COMPLETE', v);
+  r = good(); r.part2.cases[3] = { ...chat, no_save_verified: undefined }; v = L.verdict(r);
+  ck('…without the no-save check → INCOMPLETE', v.run === 'INCOMPLETE' && /S4: not verified that nothing was saved/.test(v.incomplete.join()), v);
+  r = good(); r.part2.cases[3] = { ...chat, reply: null }; v = L.verdict(r);
+  ck('…with the reply not recorded → INCOMPLETE', v.run === 'INCOMPLETE' && /chat reply was not recorded/.test(v.incomplete.join()), v);
+  r = good(); r.part2.cases[3] = { id: 'S4', collected: true, transcribed: true, status: 200, outcome: 'preview', transcript: 'x', error: 'the AI answer failed (HTTP 502)' }; v = L.verdict(r);
+  ck('an AI answer that failed (HTTP 502) is an error → INCOMPLETE, never a chat-only outcome', v.run === 'INCOMPLETE' && /HTTP 502/.test(v.incomplete.join()), v);
+  r = good(); r.part2.cases[3] = { id: 'S4', collected: true, transcribed: true, status: 200, outcome: 'preview', transcript: 'x', error: 'the transcript was accepted but the AI gave no answer within 60 s' }; v = L.verdict(r);
+  ck('an unfinished AI answer (timeout) → INCOMPLETE', v.run === 'INCOMPLETE', v);
+  // ── INVALID capture ──
+  r = good(); r.part2.cases[4] = { id: 'S5', invalid: true, invalid_reasons: ['attempt 1: the recording does not follow the source sound', 'attempt 2: the recording does not follow the source sound'], attempts: [{}, {}] }; v = L.verdict(r);
+  ck('an INVALID capture on every attempt → INCOMPLETE, excluded from quality, never a pass', v.run === 'INCOMPLETE' && /S5: capture INVALID on every attempt/.test(v.incomplete.join()) && /not counted/.test(v.incomplete.join()), v);
+  // ── Captured audio against the source (decoded, not bytes) ──
+  const F = (f) => fs.readFileSync(path.join(HERE, 'fixtures/voice', f));
+  const meas = async (buf) => { const pcm = await SP.decode(buf); const sp = SP.analyse(pcm); return { pcm, env: L.envelopeDb(pcm), duration_ms: sp.duration_ms, speech: sp }; };
+  const src = await meas(F('speech-en.webm'));
+  const fromPcm = (pcm) => { const sp = SP.analyse(pcm); return { env: L.envelopeDb(pcm), duration_ms: sp.duration_ms, speech: sp }; };
+  let c = L.captureCheck({ source: src, captured: src, kind: 'speech' });
+  ck('the same sound captured → valid', c.valid && c.correlation > 0.95, c);
+  const shifted = new Int16Array(src.pcm.length + 4800); for (let i = 0; i < src.pcm.length; i++) shifted[i + 4800] = Math.round(src.pcm[i] * 0.3);
+  c = L.captureCheck({ source: src, captured: fromPcm(shifted), kind: 'speech' });
+  ck('captured 300 ms late and 10 dB quieter (a real recorder) → valid, lag 300 ms', c.valid && c.lag_ms === 300, c);
+  c = L.captureCheck({ source: src, captured: await meas(F('silence-digital.webm')), kind: 'speech' });
+  ck('first run S5: speech played, silence captured → INVALID', !c.valid && /does not follow/.test(c.reasons.join()), c);
+  c = L.captureCheck({ source: src, captured: await meas(F('speech-hi.webm')), kind: 'speech' });
+  ck('a DIFFERENT speech captured (plausible length, nonzero volume, other hash) → INVALID', !c.valid, c);
+  c = L.captureCheck({ source: src, captured: await meas(F('noise-loud-pink.webm')), kind: 'speech' });
+  ck('loud noise captured instead of the speech (sounding throughout, so only the envelope match can tell) → INVALID', !c.valid && /does not follow/.test(c.reasons.join()), c);
+  const half = new Int16Array(src.pcm.length); half.set(src.pcm.subarray(0, Math.floor(src.pcm.length * 0.4)));
+  c = L.captureCheck({ source: src, captured: fromPcm(half), kind: 'speech' });
+  ck('a recording that lost the second half of the sound → INVALID', !c.valid, c);
+  c = L.captureCheck({ source: await meas(F('silence-digital.webm')), captured: await meas(F('silence-digital.webm')), kind: 'silence' });
+  ck('silence played, silence captured → valid', c.valid, c);
+  c = L.captureCheck({ source: await meas(F('silence-digital.webm')), captured: src, kind: 'silence' });
+  ck('silence played but sound captured → INVALID', !c.valid, c);
+  const noisySrc = await meas(F('speech-under-loud-noise.webm'));
+  c = L.captureCheck({ source: noisySrc, captured: noisySrc, kind: 'noisy' });
+  ck('the noisy S5 sound captured as played → valid (it followed the source; whether speech is heard is the server\'s question)', c.valid, c);
+  // ── The dal portion rule (S3) ──
+  const S3 = S('S3').expect;
+  const pv = (dal) => ({ foods: [{ name: 'Chapati', qty_text: '2 pieces', grams: 60 }, { name: 'Dal', ...dal }] });
+  let e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 150 }));
+  ck('first run S3: "1 katori dal" shown as "1 bowl (150 g)" → PASS by the dal rule, with the wording and grams in a note', e.result === 'PASS' && /said "1 katori", shown "1 bowl" at 150 g/.test(e.notes.join()) && /not a measurement/.test(e.notes.join()), e);
+  e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 200 }));
+  ck('the same words at a different amount (200 g) → FAIL', e.result === 'FAIL' && /200 g, not 150 g/.test(e.reasons.join()), e);
+  e = L.evaluatePreview(S3, pv({ qty_text: '2 bowls', grams: 300 }));
+  ck('one katori vs two bowls → still FAIL (count)', e.result === 'FAIL' && /dal: 2 instead of 1/.test(e.reasons.join()), e);
+  e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl' }));
+  ck('shown as a bowl with no grams → UNVERIFIED', e.result === 'UNVERIFIED', e);
+  e = L.evaluatePreview({ foods: [{ key: 'sambar', re: /sambar/i, n: 1, unit: 'katori' }], weight: null }, { foods: [{ name: 'Sambar', qty_text: '1 bowl', grams: 150 }] });
+  ck('katori vs bowl for a food with no mapping (sambar) → UNVERIFIED, not a pass', e.result === 'UNVERIFIED' && /no portion rule/.test(e.reasons.join()), e);
+  e = L.evaluatePreview(S('S1').expect, { foods: [{ name: 'Idli', qty_text: '2 pieces', grams: 80 }, { name: 'Sambar', qty_text: '1 cup', grams: 150 }], weight_kg: 82.5 });
+  ck('a cup is still not a bowl (outside the family) → FAIL', e.result === 'FAIL', e);
+  e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 200 }), { portions: [{ phrase: 'bowl dal', grams: 200 }] });
+  ck('the member\'s own learned "bowl dal" = 200 g comes first → 1 bowl at 200 g PASS (member basis named)', e.result === 'PASS' && /member's own 200 g/.test(e.notes.join()), e);
+  e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 150 }), { portions: [{ phrase: 'katori dal', grams: 120 }] });
+  ck('…and the 150 g default does not override a member\'s 120 g katori → FAIL', e.result === 'FAIL', e);
+  e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 150 }), { portions: [{ phrase: 'bowl rice', grams: 200 }] });
+  ck('a learned portion for another food does not apply → the default 150 g decides (PASS)', e.result === 'PASS', e);
+  // ── Names ──
+  const names = L.nameList(['Krishna Jinka', 'Avinash', 'Pradeep', 'Voice Robot', 'Test', ''], 'Voice Robot');
+  const red = L.redactNames('Invited: Avinash, KRISHNA JINKA, Pradeep. This is a test.', names);
+  ck('member names replaced (several-word names in any case); the robot\'s own name and the word "test" left alone', red.hits === 3 && !/Avinash|Krishna|Pradeep/i.test(red.text) && /This is a test/.test(red.text) && !names.includes('Voice Robot'), red);
+}
+
 console.log(`\nVoice evidence robot checks: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

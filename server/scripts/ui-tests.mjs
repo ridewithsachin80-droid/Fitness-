@@ -2712,6 +2712,40 @@ async function voicePilotTest() {
     ck('2n: an unverified (conflicting) check shows "?", not ✓ or ✗', /1 bowl sambar \?/.test(qq('vp-rerun')?.textContent || '') && /2 idli ✓/.test(qq('vp-rerun').textContent), qq('vp-rerun')?.textContent);
     ck('2n: the panel calls them limited, rule-based checks, not a guarantee of meaning', /limited, rule-based checks, not a guarantee of meaning/.test(qq('vp-explain')?.textContent || '') && /Rule checks \(✓ passed of checked · \? unverified\)/.test(qq('vp-checks')?.textContent || ''));
   }
+
+  // Fixes-2u (first real run, 21 Oct): an empty Whisper answer was shown as "answered 2 of 2". Now the
+  // re-run says requests / replies / with words / empty apart, and an empty answer is shown as such.
+  {
+    const api3 = stub('api-vp-2u.js', `
+      window.__posts = [];
+      const get = async (url) => {
+        if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [] } };
+        if (/\\/voice-pilot\\/results$/.test(url)) return { data: { overall: { gemini: 100, whisper: 25, samples: 2, gemini_answered: 2, whisper_answered: 2, whisper_empty: 0 },
+          checks: { gemini: {}, whisper: {} }, phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: 100, whisper: 0 }],
+          samples: [{ id: 1, phrase_id: 'k01', name: 'Member One', gemini: 'Belagge eradu idli ondu bowl sambar tinde', gemini_score: 1, whisper: 'x', whisper_score: 0,
+            gemini_script: 'latin', whisper_script: 'latin', whisper_setting: 'auto', whisper_language: null, gemini_checks: [], whisper_checks: [],
+            reruns: [{ engine: 'whisper', setting: 'kn', text: '', score: 0, empty: true, problem: 'empty answer', script: null, latin: null, language: 'kannada', checks: [],
+              attempts: [{ outcome: 'empty', source: 'rerun' }] }], audio_url: null }] } };
+        return { data: {} }; };
+      const post = async (url, body) => { window.__posts.push({ url, body });
+        if (/rerun$/.test(url)) return { data: { ok: true, setting: body.setting, asked: 2, responses: 2, answered: 1, empty: 1, errors: 0, more: false, problems: ['Whisper answered with no words (an empty answer).'] } };
+        return { data: { ok: true } }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const panel3 = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 1, name: 'Admin', role: 'admin' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, api3);
+    const R = run(panel3, prep()); await tick(400);
+    const rq = (id) => R.w.document.querySelector(`[data-testid="${id}"]`);
+    rq('vp-row').click(); await tick(100);
+    ck('2u: an empty re-run answer is shown as "empty answer (no words)", not as blank text', R.errors.length === 0 && /empty answer \(no words\)/.test(rq('vp-rerun-empty')?.textContent || '') && !/heard nothing/.test(rq('vp-rerun')?.textContent || ''), [R.errors.join('|'), rq('vp-rerun')?.textContent]);
+    rq('vp-rerun-kn').click(); await tick(300);
+    ck('2u: the re-run result says 2 asked · 2 replied · 1 with words · 1 empty (it said "answered 2 of 2")', /Whisper \(language Kannada\): 2 asked · 2 replied · 1 with words · 1 empty\./.test(rq('vp-rerun-result')?.textContent || '') && /empty answer/.test(rq('vp-rerun-result').textContent), rq('vp-rerun-result')?.textContent);
+    const panelSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotPanel.jsx'), 'utf8');
+    ck('2u: every kept attempt is listed when there is more than one (words / empty / no answer)', /data-testid="vp-rerun-attempts"/.test(panelSrc) && /Attempts kept:/.test(panelSrc));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

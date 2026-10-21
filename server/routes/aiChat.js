@@ -1335,8 +1335,16 @@ Return ONLY raw JSON, no markdown fences:
 // Gemini transcribes the recorded audio instead — same inline_data pattern and
 // same models as /photo. The client falls back to its on-device text if this
 // endpoint fails, so errors here degrade, never break.
-const { voiceTranscriptionPrompt, whisperTranscriptionPrompt, whisperFallbackSettings, reviewWhisper } = require('../services/voiceLanguage');
+const { voiceTranscriptionPrompt, whisperTranscriptionPrompt, whisperFallbackSettings, reviewWhisper, generatedText } = require('../services/voiceLanguage');
 const fallbackTest = require('../services/voiceFallbackTest');
+// Loaded on first use, not with this file: the parser tests load aiChat.js with a
+// strict list of allowed modules, and only the voice route needs the speech check.
+let speechPresenceModule = null;
+const speechPresence = { check: (...a) => (speechPresenceModule ||= require('../services/speechPresence')).check(...a) };
+// Fixes-2u: what a refused recording tells the member. The take stays on the
+// phone for Retry (the identical recording) or Discard; nothing is previewed.
+const NO_SPEECH_MESSAGE = "Didn't catch any speech in that recording. Retry it, speak a little closer to the phone, or type your log.";
+const speechSummary = (s) => (s ? { status: s.status, voiced_ms: s.voiced_ms ?? null, duration_ms: s.duration_ms ?? null, version: s.version } : null);
 router.post('/voice-transcribe', async (req, res) => {
   const { audio, mimeType, langHint } = req.body;
 
@@ -1354,6 +1362,15 @@ router.post('/voice-transcribe', async (req, res) => {
 
   const baseMime = String(mimeType || '').split(';')[0].trim().toLowerCase();
   const mt = ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg'].includes(baseMime) ? baseMime : 'audio/webm';
+
+  // Fixes-2u (B18): the recording itself is checked for speech BEFORE any
+  // provider is asked. On 21 Oct, 6 s of silence came back from Whisper as
+  // "Transcription by ESO. Translation by —" with confident numbers and was
+  // accepted. A recording with no voice in it is refused here, whichever engine
+  // would have answered. A recording ffmpeg cannot read ('undecodable') or a
+  // server without ffmpeg ('unavailable', shown on /health) carries on as before.
+  const speech = await speechPresence.check(audio);
+  const audioSha = crypto.createHash('sha256').update(audio).digest('hex').slice(0, 16);
 
   // ── Engine 2: Groq-hosted Whisper large-v3 ─────────────────────────────────
   // A dedicated ASR model, strong on Indian accents, using the GROQ_API_KEY
@@ -1383,7 +1400,10 @@ router.post('/voice-transcribe', async (req, res) => {
       { headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, timeout: 25000 }
     );
     // Fixes-2p: Whisper's raw answer travels with the decision, for the test-server record only.
-    return { ...reviewWhisper(r.data, langHint), raw: r.data, languageSent: language || null };
+    // Fixes-2u: so is the exact request, for a like-for-like comparison with the pilot's re-run.
+    return { ...reviewWhisper(r.data, langHint), raw: r.data, languageSent: language || null,
+      config: { path: 'everyday', model: 'whisper-large-v3', response_format: 'verbose_json', temperature: '0', language: language || null,
+        prompt_sha256: crypto.createHash('sha256').update(whisperTranscriptionPrompt(langHint)).digest('hex').slice(0, 16), audio_sha256: audioSha, mime: mt } };
   }
 
   const prompt = voiceTranscriptionPrompt(langHint);
@@ -1391,6 +1411,13 @@ router.post('/voice-transcribe', async (req, res) => {
   // skips Gemini, so the real Whisper fallback can be tried without changing the
   // shared provider settings (services/voiceFallbackTest.js). Off everywhere else.
   const fbTest = await fallbackTest.skipsGemini(req.user);
+
+  if (speech.status === 'no_speech') {
+    if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: null, raw: null, result: { ok: false, reason: 'no_speech_detected' }, speech,
+      config: { path: 'everyday', audio_sha256: audioSha, mime: mt, provider_called: false } });
+    return res.json({ transcript: '', rejected: 'no_speech_detected', message: NO_SPEECH_MESSAGE, speech: speechSummary(speech) });
+  }
+  if (speech.status !== 'speech') console.warn('voice-transcribe: speech check skipped:', speech.status, speech.error || '');
 
   try {
     const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
@@ -1423,27 +1450,35 @@ router.post('/voice-transcribe', async (req, res) => {
     if (transcript === null) {
       try {
         const w = await groqWhisper();
-        if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: w?.languageSent, raw: w?.raw, result: w, error: w ? null : 'Whisper is not set up on this server' });
+        if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: w?.languageSent, raw: w?.raw, result: w, error: w ? null : 'Whisper is not set up on this server', speech, config: w?.config });
         if (w && !w.ok) {
           // An answer in the wrong language or script, or one Whisper itself was
           // unsure of, is never handed on: the member keeps the recording to
           // retry, or types. No preview is made from it, so nothing can be saved.
           console.warn('voice-transcribe: fallback answer refused:', w.reason);
-          return res.json({ transcript: '', rejected: w.reason,
-            message: "Couldn't hear that clearly in your chosen language. Retry this recording, or type your log." });
+          return res.json({ transcript: '', rejected: w.reason, speech: speechSummary(speech),
+            message: w.reason === 'generated_text' ? NO_SPEECH_MESSAGE : "Couldn't hear that clearly in your chosen language. Retry this recording, or type your log." });
         }
         if (w) { transcript = w.text; engine = 'groq/whisper-large-v3'; }
       } catch (e) {
-        if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: whisperFallbackSettings(langHint).language || null, error: e.response?.data?.error?.message || e.message });
+        if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: whisperFallbackSettings(langHint).language || null, error: e.response?.data?.error?.message || e.message, speech,
+          config: { path: 'everyday', model: 'whisper-large-v3', audio_sha256: audioSha, mime: mt } });
         lastErr = e;
       }
     }
 
     if (transcript === null) throw lastErr || new Error('No transcription engine available');
 
+    // Fixes-2u: a Gemini answer that is nothing but subtitle/credit boilerplate is
+    // refused the same way (Whisper's answers are checked in reviewWhisper).
+    if (generatedText(transcript)) {
+      console.warn('voice-transcribe: generated credit text refused from', engine);
+      return res.json({ transcript: '', rejected: 'generated_text', message: NO_SPEECH_MESSAGE, speech: speechSummary(speech) });
+    }
+
     // engine is returned for debugging and for the edit-rate accuracy metric —
     // the client ignores it today.
-    return res.json({ transcript: transcript.slice(0, 1000), engine });
+    return res.json({ transcript: transcript.slice(0, 1000), engine, speech: speechSummary(speech) });
   } catch (err) {
     console.error('voice-transcribe failed:', err.response?.data?.error?.message || err.message);
     return res.status(502).json({ error: 'Could not transcribe the recording' });

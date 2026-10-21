@@ -110,7 +110,10 @@ app.get('/health', (req, res) => {
   // for GitHub deploys). The phone robot waits for it, so a failed deploy —
   // the old server still answering — can no longer pass as the new one
   // (18 Oct 2026: a build failed while the app bundle looked unchanged).
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), commit: process.env.RAILWAY_GIT_COMMIT_SHA || null });
+  // speech_check (Fixes-2u): whether voice notes can be checked for speech before
+  // transcription (ffmpeg present). The voice evidence robot blocks without it.
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), commit: process.env.RAILWAY_GIT_COMMIT_SHA || null,
+    speech_check: require('./services/speechPresence').available() });
 });
 
 // ── Digital Asset Links ────────────────────────────────────────────────

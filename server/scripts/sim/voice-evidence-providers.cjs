@@ -11,7 +11,12 @@
  * SIM_FAIL_SWITCH_OFF=1 (turning the voice backup switch off fails),
  * SIM_TAMPER_ORIGINALS=1 (a re-run also changes an original answer),
  * SIM_EXTRA_WATER=1 (every parse also adds 1000 ml of water nobody said),
- * SIM_PARSE_FAIL_WEIGHT=1 (the parse fails for any message with "82.5": no preview appears).
+ * SIM_PARSE_FAIL_WEIGHT=1 (the parse fails for any message with "82.5": no preview appears),
+ * SIM_CHAT_REPLY=1 (Fixes-2u: for a message with "82.5" the AI answers in chat with
+ *   no items, as the real app did for the first run's S4: "Nothing new to log there…"),
+ * SIM_EMPTY_PILOT_K01_FILE=<path> (Fixes-2u: while that file exists, the pilot's
+ *   Whisper re-run of the k01 recording answers with no words, as on 21 Oct).
+ * Dal comes back as "1 bowl" (150 g), as the real app shows a spoken katori (2u).
  */
 const path = require('path'), http = require('http'), fs = require('fs');
 const SRV = path.join(__dirname, '../..');
@@ -35,7 +40,8 @@ const audio = fs.readFileSync(process.env.SIM_AUDIO_FILE);
 const audioServer = http.createServer((q, r) => { r.writeHead(200, { 'Content-Type': 'audio/webm' }); r.end(audio); }).listen(0, '127.0.0.1');
 const storage = require(path.join(SRV, 'services/storage'));
 storage.photoUrl = (k) => `http://127.0.0.1:${audioServer.address().port}/${encodeURIComponent(k)}`;
-storage.getObject = async () => audio;
+let lastKey = '';
+storage.getObject = async (k) => { lastKey = String(k || ''); return audio; };
 
 // Providers.
 const axios = need('axios');
@@ -46,6 +52,7 @@ axios.post = async (url, body) => {
   if (url === 'https://api.groq.com/openai/v1/audio/transcriptions') {
     const lang = body.get('language'), size = body.get('file')?.size || 0;
     if (size < 12000) return { data: { text: ' Thank you.', language: 'english', segments: [seg(' Thank you.', -0.9, 0.95, 0.8)] } };
+    if (lang === 'kn' && process.env.SIM_EMPTY_PILOT_K01_FILE && fs.existsSync(process.env.SIM_EMPTY_PILOT_K01_FILE) && /\/k01$/.test(lastKey)) { lastKey = ''; return { data: { text: '', language: 'kannada', segments: [] } }; }
     if (lang === 'kn') return { data: { text: 'ಎರಡು ಇಡ್ಲಿ ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್', language: 'kannada', segments: [seg('ಎರಡು ಇಡ್ಲಿ ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್', -0.3, 0.02)] } };
     if (lang === 'hi') return { data: { text: 'दो रोटी और एक कटोरी दाल खाई', language: 'hindi', segments: [seg('दो रोटी और एक कटोरी दाल खाई', -0.3, 0.02)] } };
     return { data: { text: '2 idli, 1 bowl sambar, weight 82.5 kg', language: 'english', segments: [seg('2 idli, 1 bowl sambar,', -0.2, 0.02), seg(' weight 82.5 kg', -0.3, 0.03)] } };
@@ -58,8 +65,9 @@ axios.post = async (url, body) => {
     if (/idli|ಇಡ್ಲಿ/i.test(said)) foods.push(food('Idli', '2 idli', 100));
     if (/sambar|ಸಾಂಬಾರ್/i.test(said)) foods.push(food('Sambar', '1 bowl', 200));
     if (/roti|रोटी/i.test(said)) foods.push(food('Roti', '2 roti', 80));
-    if (/dal|दाल/i.test(said)) foods.push(food('Dal', '1 katori', 150));
-    if (process.env.SIM_WRONG_PREVIEW === '1') { if (!foods.some(f => f.name === 'Roti')) foods.push(food('Roti', '2 roti', 80)); if (!foods.some(f => f.name === 'Dal')) foods.push(food('Dal', '1 katori', 150)); }
+    if (/dal|दाल/i.test(said)) foods.push(food('Dal', '1 bowl', 150));
+    if (process.env.SIM_WRONG_PREVIEW === '1') { if (!foods.some(f => f.name === 'Roti')) foods.push(food('Roti', '2 roti', 80)); if (!foods.some(f => f.name === 'Dal')) foods.push(food('Dal', '1 bowl', 150)); }
+    if (process.env.SIM_CHAT_REPLY === '1' && /82\.5/.test(said)) return { data: { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ weight_kg: null, activities: [], acv: [], supplements: [], water_ml_add: null, sleep: null, foods: [], workouts: [], corrections: [], reply: "Nothing new to log there — it may already be in today's log." }) } }] } };
     return { data: { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ weight_kg: /82\.5/.test(said) ? 82.5 : null, activities: [], acv: [], supplements: [], water_ml_add: process.env.SIM_EXTRA_WATER === '1' ? 1000 : null, sleep: null, foods, workouts: [], corrections: [], reply: 'Got it.' }) } }] } };
   }
   throw new Error('simulation: blocked ' + url);

@@ -24,7 +24,7 @@ async function runs(limit = 50) {
   const { rows } = await pool.query(
     // Fixes-2s: user_id lets the evidence robot keep only its own account's tries.
     `SELECT r.id, r.user_id, r.created_at, u.name, r.lang_hint, r.language_sent, r.whisper_text, r.whisper_language,
-            r.segments, r.accepted, r.reason, r.transcript, r.error
+            r.segments, r.accepted, r.reason, r.transcript, r.error, r.speech, r.config
        FROM voice_fallback_test_runs r LEFT JOIN users u ON u.id = r.user_id
       ORDER BY r.created_at DESC, r.id DESC LIMIT $1`, [limit]);
   return rows;
@@ -70,10 +70,13 @@ router.delete('/runs', async (req, res) => {
 router.get('/runs.xlsx', async (req, res) => {
   try {
     const list = await runs(500);
-    const head = ['run', 'time_utc', 'account', 'voice_language_chosen', 'language_sent_to_whisper', 'whisper_text_raw', 'whisper_language_reported', 'decision', 'reason_refused', 'transcript_passed_on', 'error', 'sections'];
+    // Fixes-2u: the speech check and the request's configuration are added at the end (earlier columns keep their order).
+    const head = ['run', 'time_utc', 'account', 'voice_language_chosen', 'language_sent_to_whisper', 'whisper_text_raw', 'whisper_language_reported', 'decision', 'reason_refused', 'transcript_passed_on', 'error', 'sections',
+      'speech_check', 'speech_voiced_ms', 'recording_ms', 'whisper_called', 'prompt_sha256', 'audio_sha256'];
     const rows = list.map(r => [r.id, new Date(r.created_at).toISOString(), r.name, r.lang_hint, r.language_sent || 'not set',
       r.whisper_text, r.whisper_language, r.accepted == null ? 'no answer' : r.accepted ? 'accepted' : 'refused', r.reason, r.transcript, r.error,
-      (r.segments || []).length]);
+      (r.segments || []).length,
+      r.speech?.status || '', r.speech?.voiced_ms ?? '', r.speech?.duration_ms ?? '', r.config ? (r.config.provider_called === false ? 'no' : 'yes') : '', r.config?.prompt_sha256 || '', r.config?.audio_sha256 || '']);
     const segHead = ['run', 'section', 'start_s', 'end_s', 'text', 'avg_logprob', 'no_speech_prob', 'compression_ratio'];
     const segRows = list.flatMap(r => (r.segments || []).map((s, i) => [r.id, i + 1, s.start, s.end, s.text, s.avg_logprob, s.no_speech_prob, s.compression_ratio]));
     const buf = X.workbook([{ name: 'Tries', rows: [head, ...rows] }, { name: 'Sections', rows: [segHead, ...segRows] }]);

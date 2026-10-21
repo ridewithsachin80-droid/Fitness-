@@ -1036,6 +1036,30 @@ CREATE TABLE IF NOT EXISTS voice_sample_reruns (
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE (sample_id, engine, setting)
 );
+-- Fixes-2u: every re-run attempt, kept. voice_sample_reruns holds the LATEST
+-- answer per setting (as before); this keeps each attempt beside it, so asking
+-- again after an empty answer never loses the first result. 'kept_from_latest'
+-- rows are answers copied here just before a newer attempt replaced them in
+-- voice_sample_reruns (attempted_at = when that answer came). outcome:
+-- 'transcript' (words), 'empty' (an answer with no words) or 'error' (no answer).
+-- config: the exact request (model, language, prompt hash, audio hash; never the audio).
+CREATE TABLE IF NOT EXISTS voice_sample_rerun_attempts (
+  id            SERIAL PRIMARY KEY,
+  sample_id     INT NOT NULL REFERENCES voice_samples(id) ON DELETE CASCADE,
+  engine        VARCHAR(20) NOT NULL,
+  setting       VARCHAR(20) NOT NULL,
+  text          TEXT,
+  language      VARCHAR(20),
+  score         REAL,
+  error         VARCHAR(200),
+  outcome       VARCHAR(12) NOT NULL,
+  source        VARCHAR(20) NOT NULL DEFAULT 'rerun',
+  config        JSONB,
+  segments      JSONB,
+  attempted_at  TIMESTAMPTZ NOT NULL,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (sample_id, engine, setting, attempted_at)
+);
 
 -- ── Fixes-2p: voice fallback test (TEST SERVER ONLY) ────────────────────────
 -- On the test server only (Railway deploys it from the 'test' branch, so
@@ -1065,6 +1089,11 @@ CREATE TABLE IF NOT EXISTS voice_fallback_test_runs (
   error             VARCHAR(200),
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
+-- Fixes-2u: the recording's own speech check (services/speechPresence.js) and
+-- the exact Whisper request (model, language, prompt hash, audio hash), so tries
+-- can be compared like for like. Both NULL on tries from before 21 Oct 2026.
+ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS speech JSONB;
+ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS config JSONB;
 
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they

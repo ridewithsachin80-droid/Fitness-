@@ -65,8 +65,11 @@ export default function VoicePilotPanel({ collapsible = false }) {
     haptic(10); setRerun('busy');
     try {
       const { data } = await api.post('/voice-pilot/results/rerun', { setting }, { timeout: 180000 });
-      setRerun(!data.asked ? `Every recording already has a Whisper answer with the language set to ${LANG[setting]}.`
-        : `Whisper (language ${LANG[setting]}) answered ${data.answered} of ${data.asked}.${data.problems?.length ? ` ${data.problems[0]}` : ''}${data.more ? ' More are waiting: tap again.' : ''}`);
+      // Fixes-2u: an empty answer is not an answer; requests, responses, answers with words, empty answers and errors are told apart.
+      const parts = data.responses == null ? ` answered ${data.answered} of ${data.asked}`
+        : `: ${data.asked} asked · ${data.responses} replied · ${data.answered} with words${data.empty ? ` · ${data.empty} empty` : ''}${data.errors ? ` · ${data.errors} no answer` : ''}`;
+      setRerun(!data.asked ? `Every recording already has a Whisper answer with words, language set to ${LANG[setting]}.`
+        : `Whisper (language ${LANG[setting]})${parts}.${data.problems?.length ? ` ${data.problems[0]}` : ''}${data.more ? ' More are waiting: tap again.' : ''}`);
       load();
     } catch (e) { setRerun(e.response?.data?.error || 'Could not ask again just now.'); }
   };
@@ -141,7 +144,8 @@ export default function VoicePilotPanel({ collapsible = false }) {
           {dl && dl !== 'busy' && <p className="text-caption text-red-300">{dl}</p>}
         </>
       )}
-      {res?.overall?.samples > 0 && (res.overall.gemini_answered < res.overall.samples || res.overall.whisper_answered < res.overall.samples) && (
+      {/* Fixes-2u: only recordings with NO answer can be asked again here; an empty answer is a result (kept as it is). */}
+      {res?.overall?.samples > 0 && (res.overall.gemini_answered + (res.overall.gemini_empty || 0) < res.overall.samples || res.overall.whisper_answered + (res.overall.whisper_empty || 0) < res.overall.samples) && (
         <div data-testid="vp-retry-box">
           <button type="button" onClick={tryAgain} disabled={retry === 'busy'} style={{ minHeight: 44 }} data-testid="vp-retry"
             className="w-full rounded-xl border border-white/[0.16] text-white text-sm font-semibold disabled:opacity-50">
@@ -205,7 +209,8 @@ export default function VoicePilotPanel({ collapsible = false }) {
                           return (
                             <div key={label} className="break-words" data-testid={`vp-sample-${k}`}>
                               <p className="text-mid">{label}{text != null && !p.free && s[`${k}_score`] != null ? ` · keyword score ${Math.round(Number(s[`${k}_score`]) * 100)}%` : ''}: {text != null
-                                ? <span className="text-white" lang={s[`${k}_script`] === 'tamil' ? 'ta' : s[`${k}_script`] === 'kannada' ? 'kn' : undefined}>{text || '(heard nothing)'}</span>
+                                ? (/\S/.test(text) ? <span className="text-white" lang={s[`${k}_script`] === 'tamil' ? 'ta' : s[`${k}_script`] === 'kannada' ? 'kn' : undefined}>{text}</span>
+                                  : <span className="text-warn" data-testid={`vp-empty-${k}`}>empty answer (no words)</span>)
                                 : <span className="text-warn">no answer{problem && problem !== 'no answer' ? ` — ${problem}` : ''}</span>}</p>
                               {script && <p className="text-lo" data-testid={`vp-script-${k}`}>{script}{latin ? ` · in English letters: ${latin}` : ''}</p>}
                               {k === 'whisper' && text != null && <p className="text-lo" data-testid="vp-whisper-lang">Language asked: {LANG[s.whisper_setting] || s.whisper_setting} · used: {s.whisper_language || 'not recorded'}</p>}
@@ -216,10 +221,12 @@ export default function VoicePilotPanel({ collapsible = false }) {
                         {(s.reruns || []).map(x => (
                           <div key={`${x.engine}-${x.setting}`} className="break-words border-t border-hair pt-1" data-testid="vp-rerun">
                             <p className="text-mid">Whisper again, language {LANG[x.setting] || x.setting}{x.text != null && !p.free && x.score != null ? ` · keyword score ${Math.round(Number(x.score) * 100)}%` : ''}: {x.text != null
-                              ? <span className="text-white">{x.text || '(heard nothing)'}</span> : <span className="text-warn">no answer{x.problem && x.problem !== 'no answer' ? ` — ${x.problem}` : ''}</span>}</p>
+                              ? (/\S/.test(x.text) ? <span className="text-white">{x.text}</span> : <span className="text-warn" data-testid="vp-rerun-empty">empty answer (no words)</span>)
+                              : <span className="text-warn">no answer{x.problem && x.problem !== 'no answer' ? ` — ${x.problem}` : ''}</span>}</p>
                             {SCRIPT[x.script] && <p className="text-lo">{SCRIPT[x.script]}{x.latin ? ` · in English letters: ${x.latin}` : ''}</p>}
                             {x.language && <p className="text-lo">Language used: {x.language}</p>}
                             {x.checks?.length > 0 && <p className="text-lo">Rule checks: {checksLine(x.checks)}</p>}
+                            {x.attempts?.length > 1 && <p className="text-lo" data-testid="vp-rerun-attempts">Attempts kept: {x.attempts.map(a => (a.outcome === 'transcript' ? 'words' : a.outcome === 'empty' ? 'empty' : 'no answer')).join(' → ')}</p>}
                           </div>
                         ))}
                       </div>

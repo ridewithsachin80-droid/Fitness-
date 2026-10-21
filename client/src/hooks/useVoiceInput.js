@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { transcriptionRoute } from '../utils/voiceComposer';
-import { normalizeVoiceLang } from '../utils/voiceLanguage';
+import { normalizeVoiceLang, generatedText } from '../utils/voiceLanguage';
 import { today } from '../constants';
 
 const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
@@ -139,7 +139,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
       }, { timeout: 30000, signal: controller.signal });
       if (!current(session) || controller.signal.aborted) { invalidateChangedContext(session); return; }
       const transcript = String(data?.transcript || '').trim();
-      if (!transcript) {
+      // Fixes-2u: the server refuses a recording with no speech in it, or an answer
+      // that is only subtitle/credit text; the same text is never passed on here either.
+      if (!transcript || generatedText(transcript)) {
         failedTakeRef.current = take;
         setCanRetry(true);
         // Fixes-2n (B18): the server refuses a fallback answer in another language
@@ -147,7 +149,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
         // the take is kept for Retry.
         setError(data?.rejected === 'wrong_script' || data?.rejected === 'wrong_language'
           ? "That came back in a different language from the one you chose. Retry this recording, check your voice language, or type your log."
-          : "Couldn't make out the words. Retry this recording, or discard it and speak closer to the microphone.");
+          : data?.rejected === 'no_speech_detected' || data?.rejected === 'generated_text' || generatedText(transcript)
+            ? "Didn't catch any speech in that recording. Retry it, speak a little closer to the phone, or type your log."
+            : "Couldn't make out the words. Retry this recording, or discard it and speak closer to the microphone.");
       } else {
         clearTake();
         optsRef.current.onFinal?.(transcript);
@@ -201,7 +205,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
     if (recorder) recorder.ondataavailable = recorder.onerror = recorder.onstop = null;
     recorderRef.current = null;
     recogRef.current = null;
-    const text = finalTextRef.current;
+    // Fixes-2u: on-device words that are only subtitle/credit text are not used;
+    // the recording goes to the server instead, where it is checked for speech.
+    const text = generatedText(finalTextRef.current) ? '' : finalTextRef.current;
     if (transcriptionRoute({ webSpeechText: text }).source === 'on-device') {
       chunksRef.current = [];
       processingRef.current = false;
@@ -292,7 +298,9 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
         }
         finalTextRef.current = `${precedingFinals} ${finals}`.trim();
         heardRef.current = true; lastVoiceRef.current = Date.now();
-        optsRef.current.onInterim?.(`${precedingFinals} ${finals}${interim}`.trim());
+        // Fixes-2u: credit/subtitle text is not echoed into the box as if the member had said it.
+        const live = `${precedingFinals} ${finals}${interim}`.trim();
+        optsRef.current.onInterim?.(generatedText(live) ? '' : live);
       };
       recognition.onerror = event => {
         if (current(session) && SR_ERRORS[event.error] && !recorderRef.current) {
