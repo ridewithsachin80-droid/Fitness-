@@ -107,3 +107,8 @@ Test branch only. Production (`main` 1ca6ae7) is unchanged. Nutrient enrichment 
   - **Coach "empty answer (no words)":** 5.83:1 light, 10.34:1 dark.
   - **Coach "Attempts kept":** 5.02:1 light, 7.29:1 dark.
   - No sideways scroll.
+
+## Deployment
+- **e2fb101** (pushed 21 Oct, 13:13 UTC) was never deployed: Railway made no deployment record or commit status, while its dashboard showed "Limited Access — Deploys have been paused temporarily".
+- **22 Oct:** Sachin confirmed Railway is working again. GitHub does not resend a missed push, so this commit (a note only; the code is e2fb101's) is pushed to start the deploy.
+- **The controlled real run is requested only after** the live server reports this commit and `speech_check: true`.
