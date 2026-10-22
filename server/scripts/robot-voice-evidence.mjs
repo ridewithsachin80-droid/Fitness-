@@ -47,6 +47,7 @@ import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { browserExecutable } from './lib/browser-executable.mjs';
 import * as L from './lib/voice-evidence.mjs';
+import * as SHOT from './lib/voice-evidence-shot.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '../..');
@@ -66,8 +67,17 @@ const ACC = {
 };
 fs.mkdirSync(path.join(OUT, 'audio'), { recursive: true });
 
+// Fixes-2v: a TARGETED run repeats only the listed cases (run-2 review: "target the affected evidence").
+// Asked for in the last request line of qa/voice-evidence/REQUEST.md ("scope: S5"), or ROBOT_SCOPE.
+function requestedScope() {
+  let raw = env('ROBOT_SCOPE');
+  if (!raw) { try { const rows = fs.readFileSync(path.join(ROOT, 'qa/voice-evidence/REQUEST.md'), 'utf8').split('\n').filter(l => /^\|/.test(l) && !/^\|\s*-/.test(l) && !/Date \(IST\)/.test(l)); const m = (rows.pop() || '').match(/scope:\s*([A-Za-z0-9 ,]+)/i); raw = m ? m[1] : ''; } catch { raw = ''; } }
+  const ids = raw.split(/[ ,]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
+  return ids.length ? ids : null;
+}
+const SCOPE = requestedScope();
 const MODE_LINE = SIM ? 'SIMULATED — canned providers on this computer; NOT real results' : 'REAL providers on the test site';
-const report = { mode: SIM ? 'simulation' : 'real', started: new Date().toISOString(), errors: [], notes: [], part1: null, part2: { collected: false, real: [], cases: [] } };
+const report = { mode: SIM ? 'simulation' : 'real', started: new Date().toISOString(), errors: [], notes: [], scope: SCOPE ? { cases: SCOPE, part1: false, real_recordings: false } : null, part1: null, part2: { collected: false, real: [], cases: [] } };
 const digits = s => String(s || '').replace(/\D/g, '').slice(-10);
 // SIMULATION ONLY: a broken microphone for chosen attempts ("S5:1" = S5's first attempt;
 // "S5:1,S5:2" = both), to prove that an INVALID capture is caught. Refused on real runs.
@@ -99,6 +109,7 @@ function writeReport() {
     SIM ? '> **SIMULATED RUN — NOT REAL RESULTS.** Canned stand-ins replaced the speech/AI providers and storage on this computer. Nothing here is evidence about recognition.\n' : '',
     `# Voice evidence robot${sim} — ${report.finished.slice(0, 16).replace('T', ' ')} UTC`, '',
     `${MODE_LINE} · target ${cell(report.target)} · server ${report.server_commit ? report.server_commit.slice(0, 7) : SIM ? 'not checked (simulation)' : 'unconfirmed'} · speech check on the server: ${report.speech_check === true ? 'available' : report.speech_check === false ? 'NOT available' : '—'}`, '',
+    report.scope ? `**TARGETED RUN: ${report.scope.cases.join(', ')} only.** The Kannada re-run and the real recordings were not repeated; earlier runs' results for them stand as recorded.\n` : '',
     `**Run: ${v.run}**${v.failures.length ? ` — failed: ${v.failures.map(cell).join(' · ')}` : ''}${v.incomplete.length ? ` — incomplete: ${v.incomplete.map(cell).join(' · ')}` : ''}`, '',
     report.blocked ? '' : `**Recognition quality (not an acceptance): ${['PASS', 'FAIL', 'UNVERIFIED'].map(k => `${q[k] || 0} ${k}`).join(' · ')}${invalidN ? ` · ${invalidN} INVALID capture(s), not counted` : ''}** — "Run COMPLETE" means the evidence was collected and the site left as found; it does not mean the voice features passed.`, '',
     ...(report.blocked ? [`Nothing was changed on the site. Reason: ${cell(report.blocked)}`] : []),
@@ -113,16 +124,18 @@ function writeReport() {
       ...p2.real.map(r => `| ${r.phrase_id} | ${r.voice_language} | ${r.status} | ${cell(r.speech ? `${r.speech.status}${r.speech.voiced_ms != null ? ` (voiced ${r.speech.voiced_ms} ms)` : ''}` : null)} | ${cell(r.transcript)} | ${cell(r.rejected)} |`), '',
       `### 2b${sim}. COMPUTER VOICE (espeak-ng) through the app's microphone and screen — each case in a fresh page`, '',
       '| Case | Voice language | Said | Expected | Capture (actual upload vs source) | Server | Preview / reply | Quality | Saved / read back / nothing saved |', '|---|---|---|---|---|---|---|---|---|',
-      ...p2.cases.map(c => `| ${c.id} | ${c.lang} | ${cell(c.say)} | ${cell(c.plain)} | ${cell((c.attempts || []).map(a => `attempt ${a.n}: ${capLine(a)}`).join(' · '))} | ${c.invalid ? '—' : !c.transcribed ? 'NO ANSWER' : c.outcome === 'preview' || c.outcome === 'chat_reply' ? `accepted: "${cell(c.transcript)}"` : c.outcome === 'refused' ? `refused: ${cell(c.rejected)}` : `ERROR (HTTP ${c.status ?? '—'}, not a refusal)`}${c.speech ? ` · speech check: ${c.speech.status}` : ''}${c.error ? ` · **stopped: ${cell(c.error)}**` : ''} | ${c.outcome === 'chat_reply' ? `chat reply, no log card: "${cell(c.reply)}"` : cell(c.preview_text)}${c.retry ? ` · Retry: ${c.retry.identical ? 'identical recording re-sent (SHA-256 match)' : `NOT identical (${cell(c.retry.detail)})`}` : ''} | **${c.invalid ? 'INVALID (not counted)' : c.quality || '—'}**${c.quality_reasons?.length ? ': ' + cell(c.quality_reasons.join('; ')) : ''}${c.quality_notes?.length ? ` · note: ${cell(c.quality_notes.join('; '))}` : ''} | ${cell(c.save_note)}${c.readback ? ` · read back: ${c.readback.result}${c.readback.reasons.length ? ' (' + cell(c.readback.reasons.join('; ')) + ')' : ''}` : ''}${c.no_save_verified === true ? ' · day unchanged ✓' : c.no_save_verified === false ? ` · **day CHANGED: ${cell(c.no_save_detail.join('; '))}**` : ''}${c.normalisation ? ` · ${cell(c.normalisation)}` : ''} |`), ''] : []),
+      ...p2.cases.map(c => `| ${c.id} | ${c.lang} | ${cell(c.say)}${c.recipe ? ` [${cell(c.recipe)}]` : ''} | ${cell(c.plain)} | ${cell((c.attempts || []).map(a => `attempt ${a.n}: ${capLine(a)}`).join(' · '))} | ${c.invalid ? '—' : !c.transcribed ? 'NO ANSWER' : c.outcome === 'preview' || c.outcome === 'chat_reply' ? `accepted: "${cell(c.transcript)}"` : c.outcome === 'refused' ? `refused: ${cell(c.rejected)}` : `ERROR (HTTP ${c.status ?? '—'}, not a refusal)`}${c.speech ? ` · speech check: ${c.speech.status}` : ''}${c.error ? ` · **stopped: ${cell(c.error)}**` : ''} | ${c.outcome === 'chat_reply' ? `chat reply, no log card: "${cell(c.reply)}"` : cell(c.preview_text)}${c.retry ? ` · Retry: ${c.retry.identical ? 'identical recording re-sent (SHA-256 match)' : `NOT identical (${cell(c.retry.detail)})`}` : ''} | **${c.invalid ? 'INVALID (not counted)' : c.quality || '—'}**${c.quality_reasons?.length ? ': ' + cell(c.quality_reasons.join('; ')) : ''}${c.quality_notes?.length ? ` · note: ${cell(c.quality_notes.join('; '))}` : ''} | ${cell(c.save_note)}${c.readback ? ` · read back: ${c.readback.result}${c.readback.reasons.length ? ' (' + cell(c.readback.reasons.join('; ')) + ')' : ''}` : ''}${c.no_save_verified === true ? ' · day unchanged ✓' : c.no_save_verified === false ? ` · **day CHANGED: ${cell(c.no_save_detail.join('; '))}**` : ''}${c.normalisation ? ` · ${cell(c.normalisation)}` : ''} |`), ''] : []),
     ...(report.cleanup ? [`## Clean-up${sim}`, '', `Removed ${report.cleanup.removed} entr${report.cleanup.removed === 1 ? 'y' : 'ies'} this run created${report.cleanup.weight_restored ? '; weight restored to what it was' : ''}${report.cleanup.other_fields_restored?.length ? `; also restored: ${cell(report.cleanup.other_fields_restored.join('; '))}` : ''}. Compared with before the run: every entry (duplicates counted), weight, water, sleep, activities, ACV, supplements, notes, and the day's workouts. Day equal to before the run: **${report.cleanup.ok ? 'yes' : 'NO — ' + cell(report.cleanup.problems.join('; '))}**. Entries that existed before the run: ${report.cleanup.baseline_items}, untouched.${report.cleanup.normalisation ? ` ${cell(report.cleanup.normalisation)}.` : ''}`, ''] : []),
     ...(report.switch_off && !report.switch_off.verified ? ['## ⚠️ Voice backup switch NOT confirmed off', '', `Detail: ${cell(report.switch_off.detail)}. **Turn it off by hand:** Admin → Voice backup test → Turn off. If that is not possible it turns itself off 24 hours after it was set.`, ''] : []),
     ...(report.runs?.length ? [`### What Whisper returned${sim} (this run's tries only; section numbers in the Excel file)`, '',
       '| Try | Voice language | Told | Speech check | Whisper called | Whisper text (raw) | Language reported | Decision | Sections (log-prob / no-speech / compression) |', '|---|---|---|---|---|---|---|---|---|',
       ...report.runs.map(r => `| ${r.id} | ${cell(r.lang_hint)} | ${cell(r.language_sent || 'not set')} | ${cell(r.speech?.status)} | ${r.config ? (r.config.provider_called === false ? 'no' : 'yes') : '—'} | ${cell(r.whisper_text)} | ${cell(r.whisper_language)} | ${r.accepted === true ? 'accepted' : r.accepted === false ? `refused: ${cell(r.reason)}` : `no answer: ${cell(r.error)}`} | ${cell((r.segments || []).map(s => `${s.avg_logprob ?? '∅'}/${s.no_speech_prob ?? '∅'}/${s.compression_ratio ?? '∅'}`).join(' · '))} |`), ''] : []),
+    report.publication ? `Publication check (every file read before publishing: pictures by OCR, text and workbook directly): ${report.publication.checked} file(s) checked; ${report.publication.removed.length ? `**removed: ${report.publication.removed.map(x => `${x.file} (${x.reason})`).join('; ')}**` : 'none removed'}${report.publication.redacted.length ? `; redacted: ${report.publication.redacted.map(x => `${x.file} (${x.hits})`).join('; ')}` : ''}.` : '', '',
     report.notes.length ? `Notes: ${report.notes.map(cell).join(' · ')}` : '', '',
     'Computer voices show how the real providers and FitLife\'s checks behave; they say nothing about how well real members are understood, and an injected computer recording is not a physical phone microphone. Two real recordings are far too few to choose an engine. No member names are included; the voice test account is the robot\'s own; human recordings are never saved by the robot.',
   ].filter(x => x !== null).join('\n');
-  const mdOut = redactText(md), jsonOut = redactText(JSON.stringify(report, (k, val) => (val instanceof RegExp ? String(val) : val), 1));
+  // Fixes-2v: whole names AND their 4+ letter words (a first name alone is still a name).
+  const mdOut = SHOT.redactAll(md, knownNames), jsonOut = SHOT.redactAll(JSON.stringify(report, (k, val) => (val instanceof RegExp ? String(val) : val), 1), knownNames);
   if (mdOut.hits || jsonOut.hits) console.log(`::warning::identifying text found and replaced in the report (${mdOut.hits + jsonOut.hits})`);
   fs.writeFileSync(path.join(OUT, 'report.md'), mdOut.text + '\n');
   fs.writeFileSync(path.join(OUT, 'results.json'), jsonOut.text);
@@ -138,6 +151,7 @@ function writeReport() {
 function block(reason) { report.blocked = reason; process.exit(writeReport().exitCode); }
 
 // ── 1. Target and deployment ────────────────────────────────────────────────
+if (SCOPE && SCOPE.some(id => !L.CASES.some(c => c.id === id))) block(`the requested scope names an unknown case: ${SCOPE.join(', ')} (known: ${L.CASES.map(c => c.id).join(', ')}).`);
 const target = L.checkTarget(process.env.ROBOT_BASE_URL || L.TEST_ORIGIN, { simulation: SIM });
 report.target = target.origin || process.env.ROBOT_BASE_URL;
 if (!target.ok) block(target.reason);
@@ -356,9 +370,18 @@ function makeAudio(c) {
   if (c.kind === 'silence') ff(['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono', '-t', '6', '-c:a', 'pcm_s16le', out]);
   else {
     execFileSync('espeak-ng', ['-v', c.voice, '-s', '140', '-w', raw, c.say]);
-    if (c.kind === 'noisy') ff(['-i', raw, '-f', 'lavfi', '-i', 'anoisesrc=color=pink:amplitude=0.5:duration=12:seed=7', '-filter_complex',
-      '[0]volume=0.12,adelay=500|500,apad=pad_dur=4.5[v];[v][1]amix=inputs=2:duration=first:normalize=0', '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', out]);
-    else ff(['-i', raw, '-af', 'adelay=500|500,apad=pad_dur=4.5', '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', out]);
+    if (c.kind === 'noisy') {
+      // Fixes-2v: the mix AND its two tracks (voice alone, noise alone), so the recording's voice can be verified.
+      const vol = c.voiceVolume ?? 0.12, NOISE = 'anoisesrc=color=pink:amplitude=0.5:duration=12:seed=7';
+      ff(['-i', raw, '-f', 'lavfi', '-i', NOISE, '-filter_complex', `[0]volume=${vol},adelay=500|500,apad=pad_dur=4.5[v];[v][1]amix=inputs=2:duration=first:normalize=0`, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', out]);
+      const voiceFile = path.join(OUT, 'audio', `${c.id}-voice-only.wav`), noiseFile = path.join(OUT, 'audio', `${c.id}-noise-only.wav`);
+      ff(['-i', raw, '-af', `volume=${vol},adelay=500|500,apad=pad_dur=4.5`, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', voiceFile]);
+      const d = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out]).toString().trim();
+      ff(['-f', 'lavfi', '-i', NOISE, '-t', d, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', noiseFile]);
+      const secs = Number(d);
+      return { b64: fs.readFileSync(out).toString('base64'), secs, file: out, voiceFile, noiseFile, noiseB64: fs.readFileSync(noiseFile).toString('base64') };
+    }
+    ff(['-i', raw, '-af', 'adelay=500|500,apad=pad_dur=4.5', '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', out]);
   }
   const secs = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out]).toString().trim());
   return { b64: fs.readFileSync(out).toString('base64'), secs, file: out };
@@ -367,7 +390,7 @@ function makeAudio(c) {
 async function measure(buf) {
   const pcm = await SP.decode(buf);
   const sp = SP.analyse(pcm);
-  return { env: L.envelopeDb(pcm), duration_ms: sp.duration_ms, voiced_ms: sp.voiced_ms, speech: sp };
+  return { pcm, env: L.envelopeDb(pcm), duration_ms: sp.duration_ms, voiced_ms: sp.voiced_ms, speech: sp };
 }
 
 // ── 4. The run ──────────────────────────────────────────────────────────────
@@ -378,8 +401,8 @@ try {
     args: [...chromium.args.filter(a => !/single-process|no-zygote/.test(a)), '--no-sandbox', '--disable-dev-shm-usage',
       '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
 
-  // Part 1 (B19)
-  try {
+  // Part 1 (B19) — not repeated in a targeted run
+  if (!SCOPE) try {
     // Fixes-2t: not the dashboard button (it re-runs every recording); a request naming ONLY the approved ones.
     // Fixes-2u: the server asks again where the earlier answer was EMPTY; one with words is not re-asked.
     const ids = approved.map(a => a.id), answers = [];
@@ -398,7 +421,13 @@ try {
     const A = await newPage('admin');
     await uiAdminLogin(A);
     await A.waitForSelector('[data-testid="vp-panel"]', { visible: true, timeout: 30e3 }).catch(() => {});
-    await shot(A, 'B19-voice-test-card', { selector: '[data-testid="vp-panel"]' });
+    // Fixes-2v: the admin card is left out of the public evidence unless asked for (ROBOT_ADMIN_SHOT=1); then only
+    // after masking, a quiet page and OCR of the finished picture (lib/voice-evidence-shot.mjs).
+    if (env('ROBOT_ADMIN_SHOT') === '1') {
+      const r = await SHOT.safeShot(A, { selector: '[data-testid="vp-panel"]', names: knownNames, file: path.join(OUT, `${String(++shotN).padStart(2, '0')}-B19-voice-test-card.png`), label: `${MODE_LINE} · B19-voice-test-card`, sim: SIM });
+      if (!r.taken) report.notes.push(`admin card picture not taken: ${r.reason}`);
+      else report.notes.push(`admin card picture: ${r.masked.masked} of ${r.masked.areas} name areas masked at capture (mask style ${r.masked.style ? 'present' : 'MISSING'}); OCR of the picture found no name`);
+    } else report.notes.push('admin card picture left out of the public evidence (Fixes-2v default; the B19 data is in this report and the workbook)');
     await A.close().catch(() => {});
     const after = await api('admin', 'GET', '/api/voice-pilot/results');
     const byId = new Map((after.data.samples || []).map(s => [s.id, s]));
@@ -429,7 +458,7 @@ try {
   // 2a. The REAL approved recordings, exactly as stored. (Never saved by the robot; only their hash is kept.)
   const fresh = await api('admin', 'GET', '/api/voice-pilot/results');
   const freshById = new Map((fresh.data.samples || []).map(s => [s.id, s]));
-  for (const a of approved) {
+  for (const a of SCOPE ? [] : approved) {
     const s = freshById.get(a.id);
     if (!s?.audio_url) { report.errors.push(`2a: no stored audio for ${a.phrase_id}`); continue; }
     const audio = await fetch(s.audio_url);
@@ -484,7 +513,10 @@ try {
       await M.waitForSelector('[data-testid="composer-input"]', { visible: true, timeout: 15e3 });
       await M.select('[data-testid="voice-language-ready"]', c.lang);
       const broken = BREAK.has(`${c.id}:${n}`);
-      await M.evaluate((b64, br) => { window.__micB64 = b64; window.__micBroken = br; window.__micPlays = 0; }, src.b64, broken);
+      // SIMULATION ONLY (Fixes-2v): "S5:1:noise" plays the background alone, without the voice (run-2 review, finding 2).
+      const noiseOnly = BREAK.has(`${c.id}:${n}:noise`) && !!src.noiseB64;
+      await M.evaluate((b64, br) => { window.__micB64 = b64; window.__micBroken = br; window.__micPlays = 0; }, noiseOnly ? src.noiseB64 : src.b64, broken);
+      if (noiseOnly) at.simulated_noise_only_microphone = true;
       if (broken) at.simulated_broken_microphone = true;
       M.on('request', onReq); M.on('response', onResp);
       must(await visible(M, /^Speak your log$/), 'the record button was not ready');
@@ -507,7 +539,7 @@ try {
       if (cap.error) { at.invalid_reason = `the uploaded recording could not be decoded (${cap.error})`; return at; }
       at.captured = { sha256: L.sha256(b64).slice(0, 16), bytes: cbuf.length, duration_ms: cap.duration_ms, voiced_ms: cap.voiced_ms };
       fs.writeFileSync(path.join(OUT, 'audio', `${c.id}-captured-attempt${n}.webm`), cbuf);   // computer voice only
-      at.capture = L.captureCheck({ source: src.measured, captured: cap, kind: c.kind });
+      at.capture = L.captureCheck({ source: src.measured, captured: cap, kind: c.kind, voice: src.voice, noise: src.noise });
       if (at.capture.valid && cap.duration_ms > src.measured.duration_ms + 8000) at.capture = { ...at.capture, valid: false, reasons: [...at.capture.reasons, `the recording ran ${cap.duration_ms} ms for a ${src.measured.duration_ms} ms sound (Stop did not take)`] };
       // The server's answer is recorded even for an INVALID capture (it is a real try).
       for (let i = 0; i < 80 && !answered.length; i++) await wait(500);
@@ -588,12 +620,13 @@ try {
   }
 
   const COPY = ['transcribed', 'status', 'transcript', 'rejected', 'speech', 'outcome', 'reply', 'parse', 'preview_text', 'quality', 'quality_reasons', 'quality_notes', 'saved', 'save_confirmed', 'readback', 'save_note', 'no_save_verified', 'no_save_detail', 'retry', 'error', 'normalisation'];
-  for (const c of L.CASES) {
-    const row = { id: c.id, lang: c.lang, say: c.say, plain: c.plain, collected: false, transcribed: false, attempts: [] };
+  for (const c of L.CASES.filter(x => !SCOPE || SCOPE.includes(x.id))) {
+    const row = { id: c.id, lang: c.lang, say: c.say, plain: c.plain, recipe: c.recipe || null, collected: false, transcribed: false, attempts: [] };
     report.part2.cases.push(row);
     try {
       const a = makeAudio(c);
       const src = { ...a, measured: await measure(fs.readFileSync(a.file)) };
+      if (a.voiceFile) { src.voice = { pcm: await SP.decode(fs.readFileSync(a.voiceFile)) }; src.noise = { pcm: await SP.decode(fs.readFileSync(a.noiseFile)) }; }
       // One repeat when a capture is INVALID; an invalid capture never counts.
       for (let n = 1; n <= 2; n++) {
         const at = await runAttempt(c, src, n);
@@ -668,8 +701,8 @@ try {
         ...(report.part1?.samples || []).map(s => [s.phrase_id, s.say, s.original?.gemini, s.original?.gemini_score, s.original?.whisper, s.original?.whisper_score, String(s.original_unchanged), String(!!s.asked_this_run), s.whisper_kn?.text, String(!!s.whisper_kn?.empty), s.whisper_kn?.script, s.whisper_kn?.latin, s.whisper_kn?.score])]) },
       { name: 'Pilot attempts', rows: R([['line', 'outcome', 'recorded_as', 'text', 'error', 'model', 'language_sent', 'prompt_sha256', 'audio_sha256', 'attempted_at'],
         ...(report.part1?.samples || []).flatMap(s => (s.attempts || []).map(a => [s.phrase_id, a.outcome, a.source === 'kept_from_latest' ? 'earlier answer kept' : 'attempt', a.text, a.error, a.config?.model, a.config ? (a.config.language || 'not set') : '', a.config?.prompt_sha256, a.config?.audio_sha256, a.at]))]) },
-      { name: 'Cases', rows: R([['case', 'voice_language', 'said', 'expected', 'attempts', 'capture', 'capture_r', 'capture_lag_ms', 'captured_ms', 'captured_sha256', 'server_speech_check', 'outcome', 'transcript', 'refused', 'preview_or_reply', 'quality', 'reasons', 'notes', 'saved', 'read_back', 'retry']
-        , ...report.part2.cases.map(c => { const a = c.attempts?.[c.attempts.length - 1] || {}; return [c.id, c.lang, c.say, c.plain, (c.attempts || []).length, c.invalid ? 'INVALID' : a.capture?.valid ? 'valid' : a.invalid_reason ? 'INVALID' : '', a.capture?.correlation, a.capture?.lag_ms, a.captured?.duration_ms, a.captured?.sha256,
+      { name: 'Cases', rows: R([['case', 'voice_language', 'said', 'expected', 'attempts', 'capture', 'capture_r', 'voice_check', 'capture_lag_ms', 'captured_ms', 'captured_sha256', 'server_speech_check', 'outcome', 'transcript', 'refused', 'preview_or_reply', 'quality', 'reasons', 'notes', 'saved', 'read_back', 'retry']
+        , ...report.part2.cases.map(c => { const a = c.attempts?.[c.attempts.length - 1] || {}; return [c.id, c.lang, c.say, c.plain, (c.attempts || []).length, c.invalid ? 'INVALID' : a.capture?.valid ? 'valid' : a.invalid_reason ? 'INVALID' : '', a.capture?.correlation, a.capture?.voice_check ? (a.capture.voice_check.verifiable ? a.capture.voice_check.score : 'not verifiable') : '', a.capture?.lag_ms, a.captured?.duration_ms, a.captured?.sha256,
           c.speech?.status, c.invalid ? 'not counted' : c.outcome, c.transcript, c.rejected, c.outcome === 'chat_reply' ? `chat reply: ${c.reply}` : c.preview_text, c.invalid ? 'INVALID' : c.quality, (c.quality_reasons || []).join('; '), (c.quality_notes || []).join('; '), c.save_note,
           c.readback ? `${c.readback.result} ${c.readback.reasons.join('; ')}` : '', c.retry ? c.retry.detail : '']; })]) },
       { name: 'Fallback tries', rows: R([['try', 'time_utc', 'voice_language', 'told', 'speech_check', 'speech_voiced_ms', 'whisper_called', 'prompt_sha256', 'audio_sha256', 'whisper_text_raw', 'language_reported', 'decision', 'reason', 'transcript', 'error'],
@@ -678,5 +711,8 @@ try {
       { name: 'Sections', rows: R([['try', 'section', 'start_s', 'end_s', 'text', 'avg_logprob', 'no_speech_prob', 'compression_ratio'], ...sec]) },
     ]));
   } catch (e) { report.errors.push(`evidence: ${e.message}`); }
+  // Fixes-2v: the last gate. Every picture is read by OCR and removed if it holds a name (or cannot be checked);
+  // the workbook is checked; report.md and results.json are written below with names and name words redacted.
+  try { report.publication = SHOT.publicationCheck(OUT, knownNames); } catch (e) { report.errors.push(`publication check: ${e.message}`); }
 }
 process.exit(writeReport().exitCode);

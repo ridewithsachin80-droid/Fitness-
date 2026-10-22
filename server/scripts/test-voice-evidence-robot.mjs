@@ -282,9 +282,11 @@ console.log('\n[10] Fixes-2u: the first real run\'s exact problems (21 Oct, run 
   ck('silence played, silence captured → valid', c.valid, c);
   c = L.captureCheck({ source: await meas(F('silence-digital.webm')), captured: src, kind: 'silence' });
   ck('silence played but sound captured → INVALID', !c.valid, c);
+  // Changed in Fixes-2v (run-2 review, finding 2): a noisy sound with no separate voice and noise tracks can no
+  // longer be called valid from its loudness pattern alone (2u said valid; the noise alone matched too).
   const noisySrc = await meas(F('speech-under-loud-noise.webm'));
   c = L.captureCheck({ source: noisySrc, captured: noisySrc, kind: 'noisy' });
-  ck('the noisy S5 sound captured as played → valid (it followed the source; whether speech is heard is the server\'s question)', c.valid, c);
+  ck('a noisy sound captured as played but with no voice/noise tracks to check against → INVALID, "cannot be verified" (was valid in 2u)', !c.valid && /cannot be verified/.test(c.reasons.join()), c);
   // ── The dal portion rule (S3) ──
   const S3 = S('S3').expect;
   const pv = (dal) => ({ foods: [{ name: 'Chapati', qty_text: '2 pieces', grams: 60 }, { name: 'Dal', ...dal }] });
@@ -300,8 +302,9 @@ console.log('\n[10] Fixes-2u: the first real run\'s exact problems (21 Oct, run 
   ck('katori vs bowl for a food with no mapping (sambar) → UNVERIFIED, not a pass', e.result === 'UNVERIFIED' && /no portion rule/.test(e.reasons.join()), e);
   e = L.evaluatePreview(S('S1').expect, { foods: [{ name: 'Idli', qty_text: '2 pieces', grams: 80 }, { name: 'Sambar', qty_text: '1 cup', grams: 150 }], weight_kg: 82.5 });
   ck('a cup is still not a bowl (outside the family) → FAIL', e.result === 'FAIL', e);
+  // Changed in Fixes-2v (run-2 review, finding 3): a learned BOWL size alone no longer defines the member's katori.
   e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 200 }), { portions: [{ phrase: 'bowl dal', grams: 200 }] });
-  ck('the member\'s own learned "bowl dal" = 200 g comes first → 1 bowl at 200 g PASS (member basis named)', e.result === 'PASS' && /member's own 200 g/.test(e.notes.join()), e);
+  ck('the member\'s own "bowl dal" = 200 g with no learned katori → UNVERIFIED (equivalence unresolved; was PASS in 2u)', e.result === 'UNVERIFIED' && /does not define their katori/.test(e.reasons.join()), e);
   e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 150 }), { portions: [{ phrase: 'katori dal', grams: 120 }] });
   ck('…and the 150 g default does not override a member\'s 120 g katori → FAIL', e.result === 'FAIL', e);
   e = L.evaluatePreview(S3, pv({ qty_text: '1 bowl', grams: 150 }), { portions: [{ phrase: 'bowl rice', grams: 200 }] });
@@ -310,6 +313,102 @@ console.log('\n[10] Fixes-2u: the first real run\'s exact problems (21 Oct, run 
   const names = L.nameList(['Krishna Jinka', 'Avinash', 'Pradeep', 'Voice Robot', 'Test', ''], 'Voice Robot');
   const red = L.redactNames('Invited: Avinash, KRISHNA JINKA, Pradeep. This is a test.', names);
   ck('member names replaced (several-word names in any case); the robot\'s own name and the word "test" left alone', red.hits === 3 && !/Avinash|Krishna|Pradeep/i.test(red.text) && /This is a test/.test(red.text) && !names.includes('Voice Robot'), red);
+}
+
+console.log('\n[11] Fixes-2v: the dal portion rule does not depend on the order of the member\'s saved portions');
+{
+  const S3 = L.CASES.find(c => c.id === 'S3').expect;
+  const pv = (g, q = '1 bowl') => ({ foods: [{ name: 'Chapati', qty_text: '2 pieces', grams: 60 }, { name: 'Dal', qty_text: q, grams: g }] });
+  const both = (rows, g, q) => [L.evaluatePreview(S3, pv(g, q), { portions: rows }), L.evaluatePreview(S3, pv(g, q), { portions: [...rows].reverse() })];
+  let [a, b] = both([{ phrase: 'bowl dal', grams: 200 }, { phrase: 'katori dal', grams: 150 }], 200);
+  ck('review reproduction: bowl dal 200 g, katori dal 150 g, preview 1 bowl 200 g → FAIL (was PASS)', a.result === 'FAIL' && /different sizes/.test(a.reasons.join()), a);
+  ck('…the same two rows in the other order → the same FAIL (was FAIL only in this order)', b.result === 'FAIL' && b.reasons.join() === a.reasons.join(), b);
+  [a, b] = both([{ phrase: 'bowl dal', grams: 200 }, { phrase: 'katori dal', grams: 150 }], 150);
+  ck('…and preview 150 g with those rows → FAIL in both orders (the two sizes conflict)', a.result === 'FAIL' && b.result === 'FAIL', [a, b]);
+  [a, b] = both([{ phrase: 'bowl dal', grams: 180 }, { phrase: 'katori dal', grams: 180 }], 180);
+  ck('equal learned sizes (both 180 g), preview 1 bowl 180 g → PASS in both orders, basis named', a.result === 'PASS' && b.result === 'PASS' && /both 180 g/.test(a.notes.join()), [a, b]);
+  [a, b] = both([{ phrase: 'bowl dal', grams: 180 }, { phrase: 'katori dal', grams: 180 }], 150);
+  ck('equal learned sizes (180 g) but preview at the 150 g default → FAIL in both orders', a.result === 'FAIL' && b.result === 'FAIL', [a, b]);
+  [a, b] = both([{ phrase: 'katori dal', grams: 120 }, { phrase: 'bowl rice', grams: 200 }], 120);
+  ck('the member\'s own katori dal 120 g decides the spoken amount; preview 1 bowl 120 g → PASS in both orders', a.result === 'PASS' && b.result === 'PASS', [a, b]);
+  [a, b] = both([{ phrase: 'katori dal', grams: 120 }, { phrase: 'katori dal', grams: 160 }], 120);
+  ck('two different learned sizes for the same "katori dal" → UNVERIFIED in both orders (never the first row\'s value)', a.result === 'UNVERIFIED' && b.result === 'UNVERIFIED', [a, b]);
+  [a, b] = both([{ phrase: 'bowl dal', grams: 150 }], 150);
+  ck('a learned bowl dal equal to the 150 g katori default → PASS', a.result === 'PASS', a);
+  ck('no learned portions → the 150 g default, as before (PASS at 150 g)', L.evaluatePreview(S3, pv(150)).result === 'PASS');
+  ck('the stated katori kept in the preview ("1 katori", 150 g; run 2) → PASS directly, no alias needed', L.evaluatePreview(S3, pv(150, '1 katori')).result === 'PASS' && !L.evaluatePreview(S3, pv(150, '1 katori')).notes.length);
+}
+
+console.log('\n[12] Fixes-2v: the S5 capture check must find the VOICE, not just the background');
+{
+  const { createRequire } = await import('module');
+  const rq = createRequire(import.meta.url);
+  const SP = rq('../services/speechPresence'); const FF = rq('ffmpeg-static');
+  const T = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-s5-'));
+  const ff = (...a) => spawnSync(FF, ['-y', '-loglevel', 'error', ...a]);
+  const voiceIn = path.join(HERE, 'fixtures/voice/speech-en.webm');
+  const NOISE = 'anoisesrc=color=pink:amplitude=0.5:duration=12:seed=7';   // the robot's exact background
+  const mk = (vol) => {
+    ff('-i', voiceIn, '-f', 'lavfi', '-i', NOISE, '-filter_complex', `[0]volume=${vol},adelay=500|500,apad=pad_dur=4.5[v];[v][1]amix=inputs=2:duration=first:normalize=0`, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', path.join(T, `mix${vol}.wav`));
+    ff('-i', voiceIn, '-af', `volume=${vol},adelay=500|500,apad=pad_dur=4.5`, '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', path.join(T, `voice${vol}.wav`));
+    const d = String(spawnSync(FF, ['-i', path.join(T, `mix${vol}.wav`), '-f', 'null', '-'], { encoding: 'utf8' }).stderr.match(/time=(\d+):(\d+):([\d.]+)/g).pop()).match(/(\d+):(\d+):([\d.]+)/).slice(1).reduce((a, x, i) => a + Number(x) * [3600, 60, 1][i], 0);
+    ff('-f', 'lavfi', '-i', NOISE, '-t', String(d), '-ar', '48000', '-ac', '1', '-c:a', 'pcm_s16le', path.join(T, `noise${vol}.wav`));
+    ff('-i', path.join(T, `mix${vol}.wav`), '-c:a', 'libopus', '-b:a', '32k', path.join(T, `cap${vol}.webm`));
+    ff('-i', path.join(T, `noise${vol}.wav`), '-c:a', 'libopus', '-b:a', '32k', path.join(T, `noisecap${vol}.webm`));
+  };
+  const meas = async (f) => { const pcm = await SP.decode(fs.readFileSync(path.join(T, f))); return { pcm, env: L.envelopeDb(pcm), speech: SP.analyse(pcm) }; };
+  const pcmOf = async (f) => ({ pcm: await SP.decode(fs.readFileSync(path.join(T, f))) });
+  for (const vol of ['0.12', '0.45']) mk(vol);
+  // S5 recipe v2 (voice 0.45): the voice can be verified.
+  let src = await meas('mix0.45.wav'), voice = await pcmOf('voice0.45.wav'), noise = await pcmOf('noise0.45.wav');
+  let c = L.captureCheck({ source: src, captured: await meas('cap0.45.webm'), kind: 'noisy', voice, noise });
+  ck('S5 v2: the real mix, recorded through Opus as a phone does → valid, the voice found (voice check ≥ 0.7)', c.valid && c.voice_check?.score >= 0.7, c);
+  c = L.captureCheck({ source: src, captured: await meas('noise0.45.wav'), kind: 'noisy', voice, noise });
+  ck('review counterexample: the exact background alone (anoisesrc pink 0.5 seed 7, trimmed), no voice → INVALID ("does not carry the voice")', !c.valid && c.correlation > 0.6 && c.voice_check?.score < 0.3 && /does not carry the voice/.test(c.reasons.join()), c);
+  c = L.captureCheck({ source: src, captured: await meas('noisecap0.45.webm'), kind: 'noisy', voice, noise });
+  ck('…the background alone after Opus → INVALID too', !c.valid && c.voice_check?.score < 0.5, c);
+  // Runs 1 and 2 recipe (voice 0.12): nothing can prove its voice.
+  src = await meas('mix0.12.wav'); voice = await pcmOf('voice0.12.wav'); noise = await pcmOf('noise0.12.wav');
+  const real12 = L.captureCheck({ source: src, captured: await meas('cap0.12.webm'), kind: 'noisy', voice, noise });
+  const noise12 = L.captureCheck({ source: src, captured: await meas('noise0.12.wav'), kind: 'noisy', voice, noise });
+  ck('the 0.12 recipe of runs 1 and 2: even a faithful recording is INVALID, "buried too deep to verify" (never valid)', !real12.valid && /too deep to verify/.test(real12.reasons.join()) && real12.voice_check?.verifiable === false, real12);
+  ck('…and the reviewer\'s noise-only substitute for it is INVALID (it was valid at r = 0.998)', !noise12.valid && noise12.correlation > 0.99, noise12);
+  ck('the same check on clean speech is not applied (no background), so S1–S3 are judged as before', L.captureCheck({ source: src, captured: src, kind: 'speech' }).voice_check === null);
+  fs.rmSync(T, { recursive: true, force: true });
+}
+
+console.log('\n[13] Fixes-2v: nothing identifying is published; targeted runs');
+{
+  const S = await import('./lib/voice-evidence-shot.mjs');
+  const names = ['Krishna Jinka', 'Avinash', 'Lakshmi Narayan'];
+  ck('nameHits counts whole names (any case) and 4+ letter name words; reports counts, never the names', (() => { const h = S.nameHits('Invited: KRISHNA jinka, lakshmi', names); return h.full === 1 && h.words === 1 && !JSON.stringify(h).match(/krishna|lakshmi/i); })());
+  ck('redactAll removes a first name on its own too ("Lakshmi" → [member]), not only the whole name', S.redactAll('Lakshmi and Avinash and Krishna Jinka', names).text === '[member] and [member] and [member]');
+  // A stand-in OCR program (the gate has no tesseract): prints the name of any file whose name contains "leak".
+  const T = fs.mkdtempSync(path.join(os.tmpdir(), 'pubcheck-'));
+  const fake = path.join(T, 'fake-ocr.sh'); fs.writeFileSync(fake, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo fake; exit 0; fi\ncase "$1" in *leak*) echo "Invited Krishna Jinka";; *) echo "Kannada voice test";; esac\n'); fs.chmodSync(fake, 0o755);
+  const D = path.join(T, 'out'); fs.mkdirSync(path.join(D, 'audio'), { recursive: true });
+  fs.writeFileSync(path.join(D, '01-card-leak.png'), 'x'); fs.writeFileSync(path.join(D, '02-S1-preview.png'), 'x');
+  fs.writeFileSync(path.join(D, 'report.md'), 'coach Avinash said'); fs.writeFileSync(path.join(D, 'audio', 'S1.wav'), 'x');
+  let r = S.publicationCheck(D, names, { ocrBin: fake });
+  ck('publication check: a picture whose OCR text holds a name is removed; a clean one stays', !fs.existsSync(path.join(D, '01-card-leak.png')) && fs.existsSync(path.join(D, '02-S1-preview.png')) && r.removed.length === 1 && /OCR read 1 name/.test(r.removed[0].reason), r);
+  ck('…a text file is redacted in place', fs.readFileSync(path.join(D, 'report.md'), 'utf8') === 'coach [member] said' && r.redacted.length === 1, r);
+  fs.writeFileSync(path.join(D, '03-x.png'), 'x');
+  r = S.publicationCheck(D, names, { ocrBin: path.join(T, 'no-such-ocr') });
+  ck('no OCR available → every picture is left out (it cannot be checked)', !fs.readdirSync(D).some(f => f.endsWith('.png')) && r.removed.every(x => /no OCR/.test(x.reason)), r);
+  fs.writeFileSync(path.join(D, '04-y.png'), 'x');
+  r = S.publicationCheck(D, [], { ocrBin: fake });
+  ck('no name list → every picture is left out (it cannot be cleared)', !fs.existsSync(path.join(D, '04-y.png')) && /no name list/.test(r.removed[0].reason), r);
+  fs.rmSync(T, { recursive: true, force: true });
+  // Verdict
+  const base = () => ({ scope: { cases: ['S5'] }, part1: null, part2: { collected: true, real: [], cases: [{ id: 'S5', collected: true, transcribed: true, status: 200, outcome: 'refused', rejected: 'no_speech_detected', quality: 'PASS', no_save_verified: true }] }, cleanup: { ok: true, problems: [] }, switch_off: { verified: true }, errors: [] });
+  ck('a targeted S5 run with S5 collected → COMPLETE without repeating the Kannada re-run or real recordings', L.verdict(base()).run === 'COMPLETE', L.verdict(base()));
+  let x = base(); x.part2.cases.push({ id: 'S1', collected: true, transcribed: true, outcome: 'preview', quality: 'PASS' });
+  ck('…a case outside the scope → FAILED', L.verdict(x).run === 'FAILED' && /outside the targeted scope/.test(L.verdict(x).failures.join()));
+  x = base(); x.part2.cases = []; ck('…S5 missing → INCOMPLETE', L.verdict(x).run === 'INCOMPLETE');
+  x = base(); x.publication = { removed: [{ file: '01-B19-voice-test-card.png', reason: 'OCR read 5 name(s), 0 name word(s)' }] };
+  ck('a picture removed because OCR read names in it → FAILED (removal is not a pass)', L.verdict(x).run === 'FAILED' && /removed before publishing/.test(L.verdict(x).failures.join()));
+  x = base(); x.publication = { removed: [{ file: '02-S1-preview.png', reason: 'no OCR to read it' }] };
+  ck('a picture left out because it could not be checked → INCOMPLETE', L.verdict(x).run === 'INCOMPLETE');
 }
 
 console.log(`\nVoice evidence robot checks: ${pass} passed, ${fail} failed`);

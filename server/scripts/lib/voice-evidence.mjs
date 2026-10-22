@@ -69,7 +69,9 @@ export const CASES = [
     plain: '2 roti, 1 katori dal; saved and read back' },
   { id: 'S4', lang: 'en-IN', kind: 'silence', say: '(6 seconds of silence)',
     expect: { refused: true }, retry: true, plain: 'refused; Retry re-sends the identical recording' },
-  { id: 'S5', lang: 'en-IN', voice: 'en-us', kind: 'noisy', say: 'Two idli, weight eighty two point five kilograms.',
+  // Fixes-2v: S5 recipe v2. The voice is at 0.45 under the same pink noise (amplitude 0.5, seed 7), so the
+  // voice in a recording can be verified (runs 1 and 2 used 0.12: too buried for any recording to prove its voice).
+  { id: 'S5', lang: 'en-IN', voice: 'en-us', kind: 'noisy', voiceVolume: 0.45, recipe: 'S5 v2 (2v): voice 0.45 under pink noise 0.5, seed 7', say: 'Two idli, weight eighty two point five kilograms.',
     expect: { foods: [{ ...F.idli, n: 2 }], weight: 82.5 }, save: false, refusalAllowed: true,
     plain: 'a correct preview or a refusal; never a wrong weight; never saved' },
 ];
@@ -99,11 +101,45 @@ export const PORTION_RULES = Object.freeze([
 const UNIT_FAMILIES = [['katori', 'bowl']];
 const sameFamily = (a, b) => UNIT_FAMILIES.some(f => f.includes(a) && f.includes(b));
 const FOOD_WORDS = { dal: /^(?:dal|daal|dhal)$/ };
-/** The member's own learned grams for one portion of this food in either container of the rule, or null. */
-export function memberPortionGrams(portions, food, rule) {
+/**
+ * Fixes-2v (run-2 review, finding 3): the member's own learned grams for ONE
+ * container of this food, e.g. "katori dal". Every matching row is read, never
+ * just the first, so the answer cannot depend on the order the rows arrive in.
+ * → { grams: n } when all matching rows agree, { conflict: [..] } when they
+ *   disagree, or null when the member has no row for that container.
+ */
+export function memberContainerGrams(portions, food, unit) {
   const words = FOOD_WORDS[food]; if (!words || !Array.isArray(portions)) return null;
-  const hit = portions.find(p => { const [u, ...rest] = String(p?.phrase || '').toLowerCase().trim().split(/\s+/); return [rule.spoken, rule.shown].includes(u) && words.test(rest.join(' ')); });
-  const g = Number(hit?.grams); return hit && Number.isFinite(g) && g > 0 ? g : null;
+  const gs = portions.filter(p => { const [u, ...rest] = String(p?.phrase || '').toLowerCase().trim().split(/\s+/); return u === unit && words.test(rest.join(' ')); })
+    .map(p => Number(p?.grams)).filter(g => Number.isFinite(g) && g > 0);
+  if (!gs.length) return null;
+  const set = [...new Set(gs)];
+  return set.length === 1 ? { grams: set[0] } : { conflict: set.sort((a, b) => a - b) };
+}
+/**
+ * The amounts that apply to the spoken container (katori) and the shown one
+ * (bowl): the member's own learned value, else the app's generic default. The
+ * alias is allowed only when the two applicable amounts are demonstrably equal.
+ * → { ok: true, grams, basis } | { ok: false, result: 'FAIL'|'UNVERIFIED', reason }
+ */
+export function portionAlias(portions, rule) {
+  const spoken = memberContainerGrams(portions, rule.food, rule.spoken), shown = memberContainerGrams(portions, rule.food, rule.shown);
+  const name = (u) => `${u} ${rule.food}`;
+  for (const [u, x] of [[rule.spoken, spoken], [rule.shown, shown]]) if (x?.conflict) return { ok: false, result: 'UNVERIFIED', reason: `the member has different learned sizes for "${name(u)}" (${x.conflict.join(' g, ')} g), so the amount cannot be settled` };
+  if (spoken && shown) {
+    if (spoken.grams !== shown.grams) return { ok: false, result: 'FAIL', reason: `the member's own "${name(rule.spoken)}" is ${spoken.grams} g but their "${name(rule.shown)}" is ${shown.grams} g: different sizes, so ${rule.spoken} and ${rule.shown} are not the same amount` };
+    return { ok: true, grams: spoken.grams, basis: `the member's own ${name(rule.spoken)} and ${name(rule.shown)} (both ${spoken.grams} g)` };
+  }
+  if (spoken) return { ok: true, grams: spoken.grams, basis: `the member's own ${name(rule.spoken)} (${spoken.grams} g); the shown amount must equal it` };
+  if (shown) {
+    if (shown.grams === rule.grams_each) return { ok: true, grams: rule.grams_each, basis: `the member's own ${name(rule.shown)} (${shown.grams} g), equal to the ${rule.grams_each} g default for a ${rule.spoken}` };
+    return { ok: false, result: 'UNVERIFIED', reason: `the member's own "${name(rule.shown)}" is ${shown.grams} g and they have no learned "${name(rule.spoken)}"; a learned ${rule.shown} does not define their ${rule.spoken}, so the equivalence is unresolved` };
+  }
+  return { ok: true, grams: rule.grams_each, basis: `the ${rule.grams_each} g default (${rule.source})` };
+}
+/** Kept for callers of Fixes-2u; now order-independent (the spoken container first, never "whichever row came first"). */
+export function memberPortionGrams(portions, food, rule) {
+  const a = portionAlias(portions, rule); return a.ok && a.basis.startsWith('the member') ? a.grams : null;
 }
 
 /**
@@ -128,12 +164,16 @@ export function evaluateItems(expect, { foods = [], weight_kg = null } = {}, opt
         const rule = PORTION_RULES.find(r => r.food === e.key && r.spoken === e.unit && r.shown === q.unit);
         if (!rule) { unverified = true; reasons.push(`${e.key}: ${q.unit} instead of ${e.unit}, and no portion rule maps these for ${e.key}`); }
         else {
-          const own = memberPortionGrams(opts.portions, e.key, rule), per = own ?? rule.grams_each, want = per * e.n;
-          const g = foods[i].grams == null || foods[i].grams === '' ? null : Number(foods[i].grams);
-          const basis = own != null ? `the member's own ${own} g portion` : `the ${rule.grams_each} g default (${rule.source})`;
-          if (g == null || !Number.isFinite(g)) { unverified = true; reasons.push(`${e.key}: shown as ${q.unit} with no grams, so the ${want} g portion cannot be checked`); }
-          else if (Math.abs(g - want) > 0.5) { fail = true; reasons.push(`${e.key}: ${q.n} ${q.unit} at ${g} g, not ${want} g (${basis})`); }
-          else notes.push(`${e.key}: said "${e.n} ${e.unit}", shown "${q.n} ${q.unit}" at ${g} g — accepted by the dal portion rule using ${basis}; an app estimate, not a measurement of the member's bowl`);
+          // Fixes-2v: spoken and shown containers resolved separately; conflicts fail, unresolved stays unverified.
+          const a = portionAlias(opts.portions, rule);
+          if (!a.ok) { if (a.result === 'FAIL') fail = true; else unverified = true; reasons.push(`${e.key}: shown as ${q.unit}, said ${e.unit}: ${a.reason}`); }
+          else {
+            const want = a.grams * e.n;
+            const g = foods[i].grams == null || foods[i].grams === '' ? null : Number(foods[i].grams);
+            if (g == null || !Number.isFinite(g)) { unverified = true; reasons.push(`${e.key}: shown as ${q.unit} with no grams, so the ${want} g portion cannot be checked`); }
+            else if (Math.abs(g - want) > 0.5) { fail = true; reasons.push(`${e.key}: ${q.n} ${q.unit} at ${g} g, not ${want} g (${a.basis})`); }
+            else notes.push(`${e.key}: said "${e.n} ${e.unit}", shown "${q.n} ${q.unit}" at ${g} g — accepted by the dal portion rule using ${a.basis}; an app estimate, not a measurement of the member's bowl`);
+          }
         }
       }
       else if (q.unit !== e.unit) { fail = true; reasons.push(`${e.key}: ${q.unit} instead of ${e.unit}`); }
@@ -348,7 +388,7 @@ const pearson = (a, b) => {
  * source / captured: { env (envelopeDb), duration_ms, speech (speechPresence.analyse) }.
  * → { valid, reasons, correlation, lag_ms, coverage }
  */
-export function captureCheck({ source, captured, kind } = {}) {
+export function captureCheck({ source, captured, kind, voice, noise } = {}) {
   if (!captured || !Array.isArray(captured.env) || !captured.env.length) return { valid: false, reasons: ['no captured recording to check'], correlation: null, lag_ms: null, coverage: 0 };
   const loud = (env) => env.some(x => x > -45);
   if (kind === 'silence') {
@@ -372,8 +412,93 @@ export function captureCheck({ source, captured, kind } = {}) {
   if (best.r < 0.6) reasons.push(`the recording does not follow the source sound (best match r = ${best.r < -1 ? 'none' : best.r.toFixed(2)})`);
   if (covered < 0.9) reasons.push(`the recording carries only ${Math.round(covered * 100)}% of the source sound (it stopped early, started late or went quiet)`);
   if (!reasons.length) reasons.push(`the recording follows the source sound (r = ${best.r.toFixed(2)}, ${best.lag * 20} ms later, ${Math.round(covered * 100)}% covered)`);
-  return { valid: best.r >= 0.6 && covered >= 0.9, reasons, correlation: best.r < -1 ? null : Number(best.r.toFixed(3)), lag_ms: best.lag * 20, coverage: Number(covered.toFixed(3)),
-    source_span_ms: (last - first + 1) * 20 };
+  let valid = best.r >= 0.6 && covered >= 0.9, voiceCheck = null;
+  // Fixes-2v: for a sound with a background, the envelope can match on the noise alone; the voice itself must be shown.
+  if (kind === 'noisy') {
+    voiceCheck = voiceComponentCheck({ source: source?.pcm, voice: voice?.pcm, noise: noise?.pcm, captured: captured?.pcm, lagSamples: best.lag * 320 });
+    if (!voiceCheck.valid) { valid = false; reasons.push(...voiceCheck.reasons); } else reasons.push(...voiceCheck.reasons);
+  }
+  return { valid, reasons, correlation: best.r < -1 ? null : Number(best.r.toFixed(3)), lag_ms: best.lag * 20, coverage: Number(covered.toFixed(3)),
+    source_span_ms: (last - first + 1) * 20, voice_check: voiceCheck };
+}
+
+// ── 4e. Did the VOICE reach the recording, not just the noise? (Fixes-2v) ───
+// Run-2 review, finding 2: S5's loudness envelope is dominated by its loud
+// background, so a capture of the background alone (no voice) matched the
+// source better (r = 0.998) than the real upload. The envelope check cannot see
+// the voice. This check compares the recording with the source in the places
+// where the VOICE dominates: short-time spectra (512-point frames, 32 ms, half
+// overlap, 150-4000 Hz); a time-frequency point is a voice marker when the
+// voice track alone is at least 6 dB above the noise track alone there. In those
+// points a faithful recording carries the voice's extra energy above the noise;
+// the noise alone does not. score = (recording − noise) / (source − noise),
+// averaged over the markers, after levelling the recording on noise-dominated
+// points. ≈ 1: the voice is there; ≈ 0: only the noise.
+// When a source has too few markers (the voice is buried too deep, like the
+// 0.12-level S5 recipe of runs 1 and 2: 156 points), no recording can prove its
+// voice: the capture is INVALID ("not verifiable"), never valid.
+export const VOICE_CHECK = Object.freeze({ N: 512, HOP: 256, LO_HZ: 150, HI_HZ: 4000, MARKER_DB: 6, MIN_MARKERS: 500, MIN_FRAMES: 40, MIN_SCORE: 0.7 });
+function fftMag2(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2, tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+      }
+    }
+  }
+}
+/** Short-time spectra in dB of 16 kHz samples (Int16Array or numbers in −32768…32767): frames × bins. */
+export function spectraDb(pcm, rate = 16000) {
+  const { N, HOP } = VOICE_CHECK, w = Array.from({ length: N }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1)));
+  const out = [];
+  for (let s = 0; s + N <= pcm.length; s += HOP) {
+    const re = new Float64Array(N), im = new Float64Array(N);
+    for (let i = 0; i < N; i++) re[i] = (pcm[s + i] / 32768) * w[i];
+    fftMag2(re, im);
+    const row = new Float64Array(N / 2 + 1);
+    for (let k = 0; k <= N / 2; k++) row[k] = 10 * Math.log10(re[k] * re[k] + im[k] * im[k] + 1e-10);
+    out.push(row);
+  }
+  return out;
+}
+const median = (a) => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+/**
+ * source, voice, noise, captured: 16 kHz sample arrays (voice + noise = source).
+ * lagSamples: how late the recording is (from the envelope match).
+ * → { verifiable, valid, score, markers, marker_frames, gain_db, reasons }
+ */
+export function voiceComponentCheck({ source, voice, noise, captured, lagSamples = 0, rate = 16000 } = {}) {
+  const C = VOICE_CHECK;
+  if (!source || !voice || !noise || !captured) return { verifiable: false, valid: false, score: null, markers: 0, reasons: ['no separate voice and noise tracks for this sound, so the voice in the recording cannot be verified'] };
+  const n = Math.min(source.length, voice.length, noise.length);
+  const cap = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const j = i + lagSamples; cap[i] = j >= 0 && j < captured.length ? captured[j] : 0; }
+  const S = spectraDb(source.subarray ? source.subarray(0, n) : source.slice(0, n), rate), V = spectraDb(voice.subarray ? voice.subarray(0, n) : voice.slice(0, n), rate),
+    Z = spectraDb(noise.subarray ? noise.subarray(0, n) : noise.slice(0, n), rate), R = spectraDb(cap, rate);
+  const binHz = rate / C.N, k0 = Math.ceil(C.LO_HZ / binHz), k1 = Math.floor(C.HI_HZ / binHz);
+  const markers = [], noiseBins = []; const frames = new Set();
+  for (let t = 0; t < S.length; t++) for (let k = k0; k <= k1; k++) {
+    if (V[t][k] - Z[t][k] >= C.MARKER_DB && V[t][k] > -60) { markers.push([t, k]); frames.add(t); }
+    else if (Z[t][k] - V[t][k] >= C.MARKER_DB && Z[t][k] > -60) noiseBins.push([t, k]);
+  }
+  if (markers.length < C.MIN_MARKERS || frames.size < C.MIN_FRAMES)
+    return { verifiable: false, valid: false, score: null, markers: markers.length, marker_frames: frames.size,
+      reasons: [`the voice in this sound is buried too deep to verify in any recording (${markers.length} voice-dominated points in ${frames.size} frames; at least ${C.MIN_MARKERS} in ${C.MIN_FRAMES} needed)`] };
+  // Level the recording on noise-dominated points (a recorder may be louder or quieter); none (no noise) → 0 dB.
+  const gain = noiseBins.length >= 200 ? Math.max(-20, Math.min(20, median(noiseBins.map(([t, k]) => R[t][k] - S[t][k])))) : 0;
+  let exp = 0, got = 0;
+  for (const [t, k] of markers) { const ref = Math.max(Z[t][k], -60); exp += S[t][k] - ref; got += (R[t][k] - gain) - ref; }
+  const score = exp > 0 ? got / exp : 0;
+  const ok = score >= C.MIN_SCORE;
+  return { verifiable: true, valid: ok, score: Number(score.toFixed(3)), markers: markers.length, marker_frames: frames.size, gain_db: Number(gain.toFixed(2)),
+    reasons: [ok ? `the voice itself is in the recording (voice check ${score.toFixed(2)} over ${markers.length} voice-dominated points)`
+      : `the recording does not carry the voice (voice check ${score.toFixed(2)} over ${markers.length} voice-dominated points; at least ${C.MIN_SCORE} needed): it holds the background, not the speech`] };
 }
 
 // ── 4d. Names never leave the robot (Fixes-2u, first-run review item 7) ─────
@@ -410,8 +535,11 @@ export function redactNames(t, names) {
 export function verdict(r) {
   const failures = [], incomplete = [];
   if (r.blocked) return { run: 'BLOCKED', failures: [r.blocked], incomplete, exitCode: 3 };
+  // Fixes-2v: a TARGETED run (scope: listed cases only) repeats just those cases; Part 1 and the real recordings are not repeated.
+  const scope = Array.isArray(r.scope?.cases) && r.scope.cases.length ? r.scope.cases : null;
   const p1 = r.part1;
-  if (!p1) incomplete.push('Kannada re-run not collected');
+  if (scope) { if (p1) incomplete.push('a targeted run must not repeat the Kannada re-run'); }
+  else if (!p1) incomplete.push('Kannada re-run not collected');
   else {
     if (p1.approved_count !== 2) incomplete.push(`expected the 2 approved 19 Oct recordings, found ${p1.approved_count}`);
     for (const s of p1.samples || []) {
@@ -425,11 +553,12 @@ export function verdict(r) {
   const p2 = r.part2 || {};
   if (!p2.collected) incomplete.push('everyday fallback not collected');
   else {
-    const want = 2 * (p1?.approved_count || 0);
+    const want = scope ? 0 : 2 * (p1?.approved_count || 0);
     if ((p2.real || []).length !== want) incomplete.push(`real-recording tries: ${(p2.real || []).length} of ${want}`);
     for (const t of p2.real || []) if (t.status !== 200 || (!t.transcript && !t.rejected)) incomplete.push(`real recording ${t.phrase_id} (${t.voice_language}): ${t.status !== 200 ? `HTTP ${t.status}` : 'empty answer without a reason'} — not a refusal`);
     const byId = new Map((p2.cases || []).map(c => [c.id, c]));
-    for (const spec of CASES) {
+    if (scope) for (const c of p2.cases || []) if (!scope.includes(c.id)) failures.push(`${c.id} ran outside the targeted scope (${scope.join(', ')})`);
+    for (const spec of CASES.filter(x => !scope || scope.includes(x.id))) {
       const c = byId.get(spec.id);
       if (!c) { incomplete.push(`${spec.id}: case missing`); continue; }
       // Fixes-2u: a case whose every attempt had an INVALID capture has no evidence; it is excluded from the quality totals.
@@ -462,6 +591,8 @@ export function verdict(r) {
   if (r.cleanup && !r.cleanup.ok) failures.push(`clean-up: ${r.cleanup.problems.join('; ')}`);
   if (r.switch_off && !r.switch_off.verified) failures.push(`voice backup switch NOT confirmed off (${r.switch_off.detail})`);
   for (const e of r.errors || []) failures.push(e);
+  // Fixes-2v: the last gate before publishing. A picture with a name in it is a failure even though it was removed.
+  for (const x of r.publication?.removed || []) (/OCR read|workbook held/.test(x.reason) ? failures : incomplete).push(`evidence file ${x.file} removed before publishing: ${x.reason}`);
   const run = failures.length ? 'FAILED' : incomplete.length ? 'INCOMPLETE' : 'COMPLETE';
   return { run, failures, incomplete, exitCode: run === 'COMPLETE' ? 0 : 1 };
 }

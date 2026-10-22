@@ -20,6 +20,11 @@
  *   I  (Fixes-2u) the AI answers S1 in chat with no log card: a recorded outcome.
  *   J  (Fixes-2u) a microphone that delivers nothing: S1's first attempt and both
  *      of S3's. INVALID captures are repeated once, never counted.
+ *   K  (Fixes-2v) a TARGETED run, S5 only (ROBOT_SCOPE=S5): its first attempt hears
+ *      the background alone (no voice) → INVALID by the voice check; the second
+ *      attempt is valid. No Kannada re-run, no real recordings, nothing else run.
+ *   L  (Fixes-2v) the admin card picture asked for (ROBOT_ADMIN_SHOT=1) with
+ *      invited members whose names must never reach the picture.
  *
  * Changed in Fixes-2u (scenario A): S5 (a voice buried under loud noise) is now
  * refused by the server's speech check before any provider, so it is a refusal
@@ -63,10 +68,10 @@ async function freshDb({ occupied = false, noDay = false } = {}) {
   const c = new Client({ connectionString: `${PG}/${DB}` }); await c.connect();
   const user = async (name, role, extra) => (await c.query(`INSERT INTO users (name, phone, email, password, role) VALUES ($1,$2,$3,$4,$5) RETURNING id`, [name, extra.phone || null, extra.email || null, await bcrypt.hash(extra.secret, 8), role])).rows[0].id;
   const ids = {
-    admin: await user('Sim Admin', 'admin', { email: 'admin@sim.test', secret: 'Admin#Sim1' }),
+    admin: await user('Sudha Acharya', 'admin', { email: 'admin@sim.test', secret: 'Admin#Sim1' }),
     voice: await user('Voice Robot', 'patient', { phone: '9000000101', secret: '2468' }),
-    pilot: await user('Pilot Member', 'patient', { phone: '9000000102', secret: '1111' }),
-    other: await user('Other Tester', 'patient', { phone: '9000000103', secret: '1111' }),
+    pilot: await user('Pallavi Murthy', 'patient', { phone: '9000000102', secret: '1111' }),
+    other: await user('Omkar Tendulkar', 'patient', { phone: '9000000103', secret: '1111' }),
   };
   for (const id of [ids.voice, ids.pilot, ids.other]) await c.query('INSERT INTO patient_profiles (user_id) VALUES ($1)', [id]);
   if (!noDay) await c.query(`INSERT INTO daily_logs (patient_id, log_date, weight_kg, food_items, saved_at) VALUES ($1, $2, 81, $3, NOW() - INTERVAL '1 hour')`, [ids.voice, todayIST(), JSON.stringify(OLD)]);
@@ -103,13 +108,13 @@ const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(',')}]` : v && ty
 // Empty fields left out: saving a day makes the app add food_id: null to older entries (not a change).
 const noNulls = (f) => Object.fromEntries(Object.entries(f).filter(([, v]) => v != null));
 const sameDay = (d) => d && Number(d.weight_kg) === 81 && canon(d.food_items.map(noNulls)) === canon(OLD.map(noNulls));
-const noNames = (rep) => !/Pilot Member|Other Tester|Voice Robot|Sim Admin/.test(rep);
+const noNames = (rep) => !/Pallavi Murthy|Omkar Tendulkar|Voice Robot|Sudha Acharya|Pallavi|Murthy|Omkar|Tendulkar|Sudha|Acharya/.test(rep);
 const EMPTY_FLAG = path.join(TMP, 'empty-k01');
 const casesOf = (r) => Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
 // Every file the robot wrote: no names anywhere (report, results, workbook strings).
 const outputsNameFree = (out) => fs.readdirSync(out).filter(f => /\.(md|json|xlsx)$/.test(f)).every(f => noNames(fs.readFileSync(path.join(out, f), 'latin1')));
 
-const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 for (const sc of want) {
   const flags = { B: { SIM_WRONG_PREVIEW: '1' }, D: { SIM_FAIL_SWITCH_OFF: '1' }, E: { SIM_TAMPER_ORIGINALS: '1' }, F: { SIM_EXTRA_WATER: '1' }, G: { SIM_PARSE_FAIL_WEIGHT: '1' }, H: { SIM_EMPTY_PILOT_K01_FILE: EMPTY_FLAG }, I: { SIM_CHAT_REPLY: '1' } }[sc] || {};
   const { c, ids } = await freshDb({ occupied: sc === 'C', noDay: sc === 'H' });
@@ -129,8 +134,9 @@ for (const sc of want) {
       const cs = Object.fromEntries((r.res?.part2?.cases || []).map(x => [x.id, x]));
       ck('S1–S3: preview PASS, saved, "Saved" confirmed, read back PASS', ['S1', 'S2', 'S3'].every(k => cs[k]?.quality === 'PASS' && cs[k].saved && cs[k].save_confirmed && cs[k].readback?.result === 'PASS'), ['S1', 'S2', 'S3'].map(k => cs[k]));
       ck('S4: refused as expected; Retry re-sent the identical recording (SHA-256 match)', cs.S4?.quality === 'PASS' && cs.S4.retry?.identical === true, cs.S4);
-      // Changed in Fixes-2u: the S5 recording (voice buried under loud noise) is refused by the server's speech check before any provider.
-      ck('S5: refused by the server\'s speech check (no_speech_detected; allowed for S5), nothing saved, run still COMPLETE', cs.S5?.outcome === 'refused' && cs.S5.rejected === 'no_speech_detected' && cs.S5.quality === 'PASS' && !cs.S5.saved && cs.S5.no_save_verified === true, cs.S5);
+      // Changed in Fixes-2v: S5 recipe v2 (voice 0.45, verifiable). The server may refuse it (no_speech_detected) or pass it
+      // on; either way nothing is saved, and its capture is valid only because the VOICE was found in the upload.
+      ck('S5 v2: capture valid by the voice check (not just the background); refused or previewed, never saved, day unchanged', cs.S5?.attempts?.[0]?.capture?.voice_check?.valid === true && ['refused', 'preview'].includes(cs.S5.outcome) && !cs.S5.saved && cs.S5.no_save_verified === true, { v: cs.S5?.attempts?.[0]?.capture, o: cs.S5?.outcome, q: cs.S5?.quality });
       ck('S4 (silence) refused by the speech check BEFORE any provider (no Whisper text in its try)', cs.S4?.rejected === 'no_speech_detected' && (r.res?.runs || []).filter(x => x.reason === 'no_speech_detected').every(x => !x.whisper_text && x.config?.provider_called === false), { s4: cs.S4, runs: r.res?.runs?.map(x => [x.id, x.reason, x.whisper_text]) });
       ck('S3: "1 katori dal" shown as "1 bowl" (150 g) passed by the dal portion rule, saved and read back, wording and grams kept in a note', cs.S3?.quality === 'PASS' && /said "1 katori", shown "1 bowl" at 150 g/.test((cs.S3.quality_notes || []).join()) && cs.S3.readback?.result === 'PASS', cs.S3);
       ck('every case: one attempt, capture VALID (the actual upload decoded and matched to its source), page closed', ['S1', 'S2', 'S3', 'S4', 'S5'].every(k => cs[k]?.attempts?.length === 1 && cs[k].attempts[0].capture?.valid === true && cs[k].attempts[0].page_closed && cs[k].attempts[0].recorder_ready && cs[k].attempts[0].stop_ok), ['S1', 'S2', 'S3', 'S4', 'S5'].map(k => [k, cs[k]?.attempts?.map(a => [a.capture?.reasons, a.recorder_ready, a.stop_ok])]));
@@ -142,8 +148,10 @@ for (const sc of want) {
       const rr = (await c.query(`SELECT s.phrase_id FROM voice_sample_reruns x JOIN voice_samples s ON s.id = x.sample_id ORDER BY 1`)).rows.map(x => x.phrase_id);
       ck('the re-run touched only k01 and k02: no re-run row for the own-words f01 or the other-day k03; report says the others were not reprocessed',
         rr.join() === 'k01,k02' && /2 requested · 2 provider responses · 2 with words · 0 empty · 0 errors/.test(r.res?.part1?.screen_message || '') && r.res?.part1?.unapproved_touched?.length === 0 && r.res.part1.unapproved_count === 2, { rr, p1: r.res?.part1 });
+      // Changed in Fixes-2v: the admin card picture is left out of the public evidence by default (run-2 review, finding 1).
       const card = fs.readdirSync(r.out).find(f => /B19-voice-test-card\.png$/.test(f));
-      ck('the B19 screenshot is the voice-test card only, names removed (taken, not skipped); no name in any written file', !!card && !/not taken/.test((r.res?.notes || []).join()) && outputsNameFree(r.out), { card, notes: r.res?.notes });
+      ck('the admin card picture is left out by default (said in the report); every picture passed the OCR publication check; no name in any written file',
+        !card && /admin card picture left out/.test((r.res?.notes || []).join()) && r.res?.publication?.checked > 0 && !(r.res.publication.removed || []).length && outputsNameFree(r.out), { card, notes: r.res?.notes, pub: r.res?.publication });
       ck('every case passed through all its stages (transcribed; preview or explicit refusal; quality; saved + read back, or day verified unchanged)',
         (r.res?.part2?.cases || []).every(x => x.transcribed && ['preview', 'refused'].includes(x.outcome) && x.quality && (x.saved ? x.save_confirmed && x.readback?.result === 'PASS' : x.no_save_verified === true)), r.res?.part2?.cases?.map(x => [x.id, x.outcome, x.quality, x.saved, x.no_save_verified]));
       ck('the pilot originals in the database are untouched', (await c.query(`SELECT whisper_score FROM voice_samples WHERE phrase_id IN ('k01','k02') ORDER BY phrase_id`)).rows.map(x => Number(x.whisper_score)).join() === '0,0.5');
@@ -236,6 +244,33 @@ for (const sc of want) {
       ck('the report\'s quality totals leave the INVALID capture out', /1 INVALID capture\(s\), not counted/.test(r.rep), r.rep.split('\n').find(l => /Recognition quality/.test(l)));
       ck('every recording sent is still accounted for in this run\'s tries (INVALID ones included)', !r.res?.part2?.scope_problem, r.res?.part2?.scope_problem);
       ck('day as before; switch verified off', sameDay(await dayNow(c, ids.voice)) && r.res?.switch_off?.verified);
+    }
+    if (sc === 'K') {
+      console.log('\n[K] a targeted run, S5 only; its first attempt hears the background alone (SIMULATED)');
+      const r = await robot({ ROBOT_SCOPE: 'S5', ROBOT_SIM_BREAK_CAPTURE: 'S5:1:noise' });
+      const cs = casesOf(r), a = cs.S5?.attempts || [];
+      ck('only S5 ran; no Kannada re-run and no real-recording tries; labelled TARGETED', Object.keys(cs).join() === 'S5' && !r.res?.part1 && !(r.res?.part2?.real || []).length && /TARGETED RUN: S5 only/.test(r.rep), { cases: Object.keys(cs), p1: !!r.res?.part1 });
+      ck('attempt 1 (background alone): INVALID by the voice check although the loudness pattern matched', a[0]?.simulated_noise_only_microphone && a[0].capture?.valid === false && a[0].capture?.correlation > 0.6 && /does not carry the voice/.test((a[0].capture?.reasons || []).join()), a[0]?.capture);
+      ck('attempt 2: valid, the voice found in the upload; counted', a[1]?.capture?.voice_check?.valid === true && !cs.S5.invalid && cs.S5.quality, a[1]?.capture);
+      ck('run COMPLETE; day as before; switch verified off; the pilot re-runs untouched', r.res?.verdict?.run === 'COMPLETE' && sameDay(await dayNow(c, ids.voice)) && r.res?.switch_off?.verified && !(await c.query('SELECT 1 FROM voice_sample_reruns')).rows.length, r.res?.verdict);
+    }
+    if (sc === 'L') {
+      console.log('\n[L] the admin card picture asked for, with invited members (SIMULATED)');
+      for (const [i, n] of ['Lakshmi Narayan', 'Rohit Deshpande', 'Farida Khan'].entries()) {
+        const id = (await c.query(`INSERT INTO users (name, phone, password, role) VALUES ($1,$2,'x','patient') RETURNING id`, [n, `90000003${i}0`])).rows[0].id;
+        await c.query('INSERT INTO patient_profiles (user_id) VALUES ($1)', [id]);
+        await c.query('INSERT INTO voice_pilot_members (patient_id, invited_by) VALUES ($1,$2)', [id, ids.admin]);
+      }
+      const r = await robot({ ROBOT_ADMIN_SHOT: '1', ROBOT_SCOPE: 'S1' });
+      const card = fs.readdirSync(r.out).find(f => /B19-voice-test-card\.png$/.test(f));
+      const { ocrText, nameHits } = await import('./lib/voice-evidence-shot.mjs');
+      const names = ['Lakshmi Narayan', 'Rohit Deshpande', 'Farida Khan', 'Pallavi Murthy', 'Omkar Tendulkar', 'Sudha Acharya'];
+      ck('a targeted run skips Part 1, so no admin picture is taken there either', !card, card);
+      const r2 = await robot({ ROBOT_ADMIN_SHOT: '1' });
+      const card2 = fs.readdirSync(r2.out).find(f => /B19-voice-test-card\.png$/.test(f));
+      const notes = (r2.res?.notes || []).join(' ');
+      ck('full run with the picture asked for: either a picture whose OCR text holds no name, or no picture with the reason given', card2 ? !nameHits(ocrText(path.join(r2.out, card2)), names).any : /admin card picture not taken/.test(notes), { card2, notes });
+      ck('no name in any written file; the publication check removed nothing identifying', outputsNameFree(r2.out) && !(r2.res?.publication?.removed || []).some(x => /OCR read/.test(x.reason)), r2.res?.publication);
     }
   } catch (e) { ck(`scenario ${sc} completed`, false, e.stack); }
   finally { srv.child.kill(); await c.end(); await wait(800); }

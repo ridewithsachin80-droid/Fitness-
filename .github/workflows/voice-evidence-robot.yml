@@ -34,8 +34,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install the speech tools (computer voice, audio conversion)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg
+      - name: Install the speech tools (computer voice, audio conversion) and OCR (Fixes-2v: every picture is read back before publishing)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng ffmpeg tesseract-ocr
       - name: Install server packages (the browser comes with them)
         working-directory: server
         run: npm install --no-audit --no-fund
