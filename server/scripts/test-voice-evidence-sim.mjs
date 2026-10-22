@@ -250,7 +250,7 @@ for (const sc of want) {
       const r = await robot({ ROBOT_SCOPE: 'S5', ROBOT_SIM_BREAK_CAPTURE: 'S5:1:noise' });
       const cs = casesOf(r), a = cs.S5?.attempts || [];
       ck('only S5 ran; no Kannada re-run and no real-recording tries; labelled TARGETED', Object.keys(cs).join() === 'S5' && !r.res?.part1 && !(r.res?.part2?.real || []).length && /TARGETED RUN: S5 only/.test(r.rep), { cases: Object.keys(cs), p1: !!r.res?.part1 });
-      ck('attempt 1 (background alone): INVALID by the voice check although the loudness pattern matched', a[0]?.simulated_noise_only_microphone && a[0].capture?.valid === false && a[0].capture?.correlation > 0.6 && /does not carry the voice/.test((a[0].capture?.reasons || []).join()), a[0]?.capture);
+      ck('attempt 1 (background alone): INVALID, and the voice check says why (voice check below 0.7: "does not carry the voice")', a[0]?.simulated_noise_only_microphone && a[0].capture?.valid === false && a[0].capture?.voice_check?.score < 0.7 && /does not carry the voice/.test((a[0].capture?.reasons || []).join()), a[0]?.capture);
       ck('attempt 2: valid, the voice found in the upload; counted', a[1]?.capture?.voice_check?.valid === true && !cs.S5.invalid && cs.S5.quality, a[1]?.capture);
       ck('run COMPLETE; day as before; switch verified off; the pilot re-runs untouched', r.res?.verdict?.run === 'COMPLETE' && sameDay(await dayNow(c, ids.voice)) && r.res?.switch_off?.verified && !(await c.query('SELECT 1 FROM voice_sample_reruns')).rows.length, r.res?.verdict);
     }

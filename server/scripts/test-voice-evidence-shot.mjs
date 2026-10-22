@@ -96,10 +96,11 @@ try {
   let p = await adminPage();
   // 2u: replace names once the moment the card appears, then photograph the card.
   await p.evaluate((names) => { const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); for (let n; (n = w.nextNode());) for (const x of names) n.nodeValue = n.nodeValue.split(x).join('[M]'); }, NAMES);
-  await p.waitForSelector('[data-testid="vp-members"] li', { timeout: 30e3 }); await wait(500);   // the held-back list lands AFTER the cleaning, as it did on the test site
+  await p.waitForSelector('[data-testid="vp-members"] li', { timeout: 30e3 });
+  await lateUpdate(p); await wait(500);   // what arrives after the one-off cleaning (as the late member list did on the test site)
   const leak = path.join(OUT, 'A-2u-method.png'); await (await p.$('[data-testid="vp-panel"]')).screenshot({ path: leak });
   const hA = S.nameHits(S.ocrText(leak), NAMES);
-  ck('the 2u method lets real names into the picture (OCR reads them): this test reproduces the run-2 leak', hA.any, hA);
+  ck('the 2u method (clean once, then photograph) lets names that arrive afterwards into the picture, and OCR reads them: the run-2 leak reproduced', hA.any, hA);
   await p.browserContext().close();
 
   console.log('\n[B] safeShot: quiet page, style mask, watcher, OCR of the finished picture');

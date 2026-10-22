@@ -86,3 +86,29 @@ No other existing assertion was changed or removed.
 - `DELIVERY-FIXES-2v.md`
 
 Changed: `.github/workflows/voice-evidence-robot.yml` (adds `tesseract-ocr`).
+
+## Test results (mocked or simulated; no real provider)
+- **`test-voice-evidence-robot.mjs` (gate): 169/169** (142 in 2u; 27 new), including:
+  - the dal reproduction in both row orders;
+  - the reviewer's exact noise-only S5 counterexample;
+  - the 0.12 recipe "not verifiable";
+  - the publication check with a stand-in OCR;
+  - targeted-run verdicts.
+- **Full local gate: all suites pass, 6,494 assertions** (2u: 6,467).
+- **Browser test with real OCR (`test-voice-evidence-shot.mjs`, on demand): 9/9, twice in a row.**
+  - Negative control: the 2u method lets names into the picture, and OCR reads them.
+  - The safe method gives a picture with no name or name word, even with a late update.
+  - A name drawn as pixels is caught only by OCR, and the picture is discarded.
+  - No name list or no OCR → no picture.
+  - The publication check removes the leaking picture.
+- **Mutation checks:** 12 rules in the decision libraries and 3 in the browser method broken on purpose, each caught.
+  - "Finished picture not read back" first survived. The pixel-name case was added; it is now caught.
+- **SIMULATED end to end (`test-voice-evidence-sim.mjs`, real robot, browser, server and Postgres, canned providers):**
+  - **A–L: 56/57 on a clean run; K 4/4 after its new assertion was corrected.**
+  - K's attempt 1 (background alone) was INVALID as intended. The assertion had also demanded that the loudness pattern match (r > 0.6), but with S5 v2's louder voice the background alone matches only at r = 0.51.
+  - Every valid S5 capture scored 1.00 on the voice check; the background alone scored 0.35.
+  - **An earlier run is discounted:** it overlapped the mutation checks (which temporarily break these same files), so it is not counted. That overlap is how one picture came out with stand-ins instead of grey masks; the clean run masked 3 of 3 name areas.
+
+## Deployment
+- **d8f4719** (the 2v robot code) deployed at 17:32 UTC on 22 Oct; live `/health` showed d8f4719 with `speech_check: true`.
+- **The next commit** (test-only fixes and the targeted S5 request, `scope: S5`) is the one the robot checks for.
