@@ -112,3 +112,11 @@ Changed: `.github/workflows/voice-evidence-robot.yml` (adds `tesseract-ocr`).
 ## Deployment
 - **d8f4719** (the 2v robot code) deployed at 17:32 UTC on 22 Oct; live `/health` showed d8f4719 with `speech_check: true`.
 - **The next commit** (test-only fixes and the targeted S5 request, `scope: S5`) is the one the robot checks for.
+
+## Correction: the voice workflow file (found 22 Oct, fixed in this commit)
+- **What went wrong:** the 2v edit of `.github/workflows/voice-evidence-robot.yml` put an unquoted `: ` inside a step name ("…OCR (Fixes-2v: every picture…)"). That is invalid YAML (line 37).
+  - GitHub rejected the workflow, so the targeted S5 request in 5d137e2 never ran (run 39827191618 failed at once).
+  - Nothing was tested, and nothing on the site was changed.
+- **Fixed:** the step name is now quoted.
+- **New gate check:** `test-voice-evidence-robot.mjs` [14] parses every workflow file. It fails on the broken file and passes on the fixed one.
+- **Next:** the S5 request is sent again by a new request line.

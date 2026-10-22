@@ -411,5 +411,16 @@ console.log('\n[13] Fixes-2v: nothing identifying is published; targeted runs');
   ck('a picture left out because it could not be checked → INCOMPLETE', L.verdict(x).run === 'INCOMPLETE');
 }
 
+console.log('\n[14] Fixes-2v: the workflow files are valid YAML (22 Oct: an unquoted ": " in a step name made GitHub reject the voice workflow, so the S5 request never ran)');
+{
+  const wf = path.join(HERE, '../../.github/workflows');
+  const py = spawnSync('python3', ['-c', 'import yaml'], { encoding: 'utf8' });
+  if (py.status !== 0) console.log('  – PyYAML not available here; workflow parse check skipped');
+  else for (const f of fs.readdirSync(wf).filter(x => /\.ya?ml$/.test(x))) {
+    const r = spawnSync('python3', ['-c', 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert isinstance(d, dict) and "jobs" in d', path.join(wf, f)], { encoding: 'utf8' });
+    ck(`${f} parses as a workflow`, r.status === 0, r.stderr.split('\n').filter(Boolean).slice(-2).join(' '));
+  }
+}
+
 console.log(`\nVoice evidence robot checks: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
