@@ -201,6 +201,9 @@ function start() {
       // Phase 8: voice pilot recordings past their 90 days.
       const v = await require('../routes/voicePilot').deleteExpiredSamples();
       if (v) console.log(`🗑️  Deleted ${v} expired voice pilot recording(s)`);
+      // Fixes-2x: voice calibration takes past their 90 days.
+      const vc = await require('../routes/voiceCalibration').deleteExpiredTakes();
+      if (vc) console.log(`🗑️  Deleted ${vc} expired voice calibration take(s)`);
     } catch (err) { console.error('Plate photo cleanup error:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 

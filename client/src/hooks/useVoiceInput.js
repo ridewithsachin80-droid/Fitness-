@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { transcriptionRoute } from '../utils/voiceComposer';
 import { normalizeVoiceLang, generatedText } from '../utils/voiceLanguage';
 import { today } from '../constants';
+import { calibrationForcesUpload, reportDeviceDictation } from '../utils/calibrationMode';
 
 const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 const hasRecorder = typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && !!window.MediaRecorder;
@@ -208,10 +209,12 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
     // Fixes-2u: on-device words that are only subtitle/credit text are not used;
     // the recording goes to the server instead, where it is checked for speech.
     const text = generatedText(finalTextRef.current) ? '' : finalTextRef.current;
-    if (transcriptionRoute({ webSpeechText: text }).source === 'on-device') {
+    // Fixes-2x: a controlled voice-calibration try (test site, armed account only) always uploads the recording.
+    if (transcriptionRoute({ webSpeechText: text }).source === 'on-device' && !calibrationForcesUpload()) {
       chunksRef.current = [];
       processingRef.current = false;
       setTranscribing(false);
+      reportDeviceDictation(text, session.lang);   // Fixes-2x: natural calibration try only; otherwise nothing
       optsRef.current.onFinal?.(text);
       return;
     }

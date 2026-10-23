@@ -1283,3 +1283,129 @@ CREATE INDEX IF NOT EXISTS idx_nec_batch ON nutrient_enrichment_changes(batch_id
 ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_by INT REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
 ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_revision TEXT;
+
+-- ── Fixes-2x: voice calibration kit (B18/B19), TEST SERVER ONLY ─────────────
+-- Round 1 of claude/FitLife-Voice-Calibration-Plan-2026-10-23.md. Bounds are fixed in
+-- services/voiceCalibration.js: 6 volunteers (3 Kannada, 2 Hindi, 1 English), 144
+-- planned slots, 6 offline settings, 32 Part C tries. Nothing here is read by
+-- everyday voice logging except the one armed Part C try (test server only).
+CREATE TABLE IF NOT EXISTS voice_calibration_participants (
+  id              SERIAL PRIMARY KEY,
+  patient_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code            VARCHAR(6) NOT NULL UNIQUE,          -- P1, P2… never reused; the only identifier in exports
+  grp             VARCHAR(2) NOT NULL CHECK (grp IN ('kn','hi','en')),
+  profile_note    VARCHAR(40),                         -- e.g. "40s, woman"; never a name
+  invited_by      INT REFERENCES users(id) ON DELETE SET NULL,
+  invited_at      TIMESTAMPTZ DEFAULT NOW(),
+  consented_at    TIMESTAMPTZ,
+  consent_version VARCHAR(20),
+  phone_type      VARCHAR(20),
+  browser         VARCHAR(20),
+  installed_app   BOOLEAN,
+  withdrawn_at    TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_one_active_per_member ON voice_calibration_participants (patient_id) WHERE withdrawn_at IS NULL;
+-- Every take is kept. A retake needs a reason and marks the earlier take superseded; nothing is overwritten.
+CREATE TABLE IF NOT EXISTS voice_calibration_takes (
+  id                  SERIAL PRIMARY KEY,
+  participant_id      INT NOT NULL REFERENCES voice_calibration_participants(id) ON DELETE CASCADE,
+  slot_code           VARCHAR(16) NOT NULL,
+  take_no             INT NOT NULL,
+  object_key          TEXT,
+  mime_type           VARCHAR(40),
+  duration_ms         INT,
+  audio_sha256        CHAR(64),
+  phone_type          VARCHAR(20),
+  browser             VARCHAR(20),
+  installed_app       BOOLEAN,
+  retake_reason       VARCHAR(20),
+  retake_note         VARCHAR(200),
+  superseded_at       TIMESTAMPTZ,
+  -- The live speech check, as it ran on this take: raw measurements (exact, for the offline replay).
+  speech_status       VARCHAR(12),
+  detector_version    TEXT,
+  voiced_frames       INT,
+  longest_run_frames  INT,
+  f0_spread_raw       DOUBLE PRECISION,
+  f0_count            INT,
+  hop_ms              DOUBLE PRECISION,
+  frames              INT,
+  voiced_ms           INT,
+  longest_run_ms      INT,
+  peak_db_raw         DOUBLE PRECISION,
+  background_db_raw   DOUBLE PRECISION,
+  speech_error        VARCHAR(200),
+  remeasure           JSONB,
+  -- Both engines, with what was asked and what answered.
+  gemini_text         TEXT,
+  gemini_error        VARCHAR(200),
+  gemini_generated    BOOLEAN,
+  gemini_provenance   JSONB,
+  whisper_text        TEXT,
+  whisper_error       VARCHAR(200),
+  whisper_review      JSONB,
+  whisper_segments    JSONB,
+  whisper_provenance  JSONB,
+  -- What a fluent listener heard on playback (the scoring reference); every change kept.
+  heard               VARCHAR(10) CHECK (heard IN ('speech','no_speech','uncertain')),
+  spoken_as_script    BOOLEAN,
+  reference_text      TEXT,
+  reference_items     JSONB,
+  label_history       JSONB NOT NULL DEFAULT '[]',
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  delete_after        TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '90 days'),
+  UNIQUE (participant_id, slot_code, take_no)
+);
+CREATE INDEX IF NOT EXISTS voice_cal_takes_slot ON voice_calibration_takes (participant_id, slot_code);
+-- A fluent speaker's check of one language's exact lines (the hash of what was checked).
+CREATE TABLE IF NOT EXISTS voice_calibration_wording (
+  lang          VARCHAR(2) PRIMARY KEY,
+  script_sha256 CHAR(64) NOT NULL,
+  confirmed_by  VARCHAR(80) NOT NULL,
+  note          VARCHAR(200),
+  recorded_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  confirmed_at  TIMESTAMPTZ DEFAULT NOW(),
+  history       JSONB NOT NULL DEFAULT '[]'
+);
+-- Part C: the everyday path. Every event of a try is appended (recordings, on-device dictation,
+-- retries, previews, read-backs, restores); outcomes are marked by hand, every edit kept.
+CREATE TABLE IF NOT EXISTS voice_calibration_partc (
+  trial_no            INT PRIMARY KEY,
+  route               VARCHAR(12),
+  account_id          INT REFERENCES users(id) ON DELETE SET NULL,
+  log_date            DATE,
+  baseline            JSONB,
+  captures            JSONB NOT NULL DEFAULT '[]',
+  readbacks           JSONB NOT NULL DEFAULT '[]',
+  cleanup             JSONB,
+  switch_off_verified BOOLEAN,
+  finished_at         TIMESTAMPTZ,
+  items               JSONB,
+  applied             BOOLEAN,
+  day_correct         BOOLEAN,
+  notes               TEXT,
+  edits               JSONB NOT NULL DEFAULT '[]',
+  updated_at          TIMESTAMPTZ
+);
+-- One operator and one controlled account at a time: a single armed try, cleared only by Finish.
+CREATE TABLE IF NOT EXISTS voice_calibration_partc_armed (
+  id        INT PRIMARY KEY CHECK (id = 1),
+  trial_no  INT NOT NULL,
+  route     VARCHAR(12) NOT NULL DEFAULT 'controlled',
+  user_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  armed_by  INT REFERENCES users(id) ON DELETE SET NULL,
+  armed_at  TIMESTAMPTZ DEFAULT NOW()
+);
+-- Part A rule 3: each newly admitted take's transcripts through the logging parser (evaluation
+-- mode: nothing saved, no coach message, no learning). One row per take and engine (deduplicated).
+CREATE TABLE IF NOT EXISTS voice_calibration_preview_evals (
+  id            SERIAL PRIMARY KEY,
+  take_id       INT NOT NULL REFERENCES voice_calibration_takes(id) ON DELETE CASCADE,
+  engine        VARCHAR(10) NOT NULL,
+  stage         VARCHAR(20) NOT NULL,          -- 'voice refused' | 'no transcript' | 'parsed' | 'parser error'
+  preview       JSONB,
+  judgment      JSONB,
+  parser_calls  INT NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (take_id, engine)
+);

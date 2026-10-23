@@ -1,5 +1,6 @@
 import StorageCheck from '../components/admin/StorageCheck';
 import VoicePilotPanel from '../components/voicepilot/VoicePilotPanel';
+import VoiceCalibrationPanel from '../components/voicecalibration/VoiceCalibrationPanel';
 import VoiceFallbackTestPanel from '../components/admin/VoiceFallbackTestPanel';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -182,6 +183,8 @@ export default function AdminDashboard() {
           <VoicePilotPanel />
           {/* Fixes-2p (B18): try the real Whisper backup on one test account. Test server only. */}
           <VoiceFallbackTestPanel />
+          {/* Fixes-2x (B18/B19): voice calibration round 1. Test server only. */}
+          <VoiceCalibrationPanel />
         </div>
       </div>
 

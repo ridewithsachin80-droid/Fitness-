@@ -26,6 +26,7 @@ import NextUp        from '../components/today/NextUp';
 import ProgressPhotoCard from '../components/progress/ProgressPhotoCard';
 import CheckinCard from '../components/checkin/CheckinCard';
 import VoicePilotCard from '../components/voicepilot/VoicePilotCard';
+import VoiceCalibrationCard from '../components/voicecalibration/VoiceCalibrationCard';
 import LogPlannedSheet from '../components/sheets/LogPlannedSheet';
 import PlatePhotoSheet from '../components/sheets/PlatePhotoSheet';
 import { FastingBar } from '../components/today/DayWidgets';
@@ -104,7 +105,7 @@ export default function Today() {
             <Collapsible defaultOpen={m.detailSection === 'insights'} title="Check-ins & recovery" summary="Weekly check-in, progress photos and recovery" icon="spark" testId="home-insight-details">
             <div className="member-stack">
             {m.unreadNotes?.length > 0 && <AIRead read={m.read} onOpenChat={() => openChat()} onOpen={openSheet} />}
-            {isToday && <><ProgressPhotoCard /><CheckinCard /><VoicePilotCard /><RecoveryCard today={m.date} /></>}
+            {isToday && <><ProgressPhotoCard /><CheckinCard /><VoicePilotCard /><VoiceCalibrationCard /><RecoveryCard today={m.date} /></>}
             {!protocol && <Card><h2 className="font-display text-xl mb-2">Welcome to FitLife</h2><p className="text-sm text-mid">Your coach will set up your personalised plan. You can already log food, weight, water and sleep.</p></Card>}
             </div>
             </Collapsible>

@@ -50,6 +50,17 @@ const MIN_RUN_MS = 60;
 const MIN_F0_SPREAD_HZ = 6;
 const ABS_FLOOR_DB = -55;    // a frame quieter than this is never voiced
 const ABOVE_BACKGROUND_DB = 3;
+// Fixes-2x: the live limits, and the ONE decision function the live check and the calibration
+// kit's offline replay both use. `features` are the raw measurements (whole frame counts and the
+// unrounded pitch spread); the reported voiced_ms / f0_spread_hz are rounded for display and must
+// not be used to decide (5.6 Hz reports as 6 but is refused).
+const LIVE_LIMITS = Object.freeze({ min_voiced_ms: MIN_VOICED_MS, min_run_ms: MIN_RUN_MS, min_f0_spread_hz: MIN_F0_SPREAD_HZ });
+function decide(features, limits = LIVE_LIMITS) {
+  const f = features || {};
+  const voicedMs = Math.round(f.voiced_frames * f.hop_ms);
+  const runMs = Math.round(f.longest_run_frames * f.hop_ms);
+  return voicedMs >= limits.min_voiced_ms && runMs >= limits.min_run_ms && f.f0_spread_raw >= limits.min_f0_spread_hz;
+}
 
 function ffmpegPath() {
   if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
@@ -137,7 +148,8 @@ function analyse(pcm) {
     let s = 0; for (let j = 0; j < FRAME; j++) s += x[start + j] * x[start + j];
     frames.push({ start, db: dbOf(Math.sqrt(s / FRAME)) });
   }
-  if (!frames.length) return { version: VERSION, speech: false, duration_ms, frames: 0, voiced_frames: 0, voiced_ms: 0, longest_run_ms: 0, f0_spread_hz: 0, peak_dbfs: -120, background_dbfs: -120 };
+  if (!frames.length) return { version: VERSION, speech: false, duration_ms, frames: 0, voiced_frames: 0, voiced_ms: 0, longest_run_ms: 0, f0_spread_hz: 0, peak_dbfs: -120, background_dbfs: -120,
+    features: { voiced_frames: 0, longest_run_frames: 0, f0_spread_raw: 0, f0_count: 0, hop_ms: HOP / RATE * 1000, frames: 0, peak_db_raw: -120, background_db_raw: -120 } };
   const sorted = frames.map(f => f.db).sort((p, q) => p - q);
   const background = sorted[Math.floor(sorted.length * 0.2)];
   const peak = sorted[sorted.length - 1];
@@ -156,9 +168,11 @@ function analyse(pcm) {
   const longest_run_ms = Math.round(longest * hopMs);
   let spread = 0;
   if (f0s.length >= 3) { const s = [...f0s].sort((p, q) => p - q); spread = s[Math.floor(s.length * 0.9)] - s[Math.floor(s.length * 0.1)]; }
-  const speech = voiced_ms >= MIN_VOICED_MS && longest_run_ms >= MIN_RUN_MS && spread >= MIN_F0_SPREAD_HZ;
+  const features = { voiced_frames: voiced, longest_run_frames: longest, f0_spread_raw: spread, f0_count: f0s.length, hop_ms: hopMs, frames: frames.length,
+    peak_db_raw: peak, background_db_raw: background };
+  const speech = decide(features);
   return { version: VERSION, speech, duration_ms, frames: frames.length, voiced_frames: voiced, voiced_ms, longest_run_ms,
-    f0_spread_hz: Math.round(spread), peak_dbfs: Math.round(peak), background_dbfs: Math.round(background) };
+    f0_spread_hz: Math.round(spread), peak_dbfs: Math.round(peak), background_dbfs: Math.round(background), features };
 }
 
 /**
@@ -178,5 +192,5 @@ async function check(base64) {
   }
 }
 
-module.exports = { check, analyse, decode, available, VERSION, RATE,
+module.exports = { check, analyse, decode, available, decide, LIVE_LIMITS, VERSION, RATE,
   LIMITS: { MIN_VOICED_MS, MIN_RUN_MS, MIN_F0_SPREAD_HZ, YIN_THRESHOLD, ABS_FLOOR_DB, ABOVE_BACKGROUND_DB } };

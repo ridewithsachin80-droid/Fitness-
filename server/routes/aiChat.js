@@ -1341,6 +1341,9 @@ const fallbackTest = require('../services/voiceFallbackTest');
 // strict list of allowed modules, and only the voice route needs the speech check.
 let speechPresenceModule = null;
 const speechPresence = { check: (...a) => (speechPresenceModule ||= require('../services/speechPresence')).check(...a) };
+// Fixes-2x: the calibration kit's Part C recorder (test server only, one armed try). Loaded lazily, like the speech check.
+let voiceCalibrationModule = null;
+const voiceCalibration = () => (voiceCalibrationModule ||= require('../services/voiceCalibration'));
 // Fixes-2u: what a refused recording tells the member. The take stays on the
 // phone for Retry (the identical recording) or Discard; nothing is previewed.
 const NO_SPEECH_MESSAGE = "Didn't catch any speech in that recording. Retry it, speak a little closer to the phone, or type your log.";
@@ -1411,6 +1414,15 @@ router.post('/voice-transcribe', async (req, res) => {
   // skips Gemini, so the real Whisper fallback can be tried without changing the
   // shared provider settings (services/voiceFallbackTest.js). Off everywhere else.
   const fbTest = await fallbackTest.skipsGemini(req.user);
+  // Fixes-2x (calibration Part C): which engine ACTUALLY answered, model by model. Recording only:
+  // the trail is filled as the request runs and read only when a Part C try is armed for this
+  // account on the test server; the reply is sent exactly as it would be without it.
+  const voiceTrail = [];
+  const calTrial = await voiceCalibration().armedFor(req.user);
+  if (calTrial) {
+    const send = res.json.bind(res);
+    res.json = (body) => { voiceCalibration().recordTrial(calTrial, { body, status: res.statusCode, speech, langHint, audioSha, fbTest, trail: voiceTrail }); return send(body); };
+  }
 
   if (speech.status === 'no_speech') {
     if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: null, raw: null, result: { ok: false, reason: 'no_speech_detected' }, speech,
@@ -1423,6 +1435,8 @@ router.post('/voice-transcribe', async (req, res) => {
     const models = [GEMINI_MODELS[0], GEMINI_MODELS[1]].filter(Boolean);
     let transcript = null, engine = null, lastErr;
 
+    if (GEMINI_API_KEY && fbTest) voiceTrail.push({ engine: 'gemini', outcome: 'skipped (voice backup test switch)' });
+    if (!GEMINI_API_KEY) voiceTrail.push({ engine: 'gemini', outcome: 'skipped (GEMINI_API_KEY not set)' });
     if (GEMINI_API_KEY && !fbTest) {
       for (const model of models) {
         try {
@@ -1442,14 +1456,16 @@ router.post('/voice-transcribe', async (req, res) => {
           const cand = response.data.candidates?.[0];
           transcript = (cand?.content?.parts?.map(p => p.text).join('') || '').trim();
           engine = `gemini/${model}`;
+          voiceTrail.push({ engine: 'gemini', model, outcome: 'answer', model_version: response.data?.modelVersion || null });
           break;
-        } catch (e) { lastErr = e; }
+        } catch (e) { lastErr = e; voiceTrail.push({ engine: 'gemini', model, outcome: 'error', status: e.response?.status || e.code || null }); }
       }
     }
 
     if (transcript === null) {
       try {
         const w = await groqWhisper();
+        voiceTrail.push({ engine: 'whisper', model: 'whisper-large-v3', outcome: !w ? 'not set up' : w.ok ? 'accepted' : `refused: ${w.reason}`, language_sent: w?.languageSent ?? null });
         if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: w?.languageSent, raw: w?.raw, result: w, error: w ? null : 'Whisper is not set up on this server', speech, config: w?.config });
         if (w && !w.ok) {
           // An answer in the wrong language or script, or one Whisper itself was
@@ -1461,6 +1477,7 @@ router.post('/voice-transcribe', async (req, res) => {
         }
         if (w) { transcript = w.text; engine = 'groq/whisper-large-v3'; }
       } catch (e) {
+        voiceTrail.push({ engine: 'whisper', model: 'whisper-large-v3', outcome: 'error', status: e.response?.status || e.code || null });
         if (fbTest) await fallbackTest.record(req.user.id, { langHint, languageSent: whisperFallbackSettings(langHint).language || null, error: e.response?.data?.error?.message || e.message, speech,
           config: { path: 'everyday', model: 'whisper-large-v3', audio_sha256: audioSha, mime: mt } });
         lastErr = e;
@@ -1918,7 +1935,10 @@ Return ONLY the answer text, nothing else.`;
  *
  * @param {{userId: number, message: string, context: object}} args
  */
-async function parseMemberMessage({ userId, message, context }) {
+// Fixes-2x: `evaluation: true` (voice calibration only, test server) returns the same preview with NO
+// side effects: no coach message, no correction or evaluation-set records, no food learning, and no
+// extra AI answer for a question or an accompanying question. Off by default: live parsing is unchanged.
+async function parseMemberMessage({ userId, message, context, evaluation = false }) {
   
 
   if (!message || String(message).trim().length < 2) {
@@ -2026,6 +2046,7 @@ async function parseMemberMessage({ userId, message, context }) {
       const EMPTY = { question: false, weight_kg: null, activities: [], acv: [], supplements: [],
                       water_ml_add: null, sleep: null, foods: [], workouts: [],
                       totals: { cal: 0, pro: 0, carb: 0, fat: 0 } };
+      if (evaluation) return { ...EMPTY, sent_to_coach: false, evaluation_note: 'the parser would send this to the coach (not sent)', aiProvider: provider, aiModel: model };
       try {
         const { sendMemberNote } = require('./patients');
         await sendMemberNote(userId, coachMsg);
@@ -2052,6 +2073,10 @@ async function parseMemberMessage({ userId, message, context }) {
     // Now the parser flags it, we snapshot the member's real data, and a second
     // AI call answers from that snapshot only. Empty item arrays keep the
     // client's preview card hidden — the member just sees the answer.
+    if (parsed.question && typeof parsed.question === 'string' && evaluation) {
+      return { reply: null, question: true, evaluation_note: 'the parser treated it as a question (not answered)', weight_kg: null, activities: [], acv: [], supplements: [],
+        water_ml_add: null, sleep: null, foods: [], workouts: [], totals: { cal: 0, pro: 0, carb: 0, fat: 0 }, aiProvider: provider, aiModel: model };
+    }
     if (parsed.question && typeof parsed.question === 'string') {
       try {
         // A whole-day summary gets the SAME structured card the coach sees.
@@ -2139,7 +2164,7 @@ async function parseMemberMessage({ userId, message, context }) {
 
     // Eval set: a correction is the member telling us the earlier parse was
     // wrong. Fire-and-forget — this is bookkeeping, not part of their log.
-    if (corrections.length) {
+    if (corrections.length && !evaluation) {
       captureCorrectionSamples(userId, corrections)
         .catch(err => console.error('captureCorrectionSamples failed:', err.message));
     }
@@ -2152,7 +2177,7 @@ async function parseMemberMessage({ userId, message, context }) {
 
     // Feed anything new back into the food database. Not awaited — the member
     // gets their preview immediately and the learning happens behind it.
-    learnFoods(foods).catch(err => console.error('learnFoods failed:', err.message));
+    if (!evaluation) learnFoods(foods).catch(err => console.error('learnFoods failed:', err.message));
 
     // The coach's typical serving, when the member named no quantity at all.
     // "masala dosa" with no number was landing at whatever the model guessed.
@@ -2167,12 +2192,12 @@ async function parseMemberMessage({ userId, message, context }) {
     // Eval set: hold on to what the model returned for THIS message, so a
     // correction arriving three messages later can be paired back to it.
     // Only here, in /parse — a photo has no replayable text to pair against.
-    rememberParseTurn(userId, cleanMsg, foods)
+    if (!evaluation) rememberParseTurn(userId, cleanMsg, foods)
       .catch(err => console.error('rememberParseTurn failed:', err.message));
 
     // Eval set: occasionally keep a parse nobody corrected, so a prompt change
     // can be scored on the easy cases too and not just the hard ones.
-    maybeRecordControl(userId, cleanMsg, foods)
+    if (!evaluation) maybeRecordControl(userId, cleanMsg, foods)
       .catch(err => console.error('maybeRecordControl failed:', err.message));
 
     // Per-item macros + totals computed server-side — never trust AI arithmetic
@@ -2219,7 +2244,7 @@ async function parseMemberMessage({ userId, message, context }) {
     const nothingParsed = !notes && !weight_kg && !activities.length && !acv.length &&
       !supplements.length && !water_ml_add && !sleep && !foods.length && !workouts.length && corrections.length === 0;
 
-    const advice = typeof parsed.mixed_question === 'string' && parsed.mixed_question.trim()
+    const advice = !evaluation && typeof parsed.mixed_question === 'string' && parsed.mixed_question.trim()
       ? await require('../services/mixedRequestAnswer').mixedRequestAnswer(parsed.mixed_question, {
       context: () => buildDayContext(userId, ctx),
       answer: async (question, savedContext) => {
@@ -2290,11 +2315,13 @@ async function parseMemberMessage({ userId, message, context }) {
 // Thin wrapper. All the work is in parseMemberMessage above so that voice
 // logging can call the same code path without inventing a second parser.
 router.post('/parse', async (req, res) => {
+  const calTrial = await voiceCalibration().armedFor(req.user);   // Fixes-2x: null unless a Part C try is armed for this account (test server)
   const result = await parseMemberMessage({
     userId:  req.user.id,
     message: req.body.message,
     context: req.body.context,
   });
+  if (calTrial) voiceCalibration().recordPreview(calTrial, { message: req.body.message, result });
   if (result && result.__status) {
     const { __status, ...rest } = result;
     return res.status(__status).json(rest);

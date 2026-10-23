@@ -17,7 +17,8 @@
  * onSend(text) — which should behave exactly like typing that text and
  * pressing send.
  */
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { refreshCalibrationTry, onCalibrationChange, calibrationTry } from '../utils/calibrationMode';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { VOICE_LANGUAGES, normalizeVoiceLang } from '../utils/voiceLanguage';
@@ -42,6 +43,9 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
   const voiceLang    = useSettingsStore(st => normalizeVoiceLang(st.voiceLang));
   const setVoiceLang = useSettingsStore(st => st.setVoiceLang);
 
+  // Fixes-2x: an armed voice-calibration try on the test site (null everywhere else; production never asks).
+  const [calTry, setCalTry] = useState(calibrationTry());
+  useEffect(() => { refreshCalibrationTry().then(setCalTry); return onCalibrationChange(setCalTry); }, []);
   const voice = useVoiceInput({
     lang: voiceLang,
     contextKey,
@@ -120,6 +124,11 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
   const card = !active ? null : (
     <div data-testid="voice-composer" className="mb-2 rounded-2xl border px-3 py-2.5 bg-surface"
       style={{ borderColor: 'var(--border)' }}>
+      {calTry && (
+        <p data-testid="voice-calibration-banner" className="text-caption font-semibold text-gold mb-1.5">
+          Voice calibration try {calTry.trial}: {calTry.route === 'controlled' ? 'the recording goes to the server (on-device words are not used).' : 'recorded as it happens, on-device words included.'}
+        </p>
+      )}
       {/* Header line: state + language toggle / discard */}
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div id={statusId} role="status" aria-live="polite" aria-atomic="true" className="min-w-0 flex-1">
