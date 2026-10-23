@@ -68,6 +68,21 @@ jobs:
             -f "output[title]=${title:-Voice evidence report}" \
             -F "output[summary]=@$RUNNER_TEMP/summary-cut.md" > /dev/null
           echo "Published the report as the check 'Voice evidence report'."
+      # Fixes-2w: the upload below runs even after a failed or stopped job. Only pictures the robot's
+      # publication check cleared (a completed OCR read with no name) are on cleared-pictures.sha256;
+      # every other picture in the upload folder is deleted here, whatever happened before.
+      - name: Remove every picture the publication check did not clear
+        if: always()
+        run: |
+          f=qa/voice-evidence-results
+          list="$f/cleared-pictures.sha256"
+          [ -d "$f" ] || exit 0
+          find "$f" -type f -iname '*.png' -print0 | while IFS= read -r -d '' p; do
+            h=$(sha256sum "$p" | cut -d' ' -f1)
+            if [ -f "$list" ] && grep -qx "$h" "$list"; then continue; fi
+            rm -f "$p"
+            echo "Removed a picture that was not cleared before publishing: $(basename "$p")"
+          done
       - name: Keep the report, Excel files and screenshots
         if: always()
         uses: actions/upload-artifact@v4

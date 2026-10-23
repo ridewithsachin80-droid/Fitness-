@@ -25,6 +25,10 @@
  *      attempt is valid. No Kannada re-run, no real recordings, nothing else run.
  *   L  (Fixes-2v) the admin card picture asked for (ROBOT_ADMIN_SHOT=1) with
  *      invited members whose names must never reach the picture.
+ *   M  (Fixes-2w) M1: OCR answers --version but every image read fails (a stand-in
+ *      program as ROBOT_OCR_BIN): no picture is published; the run is INCOMPLETE.
+ *      M2: the robot is killed (SIGKILL) right after its first picture: the
+ *      picture is in the holding folder, never in the upload folder.
  *
  * Changed in Fixes-2u (scenario A): S5 (a voice buried under loud noise) is now
  * refused by the server's speech check before any provider, so it is a refusal
@@ -90,13 +94,15 @@ async function startServer(flags) {
   child.kill(); throw new Error('the simulated server did not start:\n' + log.slice(-800));
 }
 // Not spawnSync: the scenario must be able to act while the robot runs.
-async function robot(extra = {}) {
+async function robot(extra = {}, whileRunning) {
   const out = fs.mkdtempSync(path.join(TMP, 'out-'));
   const child = spawn(process.execPath, [path.join(HERE, 'robot-voice-evidence.mjs')], {
-    env: { ...process.env, ROBOT_SIMULATION: '1', ROBOT_BASE_URL: BASE, ROBOT_OUT: out, GITHUB_ACTIONS: '', GITHUB_SHA: '',
+    // ROBOT_SCOPE 'all' (Fixes-2w): a full run unless the scenario asks for a targeted one; never the repo's REQUEST.md line.
+    env: { ...process.env, ROBOT_SIMULATION: '1', ROBOT_BASE_URL: BASE, ROBOT_OUT: out, GITHUB_ACTIONS: '', GITHUB_SHA: '', ROBOT_SCOPE: 'all',
       FITLIFE_ROBOT_ADMIN_EMAIL: 'admin@sim.test', FITLIFE_ROBOT_ADMIN_PASSWORD: 'Admin#Sim1', FITLIFE_ROBOT_VOICE_MEMBER_PHONE: '9000000101', FITLIFE_ROBOT_VOICE_MEMBER_PIN: '2468', ...extra } });
   let text = ''; child.stdout.on('data', d => { text += d; }); child.stderr.on('data', d => { text += d; });
   const killer = setTimeout(() => child.kill(), 900e3);
+  if (whileRunning) whileRunning(child);
   const status = await new Promise(r => child.on('close', r)); clearTimeout(killer);
   const r = { status, stdout: text, stderr: '' };
   const res = fs.existsSync(path.join(out, 'results.json')) ? JSON.parse(fs.readFileSync(path.join(out, 'results.json'), 'utf8')) : null;
@@ -114,7 +120,8 @@ const casesOf = (r) => Object.fromEntries((r.res?.part2?.cases || []).map(x => [
 // Every file the robot wrote: no names anywhere (report, results, workbook strings).
 const outputsNameFree = (out) => fs.readdirSync(out).filter(f => /\.(md|json|xlsx)$/.test(f)).every(f => noNames(fs.readFileSync(path.join(out, f), 'latin1')));
 
-const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+const want = process.argv.slice(2).length ? process.argv.slice(2) : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
+const pngsIn = (d) => (fs.existsSync(d) ? fs.readdirSync(d, { recursive: true }).map(String).filter(f => /\.png$/i.test(f)) : []);
 for (const sc of want) {
   const flags = { B: { SIM_WRONG_PREVIEW: '1' }, D: { SIM_FAIL_SWITCH_OFF: '1' }, E: { SIM_TAMPER_ORIGINALS: '1' }, F: { SIM_EXTRA_WATER: '1' }, G: { SIM_PARSE_FAIL_WEIGHT: '1' }, H: { SIM_EMPTY_PILOT_K01_FILE: EMPTY_FLAG }, I: { SIM_CHAT_REPLY: '1' } }[sc] || {};
   const { c, ids } = await freshDb({ occupied: sc === 'C', noDay: sc === 'H' });
@@ -271,6 +278,29 @@ for (const sc of want) {
       const notes = (r2.res?.notes || []).join(' ');
       ck('full run with the picture asked for: either a picture whose OCR text holds no name, or no picture with the reason given', card2 ? !nameHits(ocrText(path.join(r2.out, card2)), names).any : /admin card picture not taken/.test(notes), { card2, notes });
       ck('no name in any written file; the publication check removed nothing identifying', outputsNameFree(r2.out) && !(r2.res?.publication?.removed || []).some(x => /OCR read/.test(x.reason)), r2.res?.publication);
+    }
+    if (sc === 'M') {
+      console.log('\n[M1] OCR available, but every image read fails (SIMULATED)');
+      const failOcr = path.join(TMP, 'ocr-fails.sh');
+      fs.writeFileSync(failOcr, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo stub; exit 0; fi\nexit 2\n'); fs.chmodSync(failOcr, 0o755);
+      const tmp1 = fs.mkdtempSync(path.join(TMP, 'tmpdir-'));
+      const r = await robot({ ROBOT_SCOPE: 'S1', ROBOT_OCR_BIN: failOcr, TMPDIR: tmp1 });
+      const pub = r.res?.publication || {};
+      ck('no picture reaches the upload folder; the cleared list is empty', pngsIn(r.out).length === 0 && fs.readFileSync(path.join(r.out, 'cleared-pictures.sha256'), 'utf8') === '', { pngs: pngsIn(r.out), pub });
+      ck('every picture taken was removed as "not checked" (OCR could not finish), none cleared', pub.removed?.length > 0 && pub.removed.every(x => x.kind === 'unchecked' && /OCR could not finish/.test(x.reason)) && pub.cleared === 0 && pub.complete === false, pub);
+      ck('run INCOMPLETE (not COMPLETE); the report says the pictures were not checked', r.res?.verdict?.run === 'INCOMPLETE' && /not checked: OCR could not finish/.test(r.rep), r.res?.verdict);
+      ck('the holding folder is gone after the run; day as before; switch verified off', !fs.readdirSync(tmp1).some(f => f.startsWith('voice-evidence-unchecked-')) && sameDay(await dayNow(c, ids.voice)) && r.res?.switch_off?.verified);
+      console.log('\n[M2] the robot killed right after its first picture (SIMULATED)');
+      const tmp2 = fs.mkdtempSync(path.join(TMP, 'tmpdir-'));
+      let killedWith = 0;
+      const r2 = await robot({ ROBOT_SCOPE: 'S1', TMPDIR: tmp2 }, (child) => {
+        const t = setInterval(() => { const held = pngsIn(tmp2); if (held.length) { killedWith = held.length; clearInterval(t); child.kill('SIGKILL'); } }, 100);
+        child.on('close', () => clearInterval(t));
+      });
+      ck('the robot was killed with a picture taken (in the holding folder outside the upload folder)', killedWith > 0 && r2.code !== 0 && pngsIn(tmp2).length > 0, { killedWith, code: r2.code });
+      ck('…and the upload folder holds no picture and no cleared list', pngsIn(r2.out).length === 0 && !fs.existsSync(path.join(r2.out, 'cleared-pictures.sha256')), pngsIn(r2.out));
+      // The killed run may have left a log; restore the switch and day exactly as a real follow-up run would find them.
+      await c.query('DELETE FROM voice_fallback_test_account').catch(() => {});
     }
   } catch (e) { ck(`scenario ${sc} completed`, false, e.stack); }
   finally { srv.child.kill(); await c.end(); await wait(800); }

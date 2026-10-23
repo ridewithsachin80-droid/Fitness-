@@ -422,5 +422,117 @@ console.log('\n[14] Fixes-2v: the workflow files are valid YAML (22 Oct: an unqu
   }
 }
 
+console.log('\n[15] Fixes-2w: an OCR read that fails or times out never clears a picture (2v review: OCR errors were treated as clean)');
+{
+  const S = await import('./lib/voice-evidence-shot.mjs');
+  const names = ['Krishna Jinka', 'Avinash'];
+  const T = fs.mkdtempSync(path.join(os.tmpdir(), 'ocrfail-'));
+  // Stand-in OCR programs: every one answers --version, so "OCR is available" is true for all of them.
+  const stub = (name, body) => { const f = path.join(T, name); fs.writeFileSync(f, `#!/bin/sh\nif [ "$1" = "--version" ]; then echo stub; exit 0; fi\n${body}\n`); fs.chmodSync(f, 0o755); return f; };
+  const good = stub('ok.sh', 'case "$1" in *leak*) echo "Invited Krishna Jinka";; *) echo "Kannada voice test";; esac');
+  const failAll = stub('fail-all.sh', 'exit 2');                                               // the reviewer's reproduction
+  const fail11 = stub('fail-11.sh', 'if [ "$4" = "11" ]; then exit 1; fi\necho "Kannada voice test"');   // one required pass fails
+  const slow = stub('slow.sh', 'sleep 5\necho "Kannada voice test"');
+  const crash = stub('crash.sh', 'kill -SEGV $$');
+  const blank = stub('blank.sh', 'exit 0');                                                    // a completed read with no text
+  const pic = (d, n) => { fs.mkdirSync(d, { recursive: true }); const f = path.join(d, n); fs.writeFileSync(f, `png ${n}`); return f; };
+  const noName = (s) => !/krishna|jinka|avinash/i.test(JSON.stringify(s));
+
+  // ocrRead: success and failure are distinct results.
+  const one = pic(path.join(T, 'r'), '02-S1-preview.png');
+  let r = S.ocrRead(one, { bin: failAll });
+  ck('version answers but every image read exits non-zero → ocrRead reports a failed read, not empty text', S.ocrAvailable(failAll) && r.ok === false && /pass 3 failed \(exit code 2\)/.test(r.reason) && r.text === undefined, r);
+  ck('…and ocrText throws instead of returning text a name check would pass', (() => { try { S.ocrText(one, failAll); return false; } catch (e) { return /could not finish/.test(e.message); } })());
+  r = S.ocrRead(one, { bin: fail11 });
+  ck('one required pass failing (psm 3 read, psm 11 failed) → not a completed read', r.ok === false && /pass 11 failed/.test(r.reason), r);
+  const t0 = Date.now(); r = S.ocrRead(one, { bin: slow, timeoutMs: 400 });
+  ck('a read that times out → failed read, stopped at the time limit', r.ok === false && /timed out after 0\.4 s/.test(r.reason) && Date.now() - t0 < 3000, { r, ms: Date.now() - t0 });
+  r = S.ocrRead(one, { bin: crash });
+  ck('an OCR process killed by a signal → failed read', r.ok === false && /was stopped \(SIGSEGV\)/.test(r.reason), r);
+  ck('a missing picture and an empty picture → failed reads', !S.ocrRead(path.join(T, 'r', 'nope.png'), { bin: good }).ok && !S.ocrRead((() => { const f = path.join(T, 'r', 'empty.png'); fs.writeFileSync(f, ''); return f; })(), { bin: good }).ok);
+  r = S.ocrRead(one, { bin: blank });
+  ck('a COMPLETED read with no text is a genuine "no text" result (distinct from a failure)', r.ok === true && r.text.trim() === '', r);
+  r = S.ocrRead(one, { bin: good });
+  ck('a completed read returns both passes\' text', r.ok === true && (r.text.match(/Kannada voice test/g) || []).length === 2, r);
+
+  // publicationCheck: the reviewer's reproduction now removes the picture.
+  const runPub = (bin, opts = {}) => { const D = path.join(T, `pub-${Math.random().toString(36).slice(2)}`); pic(D, '02-S5-refused.png'); const res = S.publicationCheck(D, names, { ocrBin: bin, ...opts }); return { D, res, kept: fs.existsSync(path.join(D, '02-S5-refused.png')) }; };
+  let p = runPub(failAll);
+  ck('reviewer\'s reproduction (version ok, image reads fail): checked 1, removed 1, picture NOT retained', p.res.checked >= 1 && p.res.removed.length === 1 && !p.kept && p.res.removed[0].kind === 'unchecked' && /could not finish/.test(p.res.removed[0].reason) && p.res.complete === false, p.res);
+  ck('…and it is not on the cleared list', fs.readFileSync(path.join(p.D, S.CLEARED_LIST), 'utf8') === '');
+  p = runPub(fail11); ck('publication check, one pass failing → picture removed as unchecked', !p.kept && p.res.removed[0]?.kind === 'unchecked' && /pass 11/.test(p.res.removed[0].reason), p.res);
+  p = runPub(slow, { ocrTimeoutMs: 400 }); ck('publication check, a read timing out → picture removed as unchecked', !p.kept && /timed out/.test(p.res.removed[0]?.reason || ''), p.res);
+  p = runPub(crash); ck('publication check, OCR killed → picture removed as unchecked', !p.kept && p.res.removed[0]?.kind === 'unchecked', p.res);
+  ck('removal reasons name no person and no file content', [failAll, fail11].every(b => noName(runPub(b).res)));
+  p = runPub(blank); ck('control: a completed read with no text clears the picture (kept, on the cleared list)', p.kept && p.res.cleared === 1 && p.res.complete === true && fs.readFileSync(path.join(p.D, S.CLEARED_LIST), 'utf8').trim().length === 64, p.res);
+  p = runPub(good); ck('control: a completed clean read clears the picture', p.kept && p.res.removed.length === 0, p.res);
+
+  // The holding folder: pictures reach the upload folder only through the check.
+  const D = path.join(T, 'upload'), H = path.join(T, 'hold'); fs.mkdirSync(D, { recursive: true });
+  const clean = pic(H, '03-S1-preview.png'), cleanBytes = fs.readFileSync(clean); pic(H, '04-card-leak.png'); pic(path.join(H, 'unchecked-x'), '05-B19.png');
+  const crypto = await import('crypto');
+  let pr = S.publicationCheck(D, names, { ocrBin: good, quarantine: H });
+  ck('holding folder: a cleared picture is moved into the upload folder; one with a name is deleted; the folder is emptied', fs.existsSync(path.join(D, '03-S1-preview.png')) && !fs.existsSync(path.join(D, '04-card-leak.png')) && !fs.existsSync(H) && pr.removed.some(x => x.kind === 'identifying'), pr);
+  ck('…the cleared list holds exactly the SHA-256 of the pictures now in the upload folder', (() => { const list = fs.readFileSync(path.join(D, S.CLEARED_LIST), 'utf8').trim().split('\n'); const inDir = fs.readdirSync(D, { recursive: true }).filter(f => /\.png$/.test(String(f))).map(f => crypto.createHash('sha256').update(fs.readFileSync(path.join(D, String(f)))).digest('hex')); return list.length === 2 && inDir.every(h => list.includes(h)) && list.includes(crypto.createHash('sha256').update(cleanBytes).digest('hex')); })());
+  const D2 = path.join(T, 'upload2'), H2 = path.join(T, 'hold2'); fs.mkdirSync(D2, { recursive: true }); pic(H2, '06-S5-refused.png');
+  pr = S.publicationCheck(D2, names, { ocrBin: failAll, quarantine: H2 });
+  ck('holding folder + failing OCR → nothing reaches the upload folder; held picture deleted', !fs.readdirSync(D2).some(f => f.endsWith('.png')) && !fs.existsSync(H2) && pr.complete === false, pr);
+  const D3 = path.join(T, 'upload3'), H3 = path.join(T, 'hold3'); fs.mkdirSync(D3, { recursive: true }); pic(H3, '07-S1-day.png');
+  ck('a robot that stops before the check leaves its pictures in the holding folder, none in the upload folder', !fs.readdirSync(D3).some(f => f.endsWith('.png')) && fs.existsSync(path.join(H3, '07-S1-day.png')));
+
+  // Verdict
+  const base = () => ({ scope: { cases: ['S5'] }, part1: null, part2: { collected: true, real: [], cases: [{ id: 'S5', collected: true, transcribed: true, status: 200, outcome: 'refused', rejected: 'no_speech_detected', quality: 'PASS', no_save_verified: true }] }, cleanup: { ok: true, problems: [] }, switch_off: { verified: true }, errors: [] });
+  let x = base(); x.publication = { complete: false, removed: [{ file: '02-S5-refused.png', reason: 'OCR could not finish reading it (OCR pass 3 timed out after 60 s)', kind: 'unchecked' }] };
+  ck('verdict: a picture removed because OCR could not finish → INCOMPLETE (never COMPLETE)', L.verdict(x).run === 'INCOMPLETE', L.verdict(x));
+  x = base(); x.publication = { complete: true, removed: [{ file: '01-card.png', reason: 'OCR read 1 name(s), 0 name word(s)', kind: 'identifying' }] };
+  ck('verdict: kind "identifying" → FAILED', L.verdict(x).run === 'FAILED');
+  x = base(); x.publication = { complete: false, removed: [] };
+  ck('verdict: a publication check that reports itself incomplete → INCOMPLETE', L.verdict(x).run === 'INCOMPLETE');
+
+  // safeShot (a stand-in page: the gate has no browser). The unchecked picture never sits next to its destination.
+  const fakePage = ({ throwOnShot = false } = {}) => ({
+    waitForNetworkIdle: async () => {},
+    evaluate: async (fn) => { const t = String(fn); if (t.includes('innerText')) return ''; if (t.includes('getComputedStyle')) return { areas: 2, masked: 2, style: true }; return true; },
+    $: async () => ({ screenshot: async ({ path: f }) => { if (throwOnShot) throw new Error('screenshot failed'); fs.writeFileSync(f, 'png bytes'); } }),
+  });
+  const shotTry = async (bin, file, extra = {}) => { const Q = fs.mkdtempSync(path.join(T, 'q-')); const dest = path.join(Q, file); let res, err;
+    try { res = await S.safeShot(fakePage(extra), { selector: '[data-testid="vp-panel"]', names, file: dest, label: 'test', ocrBin: bin, quarantine: Q, quietMs: 10, ...(extra.ocrTimeoutMs ? { ocrTimeoutMs: extra.ocrTimeoutMs } : {}) }); } catch (e) { err = e; }
+    const left = fs.readdirSync(Q, { recursive: true }).map(String); return { res, err, dest, left }; };
+  let s = await shotTry(failAll, '01-B19-card.png');
+  ck('safeShot: version ok but image reads fail → no picture, marked unchecked, nothing left behind', s.res && !s.res.taken && s.res.unchecked === true && /could not finish/.test(s.res.reason) && !fs.existsSync(s.dest) && s.left.length === 0, s);
+  s = await shotTry(fail11, '01-B19-card.png');
+  ck('safeShot: one required pass failing → no picture', !s.res.taken && s.res.unchecked && /pass 11/.test(s.res.reason) && s.left.length === 0, s);
+  s = await shotTry(slow, '01-B19-card.png', { ocrTimeoutMs: 400 });
+  ck('safeShot: the read timing out → no picture', !s.res.taken && /timed out/.test(s.res.reason) && s.left.length === 0, s);
+  s = await shotTry(good, '01-B19-card-leak.png');
+  ck('safeShot control: OCR reads a name → no picture (not marked unchecked)', !s.res.taken && !s.res.unchecked && /OCR read identifying/.test(s.res.reason) && s.left.length === 0, s);
+  s = await shotTry(good, '01-B19-card.png');
+  ck('safeShot control: a completed clean read → picture written to its destination, no temporary file left', s.res.taken && fs.existsSync(s.dest) && s.left.length === 1, s);
+  s = await shotTry(good, '01-B19-card.png', { throwOnShot: true });
+  ck('safeShot: an error while taking the picture leaves no temporary file', !!s.err && s.left.length === 0, s);
+  ck('safeShot: no OCR program → no picture (2v control kept)', (await S.safeShot(fakePage(), { selector: 'x', names, file: path.join(T, 'z.png'), ocrBin: path.join(T, 'no-such-ocr') })).taken === false);
+
+  // The workflow step that runs before the upload (even after a failed job).
+  const py = spawnSync('python3', ['-c', 'import yaml'], { encoding: 'utf8' });
+  if (py.status !== 0) console.log('  – PyYAML not available here; workflow guard step check skipped');
+  else {
+    const wfFile = path.join(HERE, '../../.github/workflows/voice-evidence-robot.yml');
+    const steps = JSON.parse(spawnSync('python3', ['-c', 'import sys,yaml,json; d=yaml.safe_load(open(sys.argv[1])); print(json.dumps([s for j in d["jobs"].values() for s in j["steps"]]))', wfFile], { encoding: 'utf8' }).stdout);
+    const gi = steps.findIndex(st => /did not clear/.test(st.name || '')), ui = steps.findIndex(st => /upload-artifact/.test(st.uses || ''));
+    ck('workflow: the picture guard runs always(), immediately before the artifact upload', gi >= 0 && ui === gi + 1 && /always\(\)/.test(steps[gi].if || ''), { gi, ui });
+    const W = fs.mkdtempSync(path.join(T, 'ws-')), F = path.join(W, 'qa/voice-evidence-results');
+    const keep = pic(F, '01-cleared.png'); pic(F, '02-unchecked.png'); pic(path.join(F, 'sub'), '03-unchecked.png'); fs.writeFileSync(path.join(F, 'report.md'), 'r');
+    fs.writeFileSync(path.join(F, S.CLEARED_LIST), crypto.createHash('sha256').update(fs.readFileSync(keep)).digest('hex') + '\n');
+    let g = spawnSync('bash', ['-e', '-c', steps[gi].run], { cwd: W, encoding: 'utf8' });
+    ck('workflow guard: keeps only the cleared picture (by SHA-256); deletes the others; leaves text files', g.status === 0 && fs.existsSync(keep) && !fs.existsSync(path.join(F, '02-unchecked.png')) && !fs.existsSync(path.join(F, 'sub/03-unchecked.png')) && fs.existsSync(path.join(F, 'report.md')), g.stdout + g.stderr);
+    fs.rmSync(path.join(F, S.CLEARED_LIST)); pic(F, '04-x.png');
+    g = spawnSync('bash', ['-e', '-c', steps[gi].run], { cwd: W, encoding: 'utf8' });
+    ck('workflow guard: no cleared list (robot stopped early) → every picture deleted', g.status === 0 && !fs.readdirSync(F, { recursive: true }).some(f => /\.png$/.test(String(f))), g.stdout + g.stderr);
+    fs.rmSync(F, { recursive: true }); g = spawnSync('bash', ['-e', '-c', steps[gi].run], { cwd: W, encoding: 'utf8' });
+    ck('workflow guard: no results folder at all → succeeds quietly', g.status === 0, g.stderr);
+  }
+  fs.rmSync(T, { recursive: true, force: true });
+}
+
 console.log(`\nVoice evidence robot checks: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

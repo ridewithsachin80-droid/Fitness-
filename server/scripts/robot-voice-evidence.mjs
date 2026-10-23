@@ -41,6 +41,7 @@
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { createRequire } from 'module';
@@ -66,11 +67,21 @@ const ACC = {
   phoneRobotPhones: [env('FITLIFE_ROBOT_MEMBER_PHONE'), env('FITLIFE_ROBOT_MEMBER2_PHONE')].filter(Boolean),
 };
 fs.mkdirSync(path.join(OUT, 'audio'), { recursive: true });
+// Fixes-2w: pictures are taken into a holding folder OUTSIDE the upload folder; only the publication check moves a
+// picture into OUT, after a completed OCR read finds no name. A crash, block or kill leaves nothing unchecked in OUT.
+// Pictures or a cleared list left in OUT by an earlier local run are removed first (they were checked by that run, not this one).
+for (const f of fs.readdirSync(OUT)) if (/\.png$/i.test(f) || f === SHOT.CLEARED_LIST) fs.rmSync(path.join(OUT, f), { force: true });
+const HOLD = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-evidence-unchecked-'));
+process.on('exit', () => { try { fs.rmSync(HOLD, { recursive: true, force: true }); } catch { /* best effort */ } });
+const heldPictures = () => { try { return fs.readdirSync(HOLD, { recursive: true }).filter(f => /\.png$/i.test(String(f))).length; } catch { return 0; } };
 
 // Fixes-2v: a TARGETED run repeats only the listed cases (run-2 review: "target the affected evidence").
 // Asked for in the last request line of qa/voice-evidence/REQUEST.md ("scope: S5"), or ROBOT_SCOPE.
 function requestedScope() {
   let raw = env('ROBOT_SCOPE');
+  // Fixes-2w: "all" asks for a full run whatever the last REQUEST.md row says (the simulation uses it, so a
+  // targeted request line in the repo can never turn its full-run scenarios into targeted ones).
+  if (/^all$/i.test(String(raw).trim())) return null;
   if (!raw) { try { const rows = fs.readFileSync(path.join(ROOT, 'qa/voice-evidence/REQUEST.md'), 'utf8').split('\n').filter(l => /^\|/.test(l) && !/^\|\s*-/.test(l) && !/Date \(IST\)/.test(l)); const m = (rows.pop() || '').match(/scope:\s*([A-Za-z0-9 ,]+)/i); raw = m ? m[1] : ''; } catch { raw = ''; } }
   const ids = raw.split(/[ ,]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
   return ids.length ? ids : null;
@@ -130,12 +141,12 @@ function writeReport() {
     ...(report.runs?.length ? [`### What Whisper returned${sim} (this run's tries only; section numbers in the Excel file)`, '',
       '| Try | Voice language | Told | Speech check | Whisper called | Whisper text (raw) | Language reported | Decision | Sections (log-prob / no-speech / compression) |', '|---|---|---|---|---|---|---|---|---|',
       ...report.runs.map(r => `| ${r.id} | ${cell(r.lang_hint)} | ${cell(r.language_sent || 'not set')} | ${cell(r.speech?.status)} | ${r.config ? (r.config.provider_called === false ? 'no' : 'yes') : '—'} | ${cell(r.whisper_text)} | ${cell(r.whisper_language)} | ${r.accepted === true ? 'accepted' : r.accepted === false ? `refused: ${cell(r.reason)}` : `no answer: ${cell(r.error)}`} | ${cell((r.segments || []).map(s => `${s.avg_logprob ?? '∅'}/${s.no_speech_prob ?? '∅'}/${s.compression_ratio ?? '∅'}`).join(' · '))} |`), ''] : []),
-    report.publication ? `Publication check (every file read before publishing: pictures by OCR, text and workbook directly): ${report.publication.checked} file(s) checked; ${report.publication.removed.length ? `**removed: ${report.publication.removed.map(x => `${x.file} (${x.reason})`).join('; ')}**` : 'none removed'}${report.publication.redacted.length ? `; redacted: ${report.publication.redacted.map(x => `${x.file} (${x.hits})`).join('; ')}` : ''}.` : '', '',
+    report.publication ? `Publication check (every file read before publishing: pictures by OCR, both passes required; text and workbook directly): ${report.publication.checked} file(s) checked; ${report.publication.cleared ?? 0} picture(s) cleared by a completed OCR read; ${report.publication.removed.length ? `**removed: ${report.publication.removed.map(x => `${x.file} (${x.kind === 'unchecked' ? 'not checked: ' : ''}${x.reason})`).join('; ')}**` : 'none removed'}${report.publication.redacted.length ? `; redacted: ${report.publication.redacted.map(x => `${x.file} (${x.hits})`).join('; ')}` : ''}.` : '', '',
     report.notes.length ? `Notes: ${report.notes.map(cell).join(' · ')}` : '', '',
     'Computer voices show how the real providers and FitLife\'s checks behave; they say nothing about how well real members are understood, and an injected computer recording is not a physical phone microphone. Two real recordings are far too few to choose an engine. No member names are included; the voice test account is the robot\'s own; human recordings are never saved by the robot.',
   ].filter(x => x !== null).join('\n');
   // Fixes-2v: whole names AND their 4+ letter words (a first name alone is still a name).
-  const mdOut = SHOT.redactAll(md, knownNames), jsonOut = SHOT.redactAll(JSON.stringify(report, (k, val) => (val instanceof RegExp ? String(val) : val), 1), knownNames);
+  const mdOut = SHOT.redactAll(md + (!report.publication && heldPictures() ? `\n\nPictures: ${heldPictures()} taken before the run stopped were never checked, so none is published (they are deleted on exit).` : ''), knownNames), jsonOut = SHOT.redactAll(JSON.stringify(report, (k, val) => (val instanceof RegExp ? String(val) : val), 1), knownNames);
   if (mdOut.hits || jsonOut.hits) console.log(`::warning::identifying text found and replaced in the report (${mdOut.hits + jsonOut.hits})`);
   fs.writeFileSync(path.join(OUT, 'report.md'), mdOut.text + '\n');
   fs.writeFileSync(path.join(OUT, 'results.json'), jsonOut.text);
@@ -283,11 +294,11 @@ async function shot(page, name, { selector } = {}) {
       const el = await page.$(selector); if (!el) { report.notes.push(`screenshot "${name}" not taken: ${selector} not found`); return null; }
       await page.evaluate((s, t, sim) => { const d = document.createElement('div'); d.id = '__robot_banner'; d.textContent = t;
         d.style.cssText = `padding:4px 8px;font:600 11px sans-serif;text-align:center;color:#fff;background:${sim ? '#8a1c1c' : '#1f4d39'}`; document.querySelector(s).prepend(d); }, selector, label, SIM);
-      await el.screenshot({ path: path.join(OUT, f) });
+      await el.screenshot({ path: path.join(HOLD, f) });
     } else {
       await page.evaluate((t, sim) => { const d = document.createElement('div'); d.id = '__robot_banner'; d.textContent = t;
         d.style.cssText = `position:fixed;left:0;right:0;top:0;z-index:2147483647;padding:4px 8px;font:600 11px sans-serif;text-align:center;color:#fff;background:${sim ? '#8a1c1c' : '#1f4d39'}`; document.body.appendChild(d); }, label, SIM);
-      await page.screenshot({ path: path.join(OUT, f) });
+      await page.screenshot({ path: path.join(HOLD, f) });
     }
     await page.evaluate(() => document.getElementById('__robot_banner')?.remove());
     return f;
@@ -424,7 +435,7 @@ try {
     // Fixes-2v: the admin card is left out of the public evidence unless asked for (ROBOT_ADMIN_SHOT=1); then only
     // after masking, a quiet page and OCR of the finished picture (lib/voice-evidence-shot.mjs).
     if (env('ROBOT_ADMIN_SHOT') === '1') {
-      const r = await SHOT.safeShot(A, { selector: '[data-testid="vp-panel"]', names: knownNames, file: path.join(OUT, `${String(++shotN).padStart(2, '0')}-B19-voice-test-card.png`), label: `${MODE_LINE} · B19-voice-test-card`, sim: SIM });
+      const r = await SHOT.safeShot(A, { selector: '[data-testid="vp-panel"]', names: knownNames, file: path.join(HOLD, `${String(++shotN).padStart(2, '0')}-B19-voice-test-card.png`), label: `${MODE_LINE} · B19-voice-test-card`, sim: SIM, quarantine: HOLD });
       if (!r.taken) report.notes.push(`admin card picture not taken: ${r.reason}`);
       else report.notes.push(`admin card picture: ${r.masked.masked} of ${r.masked.areas} name areas masked at capture (mask style ${r.masked.style ? 'present' : 'MISSING'}); OCR of the picture found no name`);
     } else report.notes.push('admin card picture left out of the public evidence (Fixes-2v default; the B19 data is in this report and the workbook)');
@@ -713,6 +724,7 @@ try {
   } catch (e) { report.errors.push(`evidence: ${e.message}`); }
   // Fixes-2v: the last gate. Every picture is read by OCR and removed if it holds a name (or cannot be checked);
   // the workbook is checked; report.md and results.json are written below with names and name words redacted.
-  try { report.publication = SHOT.publicationCheck(OUT, knownNames); } catch (e) { report.errors.push(`publication check: ${e.message}`); }
+  // Fixes-2w: pictures come from the holding folder; a failed or timed-out OCR read removes the picture ('unchecked', INCOMPLETE).
+  try { report.publication = SHOT.publicationCheck(OUT, knownNames, { quarantine: HOLD }); } catch (e) { report.errors.push(`publication check: ${e.message}`); }
 }
 process.exit(writeReport().exitCode);

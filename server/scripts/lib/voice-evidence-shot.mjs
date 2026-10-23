@@ -24,21 +24,61 @@
  * OCR can miss text, so the masking does the protecting and the OCR is a second
  * check; that is also why the robot leaves the admin picture out of the public
  * evidence by default (ROBOT_ADMIN_SHOT=1 to include it).
+ *
+ * Fixes-2w (2v review): an OCR read that FAILS is not a clean read. `ocrRead`
+ * returns { ok:false, reason } when either required pass exits non-zero, times
+ * out, cannot start, or the picture is missing/empty; only { ok:true, text } can
+ * clear a picture. Pictures are taken into a holding folder OUTSIDE the upload
+ * folder and only `publicationCheck` moves a cleared one in, so a crash, a block
+ * or a kill can never leave an unchecked picture where the workflow uploads from.
+ * It also writes CLEARED_LIST (SHA-256 of every cleared picture); the workflow
+ * deletes any picture not on it before uploading.
  */
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
+import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+
+/** File in the upload folder listing the SHA-256 of every picture the publication check cleared. */
+export const CLEARED_LIST = 'cleared-pictures.sha256';
+/** Both OCR page-layout passes must complete before a picture can be cleared. */
+export const OCR_PASSES = ['3', '11'];
+const ocrTimeout = () => Number(process.env.ROBOT_OCR_TIMEOUT_MS) || 60e3;
 
 const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export function ocrAvailable(bin = process.env.ROBOT_OCR_BIN || 'tesseract') {
   try { execFileSync(bin, ['--version'], { stdio: 'ignore' }); return true; } catch { return false; }
 }
-/** Text read from an image (two page-layout modes, so scattered short labels are caught too). */
-export function ocrText(file, bin = process.env.ROBOT_OCR_BIN || 'tesseract') {
-  const run = (psm) => { try { return execFileSync(bin, [file, 'stdout', '--psm', psm], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60e3 }); } catch { return ''; } };
-  return `${run('3')}\n${run('11')}`;
+/**
+ * Read an image with OCR: every pass in OCR_PASSES (two page-layout modes, so
+ * scattered short labels are caught too) must complete.
+ * → { ok: true, text }  — a completed read; empty text is a genuine "no text"
+ * → { ok: false, reason } — the read did not complete (reason names no person and no file)
+ */
+export function ocrRead(file, { bin = process.env.ROBOT_OCR_BIN || 'tesseract', timeoutMs = ocrTimeout(), passes = OCR_PASSES } = {}) {
+  let size = 0; try { size = fs.statSync(file).size; } catch { return { ok: false, reason: 'the picture file is missing' }; }
+  if (!size) return { ok: false, reason: 'the picture file is empty' };
+  const texts = [];
+  for (const psm of passes) {
+    const r = spawnSync(bin, [file, 'stdout', '--psm', psm], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: timeoutMs, killSignal: 'SIGKILL' });
+    if (r.error?.code === 'ETIMEDOUT') return { ok: false, reason: `OCR pass ${psm} timed out after ${Math.round(timeoutMs / 100) / 10} s` };
+    if (r.error) return { ok: false, reason: `OCR pass ${psm} could not run (${r.error.code || 'error'})` };
+    if (r.signal) return { ok: false, reason: `OCR pass ${psm} was stopped (${r.signal})` };
+    if (r.status !== 0) return { ok: false, reason: `OCR pass ${psm} failed (exit code ${r.status})` };
+    texts.push(r.stdout || '');
+  }
+  return { ok: true, text: texts.join('\n') };
 }
+/** Text read from an image. Throws when the read did not complete: a failed read is never "no text". */
+export function ocrText(file, bin = process.env.ROBOT_OCR_BIN || 'tesseract') {
+  const r = ocrRead(file, { bin });
+  if (!r.ok) throw new Error(`OCR could not finish reading the picture: ${r.reason}`);
+  return r.text;
+}
+const sha256 = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+const moveFile = (from, to) => { fs.mkdirSync(path.dirname(to), { recursive: true }); try { fs.renameSync(from, to); } catch { fs.copyFileSync(from, to); fs.rmSync(from, { force: true }); } };
 /**
  * Which names appear in a text: whole names (any case, any spacing) and every
  * word of a name with 4+ letters (any case). Returns COUNTS only, never the names,
@@ -110,9 +150,13 @@ export async function namesLeftInPage(page, selector, names) {
 
 /**
  * Take a picture that is known to carry no name.
- * → { taken: true, file } or { taken: false, reason }   (reasons never contain a name)
+ * → { taken: true, file } or { taken: false, reason, unchecked? }   (reasons never contain a name)
+ * The unchecked picture is written to `quarantine` (default: the system temp folder), never next to
+ * `file`, and is always deleted unless a completed OCR read clears it. The robot passes a `file`
+ * inside its holding folder too, so even a cleared picture reaches the upload folder only through
+ * `publicationCheck`.
  */
-export async function safeShot(page, { selector, names, file, label, sim = false, quietMs = 1500, afterSanitise, ocrBin } = {}) {
+export async function safeShot(page, { selector, names, file, label, sim = false, quietMs = 1500, afterSanitise, ocrBin, ocrTimeoutMs, quarantine } = {}) {
   if (!Array.isArray(names) || !names.length) return { taken: false, reason: 'no list of names to check against, so the picture could not be cleared' };
   if (!ocrAvailable(ocrBin)) return { taken: false, reason: 'no OCR on this machine to check the finished picture, so it was not taken' };
   const el = selector ? await page.$(selector) : null;
@@ -130,46 +174,66 @@ export async function safeShot(page, { selector, names, file, label, sim = false
   // How many name areas are actually masked at the moment of the picture (recorded as evidence).
   const masked = await page.evaluate((areas, sel) => { const root = sel ? document.querySelector(sel) : document; const els = areas.flatMap(a => [...root.querySelectorAll(a)]).filter(e => e.offsetParent !== null);
     return { areas: els.length, masked: els.filter(e => getComputedStyle(e).color === 'rgba(0, 0, 0, 0)').length, style: !!document.getElementById('__robot_mask') }; }, NAME_AREAS, selector || null);
-  const tmp = `${file}.unchecked.png`;
+  const holdDir = fs.mkdtempSync(path.join(quarantine || os.tmpdir(), 'unchecked-'));
+  const tmp = path.join(holdDir, `${path.basename(file)}.unchecked.png`);
   try {
-    if (selector) await (await page.$(selector)).screenshot({ path: tmp }); else await page.screenshot({ path: tmp });
-  } finally { await page.evaluate(() => document.getElementById('__robot_banner')?.remove()).catch(() => {}); }
-  const hits = nameHits(ocrText(tmp, ocrBin), names);
-  if (hits.any) { fs.rmSync(tmp, { force: true }); return { taken: false, reason: `OCR read identifying text in the finished picture (${hits.full} name(s), ${hits.words} name word(s)); picture discarded` }; }
-  fs.renameSync(tmp, file);
-  return { taken: true, file, masked };
+    try {
+      if (selector) await (await page.$(selector)).screenshot({ path: tmp }); else await page.screenshot({ path: tmp });
+    } finally { await page.evaluate(() => document.getElementById('__robot_banner')?.remove()).catch(() => {}); }
+    const read = ocrRead(tmp, { bin: ocrBin, ...(ocrTimeoutMs ? { timeoutMs: ocrTimeoutMs } : {}) });
+    if (!read.ok) return { taken: false, unchecked: true, reason: `OCR could not finish reading the finished picture (${read.reason}); picture discarded` };
+    const hits = nameHits(read.text, names);
+    if (hits.any) return { taken: false, reason: `OCR read identifying text in the finished picture (${hits.full} name(s), ${hits.words} name word(s)); picture discarded` };
+    moveFile(tmp, file);
+    return { taken: true, file, masked };
+  } finally { fs.rmSync(holdDir, { recursive: true, force: true }); }
 }
 
 /**
- * The last gate before anything is published: every picture is read by OCR
- * (removed if it holds a name, or if there is no OCR or no name list to check
- * with); every text/JSON/CSV/workbook file is redacted in place.
- * → { checked, removed: [{file, reason}], redacted: [{file, hits}] }
+ * The last gate before anything is published.
+ * Pictures: every PNG in `dir` and in the holding folder `quarantine` is read by OCR. A picture is
+ * cleared only by a COMPLETED read with no name in it; a cleared picture from the holding folder is
+ * moved into `dir` (same relative path). Everything else is deleted:
+ *   kind 'identifying' — OCR read a name                       → the run is FAILED
+ *   kind 'unchecked'   — no name list, no OCR, or the read did not complete → INCOMPLETE
+ * The SHA-256 of every cleared picture is written to `dir/CLEARED_LIST`, and the holding folder is emptied.
+ * Text/JSON/CSV files are redacted in place; a workbook holding a name is removed ('identifying').
+ * → { checked, cleared, complete, removed: [{file, reason, kind}], redacted: [{file, hits}] }
  */
-export function publicationCheck(dir, names, { ocrBin } = {}) {
-  const out = { checked: 0, removed: [], redacted: [] };
+export function publicationCheck(dir, names, { ocrBin, ocrTimeoutMs, quarantine } = {}) {
+  const out = { checked: 0, cleared: 0, complete: true, removed: [], redacted: [] };
   const haveNames = Array.isArray(names) && names.length > 0, ocr = ocrAvailable(ocrBin);
-  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
-  for (const f of walk(dir)) {
+  const walk = (d) => (fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])) : []);
+  const cleared = [];
+  const pictures = [...walk(dir).filter(f => /\.png$/i.test(f)).map(f => ({ f, rel: path.relative(dir, f), held: false })),
+    ...(quarantine ? walk(quarantine).filter(f => /\.png$/i.test(f)).map(f => ({ f, rel: path.relative(quarantine, f), held: true })) : [])];
+  for (const { f, rel, held } of pictures) {
+    out.checked++;
+    const drop = (reason, kind) => { fs.rmSync(f, { force: true }); out.removed.push({ file: rel, reason, kind }); if (kind === 'unchecked') out.complete = false; };
+    if (!haveNames || !ocr) { drop(!haveNames ? 'no name list to check it against' : 'no OCR to read it', 'unchecked'); continue; }
+    const read = ocrRead(f, { bin: ocrBin, ...(ocrTimeoutMs ? { timeoutMs: ocrTimeoutMs } : {}) });
+    if (!read.ok) { drop(`OCR could not finish reading it (${read.reason})`, 'unchecked'); continue; }
+    const h = nameHits(read.text, names);
+    if (h.any) { drop(`OCR read ${h.full} name(s), ${h.words} name word(s)`, 'identifying'); continue; }
+    const dest = held ? path.join(dir, rel) : f;
+    if (held) moveFile(f, dest);
+    cleared.push(sha256(dest)); out.cleared++;
+  }
+  fs.writeFileSync(path.join(dir, CLEARED_LIST), cleared.length ? cleared.join('\n') + '\n' : '');
+  if (quarantine) fs.rmSync(quarantine, { recursive: true, force: true });
+  for (const f of walk(dir).filter(f => /\.(md|json|csv|txt|xlsx)$/i.test(f))) {
     const rel = path.relative(dir, f);
-    if (/\.png$/i.test(f)) {
-      out.checked++;
-      if (!haveNames || !ocr) { fs.rmSync(f); out.removed.push({ file: rel, reason: !haveNames ? 'no name list to check it against' : 'no OCR to read it' }); continue; }
-      const h = nameHits(ocrText(f, ocrBin), names);
-      if (h.any) { fs.rmSync(f); out.removed.push({ file: rel, reason: `OCR read ${h.full} name(s), ${h.words} name word(s)` }); }
-    } else if (/\.(md|json|csv|txt|xlsx)$/i.test(f)) {
-      out.checked++;
-      if (!haveNames) continue;
-      if (/\.xlsx$/i.test(f)) {
-        // xlsxLite writes a stored (uncompressed) zip with inline strings: a name would be readable bytes.
-        const raw = fs.readFileSync(f).toString('utf8');
-        const h = nameHits(raw, names);
-        if (h.any) { fs.rmSync(f); out.removed.push({ file: rel, reason: `workbook held ${h.full} name(s), ${h.words} name word(s)` }); }
-        continue;
-      }
-      const r = redactAll(fs.readFileSync(f, 'utf8'), names);
-      if (r.hits) { fs.writeFileSync(f, r.text); out.redacted.push({ file: rel, hits: r.hits }); }
+    out.checked++;
+    if (!haveNames) continue;
+    if (/\.xlsx$/i.test(f)) {
+      // xlsxLite writes a stored (uncompressed) zip with inline strings: a name would be readable bytes.
+      const raw = fs.readFileSync(f).toString('utf8');
+      const h = nameHits(raw, names);
+      if (h.any) { fs.rmSync(f); out.removed.push({ file: rel, reason: `workbook held ${h.full} name(s), ${h.words} name word(s)`, kind: 'identifying' }); }
+      continue;
     }
+    const r = redactAll(fs.readFileSync(f, 'utf8'), names);
+    if (r.hits) { fs.writeFileSync(f, r.text); out.redacted.push({ file: rel, hits: r.hits }); }
   }
   return out;
 }

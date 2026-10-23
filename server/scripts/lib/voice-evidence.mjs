@@ -592,7 +592,10 @@ export function verdict(r) {
   if (r.switch_off && !r.switch_off.verified) failures.push(`voice backup switch NOT confirmed off (${r.switch_off.detail})`);
   for (const e of r.errors || []) failures.push(e);
   // Fixes-2v: the last gate before publishing. A picture with a name in it is a failure even though it was removed.
-  for (const x of r.publication?.removed || []) (/OCR read|workbook held/.test(x.reason) ? failures : incomplete).push(`evidence file ${x.file} removed before publishing: ${x.reason}`);
+  // Fixes-2w: the publication check labels each removal; 'unchecked' (no OCR, no name list, or an OCR read that
+  // did not complete) is INCOMPLETE, never a pass. Entries without a label keep the 2v reading of the reason.
+  for (const x of r.publication?.removed || []) ((x.kind ? x.kind === 'identifying' : /OCR read|workbook held/.test(x.reason)) ? failures : incomplete).push(`evidence file ${x.file} removed before publishing: ${x.reason}`);
+  if (r.publication && r.publication.complete === false && !(r.publication.removed || []).some(x => x.kind === 'unchecked')) incomplete.push('publication check did not complete for every picture');
   const run = failures.length ? 'FAILED' : incomplete.length ? 'INCOMPLETE' : 'COMPLETE';
   return { run, failures, incomplete, exitCode: run === 'COMPLETE' ? 0 : 1 };
 }

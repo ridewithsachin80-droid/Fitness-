@@ -17,6 +17,11 @@
  *      picture with no name or name word in it;
  *   C. no name list → no picture;  D. no OCR → no picture;
  *   E. the publication check removes A's picture and keeps B's.
+ *   F. (Fixes-2w) OCR that answers --version but whose image reads fail, time
+ *      out, or fail one of the two required passes (the other pass is the real
+ *      tesseract): no picture, nothing left in the holding folder.
+ *   G. (Fixes-2w) the publication check on B's genuinely clean picture with those
+ *      failing OCR programs: removed as "not checked"; with the real OCR: kept.
  *
  * Needs Postgres on 5433, Chromium, tesseract, client/dist. On demand:
  *   node scripts/test-voice-evidence-shot.mjs [output folder]
@@ -135,6 +140,31 @@ try {
   const pub = path.join(TMP, 'pub'); fs.mkdirSync(pub); fs.copyFileSync(leak, path.join(pub, 'A.png')); if (fs.existsSync(out)) fs.copyFileSync(out, path.join(pub, 'B.png'));
   const pc = S.publicationCheck(pub, NAMES);
   ck('the leaking picture is removed and the clean one kept', !fs.existsSync(path.join(pub, 'A.png')) && fs.existsSync(path.join(pub, 'B.png')) && pc.removed.length === 1, pc);
+
+  console.log('\n[F] OCR that is "available" but cannot finish reading the picture (Fixes-2w)');
+  const real = execFileSync('sh', ['-c', 'command -v tesseract'], { encoding: 'utf8' }).trim();
+  const stub = (name, body) => { const f = path.join(TMP, name); fs.writeFileSync(f, `#!/bin/sh\nif [ "$1" = "--version" ]; then exec ${real} --version; fi\n${body}\n`); fs.chmodSync(f, 0o755); return f; };
+  const failAll = stub('ocr-fail.sh', 'exit 1');
+  const slow = stub('ocr-slow.sh', 'sleep 8; exec ' + real + ' "$@"');
+  const only3 = stub('ocr-fail-11.sh', `if [ "$4" = "11" ]; then exit 1; fi\nexec ${real} "$@"`);
+  for (const [label, bin, extra, rx] of [['image reads fail', failAll, {}, /exit code 1/], ['a read times out', slow, { ocrTimeoutMs: 1500 }, /timed out/], ['the real psm 3 read works but the required psm 11 pass fails', only3, {}, /pass 11 failed/]]) {
+    p = await adminPage();
+    const hold = fs.mkdtempSync(path.join(TMP, 'hold-')), dest = path.join(hold, 'F.png');
+    const rf = await S.safeShot(p, { selector: '[data-testid="vp-panel"]', names: NAMES, file: dest, label: 'SIMULATED · voice-test card', sim: true, ocrBin: bin, quarantine: hold, ...extra });
+    ck(`${label} → no picture, marked unchecked, nothing left in the holding folder`, !rf.taken && rf.unchecked === true && rx.test(rf.reason) && fs.readdirSync(hold, { recursive: true }).length === 0, rf);
+    await p.browserContext().close();
+  }
+
+  console.log('\n[G] the publication check on a genuinely clean picture, with OCR that cannot finish (Fixes-2w)');
+  for (const [label, bin, extra] of [['image reads fail', failAll, {}], ['a read times out', slow, { ocrTimeoutMs: 1500 }], ['one required pass fails', only3, {}]]) {
+    const d = fs.mkdtempSync(path.join(TMP, 'pubF-')), hold = fs.mkdtempSync(path.join(TMP, 'holdF-'));
+    if (fs.existsSync(out)) fs.copyFileSync(out, path.join(hold, 'B.png'));
+    const g = S.publicationCheck(d, NAMES, { ocrBin: bin, quarantine: hold, ...extra });
+    ck(`${label} → B's clean picture is NOT published (removed as not checked); the run is marked incomplete`, fs.existsSync(out) && !fs.existsSync(path.join(d, 'B.png')) && g.removed[0]?.kind === 'unchecked' && g.complete === false && !fs.existsSync(hold), g);
+  }
+  { const d = fs.mkdtempSync(path.join(TMP, 'pubOK-')), hold = fs.mkdtempSync(path.join(TMP, 'holdOK-')); if (fs.existsSync(out)) fs.copyFileSync(out, path.join(hold, 'B.png'));
+    const g = S.publicationCheck(d, NAMES, { quarantine: hold });
+    ck('control: the real OCR completes → B\'s picture moves from the holding folder into the upload folder and is on the cleared list', fs.existsSync(path.join(d, 'B.png')) && g.cleared === 1 && g.complete === true && fs.readFileSync(path.join(d, S.CLEARED_LIST), 'utf8').trim().length === 64, g); }
 } catch (e) { ck('the regression ran to the end', false, e.stack); }
 finally { await browser.close(); child.kill(); await c.end(); }
 // The negative-control picture shows names: it never leaves this computer.
