@@ -1417,11 +1417,12 @@ router.post('/voice-transcribe', async (req, res) => {
   // Fixes-2x (calibration Part C): which engine ACTUALLY answered, model by model. Recording only:
   // the trail is filled as the request runs and read only when a Part C try is armed for this
   // account on the test server; the reply is sent exactly as it would be without it.
+  // Fixes-2y: the app sends the session key it had when the take STARTED (calibration_session); a mismatch is never counted.
   const voiceTrail = [];
   const calTrial = await voiceCalibration().armedFor(req.user);
   if (calTrial) {
     const send = res.json.bind(res);
-    res.json = (body) => { voiceCalibration().recordTrial(calTrial, { body, status: res.statusCode, speech, langHint, audioSha, fbTest, trail: voiceTrail }); return send(body); };
+    res.json = (body) => { voiceCalibration().recordTrial(calTrial, { body, status: res.statusCode, speech, langHint, audioSha, fbTest, trail: voiceTrail, appSession: req.body?.calibration_session }); return send(body); };
   }
 
   if (speech.status === 'no_speech') {

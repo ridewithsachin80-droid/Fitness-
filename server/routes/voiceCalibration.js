@@ -2,9 +2,14 @@
  * routes/voiceCalibration.js — Fixes-2x: the voice calibration kit (B18/B19). TEST SERVER ONLY:
  * every route answers 404 elsewhere, with no database read (services/voiceFallbackTest.available).
  *
+ *   Fixes-2y (the 2x kit review): reviewer register (codes only in the export), reference-first takes (transcripts
+ *   hidden until the listener's reference is frozen; each change a new version), versioned rule 3 judgments with
+ *   hand verdicts and claimed (never duplicated) evaluations, Part C sessions that stay recoverable until the day is
+ *   back to its baseline and the switch is off, and the phone's make, model and versions per take.
+ *
  *   Volunteer (member):
  *     GET    /api/voice-calibration/me            invited?, consented?, their planned slots (no transcripts shown)
- *     POST   /api/voice-calibration/consent       { phone_type, browser, installed_app }
+ *     POST   /api/voice-calibration/consent       { phone_type, browser, installed_app, device: { make, model, os, os_version, browser_version } }
  *     POST   /api/voice-calibration/take          { slot, audio, mimeType, duration_ms, retake_reason?, retake_note? }
  *     POST   /api/voice-calibration/withdraw      delete every take now
  *   Administrator:
@@ -14,13 +19,20 @@
  *     POST   /api/voice-calibration/admin/wording     { lang, confirmed_by, note? }   a fluent speaker's check of the exact lines
  *     POST   /api/voice-calibration/admin/wording/revoke  { lang }
  *     GET    /api/voice-calibration/admin/takes       every take (history), with a player link
- *     POST   /api/voice-calibration/admin/label       { take_id, heard?: 'speech'|'no_speech'|'uncertain'|null, spoken_as_script?, reference_text?, reference_items? }
- *     POST   /api/voice-calibration/admin/preview-eval    rule 3: newly admitted takes' two legs through the logging parser (evaluation mode; deduplicated)
+ *     POST   /api/voice-calibration/admin/label       draft only, before the reference is frozen: { take_id, heard?, spoken_as_script?, reference_text?, reference_items? }
+ *     POST   /api/voice-calibration/admin/reference   freeze a reference version: { take_id, listener_code, heard, spoken_as_script?, mode?, items?, text? }
+ *     POST   /api/voice-calibration/admin/hand-check  Part B: { take_id, engine, verdict, note? } settles a "needs a hand check" line (current reference only)
+ *     POST   /api/voice-calibration/admin/reviewers   { name, role: 'fluent speaker'|'listener'|'both', langs? } → a code (R1…); names stay here
+ *     POST   /api/voice-calibration/admin/preview-eval    rule 3: newly admitted takes' two legs through the logging parser (evaluation mode;
+ *                                                     one claimed judgment per take, engine, reference version and judge version; { reevaluate: true } re-runs stale ones)
+ *     POST   /api/voice-calibration/admin/judgments/:id/hand  { verdict, note? } settles a "needs a hand check" preview
  *     POST   /api/voice-calibration/admin/remeasure   measure stored audio again; must equal what was stored
- *     POST   /api/voice-calibration/admin/partc/arm   { trial, account_id }   one try at a time; the day's baseline is kept
- *     POST   /api/voice-calibration/admin/partc/readback   what changed on the test account's day since arming
- *     POST   /api/voice-calibration/admin/partc/restore    put the day back to the baseline and compare the whole day
- *     POST   /api/voice-calibration/admin/partc/finish     stop recording; verify the Voice backup switch is off
+ *     POST   /api/voice-calibration/admin/partc/arm   { trial, account_id }   one session at a time: refused while any session is unresolved
+ *     POST   /api/voice-calibration/admin/partc/readback   (the unresolved session) what changed on the test account's day since arming
+ *     POST   /api/voice-calibration/admin/partc/restore    (the unresolved session) put the day back to ITS baseline and compare the whole day
+ *     POST   /api/voice-calibration/admin/partc/finish     (the unresolved session) stop recording; complete only when the day equals
+ *                                                     its baseline and the Voice backup switch is off; otherwise the session stays open for recovery
+ *     POST   /api/voice-calibration/admin/partc/sessions/:id/(readback|restore|finish)   the same, by session
  *   The armed test account (controlled mode / on-device reports):
  *     GET    /api/voice-calibration/partc/me
  *     POST   /api/voice-calibration/partc/device-event { text, lang }
@@ -54,6 +66,24 @@ const RETAKE_REASONS = ['cut_off', 'wrong_line', 'interrupted', 'other'];
 const sha256 = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const { getISTDate } = require('../utils/istDate');
 const HEARD = ['speech', 'no_speech', 'uncertain'];
+const OSES = ['android', 'ios', 'other', 'unknown'];
+const ROLES = ['fluent speaker', 'listener', 'both'];
+/** Fixes-2y: the phone itself (make, model, OS and browser versions). Each answer is required; "unknown" is a valid answer. */
+function validDevice(d) {
+  if (!d || typeof d !== 'object') return { error: "Tell us your phone's make and model (or choose \"I don't know\")." };
+  const out = {};
+  for (const k of ['make', 'model', 'os_version', 'browser_version']) {
+    const v = String(d[k] ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40);
+    if (!v) return { error: `Tell us the ${k.replace('_', ' ')} (or choose "I don't know").` };
+    out[k] = v.toLowerCase() === 'unknown' || v.toLowerCase() === "i don't know" ? 'unknown' : v;
+  }
+  out.os = OSES.includes(d.os) ? d.os : 'unknown';
+  return { device: out };
+}
+async function reviewer(code, roles, db = pool) {
+  const { rows: [r] } = await db.query(`SELECT code, role FROM voice_calibration_reviewers WHERE code=$1`, [String(code || '')]);
+  return r && (!roles || roles.includes(r.role)) ? r : null;
+}
 
 async function wordingOk(lang, db = pool) {
   if (!lang) return true;   // the no-speech controls have no wording
@@ -79,7 +109,7 @@ router.get('/me', member, async (req, res) => {
     const taken = new Map(rows.map(r => [r.slot_code, r.takes]));
     const ok = {}; for (const l of ['kn', 'hi', 'en']) ok[l] = await wordingOk(l);
     res.json({ available: true, invited: true, consented: !!p.consented_at && p.consent_version === C.CONSENT_VERSION, group: p.grp,
-      phone_type: p.phone_type, browser: p.browser, installed_app: p.installed_app, phones: PHONES, browsers: BROWSERS, retake_reasons: RETAKE_REASONS,
+      phone_type: p.phone_type, browser: p.browser, installed_app: p.installed_app, device: p.device || null, phones: PHONES, browsers: BROWSERS, oses: OSES, retake_reasons: RETAKE_REASONS,
       slots: C.slotPlan(p.grp).map(s => { const i = C.slotInfo(s.slot, p.grp);
         return { slot: s.slot, kind: s.kind, place: s.place, lang: s.lang, say: i.say, means: i.means, locked: s.lang ? !ok[s.lang] : false, takes: taken.get(s.slot) || 0 }; }) });
   } catch (err) { fail(res, err); }
@@ -90,8 +120,10 @@ router.post('/consent', member, async (req, res) => {
     const { phone_type, browser } = req.body || {};
     if (!PHONES.includes(phone_type)) return res.status(400).json({ error: 'Which phone are you using?' });
     if (!BROWSERS.includes(browser)) return res.status(400).json({ error: 'Which browser are you using?' });
-    const { rowCount } = await pool.query(`UPDATE voice_calibration_participants SET consented_at = NOW(), consent_version = $2, phone_type = $3, browser = $4, installed_app = $5
-      WHERE patient_id=$1 AND withdrawn_at IS NULL`, [req.user.id, C.CONSENT_VERSION, phone_type, browser, req.body?.installed_app === true]);
+    const dv = validDevice(req.body?.device);
+    if (dv.error) return res.status(400).json({ error: dv.error, needs_device: true });
+    const { rowCount } = await pool.query(`UPDATE voice_calibration_participants SET consented_at = NOW(), consent_version = $2, phone_type = $3, browser = $4, installed_app = $5, device = $6
+      WHERE patient_id=$1 AND withdrawn_at IS NULL`, [req.user.id, C.CONSENT_VERSION, phone_type, browser, req.body?.installed_app === true, JSON.stringify({ ...dv.device, browser })]);
     if (!rowCount) return res.status(404).json({ error: 'You are not part of the voice calibration.' });
     res.json({ ok: true });
   } catch (err) { fail(res, err); }
@@ -129,17 +161,17 @@ router.post('/take', member, async (req, res) => {
       const { rows: [mx] } = await client.query(`SELECT COALESCE(MAX(take_no), 0)::int AS n FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2`, [p.id, info.slot]);
       await client.query(`UPDATE voice_calibration_takes SET superseded_at = NOW() WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
       const { rows: [row] } = await client.query(
-        `INSERT INTO voice_calibration_takes (participant_id, slot_code, take_no, object_key, mime_type, duration_ms, audio_sha256, phone_type, browser, installed_app, retake_reason, retake_note,
+        `INSERT INTO voice_calibration_takes (participant_id, slot_code, take_no, object_key, mime_type, duration_ms, audio_sha256, phone_type, browser, installed_app, device, retake_reason, retake_note,
            speech_status, detector_version, voiced_frames, longest_run_frames, f0_spread_raw, f0_count, hop_ms, frames, voiced_ms, longest_run_ms, peak_db_raw, background_db_raw, speech_error,
            gemini_text, gemini_error, gemini_generated, gemini_provenance, whisper_text, whisper_error, whisper_review, whisper_segments, whisper_provenance)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34) RETURNING id, take_no`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$35,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34) RETURNING id, take_no`,
         [p.id, info.slot, mx.n + 1, key, mt, Math.min(60000, Math.max(0, parseInt(req.body?.duration_ms) || 0)) || null, sha256(buf), p.phone_type, p.browser, p.installed_app,
          prev.n > 0 ? reason : null, prev.n > 0 && req.body?.retake_note ? String(req.body.retake_note).slice(0, 200) : null,
          speech.status, speech.version || null, f.voiced_frames ?? null, f.longest_run_frames ?? null, f.f0_spread_raw ?? null, f.f0_count ?? null, f.hop_ms ?? null, f.frames ?? null,
          speech.voiced_ms ?? null, speech.longest_run_ms ?? null, f.peak_db_raw ?? null, f.background_db_raw ?? null, speech.error ? String(speech.error).slice(0, 200) : null,
          t.gemini.text, t.gemini.text == null ? (t.gemini.error || 'no answer') : null, t.gemini.text == null ? null : !!t.gemini.generated_text, JSON.stringify(t.gemini.provenance),
          t.whisper.text, t.whisper.text == null ? (t.whisper.error || 'no answer') : null, t.whisper.review ? JSON.stringify(t.whisper.review) : null,
-         t.whisper.segments ? JSON.stringify(t.whisper.segments) : null, JSON.stringify(t.whisper.provenance)]);
+         t.whisper.segments ? JSON.stringify(t.whisper.segments) : null, JSON.stringify(t.whisper.provenance), p.device ? JSON.stringify(p.device) : null]);
       await client.query('COMMIT');
       // No transcript is shown to the volunteer: a retake is for a recording problem, not for a wrong answer.
       res.json({ ok: true, slot: info.slot, take_no: row.take_no });
@@ -164,14 +196,15 @@ router.get('/partc/me', async (req, res) => {
     const a = await C.armedFor(req.user);
     if (!a) return res.json({ armed: null });
     const t = C.trialInfo(a.trial_no) || {};
-    res.json({ armed: { trial: a.trial_no, route: a.route, path: t.path, say: t.say, force_upload: a.route === 'controlled' } });
+    // Fixes-2y: the app binds its mode to this session and its expiry (ms from now, so phone clocks do not matter).
+    res.json({ armed: { trial: a.trial_no, route: a.route, path: t.path, say: t.say, force_upload: a.route === 'controlled', session_key: a.session_key, expires_in_ms: a.expires_in_ms } });
   } catch (err) { fail(res, err); }
 });
 router.post('/partc/device-event', async (req, res) => {
   try {
     const a = await C.armedFor(req.user);
     if (!a) return res.status(409).json({ error: 'No try is armed for this account.' });
-    await C.recordDeviceDictation(a, { text: req.body?.text, lang: req.body?.lang });
+    await C.recordDeviceDictation(a, { text: req.body?.text, lang: req.body?.lang, appSession: req.body?.session_key || null });
     res.json({ ok: true });
   } catch (err) { fail(res, err); }
 });
@@ -185,16 +218,21 @@ router.get('/admin', admin, async (req, res) => {
          FROM voice_calibration_participants p JOIN users u ON u.id = p.patient_id WHERE p.withdrawn_at IS NULL ORDER BY p.id`);
     const { rows: wording } = await pool.query(`SELECT lang, script_sha256, confirmed_by, note, confirmed_at FROM voice_calibration_wording`);
     const { rows: partc } = await pool.query(`SELECT * FROM voice_calibration_partc ORDER BY trial_no`);
-    const { rows: [armed] } = await pool.query(`SELECT a.trial_no, a.route, a.user_id, a.armed_at, a.armed_at + INTERVAL '${C.ARM_MINUTES} minutes' AS ends_at, (a.armed_at > NOW() - INTERVAL '${C.ARM_MINUTES} minutes') AS recording, u.name
+    const { rows: [armed] } = await pool.query(`SELECT a.trial_no, a.route, a.user_id, a.armed_at, a.session_id, a.armed_at + INTERVAL '${C.ARM_MINUTES} minutes' AS ends_at, (a.armed_at > NOW() - INTERVAL '${C.ARM_MINUTES} minutes') AS recording, u.name
       FROM voice_calibration_partc_armed a JOIN users u ON u.id = a.user_id WHERE a.id=1`);
+    const { rows: reviewers } = await pool.query(`SELECT code, name, role, langs FROM voice_calibration_reviewers ORDER BY created_at, code`);
+    const { rows: sessions } = await pool.query(`SELECT id, trial_no, route, armed_at, capture_stopped_at, stop_reason, resolved_at, resolution, jsonb_array_length(cleanups) AS restores FROM voice_calibration_partc_sessions ORDER BY id DESC LIMIT 60`);
+    const { rows: [hc] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_preview_judgments WHERE status='done' AND judge_version=$1 AND judgment->>'result' = 'needs a hand check' AND hand_verdict IS NULL`, [C.JUDGE_VERSION]);
     const used = Object.fromEntries(Object.keys(C.GROUPS).map(g => [g, participants.filter(p => p.grp === g).length]));
     res.json({ available: true, planned_total: C.PLANNED_TOTAL, planned_per_group: C.PLANNED_PER_GROUP, max: C.MAX_PARTICIPANTS, groups: C.GROUPS, used,
       grid: C.GRID, live: SP.LIVE_LIMITS,
       participants: participants.map(p => ({ id: p.id, code: p.code, name: p.name, group: p.grp, profile_note: p.profile_note, consented: !!p.consented_at && p.consent_version === C.CONSENT_VERSION,
-        phone_type: p.phone_type, browser: p.browser, installed_app: p.installed_app, slots_planned: C.PLANNED_PER_GROUP[p.grp], slots_recorded: p.slots_recorded, takes: p.takes })),
+        phone_type: p.phone_type, browser: p.browser, installed_app: p.installed_app, device: p.device || null, slots_planned: C.PLANNED_PER_GROUP[p.grp], slots_recorded: p.slots_recorded, takes: p.takes })),
       wording: ['kn', 'hi', 'en'].map(lang => { const w = wording.find(x => x.lang === lang);
         return { lang, name: C.LANG_NAME[lang], lines: C.linesFor(lang), sha: C.scriptSha(lang), confirmed: w && w.script_sha256 === C.scriptSha(lang) ? { by: w.confirmed_by, note: w.note, at: w.confirmed_at } : null, void: !!w && w.script_sha256 !== C.scriptSha(lang) }; }),
-      partc: { plan: C.PARTC_PLAN, natural: C.NATURAL_PLAN, rows: partc, armed: armed || null, arm_minutes: C.ARM_MINUTES } });
+      reviewers, preview_hand_checks: hc.n, judge_version: C.JUDGE_VERSION, line_outcomes: C.LINE_OUTCOMES,
+      vocab: { foods: [...Object.keys(C.FOOD), ...Object.keys(C.EXTRA_FOODS)], units: Object.keys(C.UNIT) },
+      partc: { plan: C.PARTC_PLAN, natural: C.NATURAL_PLAN, rows: partc, armed: armed || null, arm_minutes: C.ARM_MINUTES, sessions, unresolved: sessions.filter(x => !x.resolved_at) } });
   } catch (err) { fail(res, err); }
 });
 
@@ -238,10 +276,13 @@ router.delete('/admin/participant/:id', admin, async (req, res) => {
 
 router.post('/admin/wording', admin, async (req, res) => {
   try {
-    const lang = String(req.body?.lang || ''), by = String(req.body?.confirmed_by || '').trim();
+    const lang = String(req.body?.lang || ''), by = String(req.body?.reviewer_code || req.body?.confirmed_by || '').trim();
     if (!C.LANG_NAME[lang]) return res.status(400).json({ error: 'Which language?' });
     if (by.length < 2) return res.status(400).json({ error: 'Who checked the lines? (a fluent speaker)' });
-    const entry = { at: new Date().toISOString(), action: 'confirmed', by: by.slice(0, 80), note: req.body?.note ? String(req.body.note).slice(0, 200) : null, sha: C.scriptSha(lang), recorded_by: req.user.id };
+    // Fixes-2y: a registered reviewer's CODE (R1…), never a name: the shared export carries codes only.
+    if (!(await reviewer(by, ['fluent speaker', 'both']))) return res.status(400).json({ error: 'Choose the fluent speaker by their reviewer code (register them under Reviewers first). Names are not stored with the check.' });
+    if (req.body?.script_sha256 && req.body.script_sha256 !== C.scriptSha(lang)) return res.status(409).json({ error: 'The lines changed since this check was prepared. Read the current lines again.', sha: C.scriptSha(lang) });
+    const entry = { at: new Date().toISOString(), action: 'confirmed', by, reviewer: by, note: req.body?.note ? String(req.body.note).slice(0, 200) : null, sha: C.scriptSha(lang), recorded_by: req.user.id };
     await pool.query(`INSERT INTO voice_calibration_wording (lang, script_sha256, confirmed_by, note, recorded_by, confirmed_at, history) VALUES ($1,$2,$3,$4,$5,NOW(), jsonb_build_array($6::jsonb))
       ON CONFLICT (lang) DO UPDATE SET script_sha256=EXCLUDED.script_sha256, confirmed_by=EXCLUDED.confirmed_by, note=EXCLUDED.note, recorded_by=EXCLUDED.recorded_by, confirmed_at=NOW(),
         history = voice_calibration_wording.history || $6::jsonb`, [lang, entry.sha, entry.by, entry.note, req.user.id, JSON.stringify(entry)]);
@@ -259,23 +300,58 @@ router.post('/admin/wording/revoke', admin, async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+router.post('/admin/reviewers', admin, async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 80), role = String(req.body?.role || '');
+    if (name.length < 2) return res.status(400).json({ error: 'The reviewer\'s name (kept private: it never appears in the export).' });
+    if (!ROLES.includes(role)) return res.status(400).json({ error: 'Role: fluent speaker, listener or both.' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`LOCK TABLE voice_calibration_reviewers IN SHARE ROW EXCLUSIVE MODE`);
+      const { rows: [mx] } = await client.query(`SELECT COALESCE(MAX(SUBSTRING(code FROM 2)::int), 0)::int AS n FROM voice_calibration_reviewers`);
+      const code = `R${mx.n + 1}`;
+      await client.query(`INSERT INTO voice_calibration_reviewers (code, name, role, langs, created_by) VALUES ($1,$2,$3,$4,$5)`, [code, name, role, req.body?.langs ? String(req.body.langs).slice(0, 12) : null, req.user.id]);
+      await client.query('COMMIT');
+      res.json({ ok: true, code });
+    } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
+  } catch (err) { fail(res, err); }
+});
+
+const takeView = async (rows) => {
+  const ids = rows.map(t => t.id);
+  const { rows: js } = ids.length ? await pool.query(`SELECT * FROM voice_calibration_preview_judgments WHERE take_id = ANY($1::int[]) ORDER BY id`, [ids]) : { rows: [] };
+  return rows.map(t => { const info = C.slotInfo(t.slot_code, t.grp) || {};
+    const base = { id: t.id, code: t.code, slot: t.slot_code, take_no: t.take_no, current: !t.superseded_at, retake_reason: t.retake_reason, retake_note: t.retake_note, kind: info.kind, place: info.place, lang: info.lang,
+      say: info.say, intended: info.label, heard: t.heard, spoken_as_script: t.spoken_as_script, reference_text: t.reference_text, reference_items: t.reference_items, reference_mode: t.reference_mode,
+      reference_version: t.reference_version || 0, reference_frozen_at: t.reference_frozen_at, listener_code: t.listener_code,
+      items: (info.items || []).map(i => ({ label: i.label, n: i.n ?? null, kind: i.kind, unit: i.unit || null, food: i.food || null })), audio_url: link(t.object_key), at: t.created_at, device: t.device || null };
+    // Fixes-2y: the listener records what was heard BEFORE seeing any transcript or the detector's verdict.
+    if (!t.reference_frozen_at) return { ...base, revealed: false };
+    const score = (e) => { if (!info.items?.length) return null; const sc = C.takeScore(t, info, e); return { line: sc.line, auto_line: sc.auto_line, flags: sc.flags, extra: sc.extra, unexplained: sc.unexplained, hand: sc.hand || null, provisional: sc.provisional }; };
+    const legs = ['gemini', 'whisper'].map(e => { const l = C.legStatus(t, e, js); return { engine: e, status: l.cls, result: l.result, judgment_id: l.j?.id || null, hand_reasons: l.j?.judgment?.hand || [], problems: l.j?.judgment?.problems || [], hand_verdict: l.j?.hand_verdict || null }; });
+    return { ...base, revealed: true, speech_status: t.speech_status, voiced_ms: t.voiced_ms, live_decision: C.decision(t, SP.LIVE_LIMITS),
+      gemini: t.gemini_text, whisper: t.whisper_text, gemini_model: t.gemini_provenance?.model_used || null, whisper_review: t.whisper_review,
+      scores: { gemini: score('gemini'), whisper: score('whisper') }, rule3: js.some(j => j.take_id === t.id) || C.GRID.some(g => C.newlyAdmitted(t, g)) ? legs : null };
+  });
+};
 router.get('/admin/takes', admin, async (req, res) => {
   try {
     const args = []; let where = '';
     if (req.query.participant) { args.push(parseInt(req.query.participant)); where = `WHERE t.participant_id = $1`; }
     const { rows } = await pool.query(`SELECT t.*, p.code, p.grp FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id ${where} ORDER BY p.id, t.slot_code, t.take_no`, args);
-    res.json({ takes: rows.map(t => { const info = C.slotInfo(t.slot_code, t.grp) || {};
-      return { id: t.id, code: t.code, slot: t.slot_code, take_no: t.take_no, current: !t.superseded_at, retake_reason: t.retake_reason, retake_note: t.retake_note, kind: info.kind, place: info.place, lang: info.lang,
-        say: info.say, intended: info.label, heard: t.heard, spoken_as_script: t.spoken_as_script, reference_text: t.reference_text, reference_items: t.reference_items,
-        items: (info.items || []).map(i => ({ label: i.label, n: i.n ?? null })), speech_status: t.speech_status, voiced_ms: t.voiced_ms, live_decision: C.decision(t, SP.LIVE_LIMITS),
-        gemini: t.gemini_text, whisper: t.whisper_text, gemini_model: t.gemini_provenance?.model_used || null, whisper_review: t.whisper_review, audio_url: link(t.object_key), at: t.created_at }; }) });
+    res.json({ takes: await takeView(rows) });
   } catch (err) { fail(res, err); }
 });
 
+// A draft label, before the reference is frozen (2x behaviour, kept). After freezing, a change is a new version (/admin/reference).
 router.post('/admin/label', admin, async (req, res) => {
   try {
     const id = parseInt(req.body?.take_id), b = req.body || {};
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Which take?' });
+    const { rows: [cur] } = await pool.query(`SELECT reference_frozen_at FROM voice_calibration_takes WHERE id=$1`, [id]);
+    if (!cur) return res.status(404).json({ error: 'No such take.' });
+    if (cur.reference_frozen_at) return res.status(409).json({ error: 'This take\'s reference is frozen. Save a new version instead (the earlier one is kept).', frozen: true });
     const set = [], args = [id]; const entry = { at: new Date().toISOString(), by: req.user.id };
     if ('heard' in b) { if (b.heard !== null && !HEARD.includes(b.heard)) return res.status(400).json({ error: 'Heard: speech, no_speech, uncertain or clear.' }); args.push(b.heard); set.push(`heard = $${args.length}`); entry.heard = b.heard; }
     if ('spoken_as_script' in b) { if (![true, false, null].includes(b.spoken_as_script)) return res.status(400).json({ error: 'Said as written: yes, no or clear.' }); args.push(b.spoken_as_script); set.push(`spoken_as_script = $${args.length}`); entry.spoken_as_script = b.spoken_as_script; }
@@ -287,46 +363,127 @@ router.post('/admin/label', admin, async (req, res) => {
     }
     if (!set.length) return res.status(400).json({ error: 'Nothing to change.' });
     args.push(JSON.stringify(entry));
-    const { rowCount } = await pool.query(`UPDATE voice_calibration_takes SET ${set.join(', ')}, label_history = label_history || $${args.length}::jsonb WHERE id=$1`, args);
-    if (!rowCount) return res.status(404).json({ error: 'No such take.' });
+    const { rowCount } = await pool.query(`UPDATE voice_calibration_takes SET ${set.join(', ')}, label_history = label_history || $${args.length}::jsonb WHERE id=$1 AND reference_frozen_at IS NULL`, args);
+    if (!rowCount) return res.status(409).json({ error: 'This take\'s reference was frozen meanwhile.', frozen: true });
     res.json({ ok: true });
   } catch (err) { fail(res, err); }
 });
 
-// Part A rule 3: each newly admitted take (live refuses, some candidate accepts) through the everyday voice
-// route's own verdict and then the logging parser's preview, for BOTH legs. Evaluation mode: nothing saved,
-// no coach message, no learning. One row per take and engine; at most 20 parser calls a tap.
+// Fixes-2y: freeze a reference version. Everything scoring depends on is in it; a change is a new version with a new hash,
+// which makes the earlier rule 3 judgments stale (kept in the export, never reused).
+router.post('/admin/reference', admin, async (req, res) => {
+  try {
+    const id = parseInt(req.body?.take_id), b = req.body || {};
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Which take?' });
+    const { rows: [t] } = await pool.query(`SELECT t.*, p.grp FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id WHERE t.id=$1`, [id]);
+    if (!t) return res.status(404).json({ error: 'No such take.' });
+    const listener = await reviewer(b.listener_code, ['listener', 'both']);
+    if (!listener) return res.status(400).json({ error: 'Choose the fluent listener by their reviewer code (register them under Reviewers first).' });
+    if (!HEARD.includes(b.heard)) return res.status(400).json({ error: 'What did the listener hear: speech, no speech, or unsure?' });
+    const info = C.slotInfo(t.slot_code, t.grp) || {};
+    const ref = { heard: b.heard, spoken_as_script: null, mode: null, items: null, text: b.text == null || b.text === '' ? null : String(b.text).slice(0, 500) };
+    if (info.label === 'speech' && b.heard === 'speech') {
+      if (![true, false].includes(b.spoken_as_script)) return res.status(400).json({ error: 'Was the line said as written: yes or no?' });
+      ref.spoken_as_script = b.spoken_as_script;
+      if (b.spoken_as_script) ref.mode = 'as_script';
+      else if (b.mode === 'unscorable') ref.mode = 'unscorable';
+      else {
+        const v = C.validReferenceItems(b.items);
+        if (v.error) return res.status(400).json({ error: v.error, needs_items: true });
+        ref.mode = 'corrected'; ref.items = v.items;
+      }
+    }
+    const sha = C.referenceSha(ref);
+    if (t.reference_frozen_at && t.reference_sha === sha) return res.json({ ok: true, unchanged: true, version: t.reference_version, sha });
+    const version = (t.reference_version || 0) + 1;
+    const entry = { version, sha, at: new Date().toISOString(), by: req.user.id, listener: listener.code, reference: ref };
+    await pool.query(`UPDATE voice_calibration_takes SET heard=$2, spoken_as_script=$3, reference_mode=$4, reference_items=$5, reference_text=$6, reference_version=$7, reference_sha=$8, reference_frozen_at=NOW(),
+        listener_code=$9, reference_history = reference_history || $10::jsonb WHERE id=$1`,
+      [id, ref.heard, ref.spoken_as_script, ref.mode, ref.items ? JSON.stringify(ref.items) : null, ref.text, version, sha, listener.code, JSON.stringify(entry)]);
+    const { rows: [stale] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_preview_judgments WHERE take_id=$1 AND reference_sha <> $2`, [id, sha]);
+    res.json({ ok: true, version, sha, revealed: true, stale_judgments: stale.n });
+  } catch (err) { fail(res, err); }
+});
+
+// Fixes-2y: Part B hand check. Only a "needs a hand check" line, only against the current reference; one of the nine outcomes.
+router.post('/admin/hand-check', admin, async (req, res) => {
+  try {
+    const id = parseInt(req.body?.take_id), engine = String(req.body?.engine || ''), verdict = String(req.body?.verdict || '');
+    if (!Number.isInteger(id) || !['gemini', 'whisper'].includes(engine)) return res.status(400).json({ error: 'Which take and engine?' });
+    if (!C.LINE_OUTCOMES.includes(verdict) || ['provider error', 'empty answer'].includes(verdict)) return res.status(400).json({ error: 'Choose one of the line outcomes.' });
+    const { rows: [t] } = await pool.query(`SELECT t.*, p.grp FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id WHERE t.id=$1`, [id]);
+    if (!t) return res.status(404).json({ error: 'No such take.' });
+    if (!t.reference_frozen_at) return res.status(409).json({ error: 'Freeze the listener\'s reference first.' });
+    const sc = C.takeScore({ ...t, hand_checks: {} }, C.slotInfo(t.slot_code, t.grp) || {}, engine);
+    if (sc.line !== C.HAND_CHECK) return res.status(409).json({ error: `This line does not need a hand check (it is "${sc.line}").` });
+    const hc = { verdict, note: req.body?.note ? String(req.body.note).slice(0, 200) : null, by: req.user.id, at: new Date().toISOString(), reference_sha: t.reference_sha, reference_version: t.reference_version, engine };
+    await pool.query(`UPDATE voice_calibration_takes SET hand_checks = jsonb_set(COALESCE(hand_checks, '{}'::jsonb), $2, $3::jsonb, true), hand_history = hand_history || $4::jsonb WHERE id=$1`,
+      [id, `{${engine}}`, JSON.stringify(hc), JSON.stringify(hc)]);
+    res.json({ ok: true });
+  } catch (err) { fail(res, err); }
+});
+
+// Part A rule 3: each newly admitted take (live refuses, some candidate accepts) through the everyday voice route's own
+// verdict and then the logging parser's preview, for BOTH legs. Evaluation mode: nothing saved, no coach message, no learning.
+// Fixes-2y: only takes whose reference is frozen (speech, scorable). One judgment per take, engine, reference version and judge
+// version, CLAIMED before the parser is called, so two taps at once never evaluate the same leg twice. A judgment made under an
+// earlier reference or judge version is stale: kept, never reused, and re-run only when asked ({ reevaluate: true }), counted apart.
 router.post('/admin/preview-eval', admin, async (req, res) => {
   try {
+    const reevaluate = req.body?.reevaluate === true;
     const { rows } = await pool.query(`SELECT t.*, p.grp, p.patient_id FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
-      WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL ORDER BY t.id`);
-    const { rows: done } = await pool.query(`SELECT take_id, engine FROM voice_calibration_preview_evals`);
-    const have = new Set(done.map(d => `${d.take_id}|${d.engine}`));
+      WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL AND t.reference_frozen_at IS NOT NULL AND t.heard = 'speech' AND COALESCE(t.reference_mode, '') <> 'unscorable' ORDER BY t.id`);
+    const { rows: [waiting] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
+      WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL AND t.reference_frozen_at IS NULL`);
     const { parseMemberMessage } = require('./aiChat');
-    let calls = 0, judged = 0, more = false;
+    let calls = 0, recalls = 0, judged = 0, stale = 0, busy = 0, more = false;
     for (const t of rows) {
       const info = C.slotInfo(t.slot_code, t.grp);
       if (!info || !info.items.length || !C.GRID.some(g => C.newlyAdmitted(t, g))) continue;
       for (const engine of ['gemini', 'whisper']) {
-        if (have.has(`${t.id}|${engine}`)) continue;
+        const { rows: mine } = await pool.query(`SELECT id, reference_sha, judge_version, status, created_at FROM voice_calibration_preview_judgments WHERE take_id=$1 AND engine=$2`, [t.id, engine]);
+        if (mine.some(j => j.reference_sha === t.reference_sha && j.judge_version === C.JUDGE_VERSION && j.status === 'done')) continue;
+        const isRe = mine.some(j => j.reference_sha !== t.reference_sha || j.judge_version !== C.JUDGE_VERSION);
+        if (isRe && !reevaluate) { stale++; continue; }
         const leg = C.voiceLeg(t, engine);
+        if (leg.stage === 'to parser' && calls + recalls >= 20) { more = true; continue; }
+        const reason = isRe ? 're-evaluation' : 'initial';
+        let { rows: [claim] } = await pool.query(`INSERT INTO voice_calibration_preview_judgments (take_id, engine, reference_sha, reference_version, judge_version, status, reason)
+          VALUES ($1,$2,$3,$4,$5,'running',$6) ON CONFLICT (take_id, engine, reference_sha, judge_version) DO NOTHING RETURNING id`, [t.id, engine, t.reference_sha, t.reference_version, C.JUDGE_VERSION, reason]);
+        if (!claim) ({ rows: [claim] } = await pool.query(`UPDATE voice_calibration_preview_judgments SET created_at = NOW() WHERE take_id=$1 AND engine=$2 AND reference_sha=$3 AND judge_version=$4
+          AND status='running' AND created_at < NOW() - INTERVAL '10 minutes' RETURNING id`, [t.id, engine, t.reference_sha, C.JUDGE_VERSION]));
+        if (!claim) { busy++; continue; }      // another tap is evaluating this leg right now
         let stage = leg.stage, preview = null, judgment = null, used = 0;
         if (leg.stage === 'to parser') {
-          if (calls >= 20) { more = true; continue; }
-          calls++; used = 1;
+          used = 1; if (isRe) recalls++; else calls++;
           try {
             const r = await parseMemberMessage({ userId: t.patient_id, message: leg.text, context: {}, evaluation: true });
             preview = r && r.__status ? { error: r.error || `HTTP ${r.__status}` } : r;
             stage = preview?.error ? 'parser error' : 'parsed';
           } catch (e) { preview = { error: String(e.message || e).slice(0, 200) }; stage = 'parser error'; }
-          judgment = C.judgePreview(C.itemsWithReference(info.items, t.reference_items), preview, info.lang);
-        } else judgment = { result: leg.stage === 'voice refused' ? 'explicit refusal' : 'provider error', problems: [], items: [], note: leg.reason };
-        await pool.query(`INSERT INTO voice_calibration_preview_evals (take_id, engine, stage, preview, judgment, parser_calls) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (take_id, engine) DO NOTHING`,
-          [t.id, engine, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used]);
+          judgment = C.judgePreview(C.itemsWithReference(info.items, t.reference_items, t.reference_mode), preview, info.lang);
+        } else judgment = { result: leg.stage === 'voice refused' ? 'explicit refusal' : 'provider error', problems: [], hand: [], items: [], note: leg.reason };
+        await pool.query(`UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1`,
+          [claim.id, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used, preview && (preview.aiProvider || preview.aiModel) ? JSON.stringify({ provider: preview.aiProvider || null, model: preview.aiModel || null }) : null]);
         judged++;
       }
     }
-    res.json({ ok: true, judged, parser_calls: calls, more });
+    res.json({ ok: true, judged, parser_calls: calls, reevaluation_calls: recalls, stale_waiting: stale, busy, awaiting_reference: waiting.n, more });
+  } catch (err) { fail(res, err); }
+});
+
+// Fixes-2y: settle a "needs a hand check" preview (current judgments only). Every verdict is kept.
+router.post('/admin/judgments/:id/hand', admin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id), verdict = String(req.body?.verdict || '');
+    if (!['correct reviewable', 'explicit refusal', 'missing/unresolved (visible)', 'disqualifying'].includes(verdict)) return res.status(400).json({ error: 'Verdict: correct reviewable, explicit refusal, missing/unresolved (visible) or disqualifying.' });
+    const { rows: [j] } = await pool.query(`SELECT j.*, t.reference_sha AS take_sha FROM voice_calibration_preview_judgments j JOIN voice_calibration_takes t ON t.id = j.take_id WHERE j.id=$1`, [id]);
+    if (!j) return res.status(404).json({ error: 'No such judgment.' });
+    if (j.status !== 'done' || j.reference_sha !== j.take_sha || j.judge_version !== C.JUDGE_VERSION) return res.status(409).json({ error: 'This judgment is stale or still running: re-evaluate first.' });
+    if (j.judgment?.result !== 'needs a hand check') return res.status(409).json({ error: `This preview was judged "${j.judgment?.result}"; only a hand check can be settled by hand.` });
+    const hv = { verdict, note: req.body?.note ? String(req.body.note).slice(0, 200) : null, by: req.user.id, at: new Date().toISOString() };
+    await pool.query(`UPDATE voice_calibration_preview_judgments SET hand_verdict=$2, hand_history = hand_history || $3::jsonb WHERE id=$1`, [id, JSON.stringify(hv), JSON.stringify(hv)]);
+    res.json({ ok: true });
   } catch (err) { fail(res, err); }
 });
 
@@ -357,53 +514,89 @@ router.post('/admin/partc/arm', admin, async (req, res) => {
     if (!plan) return res.status(400).json({ error: `Which try (1–${C.PARTC_PLAN.length}, or a natural observation ${C.NATURAL_PLAN[0].trial}–${C.NATURAL_PLAN.slice(-1)[0].trial})?` });
     const { rows: [u] } = await pool.query(`SELECT role, active FROM users WHERE id=$1`, [account]);
     if (u?.role !== 'patient' || u.active === false) return res.status(400).json({ error: 'Choose the active test member account.' });
-    // One operator and one controlled account at a time: a try stays armed until Finish.
+    // One operator and one controlled account at a time. Fixes-2y: a session stays in the way until it is RESOLVED
+    // (the day back to its baseline and the switch verified off), not merely until its recording window ends.
+    const { rows: [open] } = await pool.query(`SELECT id, trial_no FROM voice_calibration_partc_sessions WHERE resolved_at IS NULL ORDER BY id LIMIT 1`);
+    if (open) return res.status(409).json({ error: `Try ${open.trial_no} (session ${open.id}) is not resolved yet. Read back, restore if needed, and Finish it first.`, session_id: open.id });
     const { rows: [busy] } = await pool.query(`SELECT trial_no FROM voice_calibration_partc_armed WHERE id=1`);
     if (busy) return res.status(409).json({ error: `Try ${busy.trial_no} is still open. Read back, restore and Finish it first.` });
     const date = getISTDate();
     const baseline = await C.dayState(pool, account, date);
-    await pool.query(`INSERT INTO voice_calibration_partc_armed (id, trial_no, route, user_id, armed_by, armed_at) VALUES (1,$1,$2,$3,$4,NOW())`, [trial, plan.route, account, req.user.id]);
+    const key = crypto.randomUUID();
+    let sess;
+    try {
+      ({ rows: [sess] } = await pool.query(`INSERT INTO voice_calibration_partc_sessions (session_key, trial_no, route, account_id, log_date, baseline, armed_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, armed_at`,
+        [key, trial, plan.route, account, date, JSON.stringify(baseline), req.user.id]));
+    } catch (e) { if (e.code === '23505') return res.status(409).json({ error: 'Another try was armed at the same moment. Refresh.' }); throw e; }
+    await pool.query(`INSERT INTO voice_calibration_partc_armed (id, trial_no, route, user_id, armed_by, armed_at, session_id, session_key) VALUES (1,$1,$2,$3,$4,$5,$6,$7)`, [trial, plan.route, account, req.user.id, sess.armed_at, sess.id, key]);
+    // The try's row keeps marks and every event; its baseline column mirrors the LATEST session (each session keeps its own).
     await pool.query(`INSERT INTO voice_calibration_partc (trial_no, route, account_id, log_date, baseline, updated_at) VALUES ($1,$2,$3,$4,$5,NOW())
       ON CONFLICT (trial_no) DO UPDATE SET route=EXCLUDED.route, account_id=EXCLUDED.account_id, log_date=EXCLUDED.log_date, baseline=EXCLUDED.baseline, cleanup=NULL, switch_off_verified=NULL, finished_at=NULL, updated_at=NOW()`,
       [trial, plan.route, account, date, JSON.stringify(baseline)]);
     const { rows: [sw] } = await pool.query(`SELECT user_id FROM voice_fallback_test_account WHERE id=1 AND set_at > NOW() - INTERVAL '24 hours'`);
     const switchOn = !!sw && sw.user_id === account;
-    res.json({ ok: true, trial, route: plan.route, path: plan.path, switch_on: switchOn,
+    res.json({ ok: true, trial, route: plan.route, path: plan.path, session_id: sess.id, switch_on: switchOn,
       warning: plan.route === 'controlled' && plan.path === 'whisper' && !switchOn ? 'This try is planned for the Whisper fallback, but the Voice backup switch is not on for that account. Turn it on first.'
         : plan.route === 'controlled' && plan.path === 'gemini' && switchOn ? 'This try is planned for Gemini, but the Voice backup switch is on for that account. Turn it off first.' : null });
   } catch (err) { fail(res, err); }
 });
-const openTry = async () => (await pool.query(`SELECT a.trial_no, a.user_id, p.baseline, p.log_date FROM voice_calibration_partc_armed a JOIN voice_calibration_partc p ON p.trial_no = a.trial_no WHERE a.id=1`)).rows[0];
-router.post('/admin/partc/readback', admin, async (req, res) => {
+/** The session an action applies to: by id, or the one unresolved session. */
+async function sessionFor(req) {
+  if (req.params.id) return (await pool.query(`SELECT * FROM voice_calibration_partc_sessions WHERE id=$1`, [parseInt(req.params.id)])).rows[0];
+  return (await pool.query(`SELECT * FROM voice_calibration_partc_sessions WHERE resolved_at IS NULL ORDER BY id DESC LIMIT 1`)).rows[0];
+}
+const readback = async (req, res) => {
   try {
-    const o = await openTry(); if (!o) return res.status(409).json({ error: 'No try is open.' });
-    const now = await C.dayState(pool, o.user_id, o.baseline.date);
-    const diff = C.dayDiff(o.baseline, now);
-    await pool.query(`UPDATE voice_calibration_partc SET readbacks = readbacks || $2::jsonb, updated_at = NOW() WHERE trial_no=$1`, [o.trial_no, JSON.stringify({ at: new Date().toISOString(), diff })]);
-    res.json({ ok: true, trial: o.trial_no, diff });
+    const s = await sessionFor(req); if (!s) return res.status(409).json({ error: 'No try is open.' });
+    if (!s.account_id) return res.status(409).json({ error: 'The test account no longer exists.' });
+    const now = await C.dayState(pool, s.account_id, s.baseline.date);
+    const diff = C.dayDiff(s.baseline, now);
+    const entry = { at: new Date().toISOString(), reason: 'read back', diff, by: req.user.id };
+    await pool.query(`UPDATE voice_calibration_partc_sessions SET readbacks = readbacks || $2::jsonb WHERE id=$1`, [s.id, JSON.stringify(entry)]);
+    await pool.query(`UPDATE voice_calibration_partc SET readbacks = readbacks || $2::jsonb, updated_at = NOW() WHERE trial_no=$1`, [s.trial_no, JSON.stringify(entry)]);
+    res.json({ ok: true, trial: s.trial_no, session_id: s.id, diff });
   } catch (err) { fail(res, err); }
-});
-router.post('/admin/partc/restore', admin, async (req, res) => {
+};
+const restore = async (req, res) => {
   try {
-    const o = await openTry(); if (!o) return res.status(409).json({ error: 'No try is open.' });
-    const r = await C.restoreDay(pool, o.user_id, o.baseline);
-    await pool.query(`UPDATE voice_calibration_partc SET cleanup = $2, updated_at = NOW() WHERE trial_no=$1`, [o.trial_no, JSON.stringify({ at: new Date().toISOString(), ...r })]);
-    res.json({ ok: true, trial: o.trial_no, ...r });
+    const s = await sessionFor(req); if (!s) return res.status(409).json({ error: 'No try is open.' });
+    if (s.resolved_at) return res.status(409).json({ error: 'This session is already resolved: its day was verified equal to its baseline.' });
+    if (!s.account_id) return res.status(409).json({ error: 'The test account no longer exists.' });
+    const r = await C.restoreDay(pool, s.account_id, s.baseline);     // only this account, only this session's date, back to THIS session's baseline
+    const entry = { at: new Date().toISOString(), by: req.user.id, ...r };
+    await pool.query(`UPDATE voice_calibration_partc_sessions SET cleanups = cleanups || $2::jsonb WHERE id=$1`, [s.id, JSON.stringify(entry)]);
+    await pool.query(`UPDATE voice_calibration_partc SET cleanup = $2, updated_at = NOW() WHERE trial_no=$1`, [s.trial_no, JSON.stringify(entry)]);
+    res.json({ ok: true, trial: s.trial_no, session_id: s.id, ...r });
   } catch (err) { fail(res, err); }
-});
-router.post('/admin/partc/finish', admin, async (req, res) => {
+};
+// Finish: recording stops at once; the session is COMPLETE only when its day equals its baseline and the switch is off.
+// Otherwise it stays open (Restore and Finish keep working by session), and nothing reports success.
+const finish = async (req, res) => {
   try {
-    const { rows: [a] } = await pool.query(`SELECT trial_no, user_id FROM voice_calibration_partc_armed WHERE id=1`);
-    if (!a) return res.status(409).json({ error: 'No try is open.' });
-    const { rows: [sw] } = await pool.query(`SELECT user_id FROM voice_fallback_test_account WHERE id=1 AND set_at > NOW() - INTERVAL '24 hours'`);
-    const off = !(sw && sw.user_id === a.user_id);
-    await pool.query(`UPDATE voice_calibration_partc SET switch_off_verified = $2, finished_at = NOW(), updated_at = NOW() WHERE trial_no=$1`, [a.trial_no, off]);
-    await pool.query(`DELETE FROM voice_calibration_partc_armed WHERE id=1`);
-    const { rows: [r] } = await pool.query(`SELECT cleanup FROM voice_calibration_partc WHERE trial_no=$1`, [a.trial_no]);
-    res.json({ ok: true, trial: a.trial_no, switch_off_verified: off, restored: !!r?.cleanup?.ok,
-      warning: !off ? 'The Voice backup switch is still ON for the test account. Turn it off on the Voice backup test card.' : !r?.cleanup?.ok ? 'The day was not restored to its baseline (or not checked). Restore it, or note why.' : null });
+    const s = await sessionFor(req); if (!s) return res.status(409).json({ error: 'No try is open.' });
+    if (s.resolved_at) return res.json({ ok: true, completed: true, already: true, trial: s.trial_no, session_id: s.id, switch_off_verified: true, restored: true, outstanding: [], warning: null });
+    const { rows: [a] } = await pool.query(`DELETE FROM voice_calibration_partc_armed WHERE id=1 AND session_id=$1 RETURNING armed_at`, [s.id]);
+    const expired = !a && !s.capture_stopped_at ? true : a ? (Date.now() - new Date(a.armed_at).getTime() > C.ARM_MINUTES * 60000) : false;
+    await pool.query(`UPDATE voice_calibration_partc_sessions SET capture_stopped_at = COALESCE(capture_stopped_at, NOW()), stop_reason = COALESCE(stop_reason, $2) WHERE id=$1`, [s.id, expired ? 'finish (window had ended)' : 'finish']);
+    const chk = await C.checkSession(pool, s, 'finish');
+    if (chk.ok) {
+      await pool.query(`UPDATE voice_calibration_partc_sessions SET resolved_at = NOW(), resolution = $2 WHERE id=$1`, [s.id, JSON.stringify({ day: chk.note || 'equal to its baseline', switch: 'off', outstanding: [] })]);
+      await pool.query(`UPDATE voice_calibration_partc SET switch_off_verified = TRUE, finished_at = NOW(), updated_at = NOW() WHERE trial_no=$1`, [s.trial_no]);
+    } else {
+      await pool.query(`UPDATE voice_calibration_partc_sessions SET resolution = $2 WHERE id=$1`, [s.id, JSON.stringify({ outstanding: chk.outstanding })]);
+      await pool.query(`UPDATE voice_calibration_partc SET switch_off_verified = $2, updated_at = NOW() WHERE trial_no=$1`, [s.trial_no, !chk.switch_on]);
+    }
+    res.json({ ok: chk.ok, completed: chk.ok, capture_stopped: true, trial: s.trial_no, session_id: s.id, switch_off_verified: !chk.switch_on, restored: chk.diff ? chk.diff.same : true, outstanding: chk.outstanding,
+      warning: chk.switch_on ? 'The Voice backup switch is still ON for the test account. Turn it off on the Voice backup test card, then Finish again. The session stays open until then.'
+        : !chk.ok ? 'The day still differs from its baseline. Restore it, then Finish again. The session stays open until then.' : null });
   } catch (err) { fail(res, err); }
-});
+};
+router.post('/admin/partc/readback', admin, readback);
+router.post('/admin/partc/restore', admin, restore);
+router.post('/admin/partc/finish', admin, finish);
+router.post('/admin/partc/sessions/:id/readback', admin, readback);
+router.post('/admin/partc/sessions/:id/restore', admin, restore);
+router.post('/admin/partc/sessions/:id/finish', admin, finish);
 router.put('/admin/partc/:trial', admin, async (req, res) => {
   try {
     const trial = parseInt(req.params.trial);
@@ -423,12 +616,17 @@ router.put('/admin/partc/:trial', admin, async (req, res) => {
 
 router.get('/admin/export.xlsx', admin, async (req, res) => {
   try {
-    const { rows: participants } = await pool.query(`SELECT id, code, grp, profile_note, consented_at, consent_version, phone_type, browser, installed_app, withdrawn_at FROM voice_calibration_participants ORDER BY id`);
+    const { rows: participants } = await pool.query(`SELECT id, code, grp, profile_note, consented_at, consent_version, phone_type, browser, installed_app, device, withdrawn_at FROM voice_calibration_participants ORDER BY id`);
     const { rows: takes } = await pool.query(`SELECT * FROM voice_calibration_takes ORDER BY id`);
     const { rows: wording } = await pool.query(`SELECT * FROM voice_calibration_wording`);
     const { rows: partc } = await pool.query(`SELECT * FROM voice_calibration_partc ORDER BY trial_no`);
-    const { rows: evals } = await pool.query(`SELECT * FROM voice_calibration_preview_evals ORDER BY take_id, engine`);
-    const buf = X.workbook(C.workbookSheets({ participants, takes, wording, partc, evals }));
+    const { rows: sessions } = await pool.query(`SELECT * FROM voice_calibration_partc_sessions ORDER BY id`);
+    const { rows: judgments } = await pool.query(`SELECT * FROM voice_calibration_preview_judgments ORDER BY take_id, engine, id`);
+    const { rows: reviewers } = await pool.query(`SELECT code, role FROM voice_calibration_reviewers ORDER BY code`);
+    // Names are read only to REMOVE them from free text: volunteers' account names (withdrawn ones too) and reviewers' names.
+    const { rows: names } = await pool.query(`SELECT u.name FROM voice_calibration_participants p JOIN users u ON u.id = p.patient_id UNION SELECT name FROM voice_calibration_reviewers`);
+    const { rows: accounts } = await pool.query(`SELECT name FROM users WHERE name IS NOT NULL`);   // whole names only (operators, coaches, members)
+    const buf = X.workbook(C.workbookSheets({ participants, takes, wording, partc, sessions, judgments, reviewers, privateNames: names.map(n => n.name), accountNames: accounts.map(a => a.name) }));
     const day = new Date().toISOString().slice(0, 10);
     res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="FitLife-Voice-Calibration-${day}.xlsx"` });
     res.send(buf);

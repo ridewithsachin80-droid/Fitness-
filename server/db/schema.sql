@@ -1409,3 +1409,73 @@ CREATE TABLE IF NOT EXISTS voice_calibration_preview_evals (
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE (take_id, engine)
 );
+-- ── Fixes-2y: the 2x kit review (24 Oct 2026). Additive only: new columns and tables; nothing renamed or dropped. ──
+-- The phone itself (make, model, OS and browser versions; "unknown" allowed), on the volunteer and snapshotted per take.
+ALTER TABLE voice_calibration_participants ADD COLUMN IF NOT EXISTS device JSONB;
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS device JSONB;
+-- The fluent listener's reference, frozen and versioned BEFORE any transcript is shown. Every version is kept.
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_mode      VARCHAR(12);          -- as_script | corrected | unscorable
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_frozen_at TIMESTAMPTZ;
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_version   INT NOT NULL DEFAULT 0;
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_sha       CHAR(64);
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_history   JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS listener_code       VARCHAR(6);
+-- Part B hand checks (a "needs a hand check" line settled by the listener, against one reference version).
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS hand_checks  JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS hand_history JSONB NOT NULL DEFAULT '[]';
+-- Reviewers (fluent speakers, listeners): the export carries their CODE only; names stay here (admin view only).
+CREATE TABLE IF NOT EXISTS voice_calibration_reviewers (
+  code        VARCHAR(6) PRIMARY KEY,                -- R1, R2… never reused
+  name        VARCHAR(80) NOT NULL,                  -- private: never exported
+  role        VARCHAR(20) NOT NULL CHECK (role IN ('fluent speaker','listener','both')),
+  langs       VARCHAR(12),
+  created_by  INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+-- Rule 3 judgments, one per take, engine, reference version and judge version. A row is CLAIMED ('running') before the
+-- parser is called, so concurrent taps never evaluate a leg twice. Stale versions are kept, never reused.
+-- (Replaces voice_calibration_preview_evals for new judgments; that 2x table is kept and no longer written.)
+CREATE TABLE IF NOT EXISTS voice_calibration_preview_judgments (
+  id                SERIAL PRIMARY KEY,
+  take_id           INT NOT NULL REFERENCES voice_calibration_takes(id) ON DELETE CASCADE,
+  engine            VARCHAR(10) NOT NULL,
+  reference_sha     CHAR(64) NOT NULL,
+  reference_version INT NOT NULL,
+  judge_version     VARCHAR(20) NOT NULL,
+  status            VARCHAR(10) NOT NULL DEFAULT 'running',   -- running | done
+  reason            VARCHAR(20) NOT NULL DEFAULT 'initial',   -- initial | re-evaluation (counted apart)
+  stage             VARCHAR(20),
+  preview           JSONB,
+  judgment          JSONB,
+  parser            JSONB,
+  parser_calls      INT NOT NULL DEFAULT 0,
+  hand_verdict      JSONB,
+  hand_history      JSONB NOT NULL DEFAULT '[]',
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  finished_at       TIMESTAMPTZ,
+  UNIQUE (take_id, engine, reference_sha, judge_version)
+);
+-- Part C sessions: each arming of a try. Recording stops at Finish or after its window; the session stays open for
+-- recovery until its account's day equals ITS baseline and the Voice backup switch is verified off. Repeats keep every session.
+CREATE TABLE IF NOT EXISTS voice_calibration_partc_sessions (
+  id                 SERIAL PRIMARY KEY,
+  session_key        TEXT NOT NULL UNIQUE,         -- sent to the armed account's app; recordings carry it back
+  trial_no           INT NOT NULL,
+  route              VARCHAR(12) NOT NULL,
+  account_id         INT REFERENCES users(id) ON DELETE SET NULL,
+  log_date           DATE NOT NULL,
+  baseline           JSONB NOT NULL,
+  armed_by           INT REFERENCES users(id) ON DELETE SET NULL,
+  armed_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  capture_stopped_at TIMESTAMPTZ,
+  stop_reason        VARCHAR(40),
+  readbacks          JSONB NOT NULL DEFAULT '[]',
+  cleanups           JSONB NOT NULL DEFAULT '[]',
+  switch_checks      JSONB NOT NULL DEFAULT '[]',
+  resolved_at        TIMESTAMPTZ,
+  resolution         JSONB
+);
+-- At most one unresolved session at a time (one operator, one controlled account).
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_one_unresolved_session ON voice_calibration_partc_sessions ((TRUE)) WHERE resolved_at IS NULL;
+ALTER TABLE voice_calibration_partc_armed ADD COLUMN IF NOT EXISTS session_id  INT;
+ALTER TABLE voice_calibration_partc_armed ADD COLUMN IF NOT EXISTS session_key TEXT;

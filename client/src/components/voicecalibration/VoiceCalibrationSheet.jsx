@@ -15,6 +15,16 @@ import useRecorder, { blobToBase64 } from '../voicepilot/useRecorder';
 const PHONE = { android_budget: 'Android, about ₹12,000 or less', android_mid: 'Android, above ₹12,000', iphone: 'iPhone' };
 const BROWSER = { chrome: 'Chrome', safari: 'Safari', samsung: 'Samsung Internet', other: 'Other' };
 const REASON = { cut_off: 'It got cut off', wrong_line: 'I said the wrong line', interrupted: 'Something interrupted me', other: 'Something else' };
+const OS = { android: 'Android', ios: 'iOS (iPhone)', other: 'Other', unknown: "I don't know" };
+/** Fixes-2y: a first guess at the phone from the browser itself; the volunteer checks and corrects it. */
+function guessDevice() {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const iphone = /iPhone|iPad/.test(ua), android = /Android/.test(ua);
+  const model = android ? (ua.match(/Android [^;)]*;\s*([^;)]+?)(?:\s+Build\/|\))/)?.[1] || '') : iphone ? 'iPhone' : '';
+  const osv = android ? (ua.match(/Android (\d+(?:\.\d+)?)/)?.[1] || '') : iphone ? (ua.match(/OS (\d+[_.]\d+)/)?.[1] || '').replace('_', '.') : '';
+  const bv = ua.match(/SamsungBrowser\/(\d+(?:\.\d+)?)/)?.[1] || ua.match(/(?:Chrome|CriOS)\/(\d+)/)?.[1] || ua.match(/Version\/(\d+(?:\.\d+)?)/)?.[1] || '';
+  return { make: iphone ? 'Apple' : '', model: model === 'K' ? '' : model, os: iphone ? 'ios' : android ? 'android' : 'unknown', os_version: osv, browser_version: bv };
+}
 const GROUPS = [['q', 'Quiet room', 'A closed room, fan off. Hold the phone as you normally would.'],
   ['n', 'Everyday noise', 'Fan on full, plus kitchen, TV or road noise, as at home. Not louder than usual.'],
   ['x', 'No speech', 'Nobody speaks to the phone in these. Six seconds each.']];
@@ -81,12 +91,14 @@ export default function VoiceCalibrationSheet({ open, onClose, onChanged }) {
   const [phone, setPhone] = useState('');
   const [browser, setBrowser] = useState('');
   const [installed, setInstalled] = useState(false);
+  const [device, setDevice] = useState(guessDevice);
   const load = () => api.get('/voice-calibration/me').then(({ data }) => setData(data)).catch(() => setError('Could not load the voice test.'));
   useEffect(() => { if (open) { setError(''); load(); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const consent = async () => {
     if (!phone || !browser) { setError('Choose your phone and browser first.'); return; }
-    try { await api.post('/voice-calibration/consent', { phone_type: phone, browser, installed_app: installed }); haptic(20); setError(''); load(); onChanged?.(); }
+    if (['make', 'model', 'os_version', 'browser_version'].some(k => !String(device[k] || '').trim())) { setError('Fill in your phone\'s details, or tap "I don\'t know" for any you are not sure of.'); return; }
+    try { await api.post('/voice-calibration/consent', { phone_type: phone, browser, installed_app: installed, device }); haptic(20); setError(''); load(); onChanged?.(); }
     catch (e) { setError(e.response?.data?.error || 'Could not save that. Try again.'); }
   };
   const withdraw = async () => {
@@ -106,7 +118,7 @@ export default function VoiceCalibrationSheet({ open, onClose, onChanged }) {
           <p className="text-sm text-white leading-relaxed">Your coach is checking how well FitLife's voice logging hears people on real phones. You record {slots.length} short clips, about 30 minutes in all: {data.group === 'kn' ? 'English and Kannada lines' : data.group === 'hi' ? 'English and Hindi lines' : 'English lines'} to read, each once in a quiet room and once with everyday noise, plus 6 clips of six seconds with no speech at all.</p>
           <ul className="text-caption text-mid space-y-1.5 leading-relaxed">
             <li>Each recording is checked for speech by FitLife and turned into text by two speech services (Google Gemini and Whisper on Groq), the same way voice logging does it.</li>
-            <li>Your coach, authorised FitLife administrators and a fluent listener they choose can listen to the recordings to note what was actually said, and read what was heard. Your phone type and browser are noted. Results are shared for review with a code, never your name. Recordings are stored privately and deleted after 90 days.</li>
+            <li>Your coach, authorised FitLife administrators and a fluent listener they choose can listen to the recordings to note what was actually said, and read what was heard. Your phone's make, model and software versions, and your browser, are noted. Results are shared for review with a code, never your name. Recordings are stored privately and deleted after 90 days.</li>
             <li>Nothing you record is added to your food log.</li>
             <li>FitLife does not learn or store a model of your voice from this.</li>
             <li>You can stop at any time and delete every recording at once.</li>
@@ -123,6 +135,26 @@ export default function VoiceCalibrationSheet({ open, onClose, onChanged }) {
               <option value="">Choose…</option>{(data.browsers || Object.keys(BROWSER)).map(k => <option key={k} value={k}>{BROWSER[k] || k}</option>)}
             </select>
           </label>
+          <fieldset className="space-y-1.5" data-testid="vc-device">
+            <legend className="text-caption text-mid">Your phone's details (we filled in what your browser tells us; correct anything wrong)</legend>
+            {[['make', 'Make', 'e.g. Redmi, Samsung, Apple'], ['model', 'Model', 'e.g. 12C, Galaxy A14'], ['os_version', 'Android or iOS version', 'e.g. 13, 17.5'], ['browser_version', 'Browser version', 'e.g. 129']].map(([k, label, hint]) => (
+              <div key={k}>
+                <span className="block text-caption text-mid mb-0.5" id={`vc-device-${k}-label`}>{label}</span>
+                <div className="flex items-center gap-2">
+                  <input value={device[k] || ''} onChange={e => setDevice({ ...device, [k]: e.target.value })} maxLength={40} placeholder={hint} aria-label={label} data-testid={`vc-device-${k}`}
+                    className="flex-1 min-w-0 rounded-xl bg-charcoal border border-white/[0.12] text-sm text-white px-2" style={{ minHeight: 44 }} />
+                  <button type="button" onClick={() => setDevice({ ...device, [k]: 'unknown' })} aria-pressed={device[k] === 'unknown'} aria-label={`${label}: I don't know`}
+                    className={`rounded-xl border text-caption font-semibold px-2 ${device[k] === 'unknown' ? 'border-gold text-gold' : 'border-white/[0.16] text-mid'}`} style={{ minHeight: 44 }}>I don't know</button>
+                </div>
+              </div>
+            ))}
+            <label className="block text-caption text-mid">Phone system
+              <select value={device.os || 'unknown'} onChange={e => setDevice({ ...device, os: e.target.value })} aria-label="Phone system" style={{ minHeight: 44 }}
+                className="mt-0.5 w-full rounded-xl bg-charcoal border border-white/[0.12] text-sm text-white px-2">
+                {(data.oses || Object.keys(OS)).map(k => <option key={k} value={k}>{OS[k] || k}</option>)}
+              </select>
+            </label>
+          </fieldset>
           <label className="flex items-center gap-2 text-caption text-mid" style={{ minHeight: 40 }}>
             <input type="checkbox" checked={installed} onChange={e => setInstalled(e.target.checked)} /> I opened FitLife from its icon on my home screen
           </label>

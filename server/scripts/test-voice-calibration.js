@@ -172,7 +172,7 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
   const base = `http://127.0.0.1:${server.address().port}`;
   const tag = Date.now().toString(36);
   await pool.query(`SELECT setval(pg_get_serial_sequence('users','id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM users), 1))`);
-  for (const t of ['voice_calibration_preview_evals', 'voice_calibration_takes', 'voice_calibration_participants', 'voice_calibration_wording', 'voice_calibration_partc', 'voice_calibration_partc_armed', 'voice_fallback_test_account']) await pool.query(`DELETE FROM ${t}`);
+  for (const t of ['voice_calibration_preview_judgments', 'voice_calibration_preview_evals', 'voice_calibration_takes', 'voice_calibration_participants', 'voice_calibration_wording', 'voice_calibration_partc', 'voice_calibration_partc_sessions', 'voice_calibration_partc_armed', 'voice_calibration_reviewers', 'voice_fallback_test_account']) await pool.query(`DELETE FROM ${t}`);
   const mk = async (name, role = 'patient', active = true) => (await pool.query(`INSERT INTO users (name,phone,password,role,active) VALUES ($1,$2,'x',$3,$4) RETURNING id`,
     [name, '7' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0'), role, active])).rows[0].id;
   const tok = (id, role) => jwt.sign({ id, role, name: 'x' }, process.env.JWT_SECRET, { expiresIn: 600 });
@@ -247,7 +247,8 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
       r = await http('POST', '/api/voice-calibration/take', V[0], 'patient', { slot: 'x01-q', audio: silenceAudio, mimeType: 'audio/webm' });
       ck('a take before agreeing is refused', r.status === 409 && /agree/.test(r.data.error));
       ck('agreeing needs the phone and browser', (await http('POST', '/api/voice-calibration/consent', V[0], 'patient', { phone_type: 'nokia', browser: 'chrome' })).status === 400);
-      r = await http('POST', '/api/voice-calibration/consent', V[0], 'patient', { phone_type: 'android_budget', browser: 'chrome', installed_app: true });
+      // Fixes-2y: agreeing now also records the phone itself (make, model, versions; "unknown" allowed).
+      r = await http('POST', '/api/voice-calibration/consent', V[0], 'patient', { phone_type: 'android_budget', browser: 'chrome', installed_app: true, device: { make: 'Redmi', model: '12C', os: 'android', os_version: '13', browser_version: '129' } });
       let me = (await http('GET', '/api/voice-calibration/me', V[0], 'patient')).data;
       ck('after agreeing: only this group\'s task list (28 slots; no Hindi lines); read lines locked until the wording check; controls open', r.status === 200 && me.consented && me.slots.length === 28
         && !me.slots.some(s => s.lang === 'hi') && me.slots.filter(s => s.lang).every(s => s.locked) && me.slots.filter(s => s.kind === 'control').every(s => !s.locked));
@@ -257,7 +258,9 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
       r = await http('POST', '/api/voice-calibration/take', V[0], 'patient', { slot: 'x01-q', audio: silenceAudio, mimeType: 'audio/webm', duration_ms: 6000 });
       ck('a control (no words to check) can be recorded; no transcript is shown to the volunteer', r.status === 200 && r.data.take_no === 1 && !('gemini' in r.data) && !('whisper' in r.data), r.data);
       ck('the wording check needs who checked it', (await http('POST', '/api/voice-calibration/admin/wording', ADMIN, 'admin', { lang: 'kn', confirmed_by: '' })).status === 400);
-      r = await http('POST', '/api/voice-calibration/admin/wording', ADMIN, 'admin', { lang: 'kn', confirmed_by: 'Fluent Kannada speaker (Sachin)', note: 'k01–k13 and Eradu idli read aloud' });
+      // Fixes-2y: the check is recorded with a registered reviewer's CODE (names stay in the private register).
+      const kRev = (await http('POST', '/api/voice-calibration/admin/reviewers', ADMIN, 'admin', { name: 'Fluent Kannada speaker (Sachin)', role: 'both', langs: 'kn' })).data.code;
+      r = await http('POST', '/api/voice-calibration/admin/wording', ADMIN, 'admin', { lang: 'kn', reviewer_code: kRev, note: 'k01–k13 and Eradu idli read aloud' });
       me = (await http('GET', '/api/voice-calibration/me', V[0], 'patient')).data;
       ck('after the Kannada check: Kannada lines open, English still locked', r.status === 200 && me.slots.filter(s => s.lang === 'kn').every(s => !s.locked) && me.slots.filter(s => s.lang === 'en').every(s => s.locked));
       const say = C.LINES.k01.say; C.LINES.k01.say = 'Belagge eradu idli thinde';
@@ -333,7 +336,11 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
     // ── [4] Part C ─────────────────────────────────────────────────────────────
     console.log('\n[4] Part C: what actually happened on every everyday try');
     {
-      const voice = (id, audio = speechAudio, langHint = 'kn-IN') => http('POST', '/api/ai-chat/voice-transcribe', id, 'patient', { audio, mimeType: 'audio/webm', langHint });
+      // Fixes-2y: like the app, a recording carries the session key the account was given when the take started.
+      const voice = async (id, audio = speechAudio, langHint = 'kn-IN') => {
+        const armedNow = (await http('GET', '/api/voice-calibration/partc/me', id, 'patient')).data?.armed;
+        return http('POST', '/api/ai-chat/voice-transcribe', id, 'patient', { audio, mimeType: 'audio/webm', langHint, ...(armedNow ? { calibration_session: armedNow.session_key } : {}) });
+      };
       const parse = (id, message) => http('POST', '/api/ai-chat/parse', id, 'patient', { message, context: {} });
       const row = async (n) => (await pool.query(`SELECT * FROM voice_calibration_partc WHERE trial_no=$1`, [n])).rows[0];
       const settle = () => new Promise(res => setTimeout(res, 200));
@@ -414,6 +421,8 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
       r = await http('POST', '/api/voice-calibration/admin/partc/finish', ADMIN, 'admin');
       ck('finishing with the switch still on: NOT verified off, with a warning', r.data.switch_off_verified === false && /still ON/.test(r.data.warning || ''), r.data);
       await pool.query(`DELETE FROM voice_fallback_test_account`);
+      // Fixes-2y: the session stays open until the switch is verified off; finishing again completes it.
+      await http('POST', '/api/voice-calibration/admin/partc/finish', ADMIN, 'admin');
       await http('POST', '/api/voice-calibration/admin/partc/arm', ADMIN, 'admin', { trial: 4, account_id: TESTACC });
       await pool.query(`UPDATE voice_calibration_partc_armed SET armed_at = NOW() - INTERVAL '31 minutes'`);
       await voice(TESTACC); await settle();
@@ -430,7 +439,8 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
       t = await row(1);
       ck('the hand-marked outcome keeps only the planned items, and every edit is kept', r.status === 200 && t.items.length === 2 && t.edits.length === 2);
       ck('a try number outside 1–32 and 33–40 is refused', (await http('POST', '/api/voice-calibration/admin/partc/arm', ADMIN, 'admin', { trial: 41, account_id: TESTACC })).status === 400);
-      const sheets = C.workbookSheets({ partc: (await pool.query(`SELECT * FROM voice_calibration_partc ORDER BY trial_no`)).rows });
+      // Fixes-2y: restores, read-backs and switch checks now live on each session; the export is given them.
+      const sheets = C.workbookSheets({ partc: (await pool.query(`SELECT * FROM voice_calibration_partc ORDER BY trial_no`)).rows, sessions: (await pool.query(`SELECT * FROM voice_calibration_partc_sessions ORDER BY id`)).rows });
       const pc = sheets.find(s => s.name === 'Part C tries').rows, H = pc[0];
       const pcol = (trial, col) => pc.find(r => r[0] === trial)[H.indexOf(col)];
       ck('export: try 1 counts as a Gemini test; try 3 (Gemini failed) does NOT; natural 33 is not a provider test; try 2 switch not verified off', pcol(1, 'counts as a test of the planned provider') === 'yes'
@@ -517,7 +527,7 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
       ck('…a coach message is not sent, and a question is not answered (no extra AI call): both shown as explicit refusals', pr2.sent_to_coach === false && /would send/.test(pr2.evaluation_note) && pr3.question === true && pr3.reply === null
         && C.judgePreview(items, pr2, 'en').result === 'explicit refusal');
       // The route: newly admitted takes (live refuses 180 ms; v160/v120 accept), both legs, deduplicated.
-      await http('POST', '/api/voice-calibration/consent', V[7], 'patient', { phone_type: 'iphone', browser: 'safari' });
+      await http('POST', '/api/voice-calibration/consent', V[7], 'patient', { phone_type: 'iphone', browser: 'safari', device: { make: 'Apple', model: 'iPhone 13', os: 'ios', os_version: '17.6', browser_version: '17.6' } });
       const pid = (await pool.query(`SELECT id FROM voice_calibration_participants WHERE patient_id=$1 AND withdrawn_at IS NULL`, [V[7]])).rows[0].id;
       const mkTake = async (slot, frames, gem, whisp, review) => (await pool.query(`INSERT INTO voice_calibration_takes (participant_id, slot_code, take_no, speech_status, voiced_frames, longest_run_frames, f0_spread_raw, hop_ms,
         gemini_text, gemini_generated, whisper_text, whisper_review) VALUES ($1,$2,1,$3,$4,4,22,20,$5,false,$6,$7) RETURNING id`, [pid, slot, frames >= 10 ? 'speech' : 'no_speech', frames, gem, whisp, JSON.stringify(review)])).rows[0].id;
@@ -530,8 +540,11 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
         const per = { calories: 120, protein: 3, total_carbs: 20, fat: 3 };
         return /upma/.test(m) ? { ...ch0(), foods: [{ name: 'Upma', qty_text: '3 plate', grams: 600, meal: 'Breakfast', per_100g: per }, { name: 'Coffee', qty_text: '1 cup', grams: 150, meal: 'Breakfast', per_100g: per }] }
           : { ...ch0(), foods: [{ name: 'Idli', qty_text: '2 idli', grams: 100, meal: 'Breakfast', per_100g: per }, { name: 'Sambar', qty_text: '1 bowl', grams: 200, meal: 'Breakfast', per_100g: per }] }; };
+      // Fixes-2y: rule 3 runs only on takes whose listener reference is frozen (here: said as written); judgments are versioned rows.
+      const lRev = (await http('POST', '/api/voice-calibration/admin/reviewers', ADMIN, 'admin', { name: 'Listener Example', role: 'listener' })).data.code;
+      for (const id of [ok, bad]) await http('POST', '/api/voice-calibration/admin/reference', ADMIN, 'admin', { take_id: id, listener_code: lRev, heard: 'speech', spoken_as_script: true });
       let r = await http('POST', '/api/voice-calibration/admin/preview-eval', ADMIN, 'admin', {});
-      const ev = (await pool.query(`SELECT * FROM voice_calibration_preview_evals ORDER BY take_id, engine`)).rows;
+      const ev = (await pool.query(`SELECT * FROM voice_calibration_preview_judgments ORDER BY take_id, engine`)).rows;
       const evOf = (id, e) => ev.find(x => x.take_id === id && x.engine === e);
       ck('rule 3 route: only newly admitted takes, both legs: the refused Whisper leg is an explicit refusal with no parser call', r.status === 200 && ev.length === 4 && evOf(ok, 'whisper').stage === 'voice refused'
         && evOf(ok, 'whisper').judgment.result === 'explicit refusal' && evOf(ok, 'whisper').parser_calls === 0, ev.map(e => [e.take_id, e.engine, e.stage]));
@@ -543,7 +556,7 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
       stub.chat = ch0;
       const part = (await pool.query(`SELECT * FROM voice_calibration_participants`)).rows, tk = (await pool.query(`SELECT * FROM voice_calibration_takes`)).rows;
       await pool.query(`UPDATE voice_calibration_takes SET heard='speech'`);
-      const S = C.workbookSheets({ participants: part, takes: (await pool.query(`SELECT * FROM voice_calibration_takes`)).rows, evals: (await pool.query(`SELECT * FROM voice_calibration_preview_evals`)).rows });
+      const S = C.workbookSheets({ participants: part, takes: (await pool.query(`SELECT * FROM voice_calibration_takes`)).rows, judgments: (await pool.query(`SELECT * FROM voice_calibration_preview_judgments`)).rows });
       const A = S.find(s => s.name === 'Part A summary').rows, AH = A[0];
       const v160 = A.find(x => x[0] === 'v160-r60' && x[1] === 'all');
       ck('Part A: v160 newly admits 2 takes, both judged, 1 disqualified → "fails screen: rule 3"', v160[AH.indexOf('newly accepted speech vs live')] === 2 && v160[AH.indexOf('rule 3: newly accepted takes with both legs judged')] === 2
@@ -555,11 +568,12 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
     // ── [7] The export ────────────────────────────────────────────────────────
     console.log('\n[7] the export: empty and populated; codes, denominators, provenance, history; never a name');
     {
-      for (const t of ['voice_calibration_preview_evals', 'voice_calibration_takes', 'voice_calibration_participants', 'voice_calibration_wording', 'voice_calibration_partc', 'voice_calibration_partc_armed']) await pool.query(`DELETE FROM ${t}`);
+      for (const t of ['voice_calibration_preview_judgments', 'voice_calibration_preview_evals', 'voice_calibration_takes', 'voice_calibration_participants', 'voice_calibration_wording', 'voice_calibration_partc', 'voice_calibration_partc_sessions', 'voice_calibration_partc_armed', 'voice_calibration_reviewers']) await pool.query(`DELETE FROM ${t}`);
       let r = await http('GET', '/api/voice-calibration/admin/export.xlsx', ADMIN, 'admin');
       const files = X.unzipStored(r.data);
       const sheetNames = (String(files['xl/workbook.xml'] || '').match(/name="[^"]+"/g) || []).map(s => s.slice(6, -1));
-      ck('the unpopulated export: 14 sheets', r.status === 200 && sheetNames.join('|') === 'About|Volunteers|Plan|Lines|Slots|Takes|Items|Part A summary|Rule 3 previews|Part B summary|Number words|Controls|Part C tries|Part C events', sheetNames);
+      // Fixes-2y: three sheets added (Part C sessions, History, Free text); the 14 earlier sheets are unchanged in name and order.
+      ck('the unpopulated export: 17 sheets', r.status === 200 && sheetNames.join('|') === 'About|Volunteers|Plan|Lines|Slots|Takes|Items|Part A summary|Rule 3 previews|Part B summary|Number words|Controls|Part C tries|Part C sessions|Part C events|History|Free text', sheetNames);
       const sheets = C.workbookSheets({});
       const about = JSON.stringify(sheets[0].rows);
       ck('…the plan with no data: 66 slot definitions, 15 lines, the 32 controlled Part C tries, 6 settings × 14 slices', sheets.find(s => s.name === 'Plan').rows.length === 67 && sheets.find(s => s.name === 'Lines').rows.length === 16
@@ -599,9 +613,10 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
       ck('a stored live result the replay does not reproduce is flagged as a MISMATCH in About', /1 MISMATCH/.test(JSON.stringify(bad[0].rows)));
       process.env.RAILWAY_GIT_BRANCH = 'test';
       await http('POST', '/api/voice-calibration/admin/invite', ADMIN, 'admin', { member_id: V[1], group: 'kn', profile_note: '30s, man' });
-      await http('POST', '/api/voice-calibration/consent', V[1], 'patient', { phone_type: 'iphone', browser: 'safari' });
+      await http('POST', '/api/voice-calibration/consent', V[1], 'patient', { phone_type: 'iphone', browser: 'safari', device: { make: 'Apple', model: 'iPhone 12', os: 'ios', os_version: '17.5', browser_version: 'unknown' } });
       await http('POST', '/api/voice-calibration/take', V[1], 'patient', { slot: 'x02-n', audio: silenceAudio, mimeType: 'audio/webm' });
-      await http('POST', '/api/voice-calibration/admin/wording', ADMIN, 'admin', { lang: 'kn', confirmed_by: 'Fluent Kannada speaker' });
+      const kRev2 = (await http('POST', '/api/voice-calibration/admin/reviewers', ADMIN, 'admin', { name: 'Fluent Kannada speaker', role: 'fluent speaker' })).data.code;
+      await http('POST', '/api/voice-calibration/admin/wording', ADMIN, 'admin', { lang: 'kn', reviewer_code: kRev2 });
       await http('POST', '/api/voice-calibration/take', V[1], 'patient', { slot: 'k01-n', audio: speechAudio, mimeType: 'audio/webm' });
       r = await http('GET', '/api/voice-calibration/admin/export.xlsx', ADMIN, 'admin');
       const raw = r.data.toString('utf8');
@@ -610,7 +625,7 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
     }
   } catch (e) { ck('the suite ran to the end', false, e.stack); }
   finally {
-    for (const t of ['voice_calibration_preview_evals', 'voice_calibration_takes', 'voice_calibration_participants', 'voice_calibration_wording', 'voice_calibration_partc', 'voice_calibration_partc_armed', 'voice_fallback_test_account']) await pool.query(`DELETE FROM ${t}`).catch(() => {});
+    for (const t of ['voice_calibration_preview_judgments', 'voice_calibration_preview_evals', 'voice_calibration_takes', 'voice_calibration_participants', 'voice_calibration_wording', 'voice_calibration_partc', 'voice_calibration_partc_sessions', 'voice_calibration_partc_armed', 'voice_calibration_reviewers', 'voice_fallback_test_account']) await pool.query(`DELETE FROM ${t}`).catch(() => {});
     await pool.query(`DELETE FROM daily_logs WHERE patient_id = ANY($1::int[])`, [[...V, TESTACC, OTHER]]).catch(() => {});
     server.close(); R2.server?.close?.(); await pool.end().catch(() => {});
     fs.rmSync(TMP, { recursive: true, force: true });

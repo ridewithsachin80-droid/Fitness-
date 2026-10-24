@@ -45,7 +45,16 @@ export function useVoiceComposer({ onSend, accent = 'var(--accent)', autoSend = 
 
   // Fixes-2x: an armed voice-calibration try on the test site (null everywhere else; production never asks).
   const [calTry, setCalTry] = useState(calibrationTry());
-  useEffect(() => { refreshCalibrationTry().then(setCalTry); return onCalibrationChange(setCalTry); }, []);
+  // Fixes-2y: kept current while the composer stays open (every minute and on returning to the app); the label
+  // clears by itself when the session's window ends. Off the test site these make no request.
+  useEffect(() => {
+    const off = onCalibrationChange(setCalTry);
+    refreshCalibrationTry().then(setCalTry);
+    const tick = setInterval(() => refreshCalibrationTry(), 60000);
+    const again = () => { if (document.visibilityState !== 'hidden') refreshCalibrationTry(); };
+    window.addEventListener('focus', again); document.addEventListener('visibilitychange', again);
+    return () => { off(); clearInterval(tick); window.removeEventListener('focus', again); document.removeEventListener('visibilitychange', again); };
+  }, []);
   const voice = useVoiceInput({
     lang: voiceLang,
     contextKey,

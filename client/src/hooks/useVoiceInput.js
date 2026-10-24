@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { transcriptionRoute } from '../utils/voiceComposer';
 import { normalizeVoiceLang, generatedText } from '../utils/voiceLanguage';
 import { today } from '../constants';
-import { calibrationForcesUpload, reportDeviceDictation } from '../utils/calibrationMode';
+import { beginCalibrationTake, takeCalibrationMode, reportDeviceDictation } from '../utils/calibrationMode';
 
 const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 const hasRecorder = typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && !!window.MediaRecorder;
@@ -137,6 +137,8 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
       if (!current(session) || controller.signal.aborted) { invalidateChangedContext(session); return; }
       const { data } = await api.post('/ai-chat/voice-transcribe', {
         audio: base64, mimeType: take.blob.type || 'audio/webm', langHint: take.lang,
+        // Fixes-2y: an armed calibration take carries its session (a Retry keeps the original take's).
+        ...(take.cal?.session_key ? { calibration_session: take.cal.session_key } : {}),
       }, { timeout: 30000, signal: controller.signal });
       if (!current(session) || controller.signal.aborted) { invalidateChangedContext(session); return; }
       const transcript = String(data?.transcript || '').trim();
@@ -210,11 +212,14 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
     // the recording goes to the server instead, where it is checked for speech.
     const text = generatedText(finalTextRef.current) ? '' : finalTextRef.current;
     // Fixes-2x: a controlled voice-calibration try (test site, armed account only) always uploads the recording.
-    if (transcriptionRoute({ webSpeechText: text }).source === 'on-device' && !calibrationForcesUpload()) {
+    // Fixes-2y: decided by the mode read when THIS take started (null off the test site, with no request).
+    const cal = await takeCalibrationMode(session.cal);
+    if (!current(session)) { invalidateChangedContext(session); return; }
+    if (transcriptionRoute({ webSpeechText: text }).source === 'on-device' && !cal?.force_upload) {
       chunksRef.current = [];
       processingRef.current = false;
       setTranscribing(false);
-      reportDeviceDictation(text, session.lang);   // Fixes-2x: natural calibration try only; otherwise nothing
+      reportDeviceDictation(text, session.lang, cal);   // Fixes-2x: natural calibration try only; otherwise nothing
       optsRef.current.onFinal?.(text);
       return;
     }
@@ -228,7 +233,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
       processingRef.current = false; setTranscribing(false);
       setError("Didn't hear anything. Tap the microphone and start speaking, or type your log.");
     } else {
-      await transcribe({ blob, lang: session.lang, auth: session.auth, day: session.day, context: session.context }, session);
+      await transcribe({ blob, lang: session.lang, auth: session.auth, day: session.day, context: session.context, cal }, session);
     }
   }, [transcribe]); // eslint-disable-line react-hooks/exhaustive-deps
   stopRef.current = stop;
@@ -237,6 +242,7 @@ export function useVoiceInput({ lang = 'en-IN', onInterim, onFinal, onCancel, co
     if (startingRef.current || listeningRef.current || processingRef.current || failedTakeRef.current) return false;
     if (!hasRecorder && !SR) { setError('Voice is unavailable in this browser. You can type your log instead.'); return false; }
     const session = { id: ++captureId.current, auth: authIdentity(), lang: optsRef.current.lang, mime: '', day: today(), context: optsRef.current.contextKey };
+    session.cal = beginCalibrationTake();   // Fixes-2y: the calibration mode for THIS take, read now (null off the test site)
     sessionRef.current = session;
     startingRef.current = true;
     stoppingRef.current = false;

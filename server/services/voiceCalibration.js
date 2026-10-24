@@ -19,6 +19,14 @@
  * and what answered (model requested and reported, attempts, language, prompt hash).
  * A language's lines cannot be recorded until a fluent speaker's check of the exact
  * wording is recorded; changing a line's text voids that check (its hash changes).
+ *
+ * Fixes-2y (the 2x kit review, 24 Oct): screening passes only on completed, valid evidence with full
+ * coverage; the transcript and preview judges catch count-unit errors, unnumbered extras, unexplained
+ * words (a hand check, never "all correct") and every saveable field; the fluent listener's reference
+ * is frozen and versioned BEFORE transcripts are shown, and a changed reference makes the earlier
+ * judgments stale (kept, never reused); Part C tries are sessions that stay recoverable until the day
+ * is back to its baseline and the Voice backup switch is verified off; devices are recorded per take;
+ * the export uses reviewer codes, keeps every history and removes registered names from free text.
  */
 const crypto = require('crypto');
 const axios = require('axios');
@@ -31,6 +39,8 @@ const CONSENT_VERSION = 'calibration-v1';
 /** The script is frozen for round 1: changing any line voids that language's fluent-speaker check (scriptSha). */
 const SCRIPT_VERSION = 'round1-script-v1';
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+/** The judges' rules (scoreTranscript, judgePreview). Stored with every judgment; a change makes earlier judgments stale. */
+const JUDGE_VERSION = 'judge-2y.1';
 
 // ── The script ───────────────────────────────────────────────────────────────
 // items: what is scored in a transcript. kind 'count' (number [unit] food), 'weight'
@@ -154,10 +164,23 @@ const FOOD = {
   water: 'water|neeru|niru|paani|pani|ನೀರು|पानी', roti: 'roti|rotis|rotti|rottis|chapati|रोटी|रोटियां|रोटियाँ', milk: 'milk|doodh|dudh|haalu|ದೂಧ್|दूध',
   egg: 'egg|eggs|anda|ande|anday|motte|अंडे|अंडा|अण्डे', squat: 'squat|squats|ಸ್ಕ್ವಾಟ್',
 };
+// Fixes-2y: foods the script never names, so an unnumbered extra ("… and banana") is caught. Not a complete
+// list: any other unexplained word goes to a hand check instead of "all correct".
+const EXTRA_FOODS = {
+  rice: 'rice|chawal|chaval|annam|ಅನ್ನ|चावल', dosa: 'dosa|dosai|dosey|ದೋಸೆ|डोसा', vada: 'vada|vadai|wada|vade|ವಡೆ|वड़ा|वडा', banana: 'banana|bananas|kela|baalehannu|balehannu|ಬಾಳೆಹಣ್ಣು|केला',
+  apple: 'apple|apples|seb|सेब', bread: 'bread|pav|bun|buns|toast', tea: 'tea|chai|chaha|ಚಹಾ|चाय', sugar: 'sugar|sakkare|cheeni|chini|चीनी', poha: 'poha|avalakki|aval',
+  paratha: 'paratha|parotta|parantha|पराठा', curry: 'curry|sabzi|sabji|palya|सब्ज़ी|सब्जी', chicken: 'chicken|koli|मुर्गा', fish: 'fish|meenu|machli|मछली', paneer: 'paneer|पनीर',
+  biscuit: 'biscuit|biscuits|cookie|cookies', juice: 'juice|jus', ragi: 'ragi|mudde', chutney: 'chutney|chatni|चटनी', pongal: 'pongal', khichdi: 'khichdi|khichri|खिचड़ी',
+  lassi: 'lassi|majjige|buttermilk|chaas|छाछ', ghee: 'ghee|tuppa|घी', fruit: 'fruit|fruits|phal|hannu|फल', salad: 'salad', sweet: 'sweet|sweets|mithai|halwa|ladoo|laddu',
+};
+const ALL_FOODS = { ...FOOD, ...EXTRA_FOODS };
 const UNIT = {
   bowl: 'bowl|bowls|baul|ಬೌಲ್', plate: 'plate|plates|plet|ಪ್ಲೇಟ್', cup: 'cup|cups|kap|ಕಪ್', katori: 'katori|katoris|katora|kathori|कटोरी|ಕಟೋರಿ',
   glass: 'glass|glasses|gilas|lota|गिलास|ग्लास', litre: 'litre|litres|liter|liters|ltr|l|litar|ಲೀಟರ್|लीटर', kg: 'kg|kgs|kilo|kilos|kilogram|kilograms|ಕೆಜಿ|किलो|किलोग्राम',
   pound: 'pound|pounds|lb|lbs', set: 'set|sets|ಸೆಟ್', rep: 'rep|reps|repetitions|ರೆಪ್ಸ್', minute: 'minute|minutes|min|mins|nimisha|ನಿಮಿಷ|मिनट',
+  // Fixes-2y: count words. Neutral for a counted food ("2 pieces idli" is 2 idli); any other unit on a counted food is a wrong unit.
+  piece: 'piece|pieces|pc|pcs|nos',
+  gram: 'gram|grams|gm|gms|g|ग्राम', ml: 'ml|millilitre|millilitres|milliliter|milliliters',
 };
 const NUM = {
   en: { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, hundred: 100 },
@@ -171,6 +194,16 @@ const POINT = new Set(['point', 'पॉइंट', 'प्वाइंट', 'द
 const BREAKS = new Set(['and', 'then', 'mattu', 'aamele', 'amele', 'aur', 'और', 'plus', 'also']);
 const FILLERS = new Set(['of', 'full', 'small', 'big', 'medium', 'the', 'a']);
 const DEV_DIGITS = /[०-९]/g;
+// Fixes-2y: words that carry no item (articles, "ate", "today", meal names, the common Hindi/Kannada glue words,
+// in Roman and Devanagari). Anything else not in the line's own words, its meaning or the listener's
+// reference text is "unexplained" and sends the line to a hand check.
+const GENERIC_WORDS = ('a an the of i me my mine is was were are am it its this that these today tonight yesterday morning evening night afternoon noon '
+  + 'ate eat eaten eating had have has having drank drink drunk drinking did do done took take taken for at in on with to from also then so ok okay um uh hmm please log add '
+  + 'just around about some little bit approximately nearly breakfast lunch dinner supper snack snacks meal weight weighs weighed today\'s i\'m i\'ve '
+  + 'maine mai main mera meri mere aaj subah shaam sham raat khaya khaye khayi khana piya piye pi hai tha thi hain ki ka ke ko bhi abhi wazan vajan '
+  + 'naanu nanu nanna nange ivattu ivathu belagge beligge belige sanje ratri ratre tinde tindiddu tindide kudide kudidde madide maadide ge alli utakke uta tindi tindige tuka tooka '
+  + 'मैंने मैं मेरा मेरी आज सुबह शाम रात खाया खाए खाये खायी पिया है था थी हैं की का के को भी वजन वज़न').split(/\s+/);
+const GENERIC = new Set(GENERIC_WORDS.map(w => loose(w.toLowerCase().normalize('NFC').replace(/[^a-z0-9.\u0900-\u097f]+/g, ''))).filter(Boolean));
 
 function tokens(text) {
   let t = String(text || '').normalize('NFC');
@@ -237,6 +270,10 @@ function phrasesOf(text, lang) {
 // Line outcomes (2x review): complete, so no material error can fall between labels. Item flags coexist.
 const LINE_OUTCOMES = ['all correct', 'wrong number', 'wrong unit', 'missing', 'extra', 'empty answer', 'wrong language/script', 'provider error', 'uncertain/unscorable'];
 const LINE_PRIORITY = ['provider error', 'empty answer', 'wrong language/script', 'uncertain/unscorable', 'wrong number', 'wrong unit', 'extra', 'missing'];
+/** Fixes-2y: a PENDING state, not a tenth outcome. Unexplained words (or a stray number) with no other error:
+ *  the listener records one of the nine outcomes by hand; until then the line is never "all correct". */
+const HAND_CHECK = 'needs a hand check';
+const LINE_STATES = [...LINE_OUTCOMES, HAND_CHECK];
 const ITEM_OUTCOMES = ['correct', 'correct (no amount spoken)', 'unit alias', 'invented amount', 'wrong number', 'wrong unit', 'unit missing', 'conflicting', 'food heard, no number', 'missing'];
 const ITEM_FLAG = { 'invented amount': 'extra', 'wrong number': 'wrong number', 'wrong unit': 'wrong unit', 'unit missing': 'missing', 'food heard, no number': 'missing', missing: 'missing', conflicting: 'uncertain/unscorable' };
 const OK_ITEM = new Set(['correct', 'correct (no amount spoken)', 'unit alias']);
@@ -249,19 +286,65 @@ function scriptProblem(text, lang) {
   const ok = SCRIPT_OK[lang] || ['latin'];
   return letters.filter(ch => !ok.some(s => SCRIPT_RX[s].test(ch))).length / letters.length > 0.1;
 }
-/** The line's items with the listener's corrections: reference_items [{ label, n }] replaces what the script says was spoken. */
-function itemsWithReference(items, reference) {
+/** The food dictionaries a token belongs to, matched STRICTLY (the word itself or a plural): used to find extras,
+ *  so "minutes" is never taken for "meenu" by a loose prefix. Items keep the dictionaries' usual reading (isWord). */
+const foodKeysOf = (tok) => (tok === SEP || tok == null ? [] : Object.keys(ALL_FOODS).filter(k => variants(ALL_FOODS[k]).some(v => tok === v || tok === `${v}s` || tok === `${v}es`)));
+/** A count word ("2 pieces") is neutral for a counted food. */
+const pieceUnit = (u) => !!u && isWord(u, UNIT.piece);
+function lev(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+/** A spelling of an allowed word (transliteration varies): same first three letters and at most 1 edit (2 for long words). */
+const near = (a, t) => a.length >= 4 && t.length >= 4 && a.slice(0, 3) === t.slice(0, 3) && lev(a, t) <= (Math.max(a.length, t.length) >= 7 ? 2 : 1);
+
+/**
+ * Fixes-2y: the listener's reference, as items.
+ *  - mode 'as_script' (or no reference yet): the line's own items;
+ *  - mode 'corrected': the listener's COMPLETE list of what was said ({ kind, n?, unit?, food? }), which may
+ *    add, drop or change foods and units; the 2x form [{ label, n }] (new numbers on the script's items) is still read;
+ *  - mode 'unscorable': a deviation the item list cannot describe → every line is "uncertain/unscorable".
+ */
+function itemsWithReference(items, reference, mode) {
+  if (mode === 'unscorable') return items;
   if (!Array.isArray(reference) || !reference.length) return items;
+  if (reference.every(r => r && r.kind)) return reference.map(r => ({ ...r, corrected: true }));
   return items.map(it => { const r = reference.find(x => x && x.label === it.label); return r && Number.isFinite(Number(r.n)) ? { ...it, n: Number(r.n), corrected: true } : it; });
 }
+/** Validate a listener's complete item list. → { items } or { error }. Foods and units must be ones the judges can read. */
+function validReferenceItems(list) {
+  if (!Array.isArray(list) || !list.length || list.length > 12) return { error: 'List every item actually said (1 to 12).' };
+  const out = [];
+  for (const r of list) {
+    const kind = String(r?.kind || '');
+    if (!['count', 'weight', 'presence'].includes(kind)) return { error: 'Each item is a count, a weight or a food with no amount.' };
+    const food = r.food == null || r.food === '' ? null : String(r.food);
+    const unit = r.unit == null || r.unit === '' ? null : String(r.unit);
+    if (food && !ALL_FOODS[food]) return { error: `"${food}" is not a food the judges can read: mark the take unscorable instead.` };
+    if (unit && !UNIT[unit]) return { error: `"${unit}" is not a unit the judges can read: mark the take unscorable instead.` };
+    const n = r.n == null || r.n === '' ? null : Number(r.n);
+    if (kind !== 'presence' && !(Number.isFinite(n) && n > 0 && n < 10000)) return { error: 'A count or a weight needs the number actually said.' };
+    if (kind === 'presence' && !food) return { error: 'A food with no amount needs the food.' };
+    if (kind === 'count' && !food && !unit) return { error: 'A count needs a food or a unit (for example 3 sets).' };
+    const label = kind === 'weight' ? `weight ${n} kg` : kind === 'presence' ? food : [n, unit, food].filter(Boolean).join(' ');
+    out.push(kind === 'weight' ? { kind, n, label } : kind === 'presence' ? { kind, food, label } : { kind, n, ...(unit ? { unit } : {}), ...(food ? { food } : {}), label });
+  }
+  return { items: out };
+}
+/** The reference's identity: everything scoring depends on. A new version (any change) has a new hash. */
+const referenceSha = (r) => sha256(canonJ({ heard: r.heard ?? null, spoken_as_script: r.spoken_as_script ?? null, mode: r.mode ?? null, items: r.items ?? null, text: r.text ?? null }));
+
 /**
  * Score one transcript against a line's items.
- * → { line: one of LINE_OUTCOMES (the most serious), flags: every line outcome that applies, items, extra }
- * "all correct" only when no flag at all applies. opts.unscorable: the listener could not establish what was said.
+ * → { line: one of LINE_OUTCOMES, or 'needs a hand check'; flags: every line outcome that applies; items; extra; unexplained }
+ * "all correct" only when no flag applies AND every word is explained. opts.unscorable: the listener could not
+ * establish what was said. opts.allowedText: the line's own words, its meaning and the listener's reference text.
  */
-function scoreTranscript(items, transcript, lang, { error = null, unscorable = false } = {}) {
-  if (transcript == null) return { line: 'provider error', flags: ['provider error'], items: [], extra: [], error: error || 'no answer' };
-  if (!/\S/.test(transcript)) return { line: 'empty answer', flags: ['empty answer'], items: [], extra: [] };
+function scoreTranscript(items, transcript, lang, { error = null, unscorable = false, allowedText = [] } = {}) {
+  if (transcript == null) return { line: 'provider error', flags: ['provider error'], items: [], extra: [], unexplained: [], error: error || 'no answer' };
+  if (!/\S/.test(transcript)) return { line: 'empty answer', flags: ['empty answer'], items: [], extra: [], unexplained: [] };
   const flags = new Set();
   if (scriptProblem(transcript, lang)) flags.add('wrong language/script');
   if (unscorable) flags.add('uncertain/unscorable');
@@ -270,10 +353,14 @@ function scoreTranscript(items, transcript, lang, { error = null, unscorable = f
   const heardText = (list) => list.map(p => p.text).join('; ');
   const res = items.map(it => {
     if (it.kind === 'presence') {
-      const withAmount = phrases.filter(p => p.food.some(t => isWord(t, FOOD[it.food])));
+      // A workout count ("squat 3 sets") is not an amount for the exercise: sets, reps and minutes are their own items.
+      // …nor is a phrase that belongs to another item ("1 cup coffee chutney": the cup is the coffee's).
+      const otherFoods = items.filter(x => x !== it && x.food).map(x => x.food);
+      const withAmount = phrases.filter(p => p.food.some(t => isWord(t, ALL_FOODS[it.food])) && !(p.unit && ['set', 'rep', 'minute'].some(u => isWord(p.unit, UNIT[u])))
+        && !p.food.some(t => otherFoods.some(f => isWord(t, ALL_FOODS[f]))));
       withAmount.forEach(p => used.add(p));
       if (withAmount.length) return { label: it.label, outcome: 'invented amount', heard: heardText(withAmount) };   // no amount was spoken (k04's curd)
-      return { label: it.label, outcome: toks.some(t => isWord(t, FOOD[it.food])) ? 'correct (no amount spoken)' : 'missing', heard: '' };
+      return { label: it.label, outcome: toks.some(t => isWord(t, ALL_FOODS[it.food])) ? 'correct (no amount spoken)' : 'missing', heard: '' };
     }
     if (it.kind === 'weight') {
       const mine = phrases.filter(p => (p.unit && (isWord(p.unit, UNIT.kg) || isWord(p.unit, UNIT.pound))) || (!p.unit && p.value === it.n));
@@ -285,11 +372,12 @@ function scoreTranscript(items, transcript, lang, { error = null, unscorable = f
       const outcome = ok.length && !wrongN.length && !pounds.length ? 'correct' : ok.length ? 'conflicting' : wrongN.length ? 'wrong number' : pounds.length ? 'wrong unit' : bare.length ? 'unit missing' : 'missing';
       return { label: it.label, outcome, heard: heardText(mine) };
     }
-    const mine = phrases.filter(p => (it.food ? p.food.some(t => isWord(t, FOOD[it.food])) : (p.unit && isWord(p.unit, UNIT[it.unit]))));
+    const mine = phrases.filter(p => (it.food ? p.food.some(t => isWord(t, ALL_FOODS[it.food])) : (p.unit && isWord(p.unit, UNIT[it.unit]))));
     mine.forEach(p => used.add(p));
-    if (!mine.length) return { label: it.label, outcome: it.food && toks.some(t => isWord(t, FOOD[it.food])) ? 'food heard, no number' : 'missing', heard: '' };
+    if (!mine.length) return { label: it.label, outcome: it.food && toks.some(t => isWord(t, ALL_FOODS[it.food])) ? 'food heard, no number' : 'missing', heard: '' };
     const valueOk = (p) => p.value === it.n;
-    const unitState = (p) => (!it.unit ? 'ok' : p.unit && isWord(p.unit, UNIT[it.unit]) ? 'ok' : p.unit && it.unitAlias && isWord(p.unit, UNIT[it.unitAlias]) ? 'alias' : p.unit ? 'wrong' : 'missing');
+    // Fixes-2y: a counted food with no spoken unit ("2 idli") takes no unit but a count word: "2 kg idli" is a wrong unit.
+    const unitState = (p) => (!it.unit ? (!p.unit || pieceUnit(p.unit) ? 'ok' : 'wrong') : p.unit && isWord(p.unit, UNIT[it.unit]) ? 'ok' : p.unit && it.unitAlias && isWord(p.unit, UNIT[it.unitAlias]) ? 'alias' : p.unit ? 'wrong' : 'missing');
     const good = mine.filter(valueOk), bad = mine.filter(p => !valueOk(p));
     let outcome;
     if (good.length && bad.length) outcome = 'conflicting';
@@ -301,30 +389,54 @@ function scoreTranscript(items, transcript, lang, { error = null, unscorable = f
     return { label: it.label, outcome, heard: heardText(mine) };
   });
   for (const r of res) if (ITEM_FLAG[r.outcome]) flags.add(ITEM_FLAG[r.outcome]);
-  const extra = phrases.filter(p => !used.has(p) && (p.unit || p.food.length)).map(p => p.text);
+  // Extras: an unused phrase with a unit or a food, AND (Fixes-2y) any food word with no number that is not one of the items.
+  const extraPhrases = phrases.filter(p => !used.has(p) && (p.unit || p.food.length));
+  const itemFoods = new Set(items.filter(i => i.food).map(i => i.food));
+  const inExtraPhrase = new Set(extraPhrases.flatMap(p => p.food));
+  const itemFood = (t) => [...itemFoods].some(f => isWord(t, ALL_FOODS[f]));
+  const extraWords = [...new Set(toks.filter(t => t !== SEP && !inExtraPhrase.has(t) && !itemFood(t)).filter(t => foodKeysOf(t).length))];
+  const extra = [...extraPhrases.map(p => p.text), ...extraWords];
   if (extra.length) flags.add('extra');
-  const line = LINE_PRIORITY.find(f => flags.has(f)) || 'all correct';
-  return { line, flags: [...flags], items: res, extra };
+  // Fixes-2y: every remaining word must be explained (a number, unit, food, glue word, or one of the line's own words).
+  const D = numberDicts(lang);
+  const allowed = new Set(allowedText.flatMap(x => tokens(x || '')).filter(t => t !== SEP));
+  const known = (t) => t === SEP || /^\d+(\.\d+)?$/.test(t) || D.one[t] != null || D.tens[t] != null || POINT.has(t) || FILLERS.has(t) || GENERIC.has(t)
+    || isWord(t, ALL_UNITS) || itemFood(t) || foodKeysOf(t).length > 0 || allowed.has(t) || [...allowed].some(a => near(a, t));
+  const unexplained = [...new Set(toks.filter(t => !known(t)))];
+  for (const p of phrases) if (!used.has(p) && !p.unit && !p.food.length) unexplained.push(`number "${p.text}"`);   // a stray number
+  const line = LINE_PRIORITY.find(f => flags.has(f)) || (unexplained.length ? HAND_CHECK : 'all correct');
+  return { line, flags: [...flags], items: res, extra, unexplained };
 }
 
 // ── Part A rule 3: the logging parser's preview of a newly admitted take ──────
 /** "2 idli" / "1 bowl" / "150 g" → { n, unit }. */
 function qtyOf(text, lang) { const { phrases } = phrasesOf(text || '', lang); return phrases[0] ? { n: phrases[0].value, unit: phrases[0].unit } : null; }
 const WORKOUT_UNITS = new Set(['set', 'rep', 'minute']);
+/** Fields a Save can write. Fixes-2y: every one is inspected; a refusal flag counts only when none has content. */
+const SAVEABLE = ['foods', 'weight_kg', 'water_ml_add', 'sleep', 'activities', 'acv', 'supplements', 'workouts', 'corrections', 'notes', 'draft_edit'];
+/** Fields that are shown but never saved. Any OTHER field with content sends the leg to a hand check. */
+const NOT_SAVED = new Set(['reply', 'advice', 'question', 'safety', 'amount_clarification', 'evaluation_note', 'sent_to_coach', 'unresolved_foods', 'unresolved_sleep', 'totals', 'aiProvider', 'aiModel', 'error']);
+const hasContent = (v) => v != null && v !== false && v !== '' && v !== 0 && !(Array.isArray(v) && !v.length) && !(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
+const saveableIn = (p) => SAVEABLE.filter(k => hasContent(p?.[k]));
+/** The preview results; the agreed rule 3 accepts only the first two on every leg. */
+const PREVIEW_RESULTS = ['correct reviewable', 'explicit refusal', 'missing/unresolved (visible)', 'needs a hand check', 'disqualifying', 'provider error'];
 /**
  * Judge a parser preview against what was spoken (one engine's leg of one take).
- * → { result: 'correct reviewable' | 'explicit refusal' | 'missing/unresolved (visible)' | 'needs a hand check' | 'disqualifying' | 'provider error',
- *     problems: [disqualifying reasons], items: [{ label, outcome, shown }] }
- * Disqualifying: a surfaced wrong number or wrong unit, an invented item, or an unspoken health change.
+ * → { result: one of PREVIEW_RESULTS, problems: [disqualifying reasons], hand: [reasons a person must look], items: [{ label, outcome, shown }], saveable }
+ * Disqualifying: a surfaced wrong number or wrong unit (a counted food shown in kg included), an invented item,
+ * or an unspoken health change in ANY saveable field. A question or safety reply is a refusal only with nothing saveable.
  */
 function judgePreview(items, preview, lang) {
-  if (!preview || preview.error) return { result: 'provider error', problems: [], items: [], note: preview?.error || 'no preview' };
-  if (preview.question || preview.safety || preview.amount_clarification || preview.evaluation_note) return { result: 'explicit refusal', problems: [], items: [], note: preview.evaluation_note || (preview.safety ? `safety reply: ${preview.safety}` : 'asked a question; no log card') };
+  if (!preview || preview.error) return { result: 'provider error', problems: [], hand: [], items: [], note: preview?.error || 'no preview' };
+  const saveable = saveableIn(preview);
+  const flagged = !!(preview.question || preview.safety || preview.amount_clarification || preview.evaluation_note);
+  if (flagged && !saveable.length) return { result: 'explicit refusal', problems: [], hand: [], items: [], saveable, note: preview.evaluation_note || (preview.safety ? `safety reply: ${preview.safety}` : 'asked a question; nothing to save') };
   const foods = Array.isArray(preview.foods) ? preview.foods : [], unresolved = Array.isArray(preview.unresolved_foods) ? preview.unresolved_foods : [];
   const nameOf = (f) => `${f?.name || ''} ${f?.qty_text || ''}`;
-  const matches = (f, food) => tokens(nameOf(f)).some(t => isWord(t, FOOD[food]));
-  const used = new Set(), out = [], problems = [];
-  let missing = false, hand = false;
+  const matches = (f, food) => tokens(nameOf(f)).some(t => isWord(t, ALL_FOODS[food]));
+  const used = new Set(), out = [], problems = [], hand = [];
+  let missing = false;
+  if (flagged) hand.push('a question or safety flag came WITH saveable content: look at what the member would see');
   const has = { weight: items.some(i => i.kind === 'weight'), water: items.some(i => i.food === 'water'), workout: items.some(i => WORKOUT_UNITS.has(i.unit) || i.food === 'squat') };
   for (const it of items) {
     if (it.kind === 'weight') {
@@ -337,17 +449,26 @@ function judgePreview(items, preview, lang) {
       const o = got == null ? 'missing' : Number(got) === it.n * 1000 ? 'correct' : 'wrong number';
       out.push({ label: it.label, outcome: o, shown: got == null ? '' : `${got} ml` }); if (o === 'wrong number') problems.push(`water shown as ${got} ml`); if (o === 'missing') missing = true; continue;
     }
-    if (!it.food || it.food === 'squat') { out.push({ label: it.label, outcome: 'check by hand', shown: JSON.stringify(preview.workouts || preview.activities || []).slice(0, 120) }); hand = true; continue; }
+    if (!it.food || it.food === 'squat') { out.push({ label: it.label, outcome: 'check by hand', shown: JSON.stringify(preview.workouts || preview.activities || []).slice(0, 160) }); hand.push(`${it.label}: workouts are checked by hand`); continue; }
     const fs = foods.filter((f, k) => !used.has(k) && matches(f, it.food));
     foods.forEach((f, k) => { if (fs.includes(f)) used.add(k); });
+    if (it.kind === 'presence') {
+      if (fs.length) {
+        // Fixes-2y: no amount was spoken. The voice preview card shows portions with no "estimate" label
+        // (only photo previews say so), so whether the member can tell it is a guess needs a person.
+        out.push({ label: it.label, outcome: 'present; amount not spoken but one is shown (check by hand: the voice preview shows no estimate label)', shown: fs.map(x => x.qty_text || `${x.grams ?? ''} g`).join(' + ') });
+        hand.push(`${it.label}: shown as ${fs.map(x => x.qty_text || `${x.grams ?? ''} g`).join(' + ')} although no amount was spoken`);
+      } else if (unresolved.some(f => matches(f, it.food))) out.push({ label: it.label, outcome: 'present, amount asked (shown as unresolved)', shown: '' });
+      else { out.push({ label: it.label, outcome: 'missing', shown: '' }); missing = true; }
+      continue;
+    }
     if (!fs.length) { const u = unresolved.some(f => matches(f, it.food)); out.push({ label: it.label, outcome: u ? 'unresolved (shown)' : 'missing', shown: '' }); missing = true; continue; }
-    const f = fs[0];
-    if (it.kind === 'presence') { out.push({ label: it.label, outcome: 'present (amount not spoken: check it is shown as an estimate)', shown: f.qty_text || `${f.grams ?? ''} g` }); continue; }
-    const q = qtyOf(f.qty_text, lang);
+    const q = qtyOf(fs[0].qty_text, lang);
     let o;
     if (!q) o = 'number not shown';
     else if (q.n !== it.n) o = 'wrong number';
-    else if (it.unit && !(q.unit && isWord(q.unit, UNIT[it.unit]))) o = q.unit && it.unitAlias && isWord(q.unit, UNIT[it.unitAlias]) ? 'unit alias' : q.unit ? 'wrong unit' : 'unit not shown';
+    else if (!it.unit) o = !q.unit || pieceUnit(q.unit) ? 'correct' : 'wrong unit';            // Fixes-2y: "2 kg" idli is a wrong unit
+    else if (!(q.unit && isWord(q.unit, UNIT[it.unit]))) o = q.unit && it.unitAlias && isWord(q.unit, UNIT[it.unitAlias]) ? 'unit alias' : q.unit ? 'wrong unit' : 'unit not shown';
     else o = 'correct';
     if (fs.length > 1) o = 'wrong number';   // the same food twice is a doubled amount
     out.push({ label: it.label, outcome: o, shown: fs.map(x => x.qty_text || `${x.grams ?? ''} g`).join(' + ') });
@@ -355,15 +476,23 @@ function judgePreview(items, preview, lang) {
     if (o === 'number not shown' || o === 'unit not shown') missing = true;
   }
   foods.forEach((f, k) => { if (!used.has(k)) problems.push(`invented item: ${f.name || '?'}${f.qty_text ? ` (${f.qty_text})` : ''}`); });
+  // Every saveable field (Fixes-2y): an unspoken health change disqualifies; anything else unrecognised goes to a hand check.
   if (preview.weight_kg != null && !has.weight) problems.push(`unspoken weight ${preview.weight_kg} kg`);
   if (preview.water_ml_add != null && !has.water) problems.push(`unspoken water ${preview.water_ml_add} ml`);
-  if (preview.sleep) problems.push('unspoken sleep');
-  for (const k of ['activities', 'acv', 'supplements']) if (Array.isArray(preview[k]) && preview[k].length) problems.push(`unspoken ${k}`);
-  if (Array.isArray(preview.workouts) && preview.workouts.length && !has.workout) problems.push('unspoken workout');
-  if (Array.isArray(preview.corrections) && preview.corrections.length) problems.push('unspoken correction to an earlier entry');
-  const result = problems.length ? 'disqualifying' : missing ? 'missing/unresolved (visible)' : hand ? 'needs a hand check' : 'correct reviewable';
-  return { result, problems, items: out };
+  if (hasContent(preview.sleep)) problems.push('unspoken sleep');
+  for (const k of ['activities', 'acv', 'supplements']) if (hasContent(preview[k])) problems.push(`unspoken ${k}`);
+  if (hasContent(preview.workouts) && !has.workout) problems.push('unspoken workout');
+  if (hasContent(preview.corrections)) problems.push('unspoken correction to an earlier entry');
+  if (hasContent(preview.notes)) hand.push('a note would be saved with the day');
+  if (hasContent(preview.draft_edit)) hand.push('an edit to a draft entry');
+  for (const k of Object.keys(preview)) if (!SAVEABLE.includes(k) && !NOT_SAVED.has(k) && hasContent(preview[k])) hand.push(`unrecognised field "${k}"`);
+  const result = problems.length ? 'disqualifying' : missing ? 'missing/unresolved (visible)' : hand.length ? 'needs a hand check' : 'correct reviewable';
+  return { result, problems, hand, items: out, saveable };
 }
+/** How one leg's result counts in rule 3: valid, failing (definitive) or pending (no conclusion yet). */
+const LEG_CLASS = { 'correct reviewable': 'valid', 'explicit refusal': 'valid', disqualifying: 'disqualified', 'missing/unresolved (visible)': 'does not qualify', 'needs a hand check': 'pending', 'provider error': 'pending' };
+/** A judgment's result after any hand verdict (a hand verdict settles only "needs a hand check"). */
+const effectiveResult = (j) => (j?.judgment?.result === 'needs a hand check' && j.hand_verdict?.verdict ? j.hand_verdict.verdict : j?.judgment?.result || null);
 /** The everyday voice route's own verdict on one leg before any preview: refused legs never reach the parser. */
 function voiceLeg(t, engine) {
   const text = t[`${engine}_text`];
@@ -458,12 +587,18 @@ const trialInfo = (n) => PARTC_PLAN.find(t => t.trial === n) || NATURAL_PLAN.fin
 const ARM_MINUTES = 30;
 const available = () => fallbackTest.available();
 
-/** The armed Part C try for this account ({ trial_no, route }), or null. Never throws; no database read off the test server. */
+/**
+ * The armed Part C try for this account, or null. Never throws; no database read off the test server.
+ * Fixes-2y: → { trial_no, route, session_id, session_key, expires_in_ms }: the app binds its controlled mode to
+ * this session and its expiry, and sends the session key back with each recording.
+ */
 async function armedFor(user, db = require('../db/pool')) {
   if (!available() || !user?.id) return null;
   try {
-    const { rows: [a] } = await db.query(`SELECT trial_no, route FROM voice_calibration_partc_armed WHERE id=1 AND user_id=$1 AND armed_at > NOW() - INTERVAL '${ARM_MINUTES} minutes'`, [user.id]);
-    return a || null;
+    const { rows: [a] } = await db.query(`SELECT trial_no, route, session_id, session_key,
+        GREATEST(0, EXTRACT(EPOCH FROM (armed_at + INTERVAL '${ARM_MINUTES} minutes' - NOW())) * 1000)::bigint AS expires_in_ms
+      FROM voice_calibration_partc_armed WHERE id=1 AND user_id=$1 AND armed_at > NOW() - INTERVAL '${ARM_MINUTES} minutes'`, [user.id]);
+    return a ? { ...a, expires_in_ms: Number(a.expires_in_ms) } : null;
   } catch (e) { console.warn('voice calibration: arm check failed:', e.message); return null; }
 }
 const speechRecord = (s) => (s ? { status: s.status, version: s.version || null, voiced_ms: s.voiced_ms ?? null, longest_run_ms: s.longest_run_ms ?? null, f0_spread_hz: s.f0_spread_hz ?? null,
@@ -483,23 +618,31 @@ async function appendCapture(trialNo, route, build, db) {
     await client.query(`INSERT INTO voice_calibration_partc (trial_no, route, updated_at) VALUES ($1,$2,NOW()) ON CONFLICT (trial_no) DO NOTHING`, [trialNo, route]);
     const { rows: [r] } = await client.query(`SELECT captures FROM voice_calibration_partc WHERE trial_no=$1 FOR UPDATE`, [trialNo]);
     const caps = r.captures || [];
-    if (caps.length < 40) {
+    if (caps.length < 120) {
       const cap = build(caps);
-      await client.query(`UPDATE voice_calibration_partc SET captures = captures || $2::jsonb, updated_at = NOW() WHERE trial_no=$1`, [trialNo, JSON.stringify(cap)]);
+      if (cap) await client.query(`UPDATE voice_calibration_partc SET captures = captures || $2::jsonb, updated_at = NOW() WHERE trial_no=$1`, [trialNo, JSON.stringify(cap)]);
     }
     await client.query('COMMIT');
   } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
 }
-const attemptsIn = (caps) => caps.filter(c => c.kind === 'server recording' || c.kind === 'on-device dictation');
-/** A server recording of an armed try (voice-transcribe). A recording identical to an earlier one is a Retry of it. Never throws. */
-async function recordTrial(armed, { body, status, speech, langHint, audioSha, fbTest, trail }, db = require('../db/pool')) {
+/** The attempts of ONE session (a repeated try starts again at attempt 1; earlier sessions are kept). */
+const attemptsIn = (caps, sessionId) => caps.filter(c => (c.kind === 'server recording' || c.kind === 'on-device dictation') && (sessionId === undefined || c.session_id === sessionId));
+/**
+ * A server recording of an armed try (voice-transcribe). A recording identical to an earlier one is a Retry of it. Never throws.
+ * Fixes-2y: the app sends the session key it had when the take STARTED. A recording carrying another session's key is
+ * noted and never counted; one carrying none is kept but cannot count as a controlled test (its mode is unknown).
+ */
+async function recordTrial(armed, { body, status, speech, langHint, audioSha, fbTest, trail, appSession }, db = require('../db/pool')) {
   try {
     await appendCapture(armed.trial_no, armed.route, (caps) => {
-      const prev = attemptsIn(caps);
+      const match = appSession == null || appSession === '' ? 'not sent' : String(appSession) === String(armed.session_key) ? 'yes' : 'NO';
+      if (match === 'NO') return { kind: 'ignored recording (another session)', at: new Date().toISOString(), session_id: armed.session_id, route: armed.route, audio_sha256: audioSha || null, app_session: String(appSession).slice(0, 40) };
+      const prev = attemptsIn(caps, armed.session_id);
       const same = prev.find(c => c.audio_sha256 && c.audio_sha256 === audioSha);
-      const cap = { kind: 'server recording', at: new Date().toISOString(), route: armed.route, attempt: prev.length + 1, retry_of: same ? same.attempt : null, upload: true,
-        http_status: status || 200, lang_hint: langHint || null, audio_sha256: audioSha || null, voice_backup_switch: !!fbTest, speech: speechRecord(speech),
-        trail: trail || [], answered_by: answeredBy(trail, body), engine_reported: body?.engine || null,
+      const answered = [...(trail || [])].reverse().find(x => x.outcome === 'answer');
+      const cap = { kind: 'server recording', at: new Date().toISOString(), session_id: armed.session_id, route: armed.route, attempt: prev.length + 1, retry_of: same ? same.attempt : null, upload: true,
+        session_match: match, http_status: status || 200, lang_hint: langHint || null, audio_sha256: audioSha || null, voice_backup_switch: !!fbTest, speech: speechRecord(speech),
+        trail: trail || [], answered_by: answeredBy(trail, body), model_version: answered?.model_version || null, engine_reported: body?.engine || null,
         transcript: typeof body?.transcript === 'string' ? body.transcript.slice(0, 1000) : null, rejected: body?.rejected || null, error: body?.error || null };
       cap.actual_path = actualPath(cap);
       return cap;
@@ -507,27 +650,32 @@ async function recordTrial(armed, { body, status, speech, langHint, audioSha, fb
   } catch (e) { console.warn('voice calibration: Part C capture failed:', e.message); }
 }
 /** On-device dictation used with NO upload (reported by the app only while a try is armed for the account). Never labelled Gemini or Whisper. */
-async function recordDeviceDictation(armed, { text, lang }, db = require('../db/pool')) {
+async function recordDeviceDictation(armed, { text, lang, appSession }, db = require('../db/pool')) {
   await appendCapture(armed.trial_no, armed.route, (caps) => {
-    const cap = { kind: 'on-device dictation', at: new Date().toISOString(), route: armed.route, attempt: attemptsIn(caps).length + 1, upload: false, lang_hint: lang || null,
-      transcript: String(text || '').slice(0, 1000), answered_by: 'browser/on-device (no upload)' };
+    if (appSession && String(appSession) !== String(armed.session_key)) return { kind: 'ignored on-device report (another session)', at: new Date().toISOString(), session_id: armed.session_id, route: armed.route };
+    const cap = { kind: 'on-device dictation', at: new Date().toISOString(), session_id: armed.session_id, route: armed.route, attempt: attemptsIn(caps, armed.session_id).length + 1, upload: false,
+      session_match: appSession ? 'yes' : 'not sent', lang_hint: lang || null, transcript: String(text || '').slice(0, 1000), answered_by: 'browser/on-device (no upload)' };
     cap.actual_path = actualPath(cap);
     return cap;
   }, db);
 }
+/** Everything a preview would show or save (Fixes-2y: workouts, corrections, sleep and notes in full, not counts). */
 const previewSummary = (r) => (r ? { foods: (r.foods || []).slice(0, 20).map(f => ({ name: f.name, qty_text: f.qty_text || null, grams: f.grams ?? null, meal: f.meal || null })),
   unresolved_foods: (r.unresolved_foods || []).slice(0, 10).map(f => ({ name: f.name || f.query || null, qty_text: f.qty_text || null })),
-  weight_kg: r.weight_kg ?? null, water_ml_add: r.water_ml_add ?? null, sleep: r.sleep || null, activities: (r.activities || []).map(a => a.id || a), acv: (r.acv || []).map(a => a.id || a),
-  supplements: (r.supplements || []).map(a => a.id || a), workouts: (r.workouts || []).length, corrections: (r.corrections || []).length, question: !!r.question, safety: r.safety || null,
-  reply: typeof r.reply === 'string' ? r.reply.slice(0, 300) : null, error: r.error || null } : null);
+  weight_kg: r.weight_kg ?? null, water_ml_add: r.water_ml_add ?? null, sleep: r.sleep || null, unresolved_sleep: r.unresolved_sleep || null,
+  activities: (r.activities || []).map(a => a.label || a.id || a), acv: (r.acv || []).map(a => a.label || a.id || a), supplements: (r.supplements || []).map(a => a.label || a.id || a),
+  workouts: (r.workouts || []).slice(0, 10).map(w => ({ name: w.name, qty_text: w.qty_text || null, duration_min: w.duration_min ?? null, sets: (w.sets || []).slice(0, 30), cardio_type: w.cardio_type || null, distance_km: w.distance_km ?? null })),
+  corrections: (r.corrections || []).slice(0, 10).map(c => ({ name: c.name, grams: c.grams ?? null, meal: c.meal || null })), notes: typeof r.notes === 'string' ? r.notes.slice(0, 300) : null,
+  question: !!r.question, safety: r.safety || null, reply: typeof r.reply === 'string' ? r.reply.slice(0, 300) : null, error: r.error || null,
+  parser: r.aiProvider || r.aiModel ? { provider: r.aiProvider || null, model: r.aiModel || null } : null } : null);
 /** The preview (parse) of an armed try, linked to the attempt whose text it used; text edited before the preview is flagged. Never throws. */
 async function recordPreview(armed, { message, result }, db = require('../db/pool')) {
   try {
     await appendCapture(armed.trial_no, armed.route, (caps) => {
-      const last = attemptsIn(caps).slice(-1)[0];
+      const last = attemptsIn(caps, armed.session_id).slice(-1)[0];
       const msg = String(message || '').trim();
-      const source = !last ? 'typed or unknown (no recording in this try)' : (last.transcript || '').trim() === msg ? `unedited text of attempt ${last.attempt}` : `EDITED before the preview (attempt ${last.attempt} said "${(last.transcript || '').slice(0, 120)}")`;
-      return { kind: 'preview', at: new Date().toISOString(), route: armed.route, attempt: last ? last.attempt : null, message: msg.slice(0, 1000), text_source: source, edited: !!last && (last.transcript || '').trim() !== msg, preview: previewSummary(result) };
+      const source = !last ? 'typed or unknown (no recording in this session)' : (last.transcript || '').trim() === msg ? `unedited text of attempt ${last.attempt}` : `EDITED before the preview (attempt ${last.attempt} said "${(last.transcript || '').slice(0, 120)}")`;
+      return { kind: 'preview', at: new Date().toISOString(), session_id: armed.session_id, route: armed.route, attempt: last ? last.attempt : null, message: msg.slice(0, 1000), text_source: source, edited: !!last && (last.transcript || '').trim() !== msg, preview: previewSummary(result) };
     }, db);
   } catch (e) { console.warn('voice calibration: Part C preview capture failed:', e.message); }
 }
@@ -579,6 +727,28 @@ async function restoreDay(db, userId, base) {
   const diff = dayDiff(base, after);
   return { ok: diff.same, diff };
 }
+/**
+ * Fixes-2y: is a Part C session's recovery complete? Its account's day equals the session's OWN baseline and the
+ * Voice backup switch is not on for that account. Only that account and date are read; the switch is never changed.
+ * Every check is appended to the session (read-backs and switch checks are kept).
+ */
+async function checkSession(db, s, reason) {
+  const at = new Date().toISOString();
+  if (!s.account_id) {
+    await db.query(`UPDATE voice_calibration_partc_sessions SET readbacks = readbacks || $2::jsonb WHERE id=$1`, [s.id, JSON.stringify({ at, reason, note: 'the test account no longer exists' })]);
+    return { diff: null, switch_on: false, outstanding: [], ok: true, note: 'the test account no longer exists' };
+  }
+  const now = await dayState(db, s.account_id, s.baseline.date);
+  const diff = dayDiff(s.baseline, now);
+  const { rows: [sw] } = await db.query(`SELECT user_id FROM voice_fallback_test_account WHERE id=1 AND set_at > NOW() - INTERVAL '24 hours'`);
+  const switchOn = !!sw && sw.user_id === s.account_id;
+  await db.query(`UPDATE voice_calibration_partc_sessions SET readbacks = readbacks || $2::jsonb, switch_checks = switch_checks || $3::jsonb WHERE id=$1`,
+    [s.id, JSON.stringify({ at, reason, diff }), JSON.stringify({ at, reason, on: switchOn })]);
+  const outstanding = [];
+  if (!diff.same) outstanding.push('the day still differs from its baseline: Restore it, then Finish again');
+  if (switchOn) outstanding.push('the Voice backup switch is still ON for the test account: turn it off on the Voice backup test card, then Finish again');
+  return { diff, switch_on: switchOn, outstanding, ok: !outstanding.length };
+}
 
 // ── The export ───────────────────────────────────────────────────────────────
 const yes = (b) => (b === true ? 'yes' : b === false ? 'no' : '');
@@ -591,55 +761,160 @@ function truth(t, intended) {
   const heard = t.heard === 'speech' ? 'speech' : 'no-speech';
   return heard === intended ? heard : 'protocol deviation';
 }
-/** A take's line result for one engine, with the listener's reference applied. */
+/** The line a slot reads (short and soft slots read one of the lines). */
+const lineOfInfo = (info) => LINES[info?.line] || null;
+/**
+ * A take's line result for one engine, against the listener's reference.
+ * Fixes-2y: until the reference is FROZEN the result is provisional (shown, never counted). A frozen reference that is
+ * uncertain, not speech, or marked unscorable makes the line "uncertain/unscorable". A hand check recorded against the
+ * CURRENT reference settles a "needs a hand check" line.
+ */
 function takeScore(t, info, engine) {
-  const unscorable = t.heard === 'uncertain' || (t.spoken_as_script === false && !(Array.isArray(t.reference_items) && t.reference_items.length));
-  return scoreTranscript(itemsWithReference(info.items || [], t.reference_items), t[`${engine}_text`], info.lang, { error: t[`${engine}_error`], unscorable });
+  const L = lineOfInfo(info);
+  const frozen = !!t.reference_frozen_at;
+  const mode = t.reference_mode || null;
+  const unscorable = frozen ? (t.heard !== 'speech' || mode === 'unscorable')
+    : (t.heard === 'uncertain' || (t.spoken_as_script === false && !(Array.isArray(t.reference_items) && t.reference_items.length)));
+  const items = itemsWithReference(info.items || [], t.reference_items, mode);
+  const s = scoreTranscript(items, t[`${engine}_text`], info.lang, { error: t[`${engine}_error`], unscorable, allowedText: [L?.say, L?.means, t.reference_text] });
+  s.provisional = !frozen;
+  s.auto_line = s.line;
+  const hc = t.hand_checks?.[engine];
+  if (s.line === HAND_CHECK && frozen && hc && hc.reference_sha === t.reference_sha && LINE_OUTCOMES.includes(hc.verdict)) { s.line = hc.verdict; s.hand = hc; }
+  return s;
 }
 /** The takes a candidate setting would newly admit (live refuses, the candidate accepts). */
 const newlyAdmitted = (t, g) => decision(t, g) === 'accept' && decision(t, SP.LIVE_LIMITS) === 'refuse';
 const engineCalls = (t) => (t.gemini_provenance?.attempts?.length || 0) + (t.whisper_provenance?.attempts?.length || 0);
+/** A take's device: the snapshot taken with it, else the volunteer's. Unknown stays "unknown". */
+function deviceOf(t, p = {}) {
+  const d = t?.device || p?.device || {};
+  return { tier: t?.phone_type || p?.phone_type || '', make: d.make || '', model: d.model || '', os: d.os || '', os_version: d.os_version || '', browser: t?.browser || p?.browser || d.browser || '', browser_version: d.browser_version || '' };
+}
+const modelKey = (d) => (d.make && d.model && d.make !== 'unknown' && d.model !== 'unknown' ? `${d.make} ${d.model}`.toLowerCase().replace(/\s+/g, ' ').trim() : null);
+/** The phone mix the plan needs: at least 3 different models, a budget Android, an iPhone, and Chrome on Android. */
+function phoneMix(active) {
+  const devs = active.map(p => deviceOf(null, p));
+  const models = new Set(devs.map(modelKey).filter(Boolean));
+  const gaps = [];
+  if (models.size < 3) gaps.push(`${models.size} different phone model(s) recorded (3 needed)`);
+  if (!devs.some(d => d.tier === 'android_budget')) gaps.push('no budget Android');
+  if (!devs.some(d => d.tier === 'iphone')) gaps.push('no iPhone');
+  if (!devs.some(d => d.tier !== 'iphone' && d.tier && d.browser === 'chrome')) gaps.push('no Chrome on Android');
+  return { models: [...models], gaps };
+}
+/** Rule 3 for one leg of one take: the CURRENT judgment (this reference version, this judge version), else why there is none. */
+function legStatus(t, engine, judgments) {
+  const mine = judgments.filter(j => j.take_id === t.id && j.engine === engine);
+  const cur = mine.find(j => j.reference_sha === t.reference_sha && j.judge_version === JUDGE_VERSION && j.status === 'done');
+  if (cur) return { cls: LEG_CLASS[effectiveResult(cur)] || 'pending', result: effectiveResult(cur), j: cur };
+  if (mine.some(j => j.reference_sha === t.reference_sha && j.judge_version === JUDGE_VERSION && j.status === 'running')) return { cls: 'pending', result: 'running' };
+  if (mine.length) return { cls: 'stale', result: 'stale (the reference or the judge changed): re-evaluate' };
+  return { cls: 'not judged', result: 'not judged' };
+}
+/** A newly admitted speech take's rule 3 status from its two legs. */
+function rule3Status(x, judgments) {
+  if (x.truth !== 'speech') return { status: 'excluded', why: x.truth };
+  if (!x.t.reference_frozen_at) return { status: 'incomplete', why: 'reference not frozen' };
+  const legs = ['gemini', 'whisper'].map(e => legStatus(x.t, e, judgments));
+  if (legs.some(l => l.cls === 'disqualified')) return { status: 'disqualified', legs };
+  if (legs.some(l => l.cls === 'does not qualify')) return { status: 'does not qualify', legs };
+  const open = legs.filter(l => l.cls !== 'valid');
+  if (open.length) return { status: 'incomplete', why: [...new Set(open.map(l => l.cls === 'pending' ? (l.result === 'running' ? 'evaluation running' : l.result === 'provider error' ? 'provider/parser error' : 'hand check outstanding') : l.cls))].join(' + '), legs };
+  return { status: 'valid', legs };
+}
+const NAME_FREE_SHEETS = ['Volunteers', 'Takes', 'Items', 'Controls', 'Rule 3 previews', 'Part C tries', 'Part C sessions', 'Part C events', 'History'];
+const FREE_TEXT_COLUMNS = {
+  Volunteers: ['profile', 'phone make', 'phone model'], Takes: ['retake reason', 'reference transcript', 'gemini words', 'whisper words', 'phone make', 'phone model'],
+  Items: ['heard'], Controls: ['gemini words', 'whisper words'], 'Rule 3 previews': ['hand verdict', 'preview content'], 'Part C tries': ['notes'],
+  'Part C events': ['words or refusal', 'preview'], History: ['what'],
+};
 /**
- * The workbook's sheets, from database rows. Pure (unit-tested). No names and no audio:
- * volunteers appear by code (P1…), Part C operators as C1/C2.
+ * A scrubber for free text. names: the study's registered people (volunteers' account names, reviewers): full names AND
+ * name parts of 4+ letters. fullNames: every other account's full name (only the whole name, so common words survive).
+ * An unregistered name typed into a note cannot be known: the Free text sheet says which cells a person must read.
  */
-function workbookSheets({ participants = [], takes = [], wording = [], partc = [], evals = [], generatedAt = new Date() }) {
+function nameScrubber(names, fullNames = []) {
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = new Set();
+  for (const n of fullNames || []) { const full = String(n || '').trim(); if (full.length >= 4 && /\s/.test(full)) parts.add(full); }
+  for (const n of names || []) { const full = String(n || '').trim(); if (full.length >= 2) parts.add(full); for (const w of full.split(/\s+/)) if (/^\p{L}{4,}$/u.test(w)) parts.add(w); }
+  if (!parts.size) return { scrub: (x) => ({ text: x, n: 0 }) };
+  const rx = new RegExp(`(?<!\\p{L})(${[...parts].sort((a, b) => b.length - a.length).map(esc).join('|')})(?!\\p{L})`, 'giu');
+  return { scrub: (x) => { let n = 0; const text = String(x).replace(rx, () => { n++; return '[name removed]'; }); return { text, n }; } };
+}
+/**
+ * The workbook's sheets, from database rows. Pure (unit-tested). No names and no audio: volunteers appear by code (P1…),
+ * reviewers by code (R1…), administrators by an export-only code (A1…), Part C operators as C1/C2, the test account as "test account".
+ * privateNames: registered names to remove from every free-text cell (counted in About and on the Free text sheet).
+ */
+function workbookSheets({ participants = [], takes = [], wording = [], partc = [], sessions = [], judgments, evals = [], reviewers = [], privateNames = [], accountNames = [], generatedAt = new Date() }) {
+  judgments = judgments || evals;
   const active = participants.filter(p => !p.withdrawn_at);
   const byId = new Map(participants.map(p => [p.id, p]));
   const current = takes.filter(t => !t.superseded_at);
   const enrich = (t) => { const p = byId.get(t.participant_id) || {}; return { t, p, info: slotInfo(t.slot_code, p.grp) || {} }; };
   const mismatches = takes.filter(t => !replayMatches(t)).length;
   const remeasureMismatch = takes.filter(t => t.remeasure && t.remeasure.match === false).length;
+  const reviewerCode = (v) => (/^R\d+$/.test(String(v || '')) ? String(v) : v ? 'unregistered reviewer (name withheld)' : '');
   const wordingRow = (lang) => { const w = wording.find(x => x.lang === lang); const ok = w && w.script_sha256 === scriptSha(lang); return { w, ok }; };
-  const attempts = partc.flatMap(r => (r.captures || []).filter(c => c.kind === 'server recording' || c.kind === 'on-device dictation').map(c => ({ ...c, trial: r.trial_no })));
+  const allCaps = partc.flatMap(r => (r.captures || []).map(c => ({ ...c, trial: r.trial_no })));
+  const attempts = allCaps.filter(c => c.kind === 'server recording' || c.kind === 'on-device dictation');
+  const adminCodes = new Map();
+  const who = (id) => { if (id == null || id === '') return ''; if (/^R\d+$/.test(String(id))) return String(id); if (!adminCodes.has(id)) adminCodes.set(id, `A${adminCodes.size + 1}`); return adminCodes.get(id); };
+  const curActive = current.filter(t => byId.get(t.participant_id) && !byId.get(t.participant_id).withdrawn_at);
+  const mix = phoneMix(active);
+  const r3calls = judgments.reduce((acc, j) => { acc[j.reason === 're-evaluation' ? 'reeval' : 'initial'] += j.parser_calls || 0; return acc; }, { initial: 0, reeval: 0 });
+
+  // ── Screening coverage (the same for every candidate): a pass needs the whole cohort, every slot, frozen labels, controls and exact replay.
+  const plannedFor = active.reduce((n, p) => n + (PLANNED_PER_GROUP[p.grp] || 0), 0);
+  const recordedSlots = new Set(curActive.filter(t => slotPlan(byId.get(t.participant_id).grp).some(s => s.slot === t.slot_code)).map(t => `${t.participant_id}|${t.slot_code}`)).size;
+  const coverage = [], blockers = [];
+  const quotaOk = active.length === MAX_PARTICIPANTS && Object.entries(GROUPS).every(([g, x]) => active.filter(p => p.grp === g).length === x.quota);
+  if (!quotaOk) coverage.push(`cohort: ${active.length} of ${MAX_PARTICIPANTS} volunteers`);
+  if (recordedSlots < PLANNED_TOTAL) coverage.push(`recordings: ${recordedSlots} of ${PLANNED_TOTAL} planned slots`);
+  const unfrozen = curActive.filter(t => !t.reference_frozen_at).length;
+  if (unfrozen) coverage.push(`listener reference: ${unfrozen} take(s) not yet frozen`);
+  const ctlDone = curActive.filter(t => enrich(t).info.kind === 'control' && t.reference_frozen_at && t.heard).length;
+  if (ctlDone < 36) coverage.push(`no-speech controls: ${ctlDone} of 36 recorded with a frozen label`);
+  const notRemeasured = curActive.filter(t => !t.remeasure).length;
+  if (notRemeasured) coverage.push(`re-measure: ${notRemeasured} take(s) not yet measured again`);
+  if (mix.gaps.length) coverage.push(`phone mix: ${mix.gaps.join(', ')}`);
+  if (mismatches) blockers.push(`${mismatches} replay mismatch(es): the offline settings cannot be trusted until explained`);
+  if (remeasureMismatch) blockers.push(`${remeasureMismatch} re-measure mismatch(es)`);
 
   const about = [['item', 'value'],
-    ['what this is', 'FitLife voice calibration round 1 (B18/B19). TEST SERVER ONLY. Volunteers appear as codes (P1–P6); no names, no audio.'],
+    ['what this is', 'FitLife voice calibration round 1 (B18/B19). TEST SERVER ONLY. Volunteers appear as codes (P1–P6), reviewers as R1…, administrators as A1… (this export only); no names, no audio.'],
     ['script version', `${SCRIPT_VERSION} (frozen for the round; any wording change voids that language's fluent-speaker check)`],
+    ['judge version', `${JUDGE_VERSION} (stored with every rule 3 judgment; a judgment made under another version or another reference version is stale and never reused)`],
     ['generated', iso(generatedAt)],
     ['detector', SP.VERSION],
     ['live setting (unchanged)', `voiced >= ${SP.LIVE_LIMITS.min_voiced_ms} ms, run >= ${SP.LIVE_LIMITS.min_run_ms} ms, pitch spread >= ${SP.LIVE_LIMITS.min_f0_spread_hz} Hz`],
     ['offline settings (screening only)', GRID.map(g => `${g.id}${g.live ? ' (live)' : ''}`).join(', ')],
     ['volunteers', `${active.length} of ${MAX_PARTICIPANTS} (Kannada ${active.filter(p => p.grp === 'kn').length}/${GROUPS.kn.quota}, Hindi ${active.filter(p => p.grp === 'hi').length}/${GROUPS.hi.quota}, English ${active.filter(p => p.grp === 'en').length}/${GROUPS.en.quota})`],
+    ['phone mix', mix.gaps.length ? `INCOMPLETE: ${mix.gaps.join('; ')}${mix.models.length ? ` (models: ${mix.models.join(', ')})` : ''}` : `complete: ${mix.models.join(', ')}`],
     ['planned recording slots', `${PLANNED_TOTAL} for the full cohort: 108 speech, 36 no-speech controls (Kannada ${PLANNED_PER_GROUP.kn}, Hindi ${PLANNED_PER_GROUP.hi}, English ${PLANNED_PER_GROUP.en} each)`],
     ['slots recorded', `${new Set(current.map(t => `${t.participant_id}|${t.slot_code}`)).size}`],
     ['takes kept (all)', `${takes.length}: ${current.length} current, ${takes.length - current.length} superseded by a technical retake (reasons in Takes)`],
+    ['listener references', `${current.filter(t => t.reference_frozen_at).length} of ${current.length} current take(s) frozen; transcripts stay hidden from the listener until then`],
     ['budget: initial transcription calls', `planned ${PLANNED_TOTAL * 2} (both engines × ${PLANNED_TOTAL} recordings); made so far ${current.reduce((n, t) => n + engineCalls(t), 0)} on current takes`],
     ['budget: retakes and provider retries (counted separately)', `${takes.filter(t => t.superseded_at).reduce((n, t) => n + engineCalls(t), 0)} calls on superseded takes; ${takes.reduce((n, t) => n + Math.max(0, (t.gemini_provenance?.attempts?.length || 0) - 1), 0)} extra Gemini model attempts after a failure`],
-    ['budget: rule 3 parser calls (separate)', `${evals.reduce((n, e) => n + (e.parser_calls || 0), 0)} (at most 2 per newly admitted take, deduplicated by take)`],
-    ['budget: Part C attempts', `${attempts.length} of 64 planned (32 tries + one Retry each), before technical retakes`],
+    ['budget: rule 3 parser calls (separate)', `${r3calls.initial + r3calls.reeval}: ${r3calls.initial} initial (at most 2 per newly admitted take, deduplicated by take and reference version) and ${r3calls.reeval} re-evaluation(s) after a reference or judge change (each authorised separately)`],
+    ['budget: Part C attempts', `${attempts.length} of 64 planned (32 tries + one Retry each), before technical retakes; ${sessions.length} session(s)`],
     ['replay check: stored live decision vs offline replay at the live setting', mismatches ? `${mismatches} MISMATCH(ES): do not use the offline settings until explained` : `0 mismatches over ${takes.length} take(s)`],
     ['re-measure check: stored measurements vs measuring the stored audio again', remeasureMismatch ? `${remeasureMismatch} MISMATCH(ES)` : `${takes.filter(t => t.remeasure).length} take(s) re-measured, 0 mismatches`],
-    ...['kn', 'hi', 'en'].map(l => { const { w, ok } = wordingRow(l); return [`wording check: ${LANG_NAME[l]}`, ok ? `confirmed by ${w.confirmed_by}, ${iso(w.confirmed_at)}` : w ? 'VOID: the lines changed after the check' : 'NOT CONFIRMED: these lines cannot be recorded yet']; }),
-    ['Part C', `${PARTC_PLAN.length} planned controlled tries (2 operators × 8 lines × 2 provider legs) and up to ${NATURAL_SLOTS} natural observations; ${partc.filter(r => (r.captures || []).length).length} with a recorded event`],
-    ['counting rule', 'Part A counts current takes by the fluent listener\'s label. Uncertain labels, protocol deviations (heard ≠ intended, e.g. a TV voice in a control), unlabelled takes, retakes and capture failures are counted and shown, never dropped silently.'],
+    ['screening coverage (needed before any candidate can pass)', [...blockers.map(b => `BLOCKED: ${b}`), ...coverage].join('; ') || 'complete'],
+    ...['kn', 'hi', 'en'].map(l => { const { w, ok } = wordingRow(l); return [`wording check: ${LANG_NAME[l]}`, ok ? `confirmed by ${reviewerCode(w.confirmed_by)}, ${iso(w.confirmed_at)} (script sha256 ${scriptSha(l).slice(0, 16)})` : w ? 'VOID: the lines changed after the check' : 'NOT CONFIRMED: these lines cannot be recorded yet']; }),
+    ['reviewers', `${reviewers.length} registered (codes only here; names stay in the private register)`],
+    ['Part C', `${PARTC_PLAN.length} planned controlled tries (2 operators × 8 lines × 2 provider legs) and up to ${NATURAL_SLOTS} natural observations; ${partc.filter(r => (r.captures || []).length).length} with a recorded event; ${sessions.filter(x => !x.resolved_at).length} session(s) not yet resolved`],
+    ['counting rule', 'Part A counts current takes by the fluent listener\'s label. Uncertain labels, protocol deviations (heard ≠ intended, e.g. a TV voice in a control), unlabelled takes, retakes and capture failures are counted and shown, never dropped silently. Part B counts only takes whose reference is frozen; the rest are shown as awaiting the reference.'],
     ['what this round cannot do', 'Descriptive counts for six people and their phones. It cannot choose an engine or certify a threshold; a zero count is not a guaranteed rate. Any candidate setting is a proposal for review.'],
   ];
 
   const plan = [['group', 'slot', 'kind', 'place', 'language', 'line', 'say', 'intended label']];
   for (const g of Object.keys(GROUPS)) for (const s of slotPlan(g)) { const i = slotInfo(s.slot, g); plan.push([GROUPS[g].name, s.slot, s.kind, PLACES[s.place], s.lang ? LANG_NAME[s.lang] : '', s.line, i.say, s.label]); }
   const lines = [['line', 'language', 'say', 'means', 'items scored', 'wording check', 'script sha256']];
-  for (const [id, l] of Object.entries(LINES)) { const { w, ok } = wordingRow(l.lang); lines.push([id, LANG_NAME[l.lang], l.say, l.means, l.items.map(i => i.label).join(' · '), ok ? `confirmed by ${w.confirmed_by}` : w ? 'void (lines changed)' : 'not confirmed', scriptSha(l.lang).slice(0, 16)]); }
+  for (const [id, l] of Object.entries(LINES)) { const { w, ok } = wordingRow(l.lang); lines.push([id, LANG_NAME[l.lang], l.say, l.means, l.items.map(i => i.label).join(' · '), ok ? `confirmed by ${reviewerCode(w.confirmed_by)}` : w ? 'void (lines changed)' : 'not confirmed', scriptSha(l.lang).slice(0, 16)]); }
   const slots = [['volunteer', 'group', 'slot', 'kind', 'place', 'language', 'status', 'takes', 'current take']];
   for (const p of active) for (const s of slotPlan(p.grp)) {
     const mine = takes.filter(t => t.participant_id === p.id && t.slot_code === s.slot);
@@ -653,49 +928,61 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     'phone', 'browser', 'installed app', 'seconds', 'audio type', 'audio sha256', 'speech check', 'detector', 'voiced frames', 'longest run frames', 'pitch spread (raw Hz)', 'hop ms', 'voiced ms', 'longest run ms',
     'live decision (stored)', 'replay at live setting', 'replay matches', 're-measure', ...G,
     'gemini words', 'gemini line result', 'gemini flags', 'gemini model used', 'gemini model reported', 'gemini attempts', 'gemini generated-text guard', 'gemini problem',
-    'whisper words', 'whisper line result', 'whisper flags', 'whisper language sent', 'whisper language reported', 'whisper fallback decision', 'whisper problem', 'prompt sha256 (gemini / whisper)']];
+    'whisper words', 'whisper line result', 'whisper flags', 'whisper language sent', 'whisper language reported', 'whisper fallback decision', 'whisper problem', 'prompt sha256 (gemini / whisper)',
+    'take id', 'phone make', 'phone model', 'os', 'os version', 'browser version', 'reference version', 'reference frozen at', 'reference mode', 'reference items (complete)', 'listener', 'reference sha256',
+    'gemini unexplained words', 'whisper unexplained words', 'gemini hand check', 'whisper hand check']];
+  const refItemsText = (t) => (Array.isArray(t.reference_items) ? t.reference_items.map(r => r.kind ? r.label : `${r.label} → ${r.n}`).join('; ') : '');
+  const handText = (s) => (s?.hand ? `${s.hand.verdict} (${who(s.hand.by)}${s.hand.note ? `: ${s.hand.note}` : ''})` : s?.auto_line === HAND_CHECK ? 'OUTSTANDING' : '');
   for (const t of [...takes].sort((a, b) => String(byId.get(a.participant_id)?.code).localeCompare(String(byId.get(b.participant_id)?.code), undefined, { numeric: true }) || a.slot_code.localeCompare(b.slot_code) || a.take_no - b.take_no)) {
     const { p, info } = enrich(t);
     const live = t.speech_status === 'speech' ? 'accept' : t.speech_status === 'no_speech' ? 'refuse' : 'not checked';
     const gp = t.gemini_provenance || {}, wp = t.whisper_provenance || {};
     const gs = info.items?.length ? takeScore(t, info, 'gemini') : null, ws = info.items?.length ? takeScore(t, info, 'whisper') : null;
+    const d = deviceOf(t, p);
+    const lineCell = (s) => (s ? `${s.line}${s.provisional ? ' (provisional: reference not frozen)' : ''}` : '');
     takesSheet.push([p.code, t.slot_code, t.take_no, yes(!t.superseded_at), t.retake_reason ? `${t.retake_reason}${t.retake_note ? `: ${t.retake_note}` : ''}` : '', iso(t.superseded_at), iso(t.created_at),
       info.kind || '', PLACES[info.place] || '', info.lang ? LANG_NAME[info.lang] : '', info.label || '', t.heard || '', yes(t.spoken_as_script), t.reference_text || '',
-      Array.isArray(t.reference_items) ? t.reference_items.map(r => `${r.label} → ${r.n}`).join('; ') : '', truth(t, info.label),
-      t.phone_type || p.phone_type || '', t.browser || p.browser || '', yes(t.installed_app ?? p.installed_app), t.duration_ms ? (Number(t.duration_ms) / 1000).toFixed(1) : '', t.mime_type || '', (t.audio_sha256 || '').slice(0, 16),
+      Array.isArray(t.reference_items) && !t.reference_items.some(r => r.kind) ? t.reference_items.map(r => `${r.label} → ${r.n}`).join('; ') : '', truth(t, info.label),
+      d.tier, d.browser, yes(t.installed_app ?? p.installed_app), t.duration_ms ? (Number(t.duration_ms) / 1000).toFixed(1) : '', t.mime_type || '', (t.audio_sha256 || '').slice(0, 16),
       t.speech_status || '', t.detector_version || '', t.voiced_frames ?? '', t.longest_run_frames ?? '', t.f0_spread_raw ?? '', t.hop_ms ?? '', t.voiced_ms ?? '', t.longest_run_ms ?? '',
       live, decision(t, SP.LIVE_LIMITS), replayMatches(t) ? 'yes' : 'NO', t.remeasure ? (t.remeasure.match ? 'same' : 'DIFFERENT') : '', ...GRID.map(g => decision(t, g)),
-      t.gemini_text ?? '', gs ? gs.line : '', gs ? gs.flags.join('; ') : '', gp.model_used || '', gp.model_version || '', (gp.attempts || []).map(a => `${a.model}: ${a.outcome}${a.status ? ` ${a.status}` : ''}`).join('; '),
+      t.gemini_text ?? '', lineCell(gs), gs ? gs.flags.join('; ') : '', gp.model_used || '', gp.model_version || '', (gp.attempts || []).map(a => `${a.model}: ${a.outcome}${a.status ? ` ${a.status}` : ''}`).join('; '),
       t.gemini_text == null ? '' : t.gemini_generated ? 'would refuse (generated text)' : 'passes', t.gemini_text == null ? (t.gemini_error || 'no answer') : !/\S/.test(t.gemini_text) ? 'empty answer' : '',
-      t.whisper_text ?? '', ws ? ws.line : '', ws ? ws.flags.join('; ') : '', wp.language_sent || 'not set', wp.language_reported || '', t.whisper_review ? (t.whisper_review.accepted ? 'accepted' : `refused: ${t.whisper_review.reason}`) : '',
-      t.whisper_text == null ? (t.whisper_error || 'no answer') : !/\S/.test(t.whisper_text) ? 'empty answer' : '', `${gp.prompt_sha256 || ''} / ${wp.prompt_sha256 || ''}`]);
+      t.whisper_text ?? '', lineCell(ws), ws ? ws.flags.join('; ') : '', wp.language_sent || 'not set', wp.language_reported || '', t.whisper_review ? (t.whisper_review.accepted ? 'accepted' : `refused: ${t.whisper_review.reason}`) : '',
+      t.whisper_text == null ? (t.whisper_error || 'no answer') : !/\S/.test(t.whisper_text) ? 'empty answer' : '', `${gp.prompt_sha256 || ''} / ${wp.prompt_sha256 || ''}`,
+      t.id ?? '', d.make, d.model, d.os, d.os_version, d.browser_version, t.reference_version || '', iso(t.reference_frozen_at), t.reference_mode || '', refItemsText(t), t.listener_code || '', (t.reference_sha || '').slice(0, 16),
+      gs ? (gs.unexplained || []).join(', ') : '', ws ? (ws.unexplained || []).join(', ') : '', handText(gs), handText(ws)]);
   }
 
   // Part B: every current speech take × engine × item.
-  const items = [['volunteer', 'slot', 'line', 'language', 'place', 'kind', 'phone', 'engine', 'line result', 'line flags', 'item', 'expected (after listener corrections)', 'outcome', 'heard', 'listener confirmed what was said', 'recheck needed', 'kannada number word']];
+  const items = [['volunteer', 'slot', 'line', 'language', 'place', 'kind', 'phone', 'engine', 'line result', 'line flags', 'item', 'expected (after listener corrections)', 'outcome', 'heard', 'listener confirmed what was said', 'recheck needed', 'kannada number word',
+    'take id', 'reference version', 'provisional (reference not frozen)', 'unexplained words']];
   const scored = [];
   for (const t of current) {
     const { p, info } = enrich(t);
     if (!info.items?.length) continue;
-    const eff = itemsWithReference(info.items, t.reference_items);
+    const eff = itemsWithReference(info.items, t.reference_items, t.reference_mode);
     for (const engine of ['gemini', 'whisper']) {
       const s = takeScore(t, info, engine);
-      scored.push({ t, p, info, engine, s });
-      const base = [p.code, t.slot_code, info.line, LANG_NAME[info.lang], PLACES[info.place], info.kind, p.phone_type || '', engine, s.line, s.flags.join('; ')];
-      if (!s.items.length) items.push([...base, '', '', '', '', yes(t.spoken_as_script), '', '']);
-      s.items.forEach((r, k) => items.push([...base, r.label, eff[k]?.n ?? '', r.outcome, r.heard, yes(t.spoken_as_script), r.outcome === 'wrong number' && t.spoken_as_script !== true ? 'yes: listen again before calling it an engine error' : '', info.items[k]?.word || '']));
-      for (const x of s.extra) items.push([...base, '(not said)', '', 'extra', x, yes(t.spoken_as_script), '', '']);
+      scored.push({ t, p, info, engine, s, eff });
+      const base = [p.code, t.slot_code, info.line, LANG_NAME[info.lang], PLACES[info.place], info.kind, deviceOf(t, p).tier, engine, s.line, s.flags.join('; ')];
+      const tail = [t.id ?? '', t.reference_version || '', yes(s.provisional), (s.unexplained || []).join(', ')];
+      if (!s.items.length) items.push([...base, '', '', '', '', yes(t.spoken_as_script), '', '', ...tail]);
+      s.items.forEach((r, k) => items.push([...base, r.label, eff[k]?.n ?? '', r.outcome, r.heard, yes(t.spoken_as_script), r.outcome === 'wrong number' && t.spoken_as_script !== true ? 'yes: listen again before calling it an engine error' : '', eff[k]?.word || '', ...tail]));
+      for (const x of s.extra) items.push([...base, '(not said)', '', 'extra', x, yes(t.spoken_as_script), '', '', ...tail]);
     }
   }
 
   // Part A summary: every setting, per slice and per volunteer, with the real denominators.
   const all = takes.map(t => { const e = enrich(t); return { ...e, truth: truth(t, e.info.label), cur: !t.superseded_at }; });
-  const evalOf = (id) => evals.filter(e => e.take_id === id);
   const partA = [['setting', 'slice', 'current takes', 'retakes (superseded, not counted)', 'capture failures (not checked)', 'speech takes (listener)', 'missed speech (refused)', 'missed %', 'no-speech takes (listener)', 'accepted non-speech (absolute)',
-    'protocol deviations (heard ≠ intended)', 'uncertain labels', 'unlabelled', 'newly accepted speech vs live', 'newly accepted non-speech vs live', 'rule 3: newly accepted takes with both legs judged', 'rule 3: disqualified takes', 'rule 3: not yet judged', 'screening result (all slice; a proposal, never a release)']];
+    'protocol deviations (heard ≠ intended)', 'uncertain labels', 'unlabelled', 'newly accepted speech vs live', 'newly accepted non-speech vs live', 'rule 3: newly accepted takes with both legs judged', 'rule 3: disqualified takes', 'rule 3: not yet judged',
+    'labels not yet frozen', 'rule 3: takes failing the agreed rule (missing or unresolved items)', 'rule 3: incomplete (errors, hand checks, stale or unfrozen)', 'screening result (all slice; a proposal, never a release)']];
+  const models = [...new Set(active.map(p => modelKey(deviceOf(null, p))).filter(Boolean))];
   const slices = [['all', () => true], ...['kn', 'hi', 'en'].map(l => [`language ${LANG_NAME[l]}`, (x) => x.info.lang === l]), ...Object.entries(PLACES).map(([k, v]) => [`place ${v}`, (x) => x.info.place === k]),
     ['short lines', (x) => x.info.kind === 'short'], ['soft lines', (x) => x.info.kind === 'soft'], ...Object.keys(CONTROLS).map(c => [`control ${c}`, (x) => x.info.line === c]),
-    ...['android_budget', 'android_mid', 'iphone'].map(ph => [`phone ${ph}`, (x) => (x.t.phone_type || x.p.phone_type) === ph]),
+    ...['android_budget', 'android_mid', 'iphone'].map(ph => [`phone ${ph}`, (x) => deviceOf(x.t, x.p).tier === ph]),
+    ...models.map(m => [`phone model ${m}`, (x) => modelKey(deviceOf(x.t, x.p)) === m]),
     ...active.map(p => [`volunteer ${p.code}`, (x) => x.p.id === p.id])];
   const liveMissed = all.filter(x => x.cur && x.truth === 'speech' && decision(x.t, SP.LIVE_LIMITS) === 'refuse').length;
   for (const g of GRID) for (const [name, fn] of slices) {
@@ -704,37 +991,58 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     const missed = sp.filter(x => decision(x.t, g) === 'refuse').length;
     const newly = cur.filter(x => x.info.label === 'speech' && x.truth !== 'no-speech' && newlyAdmitted(x.t, g));
     const newlyNs = ns.filter(x => newlyAdmitted(x.t, g)).length;
-    const judged = newly.filter(x => ['gemini', 'whisper'].every(e => evalOf(x.t.id).some(v => v.engine === e)));
-    const disq = newly.filter(x => evalOf(x.t.id).some(v => v.judgment?.result === 'disqualifying'));
+    const r3 = newly.map(x => ({ x, ...rule3Status(x, judgments) }));
+    const judged = r3.filter(r => ['valid', 'disqualified', 'does not qualify'].includes(r.status));
+    const disq = r3.filter(r => r.status === 'disqualified'), dnq = r3.filter(r => r.status === 'does not qualify'), open = r3.filter(r => r.status === 'incomplete');
     let screen = '';
     if (name === 'all' && !g.live) {
-      const fails = [], open = [];
+      const fails = [...blockers], inc = [...coverage];
       if (newlyNs > 0) fails.push(`rule 1: ${newlyNs} more non-speech accepted`);
-      const recovered = sp.filter(x => decision(x.t, SP.LIVE_LIMITS) === 'refuse' && decision(x.t, g) === 'accept').length;
-      if (!(recovered >= 3 && recovered * 2 >= liveMissed)) fails.push(`rule 2: recovers ${recovered} of ${liveMissed} missed (needs ≥ half and ≥ 3)`);
       if (disq.length) fails.push(`rule 3: ${disq.length} newly admitted take(s) disqualified`);
-      if (newly.length - judged.length) open.push(`rule 3: ${newly.length - judged.length} newly admitted take(s) not yet judged`);
-      screen = fails.length ? `fails screen: ${fails.join('; ')}` : open.length ? `incomplete: ${open.join('; ')}` : 'passes the screen (rule 4, the gate, still to run); a proposal for review only';
+      if (dnq.length) fails.push(`rule 3: ${dnq.length} newly admitted take(s) with missing or unresolved items (the agreed rule needs a correct reviewable preview or an explicit refusal on BOTH legs)`);
+      if (open.length) {
+        const why = {}; for (const r of open) why[r.why] = (why[r.why] || 0) + 1;
+        inc.push(`rule 3: ${open.length} newly admitted take(s) without a completed valid judgment (${Object.entries(why).map(([k, v]) => `${v} ${k}`).join(', ')})`);
+      }
+      const recovered = sp.filter(x => decision(x.t, SP.LIVE_LIMITS) === 'refuse' && decision(x.t, g) === 'accept').length;
+      const rule2ok = recovered >= 3 && recovered * 2 >= liveMissed;
+      const r2 = `rule 2: recovers ${recovered} of ${liveMissed} missed so far (needs ≥ half and ≥ 3)`;
+      if (fails.length) screen = `fails screen: ${fails.join('; ')}; ${r2}${inc.length ? `; also incomplete: ${inc.join('; ')}` : ''}`;
+      else if (inc.length) screen = `incomplete: ${inc.join('; ')}; ${r2}`;
+      else if (!rule2ok) screen = `fails screen: rule 2: recovers ${recovered} of ${liveMissed} missed (needs ≥ half and ≥ 3)`;
+      else screen = `passes the screen on ${sp.length} speech and ${ns.length} no-speech take(s) (shown, not counted: ${cur.filter(x => x.truth === 'uncertain').length} uncertain, ${cur.filter(x => x.truth === 'protocol deviation').length} protocol deviation(s), ${cur.filter(x => decision(x.t, g) === 'not checked').length} capture failure(s)); rule 4, the gate, still to run; a proposal for review only`;
     }
     partA.push([`${g.id}${g.live ? ' (live)' : ''}`, name, cur.length, xs.length - cur.length, cur.filter(x => decision(x.t, g) === 'not checked').length, sp.length, missed, pct(missed, sp.length), ns.length,
       ns.filter(x => decision(x.t, g) === 'accept').length, cur.filter(x => x.truth === 'protocol deviation').length, cur.filter(x => x.truth === 'uncertain').length, cur.filter(x => x.truth === 'unlabelled').length,
-      newly.length, newlyNs, judged.length, disq.length, newly.length - judged.length, screen]);
+      newly.length, newlyNs, judged.length, disq.length, newly.length - judged.length, cur.filter(x => !x.t.reference_frozen_at).length, dnq.length, open.length, screen]);
   }
-  // Rule 3: each newly admitted take's two legs through the logging parser's preview.
-  const rule3 = [['volunteer', 'slot', 'take', 'settings that newly admit it', 'engine', 'stage', 'preview judgment', 'disqualifying problems', 'items', 'parser calls', 'judged at']];
-  for (const e of evals) {
-    const t = takes.find(x => x.id === e.take_id); if (!t) continue;
+  // Rule 3: every judgment ever made (current and stale), with its reference and judge versions.
+  const rule3 = [['judgment id', 'volunteer', 'slot', 'take id', 'take', 'reference version', 'judge version', 'state', 'reason', 'settings that newly admit it', 'engine', 'stage', 'preview judgment', 'after hand check', 'hand verdict',
+    'disqualifying problems', 'needs a person because', 'items', 'preview content', 'parser', 'parser calls', 'judged at']];
+  const pvText = (pv) => (!pv ? '' : pv.error ? `error: ${pv.error}` : [
+    ...(pv.foods || []).map(f => `food: ${`${f.qty_text || ''} ${f.name || ''}`.trim()}${f.grams != null ? ` (${f.grams} g)` : ''}${f.meal ? ` [${f.meal}]` : ''}`),
+    ...(pv.unresolved_foods || []).map(f => `unresolved: ${f.name}`), pv.weight_kg != null ? `weight ${pv.weight_kg} kg` : '', pv.water_ml_add != null ? `water ${pv.water_ml_add} ml` : '',
+    hasContent(pv.sleep) ? `sleep ${JSON.stringify(pv.sleep)}` : '', ...['activities', 'acv', 'supplements'].filter(k => hasContent(pv[k])).map(k => `${k}: ${JSON.stringify(pv[k])}`),
+    ...(pv.workouts || []).map(w => `workout: ${typeof w === 'object' ? `${w.name || ''} ${w.qty_text || ''}${w.sets?.length ? ` sets ${JSON.stringify(w.sets)}` : ''}${w.duration_min ? ` ${w.duration_min} min` : ''}` : w}`),
+    ...(Array.isArray(pv.corrections) ? pv.corrections : []).map(c => `correction: ${typeof c === 'object' ? `${c.name} → ${c.grams ?? ''} g ${c.meal || ''}` : c}`), pv.notes ? `note: ${pv.notes}` : '',
+    pv.question ? 'question / no log card' : '', pv.safety ? `safety: ${pv.safety}` : '', pv.draft_edit ? 'draft edit' : ''].filter(Boolean).join('; '));
+  for (const j of judgments) {
+    const t = takes.find(x => x.id === j.take_id); if (!t) continue;
     const { p } = enrich(t);
-    rule3.push([p.code, t.slot_code, t.take_no, GRID.filter(g => newlyAdmitted(t, g)).map(g => g.id).join(', '), e.engine, e.stage, e.judgment?.result || '', (e.judgment?.problems || []).join('; '),
-      (e.judgment?.items || []).map(i => `${i.label}: ${i.outcome}${i.shown ? ` (${i.shown})` : ''}`).join('; '), e.parser_calls || 0, iso(e.created_at)]);
+    const state = j.status === 'running' ? 'running' : j.reference_sha === t.reference_sha && j.judge_version === JUDGE_VERSION ? 'current' : 'STALE (kept; not used)';
+    rule3.push([j.id ?? '', p.code, t.slot_code, t.id, t.take_no, j.reference_version ?? '', j.judge_version || '', state, j.reason || 'initial', GRID.filter(g => newlyAdmitted(t, g)).map(g => g.id).join(', '), j.engine, j.stage || '',
+      j.judgment?.result || '', effectiveResult(j) || '', j.hand_verdict ? `${j.hand_verdict.verdict} (${who(j.hand_verdict.by)}${j.hand_verdict.note ? `: ${j.hand_verdict.note}` : ''})` : '',
+      (j.judgment?.problems || []).join('; '), (j.judgment?.hand || []).join('; '), (j.judgment?.items || []).map(i => `${i.label}: ${i.outcome}${i.shown ? ` (${i.shown})` : ''}`).join('; '),
+      pvText(j.preview), j.preview?.aiProvider || j.preview?.aiModel ? `${j.preview.aiProvider || ''}/${j.preview.aiModel || ''}` : j.parser ? `${j.parser.provider || ''}/${j.parser.model || ''}` : '', j.parser_calls || 0, iso(j.finished_at || j.created_at)]);
   }
 
-  // Part B summary: every line outcome, per engine × language × place and per volunteer.
-  const partB = [['engine', 'slice', 'lines', ...LINE_OUTCOMES, 'quantities exact', 'quantities scored', 'wrong numbers not yet confirmed by the listener']];
-  const bRow = (engine, name, xs) => {
-    const q = xs.flatMap(x => x.s.items.map((r, k) => ({ r, it: x.info.items[k] }))).filter(({ it }) => it && it.kind !== 'presence');
-    partB.push([engine, name, xs.length, ...LINE_OUTCOMES.map(o => xs.filter(x => x.s.line === o).length), q.filter(({ r }) => OK_ITEM.has(r.outcome)).length, q.length,
-      xs.filter(x => x.s.flags.includes('wrong number') && x.t.spoken_as_script !== true).length]);
+  // Part B summary: every line outcome, per engine × language × place and per volunteer. Only frozen references count.
+  const partB = [['engine', 'slice', 'lines', ...LINE_OUTCOMES, 'needs a hand check', 'awaiting the listener\'s reference (not counted)', 'quantities exact', 'quantities scored', 'wrong numbers not yet confirmed by the listener']];
+  const bRow = (engine, name, xsAll) => {
+    const xs = xsAll.filter(x => !x.s.provisional);
+    const q = xs.flatMap(x => x.s.items.map((r, k) => ({ r, it: x.eff[k] }))).filter(({ it }) => it && it.kind !== 'presence');
+    partB.push([engine, name, xs.length, ...LINE_OUTCOMES.map(o => xs.filter(x => x.s.line === o).length), xs.filter(x => x.s.line === HAND_CHECK).length, xsAll.length - xs.length,
+      q.filter(({ r }) => OK_ITEM.has(r.outcome)).length, q.length, xsAll.filter(x => x.s.flags.includes('wrong number') && x.t.spoken_as_script !== true).length]);
   };
   for (const engine of ['gemini', 'whisper']) {
     for (const l of ['kn', 'hi', 'en']) for (const pl of ['q', 'n']) bRow(engine, `${LANG_NAME[l]}, ${PLACES[pl]}`, scored.filter(x => x.engine === engine && x.info.lang === l && x.info.place === pl));
@@ -745,55 +1053,117 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
   const allWords = [...new Set(Object.values(LINES).flatMap(l => l.items.filter(i => i.word).map(i => `${i.word}=${i.n}`)))];
   for (const wv of allWords) {
     const [w, v] = wv.split('=');
-    const rows = (engine) => scored.filter(x => x.engine === engine).flatMap(x => x.s.items.map((r, k) => ({ r, it: x.info.items[k] }))).filter(({ it }) => it && it.word === w && String(it.n) === v);
+    const rows = (engine) => scored.filter(x => x.engine === engine && !x.s.provisional).flatMap(x => x.s.items.map((r, k) => ({ r, it: x.eff[k] }))).filter(({ it }) => it && it.word === w && String(it.n) === v);
     const gq = rows('gemini'), wq = rows('whisper');
     words.push([w, Number(v), gq.length, gq.filter(({ r }) => kept(r.outcome)).length, gq.filter(({ r }) => r.outcome === 'wrong number').length, wq.filter(({ r }) => kept(r.outcome)).length, wq.filter(({ r }) => r.outcome === 'wrong number').length]);
   }
-  const ctl = [['volunteer', 'slot', 'place', 'heard (listener)', 'counted as', 'live decision', 'gemini words', 'whisper words', 'whisper fallback decision']];
+  const ctl = [['volunteer', 'slot', 'place', 'heard (listener)', 'counted as', 'live decision', 'gemini words', 'whisper words', 'whisper fallback decision', 'take id', 'label frozen']];
   for (const t of current) { const { p, info } = enrich(t); if (info.kind !== 'control') continue;
-    ctl.push([p.code, t.slot_code, PLACES[info.place] || '', t.heard || '', truth(t, 'no-speech'), decision(t, SP.LIVE_LIMITS), t.gemini_text ?? '(no answer)', t.whisper_text ?? '(no answer)', t.whisper_review ? (t.whisper_review.accepted ? 'accepted' : `refused: ${t.whisper_review.reason}`) : '']); }
+    ctl.push([p.code, t.slot_code, PLACES[info.place] || '', t.heard || '', truth(t, 'no-speech'), decision(t, SP.LIVE_LIMITS), t.gemini_text ?? '(no answer)', t.whisper_text ?? '(no answer)', t.whisper_review ? (t.whisper_review.accepted ? 'accepted' : `refused: ${t.whisper_review.reason}`) : '', t.id ?? '', yes(!!t.reference_frozen_at)]); }
 
-  // Part C: one row per try, and a ledger of every event.
+  // Part C: one row per try, one per session, and a ledger of every event.
+  const sessionsOf = (trial) => sessions.filter(x => x.trial_no === trial).sort((a, b) => a.id - b.id);
+  const firstFinish = (x) => (x.switch_checks || []).find(c => c.reason === 'finish');
   const pc = [['try', 'route', 'operator', 'line', 'voice language', 'say', 'expected', 'planned provider leg', 'attempts', 'retries', 'actual paths', 'counts as a test of the planned provider', 'previews', 'previews from EDITED text',
-    'latest read-back', 'restore: whole day equal to the baseline', 'voice backup switch verified off', 'items marked right', 'items marked wrong', 'applied', 'day correct', 'notes', 'finished']];
+    'latest read-back', 'restore: whole day equal to the baseline', 'voice backup switch verified off', 'items marked right', 'items marked wrong', 'applied', 'day correct', 'notes', 'finished',
+    'sessions', 'resolved (day equal to its baseline and switch off)', 'outstanding']];
   for (const t of [...PARTC_PLAN, ...NATURAL_PLAN]) {
     const r = partc.find(x => x.trial_no === t.trial) || {};
     const caps = r.captures || [];
     const att = caps.filter(c => c.kind === 'server recording' || c.kind === 'on-device dictation');
     const prev = caps.filter(c => c.kind === 'preview');
-    const planned = (c) => c.kind === 'server recording' && (t.path === 'gemini' ? /^gemini\//.test(c.answered_by) && !c.voice_backup_switch : /whisper/.test(c.answered_by) && c.voice_backup_switch);
-    if (t.route === 'natural' && !caps.length && !r.trial_no) continue;
+    const ss = sessionsOf(t.trial), last = ss.slice(-1)[0];
+    // Fixes-2y: a recording counts for its planned provider only if the app confirmed the session (its mode was fixed at the take's start).
+    const planned = (c) => c.kind === 'server recording' && c.session_match === 'yes' && (t.path === 'gemini' ? /^gemini\//.test(c.answered_by) && !c.voice_backup_switch : /whisper/.test(c.answered_by) && c.voice_backup_switch);
+    if (t.route === 'natural' && !caps.length && !r.trial_no && !ss.length) continue;
     const marks = Array.isArray(r.items) ? r.items : [];
-    const rb = (r.readbacks || []).slice(-1)[0];
+    const rb = last ? (last.readbacks || []).filter(x => x.diff).slice(-1)[0] : (r.readbacks || []).slice(-1)[0];
+    const cl = last ? (last.cleanups || []).slice(-1)[0] : r.cleanup;
+    const ff = last ? firstFinish(last) : null;
     pc.push([t.trial, t.route, t.speaker, t.line, t.lang ? LANG_NAME[t.lang] : '', t.say, t.expect, t.route === 'natural' ? 'none (natural observation)' : t.path === 'gemini' ? 'Gemini (switch off)' : 'Whisper fallback (switch on)',
       att.length, att.filter(c => c.retry_of).length, [...new Set(att.map(c => c.actual_path))].join('; '),
-      t.route === 'natural' ? 'no (natural observation)' : att.some(planned) ? 'yes' : att.length ? 'NO: the planned provider never answered (see actual paths)' : '',
+      t.route === 'natural' ? 'no (natural observation)' : att.some(planned) ? 'yes' : att.some(c => c.kind === 'server recording' && c.session_match !== 'yes') && !att.some(planned) ? 'NO: the app did not confirm the session for its recording(s)' : att.length ? 'NO: the planned provider never answered (see actual paths)' : '',
       prev.length, prev.filter(c => c.edited).length,
       rb ? (rb.diff.same ? 'no change' : `added ${rb.diff.added_foods.length} food(s); fields ${rb.diff.changed_fields.map(f => f.field).join(', ') || 'none'}; workouts ${rb.diff.workouts_changed ? 'changed' : 'same'}`) : '',
-      r.cleanup ? (r.cleanup.ok ? 'yes' : `NO: ${JSON.stringify(r.cleanup.diff).slice(0, 160)}`) : '', yes(r.switch_off_verified),
-      marks.filter(m => m.ok === true).map(m => m.label).join('; '), marks.filter(m => m.ok === false).map(m => m.label).join('; '), yes(r.applied), yes(r.day_correct), r.notes || '', iso(r.finished_at)]);
+      cl ? (cl.ok ? 'yes' : `NO: ${JSON.stringify(cl.diff).slice(0, 160)}`) : '', ff ? yes(!ff.on) : yes(r.switch_off_verified),
+      marks.filter(m => m.ok === true).map(m => m.label).join('; '), marks.filter(m => m.ok === false).map(m => m.label).join('; '), yes(r.applied), yes(r.day_correct), r.notes || '', iso(r.finished_at),
+      ss.length, last ? (last.resolved_at ? `yes, ${iso(last.resolved_at)}` : 'NO') : '', last && !last.resolved_at ? (last.resolution?.outstanding || ['not finished yet']).join('; ') : '']);
   }
-  const ledger = [['try', 'event', 'kind', 'at', 'attempt', 'retry of attempt', 'audio uploaded', 'actual path', 'engines tried', 'voice backup switch', 'speech check', 'words or refusal', 'preview', 'preview text source']];
-  for (const r of partc) (r.captures || []).forEach((c, i) => ledger.push([r.trial_no, i + 1, c.kind, iso(c.at), c.attempt ?? '', c.retry_of ?? '', c.upload == null ? '' : yes(c.upload), c.actual_path || '',
-    (c.trail || []).map(x => `${x.engine}${x.model ? `/${x.model}` : ''}: ${x.outcome}`).join('; '), c.kind === 'server recording' ? yes(c.voice_backup_switch) : '',
+  const sess = [['session', 'try', 'route', 'armed at', 'recording until', 'capture stopped', 'stop reason', 'baseline: foods / weight / water / workouts', 'read-backs', 'latest read-back', 'restores', 'latest restore', 'switch checks', 'switch at first Finish', 'resolved at', 'outstanding']];
+  for (const x of [...sessions].sort((a, b) => a.id - b.id)) {
+    const b = x.baseline || {}, rbs = (x.readbacks || []).filter(y => y.diff), cls = x.cleanups || [], sw = x.switch_checks || [], ff = firstFinish(x);
+    const lr = rbs.slice(-1)[0], lc = cls.slice(-1)[0];
+    sess.push([x.id, x.trial_no, x.route, iso(x.armed_at), iso(x.armed_at ? new Date(new Date(x.armed_at).getTime() + ARM_MINUTES * 60000) : null), iso(x.capture_stopped_at), x.stop_reason || '',
+      `${(b.day?.food_items || []).length} / ${b.day?.weight_kg ?? '—'} / ${b.day?.water_ml ?? '—'} / ${(b.workouts || []).length}`, rbs.length, lr ? (lr.diff.same ? `no change (${iso(lr.at)})` : `differs (${iso(lr.at)})`) : '',
+      cls.length, lc ? `${lc.ok ? 'equal to the baseline' : 'STILL DIFFERS'} (${iso(lc.at)})` : '', sw.length, ff ? (ff.on ? 'ON' : 'off') : '', iso(x.resolved_at), x.resolved_at ? '' : (x.resolution?.outstanding || ['not finished yet']).join('; ')]);
+  }
+  const ledger = [['try', 'event', 'kind', 'at', 'session', 'attempt', 'retry of attempt', 'audio uploaded', 'session sent by the app', 'actual path', 'engines tried', 'model version', 'voice backup switch', 'HTTP status', 'language', 'audio sha256',
+    'speech check', 'words or refusal', 'preview', 'preview text source']];
+  for (const r of partc) (r.captures || []).forEach((c, i) => ledger.push([r.trial_no, i + 1, c.kind, iso(c.at), c.session_id ?? '', c.attempt ?? '', c.retry_of ?? '', c.upload == null ? '' : yes(c.upload), c.session_match || '', c.actual_path || '',
+    (c.trail || []).map(x => `${x.engine}${x.model ? `/${x.model}` : ''}: ${x.outcome}${x.status ? ` ${x.status}` : ''}`).join('; '), c.model_version || (c.trail || []).filter(x => x.model_version).map(x => x.model_version).join('; '),
+    c.kind === 'server recording' ? yes(c.voice_backup_switch) : '', c.http_status ?? '', c.lang_hint || '', (c.audio_sha256 || '').slice(0, 16),
     c.speech ? `${c.speech.status} (${c.speech.voiced_ms ?? '—'} ms voiced)` : '', c.kind === 'preview' ? c.message : c.rejected ? `refused: ${c.rejected}` : c.transcript ?? c.error ?? '',
-    c.preview ? [...(c.preview.foods || []).map(f => `${f.qty_text || ''} ${f.name}`.trim()), c.preview.weight_kg != null ? `weight ${c.preview.weight_kg}` : '', c.preview.water_ml_add ? `water ${c.preview.water_ml_add} ml` : '', c.preview.question ? 'question / no log card' : ''].filter(Boolean).join('; ') : '',
-    c.text_source || '']));
-  const vols = [['volunteer', 'group', 'profile', 'phone', 'browser', 'installed app', 'consented', 'consent version', 'slots planned', 'slots recorded', 'takes kept']];
-  for (const p of active) vols.push([p.code, GROUPS[p.grp].name, p.profile_note || '', p.phone_type || '', p.browser || '', yes(p.installed_app), iso(p.consented_at), p.consent_version || '', PLANNED_PER_GROUP[p.grp],
-    new Set(current.filter(t => t.participant_id === p.id).map(t => t.slot_code)).size, takes.filter(t => t.participant_id === p.id).length]);
+    c.preview ? pvText(c.preview) : '', c.text_source || '']));
+  const vols = [['volunteer', 'group', 'profile', 'phone', 'browser', 'installed app', 'consented', 'consent version', 'slots planned', 'slots recorded', 'takes kept', 'phone make', 'phone model', 'os', 'os version', 'browser version']];
+  for (const p of active) { const d = deviceOf(null, p); vols.push([p.code, GROUPS[p.grp].name, p.profile_note || '', d.tier, d.browser, yes(p.installed_app), iso(p.consented_at), p.consent_version || '', PLANNED_PER_GROUP[p.grp],
+    new Set(current.filter(t => t.participant_id === p.id).map(t => t.slot_code)).size, takes.filter(t => t.participant_id === p.id).length, d.make, d.model, d.os, d.os_version, d.browser_version]); }
 
-  return [
+  // History: every label, reference version, hand check, judgment, mark, session step and wording check.
+  const history = [['kind', 'about', 'at', 'by', 'what']];
+  const takeRef = (t) => `take ${t.id} (${byId.get(t.participant_id)?.code || '?'} ${t.slot_code} #${t.take_no})`;
+  const brief = (o) => JSON.stringify(o, (k, v) => (k === 'by' || k === 'at' || k === 'recorded_by' ? undefined : v)).slice(0, 600);
+  for (const t of takes) {
+    for (const h of t.label_history || []) history.push(['label (draft)', takeRef(t), iso(h.at), who(h.by), brief(h)]);
+    for (const h of t.reference_history || []) history.push([`reference v${h.version}`, takeRef(t), iso(h.at), [h.listener, who(h.by)].filter(Boolean).join(' / '), brief({ sha: String(h.sha || '').slice(0, 16), ...h.reference })]);
+    for (const h of t.hand_history || []) history.push(['Part B hand check', takeRef(t), iso(h.at), who(h.by), brief(h)]);
+  }
+  for (const j of judgments) {
+    const t = takes.find(x => x.id === j.take_id); if (!t) continue;
+    history.push([`rule 3 judgment (${j.reason || 'initial'})`, `${takeRef(t)} ${j.engine}`, iso(j.created_at), '', brief({ reference_version: j.reference_version, judge: j.judge_version, result: j.judgment?.result, calls: j.parser_calls })]);
+    for (const h of j.hand_history || []) history.push(['rule 3 hand verdict', `${takeRef(t)} ${j.engine}`, iso(h.at), who(h.by), brief(h)]);
+  }
+  for (const r of partc) for (const e of r.edits || []) history.push(['Part C marks', `try ${r.trial_no}`, iso(e.at), who(e.by), brief(e)]);
+  for (const x of sessions) {
+    history.push(['Part C session armed', `try ${x.trial_no} session ${x.id}`, iso(x.armed_at), who(x.armed_by), brief({ route: x.route })]);
+    for (const c of x.cleanups || []) history.push(['Part C restore', `try ${x.trial_no} session ${x.id}`, iso(c.at), who(c.by), brief({ ok: c.ok })]);
+    for (const c of x.switch_checks || []) history.push(['Part C switch check', `try ${x.trial_no} session ${x.id}`, iso(c.at), '', brief({ reason: c.reason, on: c.on })]);
+    if (x.capture_stopped_at) history.push(['Part C capture stopped', `try ${x.trial_no} session ${x.id}`, iso(x.capture_stopped_at), '', brief({ reason: x.stop_reason })]);
+    if (x.resolved_at) history.push(['Part C session resolved', `try ${x.trial_no} session ${x.id}`, iso(x.resolved_at), '', 'day equal to its baseline; Voice backup switch off']);
+  }
+  for (const w of wording) for (const h of w.history || []) history.push([`wording ${h.action || ''}`.trim(), LANG_NAME[w.lang] || w.lang, iso(h.at), reviewerCode(h.reviewer || h.by) || who(h.recorded_by), brief({ action: h.action, sha: String(h.sha || '').slice(0, 16), note: h.note || null })]);
+  history.splice(1, history.length - 1, ...history.slice(1).sort((a, b) => String(a[2]).localeCompare(String(b[2]))));
+
+  const out = [
     { name: 'About', rows: about }, { name: 'Volunteers', rows: vols }, { name: 'Plan', rows: plan }, { name: 'Lines', rows: lines }, { name: 'Slots', rows: slots },
     { name: 'Takes', rows: takesSheet }, { name: 'Items', rows: items }, { name: 'Part A summary', rows: partA }, { name: 'Rule 3 previews', rows: rule3 }, { name: 'Part B summary', rows: partB },
-    { name: 'Number words', rows: words }, { name: 'Controls', rows: ctl }, { name: 'Part C tries', rows: pc }, { name: 'Part C events', rows: ledger },
+    { name: 'Number words', rows: words }, { name: 'Controls', rows: ctl }, { name: 'Part C tries', rows: pc }, { name: 'Part C sessions', rows: sess }, { name: 'Part C events', rows: ledger }, { name: 'History', rows: history },
   ];
+  // Fixes-2y: registered names never reach the shared file. Every text cell of the sheets that can hold free text is scrubbed,
+  // and the Free text sheet lists the free-text columns, how many cells hold text and how many names were removed.
+  const { scrub } = nameScrubber(privateNames, accountNames);
+  const removed = {}; let removedTotal = 0;
+  for (const sh of out) {
+    if (!NAME_FREE_SHEETS.includes(sh.name)) continue;
+    const H = sh.rows[0];
+    for (let i = 1; i < sh.rows.length; i++) sh.rows[i] = sh.rows[i].map((v, k) => { if (typeof v !== 'string' || !v) return v; const r = scrub(v); if (r.n) { removed[`${sh.name}|${H[k]}`] = (removed[`${sh.name}|${H[k]}`] || 0) + r.n; removedTotal += r.n; } return r.text; });
+  }
+  const free = [['sheet', 'column', 'cells with text', 'names removed', 'check before sharing']];
+  for (const [sheet, cols] of Object.entries(FREE_TEXT_COLUMNS)) {
+    const sh = out.find(x => x.name === sheet); const H = sh.rows[0];
+    for (const c of cols) { const k = H.indexOf(c); const n = k < 0 ? 0 : sh.rows.slice(1).filter(r => typeof r[k] === 'string' && r[k].trim()).length; free.push([sheet, c, n, removed[`${sheet}|${c}`] || 0, n ? 'yes: read these cells before sharing' : '']); }
+  }
+  const other = Object.entries(removed).filter(([k]) => !Object.entries(FREE_TEXT_COLUMNS).some(([sh, cols]) => cols.some(c => k === `${sh}|${c}`)));
+  for (const [k, n] of other) { const [sheet, c] = k.split('|'); free.push([sheet, c, '', n, 'yes: a registered name appeared here and was removed']); }
+  about.splice(about.findIndex(r => r[0] === 'reviewers') + 1, 0, ['names removed from free text', `${removedTotal} (registered volunteer and reviewer names; see the Free text sheet, and read free text before sharing)`]);
+  out.push({ name: 'Free text', rows: free });
+  return out;
 }
 
 module.exports = {
-  CONSENT_VERSION, SCRIPT_VERSION, LINES, CONTROLS, PLACES, LANG_HINT, LANG_NAME, GROUPS, MAX_PARTICIPANTS, slotPlan, slotInfo, PLANNED_PER_GROUP, PLANNED_TOTAL,
-  linesFor, scriptSha, GRID, featuresOf, decision, replayMatches, newlyAdmitted, tokens, phrasesOf, scoreTranscript, itemsWithReference, scriptProblem, ITEM_OUTCOMES, LINE_OUTCOMES,
-  judgePreview, voiceLeg, geminiModels, geminiTake, whisperTake, transcribeTake,
+  CONSENT_VERSION, SCRIPT_VERSION, JUDGE_VERSION, LINES, CONTROLS, PLACES, LANG_HINT, LANG_NAME, GROUPS, MAX_PARTICIPANTS, slotPlan, slotInfo, PLANNED_PER_GROUP, PLANNED_TOTAL,
+  linesFor, scriptSha, GRID, featuresOf, decision, replayMatches, newlyAdmitted, tokens, phrasesOf, scoreTranscript, itemsWithReference, validReferenceItems, referenceSha, scriptProblem,
+  ITEM_OUTCOMES, LINE_OUTCOMES, LINE_STATES, HAND_CHECK, FOOD, EXTRA_FOODS, UNIT,
+  judgePreview, PREVIEW_RESULTS, LEG_CLASS, effectiveResult, legStatus, rule3Status, voiceLeg, geminiModels, geminiTake, whisperTake, transcribeTake,
   PARTC_PLAN, PARTC_LINES, NATURAL_PLAN, NATURAL_SLOTS, trialInfo, ARM_MINUTES, available, armedFor, recordTrial, recordDeviceDictation, recordPreview, answeredBy, speechRecord, actualPath,
-  dayState, dayDiff, restoreDay, workbookSheets, truth, takeScore,
+  dayState, dayDiff, restoreDay, checkSession, workbookSheets, truth, takeScore, deviceOf, phoneMix, nameScrubber, foodKeysOf,
 };
