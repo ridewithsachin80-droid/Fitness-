@@ -14,7 +14,7 @@ import useRecorder, { blobToBase64 } from '../voicepilot/useRecorder';
  */
 const PHONE = { android_budget: 'Android, about ₹12,000 or less', android_mid: 'Android, above ₹12,000', iphone: 'iPhone' };
 const BROWSER = { chrome: 'Chrome', safari: 'Safari', samsung: 'Samsung Internet', other: 'Other' };
-const REASON = { cut_off: 'It got cut off', wrong_line: 'I said the wrong line', interrupted: 'Something interrupted me', other: 'Something else' };
+const REASON = { cut_off: 'It got cut off', wrong_line: 'I said the wrong line', interrupted: 'Something interrupted me', other: 'Something else', replacement: 'My coach asked me to record it again' };
 const OS = { android: 'Android', ios: 'iOS (iPhone)', other: 'Other', unknown: "I don't know" };
 /** Fixes-2y: a first guess at the phone from the browser itself; the volunteer checks and corrects it. */
 function guessDevice() {
@@ -33,7 +33,7 @@ function SlotRecorder({ slot, reasons, onSaved }) {
   const r = useRecorder({ maxMs: slot.kind === 'control' ? 8000 : 15000 });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(slot.replacement_requested ? 'replacement' : '');
   const [note, setNote] = useState('');
   const again = slot.takes > 0;
   const send = async () => {
@@ -55,7 +55,7 @@ function SlotRecorder({ slot, reasons, onSaved }) {
           <select value={reason} onChange={e => setReason(e.target.value)} aria-label="Why record it again" style={{ minHeight: 40 }}
             className="w-full rounded-xl bg-charcoal border border-white/[0.12] text-caption text-white px-2">
             <option value="">Choose a reason…</option>
-            {(reasons || Object.keys(REASON)).map(k => <option key={k} value={k}>{REASON[k] || k}</option>)}
+            {(reasons || Object.keys(REASON)).filter(k => k !== 'replacement' || slot.replacement_requested).map(k => <option key={k} value={k}>{REASON[k] || k}</option>)}
           </select>
           {reason === 'other' && <input value={note} onChange={e => setNote(e.target.value)} maxLength={200} placeholder="What happened?" aria-label="What happened"
             className="w-full rounded-xl bg-charcoal border border-white/[0.12] text-caption text-white px-2" style={{ minHeight: 40 }} />}
@@ -180,6 +180,7 @@ export default function VoiceCalibrationSheet({ open, onClose, onChanged }) {
                           <span className="block text-sm text-white font-semibold leading-snug">{s.say}</span>
                           <span className="block text-caption text-mid">{s.locked ? 'Locked: waiting for the wording check. Your coach will tell you when it opens.' : s.kind === 'control' ? `${s.means} · ${s.place === 'q' ? 'in the quiet room' : 'with the everyday noise on'}` : s.means}</span>
                           {s.takes > 1 && <span className="block text-caption text-lo">Recorded {s.takes} times (all kept)</span>}
+                          {s.replacement_requested && <span className="block text-caption text-gold font-semibold" data-testid="vc-replace-note">Your coach asked you to record this one again</span>}
                         </span>
                       </button>
                       {openSlot === s.slot && !s.locked && <SlotRecorder slot={s} reasons={data.retake_reasons} onSaved={saved} />}

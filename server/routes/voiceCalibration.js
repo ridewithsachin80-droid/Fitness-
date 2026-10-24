@@ -62,7 +62,7 @@ const fail = (res, err) => { console.error('voice calibration:', err.message); r
 const link = (k) => { if (!k) return null; try { return storage.photoUrl(k, { expires: 300 }); } catch (_) { return null; } };
 const PHONES = ['android_budget', 'android_mid', 'iphone'];
 const BROWSERS = ['chrome', 'safari', 'samsung', 'other'];
-const RETAKE_REASONS = ['cut_off', 'wrong_line', 'interrupted', 'other'];
+const RETAKE_REASONS = ['cut_off', 'wrong_line', 'interrupted', 'other', 'replacement'];   // Fixes-2z: 'replacement' only when an administrator asked
 const sha256 = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const { getISTDate } = require('../utils/istDate');
 const HEARD = ['speech', 'no_speech', 'uncertain'];
@@ -105,13 +105,14 @@ router.get('/me', member, async (req, res) => {
   try {
     const p = await activeOf(req.user.id);
     if (!p) return res.json({ available: true, invited: false });
-    const { rows } = await pool.query(`SELECT slot_code, COUNT(*)::int AS takes FROM voice_calibration_takes WHERE participant_id=$1 GROUP BY slot_code`, [p.id]);
+    const { rows } = await pool.query(`SELECT slot_code, COUNT(*)::int AS takes, BOOL_OR(superseded_at IS NULL AND replacement_authorised IS NOT NULL) AS replace FROM voice_calibration_takes WHERE participant_id=$1 GROUP BY slot_code`, [p.id]);
     const taken = new Map(rows.map(r => [r.slot_code, r.takes]));
+    const replace = new Set(rows.filter(r => r.replace).map(r => r.slot_code));
     const ok = {}; for (const l of ['kn', 'hi', 'en']) ok[l] = await wordingOk(l);
     res.json({ available: true, invited: true, consented: !!p.consented_at && p.consent_version === C.CONSENT_VERSION, group: p.grp,
       phone_type: p.phone_type, browser: p.browser, installed_app: p.installed_app, device: p.device || null, phones: PHONES, browsers: BROWSERS, oses: OSES, retake_reasons: RETAKE_REASONS,
       slots: C.slotPlan(p.grp).map(s => { const i = C.slotInfo(s.slot, p.grp);
-        return { slot: s.slot, kind: s.kind, place: s.place, lang: s.lang, say: i.say, means: i.means, locked: s.lang ? !ok[s.lang] : false, takes: taken.get(s.slot) || 0 }; }) });
+        return { slot: s.slot, kind: s.kind, place: s.place, lang: s.lang, say: i.say, means: i.means, locked: s.lang ? !ok[s.lang] : false, takes: taken.get(s.slot) || 0, replacement_requested: replace.has(s.slot) }; }) });
   } catch (err) { fail(res, err); }
 });
 
@@ -143,6 +144,10 @@ router.post('/take', member, async (req, res) => {
     const { rows: [prev] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2`, [p.id, info.slot]);
     const reason = req.body?.retake_reason ? String(req.body.retake_reason) : null;
     if (prev.n > 0 && !RETAKE_REASONS.includes(reason)) return res.status(409).json({ error: 'This line is already recorded. Say why you are recording it again.', needs_reason: true, reasons: RETAKE_REASONS });
+    if (reason === 'replacement') {
+      const { rows: [cur] } = await pool.query(`SELECT replacement_authorised FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
+      if (!cur?.replacement_authorised) return res.status(409).json({ error: 'Your coach has not asked for this clip to be recorded again. Choose another reason if something went wrong.' });
+    }
     const mt = /^audio\/[a-z0-9.+-]+(;.*)?$/i.test(String(req.body?.mimeType || '')) ? String(req.body.mimeType).split(';')[0] : 'audio/webm';
     if (!storage.isConfigured()) return res.status(503).json({ error: 'Recording storage is not set up yet.' });
     const buf = Buffer.from(audio, 'base64');
@@ -324,13 +329,14 @@ const takeView = async (rows) => {
   return rows.map(t => { const info = C.slotInfo(t.slot_code, t.grp) || {};
     const base = { id: t.id, code: t.code, slot: t.slot_code, take_no: t.take_no, current: !t.superseded_at, retake_reason: t.retake_reason, retake_note: t.retake_note, kind: info.kind, place: info.place, lang: info.lang,
       say: info.say, intended: info.label, heard: t.heard, spoken_as_script: t.spoken_as_script, reference_text: t.reference_text, reference_items: t.reference_items, reference_mode: t.reference_mode,
-      reference_version: t.reference_version || 0, reference_frozen_at: t.reference_frozen_at, listener_code: t.listener_code,
+      reference_version: t.reference_version || 0, reference_frozen_at: t.reference_frozen_at, listener_code: t.listener_code, replacement_authorised: t.replacement_authorised || null,
       items: (info.items || []).map(i => ({ label: i.label, n: i.n ?? null, kind: i.kind, unit: i.unit || null, food: i.food || null })), audio_url: link(t.object_key), at: t.created_at, device: t.device || null };
     // Fixes-2y: the listener records what was heard BEFORE seeing any transcript or the detector's verdict.
     if (!t.reference_frozen_at) return { ...base, revealed: false };
-    const score = (e) => { if (!info.items?.length) return null; const sc = C.takeScore(t, info, e); return { line: sc.line, auto_line: sc.auto_line, flags: sc.flags, extra: sc.extra, unexplained: sc.unexplained, hand: sc.hand || null, provisional: sc.provisional }; };
+    const score = (e) => { if (!info.items?.length) return null; const sc = C.takeScore(t, info, e); return { line: sc.line, auto_line: sc.auto_line, flags: sc.flags, extra: sc.extra, unexplained: sc.unexplained, ambiguous: sc.ambiguous || [], hand: sc.hand || null, provisional: sc.provisional }; };
+    const truth = C.truth(t, info.label), excluded = !t.superseded_at && (truth === 'uncertain' || truth === 'protocol deviation' || C.decision(t, SP.LIVE_LIMITS) === 'not checked');
     const legs = ['gemini', 'whisper'].map(e => { const l = C.legStatus(t, e, js); return { engine: e, status: l.cls, result: l.result, judgment_id: l.j?.id || null, hand_reasons: l.j?.judgment?.hand || [], problems: l.j?.judgment?.problems || [], hand_verdict: l.j?.hand_verdict || null }; });
-    return { ...base, revealed: true, speech_status: t.speech_status, voiced_ms: t.voiced_ms, live_decision: C.decision(t, SP.LIVE_LIMITS),
+    return { ...base, revealed: true, excluded, speech_status: t.speech_status, voiced_ms: t.voiced_ms, live_decision: C.decision(t, SP.LIVE_LIMITS),
       gemini: t.gemini_text, whisper: t.whisper_text, gemini_model: t.gemini_provenance?.model_used || null, whisper_review: t.whisper_review,
       scores: { gemini: score('gemini'), whisper: score('whisper') }, rule3: js.some(j => j.take_id === t.id) || C.GRID.some(g => C.newlyAdmitted(t, g)) ? legs : null };
   });
@@ -402,6 +408,27 @@ router.post('/admin/reference', admin, async (req, res) => {
       [id, ref.heard, ref.spoken_as_script, ref.mode, ref.items ? JSON.stringify(ref.items) : null, ref.text, version, sha, listener.code, JSON.stringify(entry)]);
     const { rows: [stale] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_preview_judgments WHERE take_id=$1 AND reference_sha <> $2`, [id, sha]);
     res.json({ ok: true, version, sha, revealed: true, stale_judgments: stale.n });
+  } catch (err) { fail(res, err); }
+});
+
+// Fixes-2z: ask for an authorised replacement of an EXCLUDED take (frozen reference: unsure, heard ≠ intended, or not measured).
+// The excluded take stays (superseded when the replacement arrives) and is shown; replacements are budgeted apart.
+router.post('/admin/replacement', admin, async (req, res) => {
+  try {
+    const id = parseInt(req.body?.take_id);
+    const { rows: [t] } = await pool.query(`SELECT t.*, p.grp FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id WHERE t.id=$1 AND p.withdrawn_at IS NULL`, [id]);
+    if (!t) return res.status(404).json({ error: 'No such take.' });
+    if (t.superseded_at) return res.status(409).json({ error: 'This take was already replaced.' });
+    if (!t.reference_frozen_at) return res.status(409).json({ error: 'Save the listener\'s reference first: only an excluded take can be replaced.' });
+    const info = C.slotInfo(t.slot_code, t.grp) || {};
+    const truth = C.truth(t, info.label), measured = C.decision(t, SP.LIVE_LIMITS) !== 'not checked';
+    if (truth !== 'uncertain' && truth !== 'protocol deviation' && measured) return res.status(409).json({ error: 'This take is usable as it is. Only an excluded take (unsure, the wrong kind of sound, or not measured) can be replaced.' });
+    const why = req.body?.why ? String(req.body.why).slice(0, 200) : (truth !== 'speech' && truth !== 'no-speech' ? truth : 'not measured');
+    // The budget agreed before collection (counted across the round, withdrawn volunteers' takes included while they exist).
+    const { rows: [{ n: used }] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_takes WHERE replacement_authorised IS NOT NULL`);
+    if (used >= C.REPLACEMENT_BUDGET) return res.status(409).json({ error: `The replacement budget (${C.REPLACEMENT_BUDGET} for the round) is used up. Stop and review the round before any more.`, budget: C.REPLACEMENT_BUDGET, used });
+    await pool.query(`UPDATE voice_calibration_takes SET replacement_authorised = $2 WHERE id=$1`, [id, JSON.stringify({ at: new Date().toISOString(), by: req.user.id, why })]);
+    res.json({ ok: true, why, used: used + 1, budget: C.REPLACEMENT_BUDGET });
   } catch (err) { fail(res, err); }
 });
 

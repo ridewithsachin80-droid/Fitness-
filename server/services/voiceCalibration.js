@@ -109,6 +109,9 @@ function slotPlan(group) {
 }
 const PLANNED_PER_GROUP = Object.fromEntries(Object.keys(GROUPS).map(g => [g, slotPlan(g).length]));
 const PLANNED_TOTAL = Object.entries(GROUPS).reduce((n, [g, x]) => n + x.quota * PLANNED_PER_GROUP[g], 0);   // 144
+/** Fixes-2z: authorised replacements of excluded takes, agreed before collection: at most 12 for the round (two per volunteer on
+ *  average, a third of the 36 controls). Past that, no more are authorised: the round stays incomplete until it is reviewed. */
+const REPLACEMENT_BUDGET = 12;
 
 /** What a slot asks the volunteer to say, and how its takes are scored. */
 function slotInfo(slot, group) {
@@ -205,7 +208,7 @@ const GENERIC_WORDS = ('a an the of i me my mine is was were are am it its this 
   + 'मैंने मैं मेरा मेरी आज सुबह शाम रात खाया खाए खाये खायी पिया है था थी हैं की का के को भी वजन वज़न').split(/\s+/);
 const GENERIC = new Set(GENERIC_WORDS.map(w => loose(w.toLowerCase().normalize('NFC').replace(/[^a-z0-9.\u0900-\u097f]+/g, ''))).filter(Boolean));
 
-function tokens(text) {
+function tokens(text, keepBreaks = false) {
   let t = String(text || '').normalize('NFC');
   if (/[ಀ-೿]/.test(t)) t = kannadaToLatin(t);                // Kannada script spelled out, as the pilot does
   t = t.replace(DEV_DIGITS, d => String(d.charCodeAt(0) - 0x0966)).toLowerCase()
@@ -218,7 +221,7 @@ function tokens(text) {
     for (const w1 of w0.split(/[-–]/)) {                                  // "breakfast-ge" → breakfast, ge
       const w = loose(w1.replace(/[^a-z0-9.ऀ-ॿ]+/g, '').replace(/^\.+|\.+$/g, ''));
       if (!w) continue;
-      out.push(BREAKS.has(w) ? SEP : w);
+      out.push(BREAKS.has(w) && !keepBreaks ? SEP : w);   // keepBreaks: same positions, joining words kept (Fixes-2z)
     }
   }
   return out;
@@ -261,7 +264,7 @@ function phrasesOf(text, lang) {
     } else if (unit && !food.length && !weightUnit) {
       for (let b = i - 1; b >= taken && b >= i - 2 && toks[b] !== SEP && !numberAt(b); b--) food.unshift(toks[b]);
     }
-    phrases.push({ value: n.value, unit, food, text: toks.slice(i, j).filter(x => x !== SEP).join(' ') });
+    phrases.push({ value: n.value, unit, food, text: toks.slice(i, j).filter(x => x !== SEP).join(' '), start: i, end: j });
     taken = j;
     i += n.len - 1;
   }
@@ -291,6 +294,10 @@ function scriptProblem(text, lang) {
 const foodKeysOf = (tok) => (tok === SEP || tok == null ? [] : Object.keys(ALL_FOODS).filter(k => variants(ALL_FOODS[k]).some(v => tok === v || tok === `${v}s` || tok === `${v}es`)));
 /** A count word ("2 pieces") is neutral for a counted food. */
 const pieceUnit = (u) => !!u && isWord(u, UNIT.piece);
+/** Fixes-2z: a weight or volume (grams, ml) that can accompany a count ("2 idli, 100 g"): it describes the portion, it is not a second count. */
+const isMass = (p) => !!p?.unit && (isWord(p.unit, UNIT.gram) || isWord(p.unit, UNIT.ml));
+/** Fixes-2z: the same food counted more than once with the same number: a stutter or a second serving. Only a person can tell. */
+const REPEATED = 'repeated (check by hand)';
 function lev(a, b) {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
   for (let j = 1; j <= b.length; j++) d[0][j] = j;
@@ -328,8 +335,11 @@ function validReferenceItems(list) {
     if (kind !== 'presence' && !(Number.isFinite(n) && n > 0 && n < 10000)) return { error: 'A count or a weight needs the number actually said.' };
     if (kind === 'presence' && !food) return { error: 'A food with no amount needs the food.' };
     if (kind === 'count' && !food && !unit) return { error: 'A count needs a food or a unit (for example 3 sets).' };
-    const label = kind === 'weight' ? `weight ${n} kg` : kind === 'presence' ? food : [n, unit, food].filter(Boolean).join(' ');
-    out.push(kind === 'weight' ? { kind, n, label } : kind === 'presence' ? { kind, food, label } : { kind, n, ...(unit ? { unit } : {}), ...(food ? { food } : {}), label });
+    // Fixes-2z: a count may carry the weight actually said with it ("2 idli, 100 grams"), so that weight is judged, not dropped.
+    const grams = r.grams == null || r.grams === '' ? null : Number(r.grams);
+    if (grams != null && !(kind === 'count' && Number.isFinite(grams) && grams > 0 && grams < 10000)) return { error: 'A weight said with a count is a number of grams, on a count item.' };
+    const label = kind === 'weight' ? `weight ${n} kg` : kind === 'presence' ? food : `${[n, unit, food].filter(Boolean).join(' ')}${grams != null ? ` (${grams} g)` : ''}`;
+    out.push(kind === 'weight' ? { kind, n, label } : kind === 'presence' ? { kind, food, label } : { kind, n, ...(unit ? { unit } : {}), ...(food ? { food } : {}), ...(grams != null ? { grams } : {}), label });
   }
   return { items: out };
 }
@@ -378,17 +388,45 @@ function scoreTranscript(items, transcript, lang, { error = null, unscorable = f
     const valueOk = (p) => p.value === it.n;
     // Fixes-2y: a counted food with no spoken unit ("2 idli") takes no unit but a count word: "2 kg idli" is a wrong unit.
     const unitState = (p) => (!it.unit ? (!p.unit || pieceUnit(p.unit) ? 'ok' : 'wrong') : p.unit && isWord(p.unit, UNIT[it.unit]) ? 'ok' : p.unit && it.unitAlias && isWord(p.unit, UNIT[it.unitAlias]) ? 'alias' : p.unit ? 'wrong' : 'missing');
-    const good = mine.filter(valueOk), bad = mine.filter(p => !valueOk(p));
+    // Fixes-2z: EVERY mention is judged. A gram/ml mention beside a single count describes that count ("2 idli 100 g idli");
+    // two or more counts are either conflicting (different numbers) or repeated (the same number twice) — never simply correct.
+    const counts = mine.filter(p => !isMass(p)), judged = counts.length ? counts : mine;
+    const good = judged.filter(valueOk), bad = judged.filter(p => !valueOk(p));
     let outcome;
     if (good.length && bad.length) outcome = 'conflicting';
     else if (bad.length) outcome = 'wrong number';
     else {
       const states = new Set(good.map(unitState));
       outcome = states.size > 1 ? 'conflicting' : states.has('ok') ? 'correct' : states.has('alias') ? 'unit alias' : states.has('wrong') ? 'wrong unit' : 'unit missing';
+      if (counts.length > 1 && OK_ITEM.has(outcome)) outcome = REPEATED;
     }
-    return { label: it.label, outcome, heard: heardText(mine) };
+    return { label: it.label, outcome, heard: heardText(mine), masses: counts.length ? mine.filter(isMass) : [] };
   });
   for (const r of res) if (ITEM_FLAG[r.outcome]) flags.add(ITEM_FLAG[r.outcome]);
+  // Fixes-2z: a weight with no food of its own right after a counted item describes that portion when only punctuation
+  // separates them ("2 idli, 100 grams" / "2 idli (100 g)"). After a joining word ("2 idli and 100 grams") whose weight it is
+  // cannot be told: a hand check, never an automatic pass.
+  const rawToks = tokens(transcript, true), weightAfterJoin = [];
+  phrases.forEach((p, k) => {
+    const prev = phrases[k - 1];
+    if (used.has(p) || !isMass(p) || p.food.length || !prev || !used.has(prev) || isMass(prev) || prev.end > p.start) return;
+    const between = rawToks.slice(prev.end, p.start);
+    if (between.some(t => t !== SEP && !BREAKS.has(t))) return;
+    used.add(p);
+    const r = res.find(x => x.heard && x.heard.split('; ').includes(prev.text));
+    if (between.some(t => BREAKS.has(t))) weightAfterJoin.push(`"${p.text}" after "${prev.text}": its weight, or something else?`);
+    else if (r) { r.heard = `${r.heard}; ${p.text} (its weight)`; (r.masses = r.masses || []).push(p); }
+  });
+  // Fixes-2z: a weight given WITH a count is judged too, never dropped: it must match the weight the listener recorded for that
+  // item (reference grams); with no recorded weight, a person checks it was said.
+  const weightNotInReference = [];
+  res.forEach((r, k) => {
+    const it = items[k]; if (!r.masses?.length || !it) return;
+    if (it.grams != null) {
+      if (r.masses.some(m => !isWord(m.unit, UNIT.gram) || m.value !== it.grams)) { r.outcome = OK_ITEM.has(r.outcome) || r.outcome === REPEATED ? 'wrong number' : r.outcome; flags.add('wrong number'); }
+    } else weightNotInReference.push(`${it.label}: "${r.masses.map(m => m.text).join('; ')}" given with the count, not in the reference: was it said?`);
+  });
+  res.forEach(r => { delete r.masses; });
   // Extras: an unused phrase with a unit or a food, AND (Fixes-2y) any food word with no number that is not one of the items.
   const extraPhrases = phrases.filter(p => !used.has(p) && (p.unit || p.food.length));
   const itemFoods = new Set(items.filter(i => i.food).map(i => i.food));
@@ -404,8 +442,9 @@ function scoreTranscript(items, transcript, lang, { error = null, unscorable = f
     || isWord(t, ALL_UNITS) || itemFood(t) || foodKeysOf(t).length > 0 || allowed.has(t) || [...allowed].some(a => near(a, t));
   const unexplained = [...new Set(toks.filter(t => !known(t)))];
   for (const p of phrases) if (!used.has(p) && !p.unit && !p.food.length) unexplained.push(`number "${p.text}"`);   // a stray number
-  const line = LINE_PRIORITY.find(f => flags.has(f)) || (unexplained.length ? HAND_CHECK : 'all correct');
-  return { line, flags: [...flags], items: res, extra, unexplained };
+  const ambiguous = [...res.filter(r => r.outcome === REPEATED).map(r => `${r.label}: said more than once (${r.heard})`), ...weightAfterJoin, ...weightNotInReference];
+  const line = LINE_PRIORITY.find(f => flags.has(f)) || (unexplained.length || ambiguous.length ? HAND_CHECK : 'all correct');
+  return { line, flags: [...flags], items: res, extra, unexplained, ambiguous };
 }
 
 // ── Part A rule 3: the logging parser's preview of a newly admitted take ──────
@@ -463,17 +502,25 @@ function judgePreview(items, preview, lang) {
       continue;
     }
     if (!fs.length) { const u = unresolved.some(f => matches(f, it.food)); out.push({ label: it.label, outcome: u ? 'unresolved (shown)' : 'missing', shown: '' }); missing = true; continue; }
-    const q = qtyOf(fs[0].qty_text, lang);
+    // Fixes-2z: every number in the shown amount counts. A gram/ml figure beside ONE count is that portion's weight;
+    // two counts are a surfaced wrong number if either differs, and a hand check if they repeat the right number.
+    const shownPh = phrasesOf(fs[0].qty_text || '', lang).phrases, countPh = shownPh.filter(p => !isMass(p));
+    const qp = countPh[0] || shownPh[0];
+    const q = qp ? { n: qp.value, unit: qp.unit } : null;
     let o;
-    if (!q) o = 'number not shown';
+    if (countPh.length > 1) o = countPh.every(p => p.value === it.n) ? REPEATED : 'wrong number';
+    else if (!q) o = 'number not shown';
     else if (q.n !== it.n) o = 'wrong number';
     else if (!it.unit) o = !q.unit || pieceUnit(q.unit) ? 'correct' : 'wrong unit';            // Fixes-2y: "2 kg" idli is a wrong unit
     else if (!(q.unit && isWord(q.unit, UNIT[it.unit]))) o = q.unit && it.unitAlias && isWord(q.unit, UNIT[it.unitAlias]) ? 'unit alias' : q.unit ? 'wrong unit' : 'unit not shown';
     else o = 'correct';
+    // Fixes-2z: when the listener recorded a weight said with the count, the preview's weight must match it.
+    if (it.grams != null && OK_ITEM.has(o)) { const shownG = shownPh.find(p => isMass(p) && isWord(p.unit, UNIT.gram))?.value ?? (fs[0].grams != null ? Number(fs[0].grams) : null); if (shownG != null && shownG !== it.grams) o = 'wrong number'; }
     if (fs.length > 1) o = 'wrong number';   // the same food twice is a doubled amount
     out.push({ label: it.label, outcome: o, shown: fs.map(x => x.qty_text || `${x.grams ?? ''} g`).join(' + ') });
     if (o === 'wrong number' || o === 'wrong unit') problems.push(`${it.label} shown as ${fs.map(x => `${x.qty_text || ''} ${x.name || ''}`.trim()).join(' + ')}`);
     if (o === 'number not shown' || o === 'unit not shown') missing = true;
+    if (o === REPEATED) hand.push(`${it.label}: shown as "${fs[0].qty_text}" (the same count twice: one serving or two?)`);
   }
   foods.forEach((f, k) => { if (!used.has(k)) problems.push(`invented item: ${f.name || '?'}${f.qty_text ? ` (${f.qty_text})` : ''}`); });
   // Every saveable field (Fixes-2y): an unspoken health change disqualifies; anything else unrecognised goes to a hand check.
@@ -823,9 +870,29 @@ function rule3Status(x, judgments) {
   if (open.length) return { status: 'incomplete', why: [...new Set(open.map(l => l.cls === 'pending' ? (l.result === 'running' ? 'evaluation running' : l.result === 'provider error' ? 'provider/parser error' : 'hand check outstanding') : l.cls))].join(' + '), legs };
   return { status: 'valid', legs };
 }
-const NAME_FREE_SHEETS = ['Volunteers', 'Takes', 'Items', 'Controls', 'Rule 3 previews', 'Part C tries', 'Part C sessions', 'Part C events', 'History'];
+/** Fixes-2z: usable no-speech controls per required slot (volunteer × control × place), and why the others are not usable. */
+function controlCoverage(active, curActive, infoOf) {
+  const needed = active.flatMap(p => slotPlan(p.grp).filter(s => s.kind === 'control').map(s => `${p.id}|${s.slot}`));
+  const ctl = curActive.filter(t => infoOf(t).kind === 'control');
+  const at = new Map(ctl.map(t => [`${t.participant_id}|${t.slot_code}`, t]));
+  const usableTake = (t) => !!t && !!t.reference_frozen_at && t.heard === 'no_speech' && decision(t, SP.LIVE_LIMITS) !== 'not checked';
+  const n = { unsure: 0, speech: 0, 'not measured': 0, 'not labelled': 0, 'not recorded': 0 };
+  let usable = 0;
+  for (const k of needed) {
+    const t = at.get(k);
+    if (usableTake(t)) { usable++; continue; }
+    if (!t) n['not recorded']++; else if (!t.reference_frozen_at) n['not labelled']++; else if (t.heard === 'uncertain') n.unsure++; else if (t.heard === 'speech') n.speech++; else n['not measured']++;
+  }
+  const why = Object.entries(n).filter(([, v]) => v).map(([k, v]) => `${v} ${k}`).join(', ');
+  return { usable, needed: needed.length, why, counts: n, usableTake };
+}
+/** Fixes-2z: cells DERIVED from editable text (not typed directly), always on the sharing checklist: [sheet, column, which rows, label]. */
+const DERIVED_TEXT = [
+  ['About', 'value', (r) => r[0] === 'phone mix', 'value of "phone mix" (built from phone make and model)'],
+  ['Part A summary', 'slice', (r) => String(r[1]).startsWith('phone model '), 'slice labels "phone model …" (built from phone make and model)'],
+];
 const FREE_TEXT_COLUMNS = {
-  Volunteers: ['profile', 'phone make', 'phone model'], Takes: ['retake reason', 'reference transcript', 'gemini words', 'whisper words', 'phone make', 'phone model'],
+  Volunteers: ['profile', 'phone make', 'phone model'], Takes: ['retake reason', 'reference transcript', 'gemini words', 'whisper words', 'phone make', 'phone model', 'gemini hand check', 'whisper hand check', 'replacement authorised'],
   Items: ['heard'], Controls: ['gemini words', 'whisper words'], 'Rule 3 previews': ['hand verdict', 'preview content'], 'Part C tries': ['notes'],
   'Part C events': ['words or refusal', 'preview'], History: ['what'],
 };
@@ -834,11 +901,13 @@ const FREE_TEXT_COLUMNS = {
  * name parts of 4+ letters. fullNames: every other account's full name (only the whole name, so common words survive).
  * An unregistered name typed into a note cannot be known: the Free text sheet says which cells a person must read.
  */
+const PERMITTED_CODE = /^(P|R|A|C)\d+$/;
 function nameScrubber(names, fullNames = []) {
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const parts = new Set();
   for (const n of fullNames || []) { const full = String(n || '').trim(); if (full.length >= 4 && /\s/.test(full)) parts.add(full); }
   for (const n of names || []) { const full = String(n || '').trim(); if (full.length >= 2) parts.add(full); for (const w of full.split(/\s+/)) if (/^\p{L}{4,}$/u.test(w)) parts.add(w); }
+  for (const x of [...parts]) if (PERMITTED_CODE.test(x)) parts.delete(x);   // codes survive (a "name" shaped like P1 or R2 is not removed)
   if (!parts.size) return { scrub: (x) => ({ text: x, n: 0 }) };
   const rx = new RegExp(`(?<!\\p{L})(${[...parts].sort((a, b) => b.length - a.length).map(esc).join('|')})(?!\\p{L})`, 'giu');
   return { scrub: (x) => { let n = 0; const text = String(x).replace(rx, () => { n++; return '[name removed]'; }); return { text, n }; } };
@@ -875,8 +944,11 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
   if (recordedSlots < PLANNED_TOTAL) coverage.push(`recordings: ${recordedSlots} of ${PLANNED_TOTAL} planned slots`);
   const unfrozen = curActive.filter(t => !t.reference_frozen_at).length;
   if (unfrozen) coverage.push(`listener reference: ${unfrozen} take(s) not yet frozen`);
-  const ctlDone = curActive.filter(t => enrich(t).info.kind === 'control' && t.reference_frozen_at && t.heard).length;
-  if (ctlDone < 36) coverage.push(`no-speech controls: ${ctlDone} of 36 recorded with a frozen label`);
+  // Fixes-2z: a control counts for rule 1 only if it is USABLE: its current take has a frozen "no speech" label and the live
+  // check measured it. Required before any pass: a usable control in EVERY volunteer × control × place slot (36 of 36).
+  // An excluded clip (unsure, speech heard, not measured) stays visible; the remedy is an authorised replacement, budgeted apart.
+  const ctl = controlCoverage(active, curActive, (t) => enrich(t).info);
+  if (ctl.usable < 36) coverage.push(`no-speech controls: ${ctl.usable} of 36 usable (every volunteer × control × place needs a frozen "no speech" label on a measured clip${ctl.why ? `; not usable: ${ctl.why}` : ''})`);
   const notRemeasured = curActive.filter(t => !t.remeasure).length;
   if (notRemeasured) coverage.push(`re-measure: ${notRemeasured} take(s) not yet measured again`);
   if (mix.gaps.length) coverage.push(`phone mix: ${mix.gaps.join(', ')}`);
@@ -899,6 +971,7 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     ['listener references', `${current.filter(t => t.reference_frozen_at).length} of ${current.length} current take(s) frozen; transcripts stay hidden from the listener until then`],
     ['budget: initial transcription calls', `planned ${PLANNED_TOTAL * 2} (both engines × ${PLANNED_TOTAL} recordings); made so far ${current.reduce((n, t) => n + engineCalls(t), 0)} on current takes`],
     ['budget: retakes and provider retries (counted separately)', `${takes.filter(t => t.superseded_at).reduce((n, t) => n + engineCalls(t), 0)} calls on superseded takes; ${takes.reduce((n, t) => n + Math.max(0, (t.gemini_provenance?.attempts?.length || 0) - 1), 0)} extra Gemini model attempts after a failure`],
+    ['budget: authorised replacements (separate)', `${takes.filter(t => t.replacement_authorised).length} of ${REPLACEMENT_BUDGET} asked for, ${takes.filter(t => t.retake_reason === 'replacement').length} recorded; ${takes.filter(t => t.replacement_authorised && t.superseded_at).reduce((n, t) => n + engineCalls(t), 0)} calls were made on the excluded takes they replace (kept and shown)`],
     ['budget: rule 3 parser calls (separate)', `${r3calls.initial + r3calls.reeval}: ${r3calls.initial} initial (at most 2 per newly admitted take, deduplicated by take and reference version) and ${r3calls.reeval} re-evaluation(s) after a reference or judge change (each authorised separately)`],
     ['budget: Part C attempts', `${attempts.length} of 64 planned (32 tries + one Retry each), before technical retakes; ${sessions.length} session(s)`],
     ['replay check: stored live decision vs offline replay at the live setting', mismatches ? `${mismatches} MISMATCH(ES): do not use the offline settings until explained` : `0 mismatches over ${takes.length} take(s)`],
@@ -930,7 +1003,7 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     'gemini words', 'gemini line result', 'gemini flags', 'gemini model used', 'gemini model reported', 'gemini attempts', 'gemini generated-text guard', 'gemini problem',
     'whisper words', 'whisper line result', 'whisper flags', 'whisper language sent', 'whisper language reported', 'whisper fallback decision', 'whisper problem', 'prompt sha256 (gemini / whisper)',
     'take id', 'phone make', 'phone model', 'os', 'os version', 'browser version', 'reference version', 'reference frozen at', 'reference mode', 'reference items (complete)', 'listener', 'reference sha256',
-    'gemini unexplained words', 'whisper unexplained words', 'gemini hand check', 'whisper hand check']];
+    'gemini unexplained words', 'whisper unexplained words', 'gemini hand check', 'whisper hand check', 'replacement authorised', 'quantity ambiguities (gemini / whisper)']];
   const refItemsText = (t) => (Array.isArray(t.reference_items) ? t.reference_items.map(r => r.kind ? r.label : `${r.label} → ${r.n}`).join('; ') : '');
   const handText = (s) => (s?.hand ? `${s.hand.verdict} (${who(s.hand.by)}${s.hand.note ? `: ${s.hand.note}` : ''})` : s?.auto_line === HAND_CHECK ? 'OUTSTANDING' : '');
   for (const t of [...takes].sort((a, b) => String(byId.get(a.participant_id)?.code).localeCompare(String(byId.get(b.participant_id)?.code), undefined, { numeric: true }) || a.slot_code.localeCompare(b.slot_code) || a.take_no - b.take_no)) {
@@ -951,7 +1024,9 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
       t.whisper_text ?? '', lineCell(ws), ws ? ws.flags.join('; ') : '', wp.language_sent || 'not set', wp.language_reported || '', t.whisper_review ? (t.whisper_review.accepted ? 'accepted' : `refused: ${t.whisper_review.reason}`) : '',
       t.whisper_text == null ? (t.whisper_error || 'no answer') : !/\S/.test(t.whisper_text) ? 'empty answer' : '', `${gp.prompt_sha256 || ''} / ${wp.prompt_sha256 || ''}`,
       t.id ?? '', d.make, d.model, d.os, d.os_version, d.browser_version, t.reference_version || '', iso(t.reference_frozen_at), t.reference_mode || '', refItemsText(t), t.listener_code || '', (t.reference_sha || '').slice(0, 16),
-      gs ? (gs.unexplained || []).join(', ') : '', ws ? (ws.unexplained || []).join(', ') : '', handText(gs), handText(ws)]);
+      gs ? (gs.unexplained || []).join(', ') : '', ws ? (ws.unexplained || []).join(', ') : '', handText(gs), handText(ws),
+      t.replacement_authorised ? `yes, ${iso(t.replacement_authorised.at)} by ${who(t.replacement_authorised.by)}${t.replacement_authorised.why ? `: ${t.replacement_authorised.why}` : ''}` : '',
+      [gs?.ambiguous?.join('; '), ws?.ambiguous?.join('; ')].filter(Boolean).join(' / ')]);
   }
 
   // Part B: every current speech take × engine × item.
@@ -1010,7 +1085,7 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
       if (fails.length) screen = `fails screen: ${fails.join('; ')}; ${r2}${inc.length ? `; also incomplete: ${inc.join('; ')}` : ''}`;
       else if (inc.length) screen = `incomplete: ${inc.join('; ')}; ${r2}`;
       else if (!rule2ok) screen = `fails screen: rule 2: recovers ${recovered} of ${liveMissed} missed (needs ≥ half and ≥ 3)`;
-      else screen = `passes the screen on ${sp.length} speech and ${ns.length} no-speech take(s) (shown, not counted: ${cur.filter(x => x.truth === 'uncertain').length} uncertain, ${cur.filter(x => x.truth === 'protocol deviation').length} protocol deviation(s), ${cur.filter(x => decision(x.t, g) === 'not checked').length} capture failure(s)); rule 4, the gate, still to run; a proposal for review only`;
+      else screen = `passes the screen on ${sp.length} speech and ${ns.length} no-speech take(s), ${ctl.usable} of 36 controls usable (shown, not counted: ${cur.filter(x => x.truth === 'uncertain').length} uncertain, ${cur.filter(x => x.truth === 'protocol deviation').length} protocol deviation(s), ${cur.filter(x => decision(x.t, g) === 'not checked').length} capture failure(s)); rule 4, the gate, still to run; a proposal for review only`;
     }
     partA.push([`${g.id}${g.live ? ' (live)' : ''}`, name, cur.length, xs.length - cur.length, cur.filter(x => decision(x.t, g) === 'not checked').length, sp.length, missed, pct(missed, sp.length), ns.length,
       ns.filter(x => decision(x.t, g) === 'accept').length, cur.filter(x => x.truth === 'protocol deviation').length, cur.filter(x => x.truth === 'uncertain').length, cur.filter(x => x.truth === 'unlabelled').length,
@@ -1057,9 +1132,9 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     const gq = rows('gemini'), wq = rows('whisper');
     words.push([w, Number(v), gq.length, gq.filter(({ r }) => kept(r.outcome)).length, gq.filter(({ r }) => r.outcome === 'wrong number').length, wq.filter(({ r }) => kept(r.outcome)).length, wq.filter(({ r }) => r.outcome === 'wrong number').length]);
   }
-  const ctl = [['volunteer', 'slot', 'place', 'heard (listener)', 'counted as', 'live decision', 'gemini words', 'whisper words', 'whisper fallback decision', 'take id', 'label frozen']];
+  const ctlRows = [['volunteer', 'slot', 'place', 'heard (listener)', 'counted as', 'live decision', 'gemini words', 'whisper words', 'whisper fallback decision', 'take id', 'label frozen', 'usable for rule 1', 'replacement authorised']];
   for (const t of current) { const { p, info } = enrich(t); if (info.kind !== 'control') continue;
-    ctl.push([p.code, t.slot_code, PLACES[info.place] || '', t.heard || '', truth(t, 'no-speech'), decision(t, SP.LIVE_LIMITS), t.gemini_text ?? '(no answer)', t.whisper_text ?? '(no answer)', t.whisper_review ? (t.whisper_review.accepted ? 'accepted' : `refused: ${t.whisper_review.reason}`) : '', t.id ?? '', yes(!!t.reference_frozen_at)]); }
+    ctlRows.push([p.code, t.slot_code, PLACES[info.place] || '', t.heard || '', truth(t, 'no-speech'), decision(t, SP.LIVE_LIMITS), t.gemini_text ?? '(no answer)', t.whisper_text ?? '(no answer)', t.whisper_review ? (t.whisper_review.accepted ? 'accepted' : `refused: ${t.whisper_review.reason}`) : '', t.id ?? '', yes(!!t.reference_frozen_at), yes(ctl.usableTake(t)), yes(!!t.replacement_authorised)]); }
 
   // Part C: one row per try, one per session, and a ledger of every event.
   const sessionsOf = (trial) => sessions.filter(x => x.trial_no === trial).sort((a, b) => a.id - b.id);
@@ -1116,6 +1191,7 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     for (const h of t.label_history || []) history.push(['label (draft)', takeRef(t), iso(h.at), who(h.by), brief(h)]);
     for (const h of t.reference_history || []) history.push([`reference v${h.version}`, takeRef(t), iso(h.at), [h.listener, who(h.by)].filter(Boolean).join(' / '), brief({ sha: String(h.sha || '').slice(0, 16), ...h.reference })]);
     for (const h of t.hand_history || []) history.push(['Part B hand check', takeRef(t), iso(h.at), who(h.by), brief(h)]);
+    if (t.replacement_authorised) history.push(['replacement authorised', takeRef(t), iso(t.replacement_authorised.at), who(t.replacement_authorised.by), brief({ why: t.replacement_authorised.why || null })]);
   }
   for (const j of judgments) {
     const t = takes.find(x => x.id === j.take_id); if (!t) continue;
@@ -1136,14 +1212,14 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
   const out = [
     { name: 'About', rows: about }, { name: 'Volunteers', rows: vols }, { name: 'Plan', rows: plan }, { name: 'Lines', rows: lines }, { name: 'Slots', rows: slots },
     { name: 'Takes', rows: takesSheet }, { name: 'Items', rows: items }, { name: 'Part A summary', rows: partA }, { name: 'Rule 3 previews', rows: rule3 }, { name: 'Part B summary', rows: partB },
-    { name: 'Number words', rows: words }, { name: 'Controls', rows: ctl }, { name: 'Part C tries', rows: pc }, { name: 'Part C sessions', rows: sess }, { name: 'Part C events', rows: ledger }, { name: 'History', rows: history },
+    { name: 'Number words', rows: words }, { name: 'Controls', rows: ctlRows }, { name: 'Part C tries', rows: pc }, { name: 'Part C sessions', rows: sess }, { name: 'Part C events', rows: ledger }, { name: 'History', rows: history },
   ];
-  // Fixes-2y: registered names never reach the shared file. Every text cell of the sheets that can hold free text is scrubbed,
-  // and the Free text sheet lists the free-text columns, how many cells hold text and how many names were removed.
+  // Fixes-2y: registered names never reach the shared file. Fixes-2z: EVERY data cell of EVERY sheet is scrubbed, including
+  // summaries and labels derived from editable text (About's phone mix, Part A's phone-model slices). All counting and grouping
+  // above used the original values, so only the presentation changes. Column headers and sheet names are fixed by the code.
   const { scrub } = nameScrubber(privateNames, accountNames);
   const removed = {}; let removedTotal = 0;
   for (const sh of out) {
-    if (!NAME_FREE_SHEETS.includes(sh.name)) continue;
     const H = sh.rows[0];
     for (let i = 1; i < sh.rows.length; i++) sh.rows[i] = sh.rows[i].map((v, k) => { if (typeof v !== 'string' || !v) return v; const r = scrub(v); if (r.n) { removed[`${sh.name}|${H[k]}`] = (removed[`${sh.name}|${H[k]}`] || 0) + r.n; removedTotal += r.n; } return r.text; });
   }
@@ -1152,7 +1228,14 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     const sh = out.find(x => x.name === sheet); const H = sh.rows[0];
     for (const c of cols) { const k = H.indexOf(c); const n = k < 0 ? 0 : sh.rows.slice(1).filter(r => typeof r[k] === 'string' && r[k].trim()).length; free.push([sheet, c, n, removed[`${sheet}|${c}`] || 0, n ? 'yes: read these cells before sharing' : '']); }
   }
-  const other = Object.entries(removed).filter(([k]) => !Object.entries(FREE_TEXT_COLUMNS).some(([sh, cols]) => cols.some(c => k === `${sh}|${c}`)));
+  // Derived text: cells built from editable text, listed every time so the sharing check never misses them.
+  for (const [sheet, col, rowsOf, label] of DERIVED_TEXT) {
+    const sh = out.find(x => x.name === sheet); const H = sh.rows[0]; const k = H.indexOf(col);
+    const n = sh.rows.slice(1).filter(rowsOf).length;
+    free.push([sheet, label, n, removed[`${sheet}|${col}`] || 0, n ? 'yes: built from phone details people typed; read before sharing' : '']);
+  }
+  const listed = (key) => Object.entries(FREE_TEXT_COLUMNS).some(([sh, cols]) => cols.some(c => key === `${sh}|${c}`)) || DERIVED_TEXT.some(([sh, col]) => key === `${sh}|${col}`);
+  const other = Object.entries(removed).filter(([key]) => !listed(key));
   for (const [k, n] of other) { const [sheet, c] = k.split('|'); free.push([sheet, c, '', n, 'yes: a registered name appeared here and was removed']); }
   about.splice(about.findIndex(r => r[0] === 'reviewers') + 1, 0, ['names removed from free text', `${removedTotal} (registered volunteer and reviewer names; see the Free text sheet, and read free text before sharing)`]);
   out.push({ name: 'Free text', rows: free });
@@ -1165,5 +1248,5 @@ module.exports = {
   ITEM_OUTCOMES, LINE_OUTCOMES, LINE_STATES, HAND_CHECK, FOOD, EXTRA_FOODS, UNIT,
   judgePreview, PREVIEW_RESULTS, LEG_CLASS, effectiveResult, legStatus, rule3Status, voiceLeg, geminiModels, geminiTake, whisperTake, transcribeTake,
   PARTC_PLAN, PARTC_LINES, NATURAL_PLAN, NATURAL_SLOTS, trialInfo, ARM_MINUTES, available, armedFor, recordTrial, recordDeviceDictation, recordPreview, answeredBy, speechRecord, actualPath,
-  dayState, dayDiff, restoreDay, checkSession, workbookSheets, truth, takeScore, deviceOf, phoneMix, nameScrubber, foodKeysOf,
+  dayState, dayDiff, restoreDay, checkSession, workbookSheets, truth, takeScore, deviceOf, phoneMix, nameScrubber, foodKeysOf, controlCoverage, REPEATED, REPLACEMENT_BUDGET,
 };

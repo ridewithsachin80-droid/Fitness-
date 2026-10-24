@@ -50,11 +50,11 @@ function Choice({ label, options, value, onPick, busy, testid }) {
 
 /** The listener's reference for one take: what was heard and said, recorded before any transcript is shown. */
 function ReferenceForm({ take, listeners, vocab, busy, onSave, onCancel }) {
-  const fromScript = () => (take.items || []).map(i => ({ kind: i.kind, n: i.n ?? '', unit: i.unit || '', food: i.food || '' }));
+  const fromScript = () => (take.items || []).map(i => ({ kind: i.kind, n: i.n ?? '', unit: i.unit || '', food: i.food || '', grams: '' }));
   const [f, setF] = useState(() => ({
     listener: take.listener_code || '',   // chosen each time: never credited to someone by default heard: take.heard ?? null, as: take.spoken_as_script ?? null,
     mode: take.reference_mode === 'unscorable' ? 'unscorable' : 'corrected', text: take.reference_text || '',
-    items: Array.isArray(take.reference_items) && take.reference_items.some(r => r.kind) ? take.reference_items.map(r => ({ kind: r.kind, n: r.n ?? '', unit: r.unit || '', food: r.food || '' })) : fromScript(),
+    items: Array.isArray(take.reference_items) && take.reference_items.some(r => r.kind) ? take.reference_items.map(r => ({ kind: r.kind, n: r.n ?? '', unit: r.unit || '', food: r.food || '', grams: r.grams ?? '' })) : fromScript(),
   }));
   const speechSlot = take.intended === 'speech';
   const setItem = (k, patch) => setF(x => ({ ...x, items: x.items.map((it, i) => (i === k ? { ...it, ...patch } : it)) }));
@@ -62,7 +62,7 @@ function ReferenceForm({ take, listeners, vocab, busy, onSave, onCancel }) {
   const save = () => onSave({
     take_id: take.id, listener_code: f.listener, heard: f.heard, spoken_as_script: speechSlot && f.heard === 'speech' ? f.as : undefined,
     mode: f.as === false ? f.mode : undefined, text: f.text || undefined,
-    items: f.as === false && f.mode === 'corrected' ? f.items.map(it => ({ kind: it.kind, n: it.kind === 'presence' ? undefined : it.n === '' ? undefined : Number(it.n), unit: it.unit || undefined, food: it.food || undefined })) : undefined,
+    items: f.as === false && f.mode === 'corrected' ? f.items.map(it => ({ kind: it.kind, n: it.kind === 'presence' ? undefined : it.n === '' ? undefined : Number(it.n), unit: it.unit || undefined, food: it.food || undefined, grams: it.kind === 'count' && it.grams !== '' ? Number(it.grams) : undefined })) : undefined,
   });
   return (
     <div className="space-y-1.5 mt-1" data-testid="vc-reference-form">
@@ -86,7 +86,8 @@ function ReferenceForm({ take, listeners, vocab, busy, onSave, onCancel }) {
                   </select>
                   {it.kind !== 'presence' && <input inputMode="decimal" value={it.n} onChange={e => setItem(k, { n: e.target.value })} aria-label="Number actually said" placeholder="number" className={`w-16 ${field}`} style={{ minHeight: 34 }} />}
                   {it.kind === 'count' && <select value={it.unit} onChange={e => setItem(k, { unit: e.target.value })} aria-label="Unit" className={`w-20 ${field}`} style={{ minHeight: 34 }}><option value="">no unit</option>{vocab.units.map(u => <option key={u} value={u}>{u}</option>)}</select>}
-                  {it.kind !== 'weight' && <select value={it.food} onChange={e => setItem(k, { food: e.target.value })} aria-label="Food" className={`flex-1 min-w-0 ${field}`} style={{ minHeight: 34 }}><option value="">no food</option>{vocab.foods.map(x => <option key={x} value={x}>{x}</option>)}</select>}
+                  {it.kind !== 'weight' && <select value={it.food} onChange={e => setItem(k, { food: e.target.value })} aria-label="Food" className={`flex-1 min-w-[8rem] ${field}`} style={{ minHeight: 34 }}><option value="">no food</option>{vocab.foods.map(x => <option key={x} value={x}>{x}</option>)}</select>}
+                  {it.kind === 'count' && <input inputMode="decimal" value={it.grams} onChange={e => setItem(k, { grams: e.target.value })} aria-label="Grams said with it (if any)" placeholder="g said" className={`w-16 ${field}`} style={{ minHeight: 34 }} />}
                   <button type="button" onClick={() => setF(x => ({ ...x, items: x.items.filter((_, i) => i !== k) }))} className={`${btn} ${off}`} style={{ minHeight: 34 }} aria-label="Remove item">✕</button>
                 </div>
               ))}
@@ -144,6 +145,7 @@ export default function VoiceCalibrationPanel() {
   const revoke = (lang) => { if (window.confirm(`Lock the ${LANG[lang]} lines again?`)) act(() => api.post('/voice-calibration/admin/wording/revoke', { lang })); };
   const saveReference = (body) => act(() => api.post('/voice-calibration/admin/reference', body), (r) => { setAmend(null); loadTakes(); if (r.data.stale_judgments) setMsg(`New reference version ${r.data.version}: ${r.data.stale_judgments} earlier preview judgment(s) are now stale (kept). Re-evaluate them when ready.`); });
   const handCheck = (t, engine, verdict) => act(() => api.post('/voice-calibration/admin/hand-check', { take_id: t.id, engine, verdict }), loadTakes);
+  const askReplacement = (t) => act(() => api.post('/voice-calibration/admin/replacement', { take_id: t.id }), (r) => { loadTakes(); setMsg(`Replacement asked for (${r.data.why}); ${r.data.used} of ${r.data.budget} in the round's budget used. The volunteer sees it on their list; this take is kept and shown.`); });
   const handVerdict = (id, verdict) => act(() => api.post(`/voice-calibration/admin/judgments/${id}/hand`, { verdict }), loadTakes);
   const previewEval = (reevaluate) => act(() => api.post('/voice-calibration/admin/preview-eval', reevaluate ? { reevaluate: true } : {}, { timeout: 300000 }), (r) => { loadTakes(); setMsg(`Rule 3 previews: ${r.data.judged} leg(s) judged, ${r.data.parser_calls} parser call(s)${r.data.reevaluation_calls ? `, ${r.data.reevaluation_calls} re-evaluation call(s)` : ''}${r.data.stale_waiting ? `; ${r.data.stale_waiting} stale leg(s) wait for "Re-evaluate"` : ''}${r.data.awaiting_reference ? `; ${r.data.awaiting_reference} take(s) still need the listener's reference` : ''}${r.data.more ? '. More waiting: tap again.' : '.'}`); });
   const sessionMsg = (r) => (r.data.completed ? `Try ${r.data.trial} finished: the day equals its baseline and the Voice backup switch is off.` : `Try ${r.data.trial} is NOT finished: ${(r.data.outstanding || []).join(' ')} Recording has stopped; the try stays open until then.`);
@@ -259,7 +261,7 @@ export default function VoiceCalibrationPanel() {
                 <p className="text-lo">Expected {t.intended} · live check: {t.live_decision}{t.voiced_ms != null ? ` (${t.voiced_ms} ms voiced)` : ''}</p>
                 {['gemini', 'whisper'].map(e => { const sc = t.scores?.[e]; return (
                   <div key={e} data-testid={`vc-score-${e}`}>
-                    <p className="text-mid">{e === 'gemini' ? 'Gemini' : 'Whisper'}: {t[e] == null ? 'no answer' : `“${t[e]}”`}{e === 'whisper' && t.whisper_review && !t.whisper_review.accepted ? ` (fallback would refuse: ${t.whisper_review.reason})` : ''}{sc ? ` → ${sc.line}` : ''}{sc?.unexplained?.length ? ` (unexplained: ${sc.unexplained.join(', ')})` : ''}</p>
+                    <p className="text-mid">{e === 'gemini' ? 'Gemini' : 'Whisper'}: {t[e] == null ? 'no answer' : `“${t[e]}”`}{e === 'whisper' && t.whisper_review && !t.whisper_review.accepted ? ` (fallback would refuse: ${t.whisper_review.reason})` : ''}{sc ? ` → ${sc.line}` : ''}{sc?.unexplained?.length ? ` (unexplained: ${sc.unexplained.join(', ')})` : ''}{sc?.ambiguous?.length ? ` (check: ${sc.ambiguous.join('; ')})` : ''}</p>
                     {sc && sc.auto_line === 'needs a hand check' && !sc.hand && (
                       <select defaultValue="" onChange={ev => ev.target.value && handCheck(t, e, ev.target.value)} aria-label={`${e} line outcome by hand`} className={`w-full ${field}`} style={{ minHeight: 34 }} data-testid="vc-hand-check">
                         <option value="">Needs a hand check: choose the outcome…</option>{(st.line_outcomes || []).filter(o => o !== 'provider error' && o !== 'empty answer').map(o => <option key={o} value={o}>{o}</option>)}
@@ -277,6 +279,9 @@ export default function VoiceCalibrationPanel() {
                     )}
                   </div>
                 ))}
+                {t.excluded && (t.replacement_authorised
+                  ? <p className="text-lo" data-testid="vc-replacement-asked">Replacement asked for ({t.replacement_authorised.why}); this take stays in the record.</p>
+                  : <button type="button" onClick={() => askReplacement(t)} disabled={busy} className={`${btn} ${off}`} style={{ minHeight: 34 }} data-testid="vc-ask-replacement">Not usable: ask for a replacement</button>)}
                 <button type="button" onClick={() => setAmend(t.id)} className="text-gold underline" style={{ minHeight: 32 }}>Change the reference (a new version)</button>
               </div>
             )}

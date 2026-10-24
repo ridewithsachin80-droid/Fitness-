@@ -1479,3 +1479,6 @@ CREATE TABLE IF NOT EXISTS voice_calibration_partc_sessions (
 CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_one_unresolved_session ON voice_calibration_partc_sessions ((TRUE)) WHERE resolved_at IS NULL;
 ALTER TABLE voice_calibration_partc_armed ADD COLUMN IF NOT EXISTS session_id  INT;
 ALTER TABLE voice_calibration_partc_armed ADD COLUMN IF NOT EXISTS session_key TEXT;
+-- Fixes-2z: an administrator's request to replace an EXCLUDED take (unsure, wrong kind of sound, not measured). The excluded take is
+-- kept and shown; the replacement is a retake with reason 'replacement', budgeted apart.
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS replacement_authorised JSONB;
