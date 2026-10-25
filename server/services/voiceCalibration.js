@@ -919,8 +919,11 @@ function replacementBudgetText(takes, grants) {
 /** Fixes-3a: calls spent in the round from the spend ledger (kept when takes are deleted). */
 function spendText(spend, takes) {
   const held = new Set(takes.map(t => t.id));
-  const sum = (k, f = () => true) => spend.filter(x => x.kind === k && f(x)).reduce((n, x) => n + (Number(x.calls) || 0), 0);
-  return `${sum('transcription')} transcription call(s) and ${sum('rule3')} parser call(s) in the round; ${sum('transcription', x => !held.has(x.take_id)) + sum('rule3', x => !held.has(x.take_id))} of them on takes since deleted (withdrawal, removal or 90 days). Deleting recordings never lowers these`;
+  // Fixes-3b: an attempt's result was KEPT when its take was saved (transcription) or its judgment recorded (parser).
+  const kept = (x) => (x.kind === 'transcription' ? x.take_id != null && x.outcome !== 'refused' && !/^not saved/.test(x.outcome || '') : x.outcome === 'judged' || x.judgment_id != null);
+  const sum = (f) => spend.filter(f).reduce((n, x) => n + (Number(x.calls) || 0), 0);
+  const notKept = sum(x => !kept(x)), deleted = sum(x => kept(x) && !held.has(x.take_id));
+  return `${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened. Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these`;
 }
 /** Fixes-2z: usable no-speech controls per required slot (volunteer × control × place), and why the others are not usable. */
 function controlCoverage(active, curActive, infoOf) {

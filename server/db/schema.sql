@@ -1542,3 +1542,11 @@ SELECT 'rule3', j.take_id, j.id, p.code, t.slot_code, j.parser_calls, COALESCE(j
 FROM voice_calibration_preview_judgments j JOIN voice_calibration_takes t ON t.id = j.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
 WHERE COALESCE(j.parser_calls, 0) > 0 AND NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'rule3' AND s.judgment_id = j.id)
 ON CONFLICT DO NOTHING;
+-- Fixes-3b (the 3a review): every provider/parser attempt is counted when it HAPPENS, in its own committed row, before (and
+-- whatever becomes of) the take or judgment it was for. attempt_key identifies one attempt, so writing the same attempt twice
+-- (the early record and the link when the take commits) never counts it twice, while a genuinely new attempt is a new row.
+-- outcome: 'saved' / 'judged' when its result was kept; 'refused' or 'not saved' when it was not; NULL while unresolved.
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS attempt_key  TEXT;
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS outcome      TEXT;
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS judgment_ref INT;
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_attempt ON voice_calibration_spend (attempt_key);

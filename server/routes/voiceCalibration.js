@@ -90,6 +90,18 @@ async function wordingOk(lang, db = pool) {
   const { rows: [w] } = await db.query(`SELECT script_sha256 FROM voice_calibration_wording WHERE lang=$1`, [lang]);
   return !!w && w.script_sha256 === C.scriptSha(lang);
 }
+/**
+ * Fixes-3b: spent calls, recorded when the attempt happens, in their own committed statement (never inside a take's or judgment's
+ * transaction, so a rollback cannot remove them). attemptKey makes writing the same attempt twice harmless.
+ */
+async function recordSpend({ kind, attemptKey, code, slot, calls, takeId = null, judgmentRef = null }) {
+  if (!calls) return;
+  try {
+    await pool.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (attempt_key) DO NOTHING`,
+      [kind, attemptKey, takeId, judgmentRef, code || null, slot || null, calls]);
+  } catch (e) { console.error('[voice-calibration] spend not recorded yet (it is written again when the take commits):', e.message); }
+}
+const markSpend = (attemptKey, outcome) => pool.query(`UPDATE voice_calibration_spend SET outcome=$2 WHERE attempt_key=$1 AND outcome IS NULL`, [attemptKey, outcome]).catch(() => {});
 async function deleteTakes(participantId) {
   const { rows } = await pool.query(`SELECT id, object_key FROM voice_calibration_takes WHERE participant_id=$1`, [participantId]);
   for (const r of rows) {
@@ -158,6 +170,11 @@ router.post('/take', member, async (req, res) => {
     // then both engines exactly as everyday logging asks them.
     const speech = await SP.check(audio);
     const t = await C.transcribeTake(audio, mt, info.lang_hint);
+    // Fixes-3b: the engines have answered, so their calls are spent. Count them NOW, in a committed row of their own, before
+    // and whatever becomes of the take (refused, rolled back or failed to save). The attempt key ties the later link to it.
+    const attemptKey = `take:${crypto.randomUUID()}`;
+    const calls = C.engineCalls({ gemini_provenance: t.gemini.provenance, whisper_provenance: t.whisper.provenance });
+    await recordSpend({ kind: 'transcription', attemptKey, code: p.code, slot: info.slot, calls });
     const f = speech.features || {};
     const client = await pool.connect();
     try {
@@ -182,15 +199,16 @@ router.post('/take', member, async (req, res) => {
       if (reason === 'replacement') {
         const { rows: [g] } = await client.query(`UPDATE voice_calibration_replacement_grants SET replacement_take_id=$2, replaced_at=NOW()
           WHERE round=$3 AND take_id=$1 AND replacement_take_id IS NULL RETURNING id`, [curTake?.id ?? -1, row.id, C.REPLACEMENT_ROUND]);
-        if (!g) { await client.query('ROLLBACK'); storage.deleteObject(key).catch(() => {}); return res.status(409).json({ error: 'Your coach has not asked for this clip to be recorded again (or it was already recorded again). Choose another reason if something went wrong.' }); }
+        if (!g) { await client.query('ROLLBACK'); storage.deleteObject(key).catch(() => {}); await markSpend(attemptKey, 'refused (the grant was already used)');
+          return res.status(409).json({ error: 'Your coach has not asked for this clip to be recorded again (or it was already recorded again). Choose another reason if something went wrong.' }); }
       }
       // Fixes-3a: the calls spent, kept even if the take is deleted later.
-      await client.query(`INSERT INTO voice_calibration_spend (kind, take_id, participant_code, slot_code, calls) VALUES ('transcription', $1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-        [row.id, p.code, info.slot, C.engineCalls({ gemini_provenance: t.gemini.provenance, whisper_provenance: t.whisper.provenance })]);
+      await client.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, participant_code, slot_code, calls, outcome) VALUES ('transcription', $1, $2, $3, $4, $5, 'saved')
+        ON CONFLICT (attempt_key) DO UPDATE SET take_id = EXCLUDED.take_id, outcome = 'saved'`, [attemptKey, row.id, p.code, info.slot, calls]);
       await client.query('COMMIT');
       // No transcript is shown to the volunteer: a retake is for a recording problem, not for a wrong answer.
       res.json({ ok: true, slot: info.slot, take_no: row.take_no });
-    } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; }
+    } catch (e) { await client.query('ROLLBACK').catch(() => {}); storage.deleteObject(key).catch(() => {}); await markSpend(attemptKey, 'not saved (the take could not be written)'); throw e; }
     finally { client.release(); }
   } catch (err) { fail(res, err); }
 });
@@ -492,7 +510,7 @@ router.post('/admin/hand-check', admin, async (req, res) => {
 router.post('/admin/preview-eval', admin, async (req, res) => {
   try {
     const reevaluate = req.body?.reevaluate === true;
-    const { rows } = await pool.query(`SELECT t.*, p.grp, p.patient_id FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
+    const { rows } = await pool.query(`SELECT t.*, p.grp, p.patient_id, p.code FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
       WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL AND t.reference_frozen_at IS NOT NULL AND t.heard = 'speech' AND COALESCE(t.reference_mode, '') <> 'unscorable' ORDER BY t.id`);
     const { rows: [waiting] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
       WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL AND t.reference_frozen_at IS NULL`);
@@ -515,6 +533,7 @@ router.post('/admin/preview-eval', admin, async (req, res) => {
           AND status='running' AND created_at < NOW() - INTERVAL '10 minutes' RETURNING id`, [t.id, engine, t.reference_sha, C.JUDGE_VERSION]));
         if (!claim) { busy++; continue; }      // another tap is evaluating this leg right now
         let stage = leg.stage, preview = null, judgment = null, used = 0;
+        const spendKey = `rule3:${crypto.randomUUID()}`;
         if (leg.stage === 'to parser') {
           used = 1; if (isRe) recalls++; else calls++;
           try {
@@ -522,14 +541,14 @@ router.post('/admin/preview-eval', admin, async (req, res) => {
             preview = r && r.__status ? { error: r.error || `HTTP ${r.__status}` } : r;
             stage = preview?.error ? 'parser error' : 'parsed';
           } catch (e) { preview = { error: String(e.message || e).slice(0, 200) }; stage = 'parser error'; }
+          // Fixes-3b: the parser has answered: its call is counted now, whatever becomes of the judgment.
+          await recordSpend({ kind: 'rule3', attemptKey: spendKey, code: t.code, slot: t.slot_code, calls: used, takeId: t.id, judgmentRef: claim.id });
           judgment = C.judgePreview(C.itemsWithReference(info.items, t.reference_items, t.reference_mode), preview, info.lang);
         } else judgment = { result: leg.stage === 'voice refused' ? 'explicit refusal' : 'provider error', problems: [], hand: [], items: [], note: leg.reason };
-        // Fixes-3a: the judgment and its spend row in ONE statement (recorded together; no extra round trip).
-        await pool.query(`WITH done AS (UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1 RETURNING id, take_id)
-          INSERT INTO voice_calibration_spend (kind, take_id, judgment_id, participant_code, slot_code, calls)
-          SELECT 'rule3', d.take_id, d.id, p.code, t.slot_code, $5 FROM done d JOIN voice_calibration_takes t ON t.id = d.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
-          WHERE $5::int > 0 ON CONFLICT DO NOTHING`,
-          [claim.id, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used, preview && (preview.aiProvider || preview.aiModel) ? JSON.stringify({ provider: preview.aiProvider || null, model: preview.aiModel || null }) : null]);
+        // The judgment, and (Fixes-3b) its spend row marked as kept, in one statement.
+        await pool.query(`WITH done AS (UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1 RETURNING id)
+          UPDATE voice_calibration_spend SET outcome = 'judged' WHERE attempt_key = $7 AND EXISTS (SELECT 1 FROM done)`,
+          [claim.id, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used, preview && (preview.aiProvider || preview.aiModel) ? JSON.stringify({ provider: preview.aiProvider || null, model: preview.aiModel || null }) : null, spendKey]);
         judged++;
       }
     }
