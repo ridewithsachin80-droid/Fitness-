@@ -164,6 +164,7 @@ router.post('/take', member, async (req, res) => {
       await client.query('BEGIN');
       await client.query(`SELECT id FROM voice_calibration_participants WHERE id=$1 FOR UPDATE`, [p.id]);   // one take number at a time
       const { rows: [mx] } = await client.query(`SELECT COALESCE(MAX(take_no), 0)::int AS n FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2`, [p.id, info.slot]);
+      const { rows: [curTake] } = await client.query(`SELECT id FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
       await client.query(`UPDATE voice_calibration_takes SET superseded_at = NOW() WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
       const { rows: [row] } = await client.query(
         `INSERT INTO voice_calibration_takes (participant_id, slot_code, take_no, object_key, mime_type, duration_ms, audio_sha256, phone_type, browser, installed_app, device, retake_reason, retake_note,
@@ -177,6 +178,15 @@ router.post('/take', member, async (req, res) => {
          t.gemini.text, t.gemini.text == null ? (t.gemini.error || 'no answer') : null, t.gemini.text == null ? null : !!t.gemini.generated_text, JSON.stringify(t.gemini.provenance),
          t.whisper.text, t.whisper.text == null ? (t.whisper.error || 'no answer') : null, t.whisper.review ? JSON.stringify(t.whisper.review) : null,
          t.whisper.segments ? JSON.stringify(t.whisper.segments) : null, JSON.stringify(t.whisper.provenance), p.device ? JSON.stringify(p.device) : null]);
+      // Fixes-3a: one grant, one replacement. The grant on the take being replaced is used by THIS take, or the replacement is refused.
+      if (reason === 'replacement') {
+        const { rows: [g] } = await client.query(`UPDATE voice_calibration_replacement_grants SET replacement_take_id=$2, replaced_at=NOW()
+          WHERE round=$3 AND take_id=$1 AND replacement_take_id IS NULL RETURNING id`, [curTake?.id ?? -1, row.id, C.REPLACEMENT_ROUND]);
+        if (!g) { await client.query('ROLLBACK'); storage.deleteObject(key).catch(() => {}); return res.status(409).json({ error: 'Your coach has not asked for this clip to be recorded again (or it was already recorded again). Choose another reason if something went wrong.' }); }
+      }
+      // Fixes-3a: the calls spent, kept even if the take is deleted later.
+      await client.query(`INSERT INTO voice_calibration_spend (kind, take_id, participant_code, slot_code, calls) VALUES ('transcription', $1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+        [row.id, p.code, info.slot, C.engineCalls({ gemini_provenance: t.gemini.provenance, whisper_provenance: t.whisper.provenance })]);
       await client.query('COMMIT');
       // No transcript is shown to the volunteer: a retake is for a recording problem, not for a wrong answer.
       res.json({ ok: true, slot: info.slot, take_no: row.take_no });
@@ -414,22 +424,46 @@ router.post('/admin/reference', admin, async (req, res) => {
 // Fixes-2z: ask for an authorised replacement of an EXCLUDED take (frozen reference: unsure, heard ≠ intended, or not measured).
 // The excluded take stays (superseded when the replacement arrives) and is shown; replacements are budgeted apart.
 router.post('/admin/replacement', admin, async (req, res) => {
+  // Fixes-3a (the 2z review): eligibility, a repeated request and the budget are decided in ONE transaction, serialised for the
+  // round by an advisory lock; the ledger's unique grant numbers (1..12, a CHECK in the database) are the last line of defence.
+  const id = parseInt(req.body?.take_id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Which take?' });
+  const client = await pool.connect();
+  let done = false;
+  const finish = async (status, body, commit = false) => { await client.query(commit ? 'COMMIT' : 'ROLLBACK').catch(() => {}); done = true; return res.status(status).json(body); };
   try {
-    const id = parseInt(req.body?.take_id);
-    const { rows: [t] } = await pool.query(`SELECT t.*, p.grp FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id WHERE t.id=$1 AND p.withdrawn_at IS NULL`, [id]);
-    if (!t) return res.status(404).json({ error: 'No such take.' });
-    if (t.superseded_at) return res.status(409).json({ error: 'This take was already replaced.' });
-    if (!t.reference_frozen_at) return res.status(409).json({ error: 'Save the listener\'s reference first: only an excluded take can be replaced.' });
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('voice_calibration_replacement_budget'))`);
+    const { rows: [t] } = await client.query(`SELECT t.*, p.grp, p.code FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
+      WHERE t.id=$1 AND p.withdrawn_at IS NULL FOR UPDATE OF t`, [id]);
+    if (!t) return await finish(404, { error: 'No such take.' });
+    const used = async () => (await client.query(`SELECT (SELECT COUNT(*) FROM voice_calibration_replacement_grants WHERE round = $1)
+      + (SELECT COUNT(*) FROM voice_calibration_takes t WHERE t.replacement_authorised IS NOT NULL AND NOT EXISTS (SELECT 1 FROM voice_calibration_replacement_grants g WHERE g.take_id = t.id)) AS n`, [C.REPLACEMENT_ROUND])).rows[0].n;
+    // A repeated request for a take already granted: the same grant, unchanged (no new allowance, history kept).
+    const { rows: [had] } = await client.query(`SELECT * FROM voice_calibration_replacement_grants WHERE round=$1 AND take_id=$2`, [C.REPLACEMENT_ROUND, id]);
+    if (had || t.replacement_authorised) {
+      const n = Number(await used());
+      return await finish(200, { ok: true, already: true, why: had?.why ?? t.replacement_authorised?.why ?? null, grant_no: had?.grant_no ?? null, used: n, budget: C.REPLACEMENT_BUDGET }, true);
+    }
+    if (t.superseded_at) return await finish(409, { error: 'This take was already replaced.' });
+    if (!t.reference_frozen_at) return await finish(409, { error: 'Save the listener\'s reference first: only an excluded take can be replaced.' });
     const info = C.slotInfo(t.slot_code, t.grp) || {};
     const truth = C.truth(t, info.label), measured = C.decision(t, SP.LIVE_LIMITS) !== 'not checked';
-    if (truth !== 'uncertain' && truth !== 'protocol deviation' && measured) return res.status(409).json({ error: 'This take is usable as it is. Only an excluded take (unsure, the wrong kind of sound, or not measured) can be replaced.' });
+    if (truth !== 'uncertain' && truth !== 'protocol deviation' && measured) return await finish(409, { error: 'This take is usable as it is. Only an excluded take (unsure, the wrong kind of sound, or not measured) can be replaced.' });
     const why = req.body?.why ? String(req.body.why).slice(0, 200) : (truth !== 'speech' && truth !== 'no-speech' ? truth : 'not measured');
-    // The budget agreed before collection (counted across the round, withdrawn volunteers' takes included while they exist).
-    const { rows: [{ n: used }] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_takes WHERE replacement_authorised IS NOT NULL`);
-    if (used >= C.REPLACEMENT_BUDGET) return res.status(409).json({ error: `The replacement budget (${C.REPLACEMENT_BUDGET} for the round) is used up. Stop and review the round before any more.`, budget: C.REPLACEMENT_BUDGET, used });
-    await pool.query(`UPDATE voice_calibration_takes SET replacement_authorised = $2 WHERE id=$1`, [id, JSON.stringify({ at: new Date().toISOString(), by: req.user.id, why })]);
-    res.json({ ok: true, why, used: used + 1, budget: C.REPLACEMENT_BUDGET });
-  } catch (err) { fail(res, err); }
+    const n = Number(await used());
+    if (n >= C.REPLACEMENT_BUDGET) return await finish(409, { error: `The replacement budget (${C.REPLACEMENT_BUDGET} for the round) is used up. Stop and review the round before any more.`, budget: C.REPLACEMENT_BUDGET, used: n });
+    const at = new Date().toISOString();
+    await client.query(`INSERT INTO voice_calibration_replacement_grants (round, grant_no, take_id, participant_code, slot_code, why, calls_spent, granted_by, granted_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [C.REPLACEMENT_ROUND, n + 1, id, t.code, t.slot_code, why, C.engineCalls(t), req.user.id, at]);
+    await client.query(`UPDATE voice_calibration_takes SET replacement_authorised = $2 WHERE id=$1 AND replacement_authorised IS NULL`, [id, JSON.stringify({ at, by: req.user.id, why, grant_no: n + 1 })]);
+    return await finish(200, { ok: true, why, grant_no: n + 1, used: n + 1, budget: C.REPLACEMENT_BUDGET }, true);
+  } catch (err) {
+    if (!done) await client.query('ROLLBACK').catch(() => {});
+    // The database refused a grant number past the budget or a duplicate: never a 13th grant, never a second grant for a take.
+    if (!done && (err.code === '23505' || err.code === '23514')) return res.status(409).json({ error: `The replacement budget (${C.REPLACEMENT_BUDGET} for the round) is used up, or this take was just granted. Reload and check.`, budget: C.REPLACEMENT_BUDGET });
+    if (!done) fail(res, err);
+  } finally { client.release(); }
 });
 
 // Fixes-2y: Part B hand check. Only a "needs a hand check" line, only against the current reference; one of the nine outcomes.
@@ -490,7 +524,11 @@ router.post('/admin/preview-eval', admin, async (req, res) => {
           } catch (e) { preview = { error: String(e.message || e).slice(0, 200) }; stage = 'parser error'; }
           judgment = C.judgePreview(C.itemsWithReference(info.items, t.reference_items, t.reference_mode), preview, info.lang);
         } else judgment = { result: leg.stage === 'voice refused' ? 'explicit refusal' : 'provider error', problems: [], hand: [], items: [], note: leg.reason };
-        await pool.query(`UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1`,
+        // Fixes-3a: the judgment and its spend row in ONE statement (recorded together; no extra round trip).
+        await pool.query(`WITH done AS (UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1 RETURNING id, take_id)
+          INSERT INTO voice_calibration_spend (kind, take_id, judgment_id, participant_code, slot_code, calls)
+          SELECT 'rule3', d.take_id, d.id, p.code, t.slot_code, $5 FROM done d JOIN voice_calibration_takes t ON t.id = d.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
+          WHERE $5::int > 0 ON CONFLICT DO NOTHING`,
           [claim.id, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used, preview && (preview.aiProvider || preview.aiModel) ? JSON.stringify({ provider: preview.aiProvider || null, model: preview.aiModel || null }) : null]);
         judged++;
       }
@@ -653,7 +691,9 @@ router.get('/admin/export.xlsx', admin, async (req, res) => {
     // Names are read only to REMOVE them from free text: volunteers' account names (withdrawn ones too) and reviewers' names.
     const { rows: names } = await pool.query(`SELECT u.name FROM voice_calibration_participants p JOIN users u ON u.id = p.patient_id UNION SELECT name FROM voice_calibration_reviewers`);
     const { rows: accounts } = await pool.query(`SELECT name FROM users WHERE name IS NOT NULL`);   // whole names only (operators, coaches, members)
-    const buf = X.workbook(C.workbookSheets({ participants, takes, wording, partc, sessions, judgments, reviewers, privateNames: names.map(n => n.name), accountNames: accounts.map(a => a.name) }));
+    const { rows: grants } = await pool.query(`SELECT * FROM voice_calibration_replacement_grants WHERE round=$1 ORDER BY grant_no`, [C.REPLACEMENT_ROUND]);
+    const { rows: spend } = await pool.query(`SELECT * FROM voice_calibration_spend ORDER BY id`);
+    const buf = X.workbook(C.workbookSheets({ participants, takes, wording, partc, sessions, judgments, reviewers, grants, spend, privateNames: names.map(n => n.name), accountNames: accounts.map(a => a.name) }));
     const day = new Date().toISOString().slice(0, 10);
     res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="FitLife-Voice-Calibration-${day}.xlsx"` });
     res.send(buf);

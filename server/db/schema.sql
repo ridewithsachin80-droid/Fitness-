@@ -1482,3 +1482,63 @@ ALTER TABLE voice_calibration_partc_armed ADD COLUMN IF NOT EXISTS session_key T
 -- Fixes-2z: an administrator's request to replace an EXCLUDED take (unsure, wrong kind of sound, not measured). The excluded take is
 -- kept and shown; the replacement is a retake with reason 'replacement', budgeted apart.
 ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS replacement_authorised JSONB;
+-- Fixes-3a (the 2z review, finding 2): the replacement budget is a LEDGER for the round, enforced by the database.
+-- One row per grant; grant_no runs 1..12 and is unique per round, so two requests racing for the last slot can never both succeed.
+-- take_id has NO foreign key on purpose: deleting a take (withdrawal, removal, 90 days) never deletes its grant, so a spent
+-- allowance is never returned. A grant is tied to the one replacement recorded under it (replacement_take_id).
+CREATE TABLE IF NOT EXISTS voice_calibration_replacement_grants (
+  id                  SERIAL PRIMARY KEY,
+  round               TEXT NOT NULL DEFAULT 'round1',
+  grant_no            INT  NOT NULL CHECK (grant_no BETWEEN 1 AND 12),
+  take_id             INT  NOT NULL,
+  participant_code    TEXT,
+  slot_code           TEXT,
+  why                 TEXT,
+  calls_spent         INT  NOT NULL DEFAULT 0,
+  granted_by          INT,
+  granted_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  replacement_take_id INT,
+  replaced_at         TIMESTAMPTZ,
+  UNIQUE (round, grant_no),
+  UNIQUE (round, take_id),
+  UNIQUE (replacement_take_id)
+);
+-- Grants made before the ledger existed (Fixes-2z wrote only the take's column) join the ledger once, in take order, up to 12.
+INSERT INTO voice_calibration_replacement_grants (round, grant_no, take_id, participant_code, slot_code, why, granted_by, granted_at)
+SELECT 'round1', x.n, x.id, x.code, x.slot_code, x.why, x.by_id, x.at FROM (
+  SELECT t.id, p.code, t.slot_code, t.replacement_authorised->>'why' AS why,
+         CASE WHEN (t.replacement_authorised->>'by') ~ '^[0-9]+$' THEN (t.replacement_authorised->>'by')::int END AS by_id,
+         COALESCE(t.created_at, NOW()) AS at,
+         COALESCE((SELECT MAX(grant_no) FROM voice_calibration_replacement_grants WHERE round = 'round1'), 0) + ROW_NUMBER() OVER (ORDER BY t.id) AS n
+  FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
+  WHERE t.replacement_authorised IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM voice_calibration_replacement_grants g WHERE g.take_id = t.id)
+) x WHERE x.n <= 12
+ON CONFLICT DO NOTHING;
+-- Fixes-3a: calls spent in the round, kept when the take is deleted, so withdrawal or expiry never lowers what was spent.
+CREATE TABLE IF NOT EXISTS voice_calibration_spend (
+  id               SERIAL PRIMARY KEY,
+  kind             TEXT NOT NULL CHECK (kind IN ('transcription', 'rule3')),
+  take_id          INT,
+  judgment_id      INT,
+  participant_code TEXT,
+  slot_code        TEXT,
+  calls            INT  NOT NULL DEFAULT 0,
+  at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_take ON voice_calibration_spend (take_id) WHERE kind = 'transcription';
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_judgment ON voice_calibration_spend (judgment_id) WHERE kind = 'rule3';
+-- Calls already spent before the ledger existed join it once.
+INSERT INTO voice_calibration_spend (kind, take_id, participant_code, slot_code, calls, at)
+SELECT 'transcription', t.id, p.code, t.slot_code,
+       COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(t.gemini_provenance->'attempts') = 'array' THEN t.gemini_provenance->'attempts' END), 0)
+     + COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(t.whisper_provenance->'attempts') = 'array' THEN t.whisper_provenance->'attempts' END), 0),
+       COALESCE(t.created_at, NOW())
+FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
+WHERE NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'transcription' AND s.take_id = t.id)
+ON CONFLICT DO NOTHING;
+INSERT INTO voice_calibration_spend (kind, take_id, judgment_id, participant_code, slot_code, calls, at)
+SELECT 'rule3', j.take_id, j.id, p.code, t.slot_code, j.parser_calls, COALESCE(j.finished_at, j.created_at, NOW())
+FROM voice_calibration_preview_judgments j JOIN voice_calibration_takes t ON t.id = j.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
+WHERE COALESCE(j.parser_calls, 0) > 0 AND NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'rule3' AND s.judgment_id = j.id)
+ON CONFLICT DO NOTHING;

@@ -95,12 +95,20 @@ const sideways = (p) => p.evaluate(() => document.documentElement.scrollWidth > 
 const stamp = (p) => p.evaluate(() => { if (document.getElementById('sim-stamp')) return; const d = document.createElement('div'); d.id = 'sim-stamp';
   d.textContent = 'SIMULATED · local test server · synthetic data'; d.setAttribute('style', 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#7a0019;color:#fff;font:700 11px/1.6 system-ui,sans-serif;text-align:center;letter-spacing:.04em;pointer-events:none');
   document.body.appendChild(d); });
-const shot = async (p, file, el) => { await stamp(p); const f = `SIMULATED-${file}`; if (el) await el.screenshot({ path: path.join(OUT, f), captureBeyondViewport: true }); else await p.screenshot({ path: path.join(OUT, f) }); return f; };
+/** Fixes-3a (the 2z review): a cropped picture carries its own visible stamp, inside the crop (the page stamp sits at the bottom of the window). */
+const cropStamp = (el, on) => el.evaluate((e, on) => { e.querySelector(':scope > [data-crop-stamp]')?.remove(); if (!on) return;
+  const d = document.createElement('div'); d.setAttribute('data-crop-stamp', ''); d.textContent = 'SIMULATED · local test server · synthetic data';
+  d.setAttribute('style', 'display:block;background:#7a0019;color:#fff;font:700 11px/1.6 system-ui,sans-serif;text-align:center;letter-spacing:.04em;padding:2px 4px;margin:0 0 4px 0');
+  e.prepend(d); }, on);
+const shot = async (p, file, el) => { await stamp(p); const f = `SIMULATED-${file}`;
+  if (el) { await cropStamp(el, true); try { await el.screenshot({ path: path.join(OUT, f), captureBeyondViewport: true }); } finally { await cropStamp(el, false); } }
+  else await p.screenshot({ path: path.join(OUT, f) }); return f; };
 const mark = (p, sel, name) => p.evaluate((sel, name) => { const el = document.querySelector(sel); if (el) el.setAttribute('data-shot', name); return !!el; }, sel, name);
 
 for (const theme of ['light', 'dark']) for (const width of [360, 390]) {
   console.log(`\n[${theme}, ${width} px]`);
   await c.query(`UPDATE voice_calibration_takes SET replacement_authorised = NULL WHERE id=$1`, [excludedId]);
+  await c.query(`DELETE FROM voice_calibration_replacement_grants WHERE take_id=$1`, [excludedId]);   // Fixes-3a: the grant lives in the ledger (seed reset only)
   // ── Admin ──
   const a = await page(width, theme);
   await a.goto(BASE, { waitUntil: 'networkidle2' });

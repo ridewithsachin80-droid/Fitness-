@@ -40,7 +40,7 @@ const CONSENT_VERSION = 'calibration-v1';
 const SCRIPT_VERSION = 'round1-script-v1';
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 /** The judges' rules (scoreTranscript, judgePreview). Stored with every judgment; a change makes earlier judgments stale. */
-const JUDGE_VERSION = 'judge-2y.1';
+const JUDGE_VERSION = 'judge-3a.1';   // Fixes-3a: every weight shown AND the amount that would be saved are judged (judgments under judge-2y.1 are stale)
 
 // ── The script ───────────────────────────────────────────────────────────────
 // items: what is scored in a transcript. kind 'count' (number [unit] food), 'weight'
@@ -112,6 +112,8 @@ const PLANNED_TOTAL = Object.entries(GROUPS).reduce((n, [g, x]) => n + x.quota *
 /** Fixes-2z: authorised replacements of excluded takes, agreed before collection: at most 12 for the round (two per volunteer on
  *  average, a third of the 36 controls). Past that, no more are authorised: the round stays incomplete until it is reviewed. */
 const REPLACEMENT_BUDGET = 12;
+/** Fixes-3a: the ledger's round (voice_calibration_replacement_grants.round; the database allows grant numbers 1..12 per round). */
+const REPLACEMENT_ROUND = 'round1';
 
 /** What a slot asks the volunteer to say, and how its takes are scored. */
 function slotInfo(slot, group) {
@@ -465,6 +467,30 @@ const PREVIEW_RESULTS = ['correct reviewable', 'explicit refusal', 'missing/unre
  * Disqualifying: a surfaced wrong number or wrong unit (a counted food shown in kg included), an invented item,
  * or an unspoken health change in ANY saveable field. A question or safety reply is a refusal only with nothing saveable.
  */
+/**
+ * Fixes-3a: the weights of one counted food in a preview. shownPh: every phrase in its qty_text; food: the preview row, whose
+ * numeric `grams` is what Save writes to the day.
+ *  - The listener recorded a weight said with the count (it.grams): every gram figure shown AND the saved amount must equal
+ *    it; any other → a surfaced wrong number. A figure in another unit (ml) cannot be compared → a hand check.
+ *  - No weight was spoken: a weight is the app's estimate for an otherwise correct count. It must be ONE amount: every figure
+ *    shown and the saved amount agree (ml taken as g). Disagreeing figures cannot be an automatic success → a hand check.
+ * → { wrong: bool, hand: reason or null }
+ */
+function weightCheck(it, shownPh, food) {
+  const mass = shownPh.filter(isMass);
+  const saved = food?.grams == null || food.grams === '' ? null : Number(food.grams);
+  const label = mass.map(p => p.text).join(', ');
+  if (it.grams != null) {
+    const grams = mass.filter(p => isWord(p.unit, UNIT.gram)), other = mass.filter(p => !isWord(p.unit, UNIT.gram));
+    if (grams.some(p => p.value !== it.grams) || (saved != null && saved !== it.grams)) return { wrong: true, hand: null };
+    if (other.length) return { wrong: false, hand: `the spoken ${it.grams} g is shown as "${other.map(p => p.text).join(', ')}"` };
+    return { wrong: false, hand: null };
+  }
+  const values = new Set([...mass.map(p => p.value), ...(saved != null ? [saved] : [])]);
+  if (values.size > 1) return { wrong: false, hand: `no weight was spoken, and the shown weight disagrees with itself (label ${label || 'none'}; saved ${saved ?? 'none'} g)` };
+  return { wrong: false, hand: null };
+}
+const WEIGHT_CHECK = 'weight shown inconsistently (check by hand)';
 function judgePreview(items, preview, lang) {
   if (!preview || preview.error) return { result: 'provider error', problems: [], hand: [], items: [], note: preview?.error || 'no preview' };
   const saveable = saveableIn(preview);
@@ -514,8 +540,13 @@ function judgePreview(items, preview, lang) {
     else if (!it.unit) o = !q.unit || pieceUnit(q.unit) ? 'correct' : 'wrong unit';            // Fixes-2y: "2 kg" idli is a wrong unit
     else if (!(q.unit && isWord(q.unit, UNIT[it.unit]))) o = q.unit && it.unitAlias && isWord(q.unit, UNIT[it.unitAlias]) ? 'unit alias' : q.unit ? 'wrong unit' : 'unit not shown';
     else o = 'correct';
-    // Fixes-2z: when the listener recorded a weight said with the count, the preview's weight must match it.
-    if (it.grams != null && OK_ITEM.has(o)) { const shownG = shownPh.find(p => isMass(p) && isWord(p.unit, UNIT.gram))?.value ?? (fs[0].grams != null ? Number(fs[0].grams) : null); if (shownG != null && shownG !== it.grams) o = 'wrong number'; }
+    // Fixes-3a (the 2z review): EVERY weight shown in the label AND the amount that would be saved (foods[].grams, which the
+    // Save builder writes to the day) are judged — never only the first figure, never the label instead of the saved amount.
+    if (OK_ITEM.has(o)) {
+      const w = weightCheck(it, shownPh, fs[0]);
+      if (w.wrong) o = 'wrong number';
+      else if (w.hand) { o = WEIGHT_CHECK; hand.push(`${it.label}: ${w.hand}`); }
+    }
     if (fs.length > 1) o = 'wrong number';   // the same food twice is a doubled amount
     out.push({ label: it.label, outcome: o, shown: fs.map(x => x.qty_text || `${x.grams ?? ''} g`).join(' + ') });
     if (o === 'wrong number' || o === 'wrong unit') problems.push(`${it.label} shown as ${fs.map(x => `${x.qty_text || ''} ${x.name || ''}`.trim()).join(' + ')}`);
@@ -870,6 +901,27 @@ function rule3Status(x, judgments) {
   if (open.length) return { status: 'incomplete', why: [...new Set(open.map(l => l.cls === 'pending' ? (l.result === 'running' ? 'evaluation running' : l.result === 'provider error' ? 'provider/parser error' : 'hand check outstanding') : l.cls))].join(' + '), legs };
   return { status: 'valid', legs };
 }
+/**
+ * Fixes-3a: the replacement budget line. With the grants ledger (the export route), the counts come from it, so a withdrawal or
+ * deletion never returns an allowance; grants made before the ledger (only on the take) are added. Without it (pure use), from takes.
+ */
+function replacementBudgetText(takes, grants) {
+  if (!grants) return `${takes.filter(t => t.replacement_authorised).length} of ${REPLACEMENT_BUDGET} asked for, ${takes.filter(t => t.retake_reason === 'replacement').length} recorded; ${takes.filter(t => t.replacement_authorised && t.superseded_at).reduce((n, t) => n + engineCalls(t), 0)} calls were made on the excluded takes they replace (kept and shown)`;
+  const inLedger = new Set(grants.map(g => g.take_id));
+  const legacy = takes.filter(t => t.replacement_authorised && !inLedger.has(t.id));
+  const held = new Set(takes.map(t => t.id));
+  const asked = grants.length + legacy.length;
+  const recorded = grants.filter(g => g.replacement_take_id != null).length + legacy.filter(t => t.superseded_at).length;
+  const calls = grants.reduce((n, g) => n + (Number(g.calls_spent) || 0), 0) + legacy.reduce((n, t) => n + engineCalls(t), 0);
+  const gone = grants.filter(g => !held.has(g.take_id)).length;
+  return `${asked} of ${REPLACEMENT_BUDGET} asked for, ${recorded} recorded; ${calls} calls were made on the excluded takes they replace (kept and shown). From the grants ledger: ${gone} grant(s) on takes since deleted still count; a withdrawal or deletion never returns an allowance`;
+}
+/** Fixes-3a: calls spent in the round from the spend ledger (kept when takes are deleted). */
+function spendText(spend, takes) {
+  const held = new Set(takes.map(t => t.id));
+  const sum = (k, f = () => true) => spend.filter(x => x.kind === k && f(x)).reduce((n, x) => n + (Number(x.calls) || 0), 0);
+  return `${sum('transcription')} transcription call(s) and ${sum('rule3')} parser call(s) in the round; ${sum('transcription', x => !held.has(x.take_id)) + sum('rule3', x => !held.has(x.take_id))} of them on takes since deleted (withdrawal, removal or 90 days). Deleting recordings never lowers these`;
+}
 /** Fixes-2z: usable no-speech controls per required slot (volunteer × control × place), and why the others are not usable. */
 function controlCoverage(active, curActive, infoOf) {
   const needed = active.flatMap(p => slotPlan(p.grp).filter(s => s.kind === 'control').map(s => `${p.id}|${s.slot}`));
@@ -917,7 +969,7 @@ function nameScrubber(names, fullNames = []) {
  * reviewers by code (R1…), administrators by an export-only code (A1…), Part C operators as C1/C2, the test account as "test account".
  * privateNames: registered names to remove from every free-text cell (counted in About and on the Free text sheet).
  */
-function workbookSheets({ participants = [], takes = [], wording = [], partc = [], sessions = [], judgments, evals = [], reviewers = [], privateNames = [], accountNames = [], generatedAt = new Date() }) {
+function workbookSheets({ participants = [], takes = [], wording = [], partc = [], sessions = [], judgments, evals = [], reviewers = [], grants = null, spend = null, privateNames = [], accountNames = [], generatedAt = new Date() }) {
   judgments = judgments || evals;
   const active = participants.filter(p => !p.withdrawn_at);
   const byId = new Map(participants.map(p => [p.id, p]));
@@ -971,7 +1023,8 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     ['listener references', `${current.filter(t => t.reference_frozen_at).length} of ${current.length} current take(s) frozen; transcripts stay hidden from the listener until then`],
     ['budget: initial transcription calls', `planned ${PLANNED_TOTAL * 2} (both engines × ${PLANNED_TOTAL} recordings); made so far ${current.reduce((n, t) => n + engineCalls(t), 0)} on current takes`],
     ['budget: retakes and provider retries (counted separately)', `${takes.filter(t => t.superseded_at).reduce((n, t) => n + engineCalls(t), 0)} calls on superseded takes; ${takes.reduce((n, t) => n + Math.max(0, (t.gemini_provenance?.attempts?.length || 0) - 1), 0)} extra Gemini model attempts after a failure`],
-    ['budget: authorised replacements (separate)', `${takes.filter(t => t.replacement_authorised).length} of ${REPLACEMENT_BUDGET} asked for, ${takes.filter(t => t.retake_reason === 'replacement').length} recorded; ${takes.filter(t => t.replacement_authorised && t.superseded_at).reduce((n, t) => n + engineCalls(t), 0)} calls were made on the excluded takes they replace (kept and shown)`],
+    ['budget: authorised replacements (separate)', replacementBudgetText(takes, grants)],
+    ...(spend ? [['budget: calls spent in the round (ledger)', spendText(spend, takes)]] : []),
     ['budget: rule 3 parser calls (separate)', `${r3calls.initial + r3calls.reeval}: ${r3calls.initial} initial (at most 2 per newly admitted take, deduplicated by take and reference version) and ${r3calls.reeval} re-evaluation(s) after a reference or judge change (each authorised separately)`],
     ['budget: Part C attempts', `${attempts.length} of 64 planned (32 tries + one Retry each), before technical retakes; ${sessions.length} session(s)`],
     ['replay check: stored live decision vs offline replay at the live setting', mismatches ? `${mismatches} MISMATCH(ES): do not use the offline settings until explained` : `0 mismatches over ${takes.length} take(s)`],
@@ -1191,7 +1244,12 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     for (const h of t.label_history || []) history.push(['label (draft)', takeRef(t), iso(h.at), who(h.by), brief(h)]);
     for (const h of t.reference_history || []) history.push([`reference v${h.version}`, takeRef(t), iso(h.at), [h.listener, who(h.by)].filter(Boolean).join(' / '), brief({ sha: String(h.sha || '').slice(0, 16), ...h.reference })]);
     for (const h of t.hand_history || []) history.push(['Part B hand check', takeRef(t), iso(h.at), who(h.by), brief(h)]);
-    if (t.replacement_authorised) history.push(['replacement authorised', takeRef(t), iso(t.replacement_authorised.at), who(t.replacement_authorised.by), brief({ why: t.replacement_authorised.why || null })]);
+    if (t.replacement_authorised && !(grants || []).some(g => g.take_id === t.id)) history.push(['replacement authorised', takeRef(t), iso(t.replacement_authorised.at), who(t.replacement_authorised.by), brief({ why: t.replacement_authorised.why || null })]);
+  }
+  // Fixes-3a: the grants ledger, including grants whose takes were deleted since (they still count against the budget).
+  for (const g of grants || []) {
+    const t = takes.find(x => x.id === g.take_id);
+    history.push([`replacement granted (${g.grant_no} of ${REPLACEMENT_BUDGET})`, t ? takeRef(t) : `take ${g.take_id} (${g.participant_code || '?'} ${g.slot_code || ''}; deleted since)`, iso(g.granted_at), who(g.granted_by), brief({ why: g.why || null, replaced_by_take: g.replacement_take_id ?? null })]);
   }
   for (const j of judgments) {
     const t = takes.find(x => x.id === j.take_id); if (!t) continue;
@@ -1248,5 +1306,5 @@ module.exports = {
   ITEM_OUTCOMES, LINE_OUTCOMES, LINE_STATES, HAND_CHECK, FOOD, EXTRA_FOODS, UNIT,
   judgePreview, PREVIEW_RESULTS, LEG_CLASS, effectiveResult, legStatus, rule3Status, voiceLeg, geminiModels, geminiTake, whisperTake, transcribeTake,
   PARTC_PLAN, PARTC_LINES, NATURAL_PLAN, NATURAL_SLOTS, trialInfo, ARM_MINUTES, available, armedFor, recordTrial, recordDeviceDictation, recordPreview, answeredBy, speechRecord, actualPath,
-  dayState, dayDiff, restoreDay, checkSession, workbookSheets, truth, takeScore, deviceOf, phoneMix, nameScrubber, foodKeysOf, controlCoverage, REPEATED, REPLACEMENT_BUDGET,
+  dayState, dayDiff, restoreDay, checkSession, workbookSheets, truth, takeScore, deviceOf, phoneMix, nameScrubber, foodKeysOf, controlCoverage, REPEATED, REPLACEMENT_BUDGET, REPLACEMENT_ROUND, weightCheck, WEIGHT_CHECK, engineCalls,
 };
