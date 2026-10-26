@@ -1596,3 +1596,26 @@ CREATE TABLE IF NOT EXISTS voice_calibration_uploads (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   resolved_at    TIMESTAMPTZ
 );
+-- Fixes-3d (the 3c review): every provider/parser attempt is STARTED here, in the database, BEFORE the external call; if this
+-- row cannot be written the call is not made. It is marked 'recorded' in the same statement that writes the call count to
+-- voice_calibration_spend. A row still 'started' after a restart is an attempt whose calls are UNKNOWN (at most max_calls):
+-- the export reports it as unresolved and the screen stays incomplete until an administrator settles it from the provider's
+-- own records ('settled'). 'no call' means it ended before any external call was made. No foreign keys: deleting a take
+-- (withdrawal, 90 days) never removes an attempt.
+CREATE TABLE IF NOT EXISTS voice_calibration_attempts (
+  attempt_key      TEXT PRIMARY KEY,
+  kind             TEXT NOT NULL CHECK (kind IN ('transcription', 'rule3')),
+  take_id          INT,
+  judgment_ref     INT,
+  participant_code TEXT,
+  slot_code        TEXT,
+  max_calls        INT  NOT NULL,
+  state            TEXT NOT NULL DEFAULT 'started' CHECK (state IN ('started', 'recorded', 'no call', 'settled')),
+  started_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at      TIMESTAMPTZ,
+  settled          JSONB
+);
+-- Fixes-3d: whether an upload was ever kept, so a kept recording later deleted (withdrawal, removal, 90 days) is never reported
+-- as "never kept". Uploads kept under 3c: still 'kept', or 'deleted' by withdrawal with no reason (only unkept ones got one).
+ALTER TABLE voice_calibration_uploads ADD COLUMN IF NOT EXISTS ever_kept BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE voice_calibration_uploads SET ever_kept = TRUE WHERE NOT ever_kept AND (state = 'kept' OR (state = 'deleted' AND reason IS NULL));

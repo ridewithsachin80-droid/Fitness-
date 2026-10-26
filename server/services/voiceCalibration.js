@@ -923,14 +923,19 @@ function spendText(spend, takes, unresolved = null, reconciled = []) {
   const kept = (x) => (x.kind === 'transcription' ? x.take_id != null && x.outcome !== 'refused' && !/^refused/.test(x.outcome || '') && !/^not saved/.test(x.outcome || '') : x.outcome === 'judged' || x.judgment_id != null);
   const sum = (f) => spend.filter(f).reduce((n, x) => n + (Number(x.calls) || 0), 0);
   const notKept = sum(x => !kept(x)), deleted = sum(x => kept(x) && !held.has(x.take_id));
-  // Fixes-3c: attempts not yet written to the ledger make these totals SHORT, and say so first.
-  const waiting = unresolved && unresolved.attempts ? `UNRESOLVED: ${unresolved.attempts} attempt(s) (${unresolved.calls} call(s)) could not be written to the ledger yet, so the totals below are short by ${unresolved.calls}. ` : '';
+  // Fixes-3c: attempts not yet written to the ledger make these totals SHORT, and say so first. Fixes-3d: so do attempts that were
+  // started but never recorded (in flight, or interrupted by a restart or failure): their calls are unknown, reported with a bound.
+  const known = unresolved && unresolved.attempts ? `UNRESOLVED: ${unresolved.attempts} attempt(s) (${unresolved.calls} call(s)) could not be written to the ledger yet, so the totals below are short by ${unresolved.calls}. ` : '';
+  const unknown = unresolved && unresolved.unknownAttempts ? `UNRESOLVED: ${unresolved.unknownAttempts} attempt(s) were started but their calls were never recorded (still running, or interrupted by a restart or failure): their calls are UNKNOWN, at most ${unresolved.unknownMax}, and are not in the totals below; an administrator settles each from the provider's own records. ` : '';
+  const waiting = known + unknown;
+  const settledTxt = unresolved?.settled?.n ? ` ${unresolved.settled.n} attempt(s) were settled by an administrator from the provider's own records (${unresolved.settled.calls} call(s), included above).` : '';
   const recon = reconciled.length ? ` ${reconciled.length} duplicate row(s) (${reconciled.reduce((n, x) => n + (Number(x.calls) || 0), 0)} call(s)) added by an earlier boot back-fill were removed from these totals and kept in the reconciliation record.` : '';
-  return `${waiting}${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened. Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these.${recon}`;
+  return `${waiting}${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened. Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these.${recon}${settledTxt}`;
 }
-/** Fixes-3c: recordings registered before upload and never kept; anything not yet deleted is listed for the clean-up. */
-function uploadsText(uploads = []) {
-  const n = (st) => uploads.filter(u => u.state === st).reduce((k, u) => k + Number(u.n || 0), 0);
+/** Fixes-3c/3d: recordings registered before upload. Never kept vs kept then deleted are told apart (ever_kept). */
+function uploadsText(uploads = [], ever = false) {
+  const n = (st) => uploads.filter(u => u.state === st && !!u.ever_kept === ever).reduce((k, u) => k + Number(u.n || 0), 0);
+  if (ever) return `${n('deleted')} (kept with their take, deleted later by withdrawal, removal or the 90-day limit); ${n('kept')} still kept`;
   const waiting = n('uploading') + n('delete failed');
   return `${n('deleted')} deleted; ${waiting ? `${waiting} NOT YET DELETED (${n('delete failed')} failed deletion(s), ${n('uploading')} unfinished); the daily clean-up retries them` : 'none waiting to be deleted'}`;
 }
@@ -1015,7 +1020,8 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
   if (ctl.usable < 36) coverage.push(`no-speech controls: ${ctl.usable} of 36 usable (every volunteer × control × place needs a frozen "no speech" label on a measured clip${ctl.why ? `; not usable: ${ctl.why}` : ''})`);
   const notRemeasured = curActive.filter(t => !t.remeasure).length;
   if (notRemeasured) coverage.push(`re-measure: ${notRemeasured} take(s) not yet measured again`);
-  if (spendUnresolved?.attempts) coverage.push(`call ledger: ${spendUnresolved.attempts} attempt(s) not yet written`);   // Fixes-3c
+  { const open = (spendUnresolved?.attempts || 0) + (spendUnresolved?.unknownAttempts || 0);   // Fixes-3c/3d
+    if (open) coverage.push(`call ledger: ${open} attempt(s) not yet written${spendUnresolved?.unknownAttempts ? ` (${spendUnresolved.unknownAttempts} with unknown calls, to be settled)` : ''}`); }
   if (mix.gaps.length) coverage.push(`phone mix: ${mix.gaps.join(', ')}`);
   if (mismatches) blockers.push(`${mismatches} replay mismatch(es): the offline settings cannot be trusted until explained`);
   if (remeasureMismatch) blockers.push(`${remeasureMismatch} re-measure mismatch(es)`);
@@ -1039,6 +1045,7 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     ['budget: authorised replacements (separate)', replacementBudgetText(takes, grants)],
     ...(spend ? [['budget: calls spent in the round (ledger)', spendText(spend, takes, spendUnresolved, reconciled)]] : []),
     ...(spend ? [['recordings never kept (refused or not saved)', uploadsText(uploads)]] : []),
+    ...(spend ? [['recordings kept, then deleted', uploadsText(uploads, true)]] : []),
     ['budget: rule 3 parser calls (separate)', `${r3calls.initial + r3calls.reeval}: ${r3calls.initial} initial (at most 2 per newly admitted take, deduplicated by take and reference version) and ${r3calls.reeval} re-evaluation(s) after a reference or judge change (each authorised separately)`],
     ['budget: Part C attempts', `${attempts.length} of 64 planned (32 tries + one Retry each), before technical retakes; ${sessions.length} session(s)`],
     ['replay check: stored live decision vs offline replay at the live setting', mismatches ? `${mismatches} MISMATCH(ES): do not use the offline settings until explained` : `0 mismatches over ${takes.length} take(s)`],
