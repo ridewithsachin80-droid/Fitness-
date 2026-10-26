@@ -917,13 +917,22 @@ function replacementBudgetText(takes, grants) {
   return `${asked} of ${REPLACEMENT_BUDGET} asked for, ${recorded} recorded; ${calls} calls were made on the excluded takes they replace (kept and shown). From the grants ledger: ${gone} grant(s) on takes since deleted still count; a withdrawal or deletion never returns an allowance`;
 }
 /** Fixes-3a: calls spent in the round from the spend ledger (kept when takes are deleted). */
-function spendText(spend, takes) {
+function spendText(spend, takes, unresolved = null, reconciled = []) {
   const held = new Set(takes.map(t => t.id));
   // Fixes-3b: an attempt's result was KEPT when its take was saved (transcription) or its judgment recorded (parser).
-  const kept = (x) => (x.kind === 'transcription' ? x.take_id != null && x.outcome !== 'refused' && !/^not saved/.test(x.outcome || '') : x.outcome === 'judged' || x.judgment_id != null);
+  const kept = (x) => (x.kind === 'transcription' ? x.take_id != null && x.outcome !== 'refused' && !/^refused/.test(x.outcome || '') && !/^not saved/.test(x.outcome || '') : x.outcome === 'judged' || x.judgment_id != null);
   const sum = (f) => spend.filter(f).reduce((n, x) => n + (Number(x.calls) || 0), 0);
   const notKept = sum(x => !kept(x)), deleted = sum(x => kept(x) && !held.has(x.take_id));
-  return `${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened. Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these`;
+  // Fixes-3c: attempts not yet written to the ledger make these totals SHORT, and say so first.
+  const waiting = unresolved && unresolved.attempts ? `UNRESOLVED: ${unresolved.attempts} attempt(s) (${unresolved.calls} call(s)) could not be written to the ledger yet, so the totals below are short by ${unresolved.calls}. ` : '';
+  const recon = reconciled.length ? ` ${reconciled.length} duplicate row(s) (${reconciled.reduce((n, x) => n + (Number(x.calls) || 0), 0)} call(s)) added by an earlier boot back-fill were removed from these totals and kept in the reconciliation record.` : '';
+  return `${waiting}${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened. Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these.${recon}`;
+}
+/** Fixes-3c: recordings registered before upload and never kept; anything not yet deleted is listed for the clean-up. */
+function uploadsText(uploads = []) {
+  const n = (st) => uploads.filter(u => u.state === st).reduce((k, u) => k + Number(u.n || 0), 0);
+  const waiting = n('uploading') + n('delete failed');
+  return `${n('deleted')} deleted; ${waiting ? `${waiting} NOT YET DELETED (${n('delete failed')} failed deletion(s), ${n('uploading')} unfinished); the daily clean-up retries them` : 'none waiting to be deleted'}`;
 }
 /** Fixes-2z: usable no-speech controls per required slot (volunteer × control × place), and why the others are not usable. */
 function controlCoverage(active, curActive, infoOf) {
@@ -972,7 +981,7 @@ function nameScrubber(names, fullNames = []) {
  * reviewers by code (R1…), administrators by an export-only code (A1…), Part C operators as C1/C2, the test account as "test account".
  * privateNames: registered names to remove from every free-text cell (counted in About and on the Free text sheet).
  */
-function workbookSheets({ participants = [], takes = [], wording = [], partc = [], sessions = [], judgments, evals = [], reviewers = [], grants = null, spend = null, privateNames = [], accountNames = [], generatedAt = new Date() }) {
+function workbookSheets({ participants = [], takes = [], wording = [], partc = [], sessions = [], judgments, evals = [], reviewers = [], grants = null, spend = null, reconciled = [], uploads = [], spendUnresolved = null, privateNames = [], accountNames = [], generatedAt = new Date() }) {
   judgments = judgments || evals;
   const active = participants.filter(p => !p.withdrawn_at);
   const byId = new Map(participants.map(p => [p.id, p]));
@@ -1006,6 +1015,7 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
   if (ctl.usable < 36) coverage.push(`no-speech controls: ${ctl.usable} of 36 usable (every volunteer × control × place needs a frozen "no speech" label on a measured clip${ctl.why ? `; not usable: ${ctl.why}` : ''})`);
   const notRemeasured = curActive.filter(t => !t.remeasure).length;
   if (notRemeasured) coverage.push(`re-measure: ${notRemeasured} take(s) not yet measured again`);
+  if (spendUnresolved?.attempts) coverage.push(`call ledger: ${spendUnresolved.attempts} attempt(s) not yet written`);   // Fixes-3c
   if (mix.gaps.length) coverage.push(`phone mix: ${mix.gaps.join(', ')}`);
   if (mismatches) blockers.push(`${mismatches} replay mismatch(es): the offline settings cannot be trusted until explained`);
   if (remeasureMismatch) blockers.push(`${remeasureMismatch} re-measure mismatch(es)`);
@@ -1027,7 +1037,8 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     ['budget: initial transcription calls', `planned ${PLANNED_TOTAL * 2} (both engines × ${PLANNED_TOTAL} recordings); made so far ${current.reduce((n, t) => n + engineCalls(t), 0)} on current takes`],
     ['budget: retakes and provider retries (counted separately)', `${takes.filter(t => t.superseded_at).reduce((n, t) => n + engineCalls(t), 0)} calls on superseded takes; ${takes.reduce((n, t) => n + Math.max(0, (t.gemini_provenance?.attempts?.length || 0) - 1), 0)} extra Gemini model attempts after a failure`],
     ['budget: authorised replacements (separate)', replacementBudgetText(takes, grants)],
-    ...(spend ? [['budget: calls spent in the round (ledger)', spendText(spend, takes)]] : []),
+    ...(spend ? [['budget: calls spent in the round (ledger)', spendText(spend, takes, spendUnresolved, reconciled)]] : []),
+    ...(spend ? [['recordings never kept (refused or not saved)', uploadsText(uploads)]] : []),
     ['budget: rule 3 parser calls (separate)', `${r3calls.initial + r3calls.reeval}: ${r3calls.initial} initial (at most 2 per newly admitted take, deduplicated by take and reference version) and ${r3calls.reeval} re-evaluation(s) after a reference or judge change (each authorised separately)`],
     ['budget: Part C attempts', `${attempts.length} of 64 planned (32 tries + one Retry each), before technical retakes; ${sessions.length} session(s)`],
     ['replay check: stored live decision vs offline replay at the live setting', mismatches ? `${mismatches} MISMATCH(ES): do not use the offline settings until explained` : `0 mismatches over ${takes.length} take(s)`],

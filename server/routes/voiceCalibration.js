@@ -93,21 +93,70 @@ async function wordingOk(lang, db = pool) {
 /**
  * Fixes-3b: spent calls, recorded when the attempt happens, in their own committed statement (never inside a take's or judgment's
  * transaction, so a rollback cannot remove them). attemptKey makes writing the same attempt twice harmless.
+ * Fixes-3c (the 3b review, finding 2): a failed write is no longer swallowed. It is retried once; if it still fails, the attempt
+ * waits in `pendingSpend` (same attempt key, never a new provider call) and is written by the next calibration request
+ * (`flushSpend`). A kept take or judgment always writes its own spend row in the same transaction/statement, so a saved result
+ * can never lack its count. Anything still waiting is reported as UNRESOLVED in the export and keeps the screen incomplete.
+ * The waiting list lives in this server process: if the database refuses writes AND the server restarts before they are
+ * written, those attempts survive only in the server log (logged with their key and calls).
  */
-async function recordSpend({ kind, attemptKey, code, slot, calls, takeId = null, judgmentRef = null }) {
-  if (!calls) return;
-  try {
-    await pool.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (attempt_key) DO NOTHING`,
-      [kind, attemptKey, takeId, judgmentRef, code || null, slot || null, calls]);
-  } catch (e) { console.error('[voice-calibration] spend not recorded yet (it is written again when the take commits):', e.message); }
+const pendingSpend = new Map();   // attemptKey → spend row not yet in the ledger
+const writeSpend = (r) => pool.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+  ON CONFLICT (attempt_key) DO UPDATE SET outcome = COALESCE(voice_calibration_spend.outcome, EXCLUDED.outcome)`,
+  [r.kind, r.attemptKey, r.takeId ?? null, r.judgmentRef ?? null, r.code || null, r.slot || null, r.calls, r.outcome || null]);
+async function recordSpend(r) {
+  if (!r.calls) return true;
+  let last;
+  for (let i = 0; i < 2; i++) {
+    try { await writeSpend(r); pendingSpend.delete(r.attemptKey); return true; } catch (e) { last = e; }
+  }
+  pendingSpend.set(r.attemptKey, { ...r });
+  console.error(`[voice-calibration] spend NOT yet recorded, waiting to be written: ${r.attemptKey} (${r.kind}, ${r.calls} call(s)):`, last?.message);
+  return false;
 }
-const markSpend = (attemptKey, outcome) => pool.query(`UPDATE voice_calibration_spend SET outcome=$2 WHERE attempt_key=$1 AND outcome IS NULL`, [attemptKey, outcome]).catch(() => {});
+async function flushSpend() {
+  for (const r of [...pendingSpend.values()]) {
+    try { await writeSpend(r); pendingSpend.delete(r.attemptKey); } catch (e) { break; }
+  }
+  return pendingSpend.size;
+}
+const spendUnresolved = () => ({ attempts: pendingSpend.size, calls: [...pendingSpend.values()].reduce((n, r) => n + (Number(r.calls) || 0), 0) });
+async function markSpend(attemptKey, outcome) {
+  const waiting = pendingSpend.get(attemptKey);
+  if (waiting && !waiting.outcome) waiting.outcome = outcome;
+  await pool.query(`UPDATE voice_calibration_spend SET outcome=$2 WHERE attempt_key=$1 AND outcome IS NULL`, [attemptKey, outcome]).catch(() => {});
+}
+/**
+ * Fixes-3c (the 3b review, finding 3): an uploaded recording that will not be kept is deleted, and the outcome is recorded on its
+ * registration row: 'deleted', or 'delete failed' (retried by the daily clean-up). If even that row cannot be updated it stays
+ * 'uploading', which the clean-up also finds.
+ */
+async function discardUpload(key, reason) {
+  let state = 'deleted';
+  try { await storage.deleteObject(key); } catch (e) { state = 'delete failed'; console.error('[voice-calibration] could not delete an unkept recording yet (the daily clean-up retries it):', key, e.message); }
+  await pool.query(`UPDATE voice_calibration_uploads SET state=$2, reason=$3, resolved_at=NOW() WHERE object_key=$1 AND state <> 'kept'`, [key, state, String(reason).slice(0, 200)]).catch(() => {});
+  return state;
+}
+/** Fixes-3c: recordings registered but never kept (older than `minutes`), and failed deletions: delete them now. */
+async function sweepUploads(db = pool, minutes = 60) {
+  const { rows } = await db.query(`SELECT object_key FROM voice_calibration_uploads WHERE (state = 'uploading' AND created_at < NOW() - make_interval(mins => $1)) OR state = 'delete failed' ORDER BY created_at LIMIT 500`, [minutes]);
+  let n = 0;
+  for (const r of rows) {
+    try { await storage.deleteObject(r.object_key); await db.query(`UPDATE voice_calibration_uploads SET state='deleted', reason=COALESCE(reason, 'never kept') || ' (cleaned up)', resolved_at=NOW() WHERE object_key=$1`, [r.object_key]); n++; }
+    catch (e) { await db.query(`UPDATE voice_calibration_uploads SET state='delete failed' WHERE object_key=$1`, [r.object_key]).catch(() => {}); console.error('voice calibration upload clean-up failed:', r.object_key, e.message); }
+  }
+  return n;
+}
 async function deleteTakes(participantId) {
   const { rows } = await pool.query(`SELECT id, object_key FROM voice_calibration_takes WHERE participant_id=$1`, [participantId]);
   for (const r of rows) {
     if (r.object_key) await storage.deleteObject(r.object_key);   // throws: the caller reports it; rows stay
     await pool.query(`DELETE FROM voice_calibration_takes WHERE id=$1`, [r.id]);
   }
+  // Fixes-3c: recordings that were never kept (refused, failed, or a failed deletion) go too; kept ones were deleted above.
+  const { rows: loose } = await pool.query(`SELECT object_key FROM voice_calibration_uploads WHERE participant_id=$1 AND state IN ('uploading', 'delete failed')`, [participantId]);
+  for (const u of loose) { await storage.deleteObject(u.object_key); await pool.query(`UPDATE voice_calibration_uploads SET state='deleted', reason='withdrawn', resolved_at=NOW() WHERE object_key=$1`, [u.object_key]); }
+  await pool.query(`UPDATE voice_calibration_uploads SET state='deleted', resolved_at=COALESCE(resolved_at, NOW()) WHERE participant_id=$1 AND state='kept'`, [participantId]);
   return rows.length;
 }
 const activeOf = async (patientId) => (await pool.query(`SELECT * FROM voice_calibration_participants WHERE patient_id=$1 AND withdrawn_at IS NULL`, [patientId])).rows[0];
@@ -164,52 +213,72 @@ router.post('/take', member, async (req, res) => {
     if (!storage.isConfigured()) return res.status(503).json({ error: 'Recording storage is not set up yet.' });
     const buf = Buffer.from(audio, 'base64');
     const key = `voice-calibration/${p.id}/${info.slot}-${crypto.randomUUID()}.${mt.includes('mp4') ? 'm4a' : mt.includes('ogg') ? 'ogg' : 'webm'}`;
-    try { await storage.putObject(key, buf, mt); }
-    catch (e) { return res.status(502).json({ error: "Couldn't save that recording just now. Try again." }); }
-    // The live speech check exactly as it runs on everyday voice notes (measured, never refused here),
-    // then both engines exactly as everyday logging asks them.
-    const speech = await SP.check(audio);
-    const t = await C.transcribeTake(audio, mt, info.lang_hint);
-    // Fixes-3b: the engines have answered, so their calls are spent. Count them NOW, in a committed row of their own, before
-    // and whatever becomes of the take (refused, rolled back or failed to save). The attempt key ties the later link to it.
     const attemptKey = `take:${crypto.randomUUID()}`;
-    const calls = C.engineCalls({ gemini_provenance: t.gemini.provenance, whisper_provenance: t.whisper.provenance });
-    await recordSpend({ kind: 'transcription', attemptKey, code: p.code, slot: info.slot, calls });
-    const f = speech.features || {};
-    const client = await pool.connect();
+    await flushSpend();
+    // Fixes-3c: register the recording BEFORE it exists in storage, so it can never be left behind unseen.
+    await pool.query(`INSERT INTO voice_calibration_uploads (object_key, attempt_key, participant_id, slot_code) VALUES ($1,$2,$3,$4)`, [key, attemptKey, p.id, info.slot]);
+    try { await storage.putObject(key, buf, mt); }
+    catch (e) { await discardUpload(key, 'upload failed'); return res.status(502).json({ error: "Couldn't save that recording just now. Try again." }); }
+    // From here until the take commits, ANY failure (the speech check, the engines, getting a database connection, the write)
+    // deletes the recording and marks its calls; a refusal does the same with its own reason.
+    let settled = false;
     try {
-      await client.query('BEGIN');
-      await client.query(`SELECT id FROM voice_calibration_participants WHERE id=$1 FOR UPDATE`, [p.id]);   // one take number at a time
-      const { rows: [mx] } = await client.query(`SELECT COALESCE(MAX(take_no), 0)::int AS n FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2`, [p.id, info.slot]);
-      const { rows: [curTake] } = await client.query(`SELECT id FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
-      await client.query(`UPDATE voice_calibration_takes SET superseded_at = NOW() WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
-      const { rows: [row] } = await client.query(
-        `INSERT INTO voice_calibration_takes (participant_id, slot_code, take_no, object_key, mime_type, duration_ms, audio_sha256, phone_type, browser, installed_app, device, retake_reason, retake_note,
-           speech_status, detector_version, voiced_frames, longest_run_frames, f0_spread_raw, f0_count, hop_ms, frames, voiced_ms, longest_run_ms, peak_db_raw, background_db_raw, speech_error,
-           gemini_text, gemini_error, gemini_generated, gemini_provenance, whisper_text, whisper_error, whisper_review, whisper_segments, whisper_provenance)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$35,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34) RETURNING id, take_no`,
-        [p.id, info.slot, mx.n + 1, key, mt, Math.min(60000, Math.max(0, parseInt(req.body?.duration_ms) || 0)) || null, sha256(buf), p.phone_type, p.browser, p.installed_app,
-         prev.n > 0 ? reason : null, prev.n > 0 && req.body?.retake_note ? String(req.body.retake_note).slice(0, 200) : null,
-         speech.status, speech.version || null, f.voiced_frames ?? null, f.longest_run_frames ?? null, f.f0_spread_raw ?? null, f.f0_count ?? null, f.hop_ms ?? null, f.frames ?? null,
-         speech.voiced_ms ?? null, speech.longest_run_ms ?? null, f.peak_db_raw ?? null, f.background_db_raw ?? null, speech.error ? String(speech.error).slice(0, 200) : null,
-         t.gemini.text, t.gemini.text == null ? (t.gemini.error || 'no answer') : null, t.gemini.text == null ? null : !!t.gemini.generated_text, JSON.stringify(t.gemini.provenance),
-         t.whisper.text, t.whisper.text == null ? (t.whisper.error || 'no answer') : null, t.whisper.review ? JSON.stringify(t.whisper.review) : null,
-         t.whisper.segments ? JSON.stringify(t.whisper.segments) : null, JSON.stringify(t.whisper.provenance), p.device ? JSON.stringify(p.device) : null]);
-      // Fixes-3a: one grant, one replacement. The grant on the take being replaced is used by THIS take, or the replacement is refused.
-      if (reason === 'replacement') {
-        const { rows: [g] } = await client.query(`UPDATE voice_calibration_replacement_grants SET replacement_take_id=$2, replaced_at=NOW()
-          WHERE round=$3 AND take_id=$1 AND replacement_take_id IS NULL RETURNING id`, [curTake?.id ?? -1, row.id, C.REPLACEMENT_ROUND]);
-        if (!g) { await client.query('ROLLBACK'); storage.deleteObject(key).catch(() => {}); await markSpend(attemptKey, 'refused (the grant was already used)');
-          return res.status(409).json({ error: 'Your coach has not asked for this clip to be recorded again (or it was already recorded again). Choose another reason if something went wrong.' }); }
+      // The live speech check exactly as it runs on everyday voice notes (measured, never refused here),
+      // then both engines exactly as everyday logging asks them.
+      const speech = await SP.check(audio);
+      const t = await C.transcribeTake(audio, mt, info.lang_hint);
+      // Fixes-3b: the engines have answered, so their calls are spent. Count them NOW, in a committed row of their own, before
+      // and whatever becomes of the take (refused, rolled back or failed to save). The attempt key ties the later link to it.
+      const calls = C.engineCalls({ gemini_provenance: t.gemini.provenance, whisper_provenance: t.whisper.provenance });
+      await recordSpend({ kind: 'transcription', attemptKey, code: p.code, slot: info.slot, calls });
+      const f = speech.features || {};
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`SELECT id FROM voice_calibration_participants WHERE id=$1 FOR UPDATE`, [p.id]);   // one take number at a time
+        const { rows: [mx] } = await client.query(`SELECT COALESCE(MAX(take_no), 0)::int AS n FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2`, [p.id, info.slot]);
+        const { rows: [curTake] } = await client.query(`SELECT id FROM voice_calibration_takes WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
+        await client.query(`UPDATE voice_calibration_takes SET superseded_at = NOW() WHERE participant_id=$1 AND slot_code=$2 AND superseded_at IS NULL`, [p.id, info.slot]);
+        const { rows: [row] } = await client.query(
+          `INSERT INTO voice_calibration_takes (participant_id, slot_code, take_no, object_key, mime_type, duration_ms, audio_sha256, phone_type, browser, installed_app, device, retake_reason, retake_note,
+             speech_status, detector_version, voiced_frames, longest_run_frames, f0_spread_raw, f0_count, hop_ms, frames, voiced_ms, longest_run_ms, peak_db_raw, background_db_raw, speech_error,
+             gemini_text, gemini_error, gemini_generated, gemini_provenance, whisper_text, whisper_error, whisper_review, whisper_segments, whisper_provenance)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$35,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34) RETURNING id, take_no`,
+          [p.id, info.slot, mx.n + 1, key, mt, Math.min(60000, Math.max(0, parseInt(req.body?.duration_ms) || 0)) || null, sha256(buf), p.phone_type, p.browser, p.installed_app,
+           prev.n > 0 ? reason : null, prev.n > 0 && req.body?.retake_note ? String(req.body.retake_note).slice(0, 200) : null,
+           speech.status, speech.version || null, f.voiced_frames ?? null, f.longest_run_frames ?? null, f.f0_spread_raw ?? null, f.f0_count ?? null, f.hop_ms ?? null, f.frames ?? null,
+           speech.voiced_ms ?? null, speech.longest_run_ms ?? null, f.peak_db_raw ?? null, f.background_db_raw ?? null, speech.error ? String(speech.error).slice(0, 200) : null,
+           t.gemini.text, t.gemini.text == null ? (t.gemini.error || 'no answer') : null, t.gemini.text == null ? null : !!t.gemini.generated_text, JSON.stringify(t.gemini.provenance),
+           t.whisper.text, t.whisper.text == null ? (t.whisper.error || 'no answer') : null, t.whisper.review ? JSON.stringify(t.whisper.review) : null,
+           t.whisper.segments ? JSON.stringify(t.whisper.segments) : null, JSON.stringify(t.whisper.provenance), p.device ? JSON.stringify(p.device) : null]);
+        // Fixes-3a: one grant, one replacement. The grant on the take being replaced is used by THIS take, or the replacement is refused.
+        if (reason === 'replacement') {
+          const { rows: [g] } = await client.query(`UPDATE voice_calibration_replacement_grants SET replacement_take_id=$2, replaced_at=NOW()
+            WHERE round=$3 AND take_id=$1 AND replacement_take_id IS NULL RETURNING id`, [curTake?.id ?? -1, row.id, C.REPLACEMENT_ROUND]);
+          if (!g) {
+            await client.query('ROLLBACK'); settled = true;
+            await discardUpload(key, 'refused: the grant was already used');
+            await markSpend(attemptKey, 'refused (the grant was already used)'); await flushSpend();
+            return res.status(409).json({ error: 'Your coach has not asked for this clip to be recorded again (or it was already recorded again). Choose another reason if something went wrong.' });
+          }
+        }
+        // Fixes-3a/3b: the calls spent, linked to the kept take in the same transaction (written here if the early record failed).
+        await client.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, participant_code, slot_code, calls, outcome) VALUES ('transcription', $1, $2, $3, $4, $5, 'saved')
+          ON CONFLICT (attempt_key) DO UPDATE SET take_id = EXCLUDED.take_id, outcome = 'saved'`, [attemptKey, row.id, p.code, info.slot, calls]);
+        await client.query(`UPDATE voice_calibration_uploads SET state='kept', resolved_at=NOW() WHERE object_key=$1`, [key]);
+        await client.query('COMMIT'); settled = true;
+        pendingSpend.delete(attemptKey);
+        // No transcript is shown to the volunteer: a retake is for a recording problem, not for a wrong answer.
+        res.json({ ok: true, slot: info.slot, take_no: row.take_no });
+      } catch (e) { if (!settled) await client.query('ROLLBACK').catch(() => {}); throw e; }
+      finally { client.release(); }
+    } catch (e) {
+      if (!settled) {
+        await discardUpload(key, `not saved: ${String(e.message || e).slice(0, 120)}`);
+        await markSpend(attemptKey, 'not saved (the take could not be written)'); await flushSpend();
       }
-      // Fixes-3a: the calls spent, kept even if the take is deleted later.
-      await client.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, participant_code, slot_code, calls, outcome) VALUES ('transcription', $1, $2, $3, $4, $5, 'saved')
-        ON CONFLICT (attempt_key) DO UPDATE SET take_id = EXCLUDED.take_id, outcome = 'saved'`, [attemptKey, row.id, p.code, info.slot, calls]);
-      await client.query('COMMIT');
-      // No transcript is shown to the volunteer: a retake is for a recording problem, not for a wrong answer.
-      res.json({ ok: true, slot: info.slot, take_no: row.take_no });
-    } catch (e) { await client.query('ROLLBACK').catch(() => {}); storage.deleteObject(key).catch(() => {}); await markSpend(attemptKey, 'not saved (the take could not be written)'); throw e; }
-    finally { client.release(); }
+      throw e;
+    }
   } catch (err) { fail(res, err); }
 });
 
@@ -510,6 +579,7 @@ router.post('/admin/hand-check', admin, async (req, res) => {
 router.post('/admin/preview-eval', admin, async (req, res) => {
   try {
     const reevaluate = req.body?.reevaluate === true;
+    await flushSpend();
     const { rows } = await pool.query(`SELECT t.*, p.grp, p.patient_id, p.code FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
       WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL AND t.reference_frozen_at IS NOT NULL AND t.heard = 'speech' AND COALESCE(t.reference_mode, '') <> 'unscorable' ORDER BY t.id`);
     const { rows: [waiting] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
@@ -545,14 +615,19 @@ router.post('/admin/preview-eval', admin, async (req, res) => {
           await recordSpend({ kind: 'rule3', attemptKey: spendKey, code: t.code, slot: t.slot_code, calls: used, takeId: t.id, judgmentRef: claim.id });
           judgment = C.judgePreview(C.itemsWithReference(info.items, t.reference_items, t.reference_mode), preview, info.lang);
         } else judgment = { result: leg.stage === 'voice refused' ? 'explicit refusal' : 'provider error', problems: [], hand: [], items: [], note: leg.reason };
-        // The judgment, and (Fixes-3b) its spend row marked as kept, in one statement.
-        await pool.query(`WITH done AS (UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1 RETURNING id)
-          UPDATE voice_calibration_spend SET outcome = 'judged' WHERE attempt_key = $7 AND EXISTS (SELECT 1 FROM done)`,
+        // The judgment and its spend row in ONE statement (Fixes-3c): the row is updated to "judged", or written now if the early
+        // record failed, so a judgment can never be saved without its call. If this statement fails, neither is saved.
+        await pool.query(`WITH done AS (UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1 RETURNING id, take_id)
+          INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome)
+          SELECT 'rule3', $7, d.take_id, d.id, p.code, t.slot_code, $5, 'judged' FROM done d JOIN voice_calibration_takes t ON t.id = d.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
+          WHERE $5::int > 0
+          ON CONFLICT (attempt_key) DO UPDATE SET outcome = 'judged'`,
           [claim.id, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used, preview && (preview.aiProvider || preview.aiModel) ? JSON.stringify({ provider: preview.aiProvider || null, model: preview.aiModel || null }) : null, spendKey]);
+        pendingSpend.delete(spendKey);   // recorded with the judgment
         judged++;
       }
     }
-    res.json({ ok: true, judged, parser_calls: calls, reevaluation_calls: recalls, stale_waiting: stale, busy, awaiting_reference: waiting.n, more });
+    res.json({ ok: true, judged, parser_calls: calls, reevaluation_calls: recalls, stale_waiting: stale, busy, awaiting_reference: waiting.n, more, accounting_unresolved: spendUnresolved().attempts });
   } catch (err) { fail(res, err); }
 });
 
@@ -700,6 +775,7 @@ router.put('/admin/partc/:trial', admin, async (req, res) => {
 
 router.get('/admin/export.xlsx', admin, async (req, res) => {
   try {
+    await flushSpend();   // Fixes-3c: write any waiting spend first; whatever still waits is reported as UNRESOLVED
     const { rows: participants } = await pool.query(`SELECT id, code, grp, profile_note, consented_at, consent_version, phone_type, browser, installed_app, device, withdrawn_at FROM voice_calibration_participants ORDER BY id`);
     const { rows: takes } = await pool.query(`SELECT * FROM voice_calibration_takes ORDER BY id`);
     const { rows: wording } = await pool.query(`SELECT * FROM voice_calibration_wording`);
@@ -712,7 +788,9 @@ router.get('/admin/export.xlsx', admin, async (req, res) => {
     const { rows: accounts } = await pool.query(`SELECT name FROM users WHERE name IS NOT NULL`);   // whole names only (operators, coaches, members)
     const { rows: grants } = await pool.query(`SELECT * FROM voice_calibration_replacement_grants WHERE round=$1 ORDER BY grant_no`, [C.REPLACEMENT_ROUND]);
     const { rows: spend } = await pool.query(`SELECT * FROM voice_calibration_spend ORDER BY id`);
-    const buf = X.workbook(C.workbookSheets({ participants, takes, wording, partc, sessions, judgments, reviewers, grants, spend, privateNames: names.map(n => n.name), accountNames: accounts.map(a => a.name) }));
+    const { rows: reconciled } = await pool.query(`SELECT * FROM voice_calibration_spend_reconciled ORDER BY id`);
+    const { rows: uploads } = await pool.query(`SELECT state, COUNT(*)::int AS n FROM voice_calibration_uploads GROUP BY state`);
+    const buf = X.workbook(C.workbookSheets({ participants, takes, wording, partc, sessions, judgments, reviewers, grants, spend, reconciled, uploads, spendUnresolved: spendUnresolved(), privateNames: names.map(n => n.name), accountNames: accounts.map(a => a.name) }));
     const day = new Date().toISOString().slice(0, 10);
     res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="FitLife-Voice-Calibration-${day}.xlsx"` });
     res.send(buf);
@@ -721,6 +799,7 @@ router.get('/admin/export.xlsx', admin, async (req, res) => {
 
 /** Takes past their 90 days. Run daily by cronService; safe to repeat. */
 async function deleteExpiredTakes(db = pool, limit = 500) {
+  await sweepUploads(db).catch(e => console.error('voice calibration upload clean-up failed:', e.message));   // Fixes-3c
   const { rows } = await db.query(`SELECT id, object_key FROM voice_calibration_takes WHERE delete_after < NOW() ORDER BY delete_after LIMIT $1`, [limit]);
   let n = 0;
   for (const r of rows) {
@@ -732,4 +811,6 @@ async function deleteExpiredTakes(db = pool, limit = 500) {
 
 module.exports = router;
 module.exports.deleteExpiredTakes = deleteExpiredTakes;
+module.exports.sweepUploads = sweepUploads;
+module.exports._spend = { pending: pendingSpend, flush: flushSpend, unresolved: spendUnresolved };   // tests only
 module.exports.RETAKE_REASONS = RETAKE_REASONS;

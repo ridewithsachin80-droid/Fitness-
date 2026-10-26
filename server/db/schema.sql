@@ -1526,6 +1526,14 @@ CREATE TABLE IF NOT EXISTS voice_calibration_spend (
   calls            INT  NOT NULL DEFAULT 0,
   at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Fixes-3b (the 3a review; moved up here in Fixes-3c so the back-fills below can read these columns on any database): every provider/parser attempt is counted when it HAPPENS, in its own committed row, before (and
+-- whatever becomes of) the take or judgment it was for. attempt_key identifies one attempt, so writing the same attempt twice
+-- (the early record and the link when the take commits) never counts it twice, while a genuinely new attempt is a new row.
+-- outcome: 'saved' / 'judged' when its result was kept; 'refused' or 'not saved' when it was not; NULL while unresolved.
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS attempt_key  TEXT;
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS outcome      TEXT;
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS judgment_ref INT;
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_attempt ON voice_calibration_spend (attempt_key);
 CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_take ON voice_calibration_spend (take_id) WHERE kind = 'transcription';
 CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_judgment ON voice_calibration_spend (judgment_id) WHERE kind = 'rule3';
 -- Calls already spent before the ledger existed join it once.
@@ -1537,16 +1545,54 @@ SELECT 'transcription', t.id, p.code, t.slot_code,
 FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
 WHERE NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'transcription' AND s.take_id = t.id)
 ON CONFLICT DO NOTHING;
+-- Fixes-3c (the 3b review, finding 1): under Fixes-3b each parser call is recorded by its attempt (attempt_key, judgment_ref);
+-- the boot back-fill below checked only judgment_id, so every schema run (every boot) added a second, legacy-style row for a
+-- judgment whose calls were already recorded. Such a row is PROVABLY a duplicate: it has no attempt key, and the same judgment
+-- has attempt-recorded calls (a judgment completed under 3b was never completed before, so it cannot also have a genuine 3a
+-- row). Those rows are moved to a reconciliation record (kept, never silently erased) and removed from the ledger. Genuine
+-- attempts, including several for one judgment, are never touched.
+CREATE TABLE IF NOT EXISTS voice_calibration_spend_reconciled (
+  id            SERIAL PRIMARY KEY,
+  spend_id      INT,
+  kind          TEXT,
+  take_id       INT,
+  judgment_id   INT,
+  calls         INT,
+  at            TIMESTAMPTZ,
+  duplicate_of  TEXT,
+  reason        TEXT,
+  reconciled_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+WITH dup AS (
+  SELECT s.id, s.kind, s.take_id, s.judgment_id, s.calls, s.at,
+         (SELECT MIN(n.attempt_key) FROM voice_calibration_spend n WHERE n.kind = 'rule3' AND n.attempt_key IS NOT NULL AND n.judgment_ref = s.judgment_id) AS of_key
+  FROM voice_calibration_spend s
+  WHERE s.kind = 'rule3' AND s.attempt_key IS NULL AND s.judgment_id IS NOT NULL
+    AND EXISTS (SELECT 1 FROM voice_calibration_spend n WHERE n.kind = 'rule3' AND n.attempt_key IS NOT NULL AND n.judgment_ref = s.judgment_id)
+), moved AS (
+  INSERT INTO voice_calibration_spend_reconciled (spend_id, kind, take_id, judgment_id, calls, at, duplicate_of, reason)
+  SELECT id, kind, take_id, judgment_id, calls, at, of_key, 'boot back-fill counted a parser call already recorded by its attempt (Fixes-3b judgment_ref)' FROM dup
+  RETURNING spend_id
+)
+DELETE FROM voice_calibration_spend WHERE id IN (SELECT spend_id FROM moved);
+-- The back-fill: only a judgment with NO recorded call at all, by judgment_id (3a) OR by judgment_ref (3b onwards).
 INSERT INTO voice_calibration_spend (kind, take_id, judgment_id, participant_code, slot_code, calls, at)
 SELECT 'rule3', j.take_id, j.id, p.code, t.slot_code, j.parser_calls, COALESCE(j.finished_at, j.created_at, NOW())
 FROM voice_calibration_preview_judgments j JOIN voice_calibration_takes t ON t.id = j.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
-WHERE COALESCE(j.parser_calls, 0) > 0 AND NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'rule3' AND s.judgment_id = j.id)
+WHERE COALESCE(j.parser_calls, 0) > 0
+  AND NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'rule3' AND (s.judgment_id = j.id OR s.judgment_ref = j.id))
 ON CONFLICT DO NOTHING;
--- Fixes-3b (the 3a review): every provider/parser attempt is counted when it HAPPENS, in its own committed row, before (and
--- whatever becomes of) the take or judgment it was for. attempt_key identifies one attempt, so writing the same attempt twice
--- (the early record and the link when the take commits) never counts it twice, while a genuinely new attempt is a new row.
--- outcome: 'saved' / 'judged' when its result was kept; 'refused' or 'not saved' when it was not; NULL while unresolved.
-ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS attempt_key  TEXT;
-ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS outcome      TEXT;
-ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS judgment_ref INT;
-CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_attempt ON voice_calibration_spend (attempt_key);
+-- (Fixes-3b's spend columns are created above, with the table, so every statement that reads them runs after they exist.)
+-- Fixes-3c (the 3b review, finding 3): every uploaded recording is registered BEFORE the upload, so an object can never be left
+-- behind unseen: kept when its take commits, deleted when the take is refused or cannot be written; if deleting fails, the row
+-- stays 'delete failed' and the daily clean-up retries it. Holds the storage key, the volunteer and the slot only.
+CREATE TABLE IF NOT EXISTS voice_calibration_uploads (
+  object_key     TEXT PRIMARY KEY,
+  attempt_key    TEXT,
+  participant_id INT,
+  slot_code      TEXT,
+  state          TEXT NOT NULL DEFAULT 'uploading' CHECK (state IN ('uploading', 'kept', 'deleted', 'delete failed')),
+  reason         TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at    TIMESTAMPTZ
+);
