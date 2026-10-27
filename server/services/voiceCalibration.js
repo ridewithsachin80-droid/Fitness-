@@ -589,12 +589,13 @@ const short = (h) => h.slice(0, 16);
  * Gemini, as everyday voice logging asks it (routes/aiChat.js voice-transcribe): the same prompt,
  * models in the same order, the same settings. Every model tried is recorded.
  */
-async function geminiTake(audio, mt, langHint, env = process.env) {
+async function geminiTake(audio, mt, langHint, env = process.env, onRequest = null) {
   const prompt = voiceTranscriptionPrompt(langHint);
   const prov = { engine: 'gemini', lang_hint: langHint, prompt_sha256: short(sha256(prompt)), attempts: [], model_used: null, model_version: null, response_id: null };
   if (!env.GEMINI_API_KEY) return { text: null, error: 'GEMINI_API_KEY is not set', provenance: prov };
   let lastErr = null;
   for (const model of geminiModels(env)) {
+    if (onRequest) await onRequest({ engine: 'gemini', model });   // Fixes-3e: before each outbound request (throws → no request)
     const t0 = Date.now();
     try {
       const response = await axios.post(`${geminiUrlFor(model)}?key=${env.GEMINI_API_KEY}`,
@@ -610,7 +611,7 @@ async function geminiTake(audio, mt, langHint, env = process.env) {
   return { text: null, error: providerReason(lastErr), provenance: prov };
 }
 /** Whisper on Groq, as the everyday fallback asks it; plus the fallback's own accept/refuse decision on the answer. */
-async function whisperTake(audio, mt, langHint, env = process.env) {
+async function whisperTake(audio, mt, langHint, env = process.env, onRequest = null) {
   const { language } = whisperFallbackSettings(langHint);
   const prompt = whisperTranscriptionPrompt(langHint);
   const prov = { engine: 'whisper', model: 'whisper-large-v3', lang_hint: langHint, language_sent: language || null, prompt_sha256: short(sha256(prompt)), attempts: [], language_reported: null, request_id: null };
@@ -623,6 +624,7 @@ async function whisperTake(audio, mt, langHint, env = process.env) {
   fd.append('response_format', 'verbose_json');
   if (language) fd.append('language', language);
   fd.append('prompt', prompt);
+  if (onRequest) await onRequest({ engine: 'whisper', model: 'whisper-large-v3' });   // Fixes-3e
   const t0 = Date.now();
   try {
     const r = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', fd, { headers: { Authorization: `Bearer ${env.GROQ_API_KEY}` }, timeout: 25000 });
@@ -637,8 +639,10 @@ async function whisperTake(audio, mt, langHint, env = process.env) {
     return { text: null, error: providerReason(e), provenance: prov };
   }
 }
-async function transcribeTake(audio, mt, langHint) {
-  const [g, w] = await Promise.all([geminiTake(audio, mt, langHint), whisperTake(audio, mt, langHint)]);
+/** The most outbound requests one recording's transcription can make: one per Gemini model, plus Whisper once (Fixes-3e). */
+const transcriptionMaxRequests = (env = process.env) => (env.GEMINI_API_KEY ? geminiModels(env).length : 0) + (env.GROQ_API_KEY ? 1 : 0);
+async function transcribeTake(audio, mt, langHint, { onRequest = null } = {}) {
+  const [g, w] = await Promise.all([geminiTake(audio, mt, langHint, process.env, onRequest), whisperTake(audio, mt, langHint, process.env, onRequest)]);
   return { gemini: g, whisper: w };
 }
 
@@ -926,11 +930,14 @@ function spendText(spend, takes, unresolved = null, reconciled = []) {
   // Fixes-3c: attempts not yet written to the ledger make these totals SHORT, and say so first. Fixes-3d: so do attempts that were
   // started but never recorded (in flight, or interrupted by a restart or failure): their calls are unknown, reported with a bound.
   const known = unresolved && unresolved.attempts ? `UNRESOLVED: ${unresolved.attempts} attempt(s) (${unresolved.calls} call(s)) could not be written to the ledger yet, so the totals below are short by ${unresolved.calls}. ` : '';
-  const unknown = unresolved && unresolved.unknownAttempts ? `UNRESOLVED: ${unresolved.unknownAttempts} attempt(s) were started but their calls were never recorded (still running, or interrupted by a restart or failure): their calls are UNKNOWN, at most ${unresolved.unknownMax}, and are not in the totals below; an administrator settles each from the provider's own records. ` : '';
+  const unknown = unresolved && unresolved.unknownAttempts ? `UNRESOLVED: ${unresolved.unknownAttempts} attempt(s) were started but their calls were never recorded (still running, or interrupted by a restart or failure): their provider requests are UNKNOWN (${unresolved.unknownStarted || 0} had been started), at most ${unresolved.unknownMax}, and are not in the totals below; an administrator settles each from the provider's own records. ` : '';
   const waiting = known + unknown;
   const settledTxt = unresolved?.settled?.n ? ` ${unresolved.settled.n} attempt(s) were settled by an administrator from the provider's own records (${unresolved.settled.calls} call(s), included above).` : '';
   const recon = reconciled.length ? ` ${reconciled.length} duplicate row(s) (${reconciled.reduce((n, x) => n + (Number(x.calls) || 0), 0)} call(s)) added by an earlier boot back-fill were removed from these totals and kept in the reconciliation record.` : '';
-  return `${waiting}${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened. Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these.${recon}${settledTxt}`;
+  // Fixes-3e: the unit. Rows from Fixes-3e on count outbound provider requests; older rule-3 rows counted parser checks.
+  const oldChecks = spend.filter(x => x.kind === 'rule3' && x.unit !== 'requests');
+  const unitTxt = ` Each call counted from Fixes-3e on is one outbound provider request: each Gemini model tried and Whisper for a recording; every parser request for a preview check, its fallbacks and retries included.${oldChecks.length ? ` ${oldChecks.reduce((n, x) => n + (Number(x.calls) || 0), 0)} older parser call(s) on ${oldChecks.length} row(s) were counted as parser checks, one each: their real request number was not recorded (at least one each).` : ''}`;
+  return `${waiting}${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened.${unitTxt} Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these.${recon}${settledTxt}`;
 }
 /** Fixes-3c/3d: recordings registered before upload. Never kept vs kept then deleted are told apart (ever_kept). */
 function uploadsText(uploads = [], ever = false) {
@@ -1046,7 +1053,7 @@ function workbookSheets({ participants = [], takes = [], wording = [], partc = [
     ...(spend ? [['budget: calls spent in the round (ledger)', spendText(spend, takes, spendUnresolved, reconciled)]] : []),
     ...(spend ? [['recordings never kept (refused or not saved)', uploadsText(uploads)]] : []),
     ...(spend ? [['recordings kept, then deleted', uploadsText(uploads, true)]] : []),
-    ['budget: rule 3 parser calls (separate)', `${r3calls.initial + r3calls.reeval}: ${r3calls.initial} initial (at most 2 per newly admitted take, deduplicated by take and reference version) and ${r3calls.reeval} re-evaluation(s) after a reference or judge change (each authorised separately)`],
+    ['budget: rule 3 parser calls (separate)', `${r3calls.initial + r3calls.reeval}: ${r3calls.initial} initial (at most 2 per newly admitted take, deduplicated by take and reference version) and ${r3calls.reeval} re-evaluation(s) after a reference or judge change (each authorised separately). These are parser CHECKS; their provider requests, fallbacks and retries included, are in the call ledger below`],
     ['budget: Part C attempts', `${attempts.length} of 64 planned (32 tries + one Retry each), before technical retakes; ${sessions.length} session(s)`],
     ['replay check: stored live decision vs offline replay at the live setting', mismatches ? `${mismatches} MISMATCH(ES): do not use the offline settings until explained` : `0 mismatches over ${takes.length} take(s)`],
     ['re-measure check: stored measurements vs measuring the stored audio again', remeasureMismatch ? `${remeasureMismatch} MISMATCH(ES)` : `${takes.filter(t => t.remeasure).length} take(s) re-measured, 0 mismatches`],
@@ -1327,5 +1334,5 @@ module.exports = {
   ITEM_OUTCOMES, LINE_OUTCOMES, LINE_STATES, HAND_CHECK, FOOD, EXTRA_FOODS, UNIT,
   judgePreview, PREVIEW_RESULTS, LEG_CLASS, effectiveResult, legStatus, rule3Status, voiceLeg, geminiModels, geminiTake, whisperTake, transcribeTake,
   PARTC_PLAN, PARTC_LINES, NATURAL_PLAN, NATURAL_SLOTS, trialInfo, ARM_MINUTES, available, armedFor, recordTrial, recordDeviceDictation, recordPreview, answeredBy, speechRecord, actualPath,
-  dayState, dayDiff, restoreDay, checkSession, workbookSheets, truth, takeScore, deviceOf, phoneMix, nameScrubber, foodKeysOf, controlCoverage, REPEATED, REPLACEMENT_BUDGET, REPLACEMENT_ROUND, weightCheck, WEIGHT_CHECK, engineCalls,
+  dayState, dayDiff, restoreDay, checkSession, workbookSheets, truth, takeScore, deviceOf, phoneMix, nameScrubber, foodKeysOf, controlCoverage, REPEATED, REPLACEMENT_BUDGET, REPLACEMENT_ROUND, weightCheck, WEIGHT_CHECK, engineCalls, transcriptionMaxRequests,
 };

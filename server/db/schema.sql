@@ -1619,3 +1619,13 @@ CREATE TABLE IF NOT EXISTS voice_calibration_attempts (
 -- as "never kept". Uploads kept under 3c: still 'kept', or 'deleted' by withdrawal with no reason (only unkept ones got one).
 ALTER TABLE voice_calibration_uploads ADD COLUMN IF NOT EXISTS ever_kept BOOLEAN NOT NULL DEFAULT FALSE;
 UPDATE voice_calibration_uploads SET ever_kept = TRUE WHERE NOT ever_kept AND (state = 'kept' OR (state = 'deleted' AND reason IS NULL));
+-- Fixes-3e (the 3d review): the units are explicit.
+--  * voice_calibration_spend.calls counts OUTBOUND PROVIDER REQUESTS when unit = 'requests' (every row written from Fixes-3e on:
+--    each Gemini model tried, Whisper, and every parser request including its fallbacks and retries). Older rule-3 rows
+--    (unit NULL) counted parser CHECKS: their real request number was never recorded and is reported as unknown (at least one).
+--  * voice_calibration_attempts.requests_started is incremented, durably, just before each outbound request; after a restart it
+--    says how many requests had been started (at most max_calls, the configured worst case).
+--  * voice_calibration_preview_judgments.parser_calls stays the number of parser CHECKS (0 or 1); provider_requests is new.
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS unit TEXT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS requests_started INT NOT NULL DEFAULT 0;
+ALTER TABLE voice_calibration_preview_judgments ADD COLUMN IF NOT EXISTS provider_requests INT;

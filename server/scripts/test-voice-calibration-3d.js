@@ -197,8 +197,9 @@ const child = (job) => {
     await ctl('vc_test_spend_ctl', 0, '');
     const pBefore = calls.parser, eBefore = engineCalls();
     let raw = await exportRaw(ADMIN);
-    ck('after the restart (a fresh process, writes working again): the export is still UNRESOLVED (calls UNKNOWN, at most 1, not in the totals) — never silently 0',
-      /UNRESOLVED: 1 attempt\(s\) were started but their calls were never recorded .*at most 1/.test(raw) && totals(raw).r === lp0, (raw.match(/.{0,20}UNRESOLVED.{0,200}/) || [''])[0]);
+    // Fixes-3e: the bound is the parser's real worst case (2 providers × 2 models × 3 tries = 12 in this test's setup), not 1.
+    ck('after the restart (a fresh process, writes working again): the export is still UNRESOLVED (calls UNKNOWN, at most 12, not in the totals) — never silently 0',
+      /UNRESOLVED: 1 attempt\(s\) were started but their calls were never recorded .*at most 12,/.test(raw) && totals(raw).r === lp0, (raw.match(/.{0,20}UNRESOLVED.{0,200}/) || [''])[0]);
     ck('…the screen stays incomplete ("call ledger: 1 attempt(s) not yet written (1 with unknown calls, to be settled)"), and nothing called a provider to repair it',
       /call ledger: 1 attempt\(s\) not yet written \(1 with unknown calls, to be settled\)/.test(raw) && calls.parser === pBefore && engineCalls() === eBefore);
     // Failed and refused uploads across a restart.
@@ -224,8 +225,9 @@ const child = (job) => {
     ck('child process (two replacement uploads at once): one kept (its spend written with the take), one refused whose spend never got written; exited',
       JSON.stringify((c3.statuses || []).slice().sort()) === JSON.stringify([200, 409]) && c3.engines === 4 && await ledger('transcription') - lt1 === 2 && after3.filter(a => a.kind === 'transcription').length === 2, { c3, after3 });
     raw = await exportRaw(ADMIN);
-    ck('after the restart: 3 attempts UNRESOLVED (1 parser, at most 1 call; the failed and the refused upload, at most 3 calls each): "at most 7", none in the totals',
-      /UNRESOLVED: 3 attempt\(s\) were started but their calls were never recorded .*at most 7/.test(raw) && /call ledger: 3 attempt\(s\) not yet written \(3 with unknown calls/.test(raw), (raw.match(/.{0,20}UNRESOLVED.{0,200}/) || [''])[0]);
+    // Fixes-3e: 12 for the parser attempt (its real worst case) + 3 for each upload = 18 (was 7 under the false bound of 1).
+    ck('after the restart: 3 attempts UNRESOLVED (1 parser, at most 12 requests; the failed and the refused upload, at most 3 each): "at most 18", none in the totals',
+      /UNRESOLVED: 3 attempt\(s\) were started but their calls were never recorded .*at most 18,/.test(raw) && /call ledger: 3 attempt\(s\) not yet written \(3 with unknown calls/.test(raw), (raw.match(/.{0,20}UNRESOLVED.{0,200}/) || [''])[0]);
 
     console.log('\n[4] repeated retries, genuine repeats, withdrawal, expiry, schema replay');
     const before = { t: await ledger('transcription'), r: await ledger('rule3'), s: (await started()).length };
@@ -247,7 +249,8 @@ const child = (job) => {
     r = await A('POST', '/api/voice-calibration/admin/attempts/settle', { attempt_key: parserKey, calls: 1, why: 'Groq usage console shows the call' });
     ck('settling an attempt that may still be running is refused (under 10 minutes old)', r.status === 409 && /Wait 10 minutes/.test(r.data.error || ''));
     await pool.query(`UPDATE voice_calibration_attempts SET started_at = NOW() - INTERVAL '20 minutes' WHERE state='started'`);
-    ck('…a number above the attempt\'s maximum, or no reason, is refused', (await A('POST', '/api/voice-calibration/admin/attempts/settle', { attempt_key: parserKey, calls: 2, why: 'console says 2' })).status === 400
+    // Fixes-3e: the parser attempt's maximum is 12 in this setup, so 13 is the first number above it (2 was valid all along).
+    ck('…a number above the attempt\'s maximum, or no reason, is refused', (await A('POST', '/api/voice-calibration/admin/attempts/settle', { attempt_key: parserKey, calls: 13, why: 'console says 13' })).status === 400
       && (await A('POST', '/api/voice-calibration/admin/attempts/settle', { attempt_key: parserKey, calls: 1, why: '' })).status === 400);
     const rs = await A('POST', '/api/voice-calibration/admin/attempts/settle', { attempt_key: parserKey, calls: 1, why: 'Groq usage console shows the call' });
     const again = await A('POST', '/api/voice-calibration/admin/attempts/settle', { attempt_key: parserKey, calls: 1, why: 'Groq usage console shows the call' });

@@ -106,7 +106,7 @@ async function wordingOk(lang, db = pool) {
 const pendingSpend = new Map();   // attemptKey → spend row not yet in the ledger (this process knows its calls)
 /** Writes (or links) the spend row AND marks its attempt recorded, in one statement. */
 const SPEND_UPSERT = `WITH s AS (
-    INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome, unit) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'requests')
     ON CONFLICT (attempt_key) DO UPDATE SET outcome = COALESCE(voice_calibration_spend.outcome, EXCLUDED.outcome) RETURNING attempt_key)
   UPDATE voice_calibration_attempts SET state = 'recorded', resolved_at = NOW() WHERE attempt_key IN (SELECT attempt_key FROM s) AND state = 'started'`;
 const writeSpend = (r) => pool.query(SPEND_UPSERT, [r.kind, r.attemptKey, r.takeId ?? null, r.judgmentRef ?? null, r.code || null, r.slot || null, r.calls, r.outcome || null]);
@@ -124,13 +124,41 @@ async function startAttempt({ kind, attemptKey, takeId = null, judgmentRef = nul
   }
   return false;
 }
+/**
+ * Fixes-3e: the hook awaited just before each outbound provider request: it durably counts the request as started (so a restart
+ * still knows how many had begun), then counts it in memory. If the durable write fails, it throws and the request is not made.
+ */
+const requestCounter = (attemptKey, start = null) => {
+  // `start` (rule 3): the attempt row itself is written by the FIRST request's hook, with requests_started = 1 (retried once), so
+  // it still exists before any request leaves, with no extra round trip. If it cannot be written, no request is made.
+  const counter = { n: 0, startFailed: false };
+  counter.onRequest = async () => {
+    if (start && counter.n === 0) {
+      let ok = false, last;
+      for (let i = 0; i < 2 && !ok; i++) {
+        try {
+          await pool.query(`INSERT INTO voice_calibration_attempts (attempt_key, kind, take_id, judgment_ref, participant_code, slot_code, max_calls, requests_started) VALUES ($1,$2,$3,$4,$5,$6,$7,1)
+            ON CONFLICT (attempt_key) DO UPDATE SET requests_started = voice_calibration_attempts.requests_started + 1`,
+            [attemptKey, start.kind, start.takeId ?? null, start.judgmentRef ?? null, start.code ?? null, start.slot ?? null, start.maxCalls]);
+          ok = true;
+        } catch (e) { last = e; }
+      }
+      if (!ok) { counter.startFailed = true; console.error('[voice-calibration] attempt could not be started, so no provider request was made:', attemptKey, last?.message); throw last; }
+    } else {
+      await pool.query(`UPDATE voice_calibration_attempts SET requests_started = requests_started + 1 WHERE attempt_key=$1`, [attemptKey]);
+    }
+    counter.n++;
+  };
+  return counter;
+};
 /** Fixes-3d: an attempt that ended before any external call was made. */
 const endAttemptNoCall = (attemptKey) => pool.query(`UPDATE voice_calibration_attempts SET state='no call', resolved_at=NOW() WHERE attempt_key=$1 AND state='started'`, [attemptKey]).catch(() => {});
 /** Fixes-3d: attempts not yet settled: known to this process (calls waiting) or unknown (started, never recorded: in flight or interrupted). */
 async function accountingState() {
-  const { rows } = await pool.query(`SELECT attempt_key, max_calls FROM voice_calibration_attempts WHERE state = 'started'`);
+  const { rows } = await pool.query(`SELECT attempt_key, max_calls, requests_started FROM voice_calibration_attempts WHERE state = 'started'`);
   const unknown = rows.filter(r => !pendingSpend.has(r.attempt_key));
-  return { ...spendUnresolved(), unknownAttempts: unknown.length, unknownMax: unknown.reduce((n, r) => n + (Number(r.max_calls) || 0), 0) };
+  return { ...spendUnresolved(), unknownAttempts: unknown.length, unknownMax: unknown.reduce((n, r) => n + (Number(r.max_calls) || 0), 0),
+    unknownStarted: unknown.reduce((n, r) => n + (Number(r.requests_started) || 0), 0) };
 }
 async function recordSpend(r) {
   if (!r.calls) return true;
@@ -244,7 +272,7 @@ router.post('/take', member, async (req, res) => {
     const attemptKey = `take:${crypto.randomUUID()}`;
     await flushSpend();
     // Fixes-3d: the attempt is started in the database before anything else; without it, no provider is called.
-    if (!(await startAttempt({ kind: 'transcription', attemptKey, code: p.code, slot: info.slot, maxCalls: C.geminiModels().length + 1 }))) {
+    if (!(await startAttempt({ kind: 'transcription', attemptKey, code: p.code, slot: info.slot, maxCalls: C.transcriptionMaxRequests() }))) {
       return res.status(503).json({ error: "Couldn't start the recording check just now. Try again in a minute." });
     }
     // Fixes-3c: register the recording BEFORE it exists in storage, so it can never be left behind unseen.
@@ -255,11 +283,12 @@ router.post('/take', member, async (req, res) => {
     // From here until the take commits, ANY failure (the speech check, the engines, getting a database connection, the write)
     // deletes the recording and marks its calls; a refusal does the same with its own reason.
     let settled = false;
+    const reqs = requestCounter(attemptKey);   // Fixes-3e: each outbound engine request, counted as it starts
     try {
       // The live speech check exactly as it runs on everyday voice notes (measured, never refused here),
       // then both engines exactly as everyday logging asks them.
       const speech = await SP.check(audio);
-      const t = await C.transcribeTake(audio, mt, info.lang_hint);
+      const t = await C.transcribeTake(audio, mt, info.lang_hint, { onRequest: reqs.onRequest });
       // Fixes-3b: the engines have answered, so their calls are spent. Count them NOW, in a committed row of their own, before
       // and whatever becomes of the take (refused, rolled back or failed to save). The attempt key ties the later link to it.
       const calls = C.engineCalls({ gemini_provenance: t.gemini.provenance, whisper_provenance: t.whisper.provenance });
@@ -297,7 +326,7 @@ router.post('/take', member, async (req, res) => {
         }
         // Fixes-3a/3b: the calls spent, linked to the kept take in the same transaction (written here if the early record failed).
         // Fixes-3d: and its attempt marked recorded, in the same statement.
-        await client.query(`WITH s AS (INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, participant_code, slot_code, calls, outcome) VALUES ('transcription', $1, $2, $3, $4, $5, 'saved')
+        await client.query(`WITH s AS (INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, participant_code, slot_code, calls, outcome, unit) VALUES ('transcription', $1, $2, $3, $4, $5, 'saved', 'requests')
           ON CONFLICT (attempt_key) DO UPDATE SET take_id = EXCLUDED.take_id, outcome = 'saved' RETURNING attempt_key)
           UPDATE voice_calibration_attempts SET state = 'recorded', resolved_at = NOW(), take_id = $2 WHERE attempt_key IN (SELECT attempt_key FROM s) AND state = 'started'`, [attemptKey, row.id, p.code, info.slot, calls]);
         await client.query(`UPDATE voice_calibration_uploads SET state='kept', ever_kept=TRUE, resolved_at=NOW() WHERE object_key=$1`, [key]);
@@ -309,6 +338,7 @@ router.post('/take', member, async (req, res) => {
       finally { client.release(); }
     } catch (e) {
       if (!settled) {
+        if (reqs.n === 0) await endAttemptNoCall(attemptKey);   // Fixes-3e: it failed before any engine request was made
         await discardUpload(key, `not saved: ${String(e.message || e).slice(0, 120)}`);
         await markSpend(attemptKey, 'not saved (the take could not be written)'); await flushSpend();
       }
@@ -619,8 +649,22 @@ router.post('/admin/preview-eval', admin, async (req, res) => {
       WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL AND t.reference_frozen_at IS NOT NULL AND t.heard = 'speech' AND COALESCE(t.reference_mode, '') <> 'unscorable' ORDER BY t.id`);
     const { rows: [waiting] } = await pool.query(`SELECT COUNT(*)::int AS n FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
       WHERE t.superseded_at IS NULL AND p.withdrawn_at IS NULL AND t.reference_frozen_at IS NULL`);
-    const { parseMemberMessage } = require('./aiChat');
+    const { parseMemberMessage, callAIMaxRequests } = require('./aiChat');
+    let requestsMade = 0;   // Fixes-3e: outbound provider requests across this tap
     let calls = 0, recalls = 0, judged = 0, stale = 0, busy = 0, more = false;
+    // Fixes-3e: first CLAIM every leg this tap will evaluate (within the 20-check limit), then evaluate them. A second tap at the
+    // same moment then finds each leg either claimed (busy) or its own, never half-way, whatever the request timing.
+    const todo = [], released = new Set();
+    let planned = 0;
+    const release = async () => {
+      for (const c of todo) {
+        if (c.started || released.has(c.claim.id)) continue;
+        released.add(c.claim.id);
+        if (c.fresh) await pool.query(`DELETE FROM voice_calibration_preview_judgments WHERE id=$1 AND status='running'`, [c.claim.id]).catch(() => {});
+        else await pool.query(`UPDATE voice_calibration_preview_judgments SET created_at = NOW() - INTERVAL '11 minutes' WHERE id=$1 AND status='running'`, [c.claim.id]).catch(() => {});
+      }
+    };
+    try {
     for (const t of rows) {
       const info = C.slotInfo(t.slot_code, t.grp);
       if (!info || !info.items.length || !C.GRID.some(g => C.newlyAdmitted(t, g))) continue;
@@ -630,45 +674,61 @@ router.post('/admin/preview-eval', admin, async (req, res) => {
         const isRe = mine.some(j => j.reference_sha !== t.reference_sha || j.judge_version !== C.JUDGE_VERSION);
         if (isRe && !reevaluate) { stale++; continue; }
         const leg = C.voiceLeg(t, engine);
-        if (leg.stage === 'to parser' && calls + recalls >= 20) { more = true; continue; }
+        if (leg.stage === 'to parser' && planned >= 20) { more = true; continue; }
         const reason = isRe ? 're-evaluation' : 'initial';
+        let fresh = true;
         let { rows: [claim] } = await pool.query(`INSERT INTO voice_calibration_preview_judgments (take_id, engine, reference_sha, reference_version, judge_version, status, reason)
           VALUES ($1,$2,$3,$4,$5,'running',$6) ON CONFLICT (take_id, engine, reference_sha, judge_version) DO NOTHING RETURNING id`, [t.id, engine, t.reference_sha, t.reference_version, C.JUDGE_VERSION, reason]);
-        if (!claim) ({ rows: [claim] } = await pool.query(`UPDATE voice_calibration_preview_judgments SET created_at = NOW() WHERE take_id=$1 AND engine=$2 AND reference_sha=$3 AND judge_version=$4
-          AND status='running' AND created_at < NOW() - INTERVAL '10 minutes' RETURNING id`, [t.id, engine, t.reference_sha, C.JUDGE_VERSION]));
+        if (!claim) { fresh = false; ({ rows: [claim] } = await pool.query(`UPDATE voice_calibration_preview_judgments SET created_at = NOW() WHERE take_id=$1 AND engine=$2 AND reference_sha=$3 AND judge_version=$4
+          AND status='running' AND created_at < NOW() - INTERVAL '10 minutes' RETURNING id`, [t.id, engine, t.reference_sha, C.JUDGE_VERSION])); }
         if (!claim) { busy++; continue; }      // another tap is evaluating this leg right now
+        if (leg.stage === 'to parser') planned++;
+        todo.push({ t, info, engine, isRe, leg, claim, fresh, started: false });
+      }
+    }
+    for (const c of todo) {
+        const { t, info, engine, isRe, leg, claim } = c;
+        c.started = true;
         let stage = leg.stage, preview = null, judgment = null, used = 0;
         const spendKey = `rule3:${crypto.randomUUID()}`;
         if (leg.stage === 'to parser') {
           // Fixes-3d: the attempt is started in the database before the parser is called; without it, no call is made.
-          if (!(await startAttempt({ kind: 'rule3', attemptKey: spendKey, takeId: t.id, judgmentRef: claim.id, code: t.code, slot: t.slot_code, maxCalls: 1 }))) {
-            await pool.query(`DELETE FROM voice_calibration_preview_judgments WHERE id=$1 AND status='running'`, [claim.id]).catch(() => {});
-            const err = new Error('attempt not started'); err.code = 'ATTEMPT_NOT_STARTED'; throw err;
-          }
-          used = 1; if (isRe) recalls++; else calls++;
+          // Fixes-3e: the attempt is written by the first request's hook (before that request leaves); its bound is the parser's
+          // real worst case: every configured provider × model × try (callAIMaxRequests).
+          if (isRe) recalls++; else calls++;   // parser CHECKS (one per leg)
+          const reqs = requestCounter(spendKey, { kind: 'rule3', takeId: t.id, judgmentRef: claim.id, code: t.code, slot: t.slot_code, maxCalls: callAIMaxRequests() });
           try {
-            const r = await parseMemberMessage({ userId: t.patient_id, message: leg.text, context: {}, evaluation: true });
+            const r = await parseMemberMessage({ userId: t.patient_id, message: leg.text, context: {}, evaluation: true, onAIRequest: reqs.onRequest });
             preview = r && r.__status ? { error: r.error || `HTTP ${r.__status}` } : r;
             stage = preview?.error ? 'parser error' : 'parsed';
           } catch (e) { preview = { error: String(e.message || e).slice(0, 200) }; stage = 'parser error'; }
-          // Fixes-3b: the parser has answered: its call is counted now, whatever becomes of the judgment.
-          await recordSpend({ kind: 'rule3', attemptKey: spendKey, code: t.code, slot: t.slot_code, calls: used, takeId: t.id, judgmentRef: claim.id });
+          // Fixes-3d: the attempt could not be started, so the parser made no request: release the claim and say so (503).
+          if (reqs.startFailed && reqs.n === 0) {
+            if (isRe) recalls--; else calls--;
+            await pool.query(`DELETE FROM voice_calibration_preview_judgments WHERE id=$1 AND status='running'`, [claim.id]).catch(() => {});
+            const err = new Error('attempt not started'); err.code = 'ATTEMPT_NOT_STARTED'; throw err;
+          }
+          // Fixes-3e: `used` is the number of outbound provider REQUESTS this check made (fallbacks and retries included).
+          used = reqs.n; requestsMade += used;
+          // Fixes-3b: the parser has answered: its requests are counted now, whatever becomes of the judgment.
+          if (used) await recordSpend({ kind: 'rule3', attemptKey: spendKey, code: t.code, slot: t.slot_code, calls: used, takeId: t.id, judgmentRef: claim.id });
           judgment = C.judgePreview(C.itemsWithReference(info.items, t.reference_items, t.reference_mode), preview, info.lang);
         } else judgment = { result: leg.stage === 'voice refused' ? 'explicit refusal' : 'provider error', problems: [], hand: [], items: [], note: leg.reason };
         // The judgment and its spend row in ONE statement (Fixes-3c): the row is updated to "judged", or written now if the early
         // record failed, so a judgment can never be saved without its call. If this statement fails, neither is saved.
-        await pool.query(`WITH done AS (UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$5, parser=$6, finished_at=NOW() WHERE id=$1 RETURNING id, take_id),
-          s AS (INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome)
-          SELECT 'rule3', $7, d.take_id, d.id, p.code, t.slot_code, $5, 'judged' FROM done d JOIN voice_calibration_takes t ON t.id = d.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
+        await pool.query(`WITH done AS (UPDATE voice_calibration_preview_judgments SET status='done', stage=$2, preview=$3, judgment=$4, parser_calls=$8, provider_requests=$5, parser=$6, finished_at=NOW() WHERE id=$1 RETURNING id, take_id),
+          s AS (INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome, unit)
+          SELECT 'rule3', $7, d.take_id, d.id, p.code, t.slot_code, $5, 'judged', 'requests' FROM done d JOIN voice_calibration_takes t ON t.id = d.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
           WHERE $5::int > 0
           ON CONFLICT (attempt_key) DO UPDATE SET outcome = 'judged' RETURNING attempt_key)
           UPDATE voice_calibration_attempts SET state = 'recorded', resolved_at = NOW() WHERE attempt_key IN (SELECT attempt_key FROM s) AND state = 'started'`,
-          [claim.id, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used, preview && (preview.aiProvider || preview.aiModel) ? JSON.stringify({ provider: preview.aiProvider || null, model: preview.aiModel || null }) : null, spendKey]);
+          [claim.id, stage, preview ? JSON.stringify(preview) : null, JSON.stringify(judgment), used, preview && (preview.aiProvider || preview.aiModel) ? JSON.stringify({ provider: preview.aiProvider || null, model: preview.aiModel || null }) : null, spendKey,
+           leg.stage === 'to parser' && used > 0 ? 1 : 0]);
         pendingSpend.delete(spendKey);   // recorded with the judgment
         judged++;
-      }
     }
-    res.json({ ok: true, judged, parser_calls: calls, reevaluation_calls: recalls, stale_waiting: stale, busy, awaiting_reference: waiting.n, more, accounting_unresolved: spendUnresolved().attempts });
+    } catch (e) { await release(); throw e; }   // claims this tap never reached are released for the next tap
+    res.json({ ok: true, judged, parser_calls: calls, reevaluation_calls: recalls, provider_requests: requestsMade, stale_waiting: stale, busy, awaiting_reference: waiting.n, more, accounting_unresolved: spendUnresolved().attempts });
   } catch (err) {
     // Fixes-3d: the attempt could not be started in the database, so the parser was NOT called (its claim was released).
     if (err.code === 'ATTEMPT_NOT_STARTED') return res.status(503).json({ error: 'Could not record the start of the check, so the parser was not called. Try again in a minute.', parser_called: false });
@@ -680,8 +740,13 @@ router.post('/admin/preview-eval', admin, async (req, res) => {
 // records (its usage console). Only an attempt still 'started' after 10 minutes, never one this process still knows; calls
 // from 0 to its max_calls; a reason is required. Kept in the attempt (settled: {by, at, calls, why}) and as a spend row.
 router.post('/admin/attempts/settle', admin, async (req, res) => {
-  const key = String(req.body?.attempt_key || ''), calls = Number(req.body?.calls), why = String(req.body?.why || '').trim();
+  // Fixes-3e (the 3d review, finding 1): the count must be a whole number given explicitly: a JSON number, or a string of digits.
+  // Missing, null, false, "", whitespace, [] and {} are refused before anything changes (Number() would have made them 0).
+  const raw = req.body?.calls;
+  const calls = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\s*\d+\s*$/.test(raw) ? Number(raw.trim()) : NaN;
+  const key = String(req.body?.attempt_key || ''), why = String(req.body?.why || '').trim();
   if (!key) return res.status(400).json({ error: 'Which attempt?' });
+  if (!Number.isInteger(calls) || calls < 0) return res.status(400).json({ error: 'Give the number of provider requests as a whole number (0 or more), from the provider\'s usage records.' });
   if (why.length < 5) return res.status(400).json({ error: 'Say how the number was found (for example, the provider\'s usage console).' });
   await flushSpend();
   if (pendingSpend.has(key)) return res.status(409).json({ error: 'This server still knows that attempt\'s calls; they are written as soon as the database accepts them.' });
@@ -695,7 +760,7 @@ router.post('/admin/attempts/settle', admin, async (req, res) => {
     if (!Number.isInteger(calls) || calls < 0 || calls > a.max_calls) { await client.query('ROLLBACK'); return res.status(400).json({ error: `Calls must be a whole number from 0 to ${a.max_calls}.` }); }
     const settled = { by: req.user.id, at: new Date().toISOString(), calls, why: why.slice(0, 300) };
     await client.query(`UPDATE voice_calibration_attempts SET state='settled', resolved_at=NOW(), settled=$2 WHERE attempt_key=$1`, [key, JSON.stringify(settled)]);
-    if (calls > 0) await client.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome) VALUES ($1,$2,$3,$4,$5,$6,$7,'settled by an administrator')
+    if (calls > 0) await client.query(`INSERT INTO voice_calibration_spend (kind, attempt_key, take_id, judgment_ref, participant_code, slot_code, calls, outcome, unit) VALUES ($1,$2,$3,$4,$5,$6,$7,'settled by an administrator','requests')
       ON CONFLICT (attempt_key) DO NOTHING`, [a.kind, key, a.take_id, a.judgment_ref, a.participant_code, a.slot_code, calls]);
     await client.query('COMMIT');
     res.json({ ok: true, attempt_key: key, calls });

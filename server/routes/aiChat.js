@@ -112,11 +112,19 @@ async function callGeminiOnce(model, prompt, opts = {}) {
  *     object, which no parser can read. Treat it as a failure and try the
  *     next model, instead of returning it as if it were an answer.
  */
+const AI_MAX_RETRIES = 2;   // per model, on a 429/503 only
+const aiProviders = () => [
+  GROQ_API_KEY   && { name: 'groq',   models: GROQ_MODELS,   call: callGroqOnce },
+  GEMINI_API_KEY && { name: 'gemini', models: GEMINI_MODELS, call: callGeminiOnce },
+].filter(Boolean);
+/** Fixes-3e: the most outbound provider requests one callAI can make (every provider × model × try), from the same lists. */
+const callAIMaxRequests = () => aiProviders().reduce((n, p) => n + p.models.length * (AI_MAX_RETRIES + 1), 0);
+/*
+ * opts.onRequest (Fixes-3e, voice calibration only): awaited just BEFORE each outbound provider request. If it throws, callAI
+ * stops there and no request is made. Without it (every everyday caller) callAI behaves exactly as before.
+ */
 async function callAI(prompt, opts = {}) {
-  const providers = [
-    GROQ_API_KEY   && { name: 'groq',   models: GROQ_MODELS,   call: callGroqOnce },
-    GEMINI_API_KEY && { name: 'gemini', models: GEMINI_MODELS, call: callGeminiOnce },
-  ].filter(Boolean);
+  const providers = aiProviders();
 
   if (!providers.length) {
     const err = new Error('No AI provider configured — set GROQ_API_KEY and/or GEMINI_API_KEY');
@@ -127,8 +135,9 @@ async function callAI(prompt, opts = {}) {
   let lastErr;
   for (const provider of providers) {
     for (const model of provider.models) {
-      const maxRetries = 2;
+      const maxRetries = AI_MAX_RETRIES;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (opts.onRequest) await opts.onRequest({ provider: provider.name, model, attempt });
         try {
           const { text, finishReason } = await provider.call(model, prompt, opts);
           if (opts.failOnTruncation && (finishReason === 'length' || finishReason === 'MAX_TOKENS')) {
@@ -1939,7 +1948,7 @@ Return ONLY the answer text, nothing else.`;
 // Fixes-2x: `evaluation: true` (voice calibration only, test server) returns the same preview with NO
 // side effects: no coach message, no correction or evaluation-set records, no food learning, and no
 // extra AI answer for a question or an accompanying question. Off by default: live parsing is unchanged.
-async function parseMemberMessage({ userId, message, context, evaluation = false }) {
+async function parseMemberMessage({ userId, message, context, evaluation = false, onAIRequest = null }) {
   
 
   if (!message || String(message).trim().length < 2) {
@@ -2010,7 +2019,7 @@ async function parseMemberMessage({ userId, message, context, evaluation = false
       kitchenFat = rows[0]?.cooking_fat || null;
     } catch (e) { console.error('cooking_fat lookup failed:', e.message); }
 
-    const { text: rawText, provider, model } = await callAI(buildParsePrompt(cleanMsg, ctx, portions));
+    const { text: rawText, provider, model } = await callAI(buildParsePrompt(cleanMsg, ctx, portions), onAIRequest ? { onRequest: onAIRequest } : {});
 
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed   = JSON.parse(jsonText);
@@ -4531,6 +4540,7 @@ router.post('/weekly-summary', roleCheck('monitor', 'admin'), async (req, res) =
 module.exports = router;
 module.exports.parseMemberMessage = parseMemberMessage;
 module.exports.callAI = callAI;   // reused by weeklyReport.js — same providers, same fallback
+module.exports.callAIMaxRequests = callAIMaxRequests;   // Fixes-3e: voice calibration's bound on one parser check's requests
 // Exported for tests: the coach-question snapshot is the thing that decides
 // whether an answer can be complete, so it needs to be inspectable directly.
 module.exports.buildCoachMemberContext = buildCoachMemberContext;
