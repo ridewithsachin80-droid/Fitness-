@@ -144,7 +144,10 @@ const SCHEMA = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf8')
     ck(`review repro: completed new parser work + a legacy call + an unrecorded judgment → ${expectRule3} parser calls after the first AND the second full replay (was +2 per replay)`, r.status === 200 && after1.r === expectRule3 && after2.r === expectRule3 && after1.t === expectT && after2.t === expectT, { after1, after2, expectRule3, expectT, parser: calls.parser });
     ck('…the two genuine attempts for one judgment are both kept; the legacy row stays single; the unrecorded judgment is back-filled once', perJudgment.find(x => x.j === jA)?.rows === 2 && perJudgment.find(x => x.j === jL)?.rows === 1 && perJudgment.find(x => x.j === jU)?.rows === 1, perJudgment);
     let ex = await exportRaw(ADMIN);
-    ck('the real export equals the independently counted calls after both replays', ex.status === 200 && JSON.stringify(exportTotals(ex.raw)) === JSON.stringify({ t: expectT, r: expectRule3 }), exportTotals(ex.raw));
+    // Fixes-3f (the 3e review, finding 3): the export's parser total counts provider REQUESTS only (the stub's own count); the three
+    // older rows (reclaimed 3b attempt, legacy, back-filled: parser checks with no unit) are reported apart, never added in.
+    ck('the real export equals the independently counted calls after both replays (requests in the total; the 3 older checks apart)', ex.status === 200 && JSON.stringify(exportTotals(ex.raw)) === JSON.stringify({ t: expectT, r: calls.parser })
+      && /Kept apart, NOT in these totals: 3 older parser check\(s\) on 3 row\(s\)/.test(ex.raw), exportTotals(ex.raw));
     // Duplicates an earlier (3b) boot already added: a legacy-shaped row for a judgment whose calls are attempt-recorded.
     const jN = (await q(`SELECT DISTINCT judgment_ref AS j FROM voice_calibration_spend WHERE kind='rule3' AND attempt_key LIKE 'rule3:%' AND judgment_ref <> $1`, [jA]))[0].j;   // the other new judgment (one duplicate per judgment, as a boot could add)
     await pool.query(`INSERT INTO voice_calibration_spend (kind, take_id, judgment_id, calls) VALUES ('rule3', $1, $2, 1), ('rule3', $1, $3, 1)`, [k1, jN, jA]);
@@ -154,7 +157,8 @@ const SCHEMA = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf8')
     ck(`duplicates an earlier boot added (${inflated - expectRule3}) are moved to the reconciliation record: the ledger is back to ${expectRule3}, every genuine attempt untouched`, inflated === expectRule3 + 2 && await ledger('rule3') === expectRule3 && rec.length === 2 && rec.every(x => /^rule3:/.test(x.duplicate_of || ''))
       && (await q(`SELECT COUNT(*)::int AS n FROM voice_calibration_spend WHERE judgment_ref=$1`, [jA]))[0].n === 2, { inflated, now: await ledger('rule3'), rec });
     ex = await exportRaw(ADMIN);
-    ck('…and the export reports the reconciliation separately (2 rows, 2 calls, kept in the record)', /2 duplicate row\(s\) \(2 call\(s\)\) added by an earlier boot back-fill were removed from these totals/.test(ex.raw) && exportTotals(ex.raw)?.r === expectRule3);
+    // Fixes-3f: the reconciled rows are labelled by their unit (older parser checks), and the request total is the stub's count.
+    ck('…and the export reports the reconciliation separately (2 rows, 2 older parser checks, kept in the record)', /2 duplicate row\(s\) \(2 older parser check\(s\)\) added by an earlier boot back-fill were removed from these totals/.test(ex.raw) && exportTotals(ex.raw)?.r === calls.parser);
 
     // ── [2] Spend write failures ─────────────────────────────────────────────
     console.log('\n[2] a failed spend write is never swallowed');
@@ -251,7 +255,9 @@ const SCHEMA = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf8')
     await pool.query(SCHEMA);
     ex = await exportRaw(ADMIN);
     ck('after withdrawal, expiry and one more replay: the ledger and the real export still equal the independent count; no recording left in storage',
-      JSON.stringify({ t: await ledger('transcription'), r: await ledger('rule3') }) === JSON.stringify(independent) && JSON.stringify(exportTotals(ex.raw)) === JSON.stringify(independent) && objects() === 0
+      // Fixes-3f: the ledger (every row) still equals the independent count; the export's request total excludes the 3 older checks.
+      JSON.stringify({ t: await ledger('transcription'), r: await ledger('rule3') }) === JSON.stringify(independent) && JSON.stringify(exportTotals(ex.raw)) === JSON.stringify({ t: independent.t, r: calls.parser }) && objects() === 0
+      && /Kept apart, NOT in these totals: 3 older parser check\(s\) on 3 row\(s\)/.test(ex.raw)
       && /recordings never kept \(refused or not saved\)/.test(ex.raw), { totals: exportTotals(ex.raw), independent, objects: objects() });
   } catch (e) { ck('the suite ran to the end', false, e.stack); }
   finally {

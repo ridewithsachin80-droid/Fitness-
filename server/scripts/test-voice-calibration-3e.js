@@ -274,12 +274,14 @@ const childJob = (job) => {
     raw = await exportRaw(ADMIN);
     const rows = await q(`SELECT unit, COUNT(*)::int AS n FROM voice_calibration_spend GROUP BY unit`);
     ck('every row written now says unit "requests"; the older one (no unit) is reported as a parser check whose requests were not recorded (at least one)', rows.find(x => x.unit === null)?.n === 1 && rows.find(x => x.unit === 'requests')?.n > 0
-      && /1 older parser call\(s\) on 1 row\(s\) were counted as parser checks, one each: their real request number was not recorded \(at least one each\)/.test(raw), rows);
-    ck('the export says what each number is: provider requests in the ledger; the rule 3 budget line counts parser CHECKS', /Each call counted from Fixes-3e on is one outbound provider request/.test(raw) && /These are parser CHECKS; their provider requests, fallbacks and retries included, are in the call ledger below/.test(raw));
+      // Fixes-3f: the older check is reported APART from the request totals, with no request number guessed for it.
+      && /Kept apart, NOT in these totals: 1 older parser check\(s\) on 1 row\(s\) from before Fixes-3e, counted one per check; their provider requests were never recorded \(at least one each, number unknown\)/.test(raw), rows);
+    ck('the export says what each number is: provider requests in the ledger; the rule 3 budget line counts parser CHECKS', /Each of these calls is one outbound provider request/.test(raw) && /These are parser CHECKS; their provider requests, fallbacks and retries included, are in the call ledger below/.test(raw));
     // Independent count: this process's stub (seen.parser) + the children's own stub counts (ch0, ch, and the killed child's
-    // trace, settled as if from the provider's records) + the one older check.
-    const expectR = seen.parser + ch0.parser + ch.parser + killedSent + 1;
-    ck(`the ledger totals equal the requests counted independently: ${expectR} parser (this process ${seen.parser}, the children ${ch0.parser} + ${ch.parser} + ${killedSent}, 1 older check), ${seen.transcribeGemini + seen.whisper} transcription`,
+    // trace, settled as if from the provider's records). Fixes-3f (the 3e review, finding 3): the one older CHECK is no longer
+    // added: it is not a request count (it was "+ 1" here in 3e, which was the very mixing the review found).
+    const expectR = seen.parser + ch0.parser + ch.parser + killedSent;
+    ck(`the ledger totals equal the requests counted independently: ${expectR} parser requests (this process ${seen.parser}, the children ${ch0.parser} + ${ch.parser} + ${killedSent}; the 1 older check kept apart), ${seen.transcribeGemini + seen.whisper} transcription`,
       totals(raw).r === expectR && totals(raw).t === seen.transcribeGemini + seen.whisper, { totals: totals(raw), expectR });
   } catch (e) { ck('the suite ran to the end', false, e.stack); }
   finally {

@@ -1629,3 +1629,25 @@ UPDATE voice_calibration_uploads SET ever_kept = TRUE WHERE NOT ever_kept AND (s
 ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS unit TEXT;
 ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS requests_started INT NOT NULL DEFAULT 0;
 ALTER TABLE voice_calibration_preview_judgments ADD COLUMN IF NOT EXISTS provider_requests INT;
+-- Fixes-3f (the 3e review).
+--  * voice_calibration_preview_judgments.claim_owner: the tap that owns a running preview check. It renews its lease
+--    (created_at) when the leg's turn comes, at every provider request and by a heartbeat; only a lease over 10 minutes old
+--    (abandoned) can be taken over, and only the owner can complete the leg.
+--  * voice_calibration_attempts.counting = 'requests': the attempt counts its outbound requests as they start (Fixes-3e on).
+--    NULL marks an attempt from BEFORE Fixes-3e: how many requests it started was never recorded, so its requests_started
+--    (defaulted to 0 when that column was added) is NOT evidence of zero; it is reported as unknown.
+--    Attempts written under Fixes-3e are recognised by a request already counted (requests_started > 0 was only ever written
+--    by Fixes-3e code); one that started none stays NULL and is reported, conservatively, as "not recorded".
+--  * A rule-3 attempt from before Fixes-3e carried max_calls = 1, which was false. Its bound becomes 12: the most the parser
+--    at that time (d58250c, routes/aiChat.js callAI) could make in ANY configuration: two providers, at most two models each
+--    (GROQ_MODELS / GEMINI_MODELS have two entries, filtered), three tries per model. The original value is kept in
+--    legacy_max_calls and the change is noted in bound_note; each row is changed once (legacy_max_calls IS NULL), so replays
+--    change nothing. Recording attempts kept their bound (3: one per Gemini model, plus Whisper), which was already true.
+ALTER TABLE voice_calibration_preview_judgments ADD COLUMN IF NOT EXISTS claim_owner TEXT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS counting TEXT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS legacy_max_calls INT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS bound_note TEXT;
+UPDATE voice_calibration_attempts SET counting = 'requests' WHERE counting IS NULL AND requests_started > 0;
+UPDATE voice_calibration_attempts SET legacy_max_calls = max_calls, max_calls = GREATEST(max_calls, 12),
+  bound_note = 'Fixes-3f: recorded before Fixes-3e with max_calls ' || max_calls || ' (parser checks); the real bound is 12 provider requests (2 providers x 2 models x 3 tries, the d58250c parser in any configuration)'
+  WHERE kind = 'rule3' AND counting IS NULL AND legacy_max_calls IS NULL;

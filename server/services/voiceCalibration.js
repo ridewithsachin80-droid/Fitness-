@@ -642,8 +642,13 @@ async function whisperTake(audio, mt, langHint, env = process.env, onRequest = n
 /** The most outbound requests one recording's transcription can make: one per Gemini model, plus Whisper once (Fixes-3e). */
 const transcriptionMaxRequests = (env = process.env) => (env.GEMINI_API_KEY ? geminiModels(env).length : 0) + (env.GROQ_API_KEY ? 1 : 0);
 async function transcribeTake(audio, mt, langHint, { onRequest = null } = {}) {
-  const [g, w] = await Promise.all([geminiTake(audio, mt, langHint, process.env, onRequest), whisperTake(audio, mt, langHint, process.env, onRequest)]);
-  return { gemini: g, whisper: w };
+  // Fixes-3f (the 3e review, finding 1): wait for BOTH engines to finish (answered, failed, or stopped by their request hook)
+  // before reporting anything. With Promise.all, one engine's hook failure rejected at once while the other was still about
+  // to send, so the caller could close the attempt as "no call" and a request then left uncounted.
+  const [g, w] = await Promise.allSettled([geminiTake(audio, mt, langHint, process.env, onRequest), whisperTake(audio, mt, langHint, process.env, onRequest)]);
+  if (g.status === 'rejected') throw g.reason;
+  if (w.status === 'rejected') throw w.reason;
+  return { gemini: g.value, whisper: w.value };
 }
 
 // ── Part C: the everyday path, 32 planned controlled tries + natural observations ──
@@ -925,19 +930,31 @@ function spendText(spend, takes, unresolved = null, reconciled = []) {
   const held = new Set(takes.map(t => t.id));
   // Fixes-3b: an attempt's result was KEPT when its take was saved (transcription) or its judgment recorded (parser).
   const kept = (x) => (x.kind === 'transcription' ? x.take_id != null && x.outcome !== 'refused' && !/^refused/.test(x.outcome || '') && !/^not saved/.test(x.outcome || '') : x.outcome === 'judged' || x.judgment_id != null);
-  const sum = (f) => spend.filter(f).reduce((n, x) => n + (Number(x.calls) || 0), 0);
-  const notKept = sum(x => !kept(x)), deleted = sum(x => kept(x) && !held.has(x.take_id));
+  // Fixes-3f (the 3e review, finding 3): two units, never added together. A REQUEST row counts outbound provider requests: every
+  // row from Fixes-3e on, and every transcription row (a recording's calls were always counted one per engine request: each
+  // Gemini model tried, plus Whisper). An OLDER parser row (rule 3, before Fixes-3e) counted parser CHECKS: its real request
+  // number was never recorded, so it is reported beside the totals, never in them, and no number of requests is guessed for it.
+  const isReq = (x) => x.kind === 'transcription' || x.unit === 'requests';
+  const req = spend.filter(isReq), old = spend.filter(x => !isReq(x));
+  const sumOf = (rows, f = () => true) => rows.filter(f).reduce((n, x) => n + (Number(x.calls) || 0), 0);
+  const notKept = sumOf(req, x => !kept(x)), deleted = sumOf(req, x => kept(x) && !held.has(x.take_id));
   // Fixes-3c: attempts not yet written to the ledger make these totals SHORT, and say so first. Fixes-3d: so do attempts that were
   // started but never recorded (in flight, or interrupted by a restart or failure): their calls are unknown, reported with a bound.
   const known = unresolved && unresolved.attempts ? `UNRESOLVED: ${unresolved.attempts} attempt(s) (${unresolved.calls} call(s)) could not be written to the ledger yet, so the totals below are short by ${unresolved.calls}. ` : '';
-  const unknown = unresolved && unresolved.unknownAttempts ? `UNRESOLVED: ${unresolved.unknownAttempts} attempt(s) were started but their calls were never recorded (still running, or interrupted by a restart or failure): their provider requests are UNKNOWN (${unresolved.unknownStarted || 0} had been started), at most ${unresolved.unknownMax}, and are not in the totals below; an administrator settles each from the provider's own records. ` : '';
+  const legacyTxt = unresolved?.unknownLegacy ? ` (${unresolved.unknownLegacy} of them from before Fixes-3e, whose requests started were never recorded)` : '';
+  const unknown = unresolved && unresolved.unknownAttempts ? `UNRESOLVED: ${unresolved.unknownAttempts} attempt(s) were started but their calls were never recorded (still running, or interrupted by a restart or failure): their provider requests are UNKNOWN (${unresolved.unknownStarted || 0} had been started${legacyTxt}), at most ${unresolved.unknownMax}, and are not in the totals below; an administrator settles each from the provider's own records. ` : '';
   const waiting = known + unknown;
-  const settledTxt = unresolved?.settled?.n ? ` ${unresolved.settled.n} attempt(s) were settled by an administrator from the provider's own records (${unresolved.settled.calls} call(s), included above).` : '';
-  const recon = reconciled.length ? ` ${reconciled.length} duplicate row(s) (${reconciled.reduce((n, x) => n + (Number(x.calls) || 0), 0)} call(s)) added by an earlier boot back-fill were removed from these totals and kept in the reconciliation record.` : '';
-  // Fixes-3e: the unit. Rows from Fixes-3e on count outbound provider requests; older rule-3 rows counted parser checks.
-  const oldChecks = spend.filter(x => x.kind === 'rule3' && x.unit !== 'requests');
-  const unitTxt = ` Each call counted from Fixes-3e on is one outbound provider request: each Gemini model tried and Whisper for a recording; every parser request for a preview check, its fallbacks and retries included.${oldChecks.length ? ` ${oldChecks.reduce((n, x) => n + (Number(x.calls) || 0), 0)} older parser call(s) on ${oldChecks.length} row(s) were counted as parser checks, one each: their real request number was not recorded (at least one each).` : ''}`;
-  return `${waiting}${sum(x => x.kind === 'transcription')} transcription call(s) and ${sum(x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened.${unitTxt} Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these.${recon}${settledTxt}`;
+  const settledRows = (rows) => rows.filter(x => x.outcome === 'settled by an administrator');
+  const sReq = sumOf(settledRows(req)), sOld = settledRows(old);
+  const settledTxt = unresolved?.settled?.n ? ` ${unresolved.settled.n} attempt(s) were settled by an administrator from the provider's own records (${sReq} call(s), included above${sOld.length ? `; plus ${sOld.length} older settlement(s) of ${sumOf(sOld)} parser check(s) from before Fixes-3e, kept apart with the older checks` : ''}).` : '';
+  const units = (rows) => {
+    const r = rows.filter(isReq), o = rows.filter(x => !isReq(x));
+    return [r.length ? `${sumOf(r)} provider request(s)` : null, o.length ? `${sumOf(o)} older parser check(s)` : null].filter(Boolean).join(' and ') || '0 provider requests';
+  };
+  const recon = reconciled.length ? ` ${reconciled.length} duplicate row(s) (${units(reconciled)}) added by an earlier boot back-fill were removed from these totals and kept in the reconciliation record.` : '';
+  const unitTxt = ' Each of these calls is one outbound provider request: each Gemini model tried and Whisper for a recording; every parser request for a preview check, its fallbacks and retries included.';
+  const oldTxt = old.length ? ` Kept apart, NOT in these totals: ${sumOf(old)} older parser check(s) on ${old.length} row(s) from before Fixes-3e, counted one per check; their provider requests were never recorded (at least one each, number unknown). Of these older checks, ${sumOf(old, x => kept(x) && !held.has(x.take_id))} were on recordings deleted since and ${sumOf(old, x => !kept(x))} on attempts whose result was never kept.` : '';
+  return `${waiting}${sumOf(req, x => x.kind === 'transcription')} transcription call(s) and ${sumOf(req, x => x.kind === 'rule3')} parser call(s) in the round, counted when each call happened.${unitTxt} Of these, ${deleted} were on recordings deleted since (withdrawal, removal or 90 days), and ${notKept} on attempts whose result was never kept (an upload refused or not saved after the engines answered, a judgment that could not be saved, or one still in progress). Deleting recordings never lowers these.${oldTxt}${recon}${settledTxt}`;
 }
 /** Fixes-3c/3d: recordings registered before upload. Never kept vs kept then deleted are told apart (ever_kept). */
 function uploadsText(uploads = [], ever = false) {
