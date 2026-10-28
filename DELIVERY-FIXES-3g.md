@@ -57,7 +57,7 @@ The evidence:
 | Full local gate | **all suites pass, 6,971 assertions** (3f: 6,955; + 13 panel + 3 built client) |
 | Browser screens | the panel, its Wording check, the error card and the loading card at 360 and 390 px, dark and light: readable, accent and contrast as the rest of the panel (stamped SIMULATED, local server) |
 | End-to-end voice simulation A–M, with the new client build served | **63/63** (05:22–05:51 UTC, 28 Oct) |
-| Live site after the push | LIVE_RESULT |
+| Live site after the push | **Verified by the robot workflow, signed in as admin, read-only (28 Oct 14:42 UTC):** server and app 7eecd1c (entry `index-Cl5aKNS5.js`, admin `AdminDashboard-l7iiToQy.js`, 119,368 bytes); `GET /api/voice-calibration/admin` **HTTP 200, available: true**; **the panel is shown, with its Wording check (0/3 confirmed)**: Kannada, Hindi and English all *not confirmed, locked*, hashes `02dc7a808038` / `21ef021a6c57` / `9bd51a13bb06` (as reviewed); nothing but GET sent. Railway deployed 14:33:40–14:36:30 UTC; phone robot 51/51 clean, 35 of 35 live files identical; GitHub gate green 14:45:31 UTC |
 
 ## For Sachin
 1. **After this deploy:** open Admin on the test site; **Voice calibration · round 1** is under the Voice backup test card. If it says it couldn't load, it now says why: send me a screenshot.
