@@ -52,6 +52,16 @@ jobs:
         env:
           ROBOT_BASE_URL: https://fitness-test.up.railway.app
         run: node scripts/check-live-assets.mjs
+      # Fixes-3g (28 Oct 2026): the live files matched client/dist, yet client/dist was stale and the admin page had no
+      # calibration panel. This signs in as the robot admin (read-only) and requires the panel and its Wording check.
+      - name: Check the live calibration panel (signed in, read-only)
+        if: always()
+        working-directory: server
+        env:
+          ROBOT_BASE_URL: https://fitness-test.up.railway.app
+          FITLIFE_ROBOT_ADMIN_EMAIL: ${{ secrets.FITLIFE_ROBOT_ADMIN_EMAIL }}
+          FITLIFE_ROBOT_ADMIN_PASSWORD: ${{ secrets.FITLIFE_ROBOT_ADMIN_PASSWORD }}
+        run: node scripts/check-live-calibration-panel.mjs
       - name: Publish the report on the commit
         if: always()
         env:
@@ -60,6 +70,7 @@ jobs:
           f=qa/robot-results
           { cat "$f/report.md" 2>/dev/null || echo "# Phone robot: no report (the run stopped before writing one)"
             echo; cat "$f/live-assets.md" 2>/dev/null || echo "Live file check: did not run."
+            echo; cat "$f/calibration-panel.md" 2>/dev/null || echo "Live calibration panel check: did not run."
             echo; cat "$f/nutrient-inventory.md" 2>/dev/null || true; } > "$RUNNER_TEMP/summary.md"
           head -c 60000 "$RUNNER_TEMP/summary.md" > "$RUNNER_TEMP/summary-cut.md"
           title=$(grep -m1 '^\*\*' "$f/report.md" 2>/dev/null | tr -d '*' | cut -c1-200)

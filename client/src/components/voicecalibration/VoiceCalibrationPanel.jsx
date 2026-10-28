@@ -3,6 +3,7 @@ import api from '../../api/client';
 import { Eyebrow } from '../primitives';
 import { haptic } from '../../store/settingsStore';
 import { shareOrDownload } from '../../utils/shareFile';
+import { onTestSite } from '../../utils/calibrationMode';
 
 /**
  * VoiceCalibrationPanel — admin dashboard, TEST SERVER ONLY (hidden elsewhere: the API is 404).
@@ -120,13 +121,33 @@ export default function VoiceCalibrationPanel() {
   const [arm, setArm] = useState({ trial: '1', account: '' });
   const [mark, setMark] = useState(null);
   const [amend, setAmend] = useState(null);   // take id whose reference is being re-recorded
-  const load = () => api.get('/voice-calibration/admin').then(({ data }) => setSt(data)).catch(() => setSt(null));
+  // Fixes-3g: a failed request is no longer silent. On the test site the panel says it is loading, or why it could not load
+  // (with the HTTP status) and offers Retry. Off the test site the server answers 404 by design, and nothing is shown.
+  const [loadErr, setLoadErr] = useState(null);   // { status } of the last failed GET /voice-calibration/admin
+  const load = () => api.get('/voice-calibration/admin').then(({ data }) => { setSt(data); setLoadErr(null); })
+    .catch((e) => { setLoadErr({ status: e?.response?.status || null }); });
   const loadTakes = () => api.get('/voice-calibration/admin/takes').then(({ data }) => setTakes(data.takes || [])).catch(() => setTakes([]));
   useEffect(() => {
     load();
     api.get('/admin/members').then(({ data }) => setAll(Array.isArray(data) ? data : data?.members || [])).catch(() => setAll([]));
   }, []);
-  if (!st?.available) return null;
+  if (!st?.available) {
+    if (!onTestSite()) return null;   // production and any other site: excluded on purpose, as before
+    const shell = 'rounded-2xl border border-hair bg-surface px-4 py-3 mt-3 space-y-2';
+    if (st && !st.available) return <div className={shell} data-testid="vc-panel-off"><Eyebrow>Voice calibration · round 1</Eyebrow><p className="text-caption text-mid">This server says voice calibration is switched off here.</p></div>;
+    if (loadErr) {
+      const why = loadErr.status === 404 ? 'this server says voice calibration is not available here (HTTP 404)'
+        : loadErr.status ? `the server answered HTTP ${loadErr.status}` : 'no answer from the server (offline or timed out)';
+      return (
+        <div className={shell} data-testid="vc-panel-error" role="alert">
+          <Eyebrow>Voice calibration · round 1</Eyebrow>
+          <p className="text-caption text-mid leading-snug">Couldn't load the calibration panel: {why}. Nothing was changed.</p>
+          <button type="button" onClick={() => { setLoadErr(null); load(); }} className={`${btn} ${on}`} style={{ minHeight: 44 }} data-testid="vc-panel-retry">Retry</button>
+        </div>
+      );
+    }
+    return <div className={shell} data-testid="vc-panel-loading" aria-busy="true"><Eyebrow>Voice calibration · round 1</Eyebrow><p className="text-caption text-mid">Loading…</p></div>;
+  }
   const toggle = (k) => { setOpen(o => ({ ...o, [k]: !o[k] })); if (k === 'takes' && !open.takes) loadTakes(); };
   const act = async (fn, after) => {
     haptic(10); setBusy(true); setMsg('');

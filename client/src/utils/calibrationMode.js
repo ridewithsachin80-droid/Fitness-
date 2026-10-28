@@ -20,7 +20,8 @@ import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
 const TEST_HOSTS = /(^|\.)fitness-test\.|^localhost$|^127\.0\.0\.1$/;
-const onTestSite = () => typeof window !== 'undefined' && TEST_HOSTS.test(window.location?.hostname || '');
+/** Fixes-3g: also used by the admin calibration panel, to show its loading and error states on the test site only. */
+export const onTestSite = () => typeof window !== 'undefined' && TEST_HOSTS.test(window.location?.hostname || '');
 /** Who is signed in, and which sign-in (a new sign-in of the same account is a new session too). */
 const authKey = () => { const { user, sessionVersion } = useAuthStore.getState(); return user?.id ? `${sessionVersion}:${user.id}` : null; };
 
