@@ -7,8 +7,11 @@
  * temporary folder (the build is reproducible: content-hashed file names) and requires:
  *   [1] the fresh build's admin bundle contains the Voice calibration panel and its Wording check;
  *   [2] the committed client/dist (the git index, i.e. what the next commit or this checkout holds) is that same build: the same
- *       entry file, and the same admin bundle, present in git. If not, build the client and commit client/dist.
+ *       entry file, and EVERY file of the fresh build present in git with identical bytes (Fixes-3h, the 3g review: 3g compared
+ *       only the entry and admin file NAMES, so a missing or corrupted admin file, a missing chunk or a stale stylesheet passed).
+ *       Older builds' files may stay in git as extras. If not, build the client and commit client/dist.
  */
+import { compareBuild } from './lib/built-client.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -44,6 +47,9 @@ try {
   ck(`client/dist in git loads the same entry file as a fresh build (committed ${cEntry || 'none'}, fresh ${entry}): if this fails, build the client and commit client/dist`,
     !!cEntry && cEntry === entry, { committed: cEntry, fresh: entry });
   ck(`…and the same admin bundle, present in git (committed ${cAdmin || 'none'}, fresh ${admin})`, !!cAdmin && cAdmin === admin, { committed: cAdmin, fresh: admin });
+  const cmp = compareBuild({ freshDir: OUT, root: ROOT });
+  ck(`every one of the fresh build's ${cmp.total} files (HTML, CSS, service worker, every chunk) is in git with identical bytes (${cmp.same} identical; ${cmp.extras} older file(s) kept as extras)`,
+    cmp.total > 0 && cmp.missing.length === 0 && cmp.different.length === 0, { missing: cmp.missing.slice(0, 8), different: cmp.different.slice(0, 8) });
 } catch (e) { ck('the check ran to the end', false, String(e.stderr || e.stack || e).slice(0, 600)); }
 finally { fs.rmSync(OUT, { recursive: true, force: true }); }
 console.log(`\nBuilt client (Fixes-3g): ${pass} passed, ${fail} failed`);

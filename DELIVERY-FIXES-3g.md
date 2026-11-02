@@ -4,14 +4,14 @@
 
 **Unchanged:** production (`main` 1ca6ae7); the calibration kit's server code, its scripts and their hashes (kn `02dc7a808038…`, hi `21ef021a6c57…`, en `9bd51a13bb06…`); the live speech check (200 / 60 / 6), detector settings, provider order, nutrients and supplement accounting; every recording, history and wording record. **No wording confirmation was made on anyone's behalf.** Collection, invitations for collection and real-provider batches stay closed. **B18/B19, Scenario G (3u), B20 and the 61/63 simulation anomaly (3z-b) stay open.**
 
-## The cause (established)
+## The cause (the stale build is established; why Railway did not rebuild it is an inference)
 
 **The test site serves the committed `client/dist`, and `client/dist` had not been committed since Fixes-2u (e2fb101, 22 Oct).** The client source has had the panel since Fixes-2x (f450f9f, 23–24 Oct), but no build of it was ever committed, so it never reached the site.
 
 The evidence:
 - **The live bundles are the committed ones.** The admin bundle the reviewer found live (`AdminDashboard-DRVOGYZk.js`, 90,137 bytes, no "calibration") and the entry file `index-DeNUWF9y.js` are the files in git, committed in Fixes-2u, byte for byte.
-- **Railway does not rebuild the client.** `railway.toml` asks for `bash build.sh`, which builds the client from source after deleting `client/dist` (`clean-build.mjs`). Had it run, the site would serve new file names; it serves the committed ones. So the test service is evidently not running `build.sh`. The Railway dashboard says Railpack, while `railway.toml` says nixpacks (an old handoff note). The build logs need a Railway login and could not be read from here.
-- **My own rule caused the gap.** From Fixes-2v on I followed a rule of not committing `client/dist`, believing the deploy built it. It doesn't. The rule was wrong for this deploy, and it is withdrawn (handoff updated).
+- **Inferred, not verified: the test service does not rebuild the client.** (Corrected 2 Nov after the 3g review: this line first said it as a fact.) `railway.toml` asks for `bash build.sh`, which builds the client from source after deleting `client/dist` (`clean-build.mjs`). Had it run, the site would serve new file names; it serves the committed ones. That points to the test service not running `build.sh`. The Railway dashboard said Railpack while `railway.toml` says nixpacks (an old handoff note). The effective builder, build command and build logs need a Railway login and have **not** been checked, so the precise cause stays open.
+- **My own rule caused the gap.** From Fixes-2v on I followed a rule of not committing `client/dist`, believing the deploy built it. On the evidence it does not. The rule was wrong for this deploy, and it is withdrawn (handoff updated).
 - **The robot could not see it.** Its "35 of 35 live files identical" check (`check-live-assets.mjs`) compares the site with `client/dist`, so it confirmed the site was serving the stale build faithfully.
 - **No server fault was found.** The calibration API itself works. On a local production server built from this commit, the signed-in `GET /api/voice-calibration/admin` answers **200, available: true**, and the panel shows. On the live site that request was never made, because the served admin bundle has no panel to make it. No HTTP 500, migration or availability-gate fault is claimed.
 

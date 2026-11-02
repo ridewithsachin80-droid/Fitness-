@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { browserExecutable } from './lib/browser-executable.mjs';
+import { waitForCommit } from './lib/deploy-wait.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(HERE, '../../qa/robot-results');
@@ -27,13 +28,12 @@ const row = (name, ok, detail = '') => { rows.push(`| ${ok ? '✅' : '❌'} | ${
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 const MARKS = ['vc-panel', 'vc-words', 'Voice calibration · round 1', '/voice-calibration/admin'];
 
-// The deploy of this commit first (the robot step before this one waits too; this keeps the check honest on its own).
-let live = null;
-for (let i = 0; i < 60; i++) {
-  try { live = (await (await fetch(`${BASE}/health`, { cache: 'no-store' })).json())?.commit || null; } catch { live = null; }
-  if (!WANT || (live && WANT.startsWith(live.slice(0, 7))) || (live && live.startsWith(WANT.slice(0, 7)))) break;
-  await wait(15000);
-}
+// The deploy of this commit first. Fixes-3h (the 3g review): if it never arrives, that is a FAILURE (3g carried on and could
+// pass against an older deployment).
+const dep = await waitForCommit({ fetchCommit: async () => (await (await fetch(`${BASE}/health`, { cache: 'no-store' })).json())?.commit || null, want: WANT,
+  tries: Number(process.env.LIVE_WAIT_TRIES || 60), delayMs: Number(process.env.LIVE_WAIT_MS || 15000) });
+const live = dep.live;
+row('The deployment of this commit is live', dep.ok, `expected ${WANT ? WANT.slice(0, 7) : '(none requested)'}, live ${live ? live.slice(0, 7) : 'unknown'}: ${dep.reason}`);
 notes.push(`Server commit: ${live || 'unknown'}${WANT ? ` (this commit ${WANT.slice(0, 7)})` : ''}`);
 
 // [A] the served client, signed out
@@ -90,7 +90,7 @@ if (!EMAIL || !PASSWORD) {
           // codes only: the status line says "confirmed by R1 · <date>", "not confirmed, locked" or "check void …"
           return { l, status: head.replace(/^[^:]*:\s*/, '').slice(0, 80), hash }; }));
         const expect = { kn: '02dc7a808038', hi: '21ef021a6c57', en: '9bd51a13bb06' };
-        row('…listing Kannada, Hindi and English, each with its status and script hash', langs.every(x => !x.missing && x.hash), langs.map(x => `${x.l}: ${x.missing ? 'missing' : `${x.status} (hash ${x.hash}${x.hash === expect[x.l] ? ', as reviewed' : `, EXPECTED ${expect[x.l]}`})`}`).join('; '));
+        row('…listing Kannada, Hindi and English, each with its status and script hash (a status inventory: a hash that differs from the reviewed one is reported, not judged)', langs.every(x => !x.missing && x.hash), langs.map(x => `${x.l}: ${x.missing ? 'missing' : `${x.status} (hash ${x.hash}${x.hash === expect[x.l] ? ', as reviewed' : `, EXPECTED ${expect[x.l]}`})`}`).join('; '));
       }
     }
     row('Read-only: nothing but GET was sent to the calibration API', blocked.length === 0, blocked.length ? `blocked: ${blocked.join(', ')}` : 'none blocked');

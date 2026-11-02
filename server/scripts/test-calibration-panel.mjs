@@ -45,7 +45,7 @@ try {
   server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
   const q = async (sql, a) => (await pool.query(sql, a)).rows;
   await pool.query(`SELECT setval(pg_get_serial_sequence('users','id'), GREATEST((SELECT COALESCE(MAX(id), 0) FROM users), 1))`);
-  const admin = (await q(`INSERT INTO users (name,phone,password,role,active) VALUES ('Panel Admin','5000000088','x','admin',true) RETURNING id`))[0].id;
+  const admin = (await q(`INSERT INTO users (name,phone,password,role,active) VALUES ('Panel Admin',$1,'x','admin',true) RETURNING id`, ['5' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0')]))[0].id;
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt.sign({ id: admin, role: 'admin', name: 'x' }, process.env.JWT_SECRET, { expiresIn: 600 })}` };
   const base = `http://127.0.0.1:${server.address().port}/api/voice-calibration`;
   await pool.query(`DELETE FROM voice_calibration_wording`); await pool.query(`DELETE FROM voice_calibration_reviewers`).catch(() => {});
@@ -128,6 +128,38 @@ try {
   ck('production address, any other failure: nothing on screen (the panel is a test-server tool)', P.w.document.getElementById('root').innerHTML === '');
 
   await pool.query(`DELETE FROM voice_calibration_wording`); await pool.query(`DELETE FROM voice_calibration_reviewers`).catch(() => {});
+  // ── [4] Fixes-3h (the 3g review, finding 2): a refresh that fails AFTER a successful action ──
+  console.log('\n[4] a refresh that fails after a successful Confirm is shown, and recovers without another Confirm');
+  const withConfirmed = (lang) => ({ ...real, wording: real.wording.map(w => w.lang === lang ? { ...w, confirmed: { by: rv.code, note: null, at: new Date().toISOString() }, void: false } : w) });
+  const confirmAs = async (P, lang) => {
+    const sel = P.q(`vc-words-${lang}`)?.querySelector('select');
+    if (sel) { sel.value = rv.code; sel.dispatchEvent(new P.w.Event('change', { bubbles: true })); }
+    await tick(60); P.q(`vc-confirm-${lang}`)?.click();
+  };
+  const posts = (P) => P.w.calls.filter(c => c.method === 'post' && c.url === '/voice-calibration/admin/wording').length;
+  const gets = (P) => P.w.calls.filter(c => c.method === 'get' && c.url === '/voice-calibration/admin').length;
+  P = await page(TEST, 'ok'); await until(() => P.q('vc-words')); P.q('vc-words').querySelector('button').click(); await until(() => P.q('vc-words-kn'));
+  P.w.mode = 500;                       // the Confirm itself succeeds; the status refresh after it fails
+  await confirmAs(P, 'kn');
+  await until(() => P.q('vc-panel-stale'));
+  const staleText = P.q('vc-panel-stale')?.textContent || '';
+  ck('review repro: Confirm succeeds, the refresh answers HTTP 500 → a notice says the change was accepted but the statuses may be out of date (HTTP 500), with Retry; never "nothing was changed"',
+    /Your change was accepted by the server/.test(staleText) && /HTTP 500/.test(staleText) && /may be out of date/.test(staleText) && !/Nothing was changed/i.test(staleText) && !!P.q('vc-panel-refresh-retry') && posts(P) === 1, { staleText, posts: posts(P) });
+  ck('…the old status on screen is marked: the Wording check says "may be out of date"', /0\/3 confirmed · may be out of date|1\/3 confirmed · may be out of date/.test(P.q('vc-words')?.textContent || ''), (P.q('vc-words')?.textContent || '').slice(0, 80));
+  const g0 = gets(P);
+  P.w.realAnswer = withConfirmed('kn'); P.w.mode = 'ok';
+  P.q('vc-panel-refresh-retry')?.click();
+  ck('…Retry only reads again (GET): Kannada now shows "confirmed by" the code, the notice clears, and NO second Confirm was sent',
+    await until(() => /confirmed by R\d+/.test(P.q('vc-words-kn')?.textContent || '') && !P.q('vc-panel-stale')) && posts(P) === 1 && gets(P) === g0 + 1, { posts: posts(P), gets: gets(P) - g0, kn: (P.q('vc-words-kn')?.textContent || '').slice(0, 80) });
+  P = await page(TEST, 'ok'); await until(() => P.q('vc-words')); P.q('vc-words').querySelector('button').click(); await until(() => P.q('vc-words-en'));
+  P.w.realAnswer = withConfirmed('en');
+  await confirmAs(P, 'en');
+  ck('positive control: Confirm with an ordinary successful refresh → English shows "confirmed by", no notice, one Confirm',
+    await until(() => /confirmed by R\d+/.test(P.q('vc-words-en')?.textContent || '')) && !P.q('vc-panel-stale') && posts(P) === 1, { posts: posts(P), en: (P.q('vc-words-en')?.textContent || '').slice(0, 80) });
+  P = await page(TEST, 'ok'); await until(() => P.q('vc-words')); P.q('vc-words').querySelector('button').click(); await until(() => P.q('vc-words-en'));
+  P.w.mode = 'offline'; await confirmAs(P, 'en');
+  ck('a refresh after Confirm that gets no answer at all → the same notice, "no answer from the server", one Confirm',
+    await until(() => /no answer from the server/.test(P.q('vc-panel-stale')?.textContent || '')) && /Your change was accepted/.test(P.q('vc-panel-stale')?.textContent || '') && posts(P) === 1, (P.q('vc-panel-stale')?.textContent || '').slice(0, 160));
   await pool.query(`DELETE FROM users WHERE id=$1`, [admin]);
 } catch (e) { ck('the suite ran to the end', false, e.stack); }
 finally { server?.close(); await pool.end().catch(() => {}); fs.rmSync(TMP, { recursive: true, force: true }); }

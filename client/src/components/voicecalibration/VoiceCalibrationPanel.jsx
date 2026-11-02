@@ -123,9 +123,12 @@ export default function VoiceCalibrationPanel() {
   const [amend, setAmend] = useState(null);   // take id whose reference is being re-recorded
   // Fixes-3g: a failed request is no longer silent. On the test site the panel says it is loading, or why it could not load
   // (with the HTTP status) and offers Retry. Off the test site the server answers 404 by design, and nothing is shown.
-  const [loadErr, setLoadErr] = useState(null);   // { status } of the last failed GET /voice-calibration/admin
-  const load = () => api.get('/voice-calibration/admin').then(({ data }) => { setSt(data); setLoadErr(null); })
-    .catch((e) => { setLoadErr({ status: e?.response?.status || null }); });
+  // Fixes-3h (the 3g review): a refresh that fails AFTER the panel has loaded (for example right after a successful Confirm)
+  // is shown too: the statuses on screen are marked possibly out of date, with a Retry that only reads (GET). The action that
+  // succeeded is never repeated, and never described as "nothing was changed".
+  const [loadErr, setLoadErr] = useState(null);   // { status, afterAction } of the last failed GET /voice-calibration/admin
+  const load = (afterAction = false) => api.get('/voice-calibration/admin').then(({ data }) => { setSt(data); setLoadErr(null); return true; })
+    .catch((e) => { setLoadErr({ status: e?.response?.status || null, afterAction }); return false; });
   const loadTakes = () => api.get('/voice-calibration/admin/takes').then(({ data }) => setTakes(data.takes || [])).catch(() => setTakes([]));
   useEffect(() => {
     load();
@@ -151,7 +154,7 @@ export default function VoiceCalibrationPanel() {
   const toggle = (k) => { setOpen(o => ({ ...o, [k]: !o[k] })); if (k === 'takes' && !open.takes) loadTakes(); };
   const act = async (fn, after) => {
     haptic(10); setBusy(true); setMsg('');
-    try { const r = await fn(); await load(); if (after) after(r); }
+    try { const r = await fn(); await load(true); if (after) after(r); }
     catch (e) { setMsg(e.response?.data?.error || 'Could not do that just now. Try again.'); }
     setBusy(false);
   };
@@ -194,6 +197,12 @@ export default function VoiceCalibrationPanel() {
         <span className="text-caption text-lo">test server only</span>
       </div>
       <p className="text-caption text-mid leading-snug">{people.length} of {st.max} volunteers · {recorded} of {st.planned_total} planned recordings · live speech check stays at {st.live.min_voiced_ms} ms</p>
+      {loadErr && (
+        <div className="rounded-xl border border-hair px-3 py-2 space-y-1.5" role="alert" data-testid="vc-panel-stale">
+          <p className="text-caption text-white leading-snug">{loadErr.afterAction ? 'Your change was accepted by the server, but the panel could not refresh' : 'The panel could not refresh'} ({loadErr.status ? `HTTP ${loadErr.status}` : 'no answer from the server'}), so the statuses below may be out of date.</p>
+          <button type="button" onClick={() => load(loadErr.afterAction)} className={`${btn} ${on}`} style={{ minHeight: 44 }} data-testid="vc-panel-refresh-retry">Retry</button>
+        </div>
+      )}
       {msg && <p className="text-caption text-gold leading-snug" data-testid="vc-msg">{msg}</p>}
 
       <Section title="Volunteers" count={`${people.length}/${st.max}`} open={!!open.people} onToggle={() => toggle('people')} testid="vc-people">
@@ -233,7 +242,7 @@ export default function VoiceCalibrationPanel() {
         <button type="button" onClick={register} disabled={busy || rev.name.trim().length < 2} className={`w-full ${btn} ${on}`} style={{ minHeight: 40 }} data-testid="vc-register">Register</button>
       </Section>
 
-      <Section title="Wording check (before any recording)" count={`${st.wording.filter(w => w.confirmed).length}/3 confirmed`} open={!!open.words} onToggle={() => toggle('words')} testid="vc-words">
+      <Section title="Wording check (before any recording)" count={`${st.wording.filter(w => w.confirmed).length}/3 confirmed${loadErr ? ' · may be out of date' : ''}`} open={!!open.words} onToggle={() => toggle('words')} testid="vc-words">
         <p className="text-caption text-mid leading-snug">A fluent speaker reads each language's lines aloud and confirms the words are natural and correct. Until then those lines cannot be recorded. Editing a line later locks it again.</p>
         {st.wording.map(w => (
           <div key={w.lang} className="rounded-xl border border-hair px-3 py-2 space-y-1.5" data-testid={`vc-words-${w.lang}`}>
