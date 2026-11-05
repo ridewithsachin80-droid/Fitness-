@@ -90,7 +90,7 @@ if (!EMAIL || !PASSWORD) {
           // codes only: the status line says "confirmed by R1 · <date>", "not confirmed, locked" or "check void …"
           return { l, status: head.replace(/^[^:]*:\s*/, '').slice(0, 80), hash }; }));
         const expect = { kn: '4087ba15e0a6', hi: '21ef021a6c57', en: '9bd51a13bb06' };   // Fixes-3i: kn changed with k02 (uppittu) and k04 (battalu); 3h reviewed kn 02dc7a808038
-        row('…listing Kannada, Hindi and English, each with its status and script hash (a status inventory: a hash that differs from the reviewed one is reported, not judged)', langs.every(x => !x.missing && x.hash), langs.map(x => `${x.l}: ${x.missing ? 'missing' : `${x.status} (hash ${x.hash}${x.hash === expect[x.l] ? ', as reviewed' : `, EXPECTED ${expect[x.l]}`})`}`).join('; '));
+        row('…listing Kannada, Hindi and English, each with its status and script hash (a status inventory: a hash that differs from the expected one is reported, not judged; kn expected is the Fixes-3i lines, not yet reviewed)', langs.every(x => !x.missing && x.hash), langs.map(x => `${x.l}: ${x.missing ? 'missing' : `${x.status} (hash ${x.hash}${x.hash === expect[x.l] ? ', as expected' : `, EXPECTED ${expect[x.l]}`})`}`).join('; '));
       }
     }
     row('Read-only: nothing but GET was sent to the calibration API', blocked.length === 0, blocked.length ? `blocked: ${blocked.join(', ')}` : 'none blocked');

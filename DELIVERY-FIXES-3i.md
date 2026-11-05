@@ -33,7 +33,7 @@ Sachin's instruction (5 Nov): **"any spelling is ok, app should identify"**. So 
 ## Changes to existing tests
 1. **`test-voice-calibration-3a.js`** — "the judge version changed with these rules": expected `judge-3a.1` → **`judge-3i.1`**. The scorer's rules changed in this delivery, so its version must move (that is what makes older judgments stale). What the check protects is unchanged: a judgment cached under an older judge (2y, and now 3a) is never reused.
 2. **`test-voice-calibration.js`** — the unpopulated export's About sheet: expected `round1-script-v1` → **`round1-script-v2`**. Everything else in that assertion is unchanged (still 3 × NOT CONFIRMED).
-3. **`check-live-calibration-panel.mjs`** (robot workflow) — the wording **status inventory**'s reference hash for Kannada: `02dc7a808038` → **`4087ba15e0a6`**. This row reports, it does not gate; Hindi and English references unchanged.
+3. **`check-live-calibration-panel.mjs`** (robot workflow) — the wording **status inventory**'s reference hash for Kannada: `02dc7a808038` → **`4087ba15e0a6`**. This row reports, it does not gate; Hindi and English references unchanged. In the follow-up commit its words "as reviewed" became **"as expected"**: the first live report on f023f86 said "hash 4087ba15e0a6, as reviewed", which was not true (the new Kannada lines have not been reviewed). Wording only; what it checks is unchanged.
 
 No other test changed. No test was removed or loosened.
 
@@ -45,7 +45,7 @@ No other test changed. No test was removed or loosened.
 | Calibration suites on a real local Postgres (from `schema.sql`) | calibration 126, 2y 99, 2z 46, 3a 29, 3b 14, 3c 21, 3d 20, 3e 19, 3f 26, panel 18, pilot 134: **all pass** |
 | Screens (`screens-3i.mjs`, SIMULATED, local server, real client build) | **40/40**: at 360 and 390 px, light and dark: Kannada shows the new k02/k04 and hash `4087ba15e0a6`, Hindi/English hashes unchanged, "not confirmed, locked", 0/3; with a check recorded against the old hash → "check void (lines changed), locked", still 0/3; text contrast 6.17–14.57; no sideways scroll |
 | Full local gate | **all suites pass, 7,006 assertions** (3h: 6,990; + 16 new). Three existing assertions updated as listed above |
-| Live site after the push | recorded in the follow-up delivery-note commit |
+| Live site after the push | **Verified live (robot workflow run 41954633383, signed-in admin, read-only, 5 Nov 02:21–02:29 UTC):** "The deployment of this commit is live": expected f023f86, live f023f86, match; app unchanged (entry `index-Cv-VEZoW.js`, admin `AdminDashboard-Cm05YZvA.js`); `GET /api/voice-calibration/admin` HTTP 200, available: true; panel shown; Wording check **0/3 confirmed**: **kn not confirmed, locked, hash `4087ba15e0a6`**; hi `21ef021a6c57` and en `9bd51a13bb06` not confirmed, locked (unchanged); nothing but GET sent. Phone robot 51/51 clean, 35 of 35 live files identical. **GitHub gate green** (run 41954633463) |
 
 ## For Sachin
 1. **Hindi and English:** go ahead exactly as in the guide; their lines and hashes did not change.
