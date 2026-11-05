@@ -185,7 +185,7 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
            u.id, u.name, u.phone, u.created_at,
            pp.dob, pp.gender, pp.height_cm, pp.start_weight, pp.target_weight, pp.goal, pp.goals,
            pp.conditions, pp.diet_notes, pp.water_target, pp.target_set_by,
-           pp.sleep_bed, pp.sleep_wake, pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
+           pp.sleep_bed, pp.sleep_wake, pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements, pp.protocol_default_none,
            pp.fasting_start, pp.fasting_end, pp.fasting_label, pp.fasting_note,
            pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
            (SELECT u2.name FROM monitor_patients mp
@@ -458,7 +458,7 @@ async function collectTriage(members) {
          WHERE patient_id = ANY($1) AND log_date >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 13
          ORDER BY log_date`, [ids]),
       pool.query(
-        `SELECT user_id, water_target, protocol_activities, protocol_acv, protocol_supplements, meal_plan
+        `SELECT user_id, water_target, protocol_activities, protocol_acv, protocol_supplements, protocol_default_none, custom_acv, custom_supplements, meal_plan
          FROM patient_profiles WHERE user_id = ANY($1)`, [ids]),
       pool.query(
         `SELECT patient_id, ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - MAX(log_date)) AS days_since
@@ -577,7 +577,7 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
         [ids]),
       pool.query(
         `SELECT user_id, water_target, protocol_activities, protocol_acv,
-                protocol_supplements, meal_plan
+                protocol_supplements, protocol_default_none, custom_acv, custom_supplements, meal_plan
          FROM patient_profiles WHERE user_id = ANY($1)`, [ids]),
       // How long since each member logged anything at all — a member silent
       // for weeks needs a different message from one who missed water today.
@@ -602,6 +602,9 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
         activities:   p.protocol_activities,
         acv:          p.protocol_acv,
         supplements:  p.protocol_supplements,
+        default_none: p.protocol_default_none === true,   // Fixes-3k
+        custom_acv:   p.custom_acv,            // Fixes-3k: the coach's own items count when nothing is chosen
+        custom_supplements: p.custom_supplements,
         meal_slots:   p.meal_plan,
       }, { daysSince: days });
     }).filter(r => {
@@ -799,7 +802,7 @@ router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAcc
          WHERE patient_id = $1 AND log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`, [id]),
       pool.query(
         `SELECT water_target, protocol_activities, protocol_acv,
-                protocol_supplements, meal_plan
+                protocol_supplements, protocol_default_none, custom_acv, custom_supplements, meal_plan
          FROM patient_profiles WHERE user_id = $1`, [id]),
       pool.query(
         `SELECT ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - MAX(log_date)) AS days_since
@@ -818,6 +821,9 @@ router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAcc
         activities:   p.protocol_activities,
         acv:          p.protocol_acv,
         supplements:  p.protocol_supplements,
+        default_none: p.protocol_default_none === true,   // Fixes-3k
+        custom_acv:   p.custom_acv,            // Fixes-3k: the coach's own items count when nothing is chosen
+        custom_supplements: p.custom_supplements,
         meal_slots:   p.meal_plan,
       }, { daysSince: days }),
       next_check: nextCheck(),
@@ -1310,9 +1316,11 @@ router.post('/', authMW, roleCheck('admin'), async (req, res) => {
 
     // Create patient profile
     await client.query(
+      // Fixes-3k: a member created from now on starts with no supplements or ACV until the coach adds them
+      // (protocol_default_none; Sachin's decision, 5 Nov). Members created before keep NULL: the old meaning.
       `INSERT INTO patient_profiles
-         (user_id, height_cm, start_weight, target_weight, conditions, diet_notes, water_target)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         (user_id, height_cm, start_weight, target_weight, conditions, diet_notes, water_target, protocol_default_none)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)`,
       [
         newUser.id,
         height_cm    || null,

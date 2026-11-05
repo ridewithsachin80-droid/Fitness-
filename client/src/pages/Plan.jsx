@@ -8,7 +8,7 @@ import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { OfflineBanner, MemberBottomNav } from '../components/UI';
 import { Eyebrow, Icon, Segmented, Skeleton, SkeletonCard, EmptyState } from '../components/primitives';
 import { WEEKDAYS, istWeekday, labelHasWeekday, isWeekdayScheduled, deriveTodayDay } from '../utils/programDay';
-import { resolveProtocolItems, AUTO_TICK_IDS, clock, sleepTarget, protocolFromProfile, waterTarget, routineOrigin, planSourceLine, STANDARD_LABEL } from '../lib/day';
+import { resolveProtocolItems, protocolDefaultNone, AUTO_TICK_IDS, clock, sleepTarget, protocolFromProfile, waterTarget, routineOrigin, planSourceLine, STANDARD_LABEL } from '../lib/day';
 import { formatDate } from '../constants';
 import { plural } from '../constants';
 
@@ -135,6 +135,8 @@ export default function Plan() {
   const water = waterTarget(protocol);
   const waterL = (water.ml / 1000).toFixed(1);
   const routine = routineOrigin(protocol);
+  // Fixes-3k: a member created from 3k on has no supplements or ACV until the coach adds them; existing members: unchanged.
+  const newRule = protocolDefaultNone(protocol);
   // The member's own bedtime and wake time when the coach has set them; the
   // hours are worked out from the times, never typed in beside them.
   const sleep = sleepTarget(protocol);
@@ -229,10 +231,13 @@ export default function Plan() {
               <div data-testid="plan-today-recover">
                 <Line icon="drop" title="Water" sub={waterSub(water)} right={`${waterL} L`} onPress={() => goToday('water')} testId="plan-water" />
                 <Line icon="moon" title={terms.sleep} sub={sleepSub(sleep)} right={sleep.hoursLabel} onPress={() => goToday('sleep')} testId="plan-sleep" />
-                {activeSupplements.length > 0 && (
-                  <Line icon="pill" title={terms.supplements} sub={(routine.standard.includes('supplements') ? `${STANDARD_LABEL} · ` : '') + activeSupplements.map(s => s.label).join(' · ')}
+                {activeSupplements.length > 0 ? (
+                  <Line icon="pill" title={terms.supplements} sub={(routine.standard.includes('supplements') && !newRule ? `${STANDARD_LABEL} · ` : '') + activeSupplements.map(s => s.label).join(' · ')}
                     right={`${activeSupplements.length}`} onPress={() => goToday('protocol')} />
-                )}
+                ) : newRule ? (
+                  // Fixes-3k (UX review finding 3): never a "FitLife standard" list of supplements nobody prescribed.
+                  <Line icon="pill" title={terms.supplements} sub="Your coach will add these if you need any" testId="plan-supplements-none" />
+                ) : null}
               </div>
             </Section>
           </>
@@ -393,9 +398,16 @@ export default function Plan() {
             <Section eyebrow="Protocol" title={(() => { const n = activeActivities.length + activeACV.length + activeSupplements.length; return `${n} ${plural(n, 'item')} a day`; })()}>
               {routine.anyStandard && (
                 <p className="text-caption text-mid mb-2" data-testid="plan-routine-standard">
-                  {routine.allStandard
-                    ? 'This is FitLife\u2019s standard daily routine. Your coach hasn\u2019t chosen yours yet.'
-                    : `Your coach chose some of this. ${routine.standard.map(g => ({ activities: 'Activities', acv: 'ACV', supplements: terms.supplements }[g])).join(' and ')}: FitLife standard.`}
+                  {newRule
+                    // Fixes-3k: for a new-rule member only activities can be "standard"; supplements and ACV are the coach's.
+                    ? (routine.standard.includes('activities')
+                        ? (routine.allStandard
+                            ? 'Activities are FitLife\u2019s standard for now; your coach hasn\u2019t chosen yours yet. Supplements and apple cider vinegar are added only by your coach.'
+                            : 'Your coach chose some of this. Activities: FitLife standard.')
+                        : 'Your coach chose this routine.')
+                    : routine.allStandard
+                      ? 'This is FitLife\u2019s standard daily routine. Your coach hasn\u2019t chosen yours yet.'
+                      : `Your coach chose some of this. ${routine.standard.map(g => ({ activities: 'Activities', acv: 'ACV', supplements: terms.supplements }[g])).join(' and ')}: FitLife standard.`}
                 </p>
               )}
               <div data-testid="plan-protocol">

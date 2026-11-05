@@ -1095,6 +1095,13 @@ CREATE TABLE IF NOT EXISTS voice_fallback_test_runs (
 ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS speech JSONB;
 ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS config JSONB;
 
+-- Fixes-3k (5 Nov 2026, Sachin's decision): for supplements and apple cider vinegar, "no coach selection" means NONE for
+-- members created from now on, and keeps its old meaning (every built-in item) for existing members, because the old
+-- app saved "the coach ticked them all" the same way as "never chosen". Existing rows stay NULL (old meaning). TRUE is
+-- written only where a member is created (POST /api/admin/members and POST /api/patients); any other row stays NULL.
+-- No column default on purpose: a profile row made later for an old member (a lazy insert) must keep the old meaning.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_default_none BOOLEAN;
+
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was

@@ -25,6 +25,7 @@
  *    in flight and today's answer landed in yesterday's screen. resolveSave()
  *    drops an answer for a date that is no longer the one on screen.
  */
+import { resolveProtocolItems, protocolDefaultNone } from '../lib/day/protocol';   // Fixes-3k: one rule for what is in force
 
 /** What an empty day looks like to the server — the base for a day never saved. */
 export const EMPTY_BASE = Object.freeze({
@@ -90,6 +91,14 @@ export function mapQueuedLog(payload) {
 /** Compute total assignable checkable items from the member's protocol */
 export function computeProtocolTotal(protocol) {
   if (!protocol) return null;
+  // Fixes-3k, a member created from 3k on (protocolDefaultNone): exactly the items Today lists, so the saved score uses
+  // the same "of N" the member sees (no selection for ACV or supplements = only the coach's own items).
+  if (protocolDefaultNone(protocol)) {
+    const { activeActivities, activeACV, activeSupplements } = resolveProtocolItems(protocol);
+    return activeActivities.length + activeACV.length + activeSupplements.length;
+  }
+  // Existing members: exactly as before 3k (Sachin's decision: their scores do not change). Note: with the custom
+  // lists the server sends ([]), a group with no selection counts 0 here and the server then uses its 16 floor.
   const acts  = protocol.activities  ? protocol.activities.length
               : protocol.custom_activities?.length ?? 6;
   const acvs  = protocol.acv         ? protocol.acv.length

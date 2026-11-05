@@ -101,8 +101,8 @@ function PastLogModal({ log, onClose }) {
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               log.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
               log.compliance_pct >= 50 ? 'bg-warn/[0.14] text-warn' :
-              'bg-red-400/[0.14] text-red-400'}`}>
-              {log.compliance_pct}% compliance
+              'bg-white/[0.08] text-mid'}`}>
+              {log.compliance_pct}% of checklist
             </span>
           )}
         </div>
@@ -545,7 +545,7 @@ export default function Progress() {
             {avg30 >= 80 && (
               <div className="flex items-center gap-2 bg-info/[0.08] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">⭐</span>
-                <span><strong>{avg30}% compliance</strong> over 30 days — outstanding consistency.</span>
+                <span><strong>{avg30}% of your checklist</strong> over 30 days — outstanding consistency.</span>
               </div>
             )}
             {journeyPct !== null && journeyPct >= 25 && (
@@ -704,7 +704,7 @@ export default function Progress() {
           />
           <StatBox
             value={in30.length ? `${avg30}%` : '—'}
-            label="30-day Compliance"
+            label="30-day checklist"
             sub={!in30.length ? 'Nothing logged in 30 days' : avg30 >= 75 ? 'Strong' : avg30 >= 50 ? 'Steady' : 'Room to improve'}
             tone={!in30.length ? null : avg30 >= 75 ? 'good' : avg30 >= 50 ? null : 'warn'}
           />
@@ -735,7 +735,7 @@ export default function Progress() {
               const key = shiftDateKey(start, i);
               cells.push({ key, log: byDate.get(key) || null, day: Number(key.slice(-2)) });
             }
-            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-ghost'
+            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-lo'
               : pct >= 75 ? 'bg-gold/[0.55] text-charcoal' : pct >= 50 ? 'bg-gold/[0.28] text-white' : pct > 0 ? 'bg-gold/[0.12] text-mid' : 'bg-white/[0.06] text-lo';
             return (
               <div data-testid="heat-grid">
@@ -786,7 +786,7 @@ export default function Progress() {
                     </div>
                     <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${
-                        pct >= 75 ? 'bg-gold-deep' : pct >= 50 ? 'bg-warn' : 'bg-red-400'
+                        pct >= 75 ? 'bg-gold-deep' : pct >= 50 ? 'bg-warn' : 'bg-lo'
                       }`} style={{ width: `${pct || 0}%` }} />
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -794,7 +794,7 @@ export default function Progress() {
                         <span className="text-xs font-semibold text-faint">{log.weight_kg}kg</span>
                       )}
                       <span className={`text-xs font-bold w-10 text-right ${
-                        pct >= 75 ? 'text-gold-deep' : pct >= 50 ? 'text-warn' : 'text-red-400'
+                        pct >= 75 ? 'text-gold-deep' : pct >= 50 ? 'text-warn' : 'text-mid'
                       }`}>{pct != null ? `${pct}%` : '—'}</span>
                       <svg className="w-3.5 h-3.5 text-ghost group-hover:text-mid transition-colors"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

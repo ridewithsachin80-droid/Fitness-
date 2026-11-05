@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Eyebrow, Pressable } from '../primitives';
 import { haptic } from '../../store/settingsStore';
 import { updateProfile } from '../../api/logs';
-import { waterTarget, routineOrigin, targetOrigin, STANDARD_WATER_ML } from '../../lib/day';
+import { waterTarget, routineOrigin, targetOrigin, protocolDefaultNone, resolveProtocolItems, protocolFromProfile, STANDARD_WATER_ML } from '../../lib/day';
 import { firstName } from '../../utils/personName';
 
 /**
@@ -100,7 +100,16 @@ export default function WaterTargetCard({ memberId, profile, onSaved }) {
       )}
 
       <p className="text-caption text-lo mt-3 pt-3 border-t border-hair" data-testid="routine-origin">
-        Daily routine: {routine.allStandard
+        Daily routine: {protocolDefaultNone(p)
+          // Fixes-3k: a member created from 3k on has no supplements or ACV until you add them (Sachin, 5 Nov).
+          ? (() => {
+              // QA review of 3k: count what is really in force (an empty list is "none", not "chosen by you").
+              const r = resolveProtocolItems(protocolFromProfile(p));
+              const n = r.activeACV.length + r.activeSupplements.length;
+              return `activities ${routine.standard.includes('activities') ? 'are the FitLife standard' : 'chosen by you'}; ${
+                n ? `${n} supplement or ACV ${n === 1 ? 'item' : 'items'} assigned` : `no supplements or ACV until you add them (${first} sees none)`}.`;
+            })()
+          : routine.allStandard
           ? `FitLife standard (every item on). ${first} sees it labelled that way.`
           : routine.anyStandard
             ? `you chose some groups; ${routine.standard.map(g => ({ activities: 'activities', acv: 'ACV', supplements: 'supplements' }[g])).join(' and ')} still standard.`

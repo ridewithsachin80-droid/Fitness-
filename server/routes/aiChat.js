@@ -2402,7 +2402,7 @@ async function buildCoachMemberContext(member) {
     pool.query(
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
               target_weight, start_weight,
-              protocol_activities, protocol_acv, protocol_supplements,
+              protocol_activities, protocol_acv, protocol_supplements, protocol_default_none,
               custom_activities, custom_acv, custom_supplements, item_overrides, target_set_by, sleep_bed, sleep_wake
          FROM patient_profiles WHERE user_id = $1`, [member.id]),
   ]);
@@ -2587,9 +2587,13 @@ function resolveProtocolGroup(group, profile, ticksObj) {
     return { id: item.id, label: (ov && ov.label) || item.label || item.id };
   });
 
+  // null / undefined => all assigned — except, from Fixes-3k, ACV and supplements for members created since
+  // (protocol_default_none): then only the coach's own items. Same rule as the app (lib/day/protocol.js).
+  const builtInIds = new Set(CATALOG[group].map(i => i.id));
+  const noneByDefault = profile.protocol_default_none === true && (group === 'acv' || group === 'supplements');
   const active = Array.isArray(protoList)
     ? all.filter(i => protoList.includes(i.id))
-    : all;                       // null / undefined => all assigned
+    : noneByDefault ? all.filter(i => !builtInIds.has(i.id)) : all;
 
   const on = Object.entries(ticksObj || {}).filter(([, v]) => v).map(([k]) => k);
   const byId = new Map(all.map(i => [i.id, i.label]));
@@ -2612,7 +2616,7 @@ async function buildCoachSummary(member) {
          FROM daily_logs WHERE patient_id = $1 AND log_date = $2::date`, [member.id, today]),
     pool.query(
       `SELECT macro_kcal, macro_pro, macro_carb, macro_fat, water_target,
-              protocol_activities, protocol_acv, protocol_supplements,
+              protocol_activities, protocol_acv, protocol_supplements, protocol_default_none,
               custom_activities, custom_acv, custom_supplements, item_overrides, target_set_by, sleep_bed, sleep_wake
          FROM patient_profiles WHERE user_id = $1`, [member.id]),
   ]);
@@ -3935,7 +3939,7 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
         `INSERT INTO patient_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
         [memberId]);
       const { rows: prows } = await client.query(
-        `SELECT protocol_activities, protocol_acv, protocol_supplements,
+        `SELECT protocol_activities, protocol_acv, protocol_supplements, protocol_default_none,
                 custom_activities, custom_acv, custom_supplements
          FROM patient_profiles WHERE user_id=$1 FOR UPDATE`, [memberId]);
       const prof = prows[0];
@@ -3951,7 +3955,12 @@ router.post('/coach-apply', roleCheck('monitor', 'admin'), async (req, res) => {
         if (!op) return null;
         const defaults  = CATALOG[group].map(i => i.id);
         let customList  = Array.isArray(prof[customCol]) ? [...prof[customCol]] : [];
-        let protoList   = prof[protoCol]; // null = everything assigned
+        let protoList   = prof[protoCol]; // null = everything assigned (existing members) …
+        // … Fixes-3k: but for a member created from 3k on, null ACV/supplements = only the coach's own items. Before
+        // adding or removing catalog items, write that out as a list (the own items in force now), so "add D3" really
+        // assigns D3 and "remove fish oil" never assigns the other six. Own items added with null stay in force anyway.
+        const noneByDefault = prof.protocol_default_none === true && (group === 'acv' || group === 'supplements');
+        if (protoList == null && noneByDefault && (op.add?.length || op.remove?.length)) protoList = customList.map(c => c.id);
 
         // remove_custom by label (or id)
         if (op.remove_custom?.length) {
@@ -4575,3 +4584,4 @@ module.exports.setControlSampler  = setControlSampler;
 module.exports.CONTROL_DAILY_CAP  = CONTROL_DAILY_CAP;
 module.exports.CONTROL_SAMPLE_RATE = CONTROL_SAMPLE_RATE;
 module.exports.EVAL_DAILY_CAP     = EVAL_DAILY_CAP;
+module.exports.resolveProtocolGroup = resolveProtocolGroup;   // Fixes-3k: exported for test-ux-3k

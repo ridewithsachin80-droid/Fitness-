@@ -32,7 +32,7 @@
 const pool = require('../db/pool');
 const { withMemberLock } = require('../db/locks');
 const { getISTDate } = require('../utils/istDate');
-const { calcCompliance, protocolTotalFor } = require('./compliance');
+const { calcCompliance, protocolTotalFor, inForceFor } = require('./compliance');
 const { pickSlot, prescribedMeals, istMinutes } = require('./mealSlot');
 const { cleanPreparation } = require('./foodPreparation');
 
@@ -234,7 +234,7 @@ async function applyParsed(userId, parsed, opts = {}) {
   }
 
   // ── Write ─────────────────────────────────────────────────────────────────
-  const compliance = calcCompliance(activities, acv, supplements, protocolTotalFor(profile));
+  const compliance = calcCompliance(activities, acv, supplements, protocolTotalFor(profile), inForceFor(profile));   // Fixes-3k: in-force ticks (new-rule members)
 
   await db.query(
     `INSERT INTO daily_logs

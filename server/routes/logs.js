@@ -22,7 +22,16 @@ const { getISTDate } = require('../utils/istDate');
 // daily_logs too, and two definitions of "how compliant was today" would mean
 // the same day scoring differently depending on whether the member typed it or
 // spoke it — with the coach's dashboard showing whichever landed last.
-const { calcCompliance } = require('../services/compliance');
+const { calcCompliance, protocolTotalFor, inForceFor } = require('../services/compliance');
+// Fixes-3k: the member's protocol, for the score: the total when the app sent none, and (new-rule members) which
+// ticks count.
+async function protocolForScore(db, patientId) {
+  const { rows: [p] } = await db.query(
+    `SELECT protocol_activities, protocol_acv, protocol_supplements, protocol_default_none,
+            custom_activities, custom_acv, custom_supplements
+       FROM patient_profiles WHERE user_id = $1`, [patientId]);
+  return p || null;
+}
 const { withMemberLock } = require('../db/locks');
 const { writeMetadata, dayFingerprint, requestFingerprint, receiptDecision } = require('../services/dayWriteReceipt');
 
@@ -193,6 +202,7 @@ router.get('/:date', authMW, async (req, res) => {
       activities:         profile.protocol_activities  || null,
       acv:                profile.protocol_acv         || null,
       supplements:        profile.protocol_supplements || null,
+      default_none:       profile.protocol_default_none === true,   // Fixes-3k: no selection = none (members from 3k on)
       custom_activities:  profile.custom_activities    || [],
       custom_acv:         profile.custom_acv           || [],
       custom_supplements: profile.custom_supplements   || [],
@@ -367,7 +377,14 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
         extra = { merged_live: true, kept_server: m.kept_server, food_added: m.food_added, food_removed: m.food_removed };
       }
 
-      const compliance_pct = calcCompliance(doc.activities, doc.acv, doc.supplements, protocol_total || null);
+      // Fixes-3k: no total from the app (an older app, or 0) → the member's own in-force total, not the 16-item floor;
+      // for a new-rule member only ticks of items in force count.
+      // Existing members: exactly as before (the app's total, else the 16 floor).
+      const scoreProfile = await protocolForScore(db, patientId);
+      const newRule = scoreProfile?.protocol_default_none === true;
+      const compliance_pct = calcCompliance(doc.activities, doc.acv, doc.supplements,
+        newRule ? ((Number(protocol_total) > 0 ? Number(protocol_total) : null) ?? protocolTotalFor(scoreProfile)) : (protocol_total || null),
+        inForceFor(scoreProfile));
       const { rows: [saved] } = await db.query(
         `INSERT INTO daily_logs
            (patient_id, log_date, weight_kg, activities, acv,

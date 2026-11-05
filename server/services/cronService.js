@@ -55,8 +55,20 @@ async function getSchedulesForTime(timeStr) {
        WHERE role = 'patient' AND active = true
          AND (rs.patient_id IS NULL OR rs.patient_id = id)
      ) u
+     LEFT JOIN patient_profiles pp ON pp.user_id = u.id
      WHERE rs.active = true
-       AND $1 = ANY(rs.times)`,
+       AND $1 = ANY(rs.times)
+       -- Fixes-3k: no apple cider vinegar reminder for a member who has none in
+       -- force (new-rule member, nothing assigned, no custom item).
+       AND NOT COALESCE(rs.type = 'acv'
+                AND pp.protocol_default_none IS TRUE
+                AND (pp.protocol_acv IS NULL OR jsonb_typeof(pp.protocol_acv) = 'null')
+                AND COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(pp.custom_acv) = 'array' THEN pp.custom_acv END), 0) = 0, false)
+       -- …nor for such a member whose coach switched every ACV item off (an empty list). Existing members: unchanged.
+       -- (COALESCE: a NULL list or a member without a profile row must not drop the reminder)
+       AND NOT COALESCE(rs.type = 'acv'
+                AND pp.protocol_default_none IS TRUE
+                AND jsonb_array_length(CASE WHEN jsonb_typeof(pp.protocol_acv) = 'array' THEN pp.protocol_acv END) = 0, false)`,
     [timeStr]
   );
   return result.rows;
@@ -258,4 +270,4 @@ function start() {
   console.log('⏰ Cron jobs registered (IST timezone)');
 }
 
-module.exports = { start };
+module.exports = { start, getSchedulesForTime }; // getSchedulesForTime: exported for test-ux-3k (Fixes-3k)

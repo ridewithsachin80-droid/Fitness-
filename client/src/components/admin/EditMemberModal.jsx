@@ -12,6 +12,14 @@ import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS, RDA_OVERRIDE_KEYS, rol
 import { StatCard, Modal, Field, assignableCoaches } from './AdminAtoms';
 import { microCoverage, microCell } from '../../lib/day';
 
+/**
+ * Fixes-3k (Sachin's decision, 5 Nov: keep existing members, change new ones): for a member created from Fixes-3k on
+ * (protocol_default_none), "no selection" for ACV and supplements means none of the built-in items (only the coach's own
+ * items for that member). Existing members keep the old meaning, every built-in item, exactly as before.
+ */
+export const noneByDefaultFor = (member, key) =>
+  member?.protocol_default_none === true && (key === 'acv' || key === 'supplements');
+
 // because the tab is rendered conditionally — hook count changes between renders.
 export function MealPlanTab({ mealPlan, setMealPlan, macrosKcal }) {
   const MEAL_COLORS = ['emerald','blue','orange','purple','rose'];
@@ -436,11 +444,20 @@ export function EditMemberModal({ member, onClose, onSaved }) {
   // Structure: [{id, name, badge, time, color, items:[{food_id,food_name,qty_g,kcal,pro,carb,fat,fiber,per_100g}]}]
   const [mealPlan, setMealPlan] = useState(member.meal_plan || []);
 
+  // Fixes-3k: what "no selection" (null) puts in force for this member and group. A new-rule member (noneByDefaultFor):
+  // only the coach's own items for them, so the editor shows the built-in ones unticked, and a ticked list is always saved
+  // as that list (never collapsed to null, which would switch them off). Everyone else and activities: unchanged.
+  // QA review of 3k (blocker): the members LIST row passed in as `member` did not carry the flag; `data` is the full row
+  // (GET /admin/members/:id merged over it), so the rule is read from there.
+  const nullMeansIds = (key, defaultItems) => (noneByDefaultFor(data, key)
+    ? (customItems[key] || []).map(i => i.id)
+    : defaultItems.map(i => i.id));
   const toggleProto = (key, id, defaultItems) => {
     setProto(p => {
-      const current = p[key] || defaultItems.map(i => i.id);
+      const noneByDefault = noneByDefaultFor(data, key);
+      const current = p[key] || nullMeansIds(key, defaultItems);
       const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
-      return { ...p, [key]: next.length === defaultItems.length ? null : next };
+      return { ...p, [key]: !noneByDefault && next.length === defaultItems.length ? null : next };
     });
   };
 
@@ -467,7 +484,7 @@ export function EditMemberModal({ member, onClose, onSaved }) {
     }
     setProto(p => {
       const def = key === 'activities' ? ACTIVITIES : key === 'acv' ? ACV_ITEMS : SUPPLEMENTS;
-      const current = p[key] || def.map(i => i.id);
+      const current = p[key] || nullMeansIds(key, def);
       return { ...p, [key]: current.filter(x => x !== id) };
     });
     setOverrides(o => { const n = { ...o }; delete n[id]; return n; });
@@ -483,7 +500,7 @@ export function EditMemberModal({ member, onClose, onSaved }) {
     setOverrides(o => ({ ...o, [id]: ov }));
     setProto(p => {
       const def = key === 'activities' ? ACTIVITIES : key === 'acv' ? ACV_ITEMS : SUPPLEMENTS;
-      const current = p[key] || def.map(i => i.id);
+      const current = p[key] || nullMeansIds(key, def);
       return { ...p, [key]: [...current, id] };
     });
     setAddingKey(null);
@@ -854,7 +871,7 @@ export function EditMemberModal({ member, onClose, onSaved }) {
   // ── Protocol section ───────────────────────────────────────────────────────
   const ProtocolSection = ({ label, icon, items, protoKey }) => {
     const allItems = [...items, ...customItems[protoKey]];
-    const assigned = proto[protoKey] || items.map(i => i.id);
+    const assigned = proto[protoKey] || nullMeansIds(protoKey, items);
 
     return (
       <div className="border border-hair rounded-2xl p-3 space-y-1">

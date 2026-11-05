@@ -3,7 +3,7 @@ import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../../constants';
 import { UNSORTED_MEAL, groupByMeal } from '../../utils/coachView';
 import WorkoutSessionViewer from '../WorkoutSessionViewer';
 import { calcN, rowCompliance } from '../../lib/coach/dayMath.jsx';
-import { microStatus, resolveProtocolItems, protocolFromProfile } from '../../lib/day';
+import { microStatus, resolveProtocolItems, protocolFromProfile, protocolDefaultNone } from '../../lib/day';
 import { MicroRow, microCountTone } from '../today/DayWidgets';
 
 /**
@@ -166,11 +166,25 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                         Each group shows its own X/Y so the coach can scan exactly what's
                         missing without having to decode emoji or count cryptic pills. */}
                     <div className="space-y-3">
-                      {[
-                        { title: '🏃 Activities', items: ACTIVITIES,  done: log.activities },
-                        { title: '🍎 ACV',         items: ACV_ITEMS,  done: log.acv },
-                        { title: '💊 Supplements', items: SUPPLEMENTS, done: log.supplements },
-                      ].map(group => {
+                      {(() => {
+                        const prof = data?.profile ? protocolFromProfile(data.profile) : null;
+                        // Existing members: exactly as before 3k (every built-in item).
+                        if (!protocolDefaultNone(prof)) return [
+                          { title: '🏃 Activities', items: ACTIVITIES,  done: log.activities },
+                          { title: '🍎 ACV',         items: ACV_ITEMS,  done: log.acv },
+                          { title: '💊 Supplements', items: SUPPLEMENTS, done: log.supplements },
+                        ];
+                        // Fixes-3k, a member created from 3k on: the items in force (the same rule as their app), so a
+                        // member with no supplements assigned is not shown "0/7 supplements". Any item ticked THAT day
+                        // is kept too, so a past day's history never loses a tick when the coach changes the list later.
+                        const r = resolveProtocolItems(prof);
+                        const withTicked = (inForce, all, done) => [...inForce, ...all.filter(i => done?.[i.id] && !inForce.some(x => x.id === i.id))];
+                        return [
+                          { title: '🏃 Activities', items: withTicked(r.activeActivities, ACTIVITIES, log.activities), done: log.activities },
+                          { title: '🍎 Apple cider vinegar', items: withTicked(r.activeACV, ACV_ITEMS, log.acv), done: log.acv },
+                          { title: '💊 Supplements', items: withTicked(r.activeSupplements, SUPPLEMENTS, log.supplements), done: log.supplements },
+                        ].filter(g => g.items.length > 0);
+                      })().map(group => {
                         const doneCount = group.items.filter(it => group.done?.[it.id]).length;
                         return (
                           <div key={group.title}>

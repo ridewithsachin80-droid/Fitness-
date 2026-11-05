@@ -53,8 +53,14 @@ function waterTargetText(p) {
 /** For AI prompts: the same for the daily routine. */
 function routineText(p) {
   const o = targetOrigin(p) || {};
-  const std = ['activities', 'acv', 'supplements'].filter(k => o[k] === 'standard');
-  return std.length ? `standard FitLife routine for ${std.join(', ')} (the coach has not chosen these)` : 'chosen by the coach';
+  // Fixes-3k: for members created from 3k on, unchosen ACV and supplements are NONE, not a standard routine.
+  const none = p?.protocol_default_none === true;
+  const std = ['activities', 'acv', 'supplements'].filter(k => o[k] === 'standard' && !(none && k !== 'activities'));
+  const unassigned = none ? ['acv', 'supplements'].filter(k => o[k] === 'standard') : [];
+  const parts = [];
+  if (std.length) parts.push(`standard FitLife routine for ${std.join(', ')} (the coach has not chosen these)`);
+  if (unassigned.length) parts.push(`no ${unassigned.join(' or ')} assigned (the coach has not added any; do not suggest any)`);
+  return parts.length ? parts.join('; ') : 'chosen by the coach';
 }
 
 /**

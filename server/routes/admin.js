@@ -219,7 +219,7 @@ router.get('/members', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id, u.name, u.phone, u.active, u.created_at,
-        pp.height_cm, pp.start_weight, pp.target_weight, pp.conditions,
+        pp.height_cm, pp.start_weight, pp.target_weight, pp.conditions, pp.protocol_default_none,
         (u.password IS NOT NULL AND u.password != '') AS has_pin,
         (SELECT weight_kg  FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS latest_weight,
         (SELECT log_date   FROM daily_logs WHERE patient_id=u.id ORDER BY log_date DESC LIMIT 1) AS last_logged,
@@ -327,8 +327,10 @@ router.post('/members', async (req, res) => {
     const user = userRes.rows[0];
 
     await client.query(
-      `INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target)
-       VALUES ($1,$2,$3,$4,$5,3000)`,
+      // Fixes-3k: a member created from now on starts with no supplements or ACV until the coach adds them
+      // (protocol_default_none; Sachin's decision, 5 Nov). Members created before keep NULL: the old meaning.
+      `INSERT INTO patient_profiles (user_id, height_cm, start_weight, target_weight, conditions, water_target, protocol_default_none)
+       VALUES ($1,$2,$3,$4,$5,3000,TRUE)`,
       [user.id, height_cm||null, start_weight||null, target_weight||null, JSON.stringify(conditions)]
     );
 
@@ -542,7 +544,7 @@ router.put('/members/:id', async (req, res) => {
     const result = await client.query(
       `SELECT u.id, u.name, u.phone, u.active,
          pp.height_cm, pp.gender, pp.dob, pp.start_weight, pp.target_weight,
-         pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements,
+         pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements, pp.protocol_default_none,
          pp.custom_activities, pp.custom_acv, pp.custom_supplements,
          pp.item_overrides,
          pp.fasting_start, pp.fasting_end, pp.fasting_note, pp.fasting_label,

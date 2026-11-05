@@ -309,7 +309,7 @@ export default function Profile() {
         {/* Activity stats */}
         <div className="grid grid-cols-2 gap-2">
           <StatPill label="Total logs" value={p.total_logs} />
-          <StatPill label="30-day compliance"
+          <StatPill label="30-day checklist"
             value={p.avg_compliance !== null ? `${p.avg_compliance}%` : null}
             />
         </div>

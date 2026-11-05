@@ -1,7 +1,7 @@
 import { Sheet, Pressable, Eyebrow } from '../primitives';
 import { SectionTitle } from '../UI';
 import { haptic } from '../../store/settingsStore';
-import { AUTO_TICK_IDS, routineOrigin } from '../../lib/day';
+import { AUTO_TICK_IDS, routineOrigin, protocolDefaultNone } from '../../lib/day';
 
 /**
  * ProtocolSheet — the day's activities, ACV doses and supplements as chips.
@@ -60,7 +60,10 @@ export default function ProtocolSheet({ open, onClose, m }) {
       <p className="text-eyebrow text-lo mb-3">Tap to mark done · long-press for timing · AUTO items tick from your Workout log</p>
       {routineOrigin(m.protocol).allStandard && (
         <p className="text-caption text-mid -mt-1 mb-3" data-testid="protocol-standard-note">
-          FitLife’s standard routine. Your coach hasn’t chosen yours yet, so every item is on.
+          {protocolDefaultNone(m.protocol)
+            // Fixes-3k: a member created from 3k on has no supplements or ACV until the coach adds them.
+            ? 'FitLife’s standard activities. Your coach hasn’t chosen yours yet; supplements and apple cider vinegar are added only by your coach.'
+            : 'FitLife’s standard routine. Your coach hasn’t chosen yours yet, so every item is on.'}
         </p>
       )}
 

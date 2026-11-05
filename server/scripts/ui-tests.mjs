@@ -851,7 +851,11 @@ async function progressTest() {
   ck('tapping an unlogged cell opens nothing', !d.querySelector('.fixed.inset-0'));
   const logged = cells.find(c => /: 90%/.test(c.getAttribute('aria-label')));
   logged.click(); await tick(200);
-  ck('tapping a logged cell opens that day\'s full log', d.querySelector('.fixed.inset-0') != null && /Compliance|compliance/.test(html()));
+  // Fixes-3k (UX review findings 8 and 14): the member's screens say "checklist" instead of "compliance". The old check
+  // matched "Compliance" in #root, i.e. the page's "30-day Compliance" label, not the opened log (the sheet renders
+  // outside #root). It now reads the opened day log itself: that day's 90% as "90% of checklist".
+  ck('tapping a logged cell opens that day\'s full log', d.querySelector('.fixed.inset-0') != null
+    && /90% of checklist/.test(d.querySelector('[data-testid="past-log-details"]')?.textContent || ''), d.querySelector('[data-testid="past-log-details"]')?.textContent?.slice(0, 120));
   ck('no purple/blue header leftovers on the page', !/#0d0b18|text-blue-200/.test(h));
   const pageSrc = fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8');
   ck('Training holds the training trends; Nutrition the nutrition trend and a way to the diet plan',
