@@ -80,7 +80,11 @@ function startRecording(name) {
 const keyboardShown = async () => /mInputShown=true/.test(await sh('dumpsys input_method'));
 
 await sh('cmd uimode night no');
+// Keep the emulator's screen on and unlocked: a dozing or locked screen still gives screenshots but ignores taps.
+await sh('svc power stayon true; settings put system screen_off_timeout 1800000; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; input keyevent 82').catch(() => {});
 await sh('am force-stop com.android.chrome');
+const focus = async () => ((await sh('dumpsys window | grep -E "mCurrentFocus|mFocusedApp" | head -2')).replace(/\s+/g, ' ').slice(0, 220));
+const awake = async () => ((await sh('dumpsys power | grep -E "mWakefulness=|mHoldingDisplaySuspendBlocker"')).replace(/\s+/g, ' ').slice(0, 160));
 // hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
 // hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
 let context, page;
@@ -103,7 +107,8 @@ async function contentOrigin() {
   const [W, H] = ((await sh('wm size')).match(/(\d+)x(\d+)/) || []).slice(1).map(Number);
   await page.evaluate(() => { const d = document.createElement('div'); d.id = 'fitlife-robot-calibrate';
     d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:transparent;touch-action:none';
-    d.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); window.__fitlifeTouch = { x: e.clientX, y: e.clientY }; }, true);
+    const got = (e) => { const p = e.touches?.[0] || e; if (!window.__fitlifeTouch) window.__fitlifeTouch = { x: p.clientX, y: p.clientY, type: e.type }; e.preventDefault?.(); e.stopPropagation(); };
+    for (const t of ['pointerdown', 'touchstart', 'mousedown']) d.addEventListener(t, got, { capture: true, passive: false });
     window.__fitlifeTouch = null; document.body.appendChild(d); });
   const px = Math.round(W / 2), py = Math.round(H / 2);
   await sh(`input tap ${px} ${py}`); await wait(600);
@@ -116,7 +121,7 @@ async function realTap(locator, what) {
   await locator.scrollIntoViewIfNeeded().catch(() => {});
   await wait(400);
   const o = await contentOrigin();
-  if (!o) throw new Error(`${what}: the calibration tap did not reach the page`);
+  if (!o) throw new Error(`${what}: the calibration tap did not reach the page (focus: ${await focus()}; power: ${await awake()})`);
   const box = await locator.boundingBox();
   if (!box) throw new Error(`${what}: not on screen`);
   const x = Math.round(o.left + (box.x + box.width / 2) * o.dpr), y = Math.round(o.top + (box.y + box.height / 2) * o.dpr);
@@ -140,7 +145,7 @@ async function signIn(photo = true) {
   await page.locator('input[type=tel], [data-testid="daily-essentials"]').first().waitFor();
   if (await tid('daily-essentials').count()) { row('Still signed in after Chrome restarted', true); return; }
   await wait(1500);
-  if (photo) { const f = await shot('light-login-before-typing'); row('Login screen opens in Android Chrome', true, `${f} (photographed before anything was typed)`); }
+  if (photo) { const f = await shot('light-login-before-typing'); row('Login screen opens in Android Chrome', true, `${f} (photographed before anything was typed); focus: ${await focus()}; power: ${await awake()}`); }
   if (photo) {
     const how = await realTap(page.locator('input[type=tel]'), 'phone box').catch(e => e.message); await wait(1500);
     row('A real tap on the phone box raises the Android keyboard', await keyboardShown(), `dumpsys input_method mInputShown; ${how}`);
