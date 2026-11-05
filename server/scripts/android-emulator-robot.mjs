@@ -83,6 +83,10 @@ await sh('cmd uimode night no');
 // Keep the emulator's screen on and unlocked: a dozing or locked screen still gives screenshots but ignores taps.
 await sh('svc power stayon true; settings put system screen_off_timeout 1800000; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; input keyevent 82').catch(() => {});
 await sh('am force-stop com.android.chrome');
+/** The address shown in Chrome's own address bar on the SCREEN (Android's UI dump), to prove the robot's tab is the visible one. */
+const shownUrl = async () => { const x = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml').catch(() => '');
+  const m = x.match(/resource-id="com\.android\.chrome:id\/url_bar"[^>]*/) || x.match(/text="([^"]*)"[^>]*resource-id="com\.android\.chrome:id\/url_bar"/);
+  const t = m ? (m[0].match(/text="([^"]*)"/) || [])[1] : null; return t ?? `(no address bar in the UI dump; ${(x.match(/<node /g) || []).length} nodes)`; };
 const focus = async () => ((await sh('dumpsys window | grep -E "mCurrentFocus|mFocusedApp" | head -2')).replace(/\s+/g, ' ').slice(0, 220));
 const awake = async () => ((await sh('dumpsys power | grep -E "mWakefulness=|mHoldingDisplaySuspendBlocker"')).replace(/\s+/g, ' ').slice(0, 160));
 // hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
@@ -91,10 +95,13 @@ let context, page;
 async function openChrome() {
   if (context) await context.close().catch(() => {});
   context = await device.launchBrowser({ hasTouch: true });
-  page = context.pages()[0];
+  // Use the tab Chrome opened itself when there is one (a second tab would sit behind it); wait for it before making one.
+  page = context.pages()[0] || await context.waitForEvent('page', { timeout: 10e3 }).catch(() => null);
   for (let i = 0; !page && i < 5; i++) { page = await context.newPage().catch(() => null) || context.pages()[0]; if (!page) await wait(3000); }
   if (!page) stop('Chrome opened, but no tab could be attached (5 tries)');
+  await page.bringToFront().catch(() => {});
   page.setDefaultTimeout(30e3);
+  console.log(`Chrome tabs attached: ${context.pages().length}`);
 }
 await openChrome();
 
@@ -145,7 +152,12 @@ async function signIn(photo = true) {
   await page.locator('input[type=tel], [data-testid="daily-essentials"]').first().waitFor();
   if (await tid('daily-essentials').count()) { row('Still signed in after Chrome restarted', true); return; }
   await wait(1500);
-  if (photo) { const f = await shot('light-login-before-typing'); row('Login screen opens in Android Chrome', true, `${f} (photographed before anything was typed); focus: ${await focus()}; power: ${await awake()}`); }
+  if (photo) {
+    const f = await shot('light-login-before-typing');
+    const onScreen = await shownUrl();
+    row('Login screen opens in Android Chrome', true, `${f} (photographed before anything was typed)`);
+    row("The robot's tab is the one on the screen", /fitness-test/.test(onScreen), `address bar on screen: "${onScreen}"; robot's tab: ${page.url()}; tabs: ${context.pages().length}`);
+  }
   if (photo) {
     const how = await realTap(page.locator('input[type=tel]'), 'phone box').catch(e => e.message); await wait(1500);
     row('A real tap on the phone box raises the Android keyboard', await keyboardShown(), `dumpsys input_method mInputShown; ${how}`);
