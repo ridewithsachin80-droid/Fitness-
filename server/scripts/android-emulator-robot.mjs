@@ -179,7 +179,7 @@ async function whatIsOnScreen() {
 const tid = (id) => page.locator(`[data-testid="${id}"]`);
 async function tapNav(label) {
   const el = page.locator('nav a, nav button').filter({ hasText: new RegExp('^\\s*' + label) }).first();
-  await el.tap(); await wait(2500);
+  await realTap(el, `${label} tab`); await wait(2500);
 }
 async function sideways() { return page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1); }
 
@@ -234,7 +234,8 @@ async function tour(theme) {
 
     // The AI composer with the real Android keyboard: is the text box still visible above it?
     await tid('ai-type').waitFor({ state: 'visible', timeout: 15e3 }).catch(async () => { throw new Error(`the "Type to log" button is not visible: ${await whatIsOnScreen()}`); });
-    await tid('ai-type').tap();
+    // A real Android tap (run 41992421264: Playwright's synthetic tap on this button timed out in the dark tour).
+    await realTap(tid('ai-type'), '"Type to log" button');
     await tid('composer-input').waitFor({ state: 'visible', timeout: 15e3 });
     const how = await realTap(tid('composer-input'), 'composer text box'); await wait(2000);
     const kb = await keyboardShown();
@@ -275,7 +276,10 @@ try {
   if (!native) { await page.emulateMedia({ colorScheme: 'dark' }); await page.reload({ waitUntil: 'load' }); await tid('daily-essentials').waitFor(); await wait(1500); }
   darkHow = native ? 'Android dark mode' : 'dark set inside Chrome (Android dark mode on for the bars)';
   await tour('dark');
-} catch (e) { row('robot finished', false, secretFree(`${String(e.message || e).split('\n')[0].slice(0, 240)} — on screen: ${await whatIsOnScreen()}`)); }
+} catch (e) {
+  const lines = String(e.message || e).split('\n'); const why = lines.filter(l => /intercepts|not stable|not visible|waiting for|outside of the viewport/.test(l)).slice(-2).join(' / ');
+  row('robot finished', false, secretFree(`${lines[0].slice(0, 200)}${why ? ` (${why.slice(0, 200)})` : ''} — on screen: ${await whatIsOnScreen()}`));
+}
 finally {
   await sh('cmd uimode night no').catch(() => {});
   await context.close().catch(() => {});
