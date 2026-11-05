@@ -82,11 +82,43 @@ const keyboardShown = async () => /mInputShown=true/.test(await sh('dumpsys inpu
 await sh('cmd uimode night no');
 await sh('am force-stop com.android.chrome');
 // hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
-const context = await device.launchBrowser({ hasTouch: true });
-let page = context.pages()[0];
-for (let i = 0; !page && i < 5; i++) { page = await context.newPage().catch(() => null) || context.pages()[0]; if (!page) await wait(3000); }
-if (!page) stop('Chrome opened, but no tab could be attached (5 tries)');
-page.setDefaultTimeout(30e3);
+// hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
+let context, page;
+async function openChrome() {
+  if (context) await context.close().catch(() => {});
+  context = await device.launchBrowser({ hasTouch: true });
+  page = context.pages()[0];
+  for (let i = 0; !page && i < 5; i++) { page = await context.newPage().catch(() => null) || context.pages()[0]; if (!page) await wait(3000); }
+  if (!page) stop('Chrome opened, but no tab could be attached (5 tries)');
+  page.setDefaultTimeout(30e3);
+}
+await openChrome();
+
+/** A REAL Android tap (adb "input tap"), so the phone behaves as under a finger: the soft keyboard opens for a text box.
+ *  (Playwright's own taps are synthetic and do not open the keyboard.) The web content's position on the screen comes from
+ *  Android's accessibility dump of Chrome (the WebView node); the element's position from the page, times the pixel ratio. */
+async function contentOrigin() {
+  const xml = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml');
+  const m = xml.match(/class="android\.webkit\.WebView"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+  if (m) return { left: +m[1], top: +m[2], how: 'WebView' };
+  const c = xml.match(/resource-id="com\.android\.chrome:id\/compositor_view_holder"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+  return c ? { left: +c[1], top: +c[2], how: 'compositor (approximate)' } : null;
+}
+async function realTap(locator, what) {
+  await locator.scrollIntoViewIfNeeded().catch(() => {});
+  const box = await locator.boundingBox();
+  if (!box) throw new Error(`${what}: not on screen`);
+  const dpr = await page.evaluate(() => window.devicePixelRatio);
+  const o = await contentOrigin();
+  if (!o) throw new Error(`${what}: could not find Chrome's web content on the screen`);
+  const x = Math.round(o.left + (box.x + box.width / 2) * dpr), y = Math.round(o.top + (box.y + box.height / 2) * dpr);
+  await sh(`input tap ${x} ${y}`);
+  return `${o.how} origin ${o.left},${o.top}; tapped ${x},${y}`;
+}
+/** What the robot could see when something failed (test ids on screen, the address), for the log. Never typed values. */
+async function whatIsOnScreen() {
+  return page.evaluate(() => `${location.pathname} · visible: ${[...document.querySelectorAll('[data-testid]')].filter(e => e.offsetParent !== null).map(e => e.dataset.testid).slice(0, 25).join(', ')} · dialogs open: ${document.querySelectorAll('[role=dialog]').length}`).catch(e => `(page unreadable: ${e.message})`);
+}
 
 const tid = (id) => page.locator(`[data-testid="${id}"]`);
 async function tapNav(label) {
@@ -95,14 +127,16 @@ async function tapNav(label) {
 }
 async function sideways() { return page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1); }
 
-async function signIn() {
+async function signIn(photo = true) {
   await page.goto(BASE, { waitUntil: 'load' });
-  await page.locator('input[type=tel]').waitFor();
+  await page.locator('input[type=tel], [data-testid="daily-essentials"]').first().waitFor();
+  if (await tid('daily-essentials').count()) { row('Still signed in after Chrome restarted', true); return; }
   await wait(1500);
-  const f = await shot('light-login-before-typing');
-  row('Login screen opens in Android Chrome', true, `${f} (photographed before anything was typed)`);
-  await page.locator('input[type=tel]').tap(); await wait(1200);
-  row('Tapping the phone box raises the Android keyboard', await keyboardShown(), 'dumpsys input_method mInputShown');
+  if (photo) { const f = await shot('light-login-before-typing'); row('Login screen opens in Android Chrome', true, `${f} (photographed before anything was typed)`); }
+  if (photo) {
+    const how = await realTap(page.locator('input[type=tel]'), 'phone box').catch(e => e.message); await wait(1500);
+    row('A real tap on the phone box raises the Android keyboard', await keyboardShown(), `dumpsys input_method mInputShown; ${how}`);
+  }
   await page.locator('input[type=tel]').fill(PHONE);
   await page.locator('input[type=password]').fill(PIN);
   await page.locator('button').filter({ hasText: /^Log In/ }).first().tap();
@@ -136,14 +170,15 @@ async function tour(theme) {
     await page.evaluate(() => window.scrollTo(0, 0)); await wait(600);
 
     // The AI composer with the real Android keyboard: is the text box still visible above it?
+    await tid('ai-type').waitFor({ state: 'visible', timeout: 15e3 }).catch(async () => { throw new Error(`the "Type to log" button is not visible: ${await whatIsOnScreen()}`); });
     await tid('ai-type').tap();
     await tid('composer-input').waitFor({ state: 'visible', timeout: 15e3 });
-    await tid('composer-input').tap(); await wait(1800);
+    const how = await realTap(tid('composer-input'), 'composer text box'); await wait(2000);
     const kb = await keyboardShown();
     const geo = await page.evaluate(() => { const r = document.querySelector('[data-testid="composer-input"]').getBoundingClientRect(); const v = window.visualViewport;
       return { inputBottom: Math.round(r.bottom), inputTop: Math.round(r.top), visibleBottom: Math.round(v.offsetTop + v.height), innerHeight: window.innerHeight }; });
     f = await shot(`${theme}-composer-keyboard-up`);
-    row(`${theme}: AI composer — Android keyboard up`, kb, `${f}; mInputShown=${kb}`);
+    row(`${theme}: AI composer — a real tap raises the Android keyboard`, kb, `${f}; mInputShown=${kb}; ${how}`);
     row(`${theme}: AI composer — the text box stays visible above the keyboard`, geo.inputTop >= 0 && geo.inputBottom <= geo.visibleBottom + 1,
       `box ${geo.inputTop}–${geo.inputBottom} px, visible area ends at ${geo.visibleBottom} px (window ${geo.innerHeight} px)`);
     await page.locator('[data-testid="composer-input"]').fill('2 idli aur 1 bowl sambar'); await wait(800);
@@ -167,10 +202,13 @@ async function tour(theme) {
 try {
   await signIn();
   await tour('light');
-  await sh('cmd uimode night yes'); await wait(1500);
-  await page.reload({ waitUntil: 'load' }); await tid('daily-essentials').waitFor(); await wait(2000);
+  // Chrome reads the system theme when it starts, so switch Android to dark and restart Chrome (the sign-in is kept).
+  await sh('cmd uimode night yes'); await wait(2000);
+  await openChrome();
+  await signIn(false);
+  await tid('daily-essentials').waitFor(); await wait(2000);
   await tour('dark');
-} catch (e) { row('robot finished', false, secretFree(String(e.message || e).slice(0, 300))); }
+} catch (e) { row('robot finished', false, secretFree(`${String(e.message || e).split('\n')[0].slice(0, 240)} — on screen: ${await whatIsOnScreen()}`)); }
 finally {
   await sh('cmd uimode night no').catch(() => {});
   await context.close().catch(() => {});

@@ -6,3 +6,4 @@ Add one line per request (date and why). Results: the run's summary, and the art
 
 - 2026-11-05: first run, asked by Sachin ("create android emulator to check in phone").
 - 2026-11-05: second run after fixing touch taps and the first-tab timing.
+- 2026-11-05: third run: real Android taps (keyboard), Chrome restarted for dark mode, more detail when a step fails.
