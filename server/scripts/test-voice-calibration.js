@@ -580,7 +580,7 @@ const b64 = (f) => fs.readFileSync(f).toString('base64');
         && sheets.find(s => s.name === 'Part C tries').rows.length === 33 && sheets.find(s => s.name === 'Part A summary').rows.length === 1 + 6 * 14);
       ck('…About: 0 of 6, 144 slots (108 speech, 36 controls), budgets (288 initial calls, 64 Part C attempts, rule 3 separate), every language NOT CONFIRMED, script version, no "8%" claim',
         /0 of 6/.test(about) && /108 speech, 36 no-speech/.test(about) && /planned 288/.test(about) && /of 64 planned/.test(about) && /rule 3 parser calls/.test(about) && (about.match(/NOT CONFIRMED/g) || []).length === 3
-        && /round1-script-v1/.test(about) && !/8%/.test(about) && /cannot choose an engine/.test(about));
+        && /round1-script-v2/.test(about) && !/8%/.test(about) && /cannot choose an engine/.test(about));
       if (process.env.CAL_EXPORT_OUT) { fs.writeFileSync(process.env.CAL_EXPORT_OUT, r.data); console.log(`    (unpopulated example written to ${process.env.CAL_EXPORT_OUT})`); }
       const P = [{ id: 1, code: 'P1', grp: 'kn', phone_type: 'iphone' }];
       const f = (frames, run, spread = 20) => ({ voiced_frames: frames, longest_run_frames: run, f0_spread_raw: spread, hop_ms: 20 });

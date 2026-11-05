@@ -37,10 +37,10 @@ const { kannadaToLatin, reason: providerReason } = require('./voicePilot');
 
 const CONSENT_VERSION = 'calibration-v1';
 /** The script is frozen for round 1: changing any line voids that language's fluent-speaker check (scriptSha). */
-const SCRIPT_VERSION = 'round1-script-v1';
+const SCRIPT_VERSION = 'round1-script-v2';   // Fixes-3i (5 Nov): k02 upma → uppittu, k04 katori → battalu, after fluent-speaker review (R1); no take was ever recorded under v1
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 /** The judges' rules (scoreTranscript, judgePreview). Stored with every judgment; a change makes earlier judgments stale. */
-const JUDGE_VERSION = 'judge-3a.1';   // Fixes-3a: every weight shown AND the amount that would be saved are judged (judgments under judge-2y.1 are stale)
+const JUDGE_VERSION = 'judge-3i.1';   // Fixes-3i: spellings of uppittu and battalu accepted (judgments under judge-3a.1 / judge-2y.1 are stale). Fixes-3a: every weight shown AND the amount that would be saved are judged
 
 // ── The script ───────────────────────────────────────────────────────────────
 // items: what is scored in a transcript. kind 'count' (number [unit] food), 'weight'
@@ -56,10 +56,11 @@ const LINES = {
     items: [{ kind: 'count', label: 'walk 40 min', n: 40, unit: 'minute' }, { kind: 'count', label: '2 litres water', n: 2, unit: 'litre', food: 'water' }] },
   k01: { lang: 'kn', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', means: 'This morning I ate two idli and a bowl of sambar',
     items: [{ kind: 'count', label: '2 idli', n: 2, food: 'idli', word: 'eradu' }, { kind: 'count', label: '1 bowl sambar', n: 1, unit: 'bowl', food: 'sambar', word: 'ondu' }] },
-  k02: { lang: 'kn', say: 'Breakfast-ge ondu plate upma, ondu cup coffee', means: 'For breakfast, a plate of upma and a cup of coffee',
-    items: [{ kind: 'count', label: '1 plate upma', n: 1, unit: 'plate', food: 'upma', word: 'ondu' }, { kind: 'count', label: '1 cup coffee', n: 1, unit: 'cup', food: 'coffee', word: 'ondu' }] },
-  k04: { lang: 'kn', say: 'Lunch-ge eradu chapati, ondu katori dal mattu mosaru', means: 'For lunch, two chapati, a katori of dal and curd',
-    items: [{ kind: 'count', label: '2 chapati', n: 2, food: 'chapati', word: 'eradu' }, { kind: 'count', label: '1 katori dal', n: 1, unit: 'katori', unitAlias: 'bowl', food: 'dal', word: 'ondu' }, { kind: 'presence', label: 'curd', food: 'curd' }] },
+  // Fixes-3i: k02 and k04 use the everyday Kannada words a fluent speaker (R1) asked for: uppittu (upma) and battalu (katori, bowl).
+  k02: { lang: 'kn', say: 'Breakfast-ge ondu plate uppittu, ondu cup coffee', means: 'For breakfast, a plate of uppittu (upma) and a cup of coffee',
+    items: [{ kind: 'count', label: '1 plate uppittu', n: 1, unit: 'plate', food: 'upma', word: 'ondu' }, { kind: 'count', label: '1 cup coffee', n: 1, unit: 'cup', food: 'coffee', word: 'ondu' }] },
+  k04: { lang: 'kn', say: 'Lunch-ge eradu chapati, ondu battalu dal mattu mosaru', means: 'For lunch, two chapati, a battalu (bowl) of dal and curd',
+    items: [{ kind: 'count', label: '2 chapati', n: 2, food: 'chapati', word: 'eradu' }, { kind: 'count', label: '1 battalu dal', n: 1, unit: 'katori', unitAlias: 'bowl', food: 'dal', word: 'ondu' }, { kind: 'presence', label: 'curd', food: 'curd' }] },
   k06: { lang: 'kn', say: 'Ivattu mooru litre neeru kudide', means: 'I drank three litres of water today',
     items: [{ kind: 'count', label: '3 litres water', n: 3, unit: 'litre', food: 'water', word: 'mooru' }] },
   k11: { lang: 'kn', say: 'Ivattu belagge nanna tooka eppattu eradu point aidu kg', means: 'My weight this morning is 72.5 kg',
@@ -164,7 +165,7 @@ function replayMatches(t) {
 const SEP = '|';
 const loose = (s) => s.replace(/ee/g, 'i').replace(/oo/g, 'u').replace(/aa/g, 'a').replace(/ii/g, 'i').replace(/uu/g, 'u').replace(/ph/g, 'f').replace(/th/g, 't').replace(/dh/g, 'd');
 const FOOD = {
-  idli: 'idli|idly|itli|idlis|idlies|ಇಡ್ಲಿ', sambar: 'sambar|sambhar|saambar|sambaru|ಸಾಂಬಾರ್', upma: 'upma|uppittu|uppit|ಉಪ್ಮಾ|ಉಪ್ಪಿಟ್ಟು', coffee: 'coffee|kaafi|kapi|kafi|kaapi|ಕಾಫಿ',
+  idli: 'idli|idly|itli|idlis|idlies|ಇಡ್ಲಿ', sambar: 'sambar|sambhar|saambar|sambaru|ಸಾಂಬಾರ್', upma: 'upma|uppittu|uppitu|upittu|upitu|uppit|upit|ಉಪ್ಮಾ|ಉಪ್ಪಿಟ್ಟು', coffee: 'coffee|kaafi|kapi|kafi|kaapi|ಕಾಫಿ',
   chapati: 'chapati|chapathi|chappathi|chapatis|chapatti|ಚಪಾತಿ', dal: 'dal|daal|dhal|dhaal|ದಾಲ್|दाल', curd: 'curd|mosaru|dahi|ಮೊಸರು',
   water: 'water|neeru|niru|paani|pani|ನೀರು|पानी', roti: 'roti|rotis|rotti|rottis|chapati|रोटी|रोटियां|रोटियाँ', milk: 'milk|doodh|dudh|haalu|ದೂಧ್|दूध',
   egg: 'egg|eggs|anda|ande|anday|motte|अंडे|अंडा|अण्डे', squat: 'squat|squats|ಸ್ಕ್ವಾಟ್',
@@ -180,7 +181,7 @@ const EXTRA_FOODS = {
 };
 const ALL_FOODS = { ...FOOD, ...EXTRA_FOODS };
 const UNIT = {
-  bowl: 'bowl|bowls|baul|ಬೌಲ್', plate: 'plate|plates|plet|ಪ್ಲೇಟ್', cup: 'cup|cups|kap|ಕಪ್', katori: 'katori|katoris|katora|kathori|कटोरी|ಕಟೋರಿ',
+  bowl: 'bowl|bowls|baul|ಬೌಲ್', plate: 'plate|plates|plet|ಪ್ಲೇಟ್', cup: 'cup|cups|kap|ಕಪ್', katori: 'katori|katoris|katora|kathori|कटोरी|ಕಟೋರಿ|battalu|battlu|batalu|batlu|battal|batal|battl|batl|ಬಟ್ಟಲು',
   glass: 'glass|glasses|gilas|lota|गिलास|ग्लास', litre: 'litre|litres|liter|liters|ltr|l|litar|ಲೀಟರ್|लीटर', kg: 'kg|kgs|kilo|kilos|kilogram|kilograms|ಕೆಜಿ|किलो|किलोग्राम',
   pound: 'pound|pounds|lb|lbs', set: 'set|sets|ಸೆಟ್', rep: 'rep|reps|repetitions|ರೆಪ್ಸ್', minute: 'minute|minutes|min|mins|nimisha|ನಿಮಿಷ|मिनट',
   // Fixes-2y: count words. Neutral for a counted food ("2 pieces idli" is 2 idli); any other unit on a counted food is a wrong unit.

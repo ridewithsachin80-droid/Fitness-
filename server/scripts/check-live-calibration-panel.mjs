@@ -89,7 +89,7 @@ if (!EMAIL || !PASSWORD) {
           const head = el.querySelector('p')?.textContent || ''; const hash = (el.textContent.match(/Script hash ([0-9a-f]{12})/) || [])[1] || null;
           // codes only: the status line says "confirmed by R1 · <date>", "not confirmed, locked" or "check void …"
           return { l, status: head.replace(/^[^:]*:\s*/, '').slice(0, 80), hash }; }));
-        const expect = { kn: '02dc7a808038', hi: '21ef021a6c57', en: '9bd51a13bb06' };
+        const expect = { kn: '4087ba15e0a6', hi: '21ef021a6c57', en: '9bd51a13bb06' };   // Fixes-3i: kn changed with k02 (uppittu) and k04 (battalu); 3h reviewed kn 02dc7a808038
         row('…listing Kannada, Hindi and English, each with its status and script hash (a status inventory: a hash that differs from the reviewed one is reported, not judged)', langs.every(x => !x.missing && x.hash), langs.map(x => `${x.l}: ${x.missing ? 'missing' : `${x.status} (hash ${x.hash}${x.hash === expect[x.l] ? ', as reviewed' : `, EXPECTED ${expect[x.l]}`})`}`).join('; '));
       }
     }
