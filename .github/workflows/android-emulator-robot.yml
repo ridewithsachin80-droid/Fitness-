@@ -1,0 +1,68 @@
+name: Android emulator robot (test site)
+# STARTED ON REQUEST ONLY: by a change to qa/android-emulator/REQUEST.md on the test branch (add a line saying why),
+# or with "Run workflow" (GitHub shows that button only for workflows on the default branch, which stays untouched,
+# so the request file is the normal way). It never runs on other pushes.
+# Boots a real Android 14 emulator (Google APIs image, Chrome for Android) on GitHub's machine and drives the
+# TEST site as the robot member: Today, the AI composer with the Android keyboard up, Plan, Progress, More, in the
+# light and dark system themes, on two screen sizes. Read-only: nothing is sent or saved.
+# Results: the run's summary, and an artifact per screen size (screenshots, screen recordings, report), kept 7 days.
+# Emulator, not a physical phone: no real microphone, camera, push notification or install.
+# Needs the existing secrets FITLIFE_ROBOT_MEMBER_PHONE and FITLIFE_ROBOT_MEMBER_PIN. Never point it at production.
+on:
+  push:
+    branches: [test]
+    paths: ['qa/android-emulator/REQUEST.md']
+  workflow_dispatch:
+
+concurrency:
+  group: android-emulator-robot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ['pixel_6', 'Nexus 5']   # about 411 and 360 px wide
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Let the emulator use the machine's virtualisation (KVM)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install the driver (Playwright core; it uses the phone's own Chrome, no browser download)
+        working-directory: server
+        run: npm install --no-audit --no-fund && npm install --no-save --no-audit --no-fund playwright-core@1.56.0
+      - name: Run the robot inside the Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ROBOT_BASE_URL: https://fitness-test.up.railway.app
+          ANDROID_PROFILE: ${{ matrix.profile }}
+          FITLIFE_ROBOT_MEMBER_PHONE: ${{ secrets.FITLIFE_ROBOT_MEMBER_PHONE }}
+          FITLIFE_ROBOT_MEMBER_PIN: ${{ secrets.FITLIFE_ROBOT_MEMBER_PIN }}
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          working-directory: server
+          script: node scripts/android-emulator-robot.mjs
+      - name: Keep the screenshots, recordings and report (7 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.profile == 'Nexus 5' && 'nexus5-360' || 'pixel6-411' }}
+          path: qa/android-results
+          retention-days: 7
+          if-no-files-found: warn
