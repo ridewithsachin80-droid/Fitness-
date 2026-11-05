@@ -235,6 +235,19 @@ async function tour(theme) {
     // The AI composer with the real Android keyboard: is the text box still visible above it?
     await tid('ai-type').waitFor({ state: 'visible', timeout: 15e3 }).catch(async () => { throw new Error(`the "Type to log" button is not visible: ${await whatIsOnScreen()}`); });
     // A real Android tap (run 41992421264: Playwright's synthetic tap on this button timed out in the dark tour).
+    // Real Android Chrome only (the desktop robots never get Chrome's install event): FitLife's own "Add to Home Screen"
+    // card (components/InstallPrompt.jsx, fixed bottom-24, z-50) can sit over the "Type to log" button. Found in run
+    // 41993971926. Record it with a screenshot, then close it as a member would (its "Dismiss" ×; stored only on the emulator).
+    const cover = await page.evaluate(() => { const b = document.querySelector('[data-testid="ai-type"]')?.getBoundingClientRect(); if (!b) return null;
+      const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); const card = el?.closest('div.fixed');
+      return card && /Add to Home Screen/.test(card.textContent) ? card.getBoundingClientRect().height | 0 : null; });
+    if (cover != null) {
+      const fc = await shot(`${theme}-install-card-over-type-button`);
+      const x = page.locator('button[aria-label="Dismiss"]').filter({ hasText: '×' }).first(); const xb = await x.boundingBox();
+      row(`${theme}: FitLife's "Add to Home Screen" card covers the "Type to log" button`, false,
+        `${fc}; card ${cover} px tall over the button; its close "×" is ${xb ? `${Math.round(xb.width)}×${Math.round(xb.height)} px` : 'not found'}. Real Android Chrome only; closed by the robot to continue`);
+      if (xb) { await realTap(x, 'install card close'); await wait(1200); }
+    }
     const tapped = await realTap(tid('ai-type'), '"Type to log" button');
     try { await tid('composer-input').waitFor({ state: 'visible', timeout: 15e3 }); }
     catch {

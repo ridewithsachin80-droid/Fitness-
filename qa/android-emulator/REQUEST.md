@@ -18,3 +18,4 @@ Add one line per request (date and why). Results: the run's summary, and the art
 - 2026-11-05: eleventh run: no Chrome restart for dark; the page's dark theme is set inside Chrome when Android's does not reach it (reported).
 - 2026-11-05: twelfth run: real Android taps for the Type button and the tabs too.
 - 2026-11-05: thirteenth run: diagnose why the AI composer does not open after a page reload.
+- 2026-11-05: fourteenth run: record FitLife's install card over the Type button (found in run 41993971926), close it, continue.
