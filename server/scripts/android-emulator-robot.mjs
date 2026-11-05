@@ -95,25 +95,33 @@ async function openChrome() {
 await openChrome();
 
 /** A REAL Android tap (adb "input tap"), so the phone behaves as under a finger: the soft keyboard opens for a text box.
- *  (Playwright's own taps are synthetic and do not open the keyboard.) The web content's position on the screen comes from
- *  Android's accessibility dump of Chrome (the WebView node); the element's position from the page, times the pixel ratio. */
+ *  (Playwright's own taps are synthetic and do not open the keyboard.) Where the web page sits on the screen is MEASURED
+ *  just before each tap: an invisible full-screen layer is added, one real tap lands on it, the layer reports where the
+ *  touch arrived in page pixels and is removed (the tap goes nowhere else). Chrome's toolbar can move, so this is redone
+ *  every time. */
 async function contentOrigin() {
-  const xml = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml');
-  const m = xml.match(/class="android\.webkit\.WebView"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
-  if (m) return { left: +m[1], top: +m[2], how: 'WebView' };
-  const c = xml.match(/resource-id="com\.android\.chrome:id\/compositor_view_holder"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
-  return c ? { left: +c[1], top: +c[2], how: 'compositor (approximate)' } : null;
+  const [W, H] = ((await sh('wm size')).match(/(\d+)x(\d+)/) || []).slice(1).map(Number);
+  await page.evaluate(() => { const d = document.createElement('div'); d.id = 'fitlife-robot-calibrate';
+    d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:transparent;touch-action:none';
+    d.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); window.__fitlifeTouch = { x: e.clientX, y: e.clientY }; }, true);
+    window.__fitlifeTouch = null; document.body.appendChild(d); });
+  const px = Math.round(W / 2), py = Math.round(H / 2);
+  await sh(`input tap ${px} ${py}`); await wait(600);
+  const t = await page.evaluate(() => { document.getElementById('fitlife-robot-calibrate')?.remove(); return window.__fitlifeTouch; });
+  if (!t) return null;
+  const dpr = await page.evaluate(() => window.devicePixelRatio);
+  return { left: Math.round(px - t.x * dpr), top: Math.round(py - t.y * dpr), dpr, how: 'measured' };
 }
 async function realTap(locator, what) {
   await locator.scrollIntoViewIfNeeded().catch(() => {});
+  await wait(400);
+  const o = await contentOrigin();
+  if (!o) throw new Error(`${what}: the calibration tap did not reach the page`);
   const box = await locator.boundingBox();
   if (!box) throw new Error(`${what}: not on screen`);
-  const dpr = await page.evaluate(() => window.devicePixelRatio);
-  const o = await contentOrigin();
-  if (!o) throw new Error(`${what}: could not find Chrome's web content on the screen`);
-  const x = Math.round(o.left + (box.x + box.width / 2) * dpr), y = Math.round(o.top + (box.y + box.height / 2) * dpr);
+  const x = Math.round(o.left + (box.x + box.width / 2) * o.dpr), y = Math.round(o.top + (box.y + box.height / 2) * o.dpr);
   await sh(`input tap ${x} ${y}`);
-  return `${o.how} origin ${o.left},${o.top}; tapped ${x},${y}`;
+  return `page origin ${o.left},${o.top} (measured); tapped ${x},${y}`;
 }
 /** What the robot could see when something failed (test ids on screen, the address), for the log. Never typed values. */
 async function whatIsOnScreen() {
