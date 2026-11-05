@@ -10,3 +10,4 @@ Add one line per request (date and why). Results: the run's summary, and the art
 - 2026-11-05: fourth run: the page position for real taps is measured with one calibration tap.
 - 2026-11-05: fifth run: screen kept awake and unlocked; focus and power logged.
 - 2026-11-05: sixth run: use Chrome's own tab, bring it to the front, check the address on screen.
+- 2026-11-05: seventh run: log what Android's UI dump shows on the screen.
