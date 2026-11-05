@@ -86,7 +86,11 @@ await sh('am force-stop com.android.chrome');
 /** The address shown in Chrome's own address bar on the SCREEN (Android's UI dump), to prove the robot's tab is the visible one. */
 const shownUrl = async () => { const x = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml').catch(() => '');
   const m = x.match(/resource-id="com\.android\.chrome:id\/url_bar"[^>]*/) || x.match(/text="([^"]*)"[^>]*resource-id="com\.android\.chrome:id\/url_bar"/);
-  const t = m ? (m[0].match(/text="([^"]*)"/) || [])[1] : null; return t ?? `(no address bar in the UI dump; ${(x.match(/<node /g) || []).length} nodes)`; };
+  const t = m ? (m[0].match(/text="([^"]*)"/) || [])[1] : null; if (t != null) return t;
+  // Say what IS on the screen: each node's class, id and text (the dump is taken before anything is typed).
+  const nodes = [...x.matchAll(/<node [^>]*>/g)].map(n => { const g = (k) => (n[0].match(new RegExp(k + '="([^"]*)"')) || [])[1] || '';
+    return [g('class').split('.').pop(), g('resource-id').split('/').pop(), g('text').slice(0, 40), g('content-desc').slice(0, 40), g('bounds')].filter(Boolean).join(' '); });
+  return `(no address bar; ${nodes.length} nodes: ${nodes.join(' | ').slice(0, 900)})`; };
 const focus = async () => ((await sh('dumpsys window | grep -E "mCurrentFocus|mFocusedApp" | head -2')).replace(/\s+/g, ' ').slice(0, 220));
 const awake = async () => ((await sh('dumpsys power | grep -E "mWakefulness=|mHoldingDisplaySuspendBlocker"')).replace(/\s+/g, ' ').slice(0, 160));
 // hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
