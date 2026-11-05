@@ -81,8 +81,11 @@ const keyboardShown = async () => /mInputShown=true/.test(await sh('dumpsys inpu
 
 await sh('cmd uimode night no');
 await sh('am force-stop com.android.chrome');
-const context = await device.launchBrowser();
-const page = await context.newPage();
+// hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
+const context = await device.launchBrowser({ hasTouch: true });
+let page = context.pages()[0];
+for (let i = 0; !page && i < 5; i++) { page = await context.newPage().catch(() => null) || context.pages()[0]; if (!page) await wait(3000); }
+if (!page) stop('Chrome opened, but no tab could be attached (5 tries)');
 page.setDefaultTimeout(30e3);
 
 const tid = (id) => page.locator(`[data-testid="${id}"]`);

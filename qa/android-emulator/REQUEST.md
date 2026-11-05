@@ -5,3 +5,4 @@ on GitHub's machine opens the TEST site as the robot member (read-only) in light
 Add one line per request (date and why). Results: the run's summary, and the artifacts (screenshots, recordings), kept 7 days.
 
 - 2026-11-05: first run, asked by Sachin ("create android emulator to check in phone").
+- 2026-11-05: second run after fixing touch taps and the first-tab timing.
