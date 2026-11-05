@@ -138,6 +138,14 @@ await openChrome();
  *  touch arrived in page pixels and is removed (the tap goes nowhere else). Chrome's toolbar can move, so this is redone
  *  every time. */
 async function contentOrigin() {
+  const dpr0 = await page.evaluate(() => window.devicePixelRatio);
+  // 1st choice: Android's screen dump gives Chrome's web view (titled with the page title) and its position. No tap needed.
+  const ui = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml').catch(() => '');
+  const wv = ui.match(/class="android\.webkit\.WebView"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+  if (wv) return { left: +wv[1], top: +wv[2], dpr: dpr0, how: 'web view position from the screen dump' };
+  // 2nd choice: one calibration tap, but ONLY when nothing is open over the page (a blind tap on an open sheet could
+  // press one of its buttons: in run 41991091701 it apparently opened the camera and left Chrome).
+  if (await page.evaluate(() => !!document.querySelector('[aria-modal="true"], dialog[open]'))) return null;
   const [W, H] = ((await sh('wm size')).match(/(\d+)x(\d+)/) || []).slice(1).map(Number);
   await page.evaluate(() => { const d = document.createElement('div'); d.id = 'fitlife-robot-calibrate';
     d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:transparent;touch-action:none';
@@ -149,19 +157,19 @@ async function contentOrigin() {
   const t = await page.evaluate(() => { document.getElementById('fitlife-robot-calibrate')?.remove(); return window.__fitlifeTouch; });
   if (!t) return null;
   const dpr = await page.evaluate(() => window.devicePixelRatio);
-  return { left: Math.round(px - t.x * dpr), top: Math.round(py - t.y * dpr), dpr, how: 'measured' };
+  return { left: Math.round(px - t.x * dpr), top: Math.round(py - t.y * dpr), dpr, how: 'measured with a calibration tap' };
 }
 async function realTap(locator, what) {
   await locator.scrollIntoViewIfNeeded().catch(() => {});
   await clearSystemDialogs();
   await wait(400);
   const o = await contentOrigin();
-  if (!o) throw new Error(`${what}: the calibration tap did not reach the page (focus: ${await focus()}; power: ${await awake()})`);
+  if (!o) throw new Error(`${what}: the page's position on the screen could not be found (focus: ${await focus()}; power: ${await awake()})`);
   const box = await locator.boundingBox();
   if (!box) throw new Error(`${what}: not on screen`);
   const x = Math.round(o.left + (box.x + box.width / 2) * o.dpr), y = Math.round(o.top + (box.y + box.height / 2) * o.dpr);
   await sh(`input tap ${x} ${y}`);
-  return `page origin ${o.left},${o.top} (measured); tapped ${x},${y}`;
+  return `page origin ${o.left},${o.top} (${o.how}); tapped ${x},${y}`;
 }
 /** What the robot could see when something failed (test ids on screen, the address), for the log. Never typed values. */
 async function whatIsOnScreen() {
