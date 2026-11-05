@@ -66,7 +66,7 @@ const density = await sh('wm density');
 console.log(`Android ${androidVersion}, model ${device.model()}, Chrome ${chromeVersion}, ${screenSize}, ${density}`);
 if (chromeVersion === 'not installed') stop('Chrome is not installed on this emulator image');
 
-let n = 0;
+let n = 0; let darkHow = '';
 async function shot(name) {
   await clearSystemDialogs();
   const f = `${String(++n).padStart(2, '0')}-${name}.png`;
@@ -224,7 +224,7 @@ async function tour(theme) {
   try {
     await page.evaluate(() => window.scrollTo(0, 0)); await wait(800);
     const actual = await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    row(`${theme}: the page sees the Android system theme`, actual === theme, `prefers-color-scheme: ${actual}`);
+    row(`${theme}: the page is in the ${theme} theme`, actual === theme, `prefers-color-scheme: ${actual}${theme === 'dark' ? ` (${darkHow})` : ' (Android light mode)'}`);
     let f = await shot(`${theme}-today-top`);
     row(`${theme}: Today`, !(await sideways()), `${f}; no sideways scroll`);
     await page.evaluate(() => window.scrollBy(0, Math.round(window.innerHeight * 0.8))); await wait(1000);
@@ -265,11 +265,15 @@ async function tour(theme) {
 try {
   await signIn();
   await tour('light');
-  // Chrome reads the system theme when it starts, so switch Android to dark and restart Chrome (the sign-in is kept).
-  await sh('cmd uimode night yes'); await wait(2000);
-  await openChrome();
-  await signIn(false);
-  await tid('daily-essentials').waitFor(); await wait(2000);
+  // Dark: Android is switched to dark (its own bars and Chrome's UI follow). In runs 41991091701/41991666837 Chrome 113 on
+  // this emulator did not pass Android's dark setting on to the page, and restarting Chrome lost the tab, so the PAGE's
+  // dark theme is set inside Chrome (prefers-color-scheme: dark) and the report says so.
+  await sh('cmd uimode night yes'); await wait(2500);
+  await page.reload({ waitUntil: 'load' }); await tid('daily-essentials').waitFor(); await wait(1500);
+  const native = await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches);
+  row("dark: Android's own dark setting reaches the page (information only)", true, native ? 'yes' : 'no: Chrome 113 on this emulator kept the page light; the page is switched to dark inside Chrome for the dark tour');
+  if (!native) { await page.emulateMedia({ colorScheme: 'dark' }); await page.reload({ waitUntil: 'load' }); await tid('daily-essentials').waitFor(); await wait(1500); }
+  darkHow = native ? 'Android dark mode' : 'dark set inside Chrome (Android dark mode on for the bars)';
   await tour('dark');
 } catch (e) { row('robot finished', false, secretFree(`${String(e.message || e).split('\n')[0].slice(0, 240)} — on screen: ${await whatIsOnScreen()}`)); }
 finally {
