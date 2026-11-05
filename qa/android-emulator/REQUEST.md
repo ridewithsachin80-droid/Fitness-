@@ -21,3 +21,4 @@ Add one line per request (date and why). Results: the run's summary, and the art
 - 2026-11-05: fourteenth run: record FitLife's install card over the Type button (found in run 41993971926), close it, continue.
 - 2026-11-05: after Fixes-3j (3b10e2d): the install card should no longer cover "Type to log".
 - 2026-11-05: after Fixes-3k (fa405d3): Today, Plan and Progress for the robot member (an existing member: lists unchanged); "checklist" wording; no red on Progress.
+- 2026-11-05: rerun after Fixes-3k: the 360 px run (42031373877) stopped at sign-in (411 px passed every check); the robot now reports why sign-in stalls (screen, login form, Log In button, alert text) and photographs it.

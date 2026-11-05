@@ -214,7 +214,18 @@ async function signIn(photo = true) {
     }
     await wait(1000);
   }
-  if (!(await tid('daily-essentials').count())) stop('sign-in did not reach Today (no Daily essentials after 40 s)');
+  if (!(await tid('daily-essentials').count())) {
+    // 5 Nov (after Fixes-3k, 360 px run 42031373877): this stop said nothing about WHY. Report what is on the screen,
+    // whether the login form is still there, and any alert or error text (never the phone number or PIN).
+    const why = await page.evaluate(() => {
+      const alerts = [...document.querySelectorAll('[role=alert], [aria-live], .text-red-400, .text-bad')].map(e => e.textContent.trim()).filter(Boolean).join(' | ').slice(0, 160);
+      const btn = [...document.querySelectorAll('button')].find(b => /^Log In/.test(b.textContent.trim()));
+      const r = btn?.getBoundingClientRect();
+      return `login form still shown: ${!!document.querySelector('input[type=tel]')}; Log In button: ${btn ? `${btn.disabled ? 'disabled' : 'enabled'}, ${Math.round(r.top)}–${Math.round(r.bottom)} px of ${innerHeight}` : 'gone'}; alert text: ${alerts || 'none'}`;
+    }).catch(e => `(page unreadable: ${e.message})`);
+    await shot('light-signin-stuck').catch(() => {});
+    stop(secretFree(`sign-in did not reach Today (no Daily essentials after 40 s) — ${why} — on screen: ${await whatIsOnScreen()}`));
+  }
   row('Robot member signs in and Today opens', true);
   await wait(2000);
 }
