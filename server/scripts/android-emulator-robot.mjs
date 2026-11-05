@@ -235,8 +235,18 @@ async function tour(theme) {
     // The AI composer with the real Android keyboard: is the text box still visible above it?
     await tid('ai-type').waitFor({ state: 'visible', timeout: 15e3 }).catch(async () => { throw new Error(`the "Type to log" button is not visible: ${await whatIsOnScreen()}`); });
     // A real Android tap (run 41992421264: Playwright's synthetic tap on this button timed out in the dark tour).
-    await realTap(tid('ai-type'), '"Type to log" button');
-    await tid('composer-input').waitFor({ state: 'visible', timeout: 15e3 });
+    const tapped = await realTap(tid('ai-type'), '"Type to log" button');
+    try { await tid('composer-input').waitFor({ state: 'visible', timeout: 15e3 }); }
+    catch {
+      // What is under the button: in the page (topmost element at its centre) and in Chrome's own UI near the bottom.
+      const inPage = await page.evaluate(() => { const b = document.querySelector('[data-testid="ai-type"]').getBoundingClientRect();
+        const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+        return `button at ${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}×${Math.round(b.height)} (window ${innerWidth}×${innerHeight}); topmost there: ${el ? `${el.tagName.toLowerCase()}${el.dataset?.testid ? '[' + el.dataset.testid + ']' : ''}${el.id ? '#' + el.id : ''}.${String(el.className).slice(0, 60)}` : 'nothing'}`; });
+      const ui = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml').catch(() => '');
+      const native = [...ui.matchAll(/<node [^>]*>/g)].map(n => n[0]).filter(n => /resource-id="com\.android\.chrome:id\/(?!compositor|coordinator|content|control_container)[^"]+"/.test(n))
+        .map(n => `${(n.match(/resource-id="[^/]*\/([^"]+)"/) || [])[1]} ${(n.match(/text="([^"]*)"/) || [])[1] || ''} ${(n.match(/bounds="([^"]*)"/) || [])[1]}`).slice(0, 12).join(' | ');
+      throw new Error(`the AI composer did not open after a real tap (${tapped}); ${inPage}; Chrome's own UI on screen: ${native || 'none'}`);
+    }
     const how = await realTap(tid('composer-input'), 'composer text box'); await wait(2000);
     const kb = await keyboardShown();
     const geo = await page.evaluate(() => { const r = document.querySelector('[data-testid="composer-input"]').getBoundingClientRect(); const v = window.visualViewport;
