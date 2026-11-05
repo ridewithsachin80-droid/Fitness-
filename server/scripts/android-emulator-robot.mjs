@@ -68,6 +68,7 @@ if (chromeVersion === 'not installed') stop('Chrome is not installed on this emu
 
 let n = 0;
 async function shot(name) {
+  await clearSystemDialogs();
   const f = `${String(++n).padStart(2, '0')}-${name}.png`;
   await device.screenshot({ path: path.join(OUT, f) }); shots.push(f); return f;
 }
@@ -91,6 +92,22 @@ const shownUrl = async () => { const x = await sh('uiautomator dump /sdcard/fitl
   const nodes = [...x.matchAll(/<node [^>]*>/g)].map(n => { const g = (k) => (n[0].match(new RegExp(k + '="([^"]*)"')) || [])[1] || '';
     return [g('class').split('.').pop(), g('resource-id').split('/').pop(), g('text').slice(0, 40), g('content-desc').slice(0, 40), g('bounds')].filter(Boolean).join(' '); });
   return `(no address bar; ${nodes.length} nodes: ${nodes.join(' | ').slice(0, 900)})`; };
+/** Android and Chrome put their own pop-ups over the page on a fresh emulator ("Pixel Launcher isn't responding",
+ *  "Chrome notifications make things easier"). They swallow taps and spoil screenshots, so before every screenshot and
+ *  every real tap the robot closes them with their harmless button ("Wait", "No thanks"…) and records what it closed. */
+const dismissed = [];
+async function clearSystemDialogs() {
+  for (let i = 0; i < 4; i++) {
+    const x = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml').catch(() => '');
+    const btn = [...x.matchAll(/<node [^>]*>/g)].map(n => n[0]).find(n => /class="android\.widget\.Button"/.test(n)
+      && (/resource-id="android:id\/(aerr_wait|aerr_close)"/.test(n) && /aerr_wait/.test(n) || /resource-id="[^"]*negative_button"/.test(n) || /text="(Wait|No thanks|Not now|Don.t allow|Dismiss)"/.test(n)));
+    if (!btn) return;
+    const b = btn.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/); if (!b) return;
+    const title = (x.match(/resource-id="android:id\/alertTitle"[^>]*/) || x.match(/text="(Chrome notifications[^"]*)"/) || [''])[0];
+    dismissed.push(`${(btn.match(/text="([^"]*)"/) || [])[1] || 'button'} on "${((title.match(/text="([^"]*)"/) || [])[1] || title).slice(0, 60)}"`);
+    await sh(`input tap ${Math.round((+b[1] + +b[3]) / 2)} ${Math.round((+b[2] + +b[4]) / 2)}`); await wait(1200);
+  }
+}
 const focus = async () => ((await sh('dumpsys window | grep -E "mCurrentFocus|mFocusedApp" | head -2')).replace(/\s+/g, ' ').slice(0, 220));
 const awake = async () => ((await sh('dumpsys power | grep -E "mWakefulness=|mHoldingDisplaySuspendBlocker"')).replace(/\s+/g, ' ').slice(0, 160));
 // hasTouch: lets Playwright send touch taps (Chrome itself is unchanged). The first tab can take a moment to attach.
@@ -98,6 +115,7 @@ const awake = async () => ((await sh('dumpsys power | grep -E "mWakefulness=|mHo
 let context, page;
 async function openChrome() {
   if (context) await context.close().catch(() => {});
+  await sh('pm grant com.android.chrome android.permission.POST_NOTIFICATIONS').catch(() => {});   // no "Chrome notifications…" prompt
   context = await device.launchBrowser({ hasTouch: true });
   // Use the tab Chrome opened itself when there is one (a second tab would sit behind it); wait for it before making one.
   page = context.pages()[0] || await context.waitForEvent('page', { timeout: 10e3 }).catch(() => null);
@@ -105,6 +123,7 @@ async function openChrome() {
   if (!page) stop('Chrome opened, but no tab could be attached (5 tries)');
   await page.bringToFront().catch(() => {});
   page.setDefaultTimeout(30e3);
+  await wait(1500); await clearSystemDialogs();
   console.log(`Chrome tabs attached: ${context.pages().length}`);
 }
 await openChrome();
@@ -130,6 +149,7 @@ async function contentOrigin() {
 }
 async function realTap(locator, what) {
   await locator.scrollIntoViewIfNeeded().catch(() => {});
+  await clearSystemDialogs();
   await wait(400);
   const o = await contentOrigin();
   if (!o) throw new Error(`${what}: the calibration tap did not reach the page (focus: ${await focus()}; power: ${await awake()})`);
@@ -243,6 +263,7 @@ finally {
   await context.close().catch(() => {});
   await device.close().catch(() => {});
 }
+row('System pop-ups closed by the robot (not FitLife)', true, dismissed.length ? dismissed.join('; ') : 'none');
 const head = `**Result: ${failed ? `${failed} check(s) FAILED` : 'all checks passed'}** · ${PROFILE} · Android ${androidVersion} · Chrome ${chromeVersion} · ${screenSize} · ${density} · ${BASE} · ${new Date().toISOString()}`;
 writeReport(head);
 console.log(`\n${head}`);
