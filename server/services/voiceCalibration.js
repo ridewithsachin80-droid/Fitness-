@@ -40,7 +40,7 @@ const CONSENT_VERSION = 'calibration-v1';
 const SCRIPT_VERSION = 'round1-script-v2';   // Fixes-3i (5 Nov): k02 upma → uppittu, k04 katori → battalu, after fluent-speaker review (R1); no take was ever recorded under v1
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 /** The judges' rules (scoreTranscript, judgePreview). Stored with every judgment; a change makes earlier judgments stale. */
-const JUDGE_VERSION = 'judge-3i.1';   // Fixes-3i: spellings of uppittu and battalu accepted (judgments under judge-3a.1 / judge-2y.1 are stale). Fixes-3a: every weight shown AND the amount that would be saved are judged
+const JUDGE_VERSION = 'judge-3i.2';   // Fixes-3i.1: battle/batli/batlaya no longer count as battalu (independent QA review). Fixes-3i: spellings of uppittu and battalu accepted (judgments under judge-3a.1 / judge-2y.1 are stale). Fixes-3a: every weight shown AND the amount that would be saved are judged
 
 // ── The script ───────────────────────────────────────────────────────────────
 // items: what is scored in a transcript. kind 'count' (number [unit] food), 'weight'
@@ -181,7 +181,7 @@ const EXTRA_FOODS = {
 };
 const ALL_FOODS = { ...FOOD, ...EXTRA_FOODS };
 const UNIT = {
-  bowl: 'bowl|bowls|baul|ಬೌಲ್', plate: 'plate|plates|plet|ಪ್ಲೇಟ್', cup: 'cup|cups|kap|ಕಪ್', katori: 'katori|katoris|katora|kathori|कटोरी|ಕಟೋರಿ|battalu|battlu|batalu|batlu|battal|batal|battl|batl|ಬಟ್ಟಲು',
+  bowl: 'bowl|bowls|baul|ಬೌಲ್', plate: 'plate|plates|plet|ಪ್ಲೇಟ್', cup: 'cup|cups|kap|ಕಪ್', katori: 'katori|katoris|katora|kathori|कटोरी|ಕಟೋರಿ|battalu|battlu|batalu|batlu|battal|ಬಟ್ಟಲು',   // Fixes-3i.1: no bare 'batl' / 'battl' / 'batal' prefixes (they matched battle, batli, batlaya, bataliye)
   glass: 'glass|glasses|gilas|lota|गिलास|ग्लास', litre: 'litre|litres|liter|liters|ltr|l|litar|ಲೀಟರ್|लीटर', kg: 'kg|kgs|kilo|kilos|kilogram|kilograms|ಕೆಜಿ|किलो|किलोग्राम',
   pound: 'pound|pounds|lb|lbs', set: 'set|sets|ಸೆಟ್', rep: 'rep|reps|repetitions|ರೆಪ್ಸ್', minute: 'minute|minutes|min|mins|nimisha|ನಿಮಿಷ|मिनट',
   // Fixes-2y: count words. Neutral for a counted food ("2 pieces idli" is 2 idli); any other unit on a counted food is a wrong unit.

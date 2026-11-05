@@ -51,3 +51,24 @@ No other test changed. No test was removed or loosened.
 1. **Hindi and English:** go ahead exactly as in the guide; their lines and hashes did not change.
 2. **Kannada:** after this deploy, the Kannada box shows the new k02 and k04 and **Script hash `4087ba15e0a6`**. Send R1 the new Kannada reading sheet. When R1 approves, choose R1's code in the Kannada box and tap Confirm.
 3. If R1 meant something else by the k11 note, tell me before confirming.
+
+---
+
+## Fixes-3i.1: independent QA review of f023f86 / 9532274 (5 Nov, same day)
+
+Sachin adopted the AI Engineering Team Master Framework 2.0 on 5 Nov. Under it, a **separate QA agent** (spawned in the builder's session; it did not write the change; it read the diff, ran the suites and compared the 3h and 3i modules on about 70 transcripts) reviewed Fixes-3i. Its findings and what was done:
+
+| # | Finding | Severity | Done |
+|---|---|---|---|
+| 1 | The bare prefixes `batl` / `battl` (and, found while fixing, `batal`) matched other words: "battle", Hindi "batli" (bottle), "batlaya" (told), "bataliye". **e02 "one battle dal", h01 "ek batli dal" and h02 "…maine batlaya" became "all correct"** on lines whose script did not change; the preview judge accepted "Dal, 1 battle" | should-fix | **Fixed.** Those three prefixes removed; battalu / battlu / batalu / batlu / bataalu / battal(alli) / ಬಟ್ಟಲು still accepted. Judge version **judge-3i.2** (the rules changed again; no judgment exists) |
+| 2 | battalu is filed with katori, so where a line says **bowl** (k01, e01) "ondu battalu sambar" is a wrong unit ("disqualifying" in a preview) | advisory | **Not changed: a product decision.** R1 equated battalu with katori; battalu also means bowl. Nobody reading "bowl" from the k01 line is expected to say battalu. To decide with the reviewer if the recordings show it |
+| 3 | The 3i suite's preview checks were weaker than their labels (the Uppittu case also passed on 3h; the battalu case never asserted the dal item itself) | advisory | **Fixed.** Added a preview with a new spelling ("Upitu, 1 plate": 3h disqualifying → correct reviewable) and the assertion that the dal item is "correct" |
+| 4 | "bhattalu" and split forms ("bat lu") still fail; every Kannada-script form tried passes | minor | Not changed (not common spellings) |
+| 5 | Hindi and English hashes unchanged; Kannada changed as stated | none | — |
+| 6 | No existing assertion weakened | none | — |
+
+**Correction to the note above:** "Hindi and English hashes are byte-for-byte unchanged" is true, but the judge's word lists apply to every language, so Hindi and English **scoring** did change in f023f86 (finding 1). 3i.1 removes that unintended change. No take has been recorded, so nothing stored was affected.
+
+**Files (3i.1):** `server/services/voiceCalibration.js` (three prefixes removed; judge version); `server/scripts/test-voice-calibration-3i.js` (4 checks added, 1 strengthened: 20 checks); `server/scripts/test-voice-calibration-3a.js` (the judge-version assertion again: `judge-3i.1` → `judge-3i.2`, required by the version move; what it protects is unchanged).
+
+**Results (3i.1):** 3i suite **20/20**; restoring the f023f86 prefixes → 2 of the new checks fail; restoring only `batal` → 1 fails. Calibration suites on real local Postgres: 126, 99, 46, 29, 14, 21, 20, panel 18, pilot 134, all pass. Full local gate: **all suites pass, 7,010 assertions** (3i: 7,006; + 4). **QA agent re-check of this fix:** battle / batli / batlaya changes on unchanged lines gone; realistic spellings still pass; the new checks fail on f023f86's module. **Known, accepted:** bare "batal" and ಬಟಲ್ no longer count (dropping the `batal` prefix was needed because it matched "bataliye"; restoring it fails the bataliye check); the remaining `battal` prefix would accept "battalion" (implausible in a food log); battalu stays a wrong unit on lines that say bowl (finding 2, a product decision).

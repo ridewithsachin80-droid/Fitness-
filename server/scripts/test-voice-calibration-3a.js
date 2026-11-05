@@ -86,7 +86,7 @@ async function saveBuilder() {
     ck('…the judge reads that same saved amount: the payload\'s food judged against 2 idli (100 g) is disqualifying; with grams 100 it is correct', jp(withG, { qty_text: saved.qty_text, grams: saved.grams }).result === 'disqualifying'
       && jp(withG, { qty_text: saved.qty_text, grams: createDailyChange({ foods: normaliseFoodReview([{ name: 'Idli', qty_text: '2 idli (100 g)', grams: 100 }], []).foods.map(f => ({ ...f, on: true })) }, { food: [] }, { id: 'c2', mealSlots: ['breakfast'] }).foods[0].after.grams }).result === 'correct reviewable');
     // A new judge version: judgments made under the 2z judge are stale and never qualify.
-    ck('the judge version changed with these rules (judge-3a.1; since Fixes-3i judge-3i.1, which also makes 3a judgments stale), so a judgment cached under judge-2y.1 is never reused', C.JUDGE_VERSION === 'judge-3i.1');
+    ck('the judge version changed with these rules (judge-3a.1; since Fixes-3i.1 judge-3i.2, which also makes 3a judgments stale), so a judgment cached under judge-2y.1 is never reused', C.JUDGE_VERSION === 'judge-3i.2');
   }
 
   // ── [2] The replacement budget: atomic and auditable ──────────────────────

@@ -30,7 +30,7 @@ try {
     && C.LINES.k11.say === 'Ivattu belagge nanna tooka eppattu eradu point aidu kg' && C.LINES.k13.say === 'Gym-alli squat mooru set, hattu reps maadide' && C.LINES.sk1.say === 'Eradu idli');
   ck(`Kannada has a NEW hash (${NEW_KN.slice(0, 12)}…), so a check recorded against the old ${OLD.kn.slice(0, 12)}… does not count`, C.scriptSha('kn') === NEW_KN && C.scriptSha('kn') !== OLD.kn, C.scriptSha('kn'));
   ck('Hindi and English hashes are unchanged (any confirmation of them stays valid)', C.scriptSha('hi') === OLD.hi && C.scriptSha('en') === OLD.en);
-  ck('the script version moved to round1-script-v2 and the judge version to judge-3i.1 (earlier judgments are stale, never reused)', C.SCRIPT_VERSION === 'round1-script-v2' && C.JUDGE_VERSION === 'judge-3i.1');
+  ck('the script version moved to round1-script-v2 and the judge version to judge-3i.2 (3i.1 tightened the battalu spellings; earlier judgments are stale, never reused)', C.SCRIPT_VERSION === 'round1-script-v2' && C.JUDGE_VERSION === 'judge-3i.2');
   ck('the older pilot (Kannada Voice Test) is untouched: its k02 still says "upma" (its history and verdicts stay as they were)', Pilot.PHRASES ? Pilot.PHRASES.find(p => p.id === 'k02')?.say === 'Breakfast-ge ondu plate upma, ondu cup coffee' : /ondu plate upma, ondu cup coffee/.test(require('fs').readFileSync(require.resolve('../services/voicePilot'), 'utf8')));
 
   console.log('\n[2] any spelling is recognised');
@@ -46,13 +46,22 @@ try {
   ck('negative control: a cup or a glass of dal is still a wrong unit (battalu did not loosen the container check)', ['cup', 'glass'].every(u => sc('k04', `Lunch-ge eradu chapati ondu ${u} dal mattu mosaru`).line === 'wrong unit'));
   ck('negative control: the wrong amount ("eradu battalu dal") is still wrong', sc('k04', 'Lunch-ge eradu chapati eradu battalu dal mattu mosaru').line !== 'all correct', sc('k04', 'Lunch-ge eradu chapati eradu battalu dal mattu mosaru'));
 
+  // Fixes-3i.1 (independent QA review): bare prefixes matched other words. These must NOT count as battalu, on any line.
+  const L = (id, text) => C.scoreTranscript(C.LINES[id].items, text, C.LINES[id].lang).line;
+  const notBowl = [['e02', 'Three chapati and one battle dal for lunch'], ['h01', 'Do roti aur ek batli dal khaya'], ['h01', 'Do roti aur ek bataliye dal khaya'], ['k04', 'Lunch-ge eradu chapati ondu battle dal mattu mosaru']].map(([id, t]) => [id, t, L(id, t)]);
+  ck('negative control: "battle", "batli" (bottle), "bataliye" are NOT a battalu of dal (e02, h01, k04 not all correct)', notBowl.every(([, , r]) => r !== 'all correct'), notBowl);
+  ck('negative control: Hindi "batlaya" (told) is not swallowed as a unit word: h02 with it is not "all correct"', L('h02', 'Subah ek glass doodh aur do ande khaye maine batlaya') !== 'all correct', L('h02', 'Subah ek glass doodh aur do ande khaye maine batlaya'));
+  ck('…while battalalli ("in the bowl") still reads as battalu', sc('k04', 'Lunch-ge eradu chapati ondu battalalli dal mattu mosaru').line === 'all correct', sc('k04', 'Lunch-ge eradu chapati ondu battalalli dal mattu mosaru'));
+
   console.log('\n[3] the preview judge reads the same words');
   const P = (o) => ({ weight_kg: null, activities: [], acv: [], supplements: [], water_ml_add: null, sleep: null, foods: [], workouts: [], corrections: [], ...o });
   const j2 = C.judgePreview(C.LINES.k02.items, P({ foods: [{ name: 'Uppittu', qty_text: '1 plate', grams: 250 }, { name: 'Coffee', qty_text: '1 cup', grams: 150 }] }), 'kn');
   ck('k02 preview "Uppittu, 1 plate" + "Coffee, 1 cup" → correct reviewable', j2.result === 'correct reviewable', j2);
+  const j2u = C.judgePreview(C.LINES.k02.items, P({ foods: [{ name: 'Upitu', qty_text: '1 plate', grams: 250 }, { name: 'Coffee', qty_text: '1 cup', grams: 150 }] }), 'kn');
+  ck('k02 preview with a NEW spelling, "Upitu, 1 plate" → correct reviewable (3h: disqualifying)', j2u.result === 'correct reviewable', j2u);
   const j4 = C.judgePreview(C.LINES.k04.items, P({ foods: [{ name: 'Chapati', qty_text: '2 chapati', grams: 80 }, { name: 'Dal', qty_text: '1 battalu', grams: 150 }, { name: 'Curd', qty_text: 'curd', grams: null }] }), 'kn');
   const j4k = C.judgePreview(C.LINES.k04.items, P({ foods: [{ name: 'Chapati', qty_text: '2 chapati', grams: 80 }, { name: 'Dal', qty_text: '1 katori', grams: 150 }, { name: 'Curd', qty_text: 'curd', grams: null }] }), 'kn');
-  ck('k04 preview "Dal, 1 battalu" is judged exactly as "Dal, 1 katori" (same result and outcomes)', j4.result === j4k.result && JSON.stringify(j4.items.map(i => i.outcome)) === JSON.stringify(j4k.items.map(i => i.outcome)) && j4.items[1].outcome === j4k.items[1].outcome, { battalu: j4, katori: j4k });
+  ck('k04 preview "Dal, 1 battalu" is judged exactly as "Dal, 1 katori" (same result and outcomes), and the dal item itself is correct', j4.result === j4k.result && JSON.stringify(j4.items.map(i => i.outcome)) === JSON.stringify(j4k.items.map(i => i.outcome)) && j4.items[1].outcome === j4k.items[1].outcome && j4.items[1].outcome === 'correct', { battalu: j4, katori: j4k });
   const j4c = C.judgePreview(C.LINES.k04.items, P({ foods: [{ name: 'Chapati', qty_text: '2 chapati', grams: 80 }, { name: 'Dal', qty_text: '1 cup', grams: 150 }, { name: 'Curd', qty_text: 'curd', grams: null }] }), 'kn');
   ck('negative control: "Dal, 1 cup" in the preview is still not the battalu outcome', JSON.stringify(j4c.items.map(i => i.outcome)) !== JSON.stringify(j4.items.map(i => i.outcome)), { cup: j4c.items.map(i => i.outcome), battalu: j4.items.map(i => i.outcome) });
 } catch (e) { ck('the suite ran to the end', false, e.stack); }
