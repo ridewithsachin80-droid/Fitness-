@@ -99,12 +99,16 @@ const dismissed = [];
 async function clearSystemDialogs() {
   for (let i = 0; i < 4; i++) {
     const x = await sh('uiautomator dump /sdcard/fitlife-ui.xml >/dev/null 2>&1; cat /sdcard/fitlife-ui.xml').catch(() => '');
-    const btn = [...x.matchAll(/<node [^>]*>/g)].map(n => n[0]).find(n => /class="android\.widget\.Button"/.test(n)
-      && (/resource-id="android:id\/(aerr_wait|aerr_close)"/.test(n) && /aerr_wait/.test(n) || /resource-id="[^"]*negative_button"/.test(n) || /text="(Wait|No thanks|Not now|Don.t allow|Dismiss)"/.test(n)));
+    // ONLY Android's and Chrome's own native dialogs, by their resource id. Buttons inside the web page (FitLife's own
+    // "Not now" etc.) have no resource id and are never pressed: run 41990534873 pressed FitLife's "Not now" this way.
+    const [SW, SH] = ((await sh('wm size')).match(/(\d+)x(\d+)/) || []).slice(1).map(Number);
+    const SYSTEM = /resource-id="(android:id\/aerr_wait|com\.android\.chrome:id\/negative_button|android:id\/button2|com\.android\.permissioncontroller:id\/permission_deny(_and_dont_ask_again)?_button)"/;
+    const btn = [...x.matchAll(/<node [^>]*>/g)].map(n => n[0]).find(n => SYSTEM.test(n) && (() => {
+      const q = n.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/); return q && +q[3] <= SW && +q[4] <= SH && +q[1] >= 0 && +q[2] >= 0; })());
     if (!btn) return;
     const b = btn.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/); if (!b) return;
     const title = (x.match(/resource-id="android:id\/alertTitle"[^>]*/) || x.match(/text="(Chrome notifications[^"]*)"/) || [''])[0];
-    dismissed.push(`${(btn.match(/text="([^"]*)"/) || [])[1] || 'button'} on "${((title.match(/text="([^"]*)"/) || [])[1] || title).slice(0, 60)}"`);
+    dismissed.push(`${(btn.match(/text="([^"]*)"/) || [])[1] || 'button'} (${(btn.match(/resource-id="([^"]*)"/) || [])[1]}) on "${((title.match(/text="([^"]*)"/) || [])[1] || '').slice(0, 60)}"`);
     await sh(`input tap ${Math.round((+b[1] + +b[3]) / 2)} ${Math.round((+b[2] + +b[4]) / 2)}`); await wait(1200);
   }
 }
@@ -179,8 +183,10 @@ async function signIn(photo = true) {
   if (photo) {
     const f = await shot('light-login-before-typing');
     const onScreen = await shownUrl();
+    const title = await page.title();
     row('Login screen opens in Android Chrome', true, `${f} (photographed before anything was typed)`);
-    row("The robot's tab is the one on the screen", /fitness-test/.test(onScreen), `address bar on screen: "${onScreen}"; robot's tab: ${page.url()}; tabs: ${context.pages().length}`);
+    row("The robot's tab is the one on the screen", /fitness-test/.test(onScreen) || new RegExp(`WebView ${title.replace(/[^\w ]/g, '.')}\\b`).test(onScreen),
+      `on screen: ${/fitness-test/.test(onScreen) ? `address bar "${onScreen}"` : `web page titled "${title}" ${new RegExp('WebView ' + title).test(onScreen) ? 'found' : 'NOT found'} in Android's screen dump`}; robot's tab: ${page.url()}; tabs: ${context.pages().length}`);
   }
   if (photo) {
     const how = await realTap(page.locator('input[type=tel]'), 'phone box').catch(e => e.message); await wait(1500);

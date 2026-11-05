@@ -13,3 +13,4 @@ Add one line per request (date and why). Results: the run's summary, and the art
 - 2026-11-05: seventh run: log what Android's UI dump shows on the screen.
 - 2026-11-05: seventh run, corrected: the previous commit (1fe4ac4) carried only this file; the diagnostic is in this one.
 - 2026-11-05: eighth run: close Android/Chrome pop-ups (launcher not responding, Chrome notifications prompt) before taps and screenshots.
+- 2026-11-05: ninth run: the pop-up closer presses only Android/Chrome native dialog buttons (never the web page's).
