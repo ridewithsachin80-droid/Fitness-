@@ -8,6 +8,9 @@ import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { watchForNewVersion } from './utils/swReload';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { captureInstallOffer } from './utils/installOffer';
+
+captureInstallOffer();   // Fixes-3j: keep Chrome's one-time install offer even if it arrives while Today is still loading
 
 // ── Chunk-load self-healing ───────────────────────────────────────────────────
 // The classic PWA white screen: a cached index.html references hashed chunks a

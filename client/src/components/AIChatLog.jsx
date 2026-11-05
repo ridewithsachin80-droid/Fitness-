@@ -42,6 +42,7 @@ import useAIRequestRecovery from '../hooks/useAIRequestRecovery';
 import AIRequestRecovery from './chat/AIRequestRecovery';
 import useAIReviewSave from '../hooks/useAIReviewSave';
 import AIReviewSaveStatus from './chat/AIReviewSaveStatus';
+import WeightJumpNote from './chat/WeightJumpNote';
 import { definitiveWriteFailure } from '../utils/aiSaveReceipt';
 import { writeRequestId } from '../utils/writeRequestId';
 import { buildDraftFoodContext, applyDraftFoodEdit, isDraftFoodEditable } from '../utils/aiDraftFoodEdits';
@@ -850,6 +851,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                             onToggle={() => patchParsed(mi, p => ({ ...p, weightOn: !p.weightOn }))}>
                             {m.parsed.weight_kg} kg
                           </ToggleChip>
+                          {m.parsed.weightOn && <WeightJumpNote weightKg={m.parsed.weight_kg} day={m.logDate || logDate} />}
                         </div>
                       )}
 

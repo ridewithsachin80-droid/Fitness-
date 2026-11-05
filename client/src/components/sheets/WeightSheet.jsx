@@ -1,4 +1,5 @@
 import { Sheet, Pressable, Icon } from '../primitives';
+import { weightJumpNote } from '../../utils/weightCheck';
 
 /**
  * WeightSheet — morning weight. Same input, same validation, same save path
@@ -6,6 +7,10 @@ import { Sheet, Pressable, Icon } from '../primitives';
  */
 export default function WeightSheet({ open, onClose, m }) {
   const { log, update, weightWarning, validateWeight, weightDelta, yesterdayWeight } = m;
+  // Fixes-3j (UX review 7; QA review): worked out from THIS day's weight and the day before, every time the sheet shows —
+  // so it is right for a saved weight, after the day before has loaded, and never carried over from another day.
+  // The out-of-range warning (30–250 kg) takes precedence.
+  const warning = weightWarning || weightJumpNote(log.weight, yesterdayWeight);
   return (
     <Sheet size="sm" open={open} onClose={onClose} eyebrow="Morning weight" title="After washroom, before food"
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
@@ -23,10 +28,10 @@ export default function WeightSheet({ open, onClose, m }) {
             : weightDelta > 0 ? `↑ ${weightDelta.toFixed(1)} kg vs yesterday` : 'Same as yesterday'}
         </p>
       )}
-      {weightWarning && (
+      {warning && (
         <div className="mt-3 flex items-start gap-2 bg-warn/10 border border-warn/20 rounded-xl px-3 py-2" role="alert">
           <Icon name="warning" size={16} className="text-warn flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-warn leading-relaxed">{weightWarning}</p>
+          <p className="text-xs text-warn leading-relaxed" data-testid="weight-warning">{warning}</p>
         </div>
       )}
     </Sheet>

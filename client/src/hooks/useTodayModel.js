@@ -231,6 +231,7 @@ export default function useTodayModel() {
 
   // ── Weight sanity check ───────────────────────────────────────────────────
   const [weightWarning, setWeightWarning] = useState('');
+  useEffect(() => { setWeightWarning(''); }, [date]);   // Fixes-3j (QA review): a warning is about one day's value
   const validateWeight = (val) => {
     const w = parseFloat(val);
     const minW = ageMode === 'child' ? 15 : 30;

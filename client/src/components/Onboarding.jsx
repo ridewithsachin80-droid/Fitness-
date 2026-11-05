@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { saveMyOnboarding } from '../api/logs';
+import { markWhatsNewSeen } from './member/WhatsNew';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useAIChat } from '../store/aiChatStore';
 import { Icon, Eyebrow, Pressable } from './primitives';
@@ -103,6 +104,7 @@ export default function Onboarding({ onDone } = {}) {
         target_weight: targetW ? parseFloat(targetW) : null,
       });
       setAvatarIdx(avatarIdx);
+      markWhatsNewSeen();   // Fixes-3j: a brand-new member gets no "A fresh look" card about a redesign they never saw
       finishOnboarding(ageMode);
       if (thenSend) useAIChat.getState().prefill(SAMPLE_MESSAGE);
       onDone?.();

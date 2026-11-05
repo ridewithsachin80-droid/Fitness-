@@ -34,6 +34,14 @@ export default function Settings() {
   // Which channels may reach this member. Opting out is deliberately separate
   // from the individual toggles — see the note by the switch below.
   const [notif, setNotif] = useState(null);
+  // Fixes-3j (QA review): re-read the phone's notification permission when the member answers the prompt here, or comes
+  // back from the phone's settings, so the App-notifications switch never contradicts the card below it.
+  const [permTick, setPermTick] = useState(0);
+  useEffect(() => {
+    const again = () => { if (document.visibilityState === 'visible') setPermTick(t => t + 1); };
+    document.addEventListener('visibilitychange', again);
+    return () => document.removeEventListener('visibilitychange', again);
+  }, []);
   const [notifBusy, setNotifBusy] = useState(false);
   const navigate = useNavigate();
 
@@ -378,25 +386,32 @@ export default function Settings() {
                     ['push', 'App notifications', 'Free, and only on this device'],
                     ['whatsapp', 'WhatsApp', 'Reminders and your weekly summary'],
                     ['sms', 'SMS', 'For when you have no internet'],
-                  ].map(([key, label, sub]) => (
+                  ].map(([key, label, sub]) => {
+                    // Fixes-3j (UX review finding 10): when this phone blocks notifications, the app switch must not
+                    // look ON above "Notifications are blocked". It shows off and says why; the saved choice is kept.
+                    const blocked = key === 'push' && pushBlockedOnThisPhone(permTick);
+                    const on = !!notif[key] && !blocked;
+                    return (
                     <label key={key}
                       className="flex items-center justify-between gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
                       <span className="min-w-0">
                         <span className="block text-sm text-white">{label}</span>
-                        <span className="block text-caption text-lo">{sub}</span>
+                        <span id={`notif-sub-${key}`} className={`block text-caption ${blocked ? 'text-warn' : 'text-lo'}`} data-testid={blocked ? 'push-blocked-note' : undefined}>{blocked ? 'Blocked on this device — how to allow it is below' : sub}</span>
                       </span>
                       <button
-                        role="switch" aria-checked={!!notif[key]} aria-label={label}
+                        role="switch" aria-checked={on} aria-label={label} aria-describedby={`notif-sub-${key}`}
                         onClick={() => { haptic(12); saveNotif({ [key]: !notif[key] }); }}
-                        disabled={notifBusy}
+                        disabled={notifBusy || blocked}
+                        data-testid={`notif-switch-${key}`}
                         style={{ width: 46, height: 28 }}
-                        className={`rounded-full flex-shrink-0 transition-colors relative ${
-                          notif[key] ? 'bg-gold' : 'bg-white/[0.12]'}`}>
+                        className={`rounded-full flex-shrink-0 transition-colors relative disabled:opacity-60 ${
+                          on ? 'bg-gold' : 'bg-white/[0.12]'}`}>
                         <span className={`absolute top-1 w-5 h-5 rounded-full bg-surface transition-all ${
-                          notif[key] ? 'left-[22px]' : 'left-1'}`} />
+                          on ? 'left-[22px]' : 'left-1'}`} />
                       </button>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <button onClick={() => { haptic(15); saveNotif({ opted_out: true }); }}
@@ -414,7 +429,7 @@ export default function Settings() {
           {/* Permission state first. "No active subscriptions" told a blocked
               member nothing about WHY nothing ever arrives, and gave them no
               way back — so the evening recap just silently never came. */}
-          <PushStatus onRegistered={() => getSubscriptions()
+          <PushStatus permTick={permTick} onPermission={() => setPermTick(t => t + 1)} onRegistered={() => getSubscriptions()
             .then(r => setSubs(Array.isArray(r.data) ? r.data : [])).catch(() => {})} />
 
           {loading ? <p className="text-xs text-lo py-2">Loading…</p> : subs.length === 0 ? (
@@ -508,8 +523,20 @@ export default function Settings() {
 //   denied      — the browser is blocking us; only site settings can undo it,
 //                 so say so plainly instead of leaving them guessing
 //   unsupported — iOS Safari outside an installed PWA, mostly
-function PushStatus({ onRegistered }) {
+/** Fixes-3j: true when this phone/browser has blocked FitLife's notifications. (The argument only makes callers re-read.) */
+export function pushBlockedOnThisPhone(_tick) {
+  try { return typeof Notification !== 'undefined' && Notification.permission === 'denied'; } catch { return false; }
+}
+/** Fixes-3j: the installed app has no address bar, so the way to allow notifications depends on how FitLife is open. */
+function isInstalledApp() {
+  try { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; } catch { return false; }
+}
+
+function PushStatus({ onRegistered, onPermission, permTick = 0 }) {
   const [perm, setPerm] = useState(() => pushPermission());
+  // Fixes-3j (QA re-check): re-read the permission whenever Settings does (the member may have allowed or blocked it in
+  // the phone's settings and come back), so this card and the App-notifications switch always agree.
+  useEffect(() => { setPerm(pushPermission()); }, [permTick]);
   const [busy, setBusy] = useState(false);
   // 'checking' | 'ok' | 'failed'. "Allowed by the browser" is not "registered
   // with FitLife": only the member's Today screen ever registered a phone, so a
@@ -531,6 +558,7 @@ function PushStatus({ onRegistered }) {
     try {
       const p = await Notification.requestPermission();
       setPerm(p);            // 'granted' runs register() through the effect above
+      onPermission?.(p);     // Fixes-3j (QA review): the channel switch above re-reads the permission
     } catch (_) { /* leave state as-is */ }
     finally { setBusy(false); }
   };
@@ -561,10 +589,10 @@ function PushStatus({ onRegistered }) {
     return (
       <div className="mb-3 rounded-xl px-3 py-2.5 border border-warn/30 bg-warn/[0.08]">
         <p className="text-xs font-semibold text-warn">Notifications are blocked</p>
-        <p className="text-caption text-mid mt-1 leading-relaxed">
-          Your browser is blocking them, so your evening recap and coach messages
-          won't arrive. To turn them back on: tap the lock icon in the address
-          bar (or Site settings), find Notifications, and switch it to Allow.
+        <p className="text-caption text-mid mt-1 leading-relaxed" data-testid="push-blocked-help">
+          {isInstalledApp()
+            ? <>This device is blocking them, so your evening recap and coach messages won't arrive. To allow them: on Android open <strong className="text-white">Settings → Apps → FitLife → Notifications</strong>; on iPhone <strong className="text-white">Settings → Notifications → FitLife</strong>; then switch them on.</>
+            : <>This browser is blocking them, so your evening recap and coach messages won't arrive. To allow them: tap the lock icon next to the web address (or Site settings), find Notifications, and switch it to Allow.</>}
         </p>
       </div>
     );

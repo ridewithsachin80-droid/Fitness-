@@ -19,6 +19,7 @@ import MetabolicInsight from '../components/MetabolicInsight';
 import LabResults from '../components/LabResults';
 import api from '../api/client';
 import { plural } from '../constants';
+import { goalHeadline } from '../utils/goalHeadline';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -204,19 +205,8 @@ export default function Profile() {
   const goalList = goalIds.map(id => GOAL_OPTIONS.find(g => g.id === id)).filter(Boolean);
   const primaryGoal = goalList[0] || null;
   const weeks = p.member_since ? Math.max(1, Math.floor((Date.now() - new Date(p.member_since).getTime()) / (7 * 86400000)) + 1) : null;
-  const goalHeadline = (() => {
-    if (!primaryGoal) return null;
-    if (primaryGoal.id === 'lose' && p.start_weight && p.target_weight) {
-      const total = +(p.start_weight - p.target_weight).toFixed(1);
-      return toGoKg != null && toGoKg > 0 ? `Lose ${total} kg · ${toGoKg} kg to go` : `Lose ${total} kg · goal reached`;
-    }
-    if (primaryGoal.id === 'gain' && p.start_weight && p.target_weight) {
-      const total = +(p.target_weight - p.start_weight).toFixed(1);
-      const left = toGoKg != null ? +(-toGoKg).toFixed(1) : null;
-      return left != null && left > 0 ? `Gain ${total} kg · ${left} kg to go` : `Gain ${total} kg`;
-    }
-    return primaryGoal.label;
-  })();
+  // Fixes-3j: utils/goalHeadline — "goal reached" only with a known weight at or past the target.
+  const headline = goalHeadline({ goalId: primaryGoal?.id, goalLabel: primaryGoal?.label, startWeight: p.start_weight, targetWeight: p.target_weight, currentWeight: p.current_weight });
 
   return (
     <div className="min-h-screen bg-charcoal font-sans">
@@ -249,8 +239,8 @@ export default function Profile() {
           {/* ── Goal ── */}
           <div className="mt-5" data-testid="profile-goal">
             <Eyebrow>Goal</Eyebrow>
-            {goalHeadline ? (
-              <p className="font-display text-xl font-medium text-white leading-tight mt-1">{goalHeadline}</p>
+            {headline ? (
+              <p className="font-display text-xl font-medium text-white leading-tight mt-1">{headline}</p>
             ) : (
               <p className="text-sm text-mid mt-1">No goal set yet — your coach can set one, or update it in onboarding.</p>
             )}

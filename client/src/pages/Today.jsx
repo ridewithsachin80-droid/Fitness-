@@ -109,6 +109,8 @@ export default function Today() {
             {!protocol && <Card><h2 className="font-display text-xl mb-2">Welcome to FitLife</h2><p className="text-sm text-mid">Your coach will set up your personalised plan. You can already log food, weight, water and sleep.</p></Card>}
             </div>
             </Collapsible>
+            {/* Fixes-3j: the install offer is an ordinary card at the end of Today; it no longer floats over "Type to log". */}
+            {isToday && <InstallPrompt />}
           </div>
             {protocol?.fasting && (() => {
               const isMinor = m.profileAge !== null && m.profileAge < 18;
@@ -131,7 +133,6 @@ export default function Today() {
       <PlatePhotoSheet job={m.plateJob} onClose={m.closePlate} onRetake={m.openPlate} m={m} />
 
       <MemberBottomNav showAIAction={false} />
-      <InstallPrompt />
       <MilestoneModal milestone={!sheet && !composerOpen ? m.milestone : null} onClose={() => { haptic(10); m.setMilestone(null); }} />
     </div>
   );

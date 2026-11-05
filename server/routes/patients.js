@@ -192,7 +192,9 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
             JOIN users u2 ON u2.id = mp.monitor_id
             WHERE mp.patient_id = u.id AND mp.active = true LIMIT 1) AS monitor_name,
            (SELECT COUNT(*) FROM daily_logs WHERE patient_id = u.id) AS total_logs,
-           (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS current_weight,
+           -- Fixes-3j (UX review 1): the latest day WITH a weight. The newest day often has none yet (before the morning
+           -- weigh-in, or every day for weekly weighers), which made Profile say "goal reached" and hide BMI/TDEE.
+           (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id AND weight_kg IS NOT NULL ORDER BY log_date DESC LIMIT 1) AS current_weight,
            -- Today (India) and the 29 days before: the same 30 calendar days the
            -- member's Progress grid shows, so the two screens give one figure.
            (SELECT AVG(compliance_pct) FROM daily_logs

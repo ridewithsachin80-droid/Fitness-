@@ -4,6 +4,8 @@ import { useSettingsStore } from '../../store/settingsStore';
 
 const KEY = 'fitlife-whats-new-2026-10';
 const seen = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return true; } };
+/** Fixes-3j (UX review finding 9): a member who has just set up FitLife never saw the old look, so the card is not for them. */
+export const markWhatsNewSeen = () => { try { localStorage.setItem(KEY, '1'); } catch (_) {} };
 
 /**
  * WhatsNew — a one-time card for members who used the app before the 16 Oct
