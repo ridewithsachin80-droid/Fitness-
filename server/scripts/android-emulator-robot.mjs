@@ -292,6 +292,13 @@ async function tour(theme) {
         await tapNav(label);
         f = await shot(`${theme}-${file}`);
         row(`${theme}: ${label} tab opens`, !(await sideways()), `${f}; no sideways scroll`);
+        // Fixes-3k.1: say (never fail on) which supplement rule the robot member is on, so the switch on the test site
+        // can be confirmed from the run log: "new" = "Your coach will add these" (nothing chosen), "old" = a list.
+        if (label === 'Plan' && theme === 'light') {
+          const rule = await page.evaluate(() => document.querySelector('[data-testid="plan-supplements-none"]') ? 'new rule (no supplements until the coach adds them)'
+            : /Vitamin B12|Vitamin D3|Supplements/.test(document.body.innerText) ? 'supplements listed (old rule, or the coach chose some)' : 'no supplements line seen').catch(e => `unreadable: ${e.message}`);
+          row('Plan: supplement rule for the robot member (information only)', true, rule);
+        }
       } catch (e) { row(`${theme}: ${label} tab opens`, false, String(e.message || e).slice(0, 160)); }
     }
   } finally { await stopRec(); }

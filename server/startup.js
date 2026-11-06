@@ -7,6 +7,7 @@
  *  3. Seeds foods table      (NIN India + USDA) — only if table is empty
  *  4. Patches foods          (adds missing items ON CONFLICT DO NOTHING)
  *  5. Runs Kannada aliases migration — once only, tracked in migrations table
+ *  5b. Test server only, once: every member moves to the new protocol rule (Fixes-3k.1)
  *  6. Starts the Express server (require('./index.js'))
  *
  * CRITICAL: Admin upsert always runs — no skip logic.
@@ -423,6 +424,12 @@ async function main() {
     await seedExercisesIfEmpty();
     await patchFoods();
     await runKannadaMigration();
+    // Fixes-3k.1: test server only, once — every existing member moves to the new protocol rule. Never fatal.
+    try {
+      const r = await require('./services/protocolRuleSwitch').switchTestMembersToNewRule(pool);
+      if (r.ran) console.log(`🧪 Test server: ${r.moved + r.createdRows} members moved to the new protocol rule (${r.createdRows} profile rows created)`);
+      else console.log(`ℹ️  Protocol rule switch not run: ${r.why} (branch reported: ${process.env.RAILWAY_GIT_BRANCH || 'none'})`);
+    } catch (err) { console.error('⚠️  Protocol rule switch failed (non-fatal):', err.message); }
   } catch (err) {
     console.error('❌ Startup error:', err.message);
   } finally {

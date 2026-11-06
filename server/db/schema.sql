@@ -1095,13 +1095,6 @@ CREATE TABLE IF NOT EXISTS voice_fallback_test_runs (
 ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS speech JSONB;
 ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS config JSONB;
 
--- Fixes-3k (5 Nov 2026, Sachin's decision): for supplements and apple cider vinegar, "no coach selection" means NONE for
--- members created from now on, and keeps its old meaning (every built-in item) for existing members, because the old
--- app saved "the coach ticked them all" the same way as "never chosen". Existing rows stay NULL (old meaning). TRUE is
--- written only where a member is created (POST /api/admin/members and POST /api/patients); any other row stays NULL.
--- No column default on purpose: a profile row made later for an old member (a lazy insert) must keep the old meaning.
-ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_default_none BOOLEAN;
-
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
 -- touch. They used to sit ~130 lines above CREATE TABLE exercises, which was
@@ -1658,3 +1651,22 @@ UPDATE voice_calibration_attempts SET counting = 'requests' WHERE counting IS NU
 UPDATE voice_calibration_attempts SET legacy_max_calls = max_calls, max_calls = GREATEST(max_calls, 12),
   bound_note = 'Fixes-3f: recorded before Fixes-3e with max_calls ' || max_calls || ' (parser checks); the real bound is 12 provider requests (2 providers x 2 models x 3 tries, the d58250c parser in any configuration)'
   WHERE kind = 'rule3' AND counting IS NULL AND legacy_max_calls IS NULL;
+
+-- ── Fixes-3k and 3k.1 (kept at the END of this file: the schema is append-only; see test-voice-calibration-3f) ──
+-- Fixes-3k (5 Nov 2026, Sachin's decision): for supplements and apple cider vinegar, "no coach selection" means NONE for
+-- members created from now on, and keeps its old meaning (every built-in item) for existing members, because the old
+-- app saved "the coach ticked them all" the same way as "never chosen". Existing rows stay NULL (old meaning). TRUE is
+-- written only where a member is created (POST /api/admin/members and POST /api/patients); any other row stays NULL.
+-- No column default on purpose: a profile row made later for an old member (a lazy insert) must keep the old meaning.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_default_none BOOLEAN;
+-- Fixes-3k.1 (Sachin, 6 Nov: "all are test members"): on the TEST server only, every existing member is moved once to
+-- the new rule (services/protocolRuleSwitch.js, run by startup.js, only where RAILWAY_GIT_BRANCH is "test"). Each
+-- member moved is logged here, so it can be undone exactly (created_row: the switch made their profile row; the undo
+-- deletes those rows). Production is not touched.
+CREATE TABLE IF NOT EXISTS protocol_rule_switch_log (
+  user_id     INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  migration   TEXT        NOT NULL,
+  created_row BOOLEAN     NOT NULL DEFAULT FALSE,
+  switched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, migration)
+);
