@@ -212,6 +212,7 @@ async function identifyFoodViaAI(prompt) {
 // already drifted: it returned net_carbs as NaN where the other returned a
 // number.
 const { normaliseNutrients } = require('../services/nutrients');
+const { stamp } = require('../services/nutrientStatus');
 
 
 // ── Category mapper — Gemini → schema ───────────────────────────────────────
@@ -291,44 +292,51 @@ Required JSON structure:
     "total_carbs": 0,
     "net_carbs": 0,
     "fat": 0,
-    "fiber": 0,
-    "sugar": 0,
-    "saturated_fat": 0,
-    "trans_fat": 0,
-    "cholesterol": 0,
-    "omega3_ala": 0,
-    "omega3_epa": 0,
-    "omega3_dha": 0,
-    "omega6": 0,
-    "omega9_mufa": 0,
-    "vit_a": 0,
-    "vit_b1": 0,
-    "vit_b2": 0,
-    "vit_b3": 0,
-    "vit_b5": 0,
-    "vit_b6": 0,
-    "vit_b12": 0,
-    "vit_c": 0,
-    "vit_d": 0,
-    "vit_e": 0,
-    "vit_k": 0,
-    "folate": 0,
-    "biotin": 0,
-    "choline": 0,
-    "calcium": 0,
-    "iron": 0,
-    "magnesium": 0,
-    "phosphorus": 0,
-    "potassium": 0,
-    "sodium": 0,
-    "zinc": 0,
-    "copper": 0,
-    "manganese": 0,
-    "selenium": 0
+    "fiber": null,
+    "sugar": null,
+    "saturated_fat": null,
+    "trans_fat": null,
+    "cholesterol": null,
+    "omega3_ala": null,
+    "omega3_epa": null,
+    "omega3_dha": null,
+    "omega6": null,
+    "omega9_mufa": null,
+    "vit_a": null,
+    "vit_b1": null,
+    "vit_b2": null,
+    "vit_b3": null,
+    "vit_b5": null,
+    "vit_b6": null,
+    "vit_b12": null,
+    "vit_c": null,
+    "vit_d": null,
+    "vit_e": null,
+    "vit_k": null,
+    "folate": null,
+    "biotin": null,
+    "choline": null,
+    "calcium": null,
+    "iron": null,
+    "magnesium": null,
+    "phosphorus": null,
+    "potassium": null,
+    "sodium": null,
+    "zinc": null,
+    "copper": null,
+    "manganese": null,
+    "selenium": null
   }
 }
 
-Units: calories in kcal · all others in grams (macros) or milligrams (micros/minerals) per 100g.
+Units per 100 g (Fixes-2k, 18 Oct 2026; the old line said "milligrams" for every micronutrient):
+  calories kcal · protein, total_carbs, net_carbs, fat, fiber, sugar, saturated_fat, trans_fat g
+  cholesterol, omega3_ala, omega3_epa, omega3_dha, omega6, omega9_mufa mg
+  vit_a mcg (RAE) · vit_b1, vit_b2, vit_b3, vit_b5, vit_b6 mg · vit_b12 mcg · vit_c mg
+  vit_d IU · vit_e mg · vit_k mcg · folate mcg · biotin mcg · choline mg
+  calcium, iron, magnesium, phosphorus, potassium, sodium, zinc, copper, manganese mg · selenium mcg
+Leave a nutrient null when you do not have a reliable figure. Never write 0 to mean "unknown":
+0 means the food contains none. Your figures are stored as AI estimates and shown as such.
 Return ONLY the JSON. No text before or after.`;
 }
 
@@ -382,7 +390,7 @@ router.post('/ai-identify', async (req, res) => {
     const food = JSON.parse(jsonText);
 
     // Normalise the per_100g block to guarantee all 36 fields
-    food.per_100g = normaliseNutrients(food.per_100g);
+    food.per_100g = stamp(normaliseNutrients(food.per_100g), 'ai', { dropZeros: true });   // Fixes-2k: AI estimates
 
     cacheSet(cleanName, food);
     return res.json({ alreadyExists: false, food, aiProvider: provider });
@@ -420,7 +428,9 @@ router.post('/ai-confirm', async (req, res) => {
   }
 
   try {
-    const per100g = normaliseNutrients(food.per_100g);
+    // Fixes-2k: an AI-identified food's values stay AI estimates. A value the coach typed
+    // over it on the confirm screen is still marked 'ai' here; editing the food later marks it recorded.
+    const per100g = stamp(normaliseNutrients(food.per_100g), 'ai', { dropZeros: true });
     const aliases = Array.isArray(food.name_aliases) ? food.name_aliases : [];
 
     const normCategory = normaliseCategory(food.category);

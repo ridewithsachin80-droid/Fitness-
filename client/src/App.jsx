@@ -1,26 +1,30 @@
+import './components/member/member.css';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useOfflineSync } from './hooks/useOfflineQueue';
+import { useConnectionRecovery } from './hooks/useConnectionRecovery';
 import { useAuthStore } from './store/authStore';
 import { useSettingsStore, applyTheme, applyFontSize } from './store/settingsStore';
 import { getMyOnboarding } from './api/logs';
 
 import Login          from './pages/Login';
 import DailyLog       from './pages/DailyLog';
-import Progress       from './pages/Progress';
-import Plan           from './pages/Plan';
-import Profile        from './pages/Profile';
-import Coach        from './pages/Monitor';
-import MemberList    from './pages/PatientList';
-import Settings       from './pages/Settings';
-import AdminDashboard from './pages/AdminDashboard';
-import AdminFoods     from './pages/AdminFoods';
-import DeviceConnect  from './pages/DeviceConnect';
+const Progress = lazy(() => import('./pages/Progress'));
+const Plan = lazy(() => import('./pages/Plan'));
+const Profile = lazy(() => import('./pages/Profile'));
+import MemberMore     from './pages/MemberMore';
+const Coach = lazy(() => import('./pages/Monitor'));
+const MemberList = lazy(() => import('./pages/PatientList'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminFoods = lazy(() => import('./pages/AdminFoods'));
+const DeviceConnect = lazy(() => import('./pages/DeviceConnect'));
 import Onboarding     from './components/Onboarding';
 import { onboardingDecision } from './utils/onboardingGate';
 import HandsFree from './components/HandsFree';
-import { refreshRequestBody, sessionLossReport, wasSignedOut } from './utils/session';
+import { refreshRequestBody, sessionLossReport, wasSignedOut, clearSession, getStoredRefreshToken } from './utils/session';
+import { clearPrivateApiCaches } from './utils/privateApiCache';
 
 // The primitive kit demo page. `import.meta.env.DEV` is a compile-time
 // constant, so in a production build this is `null` and Vite drops the page
@@ -50,8 +54,11 @@ function PrivateRoute({ children, roles }) {
 }
 
 export default function App() {
-  const { login, setRestored } = useAuthStore();
-  const { fontSize, ageMode, onboardingDone } = useSettingsStore();
+  const { login, setRestored, user, sessionVersion, isRestoring } = useAuthStore();
+  const { fontSize, ageMode } = useSettingsStore();
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [restoreIssue, setRestoreIssue] = useState(false);
+  const online = useConnectionRecovery(restoreIssue && !user, () => setRestoreAttempt(n => n + 1));
 
   // Apply dark theme + font-size on boot
   useEffect(() => {
@@ -69,6 +76,11 @@ export default function App() {
   // any interceptor can help. Sending the stored token here is what makes the
   // fallback reach the case it was written for.
   useEffect(() => {
+    const startedVersion = useAuthStore.getState().sessionVersion;
+    let cancelled = false;
+    const isCurrent = () => !cancelled && useAuthStore.getState().sessionVersion === startedVersion;
+    setRestoreIssue(false);
+    if (useAuthStore.getState().user) { setRestored(); return; }
     // The last thing done on this phone was a deliberate sign-out. Do NOT
     // restore from a cookie the sign-out could not clear (it was offline, or
     // the request was cut short) — clear it now and show the login screen.
@@ -79,9 +91,16 @@ export default function App() {
       setRestored();
       return;
     }
+    if (navigator.onLine === false) {
+      setRestoreIssue(true);
+      return;
+    }
+    const controller = new AbortController();
     axios
-      .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true })
+      .post('/api/auth/refresh', refreshRequestBody(), { withCredentials: true, timeout: 15000, signal: controller.signal })
       .then(({ data }) => {
+        if (!isCurrent()) return;
+        if (!data?.accessToken) throw new Error('Session restore did not return an access token.');
         // Prefer the user object the server sends; fall back to decoding the
         // JWT so an older server (mid-deploy, or a stale service worker
         // talking to a new one) still restores rather than logging out.
@@ -93,11 +112,12 @@ export default function App() {
         login(data.accessToken, u, data.refreshToken || null);
       })
       .catch((err) => {
+        if (!isCurrent()) return;
         // A 401 means the session is genuinely gone and the member must sign
         // in. Anything else — offline, server restarting, DNS — is NOT a
         // reason to record a session loss; doing so would drown the real
         // signal in noise from every flaky connection.
-        if (err?.response?.status === 401) {
+        if ([401, 403].includes(err?.response?.status)) {
           try {
             const body = JSON.stringify(sessionLossReport('cold-start'));
             fetch('/api/auth/session-loss', {
@@ -108,13 +128,47 @@ export default function App() {
               credentials: 'include',
             }).catch(() => {});
           } catch (_) { /* diagnostics must never break boot */ }
+          // Expiry is confirmed. Clear the invalid fallback but retain the
+          // welcome-back hint; transient connection errors never reach here.
+          clearSession();
+          // The expired session's cached reads go too (16 Oct 2026); logout
+          // already cleared them, an expiry at start-up did not.
+          clearPrivateApiCaches().catch(() => {});
+          setRestored();
+        } else {
+          setRestoreIssue(true);
         }
-        setRestored();
       });
-  }, []);
+    return () => { cancelled = true; controller.abort(); };
+  }, [restoreAttempt]);
 
-  const { user } = useAuthStore();
   useOfflineSync();
+
+  if (restoreIssue && !user) {
+    return (
+      <main className="min-h-screen bg-charcoal flex flex-col items-center justify-center gap-5 px-8 text-center" role="alert">
+        <h1 className="text-bright text-lg font-semibold">{online ? "Couldn't reconnect just now." : "You're offline."}</h1>
+        <p className="text-mute text-sm">
+          {getStoredRefreshToken() ? 'Your saved sign-in is still on this device. ' : ''}
+          {online ? "Try again, or return when your connection is stronger." : "Connect to the internet to reopen your account. We'll try again when you're back online."}
+        </p>
+        <button type="button" disabled={!online} onClick={() => setRestoreAttempt(n => n + 1)}
+          className="px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold disabled:opacity-50">Try again</button>
+      </main>
+    );
+  }
+  if (isRestoring) return (
+    <div className="min-h-screen bg-charcoal flex items-center justify-center text-bright" role="status">Reconnecting to your space…</div>
+  );
+
+  // Reset mounted page state and onboarding checks on every real sign-in.
+  // Silent token rotation leaves this key unchanged and preserves the draft.
+  return <SessionSpace key={`${user?.id ?? 'guest'}:${sessionVersion}`} />;
+}
+
+function SessionSpace() {
+  const { user } = useAuthStore();
+  const { onboardingDone } = useSettingsStore();
 
   // ── Onboarding gate ─────────────────────────────────────────────────────────
   // The flag used to come from localStorage alone, so a member on a second
@@ -126,6 +180,7 @@ export default function App() {
   const [justOnboarded,   setJustOnboarded]   = useState(false);
   const [checkFailed,     setCheckFailed]     = useState(false);
   const [checkAttempt,    setCheckAttempt]    = useState(0);
+  const online = useConnectionRecovery(checkFailed, () => setCheckAttempt(n => n + 1));
 
   useEffect(() => {
     if (user?.role !== 'patient') return undefined;
@@ -133,6 +188,7 @@ export default function App() {
     // A member switching accounts must not be handed the previous answer.
     let cancelled = false;
     setCheckFailed(false);
+    if (navigator.onLine === false) { setCheckFailed(true); return; }
 
     getMyOnboarding()
       .then(({ data }) => {
@@ -140,7 +196,10 @@ export default function App() {
         setServerOnboarded(data.onboarding_done === true);
         // Mirror the member's saved mode so font size and terminology follow
         // them onto this device.
-        if (data.onboarding_done && data.age_mode) {
+        // Only to set up a NEW device (fix, 10 Oct 2026, SET-006): on every
+        // launch this reset the member's own Settings choices (text size,
+        // nutrition display, avatar) back to the setup answers.
+        if (data.onboarding_done && data.age_mode && !useSettingsStore.getState().onboardingDone) {
           useSettingsStore.getState().finishOnboarding(data.age_mode);
           if (Number.isInteger(data.avatar_idx)) {
             useSettingsStore.getState().setAvatarIdx(data.avatar_idx);
@@ -177,14 +236,15 @@ export default function App() {
           ) : (
             <>
               <p className="text-bright text-base">
-                Couldn't reach FitLife just now.
+                {online ? "Couldn't reach FitLife just now." : "You're offline."}
               </p>
               <p className="text-mute text-sm">
-                Check your connection — your log is safe.
+                Your saved entries haven't changed. We'll retry when you reconnect or return to the app.
               </p>
               <button
+                type="button" disabled={!online}
                 onClick={() => setCheckAttempt((n) => n + 1)}
-                className="mt-1 px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold"
+                className="mt-1 px-6 py-3 rounded-xl bg-gold text-charcoal font-semibold disabled:opacity-50"
               >
                 Try again
               </button>
@@ -208,11 +268,13 @@ export default function App() {
           problem a member does. It renders nothing unless switched on. */}
       <HandsFree />
 
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center" role="status">Loading your space…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<PrivateRoute roles={['patient']}><DailyLog /></PrivateRoute>} />
         <Route path="/plan"     element={<PrivateRoute roles={['patient']}><Plan /></PrivateRoute>} />
         <Route path="/progress" element={<PrivateRoute roles={['patient']}><Progress /></PrivateRoute>} />
+        <Route path="/more" element={<PrivateRoute roles={['patient']}><MemberMore /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute roles={['patient']}><Profile /></PrivateRoute>} />
         <Route path="/coach" element={<PrivateRoute roles={['monitor','admin']}><MemberList /></PrivateRoute>} />
         <Route path="/coach/:memberId" element={<PrivateRoute roles={['monitor','admin']}><Coach /></PrivateRoute>} />
@@ -230,6 +292,7 @@ export default function App() {
           <Navigate to={!user ? '/login' : user.role === 'patient' ? '/' : user.role === 'admin' ? '/admin' : '/coach'} replace />
         } />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

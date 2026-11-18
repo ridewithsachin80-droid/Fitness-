@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#f8f9f6" />
+    <meta name="description" content="FitLife — personalised health tracking" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FitLife" />
+    <!-- After the theme metas, so it can set them before the first paint. -->
+    <script src="/theme-init.js"></script>
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=green1" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=green1" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=green1" />
+    <!-- Outfit: clean geometric body/UI face. Fraunces: characterful display serif,
+         used sparingly for the greeting and big hero numerals (compliance ring,
+         calorie totals) to give the app a more considered, premium feel. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&display=swap"
+      rel="stylesheet"
+    />
+    <title>FitLife</title>
+    <!-- Match the persisted appearance before React and the main styles load. -->
+    <style>
+      html, body { background: #f8f9f6; margin: 0; }
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #141817; }
+      /* Recovery screen, in the green brand for both themes (18 Oct 2026; it was still gold). */
+      #boot-fallback { display: none; position: fixed; inset: 0; background: #f8f9f6;
+        color: #203026; font-family: system-ui, sans-serif; text-align: center;
+        padding: 40vh 24px 0; z-index: 9999; }
+      #boot-fallback p { color: #526657; font-size: 14px; margin: 0 0 20px; }
+      #boot-fallback button { background: #315d47; color: #fffef8; border: 0;
+        border-radius: 999px; padding: 12px 28px; font-size: 15px; font-weight: 600; }
+      html[data-theme="dark"] #boot-fallback { background: #141817; color: #f2f4ec; }
+      html[data-theme="dark"] #boot-fallback p { color: #adbdb1; }
+      html[data-theme="dark"] #boot-fallback button { background: #b7d7c2; color: #141817; }
+    </style>
+    <script type="module" crossorigin src="/assets/index-B_8oPiY_.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-vendor-cdMlWltA.js">
+    <link rel="modulepreload" crossorigin href="/assets/store-vendor-Ce5G2_r_.js">
+    <link rel="modulepreload" crossorigin href="/assets/socket-vendor-C040XL7Y.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-DEr7nG5d.css">
+  <link rel="manifest" href="/manifest.webmanifest"></head>
+  <body>
+    <div id="root"></div>
+    <div id="boot-fallback">
+      <p>FitLife couldn't load. This usually clears with a fresh start.</p>
+      <button type="button" id="boot-reload">Reload app</button>
+    </div>
+    <!-- Boot watchdog: a plain script file, not inline. The production
+         security policy (helmet) refuses inline scripts, so an inline
+         watchdog never ran on the live site. See public/boot-watchdog.js. -->
+    <script src="/boot-watchdog.js"></script>
+  </body>
+</html>

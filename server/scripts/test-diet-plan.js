@@ -178,11 +178,13 @@ const item = (name, grams) => ({ name, grams, qty_text: `${grams} g`,
     ck('an implausible protein figure is still clamped away', c.protein === 0, c.protein);
     ck('but a legitimate micro alongside it is kept', c.iron === 3, c.iron);
 
-    ck('a food with no nutrition at all yields zeroes, not undefined',
+    // Changed 18 Oct 2026 (Fixes-2k): nutrients nobody gave are null (not recorded), not 0.
+    // The guarantee is unchanged: never undefined. Calories stay a number.
+    ck('a food with no nutrition at all: calories 0, every other nutrient null (not recorded), never undefined',
       (() => {
         const none = ai.normaliseMealPlan({ meals: [{ meal: 'Lunch',
           items: [{ name: 'Mystery', grams: 50 }] }] }).meals[0].items[0].per_100g;
-        return none.iron === 0 && none.calories === 0 && none.vit_d === 0;
+        return none.iron === null && none.calories === 0 && none.vit_d === null && 'iron' in none && 'vit_d' in none;
       })());
   }
 

@@ -31,6 +31,13 @@ export function hasLoggedData(ex) {
     String(st?.reps).trim() !== '' || String(st?.weight_kg).trim() !== '');
 }
 
+// Saved selections help a member resume, but only completed sets count as
+// logged training in Today and the coach's read-only workout view.
+export function completedWorkoutExercises(exercises = []) {
+  return (Array.isArray(exercises) ? exercises : []).filter(ex =>
+    Array.isArray(ex?.sets) && ex.sets.some(set => Number(set?.reps) > 0));
+}
+
 /** Which exercises survive a switch to `day`. */
 export function keptOnSwitch(session = [], day) {
   const dayIds = new Set((day?.exercises || []).map(ex => ex.exercise_id));

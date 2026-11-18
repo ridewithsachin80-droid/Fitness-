@@ -56,7 +56,7 @@ export default function HeroNumber({
     ? (shown ?? value).toFixed(dp).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
     : (value ?? '—');
 
-  const deltaTone = delta == null ? '' : delta < 0 ? 'text-gold-light' : delta > 0 ? 'text-amber-300' : 'text-mid';
+  const deltaTone = delta == null ? '' : delta < 0 ? 'text-gold-light' : delta > 0 ? 'text-warn' : 'text-mid';
   const deltaText = delta == null ? null
     : delta === 0 ? '= same'
     : `${delta < 0 ? '↓' : '↑'} ${Math.abs(delta).toFixed(precisionOf(delta))}${deltaUnit}`;

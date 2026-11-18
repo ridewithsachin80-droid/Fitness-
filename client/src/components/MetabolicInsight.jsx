@@ -18,7 +18,7 @@ import api from '../api/client';
 const CONF = {
   high:         { label: 'High confidence',   cls: 'text-gold-light bg-ok/10 border-ok/30' },
   moderate:     { label: 'Moderate',          cls: 'text-gold bg-gold/10 border-gold/30' },
-  low:          { label: 'Low confidence',    cls: 'text-amber-300 bg-amber-400/10 border-amber-400/30' },
+  low:          { label: 'Low confidence',    cls: 'text-warn bg-warn/10 border-warn/30' },
   insufficient: { label: 'Not enough data',   cls: 'text-mid bg-white/[0.04] border-white/[0.10]' },
 };
 
@@ -231,21 +231,35 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
                   Consistently under target
                 </p>
                 <div className="space-y-1.5">
-                  {gaps.map(g => (
+                  {gaps.map(g => {
+                    // Fixes-2l: a gap resting on recipe or AI estimates is not a
+                    // confirmed shortfall, so it is neutral (amber is for warnings)
+                    // and tagged "Estimate". The tag column is reserved on every row
+                    // when any row has one, so the bars stay aligned.
+                    const est = !!g.basis && g.basis !== 'confirmed';
+                    const anyEst = gaps.some(x => x.basis && x.basis !== 'confirmed');
+                    return (
                     <div key={g.nutrient} className="flex items-center gap-2" data-testid={`micro-gap-${g.nutrient}`}>
                       <span className="text-caption text-white flex-1">
                         {NUTRIENT_LABEL[g.nutrient] || g.nutrient}
                       </span>
                       <div className="w-20 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
-                        <div className="h-full rounded-full bg-amber-400"
+                        <div className={`h-full rounded-full ${est ? 'bg-white/[0.18]' : 'bg-warn'}`}
                           style={{ width: `${Math.min(100, g.pct)}%` }} />
                       </div>
-                      <span className="text-caption font-bold text-amber-300 w-10 text-right">{g.pct}%</span>
+                      <span className={`text-caption font-bold w-10 text-right ${est ? 'text-mid' : 'text-warn'}`}>{est ? '~' : ''}{g.pct}%</span>
+                      {anyEst && (
+                        <span className="w-16 flex justify-end">
+                          {est && <span className="text-eyebrow font-bold px-1.5 py-0.5 rounded-full bg-white/[0.06] text-mid" data-testid={`micro-gap-estimate-${g.nutrient}`}>Estimate</span>}
+                        </span>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <p className="text-eyebrow text-lo mt-2" data-testid="micro-caption">
                   Averages across {data.food_days} logged days, from food only. Supplements are not counted. Against adult reference intakes.
+                  {gaps.some(g => g.basis && g.basis !== 'confirmed') ? ' ~ Estimate: partly or wholly from recipe or AI estimates, so not a confirmed shortfall.' : ''}
                 </p>
               </>
             )}
@@ -326,9 +340,9 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
           </p>
           {prior.n < 3 ? (
             <p className="text-caption text-mid leading-relaxed">
-              {prior.basis}. Once three members have a well-measured metabolism, new
-              members will start from a figure calibrated to your clinic instead of
-              the textbook formula.
+              {prior.basis}. Once three members have a well-measured metabolism, a new
+              member's starting estimate here will use your clinic's figure instead of
+              the textbook formula. It changes no targets unless you apply them.
             </p>
           ) : (
             <p className="text-caption text-white leading-relaxed">
@@ -337,8 +351,8 @@ export default function MetabolicInsight({ memberId = null, onApplied = null, ca
                 {Math.abs(Math.round((prior.factor - 1) * 100))}%{' '}
                 {prior.factor > 1 ? 'low' : 'high'}
               </span>{' '}
-              for your members — {prior.basis}. New members inherit that correction
-              from day one.
+              for your members — {prior.basis}. A new member's starting estimate on
+              this screen uses that correction; it changes no targets unless you apply them.
             </p>
           )}
         </div>

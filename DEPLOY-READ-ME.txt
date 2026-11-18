@@ -1,0 +1,53 @@
+FITLIFE — DEPLOYMENT UPDATE, 12 OCTOBER 2026
+
+Extract before uploading. Merge these folders into the repository root:
+  client/dist/                  complete compiled premium frontend
+  server/scripts/test-local.sh  prints the actual UI error and exit code on CI failure
+
+This is an update package, not the whole application. Do not upload the ZIP itself as the app.
+
+OBSERVED
+GitHub test commit ffbe079 has the new source. Its 61 logic/database suites passed;
+its UI process failed and GitHub skipped its subsequent client build.
+Railway separately reported a successful deployment. The public URL
+https://fitness.upscale-app.com/ still served an older frontend on inspection.
+These observations do not identify which Railway setting or domain mapping is wrong.
+The phone screenshot may be from a different URL; that exact URL is needed.
+
+NEXT CHECK
+In the Railway service attached to the URL being opened, verify:
+  Source branch: test
+  Root Directory: repository root (not client or server)
+  Build Command: bash build.sh
+  Start Command: node --max-old-space-size=512 server/startup.js
+  Active deployment: latest intended commit, not an earlier green deployment
+Also verify the domain is attached to that service and environment.
+Do not change another production service's branch without verifying the mapping.
+
+APPLY THIS PACKAGE
+If the intended service is serving committed dist without rebuilding the client,
+upload these extracted folders to its test branch and redeploy that commit.
+If Railway builds the latest source properly, these compiled files are redundant.
+This package cannot correct a domain pointed at another service or branch.
+The diagnostic script does not bypass or disable any tests.
+
+EXPECTED BUILD
+JavaScript entry: /assets/index-51rvY9Wi.js
+New home: Your day., calorie ring, Weight, Speak / Snap / Type.
+Navigation: Today / Progress / More.
+A successful source rebuild may produce a different content hash.
+
+VERIFICATION
+The existing compiled build was validated and its ZIP references/CRC checked.
+A local run with optional browser packages absent, matching the CI installation,
+completed 579 successful assertions (523 main runner + 56 premium-flow checks).
+Local Node was 24; GitHub used Node 22. The CI failure was not reproduced.
+No fresh full database run was done locally; database results above are from GitHub.
+The diagnostic shell script passed syntax and whitespace checks.
+GitHub denied permission to rerun the failed workflow (403). No remote files or
+Railway settings were changed by this diagnostic session.
+
+AFTER SERVER UPDATE
+Open the same URL in a private browser tab to check the server-served interface.
+Then close/reopen the installed app and accept an available update prompt.
+Do not clear site/app storage while member logs are waiting to sync.

@@ -90,6 +90,32 @@ function portionPhrase(qtyText, foodName) {
   r = await call('POST', '/api/ai-chat/portions', tok(m2.id), { corrections: [] });
   ck('empty payload rejected', r.status === 400, r.status);
 
+  console.log('\n[7] household counts, explicit edits and forgetting');
+  r = await call('POST', '/api/ai-chat/portions', tok(m2.id), {
+    corrections: [{ phrase:'bowl rice', grams:360, quantity:2, replace:true }] });
+  ck('two bowls recorded', r.status === 200 && r.data.portions.some(p => p.phrase === 'bowl rice'), r.data);
+  r = await call('GET', '/api/ai-chat/portions', tok(m2.id));
+  ck('memory stores one bowl, not two', r.data.portions.find(p => p.phrase === 'bowl rice')?.grams === 180, r.data);
+  await call('POST', '/api/ai-chat/portions', tok(m2.id), {
+    corrections: [{ phrase:'bowl rice', grams:300, quantity:2, replace:true }] });
+  r = await call('GET', '/api/ai-chat/portions', tok(m2.id));
+  ck('explicit edited measure replaces the previous estimate', r.data.portions.find(p => p.phrase === 'bowl rice')?.grams === 150);
+  for (const quantity of [0,-1,101,'abc']) {
+    await call('POST', '/api/ai-chat/portions', tok(m2.id), { corrections:[{phrase:'invalid quantity',grams:100,quantity}] });
+  }
+  r = await call('GET', '/api/ai-chat/portions', tok(m2.id));
+  ck('invalid counts never create memory', !r.data.portions.some(p => p.phrase === 'invalid quantity'));
+  await call('DELETE', '/api/ai-chat/portions', tok(m1.id), { phrase:'bowl rice' });
+  r = await call('GET', '/api/ai-chat/portions', tok(m2.id));
+  ck('another member cannot forget this member’s portion', r.data.portions.some(p => p.phrase === 'bowl rice'));
+  r = await call('DELETE', '/api/ai-chat/portions', tok(m2.id), { phrase:'BOWL RICE' });
+  ck('member can forget their portion', r.status === 200 && r.data.forgotten === true, r.data);
+  r = await call('GET', '/api/ai-chat/portions', tok(m2.id));
+  ck('forgotten portion is absent on reload', !r.data.portions.some(p => p.phrase === 'bowl rice'));
+  r = await call('DELETE', '/api/ai-chat/portions', tok(m2.id), { phrase:'bowl rice' });
+  ck('forget can safely retry', r.status === 200);
+  r = await call('DELETE', '/api/ai-chat/portions', tok(m2.id), { phrase:'' });
+  ck('empty forget request is rejected', r.status === 400);
   srv.close();
   console.log(`\n\u2550\u2550\u2550 PORTION MEMORY: ${pass} passed, ${fail} failed \u2550\u2550\u2550`);
   process.exit(fail ? 1 : 0);

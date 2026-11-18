@@ -6,7 +6,11 @@ import './index.css';
 // Register Vite PWA service worker
 // In production this enables offline support and caching.
 import { registerSW } from 'virtual:pwa-register';
+import { watchForNewVersion } from './utils/swReload';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { captureInstallOffer } from './utils/installOffer';
+
+captureInstallOffer();   // Fixes-3j: keep Chrome's one-time install offer even if it arrives while Today is still loading
 
 // ── Chunk-load self-healing ───────────────────────────────────────────────────
 // The classic PWA white screen: a cached index.html references hashed chunks a
@@ -23,14 +27,8 @@ window.addEventListener('vite:preloadError', (event) => {
 // Reload only once the NEW worker has actually taken control. Reloading
 // immediately after updateSW() is a race — the old worker is often still
 // controlling the page, so the user reloads and sees the old app again.
-let reloading = false;
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return;
-    reloading = true;
-    window.location.reload();
-  });
-}
+// …and never on the very first install (utils/swReload.js, 17 Oct 2026).
+if ('serviceWorker' in navigator) watchForNewVersion(navigator.serviceWorker);
 
 const updateSW = registerSW({
   immediate: true,
@@ -68,4 +66,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // Tell the index.html watchdog the app is alive, and reset the one-shot
 // chunk-retry guard so the NEXT stale-deploy event can heal itself too.
 window.__fitlifeBooted = true;
+// 18 Oct 2026: on a slow phone the watchdog can fire (10 s) just before the app
+// arrives. The "couldn't load" screen then stayed on top of a working app.
+// Booting late is still booting, so take it down.
+{ const fb = document.getElementById('boot-fallback'); if (fb) fb.style.display = 'none'; }
 sessionStorage.removeItem('fl-chunk-retry');

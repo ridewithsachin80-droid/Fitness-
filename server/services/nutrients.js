@@ -16,50 +16,63 @@
  * One implementation. Any new nutrient is added here and every path gets it.
  */
 
-// ── Nutrition normaliser — guarantees all 36 fields exist ────────────────────
-function normaliseNutrients(raw = {}) {
-  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
-  const fiber     = num(raw.fiber);
-  const totalCarb = num(raw.total_carbs);
-  const netRaw    = parseFloat(raw.net_carbs);
-  return {
-    calories:      num(raw.calories),
-    protein:       num(raw.protein),
-    total_carbs:   totalCarb,
-    net_carbs:     Number.isFinite(netRaw) ? netRaw : Math.max(0, +(totalCarb - fiber).toFixed(1)),
-    fat:           num(raw.fat),
-    fiber,
-    sugar:         num(raw.sugar),
-    saturated_fat: num(raw.saturated_fat),
-    trans_fat:     num(raw.trans_fat),
-    cholesterol:   num(raw.cholesterol),
-    omega3_ala:    num(raw.omega3_ala),
-    omega3_epa:    num(raw.omega3_epa),
-    omega3_dha:    num(raw.omega3_dha),
-    omega6:        num(raw.omega6),
-    omega9_mufa:   num(raw.omega9_mufa),
-    vit_a: num(raw.vit_a), vit_b1: num(raw.vit_b1), vit_b2: num(raw.vit_b2),
-    vit_b3: num(raw.vit_b3), vit_b5: num(raw.vit_b5), vit_b6: num(raw.vit_b6),
-    vit_b12: num(raw.vit_b12), vit_c: num(raw.vit_c), vit_d: num(raw.vit_d),
-    vit_e: num(raw.vit_e), vit_k: num(raw.vit_k),
-    folate: num(raw.folate), biotin: num(raw.biotin), choline: num(raw.choline),
-    calcium: num(raw.calcium), iron: num(raw.iron), magnesium: num(raw.magnesium),
-    phosphorus: num(raw.phosphorus), potassium: num(raw.potassium),
-    sodium: num(raw.sodium), zinc: num(raw.zinc), copper: num(raw.copper),
-    manganese: num(raw.manganese), selenium: num(raw.selenium),
+// ── Nutrition normaliser — guarantees every field exists ────────────────────
+//
+// Fixes-2k (18 Oct 2026, backlog B12): a nutrient nobody recorded is NULL,
+// never 0. It used to be 0, so "this food has no iron" and "nobody wrote down
+// its iron" were the same number, and every screen had to guess which.
+//   · The four core figures (calories, protein, total_carbs, fat) stay numbers:
+//     every calorie and macro total in the app is built on them, and a food
+//     without them is caught elsewhere (macroCheck, the review queue).
+//   · net_carbs stays derived (total_carbs minus a known fibre).
+//   · Every other nutrient is a finite number or null. Never NaN, never undefined.
+//   · `_status` (optional) says, per nutrient, where its value came from:
+//     'reference' | 'recipe' | 'ai' | 'recorded'. See services/nutrientStatus.js.
+//     It travels inside per_100g so every copy of the food (logged items,
+//     saved meals, plans) keeps it without each path having to carry it.
+const CORE = ['calories', 'protein', 'total_carbs', 'fat'];
+const MINOR = ['fiber', 'sugar', 'saturated_fat', 'trans_fat', 'cholesterol',
+  'omega3_ala', 'omega3_epa', 'omega3_dha', 'omega6', 'omega9_mufa',
+  'vit_a', 'vit_b1', 'vit_b2', 'vit_b3', 'vit_b5', 'vit_b6', 'vit_b12', 'vit_c', 'vit_d', 'vit_e', 'vit_k',
+  'folate', 'biotin', 'choline',
+  'calcium', 'iron', 'magnesium', 'phosphorus', 'potassium', 'sodium', 'zinc', 'copper', 'manganese', 'selenium',
+  // Fields routes/foods.js carried and the other two copies did not. Three
+  // implementations existed; the union is the contract (the intersection would
+  // have quietly deleted six nutrients from every admin-edited food).
+  'glycemic_index', 'glycemic_load', 'probiotic', 'prebiotic_fiber', 'lycopene', 'beta_glucan'];
+const STATUSES = new Set(['reference', 'recipe', 'ai', 'recorded']);
 
-    // ── Fields routes/foods.js carried and the other two copies did not ──────
-    // Three implementations existed. This one had 45 fields, the other two had
-    // 39, and taking the smaller set as canonical would have quietly deleted
-    // six nutrients from every food written through the admin editor. The
-    // union is the contract; the intersection would have been a data loss.
-    glycemic_index:  num(raw.glycemic_index),
-    glycemic_load:   num(raw.glycemic_load),
-    probiotic:       num(raw.probiotic),
-    prebiotic_fiber: num(raw.prebiotic_fiber),
-    lycopene:        num(raw.lycopene),
-    beta_glucan:     num(raw.beta_glucan),
-  };
+const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+const numOrNull = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Keeps only known nutrients with a known status, and only where there is a value. */
+function cleanStatus(raw, values) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  for (const k of [...CORE, ...MINOR]) {
+    if (STATUSES.has(raw[k]) && values[k] !== null && values[k] !== undefined) out[k] = raw[k];
+  }
+  return Object.keys(out).length ? out : null;
 }
 
-module.exports = { normaliseNutrients };
+function normaliseNutrients(raw = {}) {
+  raw = raw || {};
+  const out = {};
+  for (const k of CORE) out[k] = num(raw[k]);
+  const fiber = numOrNull(raw.fiber);
+  const netRaw = parseFloat(raw.net_carbs);
+  out.net_carbs = Number.isFinite(netRaw) ? netRaw : Math.max(0, +(out.total_carbs - (fiber ?? 0)).toFixed(1));
+  for (const k of MINOR) out[k] = numOrNull(raw[k]);
+  const st = cleanStatus(raw._status, out);
+  if (st) out._status = st;
+  return out;
+}
+
+/** The nutrient keys, in a fixed order (net_carbs included, _status not). */
+const NUTRIENT_KEYS = [...CORE, 'net_carbs', ...MINOR];
+
+module.exports = { normaliseNutrients, NUTRIENT_KEYS, CORE_KEYS: CORE, MINOR_KEYS: MINOR, NUTRIENT_STATUSES: [...STATUSES] };

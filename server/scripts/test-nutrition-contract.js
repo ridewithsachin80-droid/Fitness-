@@ -59,14 +59,22 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
 
     // NaN is the failure that started this: it survives JSON.stringify as null,
     // so nothing throws and every sum built on it silently becomes NaN.
+    // Changed 18 Oct 2026 (Fixes-2k, backlog B12): a nutrient nobody recorded is
+    // null, not 0. The guarantee these checks protect is unchanged: no NaN and
+    // no undefined, ever. The four core figures are still always numbers.
+    const CORE = ['calories', 'protein', 'total_carbs', 'fat', 'net_carbs'];
     const all = normaliseNutrients(PALAK);
-    ck('no field is ever NaN', Object.entries(all).every(([, v]) => Number.isFinite(v)),
-      Object.entries(all).filter(([, v]) => !Number.isFinite(v)));
+    const vals = Object.entries(all).filter(([k]) => k !== '_status');
+    ck('no field is ever NaN or undefined (a number, or null for "not recorded")', vals.every(([, v]) => v === null || Number.isFinite(v)),
+      vals.filter(([, v]) => !(v === null || Number.isFinite(v))));
     ck('net carbs are derived from fibre, not left blank', all.net_carbs === 1.4, all.net_carbs);
-    ck('an empty food is all zeroes, never undefined',
-      Object.values(normaliseNutrients({})).every(v => v === 0));
-    ck('junk values become 0 rather than NaN',
-      Object.values(normaliseNutrients({ iron: 'lots', calories: null })).every(Number.isFinite));
+    const empty = normaliseNutrients({});
+    ck('an empty food: the core figures are 0, every other nutrient is null (not recorded), never undefined',
+      CORE.every(k => empty[k] === 0) && Object.entries(empty).filter(([k]) => !CORE.includes(k)).every(([, v]) => v === null), empty);
+    const junk = normaliseNutrients({ iron: 'lots', calories: null });
+    ck('junk values never become NaN: junk iron is null (not known), missing calories are 0',
+      junk.iron === null && junk.calories === 0 && Object.values(junk).every(v => v === null || Number.isFinite(v)), junk);
+    ck('a recorded 0 stays 0 (it is a value, not "missing")', normaliseNutrients({ vit_c: 0 }).vit_c === 0);
   }
 
   console.log('\n[2] there is only ONE implementation');
@@ -101,9 +109,12 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
       rows[0] && CONTRACT.filter(k => !(k in rows[0].per_100g)));
     ck('with the values it did send intact',
       rows[0]?.per_100g?.iron === 1.4 && rows[0]?.per_100g?.calories === 80, rows[0]?.per_100g);
+    // Fixes-2k: _status is the per-nutrient status map, not a nutrient, so it is left out of the number check.
     ck('and no NaN reaching the database',
-      rows.length === 1 && Object.values(rows[0].per_100g).every(v => v === null || Number.isFinite(v)),
-      rows[0] && Object.entries(rows[0].per_100g).filter(([, v]) => v !== null && !Number.isFinite(v)));
+      rows.length === 1 && Object.entries(rows[0].per_100g).filter(([k]) => k !== '_status').every(([, v]) => v === null || Number.isFinite(v)),
+      rows[0] && Object.entries(rows[0].per_100g).filter(([k, v]) => k !== '_status' && v !== null && !Number.isFinite(v)));
+    ck('the AI-sent iron is marked as an AI estimate; the nutrients it did not send are null, not 0',
+      rows[0]?.per_100g?._status?.iron === 'ai' && rows[0]?.per_100g?.zinc === null, rows[0]?.per_100g?._status);
     await pool.query(`DELETE FROM foods WHERE name = 'Contract Test Sabzi'`);
   }
 
@@ -402,12 +413,12 @@ const PALAK = { calories: 23, protein: 2.9, total_carbs: 3.6, fat: 0.4, fiber: 2
     const curd = [{ name: 'Curd', grams: 120,
                     per_100g: normaliseNutrients({ calories: 60, fat: 4 }) }];
     ck('curd is not a fried dish — untouched',
-      ai.applyCookingFat(curd, 'curd', null)[0].per_100g.saturated_fat === 0);
+      ai.applyCookingFat(curd, 'curd', null)[0].per_100g.saturated_fat === null);   // Fixes-2k: untouched is null (never recorded), was 0
 
     const trace = [{ name: 'Masala Dosa', grams: 200,
                      per_100g: normaliseNutrients({ calories: 100, fat: 1 }) }];
     ck('a trace of fat is not worth splitting',
-      ai.applyCookingFat(trace, 'masala dosa', null)[0].per_100g.saturated_fat === 0);
+      ai.applyCookingFat(trace, 'masala dosa', null)[0].per_100g.saturated_fat === null);   // Fixes-2k: untouched is null, was 0
 
     ck('the member\'s kitchen default applies when they say nothing',
       ai.applyCookingFat(dosa, 'masala dosa', 'coconut')[0].per_100g.saturated_fat === 8.7);

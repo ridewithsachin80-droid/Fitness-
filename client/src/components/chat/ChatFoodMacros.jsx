@@ -21,12 +21,13 @@ import { haptic } from '../../store/settingsStore';
 /** The preview food with the member's numbers applied, its row macros
  *  recomputed for the grams on screen. Any plausibility warning is dropped:
  *  the member has just read these numbers off the pack. */
-export function foodWithLabel(f, per100g) {
+export function foodWithLabel(f, per100g, preparation) {
   const k = (Number(f.grams) || 0) / 100;
   const rest = { ...f };
   delete rest.warning;
   return {
     ...rest, per_100g: per100g, label: true, source: 'member',
+    ...(preparation !== undefined ? { preparation } : {}),
     macros: {
       ...(f.macros || {}),
       cal:  Math.round((per100g.calories || 0) * k),
@@ -42,24 +43,25 @@ export default function ChatFoodMacros({ f, disabled, onSave }) {
   const stop = (e) => e.stopPropagation();
   const openEditor = (e) => { e.stopPropagation(); haptic(10); setOpen(true); };
   return (
-    <div className="text-right flex-shrink-0">
-      <p className="text-body-sm font-bold text-orange-400">{f.macros?.cal ?? 0} kcal</p>
+    <div className="chat-food-macros text-right flex-shrink-0">
+      <p className="chat-food-calories text-body-sm font-bold">{f.macros?.cal ?? 0} kcal</p>
       <p className="text-eyebrow text-mid">
         P {f.macros?.pro ?? 0} · C {f.macros?.carb ?? 0} · F {f.macros?.fat ?? 0}
       </p>
       {!disabled && f.per_100g && (
-        <span role="button" tabIndex={0} onClick={openEditor} data-testid="chat-edit-macros"
+        <button type="button" onClick={openEditor} data-testid="chat-edit-macros"
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditor(e); } }}
-          style={{ minHeight: 30 }}
+          style={{ minHeight: 44 }}
           className="inline-flex items-center text-caption font-semibold text-gold px-1 -mr-1 rounded-md active:bg-gold/10">
           {f.label ? 'Your label · edit' : 'Edit macros'}
-        </span>
+        </button>
       )}
       <span onClick={stop} onKeyDown={stop} onPointerDown={stop}>
         <Sheet open={open} onClose={() => setOpen(false)} eyebrow="Edit macros" title={`${f.name} · ${f.grams} g`}>
           {open && (
             <MacroEditor name={f.name} grams={f.grams} per100g={f.per_100g} foodId={f.food_id || null} isLabel={!!f.label}
-              onSave={(per100g) => { onSave?.(per100g); setOpen(false); }} onCancel={() => setOpen(false)} />
+              preparation={f.preparation ?? null}
+              onSave={(per100g, how) => { onSave?.(per100g, how); setOpen(false); }} onCancel={() => setOpen(false)} />
           )}
         </Sheet>
       </span>

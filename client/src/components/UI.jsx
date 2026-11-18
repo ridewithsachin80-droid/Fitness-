@@ -21,7 +21,7 @@ import { Icon } from './primitives';
 export function Card({ children, className = '' }) {
   return (
     <div className={`rounded-[20px] px-4 py-4 bg-surface ${className}`}
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
       {children}
     </div>
   );
@@ -115,20 +115,20 @@ export function SectionTitle({ children, icon, tooltip }) {
             onClick={() => setShow(v => !v)}
             style={{
               width: 20, height: 20, borderRadius: '50%',
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-              color: '#9EA3B0', fontSize: 11, fontWeight: 700,
+              background: 'rgb(var(--fit-ink) / 0.08)', border: '1px solid rgb(var(--fit-ink) / 0.15)',
+              color: 'var(--text-mid)', fontSize: 11, fontWeight: 700,
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>?</button>
           {show && (
             <div style={{
               position: 'absolute', right: 0, top: 26, zIndex: 50,
-              background: '#1A1C20', border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#FFFFFF',
+              background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.12)',
+              borderRadius: 12, padding: '10px 14px', fontSize: 12, color: 'var(--text-hi)',
               lineHeight: 1.5, width: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
             }}>
               {tooltip}
               <button onClick={() => setShow(false)} style={{
-                display: 'block', marginTop: 8, fontSize: 11, color: '#D4AF37',
+                display: 'block', marginTop: 8, fontSize: 11, color: 'var(--accent)',
                 fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               }}>Got it ✓</button>
             </div>
@@ -170,7 +170,7 @@ export function CheckRow({ checked, onChange, label, sub, icon, burnKcal }) {
         {sub && <div className="text-xs text-lo mt-0.5 leading-tight">{sub}</div>}
       </div>
       {checked && burnKcal > 0 && (
-        <span className="flex-shrink-0 text-xs font-semibold text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full border border-orange-400/20">
+        <span className="flex-shrink-0 text-xs font-semibold text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/20">
           -{burnKcal} kcal
         </span>
       )}
@@ -190,7 +190,7 @@ export function OfflineBanner() {
   }, []);
   if (justOnline) return <div className="bg-gold text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">✓ Back online — syncing…</div>;
   if (!offline) return null;
-  return <div className="bg-amber-500/90 text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
+  return <div className="bg-warn text-charcoal text-center text-xs py-2 px-4 font-semibold tracking-wide">Offline — logs save locally and sync automatically</div>;
 }
 
 export function Spinner({ size = 'md', color = 'emerald' }) {
@@ -246,89 +246,34 @@ export function StatPill({ value, label, color = 'stone', accent = false }) {
 }
 
 // ── Member Bottom Nav ────────────────────────────────────────────────────────
-export function MemberBottomNav() {
+export function MemberBottomNav({ showAIAction = true } = {}) {
   const navigate = useNavigate();
-  // Shared AI chat store — the chat itself is mounted once on the Today page,
-  // so from anywhere else we navigate there first and it opens on arrival.
-  const openAIChat = useAIChat(s => s.openChat);
-  const toggleComposer = useAIChat(s => s.toggleComposer);
-  const composerOpen = useAIChat(s => s.composerOpen);
-  // While the composer has focus the nav slides away so the keyboard, the
-  // composer and the thread share the screen (Sprint 5b.1).
-  const composing = useAIChat(s => s.composerFocused);
   const { pathname } = useLocation();
-  // Sprint 6: Today · Plan · [orb] · Progress · Profile. Settings moved inside
-  // Profile (gear at the top + Account section) — a tab is for daily screens.
+  const composerOpen = useAIChat(s => s.composerOpen);
+  const openChat = useAIChat(s => s.openChat);
   const tabs = [
-    { label: 'Today',    path: '/',         active: pathname === '/',         icon: <Icon name="home" size={20} /> },
-    { label: 'Plan',     path: '/plan',     active: pathname === '/plan',     icon: <Icon name="calendar" size={20} /> },
-    { label: 'Progress', path: '/progress', active: pathname === '/progress', icon: <Icon name="trend" size={20} /> },
-    { label: 'Profile',  path: '/profile',  active: pathname === '/profile',  icon: <Icon name="user" size={20} /> },
+    // Plan is a tab again (16 Oct 2026): members open their diet plan daily.
+    { label: 'Today', path: '/', icon: 'home', active: pathname === '/' },
+    { label: 'Plan', path: '/plan', icon: 'calendar', active: pathname === '/plan' },
+    { label: 'Progress', path: '/progress', icon: 'trend', active: pathname === '/progress' },
+    { label: 'More', path: '/more', icon: 'more', active: ['/more', '/profile', '/settings', '/devices'].includes(pathname) },
   ];
-  const openChatFromNav = () => {
-    haptic(20);
-    // On Today the orb is a toggle: summon the composer, tap again to put it
-    // away. From any other tab it opens the chat and heads to Today, so the
-    // composer is already up on arrival.
-    if (pathname === '/') { toggleComposer(); return; }
-    openAIChat();
-    if (pathname !== '/') navigate('/');
-  };
-
-  const renderTab = (tab) => (
-    <button key={tab.path} onClick={() => { haptic(15); navigate(tab.path); }}
-      style={{ minHeight: 56, flex: 1 }}
-      className={`flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${
-        tab.active ? 'text-gold' : 'text-lo hover:text-mid'}`}>
-      {tab.icon}
-      <span className="text-eyebrow font-semibold tracking-wide">{tab.label}</span>
-      {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
-    </button>
-  );
-
-  return (
-    <>
-      {/* Spacer under the page content.
-          The nav card is ~64px plus 12px of padding, and the orb is lifted 22px
-          ABOVE the card's top edge — so the furniture occupies ~98px, not 80.
-          At 80 the orb sat on top of the last card on every screen: on Progress
-          it covered the compliance chart. Measured, not guessed. */}
-      <div style={{ height: 104 }} />
-      <div data-testid="member-nav" data-composing={composing ? '1' : '0'}
-        className={`fixed bottom-0 left-0 right-0 z-40 transition-transform duration-200 ${composing ? 'translate-y-[120%] pointer-events-none' : ''}`}
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="max-w-md mx-auto px-3 pb-3">
-          <div className="glass rounded-2xl shadow-float flex items-center relative">
-            {tabs.slice(0, 2).map(renderTab)}
-
-            {/* AI orb — always reachable, never scrolls away with the page */}
-            <div style={{ width: 68, flexShrink: 0 }} className="flex items-start justify-center">
-              <button
-                onClick={openChatFromNav}
-                aria-label={composerOpen ? 'Close AI Chat' : 'Log with AI Chat'}
-                aria-pressed={composerOpen}
-                data-testid="ai-orb"
-                style={{ width: 56, height: 56, marginTop: -22 }}
-                className="orb-breathe rounded-full bg-gradient-to-br from-gold-light via-gold to-gold-dark
-                  flex items-center justify-center border-4 border-charcoal
-                  active:scale-90 transition-transform">
-                {/* Drawn, not an emoji. This is the most-tapped control in the
-                    app and it was rendering as whatever spark the phone's font
-                    happened to supply. */}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#121316"
-                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5z" />
-                  <path d="M18.5 4v3M20 5.5h-3" />
-                </svg>
-              </button>
-            </div>
-
-            {tabs.slice(2).map(renderTab)}
-          </div>
-        </div>
+  return <>
+    <div style={{ height: showAIAction ? 146 : 88 }} />
+    {!composerOpen && <nav className="fixed bottom-0 left-0 right-0 z-40 member-nav" data-testid="member-nav" aria-label="Member navigation"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="member-nav-inner">
+        {showAIAction && <button type="button" className="member-ai-dock" data-testid="ai-orb" aria-label="Log with AI Chat" aria-pressed={false}
+          onClick={() => { haptic(12); openChat(); if (pathname !== '/') navigate('/'); }}>
+          <Icon name="spark" size={18} /> Log or ask FitLife <Icon name="mic" size={16} /><Icon name="camera" size={16} />
+        </button>}
+        <div className="member-nav-links">{tabs.map(tab => <button type="button" key={tab.path}
+          aria-current={tab.active ? 'page' : undefined} onClick={() => { haptic(8); navigate(tab.path); }}>
+          <Icon name={tab.icon} size={20} />{tab.label}
+        </button>)}</div>
       </div>
-    </>
-  );
+    </nav>}
+  </>;
 }
 
 /**
@@ -369,8 +314,8 @@ export function BottomNav({ role }) {
       style={{ minHeight: 56, flex: 1 }} aria-current={tab.active ? 'page' : undefined}
       className={`min-w-0 flex flex-col items-center justify-center gap-1 py-2 transition-all rounded-2xl ${tab.active ? 'text-gold' : 'text-lo hover:text-mid'}`}>
       {tab.icon}
-      <span className="text-eyebrow font-semibold tracking-wide">{tab.label}</span>
-      {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgba(212,175,55,0.8)]" />}
+      <span className="text-nav-label font-semibold tracking-normal">{tab.label}</span>
+      {tab.active && <div className="w-1 h-1 bg-gold rounded-full shadow-[0_0_6px_rgb(var(--fit-accent)/0.8)]" />}
     </button>
   );
   return (
@@ -388,7 +333,7 @@ export function BottomNav({ role }) {
                 className="orb-breathe rounded-full bg-gradient-to-br from-gold-light via-gold to-gold-dark
                   flex items-center justify-center border-4 border-charcoal
                   active:scale-90 transition-transform">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#121316"
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--bg-base)"
                   strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5z" />
                   <path d="M18.5 4v3M20 5.5h-3" />
@@ -423,22 +368,22 @@ export function QuickJump({ sections }) {
     <div style={{ position: 'fixed', right: 16, bottom: 100, zIndex: 40 }}>
       {open && (
         <div style={{
-          position: 'absolute', bottom: 52, right: 0, background: '#1A1C20',
-          border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '8px 0', minWidth: 160,
+          position: 'absolute', bottom: 52, right: 0, background: 'var(--bg-surface)',
+          border: '1px solid rgb(var(--fit-ink) / 0.12)', borderRadius: 16, padding: '8px 0', minWidth: 160,
           boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
         }}>
           {sections.map(s => (
             <button key={s.id} onClick={() => scrollTo(s.id)} style={{
               display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
-              background: 'none', border: 'none', color: '#FFFFFF', fontSize: 13, cursor: 'pointer',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              background: 'none', border: 'none', color: 'var(--text-hi)', fontSize: 13, cursor: 'pointer',
+              borderBottom: '1px solid rgb(var(--fit-ink) / 0.06)',
             }}>{s.icon} {s.label}</button>
           ))}
         </div>
       )}
       <button onClick={() => { setOpen(v => !v); haptic(15); }} style={{
-        width: 44, height: 44, borderRadius: 22, background: '#D4AF37', color: '#fff', fontSize: 18,
-        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgba(212,175,55,0.5)',
+        width: 44, height: 44, borderRadius: 22, background: 'var(--accent)', color: 'var(--fit-on-accent)', fontSize: 18,
+        border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgb(var(--fit-accent) / 0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>{open ? '✕' : '⚡'}</button>
     </div>

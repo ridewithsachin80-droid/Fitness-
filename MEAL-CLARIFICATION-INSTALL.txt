@@ -1,0 +1,33 @@
+FITLIFE PHASE 4 — MEAL CLARIFICATION FIX
+
+Use this incremental updated-files ZIP on the Phase 4 version you deployed.
+Verified uploaded baseline: 1c0c0408b80134d8d26812c7e1f0073271e8e939
+Local source baseline: 507c2e4434a14e57400cf079dc971dce8ba99051
+Fix revision: f6686fc431006ff46a787e4943d3a6c40cdbbe3f
+
+1. Extract and copy every included repository path into branch test, preserving
+   client/, server/, qa/, docs/ and UPDATE-README.txt. Replace matching files.
+   Do not upload the ZIP itself as application code or remove existing folders.
+2. Require a NEW complete GitHub Test gate for this fix, including 49 database
+   suites, then deploy the matching test commit through Railway.
+3. Reload the app and verify the new main asset: /assets/index-DyjU6GwD.js
+4. Retest both meal phrases in the review, UAT-209–212 and existing P0 cases.
+   Confirm named foods appear as editable estimates or quantity questions,
+   quantities/macros remain editable, and only explicit Save writes records.
+
+No new migration, environment variable or file deletion is required.
+Folder overlay OR patch (not both):
+  git apply --check meal-clarification-fix.patch
+  git apply meal-clarification-fix.patch
+The patch was checked against local baseline 507c2e4. Every touched baseline
+path also matches uploaded 1c0c0408 by Git blob hash. Merge later changes if any.
+
+Production build passed. New local gate: 29 suites / 2,432 assertions,
+zero failures. These are synthetic/local results. The earlier deployed CI 61
+passed 76 suites / 4,642 assertions and does not certify this new fix.
+New CI, redeployment and live defect retest remain pending. Real phones,
+screen readers and dedicated-account save/coach acceptance remain separate.
+
+The Excel and QA evidence ZIP are reports. The full pending plan and limits
+remain in docs/reviews/PHASE4-PENDING-PLAN.md and
+docs/reviews/PHASE4-MEAL-CLARIFICATION-FIX.md.

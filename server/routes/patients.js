@@ -1,3 +1,4 @@
+const { targetOrigin, waterTargetFrom, markWaterSet, clearWaterSet, STANDARD_WATER_ML } = require('../services/targetOrigin');
 const router = require('express').Router();
 const pool = require('../db/pool');
 // getISTDate was called in the morning-message routes below as if it were
@@ -13,6 +14,7 @@ const { composeMember, summarise, composeBrief } = require('../services/triage')
 const { computeDayTotals } = require('../services/digests');
 const aiReads = require('../services/aiReads');
 const dietPlan = require('../services/dietPlan');
+const { finiteOrNull, rangeState } = require('../services/labRange');
 /** Top up one date's prescribed meals from the diet plan in force. Never throws. */
 async function ensurePlanDay(memberId, date) {
   try { await dietPlan.ensureDay(pool, memberId, date, getISTDate()); }
@@ -182,14 +184,19 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
         `SELECT
            u.id, u.name, u.phone, u.created_at,
            pp.dob, pp.gender, pp.height_cm, pp.start_weight, pp.target_weight, pp.goal, pp.goals,
-           pp.conditions, pp.diet_notes, pp.water_target,
+           pp.conditions, pp.diet_notes, pp.water_target, pp.target_set_by,
+           pp.sleep_bed, pp.sleep_wake, pp.protocol_activities, pp.protocol_acv, pp.protocol_supplements, pp.protocol_default_none,
            pp.fasting_start, pp.fasting_end, pp.fasting_label, pp.fasting_note,
            pp.macro_kcal, pp.macro_pro, pp.macro_carb, pp.macro_fat, pp.macro_phase,
            (SELECT u2.name FROM monitor_patients mp
             JOIN users u2 ON u2.id = mp.monitor_id
             WHERE mp.patient_id = u.id AND mp.active = true LIMIT 1) AS monitor_name,
            (SELECT COUNT(*) FROM daily_logs WHERE patient_id = u.id) AS total_logs,
-           (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id ORDER BY log_date DESC LIMIT 1) AS current_weight,
+           -- Fixes-3j (UX review 1): the latest day WITH a weight. The newest day often has none yet (before the morning
+           -- weigh-in, or every day for weekly weighers), which made Profile say "goal reached" and hide BMI/TDEE.
+           (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id AND weight_kg IS NOT NULL ORDER BY log_date DESC LIMIT 1) AS current_weight,
+           -- Fixes-3l (UX finding 8b): the day of that weight, so Profile can say how old it is.
+           (SELECT to_char(log_date, 'YYYY-MM-DD') FROM daily_logs WHERE patient_id = u.id AND weight_kg IS NOT NULL ORDER BY log_date DESC LIMIT 1) AS current_weight_date,
            -- Today (India) and the 29 days before: the same 30 calendar days the
            -- member's Progress grid shows, so the two screens give one figure.
            (SELECT AVG(compliance_pct) FROM daily_logs
@@ -257,6 +264,7 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       start_weight:    p.start_weight,
       target_weight:   p.target_weight,
       current_weight:  p.current_weight,
+      current_weight_date: p.current_weight_date || null,   // Fixes-3l: 'YYYY-MM-DD' of current_weight
       // Sprint 7: goals is the ordered list the member picked; goal is its first
       // entry (kept for the coach views and older clients).
       goal:            p.goal || null,
@@ -264,6 +272,8 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       conditions:      p.conditions || [],
       diet_notes:      p.diet_notes || null,
       water_target:    p.water_target || 3000,
+      // Fixes-2j: which targets the coach set and which are FitLife standards.
+      target_origin:   targetOrigin(p),
       monitor_name:    p.monitor_name || null,
       total_logs:      parseInt(p.total_logs) || 0,
       avg_compliance:  p.avg_compliance_30 ? Math.round(parseFloat(p.avg_compliance_30)) : null,
@@ -451,7 +461,7 @@ async function collectTriage(members) {
          WHERE patient_id = ANY($1) AND log_date >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 13
          ORDER BY log_date`, [ids]),
       pool.query(
-        `SELECT user_id, water_target, protocol_activities, protocol_acv, protocol_supplements, meal_plan
+        `SELECT user_id, water_target, protocol_activities, protocol_acv, protocol_supplements, protocol_default_none, custom_acv, custom_supplements, meal_plan
          FROM patient_profiles WHERE user_id = ANY($1)`, [ids]),
       pool.query(
         `SELECT patient_id, ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - MAX(log_date)) AS days_since
@@ -570,7 +580,7 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
         [ids]),
       pool.query(
         `SELECT user_id, water_target, protocol_activities, protocol_acv,
-                protocol_supplements, meal_plan
+                protocol_supplements, protocol_default_none, custom_acv, custom_supplements, meal_plan
          FROM patient_profiles WHERE user_id = ANY($1)`, [ids]),
       // How long since each member logged anything at all — a member silent
       // for weeks needs a different message from one who missed water today.
@@ -595,6 +605,9 @@ router.get('/gaps', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
         activities:   p.protocol_activities,
         acv:          p.protocol_acv,
         supplements:  p.protocol_supplements,
+        default_none: p.protocol_default_none === true,   // Fixes-3k
+        custom_acv:   p.custom_acv,            // Fixes-3k: the coach's own items count when nothing is chosen
+        custom_supplements: p.custom_supplements,
         meal_slots:   p.meal_plan,
       }, { daysSince: days });
     }).filter(r => {
@@ -792,7 +805,7 @@ router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAcc
          WHERE patient_id = $1 AND log_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`, [id]),
       pool.query(
         `SELECT water_target, protocol_activities, protocol_acv,
-                protocol_supplements, meal_plan
+                protocol_supplements, protocol_default_none, custom_acv, custom_supplements, meal_plan
          FROM patient_profiles WHERE user_id = $1`, [id]),
       pool.query(
         `SELECT ((NOW() AT TIME ZONE 'Asia/Kolkata')::date - MAX(log_date)) AS days_since
@@ -811,6 +824,9 @@ router.get('/:id/gaps', authMW, roleCheck('monitor', 'admin'), requirePatientAcc
         activities:   p.protocol_activities,
         acv:          p.protocol_acv,
         supplements:  p.protocol_supplements,
+        default_none: p.protocol_default_none === true,   // Fixes-3k
+        custom_acv:   p.custom_acv,            // Fixes-3k: the coach's own items count when nothing is chosen
+        custom_supplements: p.custom_supplements,
         meal_slots:   p.meal_plan,
       }, { daysSince: days }),
       next_check: nextCheck(),
@@ -992,7 +1008,7 @@ router.get('/me/today', authMW, roleCheck('patient'), async (req, res) => {
     //   meal_plan  === GET /members/me/meal-plan  -> { date, meals }
     //   program    === GET /programs/active       -> { program, days }
     res.json({
-      profile:   profile.rows[0] || null,
+      profile:   profile.rows[0] ? { ...profile.rows[0], target_origin: targetOrigin(profile.rows[0]) } : null,
       meal_plan: { date: istToday, meals: dietPlan.timedMeals(mealPlan.rows || [], plan, istToday) },
       // Phase 2: the approved plan itself (never a draft), for Plan > Nutrition.
       // Same shape as GET /diet-plans/me -> plan. null when there is none.
@@ -1256,7 +1272,7 @@ router.get('/:id', authMW, roleCheck('monitor', 'admin'), async (req, res) => {
     ).catch(err => console.error('marking member messages read failed:', err));
 
     res.json({
-      profile: { ...profileResult.rows[0], has_pin: pinResult.rows[0]?.has_pin ?? false },
+      profile: { ...profileResult.rows[0], has_pin: pinResult.rows[0]?.has_pin ?? false, target_origin: targetOrigin(profileResult.rows[0]) },
       logs:    logsResult.rows,
       labs:    labsResult.rows,
       notes:   notesResult.rows,
@@ -1303,9 +1319,11 @@ router.post('/', authMW, roleCheck('admin'), async (req, res) => {
 
     // Create patient profile
     await client.query(
+      // Fixes-3k: a member created from now on starts with no supplements or ACV until the coach adds them
+      // (protocol_default_none; Sachin's decision, 5 Nov). Members created before keep NULL: the old meaning.
       `INSERT INTO patient_profiles
-         (user_id, height_cm, start_weight, target_weight, conditions, diet_notes, water_target)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         (user_id, height_cm, start_weight, target_weight, conditions, diet_notes, water_target, protocol_default_none)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)`,
       [
         newUser.id,
         height_cm    || null,
@@ -1316,6 +1334,10 @@ router.post('/', authMW, roleCheck('admin'), async (req, res) => {
         water_target,
       ]
     );
+    // Fixes-2j: only a water target the coach actually sent counts as set by them.
+    if (req.body?.water_target !== undefined && req.body.water_target !== null && req.body.water_target !== '') {
+      await client.query(`UPDATE patient_profiles SET ${markWaterSet(2)} WHERE user_id = $1`, [newUser.id, req.user.id]);
+    }
 
     // Optionally link to a monitor
     if (monitorId) {
@@ -1391,10 +1413,22 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatie
     // and the member would be shown it as their plan.
     const sleep = sleepTargetFrom(req.body || {});
     if (sleep.error) return res.status(400).json({ error: sleep.error });
+    // Fixes-2j: the water target records who set it, because its database
+    // default (3000) is otherwise indistinguishable from a coach's choice.
+    // null or '' goes back to the standard 3000 ml and forgets the record.
+    const water = req.body?.water_target !== undefined ? waterTargetFrom(req.body.water_target) : null;
+    if (water?.error) return res.status(400).json({ error: water.error });
 
     for (const field of allowed) {
       if (field === 'sleep_bed' || field === 'sleep_wake') {
         if (field in sleep) { updates.push(`${field} = $${idx++}`); values.push(sleep[field]); }
+        continue;
+      }
+      if (field === 'water_target') {
+        if (!water) continue;
+        updates.push(`water_target = $${idx++}`); values.push(water.reset ? STANDARD_WATER_ML : water.ml);
+        if (water.reset) updates.push(clearWaterSet);
+        else { updates.push(markWaterSet(idx++)); values.push(req.user.id); }
         continue;
       }
       if (req.body[field] !== undefined) {
@@ -1418,7 +1452,7 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatie
       values
     );
 
-    res.json(result.rows[0]);
+    res.json(result.rows[0] ? { ...result.rows[0], target_origin: targetOrigin(result.rows[0]) } : result.rows[0]);
   } catch (err) {
     console.error('PATCH /patients/:id/profile error:', err);
     res.status(500).json({ error: 'Failed to update profile' });
@@ -1436,6 +1470,10 @@ router.patch('/:id/profile', authMW, roleCheck('monitor', 'admin'), requirePatie
 // transcribing a PDF and a member typing from a phone deserve different trust.
 router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
   const { test_date, results, lab_name, notes } = req.body || {};
+  const requestId = req.body?.request_id;
+  if (requestId !== undefined && (typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{12,120}$/.test(requestId))) {
+    return res.status(400).json({ error: 'Invalid submission ID' });
+  }
   if (!test_date || !Array.isArray(results) || !results.length) {
     return res.status(400).json({ error: 'test_date and a results array are required' });
   }
@@ -1460,9 +1498,23 @@ router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
 
   if (!clean.length) return res.status(400).json({ error: 'No usable results — each needs a name and a numeric value' });
 
+  const payloadHash = requestId ? require('crypto').createHash('sha256').update(JSON.stringify({
+    test_date, clean, lab_name: lab_name ? String(lab_name).slice(0, 120) : null,
+    notes: notes ? String(notes).slice(0, 500) : null,
+  })).digest('hex') : null;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    if (requestId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`lab:${req.user.id}:${requestId}`]);
+      const { rows } = await client.query('SELECT payload_hash, response FROM member_lab_receipts WHERE patient_id=$1 AND request_id=$2', [req.user.id, requestId]);
+      if (rows[0]) {
+        await client.query('ROLLBACK');
+        if (rows[0].payload_hash !== payloadHash) return res.status(409).json({ code: 'SUBMISSION_CONFLICT', error: 'This submission has already been used for different results. Check Lab results.' });
+        return res.status(200).json({ ...rows[0].response, replayed: true });
+      }
+    }
     const saved = [];
     for (const r of clean) {
       const { rows } = await client.query(
@@ -1477,10 +1529,8 @@ router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
          notes ? String(notes).slice(0, 500) : null]);
       saved.push(rows[0]);
     }
-    await client.query('COMMIT');
-
     const abnormal = saved.filter(r => r.status !== 'normal');
-    res.status(201).json({
+    const response = {
       saved: saved.length,
       results: saved,
       // Stated plainly rather than interpreted. The app must not tell someone
@@ -1488,7 +1538,11 @@ router.post('/me/labs', authMW, roleCheck('patient'), async (req, res) => {
       notice: abnormal.length
         ? `${abnormal.length} result${abnormal.length > 1 ? 's are' : ' is'} outside the reference range. Your coach can see these — discuss anything abnormal with the doctor who ordered the test.`
         : null,
-    });
+    };
+    if (requestId) await client.query('INSERT INTO member_lab_receipts (patient_id, request_id, payload_hash, response) VALUES ($1,$2,$3,$4)',
+      [req.user.id, requestId, payloadHash, JSON.stringify(response)]);
+    await client.query('COMMIT');
+    res.status(201).json(response);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('POST /patients/me/labs error:', err);
@@ -1516,11 +1570,10 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
       return res.status(400).json({ error: 'test_date, test_name, and value are required' });
     }
 
-    let status = 'normal';
-    if (ref_min !== undefined && ref_max !== undefined) {
-      if (parseFloat(value) < parseFloat(ref_min))       status = 'low';
-      else if (parseFloat(value) > parseFloat(ref_max))  status = 'high';
-    }
+    const numericValue = finiteOrNull(value);
+    if (numericValue === null) return res.status(400).json({ error: 'value must be a finite number' });
+    const min = finiteOrNull(ref_min), max = finiteOrNull(ref_max);
+    const status = classify(numericValue, min, max);
 
     // Same value for the same test and date within 30 seconds is a double tap:
     // return the row that is already there. Two identical HbA1c rows otherwise
@@ -1531,14 +1584,14 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
           WHERE patient_id = $1 AND test_date = $2 AND test_name = $3 AND value = $4::numeric
             AND created_at > NOW() - INTERVAL '30 seconds'
           ORDER BY id DESC LIMIT 1`,
-        [req.params.id, test_date, test_name, value]);
+        [req.params.id, test_date, test_name, numericValue]);
       if (dup.rows.length) return { row: dup.rows[0], duplicate: true };
       const ins = await db.query(
         `INSERT INTO lab_values
            (patient_id, test_date, test_name, value, unit, ref_min, ref_max, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [req.params.id, test_date, test_name, value, unit, ref_min, ref_max, status]);
+        [req.params.id, test_date, test_name, numericValue, unit, min, max, status]);
       return { row: ins.rows[0], duplicate: false };
     });
 
@@ -1667,19 +1720,8 @@ router.delete('/:id/notes/:noteId', authMW, roleCheck('monitor', 'admin'), requi
 
 const { analyseLabs } = require('../services/labAnalysis');
 
-/** Only a finite number survives; anything else becomes null. */
-function finiteOrNull(v) {
-  if (v === undefined || v === null || v === '') return null;
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 function classify(value, refMin, refMax) {
-  if (refMin == null || refMax == null) return 'normal';
-  const v = parseFloat(value);
-  if (v < parseFloat(refMin)) return 'low';
-  if (v > parseFloat(refMax)) return 'high';
-  return 'normal';
+  return rangeState(value, refMin, refMax) || 'normal';
 }
 
 async function labContext(patientId) {
@@ -2325,3 +2367,4 @@ router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), requirePatien
 
 module.exports = router;
 module.exports.sendMemberNote = sendMemberNote;
+module.exports.classifyLab = classify;

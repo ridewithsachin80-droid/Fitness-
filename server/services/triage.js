@@ -60,6 +60,9 @@ function composeMember(member, ctx) {
     activities:   protocol.protocol_activities,
     acv:          protocol.protocol_acv,
     supplements:  protocol.protocol_supplements,
+    default_none: protocol.protocol_default_none === true,   // Fixes-3k
+    custom_acv:   protocol.custom_acv,          // Fixes-3k: the coach's own items count when nothing is chosen
+    custom_supplements: protocol.custom_supplements,
     meal_slots:   protocol.meal_plan,
   }, { daysSince, now: ctx.now || nowAtIstHour(hour) });
   const gapKeys = new Set(gapRes.gaps.map(g => g.key));

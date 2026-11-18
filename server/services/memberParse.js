@@ -103,8 +103,9 @@ async function buildParseContext(userId, opts = {}) {
   return {
     mealSlots:   await mealSlotsFor(profile, userId),
     activities:  itemsFrom(profile?.protocol_activities,  profile?.custom_activities,  STOCK_ACTIVITIES),
-    acv:         itemsFrom(profile?.protocol_acv,         profile?.custom_acv,         STOCK_ACV),
-    supplements: itemsFrom(profile?.protocol_supplements, profile?.custom_supplements, STOCK_SUPPLEMENTS),
+    // Fixes-3k: for members created from 3k on, no coach selection → no stock ACV or supplements to tick.
+    acv:         itemsFrom(profile?.protocol_acv,         profile?.custom_acv,         profile?.protocol_default_none === true ? [] : STOCK_ACV),
+    supplements: itemsFrom(profile?.protocol_supplements, profile?.custom_supplements, profile?.protocol_default_none === true ? [] : STOCK_SUPPLEMENTS),
     waterTargetMl: Math.min(8000, Math.max(500, parseInt(profile?.water_target, 10) || 3000)),
     recent,
     lastFoods: todaysFood.slice(0, 20)

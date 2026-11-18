@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Must match theme_color in client/vite.config.js, or the splash screen
-         and the installed web app disagree on the brand gold. -->
-    <color name="colorPrimary">#D4AF37</color>
+         and the installed web app disagree on the brand colour (green since 16 Oct 2026). -->
+    <color name="colorPrimary">#315D47</color>
     <!-- Matches background_color in the web manifest, so there is no flash
          between the splash and the app painting. -->
-    <color name="backgroundColor">#0b0b0e</color>
+    <color name="backgroundColor">#141817</color>
 </resources>

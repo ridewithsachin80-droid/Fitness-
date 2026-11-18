@@ -35,13 +35,13 @@ const COMMANDS = [
   {
     id: 'open_workout',
     match: /\b(open|show|go to|start)\b.*\b(workout|training|gym|exercise)\b/,
-    route: '/workout',
+    route: '/?open=workout',   // there is no /workout page; Today opens the sheet (VOI-013)
     speak: 'Workout is open.',
   },
   {
     id: 'open_food',
     match: /\b(open|show|go to)\b.*\b(food|meal|nutrition|diet)\b/,
-    route: '/food',
+    route: '/?open=food',      // there is no /food page (VOI-013)
     speak: 'Food log is open.',
   },
   {

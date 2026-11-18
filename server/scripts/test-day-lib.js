@@ -25,6 +25,56 @@ const eq   = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const day = importClient('lib/day/index.js');
 
+// Date-only keys must remain calendar dates on travelling members' devices.
+// Exercise the production helpers, including the local-timezone regression
+// and the instant immediately around midnight in the app's IST calendar.
+console.log('\n[0] calendar-key arithmetic across device timezones');
+{
+  const calendar = importClient('constants.js');
+  const originalTZ = process.env.TZ, NativeDate = global.Date;
+  const cases = [
+    ['2026-10-14', -1, '2026-10-13'], ['2026-10-13', 1, '2026-10-14'],
+    ['2026-03-08', 1, '2026-03-09'], ['2026-03-09', -1, '2026-03-08'],
+    ['2026-11-01', 1, '2026-11-02'], ['2026-11-02', -1, '2026-11-01'],
+    ['2024-03-01', -1, '2024-02-29'], ['2024-02-29', 1, '2024-03-01'],
+    ['2026-03-01', -1, '2026-02-28'], ['2026-01-01', -1, '2025-12-31'],
+    ['2025-12-31', 1, '2026-01-01'], ['2026-10-14', -29, '2026-09-15'],
+  ];
+  try {
+    for (const tz of ['UTC', 'America/Los_Angeles', 'Asia/Kolkata', 'Pacific/Kiritimati']) {
+      process.env.TZ = tz;
+      for (const [key, offset, expected] of cases) {
+        ck(`${tz}: ${key} shifted ${offset} days is ${expected}`, calendar.shiftDateKey(key, offset) === expected);
+      }
+      const keys = Array.from({ length: 30 }, (_, i) => calendar.shiftDateKey('2026-09-15', i));
+      ck(`${tz}:30-day grid has30 distinct dates ending on selected IST day`, new Set(keys).size === 30 && keys[0] === '2026-09-15' && keys.at(-1) === '2026-10-14');
+      ck(`${tz}: shifting zero preserves the date key`, calendar.shiftDateKey('2026-10-14', 0) === '2026-10-14');
+      for (const [instant, expectedToday, expectedPrevious] of [
+        ['2026-10-13T18:29:59.000Z', '2026-10-13', '2026-10-12'],
+        ['2026-10-13T18:30:00.000Z', '2026-10-14', '2026-10-13'],
+        ['2026-03-09T18:30:00.000Z', '2026-03-10', '2026-03-09'],
+        ['2026-11-02T18:30:00.000Z', '2026-11-03', '2026-11-02'],
+      ]) {
+        const fixed = NativeDate.parse(instant);
+        global.Date = class extends NativeDate {
+          constructor(...args) { super(...(args.length ? args : [fixed])); }
+          static now() { return fixed; }
+        };
+        ck(`${tz}: IST today and previous day at ${instant}`, calendar.today() === expectedToday && calendar.istDaysAgo(1) === expectedPrevious);
+        ck(`${tz}: istDate preserves actual-instant conversion at ${instant}`, calendar.istDate(new NativeDate(instant)) === expectedToday);
+        global.Date = NativeDate;
+      }
+    }
+    for (const [key, offset] of [['2026-02-30', 1], ['2026-13-01', 1], ['2026-1-01', 1], ['', 1], [null, 1],
+      ['2026-10-14', 0.5], ['2026-10-14', Infinity], ['2026-10-14', '1'], ['9999-12-31', 1], ['0000-01-01', -1]]) {
+      ck(`invalid/out-of-range date shift ${String(key)} / ${String(offset)} is rejected`, calendar.shiftDateKey(key, offset) === null);
+    }
+  } finally {
+    global.Date = NativeDate;
+    if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ;
+  }
+}
+
 // ── Fixtures (identical to the golden run) ──────────────────────────────────
 const foods = [
   { name: 'idli',   grams: 120, per_100g: { calories: 130, protein: 3.5, total_carbs: 28, net_carbs: 26, fat: 0.8, vit_b12: 0.1, calcium: 12, iron: 1.1, fiber: 1.2, sodium: 250, potassium: 80, magnesium: 14, zinc: 0.4, folate: 20, vit_d: 0 } },
@@ -77,12 +127,190 @@ console.log('\n[2] calcMicros / supplements / activities');
 // ── 3. Targets met ───────────────────────────────────────────────────────────
 console.log('\n[3] countMicrosMet');
 {
+  // Changed 18 Oct 2026 (Fixes-2i, "unknown is not zero"). These three used to
+  // expect 19 / hasData:false / 20. 130 g of this day (chapati, unknownfood) has
+  // no nutrient values, so sodium can no longer be called "under its limit": it
+  // was counted met only because the unknown part was read as 0 mg. Every other
+  // target is unchanged; the extra checks below pin exactly that.
   const r = day.countMicrosMet({ foodItems: foods, supplements: sup, activities: acts, activeActivities: active });
-  ck('19 of 31 targets met', r.met === 19 && r.total === 31 && r.hasData === true, r);
+  ck('18 of 31 targets met, 13 not known (sodium is no longer "under the limit" with 130 g of the day unknown)',
+     r.met === 18 && r.unknown === 13 && r.known === 18 && r.total === 31 && r.hasData === true, r);
+  const st = day.microStatus({ foodItems: foods, supplements: sup, activities: acts, activeActivities: active });
+  ck('…sodium: "unknown", an at-least 1100 mg; with only the two foods whose sodium is known it is "met" again',
+     st.rows.sodium.status === 'unknown' && st.rows.sodium.atLeast && near(st.rows.sodium.value, 1100)
+     && day.microStatus({ foodItems: foods.slice(0, 2), supplements: sup, activities: acts, activeActivities: active }).rows.sodium.status === 'met', st.rows.sodium);
   const none = day.countMicrosMet({ foodItems: [{ name: 'chapati', grams: 80 }] });
-  ck('no per_100g food → hasData false, met 0', eq(none, { met: 0, total: 31, hasData: false }), none);
+  ck('a food with no nutrient values: food was logged (hasData), nothing is met, all 31 are not known — never "0 of everything"',
+     eq(none, { met: 0, estimate: 0, unknown: 31, known: 0, total: 31, hasData: true }), none);   // Fixes-2k: the count also says how many are estimated
+  ck('nothing logged at all → hasData false', day.countMicrosMet({ foodItems: [] }).hasData === false);
   const ov = day.countMicrosMet({ foodItems: foods, supplements: sup, activities: acts, activeActivities: active, rdaOverrides: { calcium: '10' } });
-  ck('coach RDA override (calcium 10) flips one more target → 20', ov.met === 20, ov);
+  ck('coach RDA override (calcium 10) flips one more target → 19 (calcium: an at-least amount that already meets it)', ov.met === 19, ov);
+}
+
+// ── 3b. Unknown is not zero (Fixes-2i) ──────────────────────────────────────
+console.log('\n[3b] unknown nutrient values are not zero');
+{
+  // What the server stores for an AI food that only had macros: every micro 0.
+  const zeroFilled = { calories: 150, protein: 5, total_carbs: 20, fat: 5, fiber: 0, vit_a: 0, vit_b12: 0, vit_c: 0, calcium: 0, iron: 0, sodium: 0, omega3_ala: 0, lycopene: 0 };
+  const kz = day.microKnown(zeroFilled);
+  ck('a record with every micronutrient at 0 knows none of them (the server used to fill gaps with 0)',
+     ['vit_a', 'vit_b12', 'calcium', 'iron', 'sodium', 'fiber', 'omega3_ala', 'lycopene'].every(k => kz[k] === false), kz);
+  const detailed = { calories: 60, vit_c: 30, vit_b12: 0, calcium: 40, iron: 0, sodium: 5, fiber: 0, omega3_ala: 0 };
+  const kd = day.microKnown(detailed);
+  // Changed 18 Oct 2026 (Fixes-2k, Sachin's rule): this check used to expect
+  // B12 0, iron 0 and fibre 0 to count as measured because the same record
+  // fills other vitamins and minerals. Other nutrients no longer prove a zero:
+  // with no status, an old 0 is uncertain. A 0 that carries a status is real.
+  ck('a 0 with no status is uncertain even when the record fills its group (B12 0, iron 0, fibre 0 are not known)',
+     kd.vit_b12 === false && kd.iron === false && kd.fiber === false && kd.vit_c === true && kd.calcium === true, kd);
+  const stated = day.microKnown({ ...detailed, _status: { vit_b12: 'reference', iron: 'recorded' } });
+  ck('…a 0 that carries a status (reference or recorded) is a real, known zero', stated.vit_b12 === true && stated.iron === true && stated.fiber === false, stated);
+  ck('…but a group the record leaves at 0 is still unknown (fats: omega-3 0 with no fat data)', kd.omega3_ala === false, kd);
+  ck('a key the record does not have, or an explicit null, is unknown', kd.vit_a === false && day.microKnown({ vit_c: 30, vit_a: null }).vit_a === false);
+  ck('no record at all → nothing known', Object.values(day.microKnown(null)).every(v => v === false));
+
+  // Fixes-2k: the B12 0 is marked as a reference value, so it is a measured zero (it was implied by the group before).
+  const known = { name: 'Dal', grams: 100, per_100g: { calories: 110, vit_b12: 0, vit_c: 2, iron: 2, calcium: 20, sodium: 300, fiber: 4, _status: { vit_b12: 'reference' } } };
+  const blank = { name: 'Curry (AI)', grams: 100, per_100g: zeroFilled };
+  const S1 = day.microStatus({ foodItems: [known] });
+  ck('everything eaten knows it: iron 2 mg of 18 is "below"; B12 measured 0 is "zero"; sodium 300 is "met" (under the cap)',
+     S1.rows.iron.status === 'below' && S1.rows.vit_b12.status === 'zero' && S1.rows.sodium.status === 'met' && S1.rows.iron.coverage === 'full', [S1.rows.iron, S1.rows.vit_b12, S1.rows.sodium]);
+  const S2 = day.microStatus({ foodItems: [known, blank] });
+  ck('add a food whose iron is unknown: iron becomes "unknown", an at-least 2 mg — never "below"',
+     S2.rows.iron.status === 'unknown' && S2.rows.iron.atLeast && S2.rows.iron.coverage === 'partial', S2.rows.iron);
+  ck('…B12 is no longer a measured zero either; it is "not known" (nothing to show)', S2.rows.vit_b12.status === 'unknown' && !S2.rows.vit_b12.atLeast, S2.rows.vit_b12);
+  ck('…and sodium can no longer be "under the limit"', S2.rows.sodium.status === 'unknown', S2.rows.sodium);
+  const salty = { name: 'Pickle', grams: 100, per_100g: { calories: 30, sodium: 2500, calcium: 10 } };
+  ck('sodium already over its cap from the known foods is "over", whatever is unknown', day.microStatus({ foodItems: [salty, blank] }).rows.sodium.status === 'over');
+  const lots = { name: 'Spinach', grams: 300, per_100g: { calories: 23, iron: 2.7, calcium: 99, vit_c: 28 } };
+  ck('a partly-unknown total that already meets the target is "met" (a minimum is enough)', day.microStatus({ foodItems: [lots, blank], rdaOverrides: { iron: '8' } }).rows.iron.status === 'met');
+  ck('a supplement alone can meet a target the foods do not know (B12 1000 mcg)', day.microStatus({ foodItems: [blank], supplements: { b12: true } }).rows.vit_b12.status === 'met');
+  const c = day.countMicrosMet({ foodItems: [known, blank] }), st2 = day.microStatus({ foodItems: [known, blank] });
+  ck('the Today tile count and the panel come from one rule (met, unknown, known agree)', c.met === st2.met && c.unknown === st2.unknown && c.known === c.total - c.unknown, { c, st: [st2.met, st2.unknown] });
+  ck('grams of 0 do not make anything unknown', day.microStatus({ foodItems: [known, { ...blank, grams: 0 }] }).rows.iron.status === 'below');
+}
+
+// ── 3c. Estimates are not confirmed (Fixes-2k) ──────────────────────────────
+console.log('\n[3c] recipe and AI estimates never count as a confirmed target met');
+{
+  const st = (p, k, item) => day.nutrientStatus(p, k, item);
+  ck('statuses: explicit status wins; null → unknown; old 0 → unknown; old value → recorded, or ai when the item came from the AI or a photo',
+     st({ iron: 2, _status: { iron: 'reference' } }, 'iron') === 'reference' && st({ iron: null }, 'iron') === 'unknown' && st({ iron: 0 }, 'iron') === 'unknown'
+     && st({ iron: 2 }, 'iron') === 'recorded' && st({ iron: 2 }, 'iron', { source: 'ai' }) === 'ai' && st({ iron: 2 }, 'iron', { source: 'photo' }) === 'ai'
+     && st({ iron: 0, _status: { iron: 'recorded' } }, 'iron') === 'recorded');
+  const ref = { name: 'Spinach', grams: 100, per_100g: { calories: 23, iron: 2.95, _status: { iron: 'reference' } } };
+  const aiItem = { name: 'Palak curry (AI)', grams: 200, source: 'ai', per_100g: { calories: 90, iron: 3 } };
+  const recipe = { name: 'Dal tadka', grams: 200, per_100g: { calories: 110, iron: 2, _status: { iron: 'recipe' } } };
+  const R1 = day.microStatus({ foodItems: [ref, aiItem], rdaOverrides: { iron: '8' } });
+  ck('iron 2.95 confirmed + 6 from an AI estimate reaches 8.95 of 8, but only with the estimate → "estimate", not "met"',
+     R1.rows.iron.status === 'estimate' && near(R1.rows.iron.confirmed, 2.95) && near(R1.rows.iron.estimated, 6) && R1.rows.iron.approx === true, R1.rows.iron);
+  ck('…and the count says estimated, not met', R1.estimate >= 1 && R1.rows.iron.status !== 'met' && day.countMicrosMet({ foodItems: [ref, aiItem], rdaOverrides: { iron: '8' } }).estimate === R1.estimate);
+  const R2 = day.microStatus({ foodItems: [{ ...ref, grams: 300 }, aiItem], rdaOverrides: { iron: '8' } });
+  ck('confirmed values alone reach the target (8.85 of 8) → "met", shown as ~ because an estimate is in the total', R2.rows.iron.status === 'met' && R2.rows.iron.approx === true, R2.rows.iron);
+  const R3 = day.microStatus({ foodItems: [recipe], rdaOverrides: { iron: '8' } });
+  ck('a recipe estimate below the target is "estimate", never "below" (red)', R3.rows.iron.status === 'estimate', R3.rows.iron);
+  const salt = { name: 'Pickle (AI)', grams: 100, source: 'ai', per_100g: { calories: 30, sodium: 2500 } };
+  ck('sodium over its cap only by an AI estimate is "estimate", not "over"; confirmed sodium over the cap is "over"',
+     day.microStatus({ foodItems: [salt] }).rows.sodium.status === 'estimate'
+     && day.microStatus({ foodItems: [{ ...salt, source: 'db', per_100g: { ...salt.per_100g, _status: { sodium: 'recorded' } } }] }).rows.sodium.status === 'over');
+  ck('a supplement is a confirmed amount (B12 1000 mcg meets the target on its own)', day.microStatus({ foodItems: [aiItem], supplements: { b12: true } }).rows.vit_b12.status === 'met');
+  const legacyLog = { name: 'Old log', grams: 100, per_100g: { calories: 100, iron: 4, zinc: 0 } };
+  ck('an old logged item (no statuses): its iron 4 is recorded, its zinc 0 is not known — read, never rewritten',
+     day.microStatus({ foodItems: [legacyLog], rdaOverrides: { iron: '4' } }).rows.iron.status === 'met' && day.microStatus({ foodItems: [legacyLog] }).rows.zinc.status === 'unknown'
+     && legacyLog.per_100g.zinc === 0 && !legacyLog.per_100g._status);
+}
+
+// ── 3d. Fixes-2l: estimates by presence, confirmed-only lower bounds, sunlight ─
+console.log('\n[3d] zero-valued estimates, lower bounds and sunlight (19 Oct review)');
+{
+  const it = (name, per, extra = {}) => ({ name, grams: 100, per_100g: { calories: 50, ...per }, ...extra });
+  // Review item 2: the reviewer's two reproductions.
+  const s0 = day.microStatus({ foodItems: [it('Rasam (recipe)', { sodium: 0, _status: { sodium: 'recipe' } })] }).rows.sodium;
+  ck('recipe sodium 0 → "estimate" with ~, never a confirmed "met" under the limit (2k: met, no ~)', s0.status === 'estimate' && s0.approx === true, s0);
+  const i0 = day.microStatus({ foodItems: [it('Dish (recipe)', { iron: 0, _status: { iron: 'recipe' } })] }).rows.iron;
+  ck('recipe iron 0 → "estimate" with ~, never a definite measured "zero" (2k: zero, no ~)', i0.status === 'estimate' && i0.approx === true, i0);
+  const a0 = day.microStatus({ foodItems: [it('Curry (AI)', { iron: 0, _status: { iron: 'ai' } })] }).rows.iron;
+  ck('an AI-estimated 0 is an estimate too', a0.status === 'estimate' && a0.approx === true, a0);
+  const r0 = day.microStatus({ foodItems: [it('Banana', { vit_b12: 0, _status: { vit_b12: 'reference' } })] }).rows.vit_b12;
+  ck('…while a reference 0 is still a definite measured zero (no ~)', r0.status === 'zero' && r0.approx === false, r0);
+  const sodConf = it('Dal', { sodium: 300, _status: { sodium: 'reference' } });
+  ck('confirmed sodium + a recipe-estimated 0 is "estimate", not a confirmed "within the limit"',
+     day.microStatus({ foodItems: [sodConf, it('Rasam', { sodium: 0, _status: { sodium: 'recipe' } })] }).rows.sodium.status === 'estimate'
+     && day.microStatus({ foodItems: [sodConf] }).rows.sodium.status === 'met');
+  ck('confirmed sodium alone over the cap is "over", whatever the estimates say', day.microStatus({ foodItems: [it('Pickle', { sodium: 2500, _status: { sodium: 'recorded' } }), it('Rasam', { sodium: 0, _status: { sodium: 'recipe' } })] }).rows.sodium.status === 'over');
+  ck('the count agrees: a recipe-0 day reports sodium and iron as estimated, not met or zero',
+     (() => { const c = day.countMicrosMet({ foodItems: [it('X', { sodium: 0, iron: 0, _status: { sodium: 'recipe', iron: 'recipe' } })] }); const s = day.microStatus({ foodItems: [it('X', { sodium: 0, iron: 0, _status: { sodium: 'recipe', iron: 'recipe' } })] }); return c.estimate === s.estimate && s.rows.sodium.status === 'estimate' && s.rows.iron.status === 'estimate'; })());
+
+  // Review item 3: a lower bound rests on confirmed amounts only.
+  const unk = it('Sabzi', {});
+  const e10 = day.microStatus({ foodItems: [it('Palak (AI)', { iron: 10 }, { source: 'ai' }), unk] }).rows.iron;
+  ck('the reviewer’s case: AI iron 10 + a food with unknown iron → no "at least" claim; confirmed 0, estimated 10 kept apart (2k: atLeast true)',
+     e10.atLeast === false && e10.confirmed === 0 && e10.estimated === 10 && e10.status === 'estimate' && e10.approx === true, e10);   // reaches the 8 mg target only with the estimate
+  const mix = day.microStatus({ foodItems: [it('Dal', { iron: 2, _status: { iron: 'recorded' } }), it('Palak (AI)', { iron: 10 }, { source: 'ai' }), unk] }).rows.iron;
+  ck('confirmed 2 + AI 10 + unknown → "at least" rests on the confirmed 2; the 10 stays an estimate', mix.atLeast === true && mix.confirmed === 2 && mix.estimated === 10, mix);
+  // A table of mixtures: reference, recorded, recipe, AI and unknown, with zero-valued estimates.
+  const R = (v) => it('ref', { zinc: v, _status: { zinc: 'reference' } }), D = (v) => it('rec', { zinc: v, _status: { zinc: 'recorded' } });
+  const P = (v) => it('recipe', { zinc: v, _status: { zinc: 'recipe' } }), A = (v) => it('ai', { zinc: v, _status: { zinc: 'ai' } }), U = () => it('unk', {});
+  const T = [
+    // foods,                 status,      atLeast, approx, confirmed, estimated
+    [[R(3)],                  'below',     false,   false,  3, 0],
+    [[R(3), D(2)],            'below',     false,   false,  5, 0],
+    [[R(3), P(0)],            'estimate',  false,   true,   3, 0],
+    [[R(3), A(4)],            'estimate',  false,   true,   3, 4],
+    [[R(3), U()],             'unknown',   true,    false,  3, 0],
+    [[P(0), U()],             'unknown',   false,   true,   0, 0],
+    [[A(4), U()],             'unknown',   false,   true,   0, 4],
+    [[R(3), A(0), U()],       'unknown',   true,    true,   3, 0],
+    [[R(0), U()],             'unknown',   false,   false,  0, 0],
+    [[R(0)],                  'zero',      false,   false,  0, 0],
+    [[P(0)],                  'estimate',  false,   true,   0, 0],
+    [[D(10)],                 'met',       false,   false,  10, 0],
+    [[D(10), U()],            'met',       false,   false,  10, 0],
+    [[A(10), U()],            'estimate',  false,   true,   0, 10],
+  ];
+  const off = T.filter(([foods, st, al, ap, cf, es]) => { const r = day.microStatus({ foodItems: foods, rdaOverrides: { zinc: '11' } }).rows.zinc;
+    return !(r.status === st && r.atLeast === al && r.approx === ap && Math.abs(r.confirmed - cf) < 1e-9 && Math.abs(r.estimated - es) < 1e-9); })
+    .map(([foods, st]) => `${foods.map(f => `${f.name}${f.per_100g.zinc ?? ''}`).join('+')} → want ${st}`);
+  ck(`${T.length} mixtures of reference / recorded / recipe / AI / unknown (zinc, target 11): status, "at least", ~, confirmed and estimated all as specified`, off.length === 0, off);
+
+  // Review item 4: sunlight is an activity record, not vitamin D intake.
+  const sun = { activities: { sun: true }, activeActivities: [{ id: 'sun', vitD_iu: 1000 }] };
+  const d1 = day.microStatus({ foodItems: [unk], ...sun }).rows.vit_d;
+  ck('the reviewer’s case: ticked sunlight (1000 IU) with unknown food vitamin D → not met, confirmed 0 (2k: confirmed 1000, met)', d1.status !== 'met' && d1.confirmed === 0 && d1.value === 0, d1);
+  const d2 = day.microStatus({ foodItems: [it('Egg', { vit_d: 80, _status: { vit_d: 'reference' } })], ...sun, rdaOverrides: { vit_d: '1000' } }).rows.vit_d;
+  ck('…sunlight does not top up a food total either (egg 80 IU + sunlight → 80 IU, below a 1000 IU target)', d2.confirmed === 80 && d2.status === 'below', d2);
+  ck('…and the counts do not move when sunlight is ticked', JSON.stringify(day.countMicrosMet({ foodItems: [unk], ...sun })) === JSON.stringify(day.countMicrosMet({ foodItems: [unk] })));
+  ck('a supplement still counts as a confirmed amount (vitamin D3 weekly → met) — supplement evidence is a separate decision', day.microStatus({ foodItems: [unk], supplements: { d3: true } }).rows.vit_d.status === 'met');
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/lib/day/macros.js'), 'utf8');
+  const body = src.slice(src.indexOf('export function microStatus'), src.indexOf('export function countMicrosMet'));
+  ck('microStatus no longer calls addActivityMicros (sunlight stays out of nutrient totals)', !/addActivityMicros\(/.test(body) && /addSupplementMicros\(/.test(body));
+}
+
+// ── 3e. Fixes-2l: the coach's meal-plan summary follows the same rule ──────
+console.log('\n[3e] coach plan summary (microCell) — same rule as the member panel');
+{
+  const it = (per, extra = {}) => ({ grams: 100, per_100g: { calories: 50, ...per }, ...extra });
+  const cell = (foods, key, target, dec = 0) => day.microCell([day.microCoverage(foods)[key]], target, dec);
+  const c1 = cell([it({ sodium: 0, iron: 0, _status: { sodium: 'recipe', iron: 'recipe' } })], 'iron', 8, 1);
+  ck('a recipe-estimated iron 0 reads "~0", neutral (2k plan view: plain "0", red)', c1.shown === '~0' && c1.tone === 'unsure', c1);
+  const c2 = cell([it({ iron: 10 }, { source: 'ai' }), it({})], 'iron', 8, 1);
+  ck('AI iron 10 + a food with unknown iron → "~10", no "≥", no percentage claim (2k plan view: "≥ ~10", gold)', c2.shown === '~10' && c2.pct === null && c2.tone === 'unsure', c2);
+  const c3 = cell([it({ zinc: 2, _status: { zinc: 'recorded' } }), it({ zinc: 10 }, { source: 'ai' }), it({})], 'zinc', 8, 1);
+  ck('confirmed 2 + AI 10 + unknown → "≥ 2 +~10", percentage from the confirmed 2 only (25%)', c3.shown === '≥ 2 +~10' && Math.round(c3.pct) === 25 && c3.tone === 'unsure', c3);
+  const c4 = cell([it({ calcium: 900 }, { source: 'ai' })], 'calcium', 1000);
+  ck('estimates alone reaching the target are not "met" (no gold): "~900", tone unsure', c4.shown === '~900' && c4.tone === 'unsure', c4);
+  const c5 = cell([it({ calcium: 900, _status: { calcium: 'reference' } }), it({})], 'calcium', 1000);
+  ck('confirmed alone reaching 80% is met, even with unknown foods', c5.tone === 'met' && c5.shown === '900', c5);
+  const c6 = cell([it({ iron: 2, _status: { iron: 'reference' } })], 'iron', 8, 1);
+  ck('fully confirmed and short stays an honest shortfall (low, 25%)', c6.tone === 'low' && c6.shown === '2' && Math.round(c6.pct) === 25, c6);
+  const c7 = cell([it({})], 'iron', 8, 1);
+  ck('nothing known → "—", no percentage', c7.shown === '—' && c7.pct === null && c7.tone === 'unsure', c7);
+  const cov = day.microCoverage([it({ omega3_epa: 100, _status: { omega3_epa: 'reference' } }), it({ omega3_dha: 0, _status: { omega3_dha: 'ai' } })]);
+  const c8 = day.microCell([cov.omega3_epa, cov.omega3_dha, cov.omega3_ala], 1000);
+  ck('a combined row (omega-3) carries "~" when any part is an estimate, even a 0', /^~/.test(c8.shown) || /\+~/.test(c8.shown), c8);
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/components/admin/EditMemberModal.jsx'), 'utf8');
+  ck('the coach plan summary uses microCell and no longer decides with "estimated > 0" or a total-based "≥"',
+     /microCell\(keys\.map\(k => planCov\[k\]\), target, dec\)/.test(src) && !/estimated > 0/.test(src) && !/c\.unknownGrams > 0 && pct < 80 \? '≥ '/.test(src));
 }
 
 // ── 4. Energy ───────────────────────────────────────────────────────────────
@@ -165,13 +393,14 @@ console.log('\n[7] pendingLabels');
     activeSupplements: [{ id: 'b12' }, { id: 'd3' }],
   };
   const p1 = day.pendingLabels({ ...base, log: { activities: { walk: true }, acv: {}, supplements: { b12: true }, sleep: {} }, activitiesLabel: 'Activity' });
-  ck('counts what is left, pluralised', eq(p1, ['2 activities', '1 ACV dose', '1 supplement', 'sleep times']), p1);
+  // Fixes-3l (UX finding 14): apple cider vinegar is written out on member screens (was '1 ACV dose').
+  ck('counts what is left, pluralised', eq(p1, ['2 activities', '1 apple cider vinegar dose', '1 supplement', 'sleep times']), p1);
   const p2 = day.pendingLabels({ ...base, log: { activities: { walk: true }, acv: {}, supplements: { b12: true }, sleep: {} }, activitiesLabel: 'Activities' });
   ck('a coach label already plural is left alone (no "activitieses")', p2[0] === '2 activities', p2);
   const p3 = day.pendingLabels({ ...base, log: { activities: { walk: true, sun: true, steps: true }, acv: { acv1: true }, supplements: { b12: true, d3: true }, sleep: { bedtime: '22:30', waketime: '06:15' } } });
   ck('everything done → empty', eq(p3, []), p3);
   const p4 = day.pendingLabels({ ...base, log: {}, activitiesLabel: 'Habit' });
-  ck('nothing logged → all counts', eq(p4, ['3 habits', '1 ACV dose', '2 supplements', 'sleep times']), p4);
+  ck('nothing logged → all counts', eq(p4, ['3 habits', '1 apple cider vinegar dose', '2 supplements', 'sleep times']), p4);   // Fixes-3l: written out
 }
 
 // ── 7b. nextAction — the one button on Today's read ──────────────────────
@@ -238,6 +467,68 @@ console.log('\n[7d] suggestMeal');
   const r = day.remaining({ kcalIn: 900, kcalTarget: 1800, proteinIn: 45, proteinTarget: 120 });
   ck('remaining() reports both gaps', r.kcal === 900 && r.protein === 75);
   ck('remaining() is null without any target', day.remaining({ kcalIn: 900 }) === null);
+
+  // 17 Oct 2026: a protein-only target printed "80 g protein and null kcal
+  // still to go". Every target combination, with and without food history.
+  const bad = /null|undefined|NaN/;
+  const combos = {
+    'calories and protein': { kcalIn: 900, kcalTarget: 1800, proteinIn: 40, proteinTarget: 120 },
+    'protein only':         { kcalIn: 900, proteinIn: 40, proteinTarget: 120 },
+    'calories only':        { kcalIn: 900, kcalTarget: 1800 },
+  };
+  for (const [label, o] of Object.entries(combos)) {
+    for (const [hist, f] of [['with history', foods], ['no history', []], ['nothing fits', [{ name: 'Ghee', per_100g: { calories: 900, protein: 0 }, last_g: 500, count: 3 }]]]) {
+      const r = S({ ...o, foods: f });
+      ck(`${label}, ${hist}: no "null"/"undefined"/"NaN" in the words`, r && !bad.test(r.headline + ' ' + (r.note || '')), r && r.headline);
+    }
+  }
+  ck('protein only, no history: "80 g protein still to go."', S({ ...combos['protein only'], foods: [] }).headline === '80 g protein still to go.', S({ ...combos['protein only'], foods: [] }).headline);
+  ck('calories only, no history: "900 kcal left today."', S({ ...combos['calories only'], foods: [] }).headline === '900 kcal left today.');
+  ck('both, no history: names both gaps', S({ ...combos['calories and protein'], foods: [] }).headline === '80 g protein and 900 kcal still to go.');
+  ck('neither target: no suggestion at all (null), so the sheet shows its own "targets not set" screen', S({ kcalIn: 900, foods }) === null);
+  ck('gapText never prints null for any mix', [[900, 80], [null, 80], [900, null], [null, null], [NaN, undefined]].every(([k, p]) => !bad.test(day.gapText(k, p))));
+  ck('every outcome carries a reason for the screen to show', ['over', 'on-target', 'no-history', 'no-fit', 'suggestion'].every(x =>
+    [over, done, noHistory, tight, gap].some(r => r.reason === x)), [over, done, noHistory, tight, gap].map(r => r.reason));
+}
+
+// ── 7d3. Reload only when a new version takes over (17 Oct 2026) ────────────
+// The first install also fires "controllerchange"; the old rule reloaded then,
+// wiping a new member's half-typed login a few seconds after the first visit.
+console.log('\n[7d3] watchForNewVersion');
+{
+  const { watchForNewVersion } = importClient('utils/swReload.js');
+  const fake = (controller) => { const t = new EventTarget(); t.controller = controller; return t; };
+  let n = 0; const first = fake(null); watchForNewVersion(first, () => n++);
+  first.dispatchEvent(new Event('controllerchange'));
+  ck('first visit: the helper taking control does NOT reload the page', n === 0, n);
+  first.dispatchEvent(new Event('controllerchange'));
+  ck('…a later new version on that same page does reload it', n === 1, n);
+  let m = 0; const upd = fake({}); watchForNewVersion(upd, () => m++);
+  upd.dispatchEvent(new Event('controllerchange')); upd.dispatchEvent(new Event('controllerchange'));
+  ck('a new version replacing the old one reloads exactly once', m === 1, m);
+  const main = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/main.jsx'), 'utf8');
+  ck('main.jsx uses it, and no longer reloads on every controllerchange', /watchForNewVersion\(navigator\.serviceWorker\)/.test(main) && !/addEventListener\('controllerchange'/.test(main));
+}
+
+// ── 7d2. Raw or cooked: how to weigh (17 Oct 2026) ──────────────────────────
+console.log('\n[7d2] weighingBasis');
+{
+  const prov = importClient('utils/foodProvenance.js');
+  ck('"Rice (Cooked)", "Idli (Steamed)", "Dal Tadka" → weigh it cooked', ['Rice (Cooked)', 'Idli (Steamed)', 'Dal Tadka'].every(n => prov.weighingBasis(n) === 'cooked'));
+  ck('"Oats (Raw)", "Toor dal uncooked" → weigh it raw', ['Oats (Raw)', 'Toor dal uncooked'].every(n => prov.weighingBasis(n) === 'raw'));
+  ck('a name that does not say (Banana, Paneer, "") → unknown, so the member is asked to check', ['Banana (Ripe)', 'Paneer', '', null].every(n => prov.weighingBasis(n) === null));
+  // 18 Oct 2026: the record's own marker first, the name only as a fallback.
+  const P = prov.preparationBasis;
+  ck('record marker wins when the name is silent ("Poha" with preparation: cooked → cooked, from the record)', eq(P({ name: 'Poha', preparation: 'cooked' }), { basis: 'cooked', from: 'record' }));
+  ck('the marker may sit in per_100g too (basis: "uncooked" → raw)', eq(P({ name: 'Moong dal', per_100g: { basis: 'uncooked' } }), { basis: 'raw', from: 'record' }));
+  ck('no marker → the name decides ("Rice (Cooked)" → cooked, from the name)', eq(P({ name: 'Rice (Cooked)', per_100g: { calories: 130 } }), { basis: 'cooked', from: 'name' }));
+  ck('record and name disagree ("Oats (Raw)" marked cooked) → unknown: the member is asked to check', P({ name: 'Oats (Raw)', preparation: 'cooked' }).from === 'conflict' && prov.weighingBasis({ name: 'Oats (Raw)', preparation: 'cooked' }) === null);
+  ck('an unrecognised marker ("as sold") is ignored, not guessed', eq(P({ name: 'Paneer', preparation: 'as sold' }), { basis: null, from: null }));
+  const foodsX = [{ name: 'Idli (Steamed)' }, { name: 'Oats (Raw)' }, { name: 'Paneer' }, { name: 'Poha', preparation: 'cooked' }, { name: 'Oats (Raw)', preparation: 'cooked' }];
+  const want = { cooked: 'Cooked weight', raw: 'Raw weight' };
+  ck('the preparation label always agrees with the weighing rule (incl. "Idli (Steamed)", which the old label called "not specified")',
+    foodsX.every(f => { const p = P(f), l = prov.preparationLabel(f);
+      return p.from === 'conflict' ? l === 'Check: raw or cooked?' : p.basis ? l === want[p.basis] : l === 'Preparation not specified'; }), foodsX.map(f => prov.preparationLabel(f)));
 }
 
 // ── 7e. suggestLoad — double progression ────────────────────────────────────
@@ -341,9 +632,25 @@ console.log('\n[7g] a member\'s own label: protein, carbs, fat → calories (10 
   ck('the day totals use the label: 50 g → 193 kcal, 12 g protein', (() => { const t = day.calcFoodMacros([{ name: 'oats', grams: 50, per_100g: w }]); return t.kcal === 193 && near(t.pro, 12) && near(t.carb, 27.5); })());
   ck('carbsOf: net first, then total, then 0', carbsOf({ net_carbs: 5, total_carbs: 9 }) === 5 && carbsOf({ total_carbs: 9 }) === 9 && carbsOf(null) === 0);
   ck('macroLine: whole grams', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }) === 'P 18 g · C 60 g · F 9 g', macroLine({ pro: 18.4, carb: 59.6, fat: 9 }));
+  // WKT-012 (10 Oct 2026, restored 16 Oct): a program day pulled in but not
+  // started stays listed, but only exercises with a done set count as logged.
+  const WS = importClient('utils/workoutSession.js');
+  ck('WKT-012: only exercises with a done set count as logged (a not-started program day is not "Logged · 3 exercises")',
+     WS.completedWorkoutExercises([{ exercise_id: 1, sets: [] }, { exercise_id: 2, sets: [{ reps: '', weight_kg: '' }] }, { exercise_id: 3, sets: [{ reps: 8, weight_kg: 40 }] }]).map(e => e.exercise_id).join() === '3'
+     && WS.completedWorkoutExercises(null).length === 0);
+  {
+    const todaySrc = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/hooks/useTodayModel.js'), 'utf8');
+    const viewerSrc = require('fs').readFileSync(require('path').join(__dirname, '../../client/src/components/WorkoutSessionViewer.jsx'), 'utf8');
+    ck('…and Today\'s Move row and the coach\'s session view use it', /count: completedWorkoutExercises\(data\?\.exercises\)\.length/.test(todaySrc) && /completedWorkoutExercises\(data\?\.exercises\)/.test(viewerSrc));
+  }
   const L = importClient('utils/logSync.js');
   const body = L.mapToServer({ food: [{ id: 9, name: 'Oats', grams: 50, meal: 'Breakfast', food_id: 4, per_100g: w, label: true }, { id: 10, name: 'Tea', grams: 100 }] }, null);
   ck('the day save keeps the label mark and the edited numbers (it was dropped before — caught by the UI test)', body.food_items[0].label === true && body.food_items[0].per_100g.protein === 24 && !('label' in body.food_items[1]), body.food_items);
+  {
+    // 16 Oct 2026: the source and the household portion were dropped on save.
+    const b2 = L.mapToServer({ food: [{ id: 11, name: 'Roti', grams: 60, meal: 'Lunch', source: 'verified', qty_text: '2 rotis' }, { id: 12, name: 'Dal', grams: 150 }] }, null);
+    ck('the day save keeps where the numbers came from and the household portion ("2 rotis")', b2.food_items[0].source === 'verified' && b2.food_items[0].qty_text === '2 rotis' && !('qty_text' in b2.food_items[1]), b2.food_items);
+  }
   const base = L.baseOf({ food_items: [{ id: 9, grams: 50, meal: 'Breakfast', per_100g: w }] });
   ck('the day as loaded records each item\'s macros, so an edit survives a merge', base.food_macros['9'] === '386:24:55:7.8' && L.EMPTY_BASE.food_macros && Object.keys(L.EMPTY_BASE.food_macros).length === 0, base.food_macros);
   const server = require('fs').readFileSync(require('path').join(__dirname, '../services/memberFoods.js'), 'utf8');

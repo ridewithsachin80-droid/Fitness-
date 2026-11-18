@@ -176,11 +176,19 @@ export const today = () =>
 export const istDate = (d = new Date()) =>
   d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-export const istDaysAgo = (n) => {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return istDate(d);
+/** A calendar key is not a device-local instant. Shift its UTC components
+ * without converting through local time or IST; DST cannot skip a day. */
+export const shiftDateKey = (dateKey, offset = 0) => {
+  if (typeof dateKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !Number.isSafeInteger(offset)) return null;
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== dateKey) return null;
+  date.setUTCDate(date.getUTCDate() + offset);
+  if (!Number.isFinite(date.getTime())) return null;
+  const shifted = date.toISOString().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(shifted) ? shifted : null;
 };
+
+export const istDaysAgo = (n) => shiftDateKey(today(), -n);
 
 /** Formats YYYY-MM-DD (or full ISO timestamp) as "Mon, 3 Jan" in Indian locale */
 export const formatDate = (dateStr) => {

@@ -68,9 +68,9 @@ const f = (id, name, grams, meal = 'Lunch') => ({ id, name, grams, meal, food_id
   app.use((req, res, next) => { req.io = { to: () => ({ emit() {} }) }; next(); });
   app.use('/api/logs', require('../routes/logs'));
   const srv = app.listen(0); const port = srv.address().port;
-  const post = async (date, body) => {
+  const post = async (date, body, token = M) => {
     const r = await fetch(`http://127.0.0.1:${port}/api/logs/${date}`, { method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + M }, body: JSON.stringify(body) });
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
     return { status: r.status, data: await r.json().catch(() => ({})) };
   };
   const day = getISTDate();
@@ -111,6 +111,81 @@ const f = (id, name, grams, meal = 'Lunch') => ({ id, name, grams, meal, food_id
     const other = '2026-01-15';
     r = await post(other, body({ offline_replay: true, base_saved_at: null, food_items: [f('x', 'Poha', 150)] }));
     ck('a replay for a day the server has never seen is written as sent', r.status === 200 && !r.data.merged && r.data.food_items.length === 1, r.data);
+  }
+
+  console.log('\n[2] durable save receipts over HTTP and real PostgreSQL');
+  {
+    const date = '2026-03-12', stream = 'p0-uncertain-commit';
+    const base = (await post(date, body({ water_ml: 500 }))).data;
+    const first = body({ client_stream_id: stream, client_sequence: 1,
+      base_saved_at: base.saved_at, base_food_ids: [], base_fields: { water_ml: 500 }, water_ml: 750 });
+    const committed = await post(date, first); // Response could be lost after this commit.
+    const retry = await post(date, first);
+    ck('same direct request retry does not apply additive water twice', committed.status === 200 && retry.status === 200 && retry.data.idempotent && Number(retry.data.water_ml) === 750, retry);
+    ck('duplicate retry retains the original commit timestamp', retry.data.saved_at === committed.data.saved_at);
+
+    const next = { ...first, client_sequence: 2, base_client_write: { streamId: stream, sequence: 1 }, offline_replay: true, water_ml: 1000, weight_kg: 71.9 };
+    const recovered = await post(date, next);
+    ck('newer offline revision continues our own commit after a lost response', recovered.status === 200 && !recovered.data.merged && Number(recovered.data.water_ml) === 1000 && Number(recovered.data.weight_kg) === 71.9, recovered);
+    const older = await post(date, first);
+    ck('late older request is acknowledged without replacing the newer day', older.status === 200 && older.data.superseded && Number(older.data.water_ml) === 1000, older);
+
+    await pool.query(`UPDATE daily_logs SET water_ml=1600,weight_kg=79,food_items=$3,saved_at=NOW()
+      WHERE patient_id=$1 AND log_date=$2`, [member, date, JSON.stringify([f('external', 'Coach food', 120)])]);
+    const external = await post(date, { ...next, client_sequence: 3, base_client_write: { streamId: stream, sequence: 2 }, water_ml: 1250,
+      food_items: [f('offline', 'Offline food', 180)] });
+    ck('external edits still win after a timed-out predecessor', external.data.merged && Number(external.data.water_ml) === 1600 && Number(external.data.weight_kg) === 79, external);
+    ck('receipt recovery preserves external food while adding offline food once', external.data.food_items.length === 2 && external.data.food_items.some(x => x.id === 'external') && external.data.food_items.some(x => x.id === 'offline'));
+    const changed = await post(date, { ...next, client_sequence: 3, water_ml: 1500,
+      food_items: [f('offline', 'Offline food', 180)] });
+    ck('same revision with changed content returns 409 and leaves the committed day intact', changed.status === 409, changed);
+    const count = await pool.query(`SELECT count(*)::int AS n FROM daily_log_write_receipts WHERE patient_id=$1 AND log_date=$2 AND stream_id=$3`, [member, date, stream]);
+    ck('receipt storage stays one row per member/day/browser stream', count.rows[0].n === 1, count.rows);
+
+    const other = (await pool.query(`INSERT INTO users (name,phone,password,role,active) VALUES ('P0 other member','9102','x','patient',true) RETURNING id`)).rows[0].id;
+    await pool.query(`INSERT INTO patient_profiles (user_id) VALUES ($1)`, [other]);
+    const otherToken = jwt.sign({ id: other, role: 'patient' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const isolated = await post(date, body({ client_stream_id: stream, client_sequence: 1, water_ml: 400 }), otherToken);
+    ck('identical stream/sequence cannot acknowledge another member\'s write', isolated.status === 200 && !isolated.data.idempotent && Number(isolated.data.water_ml) === 400 && isolated.data.patient_id === other, isolated);
+    const otherDate = await post('2026-03-13', body({ client_stream_id: stream, client_sequence: 1, water_ml: 600 }));
+    ck('receipt identity is also scoped to the log date', otherDate.status === 200 && !otherDate.data.idempotent && Number(otherDate.data.water_ml) === 600);
+
+    for (const invalid of [
+      { client_stream_id: 'x'.repeat(97), client_sequence: 1 },
+      { client_stream_id: 'valid', client_sequence: 0 },
+      { client_stream_id: 'valid', client_sequence: 1.5 },
+      { client_stream_id: 'valid' },
+    ]) ck('invalid bounded receipt metadata is rejected with 400', (await post(date, body(invalid))).status === 400, invalid);
+  }
+  {
+    const date = '2026-03-14', stream = 'p0-nutrition-propagation';
+    const food = { ...f('food', 'Dal', 200), per_100g: { calories: 100 } };
+    const first = await post(date, body({ client_stream_id: stream, client_sequence: 1, food_items: [food] }));
+    await pool.query(`UPDATE daily_logs SET food_items=$3 WHERE patient_id=$1 AND log_date=$2`,
+      [member, date, JSON.stringify([{ ...food, per_100g: { calories: 120 } }])]);
+    const second = await post(date, body({ client_stream_id: stream, client_sequence: 2, offline_replay: true,
+      base_saved_at: first.data.saved_at, base_food_ids: ['food'], food_items: [food], water_ml: 1250 }));
+    ck('nutrition correction without saved_at change invalidates continuation', second.status === 200 && second.data.merged && second.data.food_items[0].per_100g.calories === 120, second);
+  }
+  {
+    const date = '2026-03-15', stream = 'p0-concurrent-sequences';
+    const base = (await post(date, body({ water_ml: 500 }))).data;
+    const request = sequence => body({ client_stream_id: stream, client_sequence: sequence,
+      ...(sequence > 1 ? { base_client_write: { streamId: stream, sequence: sequence - 1 } } : {}),
+      base_saved_at: base.saved_at, base_fields: { water_ml: 500 }, water_ml: 500 + 250 * sequence });
+    const replies = await Promise.all([post(date, request(1)), post(date, request(2))]);
+    const stored = (await pool.query(`SELECT water_ml FROM daily_logs WHERE patient_id=$1 AND log_date=$2`, [member, date])).rows[0];
+    ck('concurrent requests serialize receipt checks and preserve the newest sequence', replies.every(r => r.status === 200) && Number(stored.water_ml) === 1000, replies);
+    const receipt = (await pool.query(`SELECT sequence FROM daily_log_write_receipts WHERE patient_id=$1 AND log_date=$2 AND stream_id=$3`, [member, date, stream])).rows[0];
+    ck('concurrent requests commit one latest receipt atomically with the day', receipt.sequence === 2, receipt);
+  }
+  {
+    const date = '2026-03-16', stream = 'p0-stale-tab';
+    const base = (await post(date, body({ water_ml: 500 }))).data;
+    const staleBase = { base_saved_at: base.saved_at, base_fields: { water_ml: 500, weight_kg: 72.4 }, client_stream_id: stream };
+    await post(date, body({ ...staleBase, client_sequence: 1, water_ml: 1000 }));
+    const staleTab = await post(date, body({ ...staleBase, client_sequence: 2, water_ml: 500, weight_kg: 71.9 }));
+    ck('shared-browser counter does not let a stale tab overwrite unrelated water', staleTab.status === 200 && staleTab.data.merged_live && Number(staleTab.data.water_ml) === 1000 && Number(staleTab.data.weight_kg) === 71.9, staleTab);
   }
 
   console.log(`\n${fail === 0 ? '\u2713' : '\u2717'} test-day-merge: ${pass} passed, ${fail} failed\n`);

@@ -116,7 +116,7 @@ export default function MessageMember({ member, summary = null, initialText = nu
         </div>
 
         {!numberOk && (
-          <p className="text-caption text-amber-300 mb-3">
+          <p className="text-caption text-warn mb-3">
             This member has no usable mobile number on file, so messaging won't open.
           </p>
         )}

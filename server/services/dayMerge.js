@@ -23,7 +23,8 @@
  */
 
 const SCALARS = ['weight_kg', 'activities', 'acv', 'water_ml', 'supplements', 'sleep', 'notes'];
-const LABELS  = { weight_kg: 'weight', activities: 'activities', acv: 'ACV', water_ml: 'water',
+// Fixes-3l (UX finding 14): the member reads these in the offline-merge notice, so ACV is written out.
+const LABELS  = { weight_kg: 'weight', activities: 'activities', acv: 'apple cider vinegar', water_ml: 'water',
                   supplements: 'supplements', sleep: 'sleep', notes: 'notes' };
 
 const canon = (v) => {

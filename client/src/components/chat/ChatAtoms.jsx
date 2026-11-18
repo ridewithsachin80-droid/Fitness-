@@ -1,3 +1,4 @@
+import { Icon } from '../primitives';
 /**
  * components/chat/ChatAtoms.jsx — the small pieces the AI chat is built from
  * (Sprint 12). Layout constants, the composer's auto-grow, the suggestion
@@ -27,7 +28,7 @@ export const SUGGESTION_CHIPS = [
 export function GroupHeader({ icon, title, count }) {
   return (
     <div className="flex items-center gap-1.5 mb-1.5">
-      <span className="text-xs">{icon}</span>
+      <Icon name={({ '⚖️': 'scale', '📊': 'chart', '✏️': 'note', '🏃': 'run', '🧃': 'drop', '💊': 'pill', '💧': 'drop', '🌙': 'moon', '🥗': 'food', '💪': 'dumbbell' })[icon] || 'spark'} size={14} />
       <span className="text-eyebrow font-bold text-mid tracking-widest">{title}</span>
       {count != null && <span className="text-eyebrow text-lo">· {count}</span>}
     </div>

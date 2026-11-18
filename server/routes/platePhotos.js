@@ -79,7 +79,7 @@ router.post('/check', authMW, roleCheck('patient'), async (req, res) => {
       analysis.extras = analysis.extras.map((e, i) => {
         const db = enriched?.[i];
         if (!db || !db.per_100g || db.source === 'ai') return e;
-        return { ...e, per_100g: db.per_100g, kcal: Math.round(e.grams * (Number(db.per_100g.calories) || 0) / 100) };
+        return { ...e, per_100g: db.per_100g, preparation: db.preparation ?? null, kcal: Math.round(e.grams * (Number(db.per_100g.calories) || 0) / 100) };
       });
     } catch (_) { /* keep the model's figures */ }
 

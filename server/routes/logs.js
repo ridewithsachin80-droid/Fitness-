@@ -1,3 +1,4 @@
+const { targetOrigin } = require('../services/targetOrigin');
 const router = require('express').Router();
 const pool = require('../db/pool');
 const authMW = require('../middleware/auth');
@@ -21,8 +22,18 @@ const { getISTDate } = require('../utils/istDate');
 // daily_logs too, and two definitions of "how compliant was today" would mean
 // the same day scoring differently depending on whether the member typed it or
 // spoke it — with the coach's dashboard showing whichever landed last.
-const { calcCompliance } = require('../services/compliance');
+const { calcCompliance, protocolTotalFor, inForceFor } = require('../services/compliance');
+// Fixes-3k: the member's protocol, for the score: the total when the app sent none, and (new-rule members) which
+// ticks count.
+async function protocolForScore(db, patientId) {
+  const { rows: [p] } = await db.query(
+    `SELECT protocol_activities, protocol_acv, protocol_supplements, protocol_default_none,
+            custom_activities, custom_acv, custom_supplements
+       FROM patient_profiles WHERE user_id = $1`, [patientId]);
+  return p || null;
+}
 const { withMemberLock } = require('../db/locks');
+const { writeMetadata, dayFingerprint, requestFingerprint, receiptDecision } = require('../services/dayWriteReceipt');
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 /** A date that exists on the calendar. The regex alone let 2026-13-45 through
@@ -51,7 +62,7 @@ router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
     const freq = {};
     for (const row of result.rows) {
       const items = Array.isArray(row.food_items) ? row.food_items : [];
-      for (const item of items) {
+      for (const item of [...items].reverse()) {
         const key = item.food_id ? `id:${item.food_id}` : `name:${item.name}`;
         if (!freq[key]) {
           freq[key] = {
@@ -60,18 +71,23 @@ router.get('/recent-foods', authMW, roleCheck('patient'), async (req, res) => {
             per_100g: item.per_100g || null,
             count:    0,
             last_g:   item.grams,
+            source:   item.source || null,
+            label:    !!item.label,
+            qty_text: item.qty_text || null,
+            preparation: ['raw', 'cooked'].includes(item.preparation) ? item.preparation : null,
           };
         }
         freq[key].count++;
-        freq[key].last_g = item.grams; // update to most recent gram amount
+        // Rows arrive newest first. Keep that first quantity and nutrition;
+        // older days contribute frequency only.
       }
     }
 
     const top8 = Object.values(freq)
       .sort((a, b) => b.count - a.count)
       .slice(0, 8)
-      .map(({ food_id, name, per_100g, count, last_g }) => ({
-        food_id, name, per_100g, count, last_g,
+      .map(({ food_id, name, per_100g, count, last_g, source, label, qty_text, preparation }) => ({
+        food_id, name, per_100g, count, last_g, source, label, qty_text, preparation,
       }));
 
     res.json(top8);
@@ -186,6 +202,7 @@ router.get('/:date', authMW, async (req, res) => {
       activities:         profile.protocol_activities  || null,
       acv:                profile.protocol_acv         || null,
       supplements:        profile.protocol_supplements || null,
+      default_none:       profile.protocol_default_none === true,   // Fixes-3k: no selection = none (members from 3k on)
       custom_activities:  profile.custom_activities    || [],
       custom_acv:         profile.custom_acv           || [],
       custom_supplements: profile.custom_supplements   || [],
@@ -216,6 +233,8 @@ router.get('/:date', authMW, async (req, res) => {
       // default (the client's lib/day/sleep.js decides what that is).
       sleep_bed:     profile.sleep_bed     || null,
       sleep_wake:    profile.sleep_wake    || null,
+      // Fixes-2j: which of these the coach set and which are FitLife standards.
+      target_origin: targetOrigin(profile),
     };
 
     res.json(log ? { ...log, protocol } : { protocol });
@@ -278,6 +297,7 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     const body = isObj(req.body) ? req.body : {};
     const shapeError = dayShapeError(body);
     if (shapeError) return res.status(400).json({ error: shapeError });
+    const write = writeMetadata(body);
 
     // null and undefined both mean "empty". JSON.stringify(null) is the JSON
     // value null, which is not SQL NULL and breaks jsonb_each() later.
@@ -312,7 +332,29 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     const out = await withMemberLock(patientId, async (db) => {
       const { rows: [stored] } = await db.query(
         `SELECT * FROM daily_logs WHERE patient_id = $1 AND log_date = $2 FOR UPDATE`, [patientId, date]);
-      const stale = isStale(stored, body.base_saved_at);
+      const payloadHash = requestFingerprint(incoming, protocol_total);
+      const receipt = write ? (await db.query(
+        `SELECT * FROM daily_log_write_receipts WHERE patient_id=$1 AND log_date=$2 AND stream_id=$3`,
+        [patientId, date, write.streamId])).rows[0] : null;
+      const decision = receiptDecision(receipt, stored, write, payloadHash);
+      if (decision.replay) {
+        const extra = { ...(receipt.outcome || {}), idempotent: true, superseded: decision.superseded };
+        if (decision.externalChanged) {
+          extra.merged = true;
+          extra.kept_server = mergeOfflineDay(stored, incoming, body.base_food_ids).kept_server;
+        }
+        return { saved: stored, extra };
+      }
+      const stale = (isStale(stored, body.base_saved_at) || decision.externalChanged) && !decision.continuation;
+      const remember = async (saved, extra) => {
+        if (write) await db.query(
+          `INSERT INTO daily_log_write_receipts (patient_id,log_date,stream_id,sequence,payload_hash,day_hash,outcome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (patient_id,log_date,stream_id) DO UPDATE SET
+             sequence=EXCLUDED.sequence,payload_hash=EXCLUDED.payload_hash,day_hash=EXCLUDED.day_hash,outcome=EXCLUDED.outcome`,
+          [patientId, date, write.streamId, write.sequence, payloadHash, dayFingerprint(saved), JSON.stringify(extra)]);
+        return { saved, extra };
+      };
 
       // ── An offline copy arriving after newer edits (services/dayMerge.js) ──
       // Only replays from the offline queue say offline_replay. If the day was
@@ -324,7 +366,7 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
           `UPDATE daily_logs SET food_items = $3, saved_at = NOW()
             WHERE patient_id = $1 AND log_date = $2 RETURNING *`,
           [patientId, date, JSON.stringify(m.food_items)]);
-        return { saved, extra: { merged: true, kept_server: m.kept_server, food_added: m.added, food_removed: m.removed } };
+        return remember(saved, { merged: true, kept_server: m.kept_server, food_added: m.added, food_removed: m.removed });
       }
 
       // ── An online save from an app that is behind the server ──────────────
@@ -335,7 +377,14 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
         extra = { merged_live: true, kept_server: m.kept_server, food_added: m.food_added, food_removed: m.food_removed };
       }
 
-      const compliance_pct = calcCompliance(doc.activities, doc.acv, doc.supplements, protocol_total || null);
+      // Fixes-3k: no total from the app (an older app, or 0) → the member's own in-force total, not the 16-item floor;
+      // for a new-rule member only ticks of items in force count.
+      // Existing members: exactly as before (the app's total, else the 16 floor).
+      const scoreProfile = await protocolForScore(db, patientId);
+      const newRule = scoreProfile?.protocol_default_none === true;
+      const compliance_pct = calcCompliance(doc.activities, doc.acv, doc.supplements,
+        newRule ? ((Number(protocol_total) > 0 ? Number(protocol_total) : null) ?? protocolTotalFor(scoreProfile)) : (protocol_total || null),
+        inForceFor(scoreProfile));
       const { rows: [saved] } = await db.query(
         `INSERT INTO daily_logs
            (patient_id, log_date, weight_kg, activities, acv,
@@ -368,7 +417,7 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
           compliance_pct,
         ]
       );
-      return { saved, extra };
+      return remember(saved, extra);
     });
 
     // Real-time: notify all monitors watching this patient. AFTER the lock is
@@ -393,6 +442,7 @@ router.post('/:date', authMW, roleCheck('patient'), async (req, res) => {
     res.json({ ...out.saved, ...out.extra });
   } catch (err) {
     console.error('POST /logs/:date error:', err);
+    if (err.status === 400 || err.status === 409) return res.status(err.status).json({ error: err.message });
     res.status(500).json({ error: 'Failed to save log' });
   }
 });

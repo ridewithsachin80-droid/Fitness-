@@ -15,17 +15,17 @@ import { disconnectSocket } from '../hooks/useSync';
 import { Card, SectionTitle, BackButton, MemberBottomNav, BottomNav } from '../components/UI';
 import HouseCircuits from '../components/coach/HouseCircuits';
 import VoiceLogging from '../components/VoiceLogging';
+import { VOICE_LANGUAGES, normalizeVoiceLang } from '../utils/voiceLanguage';
 import { roleLabel } from '../constants';
+import { AGE_MODES } from '../components/Onboarding';
+import { Icon } from '../components/primitives';
 import { changeMyPin, getMyReminderSchedule } from '../api/logs';
 import { pushPermission, registerPushSubscription } from '../hooks/usePush';
 
 
 const AVATARS = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
-const AGE_MODES = [
-  { id: 'child',  label: 'Child (5–17)',   emoji: '🌟' },
-  { id: 'adult',  label: 'Adult (18–59)',  emoji: '💪' },
-  { id: 'senior', label: 'Senior (60+)',   emoji: '🌿' },
-];
+// Fixes-3l (UX finding 14): one age picker. Settings used its own list (with "5–17" for children) that disagreed with
+// onboarding's ("Child · Under 18"); both now read onboarding's AGE_MODES.
 const DEFAULT_MEALS = ['Breakfast', 'Lunch', 'Dinner'];
 const MEAL_OPTIONS  = ['Breakfast', 'Morning Snack', 'Lunch', 'Afternoon Snack', 'Dinner', 'Bedtime Snack'];
 
@@ -33,6 +33,14 @@ export default function Settings() {
   // Which channels may reach this member. Opting out is deliberately separate
   // from the individual toggles — see the note by the switch below.
   const [notif, setNotif] = useState(null);
+  // Fixes-3j (QA review): re-read the phone's notification permission when the member answers the prompt here, or comes
+  // back from the phone's settings, so the App-notifications switch never contradicts the card below it.
+  const [permTick, setPermTick] = useState(0);
+  useEffect(() => {
+    const again = () => { if (document.visibilityState === 'visible') setPermTick(t => t + 1); };
+    document.addEventListener('visibilitychange', again);
+    return () => document.removeEventListener('visibilitychange', again);
+  }, []);
   const [notifBusy, setNotifBusy] = useState(false);
   const navigate = useNavigate();
 
@@ -58,12 +66,14 @@ export default function Settings() {
   const { user, logout } = useAuthStore();
   const {
     ageMode, setAgeMode,
+    theme, setTheme,
     fontSize, setFontSize,
     nutritionView, setNutritionView,
     guardianEmail, setGuardianEmail,
     emergencyContact, setEmergencyContact,
     mealSlots, setMealSlots,
     avatarIdx, setAvatarIdx,
+    voiceLang, setVoiceLang,
   } = useSettingsStore();
 
   const [subs,     setSubs]     = useState([]);
@@ -130,8 +140,9 @@ export default function Settings() {
         {sub && <p className="text-xs text-lo">{sub}</p>}
       </div>
       <button onClick={() => { onChange(!value); haptic(15); }}
-        style={{ width: 48, height: 28, borderRadius: 14, background: value ? '#D4AF37' : 'rgba(255,255,255,0.1)', transition: 'all .2s', position: 'relative', border: 'none', cursor: 'pointer' }}>
-        <div style={{ width: 22, height: 22, borderRadius: 11, background: '#fff', position: 'absolute', top: 3, left: value ? 23 : 3, transition: 'left .2s' }} />
+        style={{ width: 48, height: 28, borderRadius: 14, background: value ? 'var(--accent)' : 'rgb(var(--fit-ink) / 0.14)', transition: 'all .2s', position: 'relative', border: '1px solid var(--border)', cursor: 'pointer' }}>
+        {/* Visible in both themes, on and off (16 Oct 2026: the white knob vanished on light cards). */}
+        <div style={{ width: 22, height: 22, borderRadius: 11, background: value ? 'var(--fit-on-accent)' : 'var(--text-mid)', position: 'absolute', top: 2, left: value ? 22 : 2, transition: 'left .2s' }} />
       </button>
     </div>
   );
@@ -201,6 +212,11 @@ export default function Settings() {
         <Card>
           <SectionTitle icon="🎨">Appearance</SectionTitle>
 
+          <div className="flex gap-2 mb-5" aria-label="Colour theme">
+            {[['system', 'Match phone'], ['light', 'Light'], ['dark', 'Dark']].map(([value, label]) => <button key={value} type="button" onClick={() => setTheme(value)} aria-pressed={(theme || 'system') === value}
+              data-testid={`theme-${value}`} style={{ minHeight: 44 }}
+              className={`flex-1 rounded-xl border py-3 text-sm ${(theme || 'system') === value ? 'border-gold bg-gold/10 text-gold font-semibold' : 'border-hair text-mid'}`}>{label}</button>)}
+          </div>
           {/* Font size */}
           <div className="mb-4">
             <p className="text-xs text-faint mb-2 font-medium tracking-wider">Text size</p>
@@ -210,7 +226,7 @@ export default function Settings() {
                   style={{ minHeight: 52, flex: 1 }}
                   className={`rounded-xl border flex items-center justify-center gap-2 py-2 transition-all ${
                     fontSize === id ? 'border-gold/50 bg-gold/10' : 'border-hair bg-surface'}`}>
-                  <span style={{ fontSize: id === 'large' ? 20 : 14, fontWeight: 700, color: '#FFFFFF' }}>{sample}</span>
+                  <span style={{ fontSize: id === 'large' ? 20 : 14, fontWeight: 700, color: 'var(--text-hi)' }}>{sample}</span>
                   <span className="text-xs text-mid">{label}</span>
                 </button>
               ))}
@@ -234,6 +250,20 @@ export default function Settings() {
           </div>
         </Card>
 
+        <Card>
+          <SectionTitle>Voice language</SectionTitle>
+          <label className="block text-xs text-mid mb-2" htmlFor="settings-voice-language">
+            Choose the language you speak most. Mixed speech works too.
+          </label>
+          <select id="settings-voice-language" data-testid="settings-voice-language"
+            value={normalizeVoiceLang(voiceLang)} onChange={e => setVoiceLang(e.target.value)}
+            className="w-full rounded-xl border border-hair bg-surface px-3 text-sm text-white"
+            style={{ minHeight: 44 }}>
+            {VOICE_LANGUAGES.map(language => <option key={language.value} value={language.value}>{language.label}</option>)}
+          </select>
+          <p className="text-caption text-lo mt-2">Used for your next recording, including food search and AI chat.</p>
+        </Card>
+
         {/* Member-only: the age group changes the member's wording, the avatar sits on
             their greeting, and meal slots shape their own food log. A coach or admin
             has none of these, and was shown all three. */}
@@ -243,12 +273,13 @@ export default function Settings() {
           <SectionTitle icon="👤" tooltip="Changes terminology, text size, and which features are shown">Who is using this app?</SectionTitle>
           <div className="flex gap-2">
             {AGE_MODES.map(m => (
-              <button key={m.id} onClick={() => { setAgeMode(m.id); haptic(15); }}
+              <button key={m.id} onClick={() => { setAgeMode(m.id); haptic(15); }} aria-pressed={ageMode === m.id} data-testid={`settings-age-${m.id}`}
                 style={{ minHeight: 64, flex: 1 }}
                 className={`rounded-xl border flex flex-col items-center justify-center gap-1 py-2 transition-all ${
                   ageMode === m.id ? 'border-gold/50 bg-gold/10' : 'border-hair bg-surface'}`}>
-                <span style={{ fontSize: 22 }}>{m.emoji}</span>
+                <Icon name={m.icon} size={20} className={ageMode === m.id ? 'text-gold' : 'text-lo'} />
                 <span className="text-xs font-semibold text-white text-center leading-tight">{m.label}</span>
+                <span className="text-micro text-lo text-center leading-tight">{m.sub}</span>
               </button>
             ))}
           </div>
@@ -262,8 +293,8 @@ export default function Settings() {
               <button key={i} onClick={() => { setAvatarIdx(i); haptic(15); }}
                 style={{
                   width: '100%', aspectRatio: '1', borderRadius: 12, fontSize: 24,
-                  border: avatarIdx === i ? '2px solid #D4AF37' : '2px solid transparent',
-                  background: avatarIdx === i ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+                  border: avatarIdx === i ? '2px solid var(--accent)' : '2px solid transparent',
+                  background: avatarIdx === i ? 'rgb(var(--fit-accent) / 0.15)' : 'rgb(var(--fit-ink) / 0.04)',
                   cursor: 'pointer', transition: 'all .15s',
                 }}>{a}</button>
             ))}
@@ -282,9 +313,9 @@ export default function Settings() {
                     ? 'border-gold/30 bg-gold/[0.06]'
                     : 'border-hair bg-surface'}`}>
                 <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderColor: localMeals.includes(m) ? '#D4AF37' : 'rgba(255,255,255,0.2)',
-                  background: localMeals.includes(m) ? '#D4AF37' : 'transparent' }}>
-                  {localMeals.includes(m) && <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span>}
+                  borderColor: localMeals.includes(m) ? 'var(--accent)' : 'rgb(var(--fit-ink) / 0.2)',
+                  background: localMeals.includes(m) ? 'var(--accent)' : 'transparent' }}>
+                  {localMeals.includes(m) && <span style={{ fontSize: 10, color: 'var(--fit-on-accent)', fontWeight: 700 }}>✓</span>}
                 </div>
                 <span className="text-sm text-white font-medium">{m}</span>
               </button>
@@ -319,10 +350,10 @@ export default function Settings() {
                 </svg>
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ color: '#FFFFFF', fontWeight: 700, fontSize: 15, margin: 0 }}>Connected Devices</p>
-                <p style={{ color: '#6a6a78', fontSize: 12, margin: '2px 0 0' }}>HART, Garmin, Apple Watch, Samsung &amp; more</p>
+                <p style={{ color: 'var(--text-hi)', fontWeight: 700, fontSize: 15, margin: 0 }}>Connected Devices</p>
+                <p style={{ color: 'var(--text-lo)', fontSize: 12, margin: '2px 0 0' }}>Fitbit, WHOOP and Polar</p>
               </div>
-              <span style={{ color: '#7E8596', fontSize: 18 }}>›</span>
+              <span style={{ color: 'var(--text-lo)', fontSize: 18 }}>›</span>
             </div>
           </Card>
         </button>
@@ -355,25 +386,32 @@ export default function Settings() {
                     ['push', 'App notifications', 'Free, and only on this device'],
                     ['whatsapp', 'WhatsApp', 'Reminders and your weekly summary'],
                     ['sms', 'SMS', 'For when you have no internet'],
-                  ].map(([key, label, sub]) => (
+                  ].map(([key, label, sub]) => {
+                    // Fixes-3j (UX review finding 10): when this phone blocks notifications, the app switch must not
+                    // look ON above "Notifications are blocked". It shows off and says why; the saved choice is kept.
+                    const blocked = key === 'push' && pushBlockedOnThisPhone(permTick);
+                    const on = !!notif[key] && !blocked;
+                    return (
                     <label key={key}
                       className="flex items-center justify-between gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
                       <span className="min-w-0">
                         <span className="block text-sm text-white">{label}</span>
-                        <span className="block text-caption text-lo">{sub}</span>
+                        <span id={`notif-sub-${key}`} className={`block text-caption ${blocked ? 'text-warn' : 'text-lo'}`} data-testid={blocked ? 'push-blocked-note' : undefined}>{blocked ? 'Blocked on this device — how to allow it is below' : sub}</span>
                       </span>
                       <button
-                        role="switch" aria-checked={!!notif[key]} aria-label={label}
+                        role="switch" aria-checked={on} aria-label={label} aria-describedby={`notif-sub-${key}`}
                         onClick={() => { haptic(12); saveNotif({ [key]: !notif[key] }); }}
-                        disabled={notifBusy}
+                        disabled={notifBusy || blocked}
+                        data-testid={`notif-switch-${key}`}
                         style={{ width: 46, height: 28 }}
-                        className={`rounded-full flex-shrink-0 transition-colors relative ${
-                          notif[key] ? 'bg-gold' : 'bg-white/[0.12]'}`}>
+                        className={`rounded-full flex-shrink-0 transition-colors relative disabled:opacity-60 ${
+                          on ? 'bg-gold' : 'bg-white/[0.12]'}`}>
                         <span className={`absolute top-1 w-5 h-5 rounded-full bg-surface transition-all ${
-                          notif[key] ? 'left-[22px]' : 'left-1'}`} />
+                          on ? 'left-[22px]' : 'left-1'}`} />
                       </button>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <button onClick={() => { haptic(15); saveNotif({ opted_out: true }); }}
@@ -391,7 +429,7 @@ export default function Settings() {
           {/* Permission state first. "No active subscriptions" told a blocked
               member nothing about WHY nothing ever arrives, and gave them no
               way back — so the evening recap just silently never came. */}
-          <PushStatus onRegistered={() => getSubscriptions()
+          <PushStatus permTick={permTick} onPermission={() => setPermTick(t => t + 1)} onRegistered={() => getSubscriptions()
             .then(r => setSubs(Array.isArray(r.data) ? r.data : [])).catch(() => {})} />
 
           {loading ? <p className="text-xs text-lo py-2">Loading…</p> : subs.length === 0 ? (
@@ -470,7 +508,7 @@ export default function Settings() {
           Sign Out
         </button>
 
-        <p className="text-center text-xs text-ghost pt-2">FitLife · Enhanced UX</p>
+        <p className="text-center text-xs text-lo pt-2">FitLife</p>
       </div>
       {user?.role === 'patient' ? <MemberBottomNav /> : <BottomNav role={user?.role} />}
     </div>
@@ -485,8 +523,20 @@ export default function Settings() {
 //   denied      — the browser is blocking us; only site settings can undo it,
 //                 so say so plainly instead of leaving them guessing
 //   unsupported — iOS Safari outside an installed PWA, mostly
-function PushStatus({ onRegistered }) {
+/** Fixes-3j: true when this phone/browser has blocked FitLife's notifications. (The argument only makes callers re-read.) */
+export function pushBlockedOnThisPhone(_tick) {
+  try { return typeof Notification !== 'undefined' && Notification.permission === 'denied'; } catch { return false; }
+}
+/** Fixes-3j: the installed app has no address bar, so the way to allow notifications depends on how FitLife is open. */
+function isInstalledApp() {
+  try { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; } catch { return false; }
+}
+
+function PushStatus({ onRegistered, onPermission, permTick = 0 }) {
   const [perm, setPerm] = useState(() => pushPermission());
+  // Fixes-3j (QA re-check): re-read the permission whenever Settings does (the member may have allowed or blocked it in
+  // the phone's settings and come back), so this card and the App-notifications switch always agree.
+  useEffect(() => { setPerm(pushPermission()); }, [permTick]);
   const [busy, setBusy] = useState(false);
   // 'checking' | 'ok' | 'failed'. "Allowed by the browser" is not "registered
   // with FitLife": only the member's Today screen ever registered a phone, so a
@@ -508,6 +558,7 @@ function PushStatus({ onRegistered }) {
     try {
       const p = await Notification.requestPermission();
       setPerm(p);            // 'granted' runs register() through the effect above
+      onPermission?.(p);     // Fixes-3j (QA review): the channel switch above re-reads the permission
     } catch (_) { /* leave state as-is */ }
     finally { setBusy(false); }
   };
@@ -515,8 +566,8 @@ function PushStatus({ onRegistered }) {
   if (perm === 'granted') {
     if (reg === 'failed') {
       return (
-        <div className="mb-3 rounded-xl px-3 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]" data-testid="push-not-registered">
-          <p className="text-xs font-semibold text-amber-300">Allowed, but this phone is not registered</p>
+        <div className="mb-3 rounded-xl px-3 py-2.5 border border-warn/30 bg-warn/[0.08]" data-testid="push-not-registered">
+          <p className="text-xs font-semibold text-warn">Allowed, but this phone is not registered</p>
           <p className="text-caption text-mid mt-1 leading-relaxed">
             Your browser allows notifications, but FitLife could not register this phone, so nothing will arrive here yet.
           </p>
@@ -536,12 +587,12 @@ function PushStatus({ onRegistered }) {
 
   if (perm === 'denied') {
     return (
-      <div className="mb-3 rounded-xl px-3 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]">
-        <p className="text-xs font-semibold text-amber-300">Notifications are blocked</p>
-        <p className="text-caption text-mid mt-1 leading-relaxed">
-          Your browser is blocking them, so your evening recap and coach messages
-          won't arrive. To turn them back on: tap the lock icon in the address
-          bar (or Site settings), find Notifications, and switch it to Allow.
+      <div className="mb-3 rounded-xl px-3 py-2.5 border border-warn/30 bg-warn/[0.08]">
+        <p className="text-xs font-semibold text-warn">Notifications are blocked</p>
+        <p className="text-caption text-mid mt-1 leading-relaxed" data-testid="push-blocked-help">
+          {isInstalledApp()
+            ? <>This device is blocking them, so your evening recap and coach messages won't arrive. To allow them: on Android open <strong className="text-white">Settings → Apps → FitLife → Notifications</strong>; on iPhone <strong className="text-white">Settings → Notifications → FitLife</strong>; then switch them on.</>
+            : <>This browser is blocking them, so your evening recap and coach messages won't arrive. To allow them: tap the lock icon next to the web address (or Site settings), find Notifications, and switch it to Allow.</>}
         </p>
       </div>
     );

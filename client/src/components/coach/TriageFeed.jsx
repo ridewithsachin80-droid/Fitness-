@@ -27,7 +27,7 @@ import OffPlanFeed from './OffPlanFeed';
  */
 const TONE = {
   high:      { dot: 'bg-red-400',    text: 'text-red-400',    label: 'High' },
-  attention: { dot: 'bg-amber-400',  text: 'text-amber-300',  label: 'Attention' },
+  attention: { dot: 'bg-warn',  text: 'text-warn',  label: 'Attention' },
   watch:     { dot: 'bg-gold',       text: 'text-gold-light', label: 'Watch' },
   ok:        { dot: 'bg-ok',         text: 'text-mid',        label: 'On track' },
 };
@@ -109,7 +109,7 @@ export default function TriageFeed({ onLoaded }) {
       <p className="text-caption text-mid mt-0.5" data-testid="triage-counts">
           <span className="text-white font-semibold tabular-nums">{counts.total}</span> members ·{' '}
           <span className="text-ok font-semibold tabular-nums">{counts.on_track}</span> on track ·{' '}
-          <span className="text-amber-300 font-semibold tabular-nums">{counts.attention + counts.watch}</span> need attention
+          <span className="text-warn font-semibold tabular-nums">{counts.attention + counts.watch}</span> need attention
           {counts.high > 0 && <> · <span className="text-red-400 font-semibold tabular-nums">{counts.high}</span> high</>}
       </p>
 

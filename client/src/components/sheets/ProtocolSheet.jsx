@@ -1,7 +1,7 @@
 import { Sheet, Pressable, Eyebrow } from '../primitives';
 import { SectionTitle } from '../UI';
 import { haptic } from '../../store/settingsStore';
-import { AUTO_TICK_IDS } from '../../lib/day';
+import { AUTO_TICK_IDS, routineOrigin, protocolDefaultNone } from '../../lib/day';
 
 /**
  * ProtocolSheet — the day's activities, ACV doses and supplements as chips.
@@ -58,6 +58,14 @@ export default function ProtocolSheet({ open, onClose, m }) {
     <Sheet open={open && !loading} onClose={onClose} eyebrow="Today's protocol" title={`${protocolDone} of ${protocolTotal} done`}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <p className="text-eyebrow text-lo mb-3">Tap to mark done · long-press for timing · AUTO items tick from your Workout log</p>
+      {routineOrigin(m.protocol).allStandard && (
+        <p className="text-caption text-mid -mt-1 mb-3" data-testid="protocol-standard-note">
+          {protocolDefaultNone(m.protocol)
+            // Fixes-3k: a member created from 3k on has no supplements or ACV until the coach adds them.
+            ? 'FitLife’s standard activities. Your coach hasn’t chosen yours yet; supplements and apple cider vinegar are added only by your coach.'
+            : 'FitLife’s standard routine. Your coach hasn’t chosen yours yet, so every item is on.'}
+        </p>
+      )}
 
       {activeActivities.length > 0 && (
         <div className="mb-4">
@@ -75,14 +83,14 @@ export default function ProtocolSheet({ open, onClose, m }) {
       {activeACV.length > 0 && (
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
-            <Eyebrow>ACV · {acvDone}/{activeACV.length}</Eyebrow>
+            <Eyebrow>Apple cider vinegar · {acvDone}/{activeACV.length}</Eyebrow>
             <button type="button" onClick={() => setAcvExpanded(v => !v)} className="text-eyebrow text-gold font-bold" style={{ minHeight: 28 }}>
-              {acvExpanded ? 'Hide' : 'Why ACV?'}
+              {acvExpanded ? 'Hide' : 'Why?'}
             </button>
           </div>
           {acvExpanded && (
             <div className="mb-2 bg-gold/[0.08] border border-gold/15 rounded-xl px-3 py-2.5 text-xs text-mid leading-relaxed">
-              <strong className="text-gold-light">Why ACV?</strong> 1 tbsp in 200ml warm water, through a straw, 15 min before meals — helps stabilise blood sugar, supports digestion, and may reduce appetite.
+              <strong className="text-gold-light">Why apple cider vinegar (ACV)?</strong> 1 tbsp in 200ml warm water, through a straw, 15 min before meals — helps stabilise blood sugar, supports digestion, and may reduce appetite.
             </div>
           )}
           <div className="flex flex-wrap gap-1.5">

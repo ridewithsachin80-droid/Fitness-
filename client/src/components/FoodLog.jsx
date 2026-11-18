@@ -18,23 +18,24 @@ import { useSettingsStore, haptic } from '../store/settingsStore';
 import AIFoodSearch from './AIFoodSearch';
 import { useAIChat } from '../store/aiChatStore';
 import { useVoiceInput } from '../hooks/useVoiceInput';
-
 // ── Extended portion map ──────────────────────────────────────────────────────
 // Sprint 12c: the pieces above the main component live in components/food/.
 import { TYPICAL_GRAMS, smartGrams, PORTIONS, PortionPicker } from './food/portions.jsx';
 import { TrafficBadge } from './food/TrafficBadge';
 import { calcMacros } from './food/macros';
+import { foodSource } from '../utils/foodProvenance';
 import { BarcodeScanner, hasBarcodeDetector } from './food/BarcodeScanner';
 import { PrescribedMeals } from './food/PrescribedMeals';
 import MacroEditor from './food/MacroEditor';
+import FoodVoiceStatus from './food/FoodVoiceStatus'; import WeighingHint from './food/WeighingHint';
 import { useMemberLabels, per100Of } from './food/useMemberLabels';
 
-export default function FoodLog({ items = [], onChange, calorieTarget }) {
+export default function FoodLog({ items = [], onChange, calorieTarget, mealTarget = null, mealHeadingRef }) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
   const nutritionView = useSettingsStore(s => s.nutritionView);
 
   const [showForm, setShowForm]       = useState(false);
-  const [meal, setMeal]               = useState(mealSlots[0] || 'Meal 1');
+  const [meal, setMeal]               = useState(() => mealSlots.find(slot => slot.toLowerCase() === mealTarget?.meal?.toLowerCase()) || mealSlots[0] || 'Meal 1');
   const [query, setQuery]             = useState('');
   const [grams, setGrams]             = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -71,9 +72,9 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   }, []);
 
   // Edited macros onto one logged item; a remembered label is offered by the search at once.
-  const saveMacros = (item, per100g, { remembered }) => {
-    onChange(items.map(i => (i.id === item.id ? { ...i, per_100g: per100g, label: true } : i)));
-    if (remembered) remember(item.name, per100g, item.food_id || null);
+  const saveMacros = (item, per100g, { remembered, preparation }) => {
+    onChange(items.map(i => (i.id === item.id ? { ...i, per_100g: per100g, label: true, ...(preparation !== undefined ? { preparation } : {}) } : i)));
+    if (remembered) remember(item.name, per100g, item.food_id || null, preparation);
     setEditingId(null);
   };
 
@@ -103,6 +104,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         meal,
         food_id:  i.food_id ?? null,
         per_100g: i.per_100g || null,
+        source:i.source || 'saved', label:!!i.label, qty_text:i.qty_text || null,
       }));
     if (!toAdd.length) { setRepeatNote('Nothing to copy.'); return; }
     onChange([...(items || []), ...toAdd]);
@@ -166,6 +168,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const voiceLang = useSettingsStore(st => st.voiceLang || 'en-IN');
   const voice = useVoiceInput({
     lang: voiceLang,
+    contextKey: `food:${meal}:${showForm}`,
     onInterim: (t) => { setQuery(t); setSelected(null); },
     onFinal:   (t) => {
       setQuery(t); setSelected(null);
@@ -180,12 +183,13 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState(null);
   const onBarcodeFound = useCallback(async (barcode) => {
+    voice.cancel();
     setScanning(false);
     haptic(20);
     setScanMsg('Looking up product…');
     try {
       const { data } = await api.post('/foods/lookup', { barcode });
-      setSelected({ id: data.id, name: data.name, per_100g: data.per_100g });
+      setSelected({ id: data.id, name: data.name, per_100g: data.per_100g, preparation: data.preparation ?? null });
       setQuery(data.name);
       setScanMsg(null);
     } catch (err) {
@@ -223,6 +227,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   }, [labelMatches]);
 
   const handleQueryChange = (val) => {
+    voice.cancel(); // a typed correction wins over any pending recording/retry
     setQuery(val);
     setSelected(null);
     setLookupStatus('');
@@ -233,6 +238,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const pickSuggestion = (food) => {
+    voice.cancel();
     clearTimeout(debounceRef.current);
     setSelected(food);
     setQuery(food.name);
@@ -261,6 +267,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const add = () => {
+    voice.cancel();
     if (!query.trim() || !grams) return;
     const g = parseFloat(grams);
     if (isNaN(g) || g <= 0) return;
@@ -268,7 +275,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
       id: Date.now(), name: selected?.name || query.trim(),
       grams: g, meal,
       food_id: selected?.label ? selected.base_food_id : (selected?.id || null),
-      per_100g: selected?.per_100g || null,
+      per_100g: selected?.per_100g || null, preparation: selected?.preparation ?? null,   // raw/cooked as stored (2h); typed: null
       ...(selected?.label ? { label: true } : {}),
     }]);
     haptic(25);
@@ -312,17 +319,19 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   }, []);
 
   const closeForm = () => {
+    voice.cancel();
     clearTimeout(debounceRef.current);
     setShowForm(false); setQuery(''); setGrams(''); setSelected(null);
     setLookupStatus(''); setSuggestions([]); setShowSuggestions(false);
   };
 
   const pickRecent = (food) => {
+    voice.cancel();
     // A food the member has their own label for comes back with the label.
     const mine = labelFor(food.name);
     setSelected(mine
-      ? { id: `label-${mine.id}`, name: food.name, per_100g: mine.per_100g, label: true, base_food_id: mine.base_food_id || food.food_id || null }
-      : { id: food.food_id, name: food.name, per_100g: food.per_100g });
+      ? { id: `label-${mine.id}`, name: food.name, per_100g: mine.per_100g, label: true, base_food_id: mine.base_food_id || food.food_id || null, preparation: mine.preparation ?? null }
+      : { id: food.food_id, name: food.name, per_100g: food.per_100g, preparation: food.preparation ?? null });
     setQuery(food.name);
     setGrams(String(food.last_g || 100));
     setSuggestions([]); setShowSuggestions(false); setLookupStatus('');
@@ -331,6 +340,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
   };
 
   const handleAISelect = (food) => {
+    voice.cancel();
     // food arrives as { ...aiFood, name: userTypedQuery, per_100g: {...}, grams: N }
     // We call onChange directly — never relies on volatile `selected` state
     const chosenGrams = food.grams || smartGrams(food.name) || 100;
@@ -369,7 +379,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
         className="w-full flex items-center gap-3 bg-gradient-to-r from-gold/[0.14] to-gold-dark/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgb(var(--fit-accent)/0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
           <span className="block text-caption text-mute leading-tight truncate">Say your whole day — I'll fill the entire log</span>
@@ -388,7 +398,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                   style={{ minHeight: 44, whiteSpace: 'nowrap', flexShrink: 0 }}
                   className="flex items-center gap-2 text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-xl px-3 py-2 transition-colors text-soft font-medium">
                   <span className="truncate max-w-[100px]">{food.name}</span>
-                  {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
+                  {kcal && <span className="text-gold font-bold whitespace-nowrap">{kcal} kcal</span>}
                 </button>
               );
             })}
@@ -483,18 +493,21 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
         const mealItems = byMeal(m);
         const totals = mealTotal(mealItems);
         return (
-          <div key={m}>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <div key={m} data-food-meal={m}>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap scroll-mt-2 outline-none focus-visible:ring-2 focus-visible:ring-gold rounded"
+              role="heading" aria-level={3} tabIndex={mealTarget && slotOf({ meal: mealTarget.meal }) === m ? 0 : -1}
+              ref={mealTarget && slotOf({ meal: mealTarget.meal }) === m ? mealHeadingRef : undefined}
+              data-food-meal-target={mealTarget && slotOf({ meal: mealTarget.meal }) === m ? "" : undefined}>
               <span className="text-xs font-bold text-ghost tracking-wider">{m}</span>
               {mealItems.length > 0 && (
                 <>
                   <span className="text-xs text-ghost">{mealItems.reduce((s,i)=>s+i.grams,0).toFixed(0)}g</span>
-                  <span className="text-xs font-semibold text-orange-400">{totals.cal} kcal</span>
+                  <span className="text-xs font-semibold text-gold">{totals.cal} kcal</span>
                   {/* Macros for the meal in both views (10 Oct 2026) — the simple
                       view used to show calories only. */}
-                  <span className="text-xs text-blue-400">P {totals.pro.toFixed(1)}g</span>
-                  <span className="text-xs text-amber-400">C {totals.carb.toFixed(1)}g</span>
-                  <span className="text-xs text-amber-400">F {totals.fat.toFixed(1)}g</span>
+                  <span className="text-xs text-mid">P {totals.pro.toFixed(1)}g</span>
+                  <span className="text-xs text-mid">C {totals.carb.toFixed(1)}g</span>
+                  <span className="text-xs text-mid">F {totals.fat.toFixed(1)}g</span>
                 </>
               )}
             </div>
@@ -515,13 +528,13 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                         {/* Change the macros: the pack's numbers, calories follow (10 Oct 2026). */}
                         <button onClick={() => { haptic(10); setEditingId(editingId === item.id ? null : item.id); }}
                           data-testid="food-edit-macros" aria-expanded={editingId === item.id}
-                          style={{ minHeight: 32 }}
+                          style={{ minHeight: 44 }}
                           className="ml-auto text-caption font-semibold text-gold px-2 rounded-lg flex-shrink-0 active:bg-gold/10">
                           Edit macros
                         </button>
                         {/* Always-visible remove button */}
                         <button onClick={() => remove(item.id)}
-                          style={{ minWidth: 32, minHeight: 32 }}
+                          style={{ minWidth: 44, minHeight: 44 }}
                           className="flex items-center justify-center rounded-full text-ghost hover:text-red-400 hover:bg-red-400/10 transition-all ml-2 flex-shrink-0"
                           aria-label="Remove item">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -529,9 +542,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                           </svg>
                         </button>
                       </div>
+                      {(item.source || item.label) && <p className="text-caption text-mid mt-1" data-testid="logged-food-source">{foodSource(item)}</p>}
                       {editingId === item.id && (
                         <div className="mt-2 pt-2 border-t border-hair">
-                          <MacroEditor name={item.name} grams={item.grams} per100g={per100Of(item)}
+                          <MacroEditor name={item.name} grams={item.grams} per100g={per100Of(item)} preparation={item.preparation ?? null}
                             foodId={item.food_id || null} isLabel={!!item.label || !!labelFor(item.name)}
                             onSave={(per100g, how) => saveMacros(item, per100g, how)}
                             onCancel={() => setEditingId(null)} />
@@ -542,10 +556,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                           ? <TrafficBadge n={n} target={calorieTarget} />
                           : (
                             <div className="flex gap-3 mt-1">
-                              <span className="text-xs font-bold text-orange-400">{n.cal} kcal</span>
-                              <span className="text-xs text-blue-400">P {n.pro}g</span>
-                              <span className="text-xs text-amber-400">C {n.carb}g</span>
-                              <span className="text-xs text-amber-400">F {n.fat}g</span>
+                              <span className="text-xs font-bold text-gold">{n.cal} kcal</span>
+                              <span className="text-xs text-mid">P {n.pro}g</span>
+                              <span className="text-xs text-mid">C {n.carb}g</span>
+                              <span className="text-xs text-mid">F {n.fat}g</span>
                             </div>
                           )
                       )}
@@ -569,10 +583,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
           <div className="flex items-center justify-between bg-white/[0.04] rounded-2xl px-4 py-2.5 border border-white/[0.06]">
             <span className="text-xs font-bold text-ghost tracking-wider">Day total</span>
             <div className="flex gap-3">
-              <span className="text-xs font-bold text-orange-400">{dayTotal.cal} kcal</span>
-              <span className="text-xs text-blue-400">P {dayTotal.pro.toFixed(1)}g</span>
-              <span className="text-xs text-amber-400">C {dayTotal.carb.toFixed(1)}g</span>
-              <span className="text-xs text-amber-400">F {dayTotal.fat.toFixed(1)}g</span>
+              <span className="text-xs font-bold text-gold">{dayTotal.cal} kcal</span>
+              <span className="text-xs text-mid">P {dayTotal.pro.toFixed(1)}g</span>
+              <span className="text-xs text-mid">C {dayTotal.carb.toFixed(1)}g</span>
+              <span className="text-xs text-mid">F {dayTotal.fat.toFixed(1)}g</span>
             </div>
           </div>
         );
@@ -612,7 +626,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                       className="flex items-center gap-1.5 text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-xl px-2.5 py-1.5 transition-colors text-soft font-medium">
                       <span className="truncate max-w-[100px]">{food.name}</span>
                       <span className="text-faint">{food.last_g}g</span>
-                      {kcal && <span className="text-orange-400 font-bold">{kcal}k</span>}
+                      {kcal && <span className="text-gold font-bold whitespace-nowrap">{kcal} kcal</span>}
                     </button>
                   );
                 })}
@@ -643,7 +657,8 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 </button>
               )}
               {/* Voice input button */}
-              <button onClick={startVoice}
+              <button onClick={startVoice} disabled={voice.requesting || voice.transcribing || voice.canRetry}
+                aria-label={listening ? 'Stop food recording' : 'Speak food name'}
                 style={{ width: 44, height: 44, minWidth: 44 }}
                 className={`rounded-xl flex items-center justify-center border transition-all ${
                   listening
@@ -662,15 +677,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 <span className="absolute right-14 top-1/2 -translate-y-1/2 text-gold-deep text-sm font-bold">✓</span>
               )}
             </div>
-            {listening && (
-              <div className="mt-1 text-xs text-red-400 font-medium px-1">🎤 Listening… tap again when done</div>
-            )}
-            {voice.transcribing && (
-              <div className="mt-1 text-xs text-gold font-medium px-1">✨ Getting the exact words…</div>
-            )}
-            {voice.error && (
-              <div className="mt-1 text-xs text-amber-400 font-medium px-1">{voice.error}</div>
-            )}
+            <FoodVoiceStatus voice={voice} />
             {scanMsg && (
               <div className="mt-1 text-xs text-gold font-medium px-1">{scanMsg}</div>
             )}
@@ -697,7 +704,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                         {food.verified && (
                           <span className="text-xs bg-gold/[0.12] text-gold px-1.5 py-0.5 rounded font-semibold">✓</span>
                         )}
-                        <span className="text-xs font-bold text-orange-400">{food.per_100g?.calories || 0} kcal</span>
+                        <span className="text-xs font-bold text-gold">{food.per_100g?.calories || 0} kcal</span>
                       </div>
                     </div>
                     {food.name_local && food.name_local !== food.name && (
@@ -710,8 +717,8 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                   onTouchStart={(e) => e.preventDefault()}
                   onClick={() => { setShowSuggestions(false); lookupOff(); }}
                   style={{ minHeight: 44 }}
-                  className="w-full text-left px-3 py-2.5 hover:bg-blue-500/10 transition-colors border-t border-white/[0.05]">
-                  <span className="text-xs text-blue-400 font-semibold">🔍 Search Open Food Facts for "{query}"</span>
+                  className="w-full text-left px-3 py-2.5 hover:bg-gold/10 transition-colors border-t border-white/[0.05]">
+                  <span className="text-xs text-mid font-semibold">🔍 Search Open Food Facts for "{query}"</span>
                 </button>
               </div>
             )}
@@ -722,7 +729,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
                 {lookupStatus === 'found'    && <p className="text-xs text-gold-deep px-1 font-semibold">✓ Found on Open Food Facts</p>}
                 {lookupStatus === 'notfound' && <p className="text-xs text-faint px-1">Not found — searching AI…</p>}
                 {lookupStatus === '' && (
-                  <button onClick={lookupOff} className="text-xs text-blue-400 font-semibold px-1 hover:underline">
+                  <button onClick={lookupOff} className="text-xs text-mid font-semibold px-1 hover:underline">
                     🔍 Not in local DB — search Open Food Facts
                   </button>
                 )}
@@ -754,10 +761,10 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
             <div className="bg-charcoal rounded-xl border border-gold/20 px-3 py-2">
               <p className="text-xs text-faint mb-1">Per 100g — {selected.name}</p>
               <div className="flex gap-3 flex-wrap">
-                <span className="text-xs font-bold text-orange-400">{selected.per_100g.calories || 0} kcal</span>
-                <span className="text-xs text-blue-400">P {selected.per_100g.protein || 0}g</span>
-                <span className="text-xs text-amber-400">C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net</span>
-                <span className="text-xs text-amber-400">F {selected.per_100g.fat || 0}g</span>
+                <span className="text-xs font-bold text-gold">{selected.per_100g.calories || 0} kcal</span>
+                <span className="text-xs text-mid">P {selected.per_100g.protein || 0}g</span>
+                <span className="text-xs text-mid">C {selected.per_100g.net_carbs ?? selected.per_100g.total_carbs ?? 0}g net</span>
+                <span className="text-xs text-mid">F {selected.per_100g.fat || 0}g</span>
                 {!selected.verified && <span className="text-xs text-faint italic">unverified</span>}
               </div>
             </div>
@@ -783,6 +790,7 @@ export default function FoodLog({ items = [], onChange, calorieTarget }) {
               className="px-3 py-2.5 text-ghost hover:text-mute text-lg leading-none"
               aria-label="Close">×</button>
           </div>
+          <WeighingHint food={selected?.name ? selected : { name: query }} />
         </div>
       )}
     </div>

@@ -19,13 +19,23 @@
  *    a guess. The signed-in member is asked, once, whether they are theirs.
  */
 
+import { baseOf } from './logSync';
+
 export const MAX_ATTEMPTS   = 12;
 export const STUCK_AFTER_MS = 24 * 60 * 60 * 1000;
 
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);
 
 export const ownerKey = (ownerId, date) => `log:${ownerId}:${date}`;
-export const isLegacy = (item) => item.ownerId == null;
+const isLog = (item) => item.kind !== 'stream';
+export const isLegacy = (item) => isLog(item) && item.ownerId == null;
+export const withWriteMetadata = (log, write) => write
+  ? { ...log, client_stream_id: write.streamId, client_sequence: write.sequence }
+  : log;
+const sameWrite = (a, b) => a?.write && b?.write
+  && a.write.streamId === b.write.streamId && a.write.sequence === b.write.sequence;
+const followsWrite = (log, write) => write && log?.base_client_write?.streamId === write.streamId
+  && log.base_client_write.sequence === write.sequence;
 
 let seq = 0;
 export function newRev(now = Date.now()) {
@@ -66,24 +76,118 @@ export function createQueue({ getDB, store, post, getOwner, now = Date.now, onCh
     return did;
   }
 
+  async function finishUpload(db, item, response) {
+    const tx = db.transaction(store, 'readwrite');
+    const current = await tx.store.get(item.key);
+    if (current && (current.rev === item.rev || sameWrite(current, item))) {
+      await tx.store.delete(item.key);
+    } else if (current && sameId(current.ownerId, item.ownerId)
+      && response?.saved_at && !response.merged && !response.merged_live && !response.superseded
+      && followsWrite(current.log, item.write)
+      && (current.log.base_saved_at ?? null) === (item.log.base_saved_at ?? null)) {
+      // The member edited again during OUR upload. Its confirmed server copy
+      // is now the newer edit's base; otherwise our own commit is mistaken
+      // for an external conflict and the next replay discards water/weight.
+      // A true conflict merge keeps the original base and existing policy.
+      await tx.store.put({ ...current, rev: newRev(now()), log: { ...current.log,
+        base_saved_at: response.saved_at,
+        base_food_ids: (response.food_items || []).map(i => i?.id).filter(Boolean),
+        base_fields: baseOf(response),
+      } });
+    }
+    await tx.done;
+  }
+
   async function enqueue(date, log, ownerId = getOwner()) {
     if (ownerId == null) throw new Error('Cannot queue a log without a signed-in member.');
     const db = await getDB();
-    await db.put(store, {
+    // This counter survives queue draining and is shared by tabs. Allocating
+    // it in the same transaction as the payload prevents duplicate sequence
+    // numbers and lets the server recognize an older timed-out write.
+    const tx = db.transaction(store, 'readwrite');
+    const key = ownerKey(ownerId, date), streamKey = `stream:${ownerId}:${date}`;
+    const previous = await tx.store.get(key);
+    if (previous && !followsWrite(log, previous.write)) {
+      await tx.done;
+      const error = new Error('Another tab has a pending edit for this day. Your change is still on screen. Sync the other tab first, then try saving again.');
+      error.code = 'QUEUE_CONFLICT';
+      throw error;
+    }
+    const stream = await tx.store.get(streamKey);
+    const write = { streamId: stream?.streamId || newRev(now()), sequence: (stream?.sequence || 0) + 1 };
+    const item = {
       key: ownerKey(ownerId, date), ownerId, date, log,
-      queuedAt: now(), rev: newRev(now()),
-    });
+      queuedAt: now(), rev: newRev(now()), write,
+    };
+    await tx.store.put({ key: streamKey, kind: 'stream', ...write });
+    await tx.store.put(item);
+    await tx.done;
+    onChange();
+    return { ...item, previous };
+  }
+
+  /** An invalid/canceled direct request was never accepted. Restore its prior
+   *  queue copy only while this is still the same logical edit; a newer edit
+   *  made meanwhile must remain untouched. */
+  async function restore(prepared) {
+    if (!prepared) return;
+    const db = await getDB(), tx = db.transaction(store, 'readwrite');
+    const current = await tx.store.get(prepared.key);
+    if (current && (current.rev === prepared.rev || sameWrite(current, prepared))) {
+      if (prepared.previous) await tx.store.put(prepared.previous);
+      else await tx.store.delete(prepared.key);
+    }
+    await tx.done;
     onChange();
   }
 
-  /** A save that reached the server directly makes any queued copy of that
-   *  day stale — replaying it later would undo the newer save. */
-  async function supersede(date, ownerId = getOwner()) {
-    if (ownerId == null) return;
+  /** Restore the member's pending day when reopening the app offline. A
+   *  later edit must start from this copy, not an empty/stale server day. */
+  async function read(date, ownerId = getOwner()) {
+    if (ownerId == null) return null;
+    const db = await getDB();
+    const key = ownerKey(ownerId, date);
+    let item = await db.get(store, key);
+    if (item && sameId(item.ownerId, ownerId) && !item.write) {
+      // Migrate an older owner-tagged queue only when that actual payload is
+      // read. Its next edit can then carry an explicit parent identity too.
+      const tx = db.transaction(store, 'readwrite');
+      item = await tx.store.get(key);
+      if (item && !item.write) {
+        const streamKey = `stream:${ownerId}:${date}`, stream = await tx.store.get(streamKey);
+        const write = { streamId: stream?.streamId || newRev(now()), sequence: (stream?.sequence || 0) + 1 };
+        item = { ...item, write };
+        await tx.store.put({ key: streamKey, kind: 'stream', ...write });
+        await tx.store.put(item);
+      }
+      await tx.done;
+    }
+    return item && sameId(item.ownerId, ownerId)
+      ? { ...item.log, ...(item.write ? { base_client_write: item.write } : {}) } : null;
+  }
+
+  /** Capture the queued revision BEFORE a direct request starts. Storage
+   *  failure must not prevent an otherwise successful online save. */
+  async function revision(date, ownerId = getOwner()) {
+    if (ownerId == null) return null;
+    try {
+      const db = await getDB();
+      return (await db.get(store, ownerKey(ownerId, date)))?.rev ?? null;
+    } catch (_) { return null; }
+  }
+
+  /** A direct save supersedes only the queued copy it knew about when it
+   *  started. A newer offline edit made while that request was in flight must
+   *  survive even if the older request finishes successfully. */
+  async function supersede(date, ownerId = getOwner(), rev, sentLog, response, write) {
+    if (ownerId == null || (rev == null && !sentLog)) return;
     try {
       const db  = await getDB();
       const key = ownerKey(ownerId, date);
-      if (await db.get(store, key)) { await db.delete(store, key); onChange(); }
+      if (sentLog && response) {
+        await finishUpload(db, { key, ownerId, rev, log: sentLog, write }, response);
+        onChange();
+      } else if (await ifSameRev(db, key, rev, (s) => s.delete(key))) onChange();
     } catch (_) { /* never fail a successful save over queue housekeeping */ }
   }
 
@@ -93,18 +197,33 @@ export function createQueue({ getDB, store, post, getOwner, now = Date.now, onCh
 
     const db    = await getDB();
     const items = (await db.getAll(store))
-      .filter(i => sameId(i.ownerId, owner) && (i.attempts || 0) < MAX_ATTEMPTS);
+      .filter(i => isLog(i) && sameId(i.ownerId, owner) && (i.attempts || 0) < MAX_ATTEMPTS);
 
     let sent = 0, stopped = null;
     for (const item of items) {
+      // A prior upload can take seconds. Another save may remove or replace
+      // a later item from this snapshot while we wait; never send that stale
+      // copy merely because it was present at the start of the pass.
+      const current = await db.get(store, item.key);
+      if (!current || current.rev !== item.rev) continue;
+      if (!item.write) {
+        // Entries saved by the previous app version need their receipt before
+        // the first network attempt too, not only when the day is reopened.
+        await read(item.date, owner);
+        const upgraded = await db.get(store, item.key);
+        if (!upgraded || upgraded.rev !== item.rev) continue;
+        item.write = upgraded.write;
+      }
       // Signed out, or someone else signed in, while this pass was running.
       if (!sameId(getOwner(), owner)) { stopped = 'owner-changed'; break; }
       try {
         // A replay says so: the server then checks whether the day changed
         // since this copy was made, and merges instead of overwriting.
-        const res = await post(item.date, { ...item.log, offline_replay: true });
-        await ifSameRev(db, item.key, item.rev, (s) => s.delete(item.key));
-        if (res?.data?.merged) { try { onMerged({ date: item.date, keptServer: res.data.kept_server || [] }); } catch (_) {} }
+        const res = await post(item.date, { ...withWriteMetadata(item.log, item.write), offline_replay: true });
+        await finishUpload(db, item, res?.data);
+        if (res?.data?.merged && sameId(getOwner(), owner)) {
+          try { onMerged({ ownerId: owner, date: item.date, keptServer: res.data.kept_server || [] }); } catch (_) {}
+        }
         sent += 1;
       } catch (err) {
         if (isAuthFailure(err)) { stopped = 'auth'; break; }
@@ -147,7 +266,7 @@ export function createQueue({ getDB, store, post, getOwner, now = Date.now, onCh
     if (owner == null) return empty;
     const db    = await getDB();
     const all   = await db.getAll(store);
-    const mine  = all.filter(i => sameId(i.ownerId, owner));
+    const mine  = all.filter(i => isLog(i) && sameId(i.ownerId, owner));
     const loose = legacyFor(all, owner);
     const out   = { ...empty, unclaimed: loose.length, unclaimedDates: loose.map(i => i.date).sort() };
     if (!mine.length) return out;
@@ -205,5 +324,5 @@ export function createQueue({ getDB, store, post, getOwner, now = Date.now, onCh
     onChange();
   }
 
-  return { enqueue, supersede, sync, retryNow, status, claimLegacy, dismissLegacy };
+  return { enqueue, restore, read, revision, supersede, sync, retryNow, status, claimLegacy, dismissLegacy };
 }

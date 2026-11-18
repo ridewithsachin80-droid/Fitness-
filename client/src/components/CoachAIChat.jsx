@@ -71,9 +71,11 @@ function FoodEditCard({ food, onSaved }) {
   const [done, setDone]   = useState(null);
 
   const micros = Object.keys(food.per_100g || {})
-    .filter(k => !MACRO_FIELDS.some(([m]) => m === k) && k !== 'net_carbs');
+    .filter(k => !MACRO_FIELDS.some(([m]) => m === k) && k !== 'net_carbs' && k !== '_status');   // _status is the per-nutrient status map (Fixes-2k)
 
-  const set = (k, v) => setVals(o => ({ ...o, [k]: v === '' ? 0 : parseFloat(v) || 0 }));
+  // Fixes-2k: a cleared micronutrient box is "not recorded" (null), not 0. Macros stay numbers.
+  const isMacro = (k) => MACRO_FIELDS.some(([m]) => m === k);
+  const set = (k, v) => setVals(o => ({ ...o, [k]: v === '' ? (isMacro(k) ? 0 : null) : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : (isMacro(k) ? 0 : null)) }));
 
   const save = async () => {
     setBusy(true); setErr('');
@@ -103,7 +105,7 @@ function FoodEditCard({ food, onSaved }) {
 
   return (
     <div className="mt-2 rounded-2xl bg-surface px-3.5 py-3"
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
       <p className="text-[14px] font-semibold text-white">{food.name}</p>
       <p className="text-caption text-lo mt-0.5">
         Per 100g · {food.verified ? 'verified' : `from ${food.source}, unverified`} ·
@@ -217,7 +219,7 @@ function FoodEditCard({ food, onSaved }) {
         <div className="grid grid-cols-2 gap-2 mt-2">
           {micros.map(k => (
             <label key={k} className="flex items-center gap-2">
-              <input type="number" inputMode="decimal" value={vals[k] ?? 0}
+              <input type="number" inputMode="decimal" value={vals[k] ?? ''} placeholder="—"
                 onChange={e => set(k, e.target.value)}
                 disabled={!food.editable || busy}
                 className="w-[74px] bg-charcoal border border-white/[0.09] rounded-lg
@@ -361,14 +363,26 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
   }, [open]);
 
   // Voice: review card above the input — see VoiceComposer for the flow
-  const vc = useVoiceComposer({ onSend: (t) => send(t), accent: '#e0c98a' });
+  const vc = useVoiceComposer({
+    onSend: (t) => send(t), // accent: the theme's own (was the old gold, 17 Oct 2026)
+    contextKey: `coach:${open ? 'open' : 'closed'}:${contextMember?.id ?? 'roster'}`,
+  });
+  useEffect(() => {
+    if (!open) vc.cancelCapture();
+  }, [open]); // the current render owns the capture; close always releases audio
 
   // ── Send → coach-parse ─────────────────────────────────────────────────────
   const send = useCallback(async (textOverride) => {
     const text = (textOverride ?? input).trim();
-    if (!text || busy) return;
+    if (!text) return;
+    if (busy || applying) {
+      // Dictation can finish while the previous request is running. Keep its
+      // words alongside the newer typed draft for a deliberate later send.
+      if (textOverride != null) setInput(previous => [previous.trim(), text].filter(Boolean).join('\n'));
+      return;
+    }
 
-    setInput('');
+    if (textOverride == null) setInput('');
     setMessages(m => [...m, { role: 'user', text }]);
     setBusy(true);
     haptic(10);
@@ -425,7 +439,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
     } finally {
       setBusy(false);
     }
-  }, [input, busy, contextMember?.id]);
+  }, [input, busy, applying, contextMember?.id]);
 
   const toggleAction = useCallback((mi, ai) => {
     setMessages(prev => {
@@ -571,7 +585,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
           </svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)]">✨</div>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgb(var(--fit-accent)/0.45)]">✨</div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">Coach AI</p>
             <p className="text-eyebrow text-ghost leading-tight">Manage protocols & messages by chat</p>
@@ -656,7 +670,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                           disabled={!a.resolved || m.applied}
                           className={`w-full text-left bg-charcoal border rounded-xl px-3.5 py-3 transition-all ${
                             !a.resolved
-                              ? 'border-amber-500/30 opacity-80'
+                              ? 'border-warn/30 opacity-80'
                               : a.on
                               ? 'border-gold/40 active:scale-[0.99]'
                               : 'border-white/[0.05] opacity-40'
@@ -676,7 +690,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                               )}
                             </div>
                             {!a.resolved && (
-                              <span className="text-tiny font-bold text-amber-400 bg-amber-500/[0.10] border border-amber-500/30 rounded-full px-2 py-0.5 flex-shrink-0">
+                              <span className="text-tiny font-bold text-warn bg-warn/[0.10] border border-warn/30 rounded-full px-2 py-0.5 flex-shrink-0">
                                 NOT FOUND
                               </span>
                             )}
@@ -689,7 +703,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                             ))}
                           </div>
                           {!a.resolved && (
-                            <p className="text-eyebrow text-amber-400/80 mt-1.5">
+                            <p className="text-eyebrow text-warn/80 mt-1.5">
                               No member by this name — check spelling and resend.
                             </p>
                           )}
@@ -701,7 +715,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
                         <button onClick={() => applyAll(mi)}
                           disabled={applying}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all disabled:opacity-60">
+                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgb(var(--fit-accent)/0.4)] transition-all disabled:opacity-60">
                           {applying
                             ? 'Applying…'
                             : `Apply changes for ${m.actions.filter(a => a.on && a.resolved).length} ${plural(m.actions.filter(a => a.on && a.resolved).length, 'member')}`}
@@ -849,7 +863,7 @@ export default function CoachAIChat({ onApplied, contextMember = null }) {
             style={{ minWidth: 48, minHeight: 48 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               (input.trim() || pendingFile) && !busy
-                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
+                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgb(var(--fit-accent)/0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-ghost'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

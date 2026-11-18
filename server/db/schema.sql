@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS lab_values (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- One receipt per member submission. A retry returns the original result;
+-- a different review may legitimately contain the same measurements.
+CREATE TABLE IF NOT EXISTS member_lab_receipts (
+  patient_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request_id VARCHAR(120) NOT NULL,
+  payload_hash TEXT NOT NULL,
+  response JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (patient_id, request_id)
+);
+
 -- ── PUSH SUBSCRIPTIONS ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   id           SERIAL PRIMARY KEY,
@@ -314,6 +325,13 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS notify_opted_out BOOLEAN D
 -- old hard-coded label said "8 h" beside times that are eight and a half apart.
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_bed  VARCHAR(5);
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS sleep_wake VARCHAR(5);
+
+-- Fixes-2j (18 Oct 2026): who set a target that has a database default.
+-- water_target defaults to 3000, so a stored 3000 cannot say whether a coach
+-- chose it. {"water": {"by": <user id>, "at": <time>}} is written when a coach
+-- or admin saves it, and removed when they go back to the standard.
+-- See services/targetOrigin.js. Existing rows start empty: nothing is guessed.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS target_set_by JSONB DEFAULT '{}';
 
 -- Delivery log. Needed to answer "did she actually get it?", to stop paying
 -- for a channel that silently fails, and to prove consent was honoured.
@@ -603,6 +621,10 @@ END $$;
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS cardio JSONB DEFAULT '[]';
+-- Selected exercises with no completed sets must survive closing the sheet.
+-- Empty by default for old sessions; applied on both fresh and existing DBs.
+ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS pending_exercises JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS revision INT NOT NULL DEFAULT 0;
 
 -- Per-member portion memory. "1 katori" is not a fixed weight — it depends on
 -- whose kitchen the katori came from. When a member corrects the grams the AI
@@ -711,6 +733,29 @@ ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS cooking_fat VARCHAR(20);
 -- Personal portion memory still wins: what THIS member means by "1 dosa"
 -- beats the generic default.
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS default_grams INT;
+
+-- ── Raw or cooked: what a food's numbers are for (Fixes-2h, 18 Oct 2026) ─────
+-- NULL = not specified. Set by a coach or admin, with who and when; never
+-- guessed from the name. Logged items, saved meals and plan items copy the
+-- value when the food is chosen (JSON, no column needed). A member's own
+-- label carries its own answer (a column on the labels table, further down).
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation VARCHAR(10);
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation_by INT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS preparation_at TIMESTAMPTZ;
+
+-- Fixes-2k (18 Oct 2026): where each nutrient value came from, per food.
+-- {"iron": {"status": "reference", "source": {"dataset": "IFCT 2017", "record_id": "C033",
+--   "name": "Spinach"}, "basis": "raw", "assumptions": "...", "date": "...",
+--   "reviewer": null, "review_status": "pending", "batch_id": 3}, ...}
+-- A compact copy of each status rides inside per_100g._status, so logged items
+-- keep it. Existing rows start empty: their values are read by the legacy rule
+-- in services/nutrientStatus.js (an old 0 stays "uncertain", nothing rewritten).
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS nutrient_meta JSONB DEFAULT '{}';
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'foods_preparation_check') THEN
+    ALTER TABLE foods ADD CONSTRAINT foods_preparation_check CHECK (preparation IS NULL OR preparation IN ('raw','cooked'));
+  END IF;
+END $$;
 
 -- ── AI EVAL SET (Sprint L1) ──────────────────────────────────────────────────
 -- Every correction a member or coach makes to an AI parse is a test case: a
@@ -971,6 +1016,84 @@ CREATE TABLE IF NOT EXISTS voice_samples (
 -- be told apart from "busy", "key missing" or "audio type not accepted".
 ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS gemini_error  VARCHAR(200);
 ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS whisper_error VARCHAR(200);
+-- Fixes-2m: which language Whisper was asked for ('kn'; NULL = not set, it
+-- guessed, as for every recording before 20 Oct 2026) and the language it
+-- reports using. The 19 Oct recordings were guessed as Tamil.
+ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS whisper_setting  VARCHAR(20);
+ALTER TABLE voice_samples ADD COLUMN IF NOT EXISTS whisper_language VARCHAR(20);
+-- Fixes-2m: an engine asked AGAIN about a stored recording with another
+-- setting (e.g. Whisper with the language fixed to Kannada), kept beside the
+-- original result, which is never changed. Deleted with the recording.
+CREATE TABLE IF NOT EXISTS voice_sample_reruns (
+  id          SERIAL PRIMARY KEY,
+  sample_id   INT NOT NULL REFERENCES voice_samples(id) ON DELETE CASCADE,
+  engine      VARCHAR(20) NOT NULL,
+  setting     VARCHAR(20) NOT NULL,
+  text        TEXT,
+  language    VARCHAR(20),
+  score       REAL,
+  error       VARCHAR(200),
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (sample_id, engine, setting)
+);
+-- Fixes-2u: every re-run attempt, kept. voice_sample_reruns holds the LATEST
+-- answer per setting (as before); this keeps each attempt beside it, so asking
+-- again after an empty answer never loses the first result. 'kept_from_latest'
+-- rows are answers copied here just before a newer attempt replaced them in
+-- voice_sample_reruns (attempted_at = when that answer came). outcome:
+-- 'transcript' (words), 'empty' (an answer with no words) or 'error' (no answer).
+-- config: the exact request (model, language, prompt hash, audio hash; never the audio).
+CREATE TABLE IF NOT EXISTS voice_sample_rerun_attempts (
+  id            SERIAL PRIMARY KEY,
+  sample_id     INT NOT NULL REFERENCES voice_samples(id) ON DELETE CASCADE,
+  engine        VARCHAR(20) NOT NULL,
+  setting       VARCHAR(20) NOT NULL,
+  text          TEXT,
+  language      VARCHAR(20),
+  score         REAL,
+  error         VARCHAR(200),
+  outcome       VARCHAR(12) NOT NULL,
+  source        VARCHAR(20) NOT NULL DEFAULT 'rerun',
+  config        JSONB,
+  segments      JSONB,
+  attempted_at  TIMESTAMPTZ NOT NULL,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (sample_id, engine, setting, attempted_at)
+);
+
+-- ── Fixes-2p: voice fallback test (TEST SERVER ONLY) ────────────────────────
+-- On the test server only (Railway deploys it from the 'test' branch, so
+-- RAILWAY_GIT_BRANCH = 'test'), an administrator may name ONE account whose
+-- voice notes skip Gemini and go straight to the Whisper fallback, so the real
+-- fallback can be tried without touching the shared provider settings. It
+-- turns itself off 24 hours after it is set. Production never reads it.
+CREATE TABLE IF NOT EXISTS voice_fallback_test_account (
+  id        INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  user_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  set_by    INT REFERENCES users(id) ON DELETE SET NULL,
+  set_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Every try made through it: what Whisper actually returned (text, language,
+-- per-section confidence numbers) and what FitLife decided. No audio is kept.
+CREATE TABLE IF NOT EXISTS voice_fallback_test_runs (
+  id                SERIAL PRIMARY KEY,
+  user_id           INT REFERENCES users(id) ON DELETE CASCADE,
+  lang_hint         VARCHAR(10),
+  language_sent     VARCHAR(10),
+  whisper_text      TEXT,
+  whisper_language  VARCHAR(30),
+  segments          JSONB,
+  accepted          BOOLEAN,
+  reason            VARCHAR(30),
+  transcript        TEXT,
+  error             VARCHAR(200),
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+-- Fixes-2u: the recording's own speech check (services/speechPresence.js) and
+-- the exact Whisper request (model, language, prompt hash, audio hash), so tries
+-- can be compared like for like. Both NULL on tries from before 21 Oct 2026.
+ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS speech JSONB;
+ALTER TABLE voice_fallback_test_runs ADD COLUMN IF NOT EXISTS config JSONB;
 
 -- ── DEFERRED BACKFILLS ───────────────────────────────────────────────────────
 -- These are UPDATEs, not CREATEs, so they MUST come after the tables they
@@ -1077,6 +1200,20 @@ ALTER TABLE diet_plan_items ADD COLUMN IF NOT EXISTS compulsory BOOLEAN NOT NULL
 -- never rewrites the table and is safe to repeat on every boot.
 ALTER TABLE diet_plan_items ALTER COLUMN qty_text TYPE VARCHAR(160);
 
+-- P0: one compact receipt per member/day/browser stream, updated in place.
+-- Payloads stay in daily_logs; hashes identify safe continuation after a lost
+-- response without overwriting edits made by another device or the coach.
+CREATE TABLE IF NOT EXISTS daily_log_write_receipts (
+  patient_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  log_date    DATE NOT NULL,
+  stream_id   VARCHAR(96) NOT NULL,
+  sequence    INT NOT NULL CHECK (sequence > 0),
+  payload_hash CHAR(64) NOT NULL,
+  day_hash     CHAR(64) NOT NULL,
+  outcome      JSONB NOT NULL DEFAULT '{}',
+  PRIMARY KEY (patient_id, log_date, stream_id)
+);
+
 -- A member's own label for a food (10 Oct 2026). The shared foods table is
 -- one row per food for everyone; plain oats really is ~13 g protein per 100 g,
 -- and a member eating a protein-added brand (24 g) must not change it for
@@ -1093,4 +1230,443 @@ CREATE TABLE IF NOT EXISTS member_foods (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (patient_id, name_key)
+);
+
+-- A member's own label says raw or cooked too (Fixes-2h, 18 Oct 2026). NULL = not specified.
+ALTER TABLE member_foods ADD COLUMN IF NOT EXISTS preparation VARCHAR(10);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'member_foods_preparation_check') THEN
+    ALTER TABLE member_foods ADD CONSTRAINT member_foods_preparation_check CHECK (preparation IS NULL OR preparation IN ('raw','cooked'));
+  END IF;
+END $$;
+
+
+-- ── Fixes-2k: nutrient enrichment batches (reversible) ────────────────────────
+-- A batch proposes values for missing nutrients on unchecked AI-created foods,
+-- each backed by a source (IFCT 2017, USDA SR28, an exact label, or a recipe
+-- calculation). Applying writes only genuinely missing or uncertain values and
+-- keeps every before-value here, so a batch can be rolled back. Proposing is
+-- separate from applying: a batch stays 'proposed' until someone applies it.
+CREATE TABLE IF NOT EXISTS nutrient_enrichment_batches (
+  id           SERIAL PRIMARY KEY,
+  label        TEXT NOT NULL,
+  status       VARCHAR(12) NOT NULL DEFAULT 'proposed'
+                 CHECK (status IN ('proposed','applied','rolled_back')),
+  created_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  applied_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  applied_at   TIMESTAMPTZ,
+  rolled_back_by INT REFERENCES users(id) ON DELETE SET NULL,
+  rolled_back_at TIMESTAMPTZ,
+  notes        TEXT
+);
+CREATE TABLE IF NOT EXISTS nutrient_enrichment_changes (
+  id           SERIAL PRIMARY KEY,
+  batch_id     INT NOT NULL REFERENCES nutrient_enrichment_batches(id) ON DELETE CASCADE,
+  food_id      INT NOT NULL REFERENCES foods(id) ON DELETE CASCADE,
+  nutrient     VARCHAR(40) NOT NULL,
+  before_value NUMERIC,
+  before_status VARCHAR(12),
+  before_meta  JSONB,
+  after_value  NUMERIC,
+  after_status VARCHAR(12) NOT NULL CHECK (after_status IN ('reference','recipe','ai')),
+  after_meta   JSONB NOT NULL,
+  outcome      VARCHAR(20) NOT NULL DEFAULT 'proposed'
+                 CHECK (outcome IN ('proposed','applied','skipped','rolled_back','rollback_conflict')),
+  reason       TEXT,
+  UNIQUE (batch_id, food_id, nutrient)
+);
+CREATE INDEX IF NOT EXISTS idx_nec_batch ON nutrient_enrichment_changes(batch_id);
+-- Fixes-2l: a batch records who approved it and the exact revision they
+-- approved (a hash of its proposed changes). Apply refuses a batch without an
+-- approval, and refuses one whose content no longer matches that revision.
+ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_by INT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+ALTER TABLE nutrient_enrichment_batches ADD COLUMN IF NOT EXISTS approved_revision TEXT;
+
+-- ── Fixes-2x: voice calibration kit (B18/B19), TEST SERVER ONLY ─────────────
+-- Round 1 of claude/FitLife-Voice-Calibration-Plan-2026-10-23.md. Bounds are fixed in
+-- services/voiceCalibration.js: 6 volunteers (3 Kannada, 2 Hindi, 1 English), 144
+-- planned slots, 6 offline settings, 32 Part C tries. Nothing here is read by
+-- everyday voice logging except the one armed Part C try (test server only).
+CREATE TABLE IF NOT EXISTS voice_calibration_participants (
+  id              SERIAL PRIMARY KEY,
+  patient_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code            VARCHAR(6) NOT NULL UNIQUE,          -- P1, P2… never reused; the only identifier in exports
+  grp             VARCHAR(2) NOT NULL CHECK (grp IN ('kn','hi','en')),
+  profile_note    VARCHAR(40),                         -- e.g. "40s, woman"; never a name
+  invited_by      INT REFERENCES users(id) ON DELETE SET NULL,
+  invited_at      TIMESTAMPTZ DEFAULT NOW(),
+  consented_at    TIMESTAMPTZ,
+  consent_version VARCHAR(20),
+  phone_type      VARCHAR(20),
+  browser         VARCHAR(20),
+  installed_app   BOOLEAN,
+  withdrawn_at    TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_one_active_per_member ON voice_calibration_participants (patient_id) WHERE withdrawn_at IS NULL;
+-- Every take is kept. A retake needs a reason and marks the earlier take superseded; nothing is overwritten.
+CREATE TABLE IF NOT EXISTS voice_calibration_takes (
+  id                  SERIAL PRIMARY KEY,
+  participant_id      INT NOT NULL REFERENCES voice_calibration_participants(id) ON DELETE CASCADE,
+  slot_code           VARCHAR(16) NOT NULL,
+  take_no             INT NOT NULL,
+  object_key          TEXT,
+  mime_type           VARCHAR(40),
+  duration_ms         INT,
+  audio_sha256        CHAR(64),
+  phone_type          VARCHAR(20),
+  browser             VARCHAR(20),
+  installed_app       BOOLEAN,
+  retake_reason       VARCHAR(20),
+  retake_note         VARCHAR(200),
+  superseded_at       TIMESTAMPTZ,
+  -- The live speech check, as it ran on this take: raw measurements (exact, for the offline replay).
+  speech_status       VARCHAR(12),
+  detector_version    TEXT,
+  voiced_frames       INT,
+  longest_run_frames  INT,
+  f0_spread_raw       DOUBLE PRECISION,
+  f0_count            INT,
+  hop_ms              DOUBLE PRECISION,
+  frames              INT,
+  voiced_ms           INT,
+  longest_run_ms      INT,
+  peak_db_raw         DOUBLE PRECISION,
+  background_db_raw   DOUBLE PRECISION,
+  speech_error        VARCHAR(200),
+  remeasure           JSONB,
+  -- Both engines, with what was asked and what answered.
+  gemini_text         TEXT,
+  gemini_error        VARCHAR(200),
+  gemini_generated    BOOLEAN,
+  gemini_provenance   JSONB,
+  whisper_text        TEXT,
+  whisper_error       VARCHAR(200),
+  whisper_review      JSONB,
+  whisper_segments    JSONB,
+  whisper_provenance  JSONB,
+  -- What a fluent listener heard on playback (the scoring reference); every change kept.
+  heard               VARCHAR(10) CHECK (heard IN ('speech','no_speech','uncertain')),
+  spoken_as_script    BOOLEAN,
+  reference_text      TEXT,
+  reference_items     JSONB,
+  label_history       JSONB NOT NULL DEFAULT '[]',
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  delete_after        TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '90 days'),
+  UNIQUE (participant_id, slot_code, take_no)
+);
+CREATE INDEX IF NOT EXISTS voice_cal_takes_slot ON voice_calibration_takes (participant_id, slot_code);
+-- A fluent speaker's check of one language's exact lines (the hash of what was checked).
+CREATE TABLE IF NOT EXISTS voice_calibration_wording (
+  lang          VARCHAR(2) PRIMARY KEY,
+  script_sha256 CHAR(64) NOT NULL,
+  confirmed_by  VARCHAR(80) NOT NULL,
+  note          VARCHAR(200),
+  recorded_by   INT REFERENCES users(id) ON DELETE SET NULL,
+  confirmed_at  TIMESTAMPTZ DEFAULT NOW(),
+  history       JSONB NOT NULL DEFAULT '[]'
+);
+-- Part C: the everyday path. Every event of a try is appended (recordings, on-device dictation,
+-- retries, previews, read-backs, restores); outcomes are marked by hand, every edit kept.
+CREATE TABLE IF NOT EXISTS voice_calibration_partc (
+  trial_no            INT PRIMARY KEY,
+  route               VARCHAR(12),
+  account_id          INT REFERENCES users(id) ON DELETE SET NULL,
+  log_date            DATE,
+  baseline            JSONB,
+  captures            JSONB NOT NULL DEFAULT '[]',
+  readbacks           JSONB NOT NULL DEFAULT '[]',
+  cleanup             JSONB,
+  switch_off_verified BOOLEAN,
+  finished_at         TIMESTAMPTZ,
+  items               JSONB,
+  applied             BOOLEAN,
+  day_correct         BOOLEAN,
+  notes               TEXT,
+  edits               JSONB NOT NULL DEFAULT '[]',
+  updated_at          TIMESTAMPTZ
+);
+-- One operator and one controlled account at a time: a single armed try, cleared only by Finish.
+CREATE TABLE IF NOT EXISTS voice_calibration_partc_armed (
+  id        INT PRIMARY KEY CHECK (id = 1),
+  trial_no  INT NOT NULL,
+  route     VARCHAR(12) NOT NULL DEFAULT 'controlled',
+  user_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  armed_by  INT REFERENCES users(id) ON DELETE SET NULL,
+  armed_at  TIMESTAMPTZ DEFAULT NOW()
+);
+-- Part A rule 3: each newly admitted take's transcripts through the logging parser (evaluation
+-- mode: nothing saved, no coach message, no learning). One row per take and engine (deduplicated).
+CREATE TABLE IF NOT EXISTS voice_calibration_preview_evals (
+  id            SERIAL PRIMARY KEY,
+  take_id       INT NOT NULL REFERENCES voice_calibration_takes(id) ON DELETE CASCADE,
+  engine        VARCHAR(10) NOT NULL,
+  stage         VARCHAR(20) NOT NULL,          -- 'voice refused' | 'no transcript' | 'parsed' | 'parser error'
+  preview       JSONB,
+  judgment      JSONB,
+  parser_calls  INT NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (take_id, engine)
+);
+-- ── Fixes-2y: the 2x kit review (24 Oct 2026). Additive only: new columns and tables; nothing renamed or dropped. ──
+-- The phone itself (make, model, OS and browser versions; "unknown" allowed), on the volunteer and snapshotted per take.
+ALTER TABLE voice_calibration_participants ADD COLUMN IF NOT EXISTS device JSONB;
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS device JSONB;
+-- The fluent listener's reference, frozen and versioned BEFORE any transcript is shown. Every version is kept.
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_mode      VARCHAR(12);          -- as_script | corrected | unscorable
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_frozen_at TIMESTAMPTZ;
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_version   INT NOT NULL DEFAULT 0;
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_sha       CHAR(64);
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS reference_history   JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS listener_code       VARCHAR(6);
+-- Part B hand checks (a "needs a hand check" line settled by the listener, against one reference version).
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS hand_checks  JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS hand_history JSONB NOT NULL DEFAULT '[]';
+-- Reviewers (fluent speakers, listeners): the export carries their CODE only; names stay here (admin view only).
+CREATE TABLE IF NOT EXISTS voice_calibration_reviewers (
+  code        VARCHAR(6) PRIMARY KEY,                -- R1, R2… never reused
+  name        VARCHAR(80) NOT NULL,                  -- private: never exported
+  role        VARCHAR(20) NOT NULL CHECK (role IN ('fluent speaker','listener','both')),
+  langs       VARCHAR(12),
+  created_by  INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+-- Rule 3 judgments, one per take, engine, reference version and judge version. A row is CLAIMED ('running') before the
+-- parser is called, so concurrent taps never evaluate a leg twice. Stale versions are kept, never reused.
+-- (Replaces voice_calibration_preview_evals for new judgments; that 2x table is kept and no longer written.)
+CREATE TABLE IF NOT EXISTS voice_calibration_preview_judgments (
+  id                SERIAL PRIMARY KEY,
+  take_id           INT NOT NULL REFERENCES voice_calibration_takes(id) ON DELETE CASCADE,
+  engine            VARCHAR(10) NOT NULL,
+  reference_sha     CHAR(64) NOT NULL,
+  reference_version INT NOT NULL,
+  judge_version     VARCHAR(20) NOT NULL,
+  status            VARCHAR(10) NOT NULL DEFAULT 'running',   -- running | done
+  reason            VARCHAR(20) NOT NULL DEFAULT 'initial',   -- initial | re-evaluation (counted apart)
+  stage             VARCHAR(20),
+  preview           JSONB,
+  judgment          JSONB,
+  parser            JSONB,
+  parser_calls      INT NOT NULL DEFAULT 0,
+  hand_verdict      JSONB,
+  hand_history      JSONB NOT NULL DEFAULT '[]',
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  finished_at       TIMESTAMPTZ,
+  UNIQUE (take_id, engine, reference_sha, judge_version)
+);
+-- Part C sessions: each arming of a try. Recording stops at Finish or after its window; the session stays open for
+-- recovery until its account's day equals ITS baseline and the Voice backup switch is verified off. Repeats keep every session.
+CREATE TABLE IF NOT EXISTS voice_calibration_partc_sessions (
+  id                 SERIAL PRIMARY KEY,
+  session_key        TEXT NOT NULL UNIQUE,         -- sent to the armed account's app; recordings carry it back
+  trial_no           INT NOT NULL,
+  route              VARCHAR(12) NOT NULL,
+  account_id         INT REFERENCES users(id) ON DELETE SET NULL,
+  log_date           DATE NOT NULL,
+  baseline           JSONB NOT NULL,
+  armed_by           INT REFERENCES users(id) ON DELETE SET NULL,
+  armed_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  capture_stopped_at TIMESTAMPTZ,
+  stop_reason        VARCHAR(40),
+  readbacks          JSONB NOT NULL DEFAULT '[]',
+  cleanups           JSONB NOT NULL DEFAULT '[]',
+  switch_checks      JSONB NOT NULL DEFAULT '[]',
+  resolved_at        TIMESTAMPTZ,
+  resolution         JSONB
+);
+-- At most one unresolved session at a time (one operator, one controlled account).
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_one_unresolved_session ON voice_calibration_partc_sessions ((TRUE)) WHERE resolved_at IS NULL;
+ALTER TABLE voice_calibration_partc_armed ADD COLUMN IF NOT EXISTS session_id  INT;
+ALTER TABLE voice_calibration_partc_armed ADD COLUMN IF NOT EXISTS session_key TEXT;
+-- Fixes-2z: an administrator's request to replace an EXCLUDED take (unsure, wrong kind of sound, not measured). The excluded take is
+-- kept and shown; the replacement is a retake with reason 'replacement', budgeted apart.
+ALTER TABLE voice_calibration_takes ADD COLUMN IF NOT EXISTS replacement_authorised JSONB;
+-- Fixes-3a (the 2z review, finding 2): the replacement budget is a LEDGER for the round, enforced by the database.
+-- One row per grant; grant_no runs 1..12 and is unique per round, so two requests racing for the last slot can never both succeed.
+-- take_id has NO foreign key on purpose: deleting a take (withdrawal, removal, 90 days) never deletes its grant, so a spent
+-- allowance is never returned. A grant is tied to the one replacement recorded under it (replacement_take_id).
+CREATE TABLE IF NOT EXISTS voice_calibration_replacement_grants (
+  id                  SERIAL PRIMARY KEY,
+  round               TEXT NOT NULL DEFAULT 'round1',
+  grant_no            INT  NOT NULL CHECK (grant_no BETWEEN 1 AND 12),
+  take_id             INT  NOT NULL,
+  participant_code    TEXT,
+  slot_code           TEXT,
+  why                 TEXT,
+  calls_spent         INT  NOT NULL DEFAULT 0,
+  granted_by          INT,
+  granted_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  replacement_take_id INT,
+  replaced_at         TIMESTAMPTZ,
+  UNIQUE (round, grant_no),
+  UNIQUE (round, take_id),
+  UNIQUE (replacement_take_id)
+);
+-- Grants made before the ledger existed (Fixes-2z wrote only the take's column) join the ledger once, in take order, up to 12.
+INSERT INTO voice_calibration_replacement_grants (round, grant_no, take_id, participant_code, slot_code, why, granted_by, granted_at)
+SELECT 'round1', x.n, x.id, x.code, x.slot_code, x.why, x.by_id, x.at FROM (
+  SELECT t.id, p.code, t.slot_code, t.replacement_authorised->>'why' AS why,
+         CASE WHEN (t.replacement_authorised->>'by') ~ '^[0-9]+$' THEN (t.replacement_authorised->>'by')::int END AS by_id,
+         COALESCE(t.created_at, NOW()) AS at,
+         COALESCE((SELECT MAX(grant_no) FROM voice_calibration_replacement_grants WHERE round = 'round1'), 0) + ROW_NUMBER() OVER (ORDER BY t.id) AS n
+  FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
+  WHERE t.replacement_authorised IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM voice_calibration_replacement_grants g WHERE g.take_id = t.id)
+) x WHERE x.n <= 12
+ON CONFLICT DO NOTHING;
+-- Fixes-3a: calls spent in the round, kept when the take is deleted, so withdrawal or expiry never lowers what was spent.
+CREATE TABLE IF NOT EXISTS voice_calibration_spend (
+  id               SERIAL PRIMARY KEY,
+  kind             TEXT NOT NULL CHECK (kind IN ('transcription', 'rule3')),
+  take_id          INT,
+  judgment_id      INT,
+  participant_code TEXT,
+  slot_code        TEXT,
+  calls            INT  NOT NULL DEFAULT 0,
+  at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Fixes-3b (the 3a review; moved up here in Fixes-3c so the back-fills below can read these columns on any database): every provider/parser attempt is counted when it HAPPENS, in its own committed row, before (and
+-- whatever becomes of) the take or judgment it was for. attempt_key identifies one attempt, so writing the same attempt twice
+-- (the early record and the link when the take commits) never counts it twice, while a genuinely new attempt is a new row.
+-- outcome: 'saved' / 'judged' when its result was kept; 'refused' or 'not saved' when it was not; NULL while unresolved.
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS attempt_key  TEXT;
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS outcome      TEXT;
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS judgment_ref INT;
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_attempt ON voice_calibration_spend (attempt_key);
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_take ON voice_calibration_spend (take_id) WHERE kind = 'transcription';
+CREATE UNIQUE INDEX IF NOT EXISTS voice_cal_spend_judgment ON voice_calibration_spend (judgment_id) WHERE kind = 'rule3';
+-- Calls already spent before the ledger existed join it once.
+INSERT INTO voice_calibration_spend (kind, take_id, participant_code, slot_code, calls, at)
+SELECT 'transcription', t.id, p.code, t.slot_code,
+       COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(t.gemini_provenance->'attempts') = 'array' THEN t.gemini_provenance->'attempts' END), 0)
+     + COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(t.whisper_provenance->'attempts') = 'array' THEN t.whisper_provenance->'attempts' END), 0),
+       COALESCE(t.created_at, NOW())
+FROM voice_calibration_takes t JOIN voice_calibration_participants p ON p.id = t.participant_id
+WHERE NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'transcription' AND s.take_id = t.id)
+ON CONFLICT DO NOTHING;
+-- Fixes-3c (the 3b review, finding 1): under Fixes-3b each parser call is recorded by its attempt (attempt_key, judgment_ref);
+-- the boot back-fill below checked only judgment_id, so every schema run (every boot) added a second, legacy-style row for a
+-- judgment whose calls were already recorded. Such a row is PROVABLY a duplicate: it has no attempt key, and the same judgment
+-- has attempt-recorded calls (a judgment completed under 3b was never completed before, so it cannot also have a genuine 3a
+-- row). Those rows are moved to a reconciliation record (kept, never silently erased) and removed from the ledger. Genuine
+-- attempts, including several for one judgment, are never touched.
+CREATE TABLE IF NOT EXISTS voice_calibration_spend_reconciled (
+  id            SERIAL PRIMARY KEY,
+  spend_id      INT,
+  kind          TEXT,
+  take_id       INT,
+  judgment_id   INT,
+  calls         INT,
+  at            TIMESTAMPTZ,
+  duplicate_of  TEXT,
+  reason        TEXT,
+  reconciled_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+WITH dup AS (
+  SELECT s.id, s.kind, s.take_id, s.judgment_id, s.calls, s.at,
+         (SELECT MIN(n.attempt_key) FROM voice_calibration_spend n WHERE n.kind = 'rule3' AND n.attempt_key IS NOT NULL AND n.judgment_ref = s.judgment_id) AS of_key
+  FROM voice_calibration_spend s
+  WHERE s.kind = 'rule3' AND s.attempt_key IS NULL AND s.judgment_id IS NOT NULL
+    AND EXISTS (SELECT 1 FROM voice_calibration_spend n WHERE n.kind = 'rule3' AND n.attempt_key IS NOT NULL AND n.judgment_ref = s.judgment_id)
+), moved AS (
+  INSERT INTO voice_calibration_spend_reconciled (spend_id, kind, take_id, judgment_id, calls, at, duplicate_of, reason)
+  SELECT id, kind, take_id, judgment_id, calls, at, of_key, 'boot back-fill counted a parser call already recorded by its attempt (Fixes-3b judgment_ref)' FROM dup
+  RETURNING spend_id
+)
+DELETE FROM voice_calibration_spend WHERE id IN (SELECT spend_id FROM moved);
+-- The back-fill: only a judgment with NO recorded call at all, by judgment_id (3a) OR by judgment_ref (3b onwards).
+INSERT INTO voice_calibration_spend (kind, take_id, judgment_id, participant_code, slot_code, calls, at)
+SELECT 'rule3', j.take_id, j.id, p.code, t.slot_code, j.parser_calls, COALESCE(j.finished_at, j.created_at, NOW())
+FROM voice_calibration_preview_judgments j JOIN voice_calibration_takes t ON t.id = j.take_id JOIN voice_calibration_participants p ON p.id = t.participant_id
+WHERE COALESCE(j.parser_calls, 0) > 0
+  AND NOT EXISTS (SELECT 1 FROM voice_calibration_spend s WHERE s.kind = 'rule3' AND (s.judgment_id = j.id OR s.judgment_ref = j.id))
+ON CONFLICT DO NOTHING;
+-- (Fixes-3b's spend columns are created above, with the table, so every statement that reads them runs after they exist.)
+-- Fixes-3c (the 3b review, finding 3): every uploaded recording is registered BEFORE the upload, so an object can never be left
+-- behind unseen: kept when its take commits, deleted when the take is refused or cannot be written; if deleting fails, the row
+-- stays 'delete failed' and the daily clean-up retries it. Holds the storage key, the volunteer and the slot only.
+CREATE TABLE IF NOT EXISTS voice_calibration_uploads (
+  object_key     TEXT PRIMARY KEY,
+  attempt_key    TEXT,
+  participant_id INT,
+  slot_code      TEXT,
+  state          TEXT NOT NULL DEFAULT 'uploading' CHECK (state IN ('uploading', 'kept', 'deleted', 'delete failed')),
+  reason         TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at    TIMESTAMPTZ
+);
+-- Fixes-3d (the 3c review): every provider/parser attempt is STARTED here, in the database, BEFORE the external call; if this
+-- row cannot be written the call is not made. It is marked 'recorded' in the same statement that writes the call count to
+-- voice_calibration_spend. A row still 'started' after a restart is an attempt whose calls are UNKNOWN (at most max_calls):
+-- the export reports it as unresolved and the screen stays incomplete until an administrator settles it from the provider's
+-- own records ('settled'). 'no call' means it ended before any external call was made. No foreign keys: deleting a take
+-- (withdrawal, 90 days) never removes an attempt.
+CREATE TABLE IF NOT EXISTS voice_calibration_attempts (
+  attempt_key      TEXT PRIMARY KEY,
+  kind             TEXT NOT NULL CHECK (kind IN ('transcription', 'rule3')),
+  take_id          INT,
+  judgment_ref     INT,
+  participant_code TEXT,
+  slot_code        TEXT,
+  max_calls        INT  NOT NULL,
+  state            TEXT NOT NULL DEFAULT 'started' CHECK (state IN ('started', 'recorded', 'no call', 'settled')),
+  started_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at      TIMESTAMPTZ,
+  settled          JSONB
+);
+-- Fixes-3d: whether an upload was ever kept, so a kept recording later deleted (withdrawal, removal, 90 days) is never reported
+-- as "never kept". Uploads kept under 3c: still 'kept', or 'deleted' by withdrawal with no reason (only unkept ones got one).
+ALTER TABLE voice_calibration_uploads ADD COLUMN IF NOT EXISTS ever_kept BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE voice_calibration_uploads SET ever_kept = TRUE WHERE NOT ever_kept AND (state = 'kept' OR (state = 'deleted' AND reason IS NULL));
+-- Fixes-3e (the 3d review): the units are explicit.
+--  * voice_calibration_spend.calls counts OUTBOUND PROVIDER REQUESTS when unit = 'requests' (every row written from Fixes-3e on:
+--    each Gemini model tried, Whisper, and every parser request including its fallbacks and retries). Older rule-3 rows
+--    (unit NULL) counted parser CHECKS: their real request number was never recorded and is reported as unknown (at least one).
+--  * voice_calibration_attempts.requests_started is incremented, durably, just before each outbound request; after a restart it
+--    says how many requests had been started (at most max_calls, the configured worst case).
+--  * voice_calibration_preview_judgments.parser_calls stays the number of parser CHECKS (0 or 1); provider_requests is new.
+ALTER TABLE voice_calibration_spend ADD COLUMN IF NOT EXISTS unit TEXT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS requests_started INT NOT NULL DEFAULT 0;
+ALTER TABLE voice_calibration_preview_judgments ADD COLUMN IF NOT EXISTS provider_requests INT;
+-- Fixes-3f (the 3e review).
+--  * voice_calibration_preview_judgments.claim_owner: the tap that owns a running preview check. It renews its lease
+--    (created_at) when the leg's turn comes, at every provider request and by a heartbeat; only a lease over 10 minutes old
+--    (abandoned) can be taken over, and only the owner can complete the leg.
+--  * voice_calibration_attempts.counting = 'requests': the attempt counts its outbound requests as they start (Fixes-3e on).
+--    NULL marks an attempt from BEFORE Fixes-3e: how many requests it started was never recorded, so its requests_started
+--    (defaulted to 0 when that column was added) is NOT evidence of zero; it is reported as unknown.
+--    Attempts written under Fixes-3e are recognised by a request already counted (requests_started > 0 was only ever written
+--    by Fixes-3e code); one that started none stays NULL and is reported, conservatively, as "not recorded".
+--  * A rule-3 attempt from before Fixes-3e carried max_calls = 1, which was false. Its bound becomes 12: the most the parser
+--    at that time (d58250c, routes/aiChat.js callAI) could make in ANY configuration: two providers, at most two models each
+--    (GROQ_MODELS / GEMINI_MODELS have two entries, filtered), three tries per model. The original value is kept in
+--    legacy_max_calls and the change is noted in bound_note; each row is changed once (legacy_max_calls IS NULL), so replays
+--    change nothing. Recording attempts kept their bound (3: one per Gemini model, plus Whisper), which was already true.
+ALTER TABLE voice_calibration_preview_judgments ADD COLUMN IF NOT EXISTS claim_owner TEXT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS counting TEXT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS legacy_max_calls INT;
+ALTER TABLE voice_calibration_attempts ADD COLUMN IF NOT EXISTS bound_note TEXT;
+UPDATE voice_calibration_attempts SET counting = 'requests' WHERE counting IS NULL AND requests_started > 0;
+UPDATE voice_calibration_attempts SET legacy_max_calls = max_calls, max_calls = GREATEST(max_calls, 12),
+  bound_note = 'Fixes-3f: recorded before Fixes-3e with max_calls ' || max_calls || ' (parser checks); the real bound is 12 provider requests (2 providers x 2 models x 3 tries, the d58250c parser in any configuration)'
+  WHERE kind = 'rule3' AND counting IS NULL AND legacy_max_calls IS NULL;
+
+-- ── Fixes-3k and 3k.1 (kept at the END of this file: the schema is append-only; see test-voice-calibration-3f) ──
+-- Fixes-3k (5 Nov 2026, Sachin's decision): for supplements and apple cider vinegar, "no coach selection" means NONE for
+-- members created from now on, and keeps its old meaning (every built-in item) for existing members, because the old
+-- app saved "the coach ticked them all" the same way as "never chosen". Existing rows stay NULL (old meaning). TRUE is
+-- written only where a member is created (POST /api/admin/members and POST /api/patients); any other row stays NULL.
+-- No column default on purpose: a profile row made later for an old member (a lazy insert) must keep the old meaning.
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_default_none BOOLEAN;
+-- Fixes-3k.1 (Sachin, 6 Nov: "all are test members") and 3k.2 (18 Nov: production too, at release): on the test site
+-- and on production, every existing member is moved once to the new rule (services/protocolRuleSwitch.js, run by
+-- startup.js, only where RAILWAY_GIT_BRANCH is exactly "test" or "main"; one record per site). Each member moved is
+-- logged here, so it can be undone exactly (created_row: the switch made their profile row; the undo deletes those rows).
+CREATE TABLE IF NOT EXISTS protocol_rule_switch_log (
+  user_id     INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  migration   TEXT        NOT NULL,
+  created_row BOOLEAN     NOT NULL DEFAULT FALSE,
+  switched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, migration)
 );

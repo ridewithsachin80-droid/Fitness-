@@ -89,7 +89,7 @@ function planPdf(plan, { memberName = '', coachName = '', draft = false } = {}) 
   const W = A4.w - 2 * MARGIN;
 
   // ── Header ────────────────────────────────────────────────────────────────
-  d.rect(MARGIN, d.y - 3, 28, 3, '#D4AF37');
+  d.rect(MARGIN, d.y - 3, 28, 3, '#315D47');
   d.text(MARGIN, d.y - 16, 'FITLIFE  DIET PLAN', { size: 8.5, font: 'bold', color: GOLD });
   d.space(24);
   d.para(plan.title || 'Diet plan', { size: 20, font: 'serif', color: INK, gap: 2, lead: 1.2 });
@@ -155,7 +155,7 @@ function planPdf(plan, { memberName = '', coachName = '', draft = false } = {}) 
 
   // ── Page 2: grocery and prep ──────────────────────────────────────────────
   d.newPage();
-  d.rect(MARGIN, d.y - 3, 28, 3, '#D4AF37');
+  d.rect(MARGIN, d.y - 3, 28, 3, '#315D47');
   d.text(MARGIN, d.y - 16, 'FITLIFE  SHOPPING AND PREP', { size: 8.5, font: 'bold', color: GOLD });
   d.space(24);
   d.para('Grocery list for the week', { size: 18, font: 'serif', gap: 2, lead: 1.2 });

@@ -23,10 +23,14 @@
  * @param {number|null} protocolTotal  how many items are ASSIGNED to them
  * @returns {number} 0-100
  */
-function calcCompliance(activities = {}, acv = {}, supplements = {}, protocolTotal = null) {
-  const actDone  = Object.values(activities  || {}).filter(Boolean).length;
-  const acvDone  = Object.values(acv         || {}).filter(Boolean).length;
-  const suppDone = Object.values(supplements || {}).filter(Boolean).length;
+function calcCompliance(activities = {}, acv = {}, supplements = {}, protocolTotal = null, inForce = null) {
+  // Fixes-3k: inForce (from inForceFor) limits the ticks counted to items in force, so a tick of an item a new-rule
+  // member does not have (an old app, a stale copy) cannot raise the score above what they really did. Without it,
+  // every tick counts, as before.
+  const doneIn = (obj, set) => Object.entries(obj || {}).filter(([k, v]) => v && (!set || set.has(k))).length;
+  const actDone  = doneIn(activities,  inForce?.activities);
+  const acvDone  = doneIn(acv,         inForce?.acv);
+  const suppDone = doneIn(supplements, inForce?.supplements);
   const done     = actDone + acvDone + suppDone;
 
   // The assigned total is the only reliable denominator, because the payload
@@ -51,9 +55,9 @@ function calcCompliance(activities = {}, acv = {}, supplements = {}, protocolTot
 /**
  * How many protocol items this member is actually assigned.
  *
- * Mirrors computeProtocolTotal in client/src/store/logStore.js. The defaults
- * (6 / 3 / 7 = 16) are the stock protocol, used when a member has no custom
- * list — the same numbers the client falls back to.
+ * Mirrors computeProtocolTotal in client/src/utils/logSync.js. With no coach
+ * selection: 6 / 3 / 7 for existing members; 6 / 0 / 0 for members created
+ * from Fixes-3k on (protocol_default_none) — the same numbers as the client.
  *
  * @param {object} profile a patient_profiles row
  * @returns {number|null} null when nothing is known, so calcCompliance falls
@@ -61,6 +65,18 @@ function calcCompliance(activities = {}, acv = {}, supplements = {}, protocolTot
  */
 function protocolTotalFor(profile) {
   if (!profile) return null;
+  if (profile.protocol_default_none === true) {
+    // Fixes-3k, a member created from 3k on: the items in force, exactly as the app's resolveProtocolItems lists them.
+    // A coach list counts as it is; no list = activities: the 6 built-in plus the coach's own; ACV and supplements:
+    // only the coach's own items.
+    const customLen = (v) => (Array.isArray(v) ? v.length : 0);
+    const count = (list, custom, builtIn) => (Array.isArray(list) ? list.length : builtIn + customLen(custom));
+    const total = count(profile.protocol_activities, profile.custom_activities, 6)
+                + count(profile.protocol_acv, profile.custom_acv, 0)
+                + count(profile.protocol_supplements, profile.custom_supplements, 0);
+    return total > 0 ? total : null;
+  }
+  // Existing members: exactly as before 3k (Sachin's decision: their scores do not change).
   const len = (v, dflt) => (Array.isArray(v) ? v.length : dflt);
   const acts  = len(profile.protocol_activities,  len(profile.custom_activities, 6));
   const acvs  = len(profile.protocol_acv,         len(profile.custom_acv, 3));
@@ -69,4 +85,20 @@ function protocolTotalFor(profile) {
   return total > 0 ? total : null;
 }
 
-module.exports = { calcCompliance, protocolTotalFor };
+/**
+ * Fixes-3k: which tick ids count for a member created from 3k on (protocol_default_none), per group: a Set, or null
+ * for "every tick counts". A coach list → its ids. No list → activities: every tick (all built-in); ACV and supplements:
+ * only the coach's own items. Existing members → null (every tick counts, exactly as before 3k).
+ */
+function inForceFor(profile) {
+  if (profile?.protocol_default_none !== true) return null;
+  const ownIds = (v) => new Set((Array.isArray(v) ? v : []).map(i => i && i.id).filter(Boolean));
+  const pick = (list, custom, noneByDefault) => (Array.isArray(list) ? new Set(list) : noneByDefault ? ownIds(custom) : null);
+  return {
+    activities:  pick(profile.protocol_activities,  profile.custom_activities,  false),
+    acv:         pick(profile.protocol_acv,         profile.custom_acv,         true),
+    supplements: pick(profile.protocol_supplements, profile.custom_supplements, true),
+  };
+}
+
+module.exports = { calcCompliance, protocolTotalFor, inForceFor };

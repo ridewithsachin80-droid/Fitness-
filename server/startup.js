@@ -7,6 +7,7 @@
  *  3. Seeds foods table      (NIN India + USDA) — only if table is empty
  *  4. Patches foods          (adds missing items ON CONFLICT DO NOTHING)
  *  5. Runs Kannada aliases migration — once only, tracked in migrations table
+ *  5b. Once per site (test, production): every member moves to the new protocol rule (Fixes-3k.1/3k.2)
  *  6. Starts the Express server (require('./index.js'))
  *
  * CRITICAL: Admin upsert always runs — no skip logic.
@@ -423,6 +424,20 @@ async function main() {
     await seedExercisesIfEmpty();
     await patchFoods();
     await runKannadaMigration();
+    // Fixes-3k.1/3k.2: once per site (test and production only) — every existing member moves to the new protocol
+    // rule (no supplements or ACV until the coach adds them). Never fatal. Back up production before the release.
+    try {
+      const r = await require('./services/protocolRuleSwitch').switchMembersToNewRule(pool);
+      if (r.ran) console.log(`✅ ${r.migration}: ${r.moved + r.createdRows} members moved to the new protocol rule (${r.createdRows} profile rows created)`);
+      else console.log(`ℹ️  Protocol rule switch not run: ${r.why} (branch reported: ${process.env.RAILWAY_GIT_BRANCH || 'none'})${r.caughtUp ? ` — ${r.caughtUp} members created since moved` : ''}`);
+      // QA review of 3k.2: the old version may still serve for a few minutes during a release and create members with
+      // the old meaning. Look once more after 15 minutes (on the app's own pool; this startup pool is closed below).
+      if (r.migration) setTimeout(() => {
+        require('./services/protocolRuleSwitch').switchMembersToNewRule(require('./db/pool'))
+          .then(c => { if (c.caughtUp) console.log(`✅ ${c.migration}: ${c.caughtUp} members created during the release moved to the new protocol rule`); })
+          .catch(e => console.error('⚠️  Protocol rule catch-up failed (non-fatal):', e.message));
+      }, 15 * 60 * 1000).unref();
+    } catch (err) { console.error('⚠️  Protocol rule switch failed (non-fatal):', err.message); }
   } catch (err) {
     console.error('❌ Startup error:', err.message);
   } finally {

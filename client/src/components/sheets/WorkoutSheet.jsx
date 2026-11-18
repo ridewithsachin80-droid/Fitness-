@@ -11,7 +11,7 @@ import WorkoutLog from '../WorkoutLog';
 export default function WorkoutSheet({ open, onClose, m }) {
   const { date, workoutRefreshKey, loading, coachPlan } = m;
   return (
-    <Sheet open={open && !loading} onClose={onClose} snap="full" eyebrow="Workout"
+    <Sheet size="lg" open={open && !loading} onClose={onClose} snap="full" eyebrow="Workout"
       title={coachPlan?.todayDay ? coachPlan.todayDay.day_label : 'Log your session'}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <div id="section-workout">

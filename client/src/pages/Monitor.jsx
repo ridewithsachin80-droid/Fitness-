@@ -1,3 +1,4 @@
+import { themeColor } from '../utils/themeColor';
 import WeeklyBrief from '../components/coach/WeeklyBrief';
 import ProgressPhotos from '../components/progress/ProgressPhotos';
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -12,7 +13,7 @@ import { setMemberPin, addNote, logWeightForMember } from '../api/logs';
 import { getMemberMorningMessage, markMorningNudgeSent } from '../api/logs';
 import { openWhatsApp } from '../utils/personalMessage';
 import { Card, SectionTitle, BackButton, PageLoader, StatPill, BottomNav } from '../components/UI';
-import { Segmented, Collapsible } from '../components/primitives';
+import { Sheet, Segmented, Collapsible } from '../components/primitives';
 import Timeline from '../components/today/Timeline';
 import { timelineModelFromServerLog, previousWeight } from '../lib/day';
 import MemberBrief from '../components/coach/MemberBrief';
@@ -23,6 +24,7 @@ import TrainingSummary from '../components/TrainingSummary';
 import MetabolicInsight from '../components/MetabolicInsight';
 import DietPlanStudio from '../components/coach/DietPlanStudio';
 import SleepTargetCard from '../components/coach/SleepTargetCard';
+import WaterTargetCard from '../components/coach/WaterTargetCard';
 import MemberLabelsCard from '../components/coach/MemberLabelsCard';
 import MacroLab from '../components/MacroLab';
 import MessageMember from '../components/MessageMember';
@@ -37,6 +39,7 @@ import { UNSORTED_MEAL, groupByMeal, deriveBodyComp } from '../utils/coachView';
 import { calcN, calcMicrosFromItems, rowCompliance, WeightTooltip } from '../lib/coach/dayMath.jsx';
 import DayDetail from '../components/coach/DayDetail';
 import MemberCharts from '../components/coach/MemberCharts';
+import CoachHistorySheet from '../components/coach/CoachHistorySheet';
 import { firstName } from '../utils/personName';
 
 // Bucket for food rows whose meal slot is null, blank, or no longer part of the
@@ -45,7 +48,7 @@ import { firstName } from '../utils/personName';
 
 // ── Nutrition helper — Sprint 1 foods have per_100g, legacy fall back to NUTRITION_DB
 // ── Add lab value modal ───────────────────────────────────────────────────────
-function AddLabModal({ memberId, onClose, onAdded }) {
+export function AddLabModal({ memberId, onClose, onAdded }) {
   const [form, setForm] = useState({
     test_date: (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })(),
     test_name: '', value: '', unit: '', ref_min: '', ref_max: '',
@@ -56,6 +59,7 @@ function AddLabModal({ memberId, onClose, onAdded }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = async () => {
+    if (saving) return;
     if (!form.test_date || !form.test_name || !form.value) {
       setError('Date, test name and value are required'); return;
     }
@@ -71,12 +75,8 @@ function AddLabModal({ memberId, onClose, onAdded }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-bold text-white">Add Lab Value</h3>
-          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
-        </div>
+    <Sheet open onClose={onClose} title="Add Lab Value">
+      <div className="space-y-3">
         {[
           { key: 'test_date', label: 'Date',      type: 'date' },
           { key: 'test_name', label: 'Test name', type: 'text', placeholder: 'HbA1c, GGT, B12…' },
@@ -87,23 +87,23 @@ function AddLabModal({ memberId, onClose, onAdded }) {
         ].map(({ key, label, type, placeholder }) => (
           <div key={key}>
             <label className="block text-eyebrow text-lo font-semibold mb-1.5">{label}</label>
-            <input type={type} value={form[key]} placeholder={placeholder}
+            <input aria-label={label} type={type} value={form[key]} placeholder={placeholder}
               onChange={e => set(key, e.target.value)}
               className="w-full border border-hair-med rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/[0.28]" />
           </div>
         ))}
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
         <button onClick={submit} disabled={saving}
           className="w-full py-3 bg-gold hover:bg-gold-light text-charcoal font-bold rounded-xl transition-colors disabled:opacity-50">
           {saving ? 'Saving…' : 'Add Lab Value'}
         </button>
       </div>
-    </div>
+    </Sheet>
   );
 }
 
 // ── Set PIN modal (Sprint 8) ──────────────────────────────────────────────────
-function SetPinModal({ memberId, memberName, onClose, onSaved }) {
+export function SetPinModal({ memberId, memberName, onClose, onSaved }) {
   const [pin,     setPin]     = useState('');
   const [confirm, setConfirm] = useState('');
   const [show,    setShow]    = useState(false);
@@ -112,6 +112,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
   const [success, setSuccess] = useState(false);
 
   const submit = async () => {
+    if (saving) return;
     if (pin.length < 4)     { setError('PIN must be at least 4 characters'); return; }
     if (pin !== confirm)    { setError('PINs do not match'); return; }
     setSaving(true); setError('');
@@ -126,15 +127,8 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
-        <div className="flex items-center justify-between mb-1">
-          <div>
-            <h3 className="font-bold text-white">Set Login PIN</h3>
-            <p className="text-xs text-lo mt-0.5">{memberName}</p>
-          </div>
-          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
-        </div>
+    <Sheet open onClose={onClose} title="Set Login PIN" eyebrow={memberName}>
+      <div className="space-y-3">
         {success ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">✅</div>
@@ -143,7 +137,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
           </div>
         ) : (
           <>
-            <p className="text-xs text-faint bg-amber-400/[0.08] border border-amber-400/15 rounded-xl px-3 py-2">
+            <p className="text-xs text-faint bg-warn/[0.08] border border-warn/15 rounded-xl px-3 py-2">
               Share this PIN with the member in person. They use it with their phone number to log in.
             </p>
             {[
@@ -153,7 +147,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
               <div key={label}>
                 <label className="block text-eyebrow text-lo font-semibold mb-1.5">{label}</label>
                 <div className="relative">
-                  <input type={show ? 'text' : 'password'} inputMode="numeric" value={value}
+                  <input aria-label={label} type={show ? 'text' : 'password'} inputMode="numeric" value={value}
                     onChange={e => onChange(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()}
                     placeholder="Min. 4 characters"
                     className="w-full border border-hair-med rounded-xl px-3 py-2.5 pr-14 text-sm
@@ -167,7 +161,7 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
                 </div>
               </div>
             ))}
-            {error && <p className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p role="alert" className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !pin || !confirm}
               className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
                 rounded-xl transition-colors disabled:opacity-50">
@@ -176,14 +170,14 @@ function SetPinModal({ memberId, memberName, onClose, onSaved }) {
           </>
         )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 
 // AddNoteModal removed in Sprint 12b — the Note tab of MemberActionSheet replaced it in 9b.
 
 // ── Weight Entry modal (Sprint 11) ───────────────────────────────────────────
-function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
+export function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
   const todayStr = (() => { const now = new Date(); return new Date(now.getTime() + 5.5*60*60*1000).toISOString().split('T')[0]; })();
   const [date,    setDate]    = useState(todayStr);
   const [weight,  setWeight]  = useState('');
@@ -192,6 +186,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
   const [success, setSuccess] = useState(false);
 
   const submit = async () => {
+    if (saving) return;
     const w = parseFloat(weight);
     if (!weight || isNaN(w) || w < 20 || w > 400) {
       setError('Enter a valid weight between 20–400 kg');
@@ -209,15 +204,8 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4">
-      <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-sm p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-bold text-white">Log Weight</h3>
-            <p className="text-xs text-lo mt-0.5">{memberName}</p>
-          </div>
-          <button onClick={onClose} className="text-lo hover:text-white text-xl">×</button>
-        </div>
+    <Sheet open onClose={onClose} title="Log Weight" eyebrow={memberName}>
+      <div className="space-y-3">
 
         {success ? (
           <div className="text-center py-4">
@@ -231,7 +219,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
             </p>
             <div>
               <label className="block text-eyebrow text-lo font-semibold mb-1.5">Date</label>
-              <input type="date" value={date} max={todayStr}
+              <input aria-label="Date" type="date" value={date} max={todayStr}
                 onChange={e => setDate(e.target.value)}
                 className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm
                   focus:outline-none focus:ring-2 focus:ring-gold/[0.28]" />
@@ -239,7 +227,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
             <div>
               <label className="block text-eyebrow text-lo font-semibold mb-1.5">Weight (kg)</label>
               <div className="flex items-center gap-2">
-                <input type="number" step="0.1" inputMode="decimal" value={weight}
+                <input aria-label="Weight (kg)" type="number" step="0.1" inputMode="decimal" value={weight}
                   onChange={e => setWeight(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && submit()}
                   placeholder="e.g. 84.5"
@@ -248,7 +236,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
                 <span className="text-lo font-bold text-lg">kg</span>
               </div>
             </div>
-            {error && <p className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
+            {error && <p role="alert" className="text-xs text-red-400 bg-red-400/[0.08] px-3 py-2 rounded-xl">{error}</p>}
             <button onClick={submit} disabled={saving || !weight}
               className="w-full py-3 bg-gold hover:bg-gold-deep text-charcoal font-bold
                 rounded-xl transition-colors disabled:opacity-50">
@@ -257,7 +245,7 @@ function WeightEntryModal({ memberId, memberName, onClose, onSaved }) {
           </>
         )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -697,7 +685,7 @@ export default function Coach() {
             </div>
             {delta !== null && (
               <div className="text-right flex-shrink-0">
-                <div className={`font-display text-2xl font-semibold ${parseFloat(delta) > 0 ? 'text-gold-light' : 'text-amber-300'}`}>
+                <div className={`font-display text-2xl font-semibold ${parseFloat(delta) > 0 ? 'text-gold-light' : 'text-warn'}`}>
                   {parseFloat(delta) > 0 ? '↓' : '↑'} {Math.abs(parseFloat(delta))} kg
                 </div>
                 <div className="text-xs text-gold-light">lost so far</div>
@@ -711,7 +699,7 @@ export default function Coach() {
               className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl
                 transition-colors border ${profile.has_pin
                   ? 'text-white bg-white/[0.06] hover:bg-white/20 border-white/20'
-                  : 'text-amber-900 bg-amber-400 hover:bg-amber-300 border-amber-300'}`}>
+                  : 'text-charcoal bg-warn hover:bg-warn/90 border-warn'}`}>
               🔑 {profile.has_pin ? 'Reset PIN' : '⚠ Set PIN (required to login)'}
             </button>
                         <button onClick={() => setActionTab('message')} data-testid="open-message"
@@ -769,7 +757,7 @@ export default function Coach() {
             {activeLog && (
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                 (activeLog.compliance_pct||0) >= 75 ? 'bg-gold/[0.12] text-gold' :
-                (activeLog.compliance_pct||0) >= 50 ? 'bg-amber-400/10 text-amber-400' :
+                (activeLog.compliance_pct||0) >= 50 ? 'bg-warn/10 text-warn' :
                                                       'bg-red-400/10 text-red-400'
               }`}>{activeLog.compliance_pct||0}%</span>
             )}
@@ -787,7 +775,7 @@ export default function Coach() {
                   const isToday = log.log_date === todayIST;
                   const isActive = log.log_date === activeDate;
                   const pct = log.compliance_pct || 0;
-                  const dotColor = pct >= 75 ? '#D4AF37' : pct >= 50 ? '#fbbf24' : '#f87171';
+                  const dotColor = pct >= 75 ? 'var(--accent)' : pct >= 50 ? 'rgb(var(--fit-warn))' : '#f87171';
                   const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
                   return (
                     <button key={log.log_date}
@@ -842,9 +830,9 @@ export default function Coach() {
             {streak14.map(d => (
               <div key={d.date} title={`${d.date} · ${d.logged ? `${d.pct}%` : 'no log'}`}
                 className="flex-1 h-5 rounded-[3px]"
-                style={{ background: !d.logged ? 'rgba(255,255,255,0.05)'
-                  : d.pct >= 75 ? 'rgba(212,175,55,0.55)'
-                  : d.pct >= 50 ? 'rgba(251,191,36,0.40)'
+                style={{ background: !d.logged ? 'rgb(var(--fit-ink) / 0.05)'
+                  : d.pct >= 75 ? 'rgb(var(--fit-accent) / 0.55)'
+                  : d.pct >= 50 ? 'rgb(var(--fit-warn) / 0.45)'   /* Fixes-3l (finding 13): the theme's warn colour, not leftover amber */
                   :               'rgba(248,113,113,0.35)' }} />
             ))}
           </div>
@@ -859,68 +847,7 @@ export default function Coach() {
 
         {/* Drill-down modal — log detail for the tapped bar */}
         {tab === 'today' && (<>   {/* Compliance drill-down modal */}
-        {selectedLog && (() => {
-          const fl    = selectedLog;
-          const dateLabel = new Date(String(fl.log_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-          const foodItems = fl.food_items || [];
-          const totalKcal = foodItems.reduce((s, i) => s + (calcN(i)?.cal || 0), 0);
-          return (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2"
-              onClick={() => setSelectedLog(null)}>
-              <div className="bg-surface rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[82vh] flex flex-col"
-                onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair flex-shrink-0">
-                  <div>
-                    <h3 className="font-bold text-white">{dateLabel}</h3>
-                    <div className="flex gap-3 mt-1">
-                      {fl.weight_kg && <span className="text-xs font-semibold text-gold-deep">⚖ {fl.weight_kg} kg</span>}
-                      {fl.compliance_pct != null && (
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                          fl.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
-                          fl.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.14] text-red-400'
-                        }`}>{fl.compliance_pct}%</span>
-                      )}
-                    </div>
-                  </div>
-                  <button onClick={() => setSelectedLog(null)} className="text-lo hover:text-white text-2xl leading-none">×</button>
-                </div>
-                <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-                  {foodItems.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-lo tracking-wider mb-2">
-                        🥗 Food {totalKcal > 0 && <span className="font-normal text-orange-300 normal-case">· {totalKcal} kcal</span>}
-                      </p>
-                      <div className="space-y-1">
-                        {foodItems.map((item, i) => {
-                          const n = calcN(item);
-                          return (
-                            <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-white/[0.05] last:border-0">
-                              <div>
-                                <span className="text-white font-medium">{item.name}</span>
-                                <span className="text-xs text-lo ml-1">{item.grams}g{item.meal ? ` · ${item.meal}` : ''}</span>
-                              </div>
-                              {n && <span className="text-xs font-bold text-orange-300">{n.cal} kcal</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {fl.water_ml > 0 && (
-                    <p className="text-sm text-blue-400 font-semibold">💧 {(fl.water_ml / 1000).toFixed(1)} L water</p>
-                  )}
-                  {fl.notes && (
-                    <div>
-                      <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
-                      <p className="text-sm text-mid whitespace-pre-wrap leading-relaxed">{fl.notes}</p>
-                    </div>
-                  )}
-                  {!foodItems.length && !fl.weight_kg && <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        <CoachHistorySheet log={selectedLog} onClose={() => setSelectedLog(null)} />
         </>)}
 
         {/* What their own data says about their metabolism — the engine
@@ -1027,6 +954,10 @@ export default function Coach() {
         <Card>
           <SleepTargetCard memberId={parseInt(memberId)} profile={profile} onSaved={() => load({ quiet: true })} />
         </Card>
+        {/* Fixes-2j: the water target, and which targets are still FitLife standards. */}
+        <Card>
+          <WaterTargetCard memberId={parseInt(memberId)} profile={profile} onSaved={() => load({ quiet: true })} />
+        </Card>
         </>)}
 
         {/* Lab values */}
@@ -1086,7 +1017,7 @@ export default function Coach() {
                       <div className="text-sm font-bold text-white">{formatDate(d)}</div>
                       <div className="text-caption text-lo">
                         {rows.length} {plural(rows.length, 'result')}
-                        {flagged > 0 && <span className="text-amber-400"> · {flagged} outside range</span>}
+                        {flagged > 0 && <span className="text-warn"> · {flagged} outside range</span>}
                         {rows[0]?.lab_name && ` · ${rows[0].lab_name}`}
                       </div>
                     </div>
@@ -1308,7 +1239,7 @@ export default function Coach() {
                     <p className="text-eyebrow text-lo leading-tight truncate" title={m.name}>{m.name}</p>
                     <p className="text-sm font-bold text-white leading-tight mt-0.5">{m.latest}</p>
                     {m.change != null && (
-                      <p className={`text-eyebrow leading-tight ${m.change > 0 ? 'text-amber-400' : 'text-gold'}`}>
+                      <p className={`text-eyebrow leading-tight ${m.change > 0 ? 'text-warn' : 'text-gold'}`}>
                         {m.change > 0 ? '↑' : '↓'} {Math.abs(m.change)}
                       </p>
                     )}
@@ -1327,9 +1258,9 @@ export default function Coach() {
                     <p className="text-caption font-semibold text-mid mb-1">{m.name}</p>
                     <ResponsiveContainer width="100%" height={80}>
                       <LineChart data={m.series} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                        <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} />
+                        <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
+                        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                         <Tooltip
                           content={({ active, payload }) => active && payload?.length
                             ? <div className="bg-surface border border-hair rounded-xl px-2 py-1 shadow-sm text-xs">
@@ -1370,6 +1301,10 @@ export default function Coach() {
           onSaved={() => setData(d => ({ ...d, profile: { ...d.profile, has_pin: true } }))}
         />
       )}
+
+      {/* CMP-010/011 (10 Oct 2026, restored 16 Oct): both buttons set state but nothing was mounted. */}
+      {showWeightForm && <WeightEntryModal memberId={memberId} memberName={profile?.name} onClose={() => setShowWeight(false)} onSaved={() => load({ quiet: true })} />}
+      {showProgramBuilder && <ProgramBuilderModal memberId={parseInt(memberId)} memberName={profile?.name} onClose={() => setShowProgramBuilder(false)} onSaved={() => load({ quiet: true })} />}
 
       {/* Sprint 9: Add note modal */}
       {/* Sprint 9b: Note · Message · Push in one sheet. */}

@@ -246,6 +246,9 @@ const TOKEN2 = 'dddddddddd.eeeeeeeeee.ffffffffff';
   ck('a failed write reports false rather than pretending to have worked',
      S.storeRefreshToken(TOKEN) === false);
 
+  await require('./lib/session-request-cases').runRequestCases(ck);
+  if (!process.env.SESSION_QA_BASELINE) await require('./lib/session-boot-cases').runBootCases(ck);
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();

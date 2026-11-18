@@ -11,6 +11,9 @@ export default defineConfig({
       filename: 'sw.js',
       includeAssets: ['icons/*.png', 'icons/*.svg', 'favicon.ico', 'icons/apple-touch-icon.png'],
 
+      // Icon URLs carry ?v=… (17 Oct 2026, gold → green): phones and the old
+      // service worker kept the gold files under the same URL, even after a
+      // reinstall. Bump the version whenever the icon art changes.
       manifest: {
         name: 'FitLife',
         short_name: 'FitLife',
@@ -23,12 +26,14 @@ export default defineConfig({
         // Activity uses theme_color for the SPLASH SCREEN and status bar, so
         // the wrong gold would be the first thing every Android member sees on
         // every single launch.
-        theme_color: '#D4AF37',
+        // 16 Oct 2026: the brand is green (Sachin's decision) — forest green
+        // #315D47, the light-theme accent, readable as a status bar.
+        theme_color: '#315D47',
         // Play requires a stable manifest id for a TWA.
         id: '/',
         // Was #ffffff, which flashed a white screen on every cold start before
         // the app painted. Matching the app's own background removes the flash.
-        background_color: '#0b0b0e',
+        background_color: '#141817',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -41,14 +46,14 @@ export default defineConfig({
             short_name: 'AI Chat',
             description: 'Log your day in one message',
             url: '/?open=ai',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
+            icons: [{ src: '/icons/icon-192.png?v=green1', sizes: '192x192' }],
           },
           {
             name: 'Log weight',
             short_name: 'Weight',
             description: 'Quick morning weigh-in',
             url: '/?open=weight',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
+            icons: [{ src: '/icons/icon-192.png?v=green1', sizes: '192x192' }],
           },
         ],
         icons: [
@@ -58,31 +63,31 @@ export default defineConfig({
           // maskable files below keep the artwork inside the centre 80% safe
           // zone and fill the rest with the background colour.
           {
-            src: '/icons/icon-192.png',
+            src: '/icons/icon-192.png?v=green1',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/icons/icon-512.png',
+            src: '/icons/icon-512.png?v=green1',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/icons/icon-192-maskable.png',
+            src: '/icons/icon-192-maskable.png?v=green1',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'maskable',
           },
           {
-            src: '/icons/icon-512-maskable.png',
+            src: '/icons/icon-512-maskable.png?v=green1',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
           },
           {
-            src: '/icons/apple-touch-icon.png',
+            src: '/icons/apple-touch-icon.png?v=green1',
             sizes: '180x180',
             type: 'image/png',
           },

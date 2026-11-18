@@ -1,8 +1,10 @@
 import { StatPill } from '../UI';
-import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, RDA_TARGETS } from '../../constants';
+import { ACTIVITIES, ACV_ITEMS, SUPPLEMENTS } from '../../constants';
 import { UNSORTED_MEAL, groupByMeal } from '../../utils/coachView';
 import WorkoutSessionViewer from '../WorkoutSessionViewer';
-import { calcN, calcMicrosFromItems, rowCompliance } from '../../lib/coach/dayMath.jsx';
+import { calcN, rowCompliance } from '../../lib/coach/dayMath.jsx';
+import { microStatus, resolveProtocolItems, protocolFromProfile, protocolDefaultNone } from '../../lib/day';
+import { MicroRow, microCountTone } from '../today/DayWidgets';
 
 /**
  * DayDetail — every tick, macro and note for one day, as the coach sees it
@@ -39,7 +41,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                     {burnedKcal > 0 && (
                       <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl border ${
                         netKcal <= 0 ? 'bg-gold/[0.07] border-gold/20 text-gold'
-                        : netKcal <= 200 ? 'bg-amber-400/10 border-amber-400/20 text-amber-400'
+                        : netKcal <= 200 ? 'bg-warn/10 border-warn/20 text-warn'
                         : 'bg-red-400/10 border-red-400/20 text-red-400'
                       }`}>
                         <div className="flex gap-3">
@@ -63,7 +65,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                             const matched = (meal.items || []).filter(i => logged.includes(i.food_name?.toLowerCase())).length;
                             const pct     = total > 0 ? matched / total : 0;
                             const color   = pct >= 0.8 ? 'bg-gold/10 text-gold border-gold/[0.22]'
-                                          : pct >= 0.5 ? 'bg-amber-400/10 text-amber-400 border-amber-400/25'
+                                          : pct >= 0.5 ? 'bg-warn/10 text-warn border-warn/25'
                                           :              'bg-red-400/10 text-red-400 border-red-400/25';
                             const icon    = pct >= 0.8 ? '✓' : pct >= 0.5 ? '~' : '✗';
                             return (
@@ -97,7 +99,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                             <div key={meal} className="border-b border-white/[0.05] last:border-0">
                               <div className="px-3 py-1.5 flex justify-between items-center bg-white/[0.02]">
                                 <span className={`text-eyebrow font-semibold tracking-wide ${
-                                  meal === UNSORTED_MEAL ? 'text-amber-400' : 'text-faint'
+                                  meal === UNSORTED_MEAL ? 'text-warn' : 'text-faint'
                                 }`}>
                                   {meal}{meal === UNSORTED_MEAL && ' · no meal slot'}
                                 </span>
@@ -114,7 +116,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                                     {n && (
                                       <div className="flex gap-2.5 text-right flex-shrink-0">
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-orange-400">{n.cal}</div>
+                                          <div className="text-xs font-bold text-gold">{n.cal}</div>
                                           <div className="text-eyebrow text-lo">kcal</div>
                                         </div>
                                         <div className="text-center">
@@ -122,11 +124,11 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                                           <div className="text-eyebrow text-lo">pro</div>
                                         </div>
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-amber-400">{n.carb}g</div>
+                                          <div className="text-xs font-bold text-carb">{n.carb}g</div>
                                           <div className="text-eyebrow text-lo">carb</div>
                                         </div>
                                         <div className="text-center">
-                                          <div className="text-xs font-bold text-amber-400">{n.fat}g</div>
+                                          <div className="text-xs font-bold text-fat">{n.fat}g</div>
                                           <div className="text-eyebrow text-lo">fat</div>
                                         </div>
                                       </div>
@@ -149,10 +151,10 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                             <div className="px-3 py-2.5 bg-gold/5 flex items-center justify-between border-t border-gold/[0.12]">
                               <span className="text-xs font-bold text-gold">Day Total</span>
                               <div className="flex gap-3 text-xs">
-                                <span className="font-bold text-orange-400">{t.cal} kcal</span>
+                                <span className="font-bold text-gold">{t.cal} kcal</span>
                                 <span className="text-blue-400">{t.pro.toFixed(1)}g P</span>
-                                <span className="text-amber-400">{t.carb.toFixed(1)}g C</span>
-                                <span className="text-amber-400">{t.fat.toFixed(1)}g F</span>
+                                <span className="text-carb">{t.carb.toFixed(1)}g C</span>
+                                <span className="text-fat">{t.fat.toFixed(1)}g F</span>
                               </div>
                             </div>
                           );
@@ -164,11 +166,25 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                         Each group shows its own X/Y so the coach can scan exactly what's
                         missing without having to decode emoji or count cryptic pills. */}
                     <div className="space-y-3">
-                      {[
-                        { title: '🏃 Activities', items: ACTIVITIES,  done: log.activities },
-                        { title: '🍎 ACV',         items: ACV_ITEMS,  done: log.acv },
-                        { title: '💊 Supplements', items: SUPPLEMENTS, done: log.supplements },
-                      ].map(group => {
+                      {(() => {
+                        const prof = data?.profile ? protocolFromProfile(data.profile) : null;
+                        // Existing members: exactly as before 3k (every built-in item).
+                        if (!protocolDefaultNone(prof)) return [
+                          { title: '🏃 Activities', items: ACTIVITIES,  done: log.activities },
+                          { title: '🍎 ACV',         items: ACV_ITEMS,  done: log.acv },
+                          { title: '💊 Supplements', items: SUPPLEMENTS, done: log.supplements },
+                        ];
+                        // Fixes-3k, a member created from 3k on: the items in force (the same rule as their app), so a
+                        // member with no supplements assigned is not shown "0/7 supplements". Any item ticked THAT day
+                        // is kept too, so a past day's history never loses a tick when the coach changes the list later.
+                        const r = resolveProtocolItems(prof);
+                        const withTicked = (inForce, all, done) => [...inForce, ...all.filter(i => done?.[i.id] && !inForce.some(x => x.id === i.id))];
+                        return [
+                          { title: '🏃 Activities', items: withTicked(r.activeActivities, ACTIVITIES, log.activities), done: log.activities },
+                          { title: '🍎 Apple cider vinegar', items: withTicked(r.activeACV, ACV_ITEMS, log.acv), done: log.acv },
+                          { title: '💊 Supplements', items: withTicked(r.activeSupplements, SUPPLEMENTS, log.supplements), done: log.supplements },
+                        ].filter(g => g.items.length > 0);
+                      })().map(group => {
                         const doneCount = group.items.filter(it => group.done?.[it.id]).length;
                         return (
                           <div key={group.title}>
@@ -179,7 +195,7 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
                                   ? 'bg-gold/[0.14] text-gold-light'
                                   : doneCount === 0
                                   ? 'bg-white/[0.05] text-lo'
-                                  : 'bg-amber-400/10 text-amber-300'
+                                  : 'bg-warn/10 text-warn'
                               }`}>{doneCount}/{group.items.length}</span>
                             </div>
                             <div className="space-y-1">
@@ -212,50 +228,30 @@ export default function DayDetail({ activeLog, activeDate, memberId, workoutTick
 
                     <WorkoutSessionViewer memberId={parseInt(memberId)} date={activeDate} refreshTick={workoutTick} />
 
-                    {/* Key nutrients collapsible */}
-                    {(log.food_items || []).some(f => f.per_100g) && (() => {
-                      const rdaOv = data?.profile?.rda_overrides || {};
-                      const micros = calcMicrosFromItems(log.food_items, log.supplements);
+                    {/* Key nutrients collapsible — the member's own rule (Fixes-2i): the same
+                        supplements maths, and unknown values are "not known", never zero. */}
+                    {(log.food_items || []).some(f => Number(f?.grams) > 0) && (() => {
+                      // The member's own inputs, as on their Today screen. Since Fixes-2l sunlight is
+                      // an activity record only — microStatus no longer counts it as vitamin D intake.
+                      // The profile row names the coach's choice protocol_activities; the member's
+                      // protocol (server/routes/logs.js) calls it activities. protocolFromProfile maps it.
+                      const { activeActivities } = resolveProtocolItems(protocolFromProfile(data?.profile || {}));
+                      const st = microStatus({ foodItems: log.food_items || [], supplements: log.supplements || {},
+                        activities: log.activities || {}, activeActivities,
+                        rdaOverrides: data?.profile?.rda_overrides || {} });
                       const KEYS = ['vit_b12','vit_d','vit_c','calcium','iron','magnesium','zinc','folate','omega3_epa','omega3_dha','fiber'];
-                      const met  = KEYS.filter(k => {
-                        const meta = RDA_TARGETS[k];
-                        if (!meta) return false;
-                        const rda = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
-                        return (micros[k]||0) / rda >= 0.8;
-                      }).length;
+                      const met = KEYS.filter(k => st.rows[k]?.status === 'met').length;
+                      const unk = KEYS.filter(k => st.rows[k]?.status === 'unknown').length;
+                      const est = KEYS.filter(k => st.rows[k]?.status === 'estimate').length;   // Fixes-2k
                       return (
-                        <details className="border border-hair rounded-xl overflow-hidden">
+                        <details className="border border-hair rounded-xl overflow-hidden" data-testid="coach-key-nutrients">
                           <summary className="px-3 py-2.5 text-xs font-semibold text-faint cursor-pointer
                             hover:text-gold list-none flex justify-between items-center bg-surface">
                             <span>🔬 Key Nutrients</span>
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${
-                              met >= KEYS.length*0.8 ? 'bg-gold/[0.12] text-gold' :
-                              met >= KEYS.length*0.5 ? 'bg-amber-400/10 text-amber-400' : 'bg-red-400/10 text-red-400'
-                            }`}>{met}/{KEYS.length} ▼</span>
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${microCountTone(met, KEYS.length, unk + est)}`}>{met}/{KEYS.length}{est ? ` · ${est} estimated` : ''}{unk ? ` · ${unk} not known` : ''} ▼</span>
                           </summary>
                           <div className="px-3 py-3 space-y-2 bg-surface">
-                            {KEYS.map(k => {
-                              const meta = RDA_TARGETS[k];
-                              if (!meta) return null;
-                              const rda  = rdaOv[k] ? parseFloat(rdaOv[k]) : meta.rda;
-                              const raw  = micros[k] || 0;
-                              const dec  = ['vit_b12','folate','vit_b6'].includes(k) ? 1 : 0;
-                              const val  = +raw.toFixed(dec);
-                              const pct  = Math.min(100, (raw / rda) * 100);
-                              const cls  = pct>=80 ? 'bg-gold' : pct>=50 ? 'bg-amber-400' : 'bg-red-400';
-                              const tcls = pct>=80 ? 'text-gold' : pct>=50 ? 'text-amber-400' : 'text-red-400';
-                              return (
-                                <div key={k}>
-                                  <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-faint">{meta.icon} {meta.label}</span>
-                                    <span className={`font-bold ${tcls}`}>{val}/{rda} {meta.unit}</span>
-                                  </div>
-                                  <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full transition-all ${cls}`} style={{width:`${pct}%`}} />
-                                  </div>
-                                </div>
-                              );
-                            })}
+                            {KEYS.map(k => <MicroRow key={k} r={st.rows[k]} custom={!!data?.profile?.rda_overrides?.[k]} />)}
                           </div>
                         </details>
                       );

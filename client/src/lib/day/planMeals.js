@@ -147,11 +147,11 @@ export function plannedRows(meal, choices = {}, food = []) {
     // Phase 6: an approved swap logs the alternative instead, at its own grams.
     if (c.swap?.name) {
       changes.push(`${c.swap.name} ${g} g instead of ${it.name}`);
-      rows.push({ name: c.swap.name, grams: g, meal: meal.meal, food_id: null, per_100g: c.swap.per_100g || null });
+      rows.push({ name: c.swap.name, grams: g, meal: meal.meal, food_id: null, per_100g: c.swap.per_100g || null, preparation: c.swap.preparation ?? null });
       continue;
     }
     if (g !== Number(it.grams)) changes.push(`${it.name} ${g} g (plan ${Number(it.grams)} g)`);
-    rows.push({ name: it.name, grams: g, meal: meal.meal, food_id: null, per_100g: it.per_100g || null });
+    rows.push({ name: it.name, grams: g, meal: meal.meal, food_id: null, per_100g: it.per_100g || null, preparation: it.preparation ?? null });
   }
   return { rows, kcal: mealKcal(rows), changes };
 }
