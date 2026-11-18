@@ -40,6 +40,19 @@ function macrosFor(food, grams) {
  * @param {number} p.hour     IST hour — only used to name the meal
  * @returns {null | { headline, note, items: [{ name, grams, kcal, protein }], totals }}
  */
+/**
+ * The day's gap in words, for whichever targets the coach has set (17 Oct
+ * 2026): a protein-only target printed "80 g protein and null kcal still to
+ * go". Both, protein only, calories only — never "null", "undefined" or NaN.
+ */
+export function gapText(kcalLeft, proLeft) {
+  const k = Number.isFinite(kcalLeft) ? kcalLeft : null, p = Number.isFinite(proLeft) ? proLeft : null;
+  if (p != null && p > 5 && k != null) return `${p} g protein and ${k.toLocaleString('en-IN')} kcal still to go.`;
+  if (p != null && p > 5) return `${p} g protein still to go.`;
+  if (k != null) return `${k.toLocaleString('en-IN')} kcal left today.`;
+  return 'What is left today';
+}
+
 export function suggestMeal({ kcalIn = 0, kcalTarget = null, proteinIn = 0, proteinTarget = null, foods = [], hour = 12 }) {
   const left = remaining({ kcalIn, kcalTarget, proteinIn, proteinTarget });
   if (!left) return null;
@@ -50,21 +63,21 @@ export function suggestMeal({ kcalIn = 0, kcalTarget = null, proteinIn = 0, prot
   // Over the target is checked FIRST: a negative "kcal left" is not a small
   // remainder. (It read as "on target" until a test caught 2,100 against 1,800.)
   if (kcalLeft != null && kcalLeft < 0) {
-    return { headline: `${Math.abs(kcalLeft)} kcal over target today.`, note: 'Water, a walk and an early night beat another meal.', items: [], totals: { kcal: 0, protein: 0 } };
+    return { headline: `${Math.abs(kcalLeft)} kcal over target today.`, reason: 'over', note: 'Water, a walk and an early night beat another meal.', items: [], totals: { kcal: 0, protein: 0 } };
   }
   const proteinMet = proLeft == null || proLeft <= 5;
   if (kcalLeft === 0 && proteinMet) {
-    return { headline: 'Exactly on target today.', note: null, items: [], totals: { kcal: 0, protein: 0 } };
+    return { headline: 'Exactly on target today.', reason: 'on-target', note: null, items: [], totals: { kcal: 0, protein: 0 } };
   }
   // Nothing worth suggesting: under ~150 kcal left and protein essentially met.
   if (proteinMet && (kcalLeft == null || kcalLeft < 150)) {
-    return { headline: 'On target for today.', note: kcalLeft > 0 ? `About ${kcalLeft} kcal spare.` : null, items: [], totals: { kcal: 0, protein: 0 } };
+    return { headline: 'On target for today.', reason: 'on-target', note: kcalLeft > 0 ? `About ${kcalLeft} kcal spare.` : null, items: [], totals: { kcal: 0, protein: 0 } };
   }
 
   const usable = foods.filter(f => f?.per_100g?.calories > 0 && f.name);
   if (!usable.length) {
     return {
-      headline: proLeft > 5 ? `${proLeft} g protein and ${kcalLeft} kcal still to go.` : `${kcalLeft} kcal left today.`,
+      headline: gapText(kcalLeft, proLeft), reason: 'no-history',
       note: 'Log a few meals and I can suggest from what you actually eat.',
       items: [], totals: { kcal: 0, protein: 0 },
     };
@@ -99,7 +112,7 @@ export function suggestMeal({ kcalIn = 0, kcalTarget = null, proteinIn = 0, prot
 
   if (!items.length) {
     return {
-      headline: `${kcalLeft} kcal left today.`,
+      headline: kcalLeft != null ? `${kcalLeft.toLocaleString('en-IN')} kcal left today.` : gapText(kcalLeft, proLeft), reason: 'no-fit',
       note: 'Nothing in your usual foods fits what is left — something light and high in protein.',
       items: [], totals: { kcal: 0, protein: 0 },
     };
@@ -108,10 +121,10 @@ export function suggestMeal({ kcalIn = 0, kcalTarget = null, proteinIn = 0, prot
   const mealName = hour < 11 ? 'breakfast' : hour < 16 ? 'lunch' : hour < 21 ? 'dinner' : 'a late meal';
   const headline = (proLeft != null && proLeft > 5)
     ? `${proLeft} g protein left — best fit for ${mealName}`
-    : `${kcalLeft} kcal left — an idea for ${mealName}`;
+    : kcalLeft != null ? `${kcalLeft.toLocaleString('en-IN')} kcal left — an idea for ${mealName}` : `An idea for ${mealName}`;
 
   return {
-    headline,
+    headline, reason: 'suggestion',
     note: `${Math.round(kcal).toLocaleString('en-IN')} kcal · ${Math.round(protein)} g protein from what you usually eat.`,
     items,
     totals: { kcal: Math.round(kcal), protein: Math.round(protein) },

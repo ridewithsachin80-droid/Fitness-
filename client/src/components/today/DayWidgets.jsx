@@ -1,3 +1,4 @@
+import { accent, themeColor } from '../../utils/themeColor';
 /**
  * components/today/DayWidgets.jsx — the four data widgets that used to be
  * private functions inside pages/DailyLog.jsx, moved here verbatim in Sprint 3
@@ -12,29 +13,58 @@
  * No behaviour change. The maths they call lives in lib/day.
  */
 import { useEffect, useState } from 'react';
-import { RDA_TARGETS } from '../../constants';
 import { Card, SectionTitle } from '../UI';
 import {
-  calcFoodMacros, calcMicros, addSupplementMicros, addActivityMicros,
+  calcFoodMacros, microStatus,
   MICRO_VITAMINS, MICRO_MINERALS, MICRO_SPECIALS, QUICK_MICRO_KEYS, timeToMin,
 } from '../../lib/day';
+
+/** The quick "key nutrients" count, read from the shared status (Fixes-2i). EPA and DHA count as one. */
+export function quickMicroCount(st) {
+  const keys = QUICK_MICRO_KEYS.filter(k => k !== 'omega3_dha');
+  let met = 0, unknown = 0, estimate = 0;
+  for (const k of keys) {
+    const r = st.rows[k]; if (!r) continue;
+    if (k === 'omega3_epa') {
+      // EPA and DHA count as one omega-3 target. Confirmed amounts alone must reach it (Fixes-2k).
+      const d = st.rows.omega3_dha;
+      const conf = r.confirmed + (d?.confirmed || 0), all = r.value + (d?.value || 0);
+      if ((conf / r.rda) * 100 >= 80) met++;
+      else if ((all / r.rda) * 100 >= 80) estimate++;
+      else if (r.coverage !== 'full' || d?.coverage !== 'full') unknown++;
+      else if (r.estimated + (d?.estimated || 0) > 0) estimate++;
+    } else if (r.status === 'met') met++;
+    else if (r.status === 'unknown') unknown++;
+    else if (r.status === 'estimate') estimate++;
+  }
+  return { met, unknown, estimate, total: keys.length };
+}
+
+/** Colour for a "met / total" count (Fixes-2i): red or amber only when the shortfall is KNOWN.
+ *  With unknowns and under 80% met it is neutral — "not known" is not "failing". */
+export function microCountTone(met, total, unknown = 0, { bg = true } = {}) {
+  if (met >= total * 0.8) return bg ? 'bg-gold/[0.13] text-gold-light' : 'text-gold-deep';
+  if (unknown > 0) return bg ? 'bg-white/[0.06] text-mid' : 'text-mid';
+  if (met >= total * 0.5) return bg ? 'bg-warn/[0.14] text-warn' : 'text-warn';
+  return bg ? 'bg-red-400/[0.08] text-red-400' : 'text-red-400';
+}
 
 export function ComplianceRing({ pct }) {
   const r = 26, circ = 2 * Math.PI * r;
   const isHigh = pct >= 80;
   return (
     <svg
-      className={`w-16 h-16 -rotate-90 transition-[filter] duration-700 ${isHigh ? 'drop-shadow-[0_0_10px_rgba(212,175,106,0.45)]' : ''}`}
+      className={`w-16 h-16 -rotate-90 transition-[filter] duration-700 ${isHigh ? 'drop-shadow-[0_0_10px_rgb(var(--fit-accent)/0.45)]' : ''}`}
       viewBox="0 0 64 64"
     >
       <defs>
         <linearGradient id="complianceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%"   stopColor="#D4AF37" />
-          <stop offset="60%"  stopColor="#F0E2B6" />
-          <stop offset="100%" stopColor={isHigh ? '#d4af6a' : '#F0E2B6'} />
+          <stop offset="0%"   stopColor={accent()} />
+          <stop offset="60%"  stopColor="rgb(var(--fit-accent) / 0.6)" />
+          <stop offset="100%" stopColor={isHigh ? 'var(--accent)' : 'rgb(var(--fit-accent) / 0.6)'} />
         </linearGradient>
       </defs>
-      <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="6" />
+      <circle cx="32" cy="32" r={r} fill="none" stroke={themeColor('--fit-ink', 0.10)} strokeWidth="6" />
       {pct > 0 && (
         <circle cx="32" cy="32" r={r} fill="none" stroke="url(#complianceGradient)" strokeWidth="6"
           strokeDasharray={`${(pct / 100) * circ} ${circ}`} strokeLinecap="round"
@@ -138,23 +168,13 @@ export function FastingBar({ fasting }) {
 
 // ─── Macro + Micro Progress ───────────────────────────────────────────────────
 
-export function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, weightKg, workoutKcal = 0 }) {
+export function MacroProgress({ macros, foodItems, supplements, activeActivities, activities, overrides, rdaOverrides = {}, weightKg, workoutKcal = 0 }) {
   const totals     = calcFoodMacros(foodItems);
-  const rawMicros  = calcMicros(foodItems);
-  const withSupps  = addSupplementMicros(rawMicros, supplements);
-  const micros     = addActivityMicros(withSupps, activities, activeActivities);
-  const hasMicroData = foodItems.some(f => f.per_100g);
-
-  // Quick count badge for MacroProgress — full detail in standalone NutritionSummary
-  const quickMet = hasMicroData ? QUICK_MICRO_KEYS.filter(key => {
-    const meta = RDA_TARGETS[key];
-    if (!meta) return false;
-    const val = key === 'omega3_epa' ? (micros.omega3_epa + micros.omega3_dha)
-               : key === 'omega3_dha' ? 0   // counted in epa
-               : micros[key] || 0;
-    return (val / (meta.rda)) * 100 >= 80;
-  }).length : 0;
-  const quickTotal = QUICK_MICRO_KEYS.filter(k => k !== 'omega3_dha').length;
+  // Quick count badge for MacroProgress — full detail in standalone NutritionSummary.
+  // Same rule as the panel and the Today tile: unknown is never counted as zero (Fixes-2i).
+  const mst = microStatus({ foodItems, supplements, activities, activeActivities, rdaOverrides });
+  const hasMicroData = mst.hasData;
+  const { met: quickMet, unknown: quickUnknown, estimate: quickEst, total: quickTotal } = quickMicroCount(mst);
 
   // Exercise burn now comes from the Workout log (passed in), not from
   // protocol checkboxes — those are compliance only.
@@ -162,10 +182,11 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
   const netKcal = Math.round(totals.kcal) - burnTotal;
 
   const bars = [
-    { key:'kcal', label:'Calories',  icon:null, unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-orange-400', light:'bg-orange-400/[0.08]', text:'text-orange-400' },
-    { key:'pro',  label:'Protein',   icon:null, unit:'g',    current:+totals.pro.toFixed(1),  target:macros.pro,  bg:'bg-blue-500',   light:'bg-blue-400/[0.08]',   text:'text-blue-400' },
-    { key:'carb', label:'Net Carbs', icon:'🌾', unit:'g',    current:+totals.carb.toFixed(1), target:macros.carb, bg:'bg-amber-400',  light:'bg-amber-400/[0.08]',  text:'text-amber-400' },
-    { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-amber-500', light:'bg-amber-400/[0.08]', text:'text-amber-400' },
+    // Brand colours only (16 Oct 2026): one accent at four strengths.
+    { key:'kcal', label:'Calories',  icon:null, unit:'kcal', current:Math.round(totals.kcal), target:macros.kcal, bg:'bg-gold', light:'bg-gold/[0.08]', text:'text-gold' },
+    { key:'pro',  label:'Protein',   icon:null, unit:'g',    current:+totals.pro.toFixed(1),  target:macros.pro,  bg:'bg-gold/80', light:'bg-gold/[0.08]', text:'text-gold' },
+    { key:'carb', label:'Net Carbs', icon:'🌾', unit:'g',    current:+totals.carb.toFixed(1), target:macros.carb, bg:'bg-gold/60', light:'bg-gold/[0.08]', text:'text-gold' },
+    { key:'fat',  label:'Fat',       icon:'🥑', unit:'g',    current:+totals.fat.toFixed(1),  target:macros.fat,  bg:'bg-gold/45', light:'bg-gold/[0.08]', text:'text-gold' },
   ];
 
   return (
@@ -180,7 +201,7 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
       {/* Net calorie banner */}
       {burnTotal > 0 && (
         <div className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-xl mb-3 ${
-          netKcal <= 0 ? 'bg-gold/[0.07] text-gold-light' : 'bg-orange-400/[0.08] text-orange-400'}`}>
+          netKcal <= 0 ? 'bg-gold/[0.07] text-gold-light' : 'bg-warn/[0.08] text-warn'}`}>
           <div className="flex gap-3">
             <span>🍽 Eaten <strong>{Math.round(totals.kcal)}</strong></span>
             <span>Burned <strong>{burnTotal}</strong></span>
@@ -231,10 +252,7 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
       {hasMicroData && (
         <div className="mt-3 pt-3 border-t border-hair flex items-center justify-between text-xs">
           <span className="text-faint font-medium">🔬 Key Nutrients</span>
-          <span className={`px-2 py-0.5 rounded-full font-bold ${
-            quickMet >= quickTotal * 0.8 ? 'bg-gold/[0.13] text-gold-light' :
-            quickMet >= quickTotal * 0.5 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400'
-          }`}>{`${quickMet}/${quickTotal}`} met · see below ↓</span>
+          <span className={`px-2 py-0.5 rounded-full font-bold ${microCountTone(quickMet, quickTotal, quickUnknown + quickEst)}`} data-testid="quick-micros">{`${quickMet}/${quickTotal}`} met{quickEst ? ` · ${quickEst} estimated` : ''}{quickUnknown ? ` · ${quickUnknown} not known` : ''} · see below ↓</span>
         </div>
       )}
     </Card>
@@ -245,68 +263,76 @@ export function MacroProgress({ macros, foodItems, supplements, activeActivities
 
 // Micro-nutrient key groups — shared by the hero tile and the summary panel so
 // the "20/31" badge and the panel can never disagree.
+/** One nutrient row. Status comes from microStatus (Fixes-2i). Exported for the coach's day view. */
+export function MicroRow({ r, custom = false }) {
+  if (!r) return null;
+  const dec = ['vit_b12','folate','biotin','vit_b1','vit_b2','vit_b5','vit_b6','copper','manganese','selenium'].includes(r.key) ? 1 : 0;
+  const val = +r.value.toFixed(dec);
+  const pct = Math.min(100, r.pct);
+  const unknown = r.status === 'unknown';
+  // Fixes-2k: a total that leans on recipe or AI estimates is neutral and says "Estimate".
+  const est = r.status === 'estimate';
+  const good = r.status === 'met';
+  const neutral = unknown || est;
+  const warn = !neutral && !r.upper && r.status === 'below' && r.pct >= 50;
+  const barCls  = neutral ? 'bg-white/[0.18]' : good ? 'bg-gold-deep' : warn ? 'bg-warn' : r.upper ? 'bg-red-500' : 'bg-red-400';
+  const textCls = neutral ? 'text-mid' : good ? 'text-gold-deep' : warn ? 'text-warn' : 'text-red-400';
+  const badgeCls= neutral ? 'bg-white/[0.06] text-mid' : good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-warn/[0.14] text-warn' : 'bg-red-400/[0.08] text-red-400';
+  // Fixes-2l: a lower bound ("≥") rests on confirmed amounts only. When
+  // estimates contributed too, their subtotal is shown apart (+~N), never
+  // folded into the guaranteed minimum. Confirmed, estimated and unknown
+  // stay three separate quantities.
+  const confVal = +r.confirmed.toFixed(dec);
+  const estVal = +r.estimated.toFixed(dec);
+  const shown = unknown
+    ? (r.confirmed > 0 ? `≥ ${confVal}${r.approx ? ` +~${estVal}` : ''}` : r.approx ? `~${estVal}` : '—')
+    : `${r.approx ? '~' : ''}${val}`;
+  const badge = unknown ? (r.confirmed > 0 ? 'At least' : r.approx ? 'Estimate' : 'Not known')
+    : est ? 'Estimate'
+    : r.status === 'over' ? `⚠️ ${Math.round(r.pct)}%`
+    : r.upper ? `${Math.round(r.pct)}%`
+    : `${Math.round(r.pct)}%`;
+  // On a partly-unknown row the bar shows only what is guaranteed (confirmed).
+  const confPct = r.rda > 0 ? Math.min(100, (r.confirmed / r.rda) * 100) : 0;
+  const barPct = unknown ? confPct : pct;
+  return (
+    <div data-testid="micro-row" data-key={r.key} data-status={r.status} data-coverage={r.coverage} data-approx={r.approx ? '1' : '0'}>
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className="text-mid font-medium">{r.icon} {r.label}
+          {custom && <span className="ml-1 text-gold text-xs">★</span>}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`font-bold ${textCls}`}>{shown}</span>
+          <span className="text-lo">/ {r.rda} {r.unit}{r.upper ? ' max' : ''}</span>
+          <span className={`font-bold px-1.5 py-0.5 rounded-full text-xs ${badgeCls}`}>{badge}</span>
+        </div>
+      </div>
+      <div className="h-1.5 bg-charcoal rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${barCls}`} style={{ width: `${barPct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function NutritionSummary({ foodItems, supplements, activities, activeActivities, rdaOverrides = {} }) {
   const [tab, setTab] = useState('vitamins');
 
-  const rawMicros  = calcMicros(foodItems);
-  const withSupps  = addSupplementMicros(rawMicros, supplements);
-  const micros     = addActivityMicros(withSupps, activities, activeActivities);
-  const hasMicros  = foodItems.some(f => f.per_100g);
-  if (!hasMicros) return null;
+  // One rule for this panel, the Today tile and the coach's day view (Fixes-2i):
+  // a value nobody knows is "not known", and a partly-known total is "at least".
+  const st = microStatus({ foodItems, supplements, activities, activeActivities, rdaOverrides });
+  if (!st.hasData) return null;
 
   const VITAMINS = MICRO_VITAMINS, MINERALS = MICRO_MINERALS, SPECIALS = MICRO_SPECIALS;
 
-  const getRda = (key) => {
-    const meta = RDA_TARGETS[key];
-    if (!meta) return null;
-    const override = rdaOverrides[key];
-    return { ...meta, rda: override ? parseFloat(override) : meta.rda };
-  };
+  const renderRows = (keys) => keys.map(key => <MicroRow key={key} r={st.rows[key]} custom={!!rdaOverrides[key]} />);
 
-  const renderRows = (keys) => keys.map(key => {
-    const meta = getRda(key);
-    if (!meta) return null;
-    const raw  = micros[key] || 0;
-    const dec  = ['vit_b12','folate','biotin','vit_b1','vit_b2','vit_b5','vit_b6','copper','manganese','selenium'].includes(key) ? 1 : 0;
-    const val  = +raw.toFixed(dec);
-    const pct  = Math.min(100, (raw / meta.rda) * 100);
-    const isUpper = meta.upper;
-    const good = isUpper ? (pct <= 100) : (pct >= 80);
-    const warn = isUpper ? (pct > 80 && pct <= 100) : (pct >= 50 && pct < 80);
-    const barCls  = good ? 'bg-gold-deep' : warn ? 'bg-amber-400' : isUpper ? 'bg-red-500' : 'bg-red-400';
-    const textCls = good ? 'text-gold-deep' : warn ? 'text-amber-400' : 'text-red-400';
-    const badgeCls= good ? 'bg-gold/[0.13] text-gold-light' : warn ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400';
-    return (
-      <div key={key}>
-        <div className="flex items-center justify-between text-xs mb-1">
-          <span className="text-mid font-medium">{meta.icon} {meta.label}
-            {rdaOverrides[key] && <span className="ml-1 text-amber-400 text-xs">★</span>}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className={`font-bold ${textCls}`}>{val}</span>
-            <span className="text-lo">/ {meta.rda} {meta.unit}</span>
-            <span className={`font-bold px-1.5 py-0.5 rounded-full text-xs ${badgeCls}`}>
-              {isUpper && pct > 100 ? '⚠️ ' : ''}{Math.round(pct)}%
-            </span>
-          </div>
-        </div>
-        <div className="h-1.5 bg-charcoal rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-500 ${barCls}`} style={{width:`${pct}%`}} />
-        </div>
-      </div>
-    );
-  });
-
-  const metCount = (keys) => keys.filter(key => {
-    const meta = getRda(key);
-    if (!meta) return false;
-    const pct = ((micros[key]||0) / meta.rda) * 100;
-    return meta.upper ? pct <= 100 : pct >= 80;
-  }).length;
-
-  const vMet = metCount(VITAMINS), mMet = metCount(MINERALS), sMet = metCount(SPECIALS);
-  const totalMet = vMet + mMet + sMet;
-  const totalAll = VITAMINS.length + MINERALS.length + SPECIALS.length;
+  const count = (keys, s) => keys.filter(k => st.rows[k]?.status === s).length;
+  const vMet = count(VITAMINS, 'met'), mMet = count(MINERALS, 'met'), sMet = count(SPECIALS, 'met');
+  // Not known or estimated: neither is a confirmed result (Fixes-2k).
+  const unsure = (keys) => count(keys, 'unknown') + count(keys, 'estimate');
+  const vUnk = unsure(VITAMINS), mUnk = unsure(MINERALS), sUnk = unsure(SPECIALS);
+  const totalMet = st.met;
+  const totalAll = st.total;
   const hasOverrides = Object.keys(rdaOverrides).length > 0;
 
   return (
@@ -314,31 +340,39 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
       <div className="flex items-center justify-between mb-3">
         <SectionTitle icon="🔬">Nutrition Summary</SectionTitle>
         <div className="flex items-center gap-2">
-          {hasOverrides && <span className="text-xs text-amber-400 font-semibold">★ custom targets</span>}
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-            totalMet >= totalAll*0.8 ? 'bg-gold/[0.13] text-gold-light' :
-            totalMet >= totalAll*0.5 ? 'bg-amber-400/[0.14] text-amber-400' : 'bg-red-400/[0.08] text-red-400'
-          }`}>{`${totalMet}/${totalAll}`}</span>
+          {hasOverrides && <span className="text-xs text-gold font-semibold">★ custom targets</span>}
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${microCountTone(totalMet, totalAll, st.unknown + st.estimate)}`} data-testid="micro-summary">{`${totalMet}/${totalAll}`}{st.estimate ? ` · ${st.estimate} estimated` : ''}{st.unknown ? ` · ${st.unknown} not known` : ''}</span>
         </div>
       </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-charcoal p-1 rounded-xl mb-4">
         {[
-          ['vitamins', `💊 Vitamins`,  vMet, VITAMINS.length],
-          ['minerals', `⛏ Minerals`,  mMet, MINERALS.length],
-          ['specials', `🌿 Specials`,  sMet, SPECIALS.length],
-        ].map(([id, label, met, total]) => (
+          ['vitamins', `💊 Vitamins`,  vMet, VITAMINS.length, vUnk],
+          ['minerals', `⛏ Minerals`,  mMet, MINERALS.length, mUnk],
+          ['specials', `🌿 Specials`,  sMet, SPECIALS.length, sUnk],
+        ].map(([id, label, met, total, unk]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
               tab===id ? 'bg-surface text-gold-light shadow-sm' : 'text-faint hover:text-white'}`}>
             <div className="text-xs font-bold">{label}</div>
-            <div className={`text-xs font-semibold ${met===total?'text-gold-deep':met>=total*0.5?'text-amber-400':'text-red-400'}`}>
-              {met + "/" + total}
+            <div className={`text-xs font-semibold ${microCountTone(met, total, unk, { bg: false })}`}>
+              {met + "/" + total}{unk ? <span className="text-lo font-medium">{` · ${unk}?`}</span> : null}
             </div>
           </button>
         ))}
       </div>
+
+      {st.unknown > 0 && (
+        <p className="text-caption text-mid mb-3 leading-snug" data-testid="micro-unknown-note">
+          Some foods you logged don’t list every nutrient. Those totals show as “at least” or “not known”, never as zero.
+        </p>
+      )}
+      {Object.values(st.rows).some(r => r.approx) && (
+        <p className="text-caption text-mid mb-3 leading-snug" data-testid="micro-estimate-note">
+          Rows marked ~ have estimated amounts in them (from a recipe or the AI). Estimates never count toward a guaranteed minimum, and a target reached only with estimates shows as “Estimate”, not as met.
+        </p>
+      )}
 
       <div className="space-y-3">
         {tab==='vitamins' && renderRows(VITAMINS)}
@@ -347,7 +381,7 @@ export function NutritionSummary({ foodItems, supplements, activities, activeAct
       </div>
 
       <p className="text-xs text-lo mt-3 italic">
-        * Includes food + supplements + sunlight. ★ = clinically adjusted target.
+        * Includes food + supplements. Sunlight stays on your activity list — it isn’t a measured vitamin D amount. ★ = clinically adjusted target.
       </p>
     </Card>
   );
@@ -428,13 +462,13 @@ export function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
 
           const badge = fullyLogged
             ? { label:'✓ Logged', cls:'bg-gold/[0.13] text-gold-light' }
-            : isCurrent ? { label:'⏰ Now', cls:'bg-amber-400/[0.14] text-amber-400' }
+            : isCurrent ? { label:'⏰ Now', cls:'bg-gold/[0.14] text-gold' }
             : { label:meal.time?meal.time.slice(0,5):'', cls:'bg-charcoal text-faint' };
 
           return (
             <div key={meal.id} className={`rounded-2xl border overflow-hidden transition-all ${
               fullyLogged ? 'border-gold/[0.22] bg-gold/[0.035]' :
-              isCurrent   ? 'border-amber-400/25 bg-amber-400/[0.04]' : 'border-hair bg-surface'}`}>
+              isCurrent   ? 'border-gold/40 bg-gold/[0.04]' : 'border-hair bg-surface'}`}>
 
               <button className="w-full text-left px-4 py-3 flex items-center gap-3" onClick={() => handleOpen(meal)}>
                 <div className="flex-1 min-w-0">
@@ -443,7 +477,7 @@ export function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                   </div>
                   <p className="text-xs text-lo mt-0.5">
-                    {(meal.items||[]).length} items · <span className="font-bold text-orange-300">{mealKcal} kcal</span>
+                    {(meal.items||[]).length} items · <span className="font-bold text-gold">{mealKcal} kcal</span>
                     {isOpen && checkedCount>0 && <span className="text-gold-deep font-semibold ml-2">· {checkedCount} selected · {checkedKcal} kcal</span>}
                   </p>
                 </div>
@@ -481,10 +515,10 @@ export function PrescribedMeals({ mealPlan, foodItems, onLogMeal }) {
                             {alreadyIn && <span className="text-xs text-gold-deep font-semibold ml-1.5">already logged</span>}
                           </div>
                           <div className="flex gap-1.5 text-xs flex-shrink-0">
-                            <span className={`font-bold ${isChecked?'text-orange-300':'text-lo'}`}>{item.kcal} kcal</span>
+                            <span className={`font-bold ${isChecked?'text-gold':'text-lo'}`}>{item.kcal} kcal</span>
                             <span className={isChecked?'text-blue-300':'text-ghost'}>P {item.pro}g</span>
-                            <span className={isChecked?'text-amber-400':'text-ghost'}>C {item.carb}g</span>
-                            <span className={isChecked?'text-amber-400':'text-ghost'}>F {item.fat}g</span>
+                            <span className={isChecked?'text-carb':'text-ghost'}>C {item.carb}g</span>
+                            <span className={isChecked?'text-fat':'text-ghost'}>F {item.fat}g</span>
                           </div>
                         </button>
                       );

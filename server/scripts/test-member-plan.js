@@ -173,6 +173,14 @@ const PLAN = () => ({
 
     r = day.plannedRows(meal, {}, [{ name: 'guava', grams: 150, meal: 'Meal 2' }]);
     ck('an item already logged under this meal is not logged twice', r.rows.length === 1 && r.rows[0].name === 'Buttermilk', r.rows);
+
+    // Fixes-2h: raw/cooked travels from the plan item (or the swap) onto the logged row.
+    const prepMeal = { meal: 'Meal 2', items: [{ name: 'Rice', grams: 150, per_100g: { calories: 130 }, preparation: 'cooked' },
+                                               { name: 'Dal', grams: 100, per_100g: { calories: 110 } }] };
+    r = day.plannedRows(prepMeal, {}, []);
+    ck('logging from the plan keeps raw/cooked: Rice "cooked"; Dal with none stays not specified (null)', r.rows[0].preparation === 'cooked' && r.rows[1].preparation === null, r.rows);
+    r = day.plannedRows(prepMeal, { Dal: { on: true, grams: '100', swap: { name: 'Moong dal', per_100g: { calories: 105 }, preparation: 'cooked' } } }, []);
+    ck('an approved swap carries its own raw/cooked', r.rows[1].name === 'Moong dal' && r.rows[1].preparation === 'cooked', r.rows);
   }
 
   // ── Database ────────────────────────────────────────────────────────────────

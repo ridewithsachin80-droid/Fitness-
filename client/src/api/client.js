@@ -33,86 +33,88 @@ const api = axios.create({
   timeout: 35000,
 });
 
-// ── Request interceptor — attach access token ─────────────────────────────
+// Bind each request to the sign-in that created it. A silent refresh keeps
+// that identity; sign-out or another login changes it, even for the same user.
+const sessionNow = () => {
+  const state = useAuthStore.getState();
+  return { owner: state.user?.id ?? null, version: state.sessionVersion };
+};
+const sameSession = (a, b) => a?.owner === b?.owner && a?.version === b?.version;
+const sessionChanged = () => new axios.CanceledError('Session changed. Please try again in your current account.');
+function assertSession(session) {
+  if (!sameSession(session, sessionNow())) throw sessionChanged();
+}
+
 api.interceptors.request.use((config) => {
+  config._authSession ||= sessionNow();
+  assertSession(config._authSession);
   const token = useAuthStore.getState().accessToken;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  else delete config.headers.Authorization;
   return config;
-});
+}, (error) => { throw error; }, { synchronous: true });
 
-// ── Response interceptor — silent token refresh on 401 ───────────────────
-let isRefreshing = false;
-let pendingQueue = [];  // Requests waiting for the refresh to complete
-
-function processPending(error, token = null) {
-  pendingQueue.forEach((prom) => {
-    if (error) prom.reject(error);
-    else       prom.resolve(token);
-  });
-  pendingQueue = [];
+// One refresh per session. A new account must never join the old account's
+// refresh, and a late old response must not restore a deliberately ended one.
+let refreshFlight = null;
+function refreshFor(session) {
+  if (refreshFlight && sameSession(refreshFlight.session, session)) return refreshFlight.promise;
+  const flight = { session, promise: null };
+  flight.promise = (async () => {
+    try {
+      assertSession(session);
+      const { data } = await axios.post('/api/auth/refresh', refreshRequestBody(), {
+        withCredentials: true,
+        timeout: 35000,
+      });
+      assertSession(session);
+      if (data.user?.id != null && data.user.id !== session.owner) {
+        // A cookie changed in another tab. Never combine its account with this
+        // tab's edits, even though the refresh itself was valid.
+        useAuthStore.getState().logout('expired');
+        throw sessionChanged();
+      }
+      if (!data.accessToken) throw new Error('Session refresh returned no access token. Please retry.');
+      useAuthStore.getState().setToken(data.accessToken, data.refreshToken || null);
+      return data.accessToken;
+    } catch (error) {
+      // No network, timeout, rate limit and server errors do not prove expiry.
+      // Keep the session and let saving queue/retry instead of throwing away
+      // the member's current screen and fallback token.
+      if (sameSession(session, sessionNow()) && [401, 403].includes(error.response?.status)) {
+        reportSessionLoss(`refresh-${error.response.status}`);
+        useAuthStore.getState().logout('expired');
+      }
+      throw error;
+    } finally {
+      if (refreshFlight === flight) refreshFlight = null;
+    }
+  })();
+  refreshFlight = flight;
+  return flight.promise;
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    assertSession(response.config._authSession);
+    return response;
+  },
   async (error) => {
     const original = error.config;
+    if (!original) throw error;
+    assertSession(original._authSession);
+    if (error.response?.status !== 401 || original._retry ||
+        original.url?.includes('/auth/refresh') || original._authSession.owner == null) throw error;
 
-    // Only attempt refresh on 401, and not for the refresh endpoint itself
-    if (
-      error.response?.status === 401 &&
-      !original._retry &&
-      !original.url?.includes('/auth/refresh')
-    ) {
-      if (isRefreshing) {
-        // Another refresh is already in flight — queue this request
-        return new Promise((resolve, reject) => {
-          pendingQueue.push({ resolve, reject });
-        }).then((token) => {
-          original.headers.Authorization = `Bearer ${token}`;
-          return api(original);
-        });
-      }
-
-      original._retry = true;
-      isRefreshing = true;
-
-      try {
-        // The fallback copy of the refresh token, for when the cookie is
-        // missing or blocked. This line used to read localStorage directly for
-        // a key that NOTHING in the client ever wrote, and that the server
-        // never returned — so it was always null and the cookie was in truth
-        // the only credential. utils/session.js owns it now, and the server
-        // returns the token in the body precisely so it can be stored.
-        const { data } = await axios.post(
-          '/api/auth/refresh',
-          refreshRequestBody(),
-          { withCredentials: true }
-        );
-
-        // The server rotates the refresh token, so store the new one. Missing
-        // this would leave a stale copy that expires on the original login's
-        // schedule no matter how often the member opens the app.
-        useAuthStore.getState().setToken(data.accessToken, data.refreshToken || null);
-        processPending(null, data.accessToken);
-
-        original.headers.Authorization = `Bearer ${data.accessToken}`;
-        return api(original);
-      } catch (refreshError) {
-        processPending(refreshError, null);
-        // Not a deliberate sign-out — the session ran out underneath them.
-        // Say so on the login screen instead of appearing to have crashed,
-        // and record it so we learn WHY without waiting for a complaint.
-        reportSessionLoss('refresh-401');
-        useAuthStore.getState().logout('expired');
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
+    original._retry = true;
+    // Another request may already have refreshed while this 401 was in flight.
+    // Reuse that token once instead of performing a second refresh.
+    const token = useAuthStore.getState().accessToken;
+    if (!token || original.headers.Authorization === `Bearer ${token}`) {
+      await refreshFor(original._authSession);
     }
-
-    return Promise.reject(error);
+    assertSession(original._authSession);
+    return api(original);
   }
 );
 

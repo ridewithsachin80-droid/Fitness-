@@ -58,6 +58,7 @@ export default function Timeline({ m, onOpen, onOpenChat, readOnly = false, meal
     const mac = calcFoodMacros(g.items);
     rows.push({
       key: 'meal:' + g.meal, icon: 'food', title: g.meal, sheet: 'food',
+      target: { meal: String(g.items[0]?.meal || '').trim(), label: g.meal },
       sub: g.items.slice(0, 3).map(f => f.name).join(' · ') + (g.items.length > 3 ? ` +${g.items.length - 3} more` : ''),
       macros: (mac.pro || mac.carb || mac.fat) ? macroLine(mac) : null,
       value: kcal ? `${kcal.toLocaleString('en-IN')} ${terms.kcal}` : `${g.items.length} ${plural(g.items.length, 'item')}`,
@@ -98,7 +99,7 @@ export default function Timeline({ m, onOpen, onOpenChat, readOnly = false, meal
     <Stagger data-testid="timeline">
       {rows.map(r => (
         <Row key={r.key} icon={r.icon} tone={r.tone} title={r.title} sub={r.sub} macros={r.macros} value={r.value}
-          testId={`row-${r.key.split(':')[0]}`} onPress={readOnly ? null : () => onOpen(r.sheet)} />
+          testId={`row-${r.key.split(':')[0]}`} onPress={readOnly ? null : () => r.target ? onOpen(r.sheet, r.target) : onOpen(r.sheet)} />
       ))}
     </Stagger>
   );

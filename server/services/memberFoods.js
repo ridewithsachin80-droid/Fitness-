@@ -20,6 +20,7 @@
  */
 const pool = require('../db/pool');
 const { normaliseNutrients } = require('./nutrients');
+const { parsePreparation } = require('./foodPreparation');
 
 const KCAL_PER_GRAM = Object.freeze({ protein: 4, carbs: 4, fat: 9 });
 
@@ -62,7 +63,9 @@ function buildLabel(body = {}) {
     calories: kcalFromMacros(macros),
   });
   const fid = parseInt(body.food_id);
-  return { name, key: nameKey(name), per_100g, base_food_id: Number.isInteger(fid) && fid > 0 ? fid : null };
+  // Raw or cooked: what the member's numbers are for (Fixes-2h). Not sent = not specified.
+  const preparation = parsePreparation(body.preparation) ?? null;
+  return { name, key: nameKey(name), per_100g, base_food_id: Number.isInteger(fid) && fid > 0 ? fid : null, preparation };
 }
 
 /** Save (or replace) a member's label. Returns the stored row. */
@@ -75,21 +78,22 @@ async function saveLabel(patientId, body) {
     if (!rows.length) baseId = null;
   }
   const { rows } = await pool.query(
-    `INSERT INTO member_foods (patient_id, name, name_key, per_100g, base_food_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO member_foods (patient_id, name, name_key, per_100g, base_food_id, preparation)
+     VALUES ($1, $2, $3, $4, $5, $6::varchar)
      ON CONFLICT (patient_id, name_key) DO UPDATE
        SET name = EXCLUDED.name, per_100g = EXCLUDED.per_100g,
            base_food_id = COALESCE(EXCLUDED.base_food_id, member_foods.base_food_id),
+           preparation = EXCLUDED.preparation,
            updated_at = NOW()
-     RETURNING id, name, per_100g, base_food_id, updated_at`,
-    [patientId, l.name, l.key, JSON.stringify(l.per_100g), baseId]);
+     RETURNING id, name, per_100g, base_food_id, preparation, updated_at`,
+    [patientId, l.name, l.key, JSON.stringify(l.per_100g), baseId, l.preparation]);
   return rows[0];
 }
 
 /** Every label a member has saved, newest first. */
 async function labelsFor(patientId) {
   const { rows } = await pool.query(
-    `SELECT id, name, per_100g, base_food_id, updated_at
+    `SELECT id, name, per_100g, base_food_id, preparation, updated_at
        FROM member_foods WHERE patient_id = $1 ORDER BY updated_at DESC, id DESC LIMIT 200`, [patientId]);
   return rows;
 }
@@ -105,7 +109,7 @@ async function findLabel(patientId, name) {
   if (!full) return null;
   const base = nameKey(full.split('(')[0]);
   const { rows } = await pool.query(
-    `SELECT id, name, per_100g, base_food_id FROM member_foods
+    `SELECT id, name, per_100g, base_food_id, preparation FROM member_foods
       WHERE patient_id = $1 AND name_key = ANY($2::text[])
       ORDER BY (name_key = $3) DESC LIMIT 1`,
     [patientId, [...new Set([full, base].filter(Boolean))], full]);

@@ -10,6 +10,7 @@
  * Every function is pure: same input, same output, no React, no store.
  */
 import { getNutrition, RDA_TARGETS } from '../../constants';
+import { nutrientStatus, isEstimate } from './nutrientStatus';
 
 /** Macros for a list of logged foods. Per-100g data wins; the static
  *  nutrition table is the fallback for foods logged before the food DB. */
@@ -139,7 +140,14 @@ export function addSupplementMicros(base, supplements = {}) {
   return m;
 }
 
-/** Sunlight-type activities carry a vitamin D credit. */
+/**
+ * Sunlight-type activities carry a vitamin D figure — but sun exposure is not
+ * a measured or consumed amount: how much D the skin makes depends on skin,
+ * season, latitude and clothing (NIH vitamin D fact sheet). Since Fixes-2l the
+ * nutrient maths (microStatus) no longer counts it: sunlight stays an activity
+ * record on the checklist and never makes the vitamin D target "met". This
+ * helper is kept only for anything that wants to show the nominal figure.
+ */
 export function addActivityMicros(base, activities = {}, activeActivities = []) {
   const m = { ...base };
   activeActivities.forEach(act => {
@@ -148,22 +156,136 @@ export function addActivityMicros(base, activities = {}, activeActivities = []) 
   return m;
 }
 
-/** How many micro-nutrient targets are met today (same rules as the panel). */
-export function countMicrosMet({ foodItems = [], supplements = {}, activities = {}, activeActivities = [], rdaOverrides = {} }) {
-  if (!foodItems.some(f => f.per_100g)) return { met: 0, total: MICRO_TOTAL, hasData: false };
-  const raw   = calcMicros(foodItems);
-  const withS = addSupplementMicros(raw, supplements);
-  const micros = addActivityMicros(withS, activities, activeActivities);
+// ── Unknown is not zero (Fixes-2i), and estimates are not confirmed (Fixes-2k)
+// Each nutrient value in a food has a status (lib/day/nutrientStatus.js):
+// confirmed (reference value, or recorded by a coach/label/database), estimate
+// (recipe or AI) or unknown (nothing recorded, or an old 0 that cannot be told
+// from "not recorded"). 2i guessed known-ness from the rest of the record (a
+// food that listed some minerals made its other mineral zeros "real"); that
+// guess is gone. A 0 is real only when its status says so.
+//  • A total with an unknown part is a minimum ("at least"): it can still meet
+//    a target, but it is never called short, zero or "under the limit".
+//  • A target reached only with estimates is "estimated", never "met".
+// Fixes-2l (after the 19 Oct review):
+//  • Whether estimates are involved is a fact about the foods, not about the
+//    sum: a recipe-estimated 0 is still an estimate, never a confirmed "met"
+//    under a limit and never a definite measured zero.
+//  • A literal lower bound ("at least N") rests on confirmed amounts only.
+//    Confirmed, estimated and unknown are kept apart on every row.
+//  • Sunlight is an activity record, not confirmed vitamin D intake.
 
-  const met = [...MICRO_VITAMINS, ...MICRO_MINERALS, ...MICRO_SPECIALS].filter(key => {
+/** Which micronutrient values this food's record actually knows (any status but unknown). key → true/false. */
+export function microKnown(per100, item = null) {
+  const out = {};
+  for (const k of Object.keys(ZERO_MICROS)) out[k] = nutrientStatus(per100, k, item) !== 'unknown';
+  return out;
+}
+
+/** Totals from foods per nutrient: confirmed and estimated amounts, and grams with nothing known. */
+export function microCoverage(foodItems = []) {
+  const cov = Object.fromEntries(Object.keys(ZERO_MICROS).map(k => [k, { value: 0, confirmed: 0, estimated: 0, knownGrams: 0, estimateGrams: 0, unknownGrams: 0 }]));
+  for (const item of foodItems) {
+    const g = Number(item?.grams) || 0;
+    if (g <= 0) continue;
+    for (const k of Object.keys(ZERO_MICROS)) {
+      const st = nutrientStatus(item.per_100g, k, item);
+      if (st === 'unknown') { cov[k].unknownGrams += g; continue; }
+      const amt = Number(item.per_100g[k]) * g / 100;
+      cov[k].value += amt;
+      if (isEstimate(st)) { cov[k].estimated += amt; cov[k].estimateGrams += g; }
+      else { cov[k].confirmed += amt; cov[k].knownGrams += g; }
+    }
+  }
+  return cov;
+}
+
+/**
+ * Today's status for every micronutrient — the ONE rule the Today tile, the
+ * nutrition panel, the quick count and the coach's day view all read.
+ *   status: 'met' | 'estimate' | 'below' | 'zero' | 'over' | 'unknown'
+ *     met       reached on confirmed values alone (upper limit: all confirmed and within it)
+ *     estimate  depends on recipe or AI estimates (reached only with them, or below with them)
+ *   coverage: 'full' (every food eaten knows it) | 'partial' | 'none'
+ *   atLeast: part is unknown and something is CONFIRMED — the confirmed amount
+ *            is the guaranteed minimum (estimates never make a lower bound)
+ *   approx:  estimates (recipe or AI) contributed to this nutrient today —
+ *            a fact about the foods, true even when their sum is 0
+ * Supplements add confirmed amounts on top. Sunlight does not (Fixes-2l): sun
+ * exposure is an activity, not a measured vitamin D intake.
+ */
+export function microStatus({ foodItems = [], supplements = {}, activities = {}, activeActivities = [], rdaOverrides = {} } = {}) {
+  const cov = microCoverage(foodItems);
+  const zero = Object.fromEntries(Object.keys(cov).map(k => [k, 0]));
+  const extra = addSupplementMicros(zero, supplements || {});
+  const rows = {};
+  const counts = { met: 0, estimate: 0, below: 0, zero: 0, over: 0, unknown: 0 };
+  for (const key of [...MICRO_VITAMINS, ...MICRO_MINERALS, ...MICRO_SPECIALS]) {
     const meta = RDA_TARGETS[key];
-    if (!meta) return false;
-    const rda = rdaOverrides[key] ? parseFloat(rdaOverrides[key]) : meta.rda;
-    const val = micros[key] || 0;
-    const pct = (val / rda) * 100;
-    // Upper-limit nutrients (e.g. sodium) count as met while UNDER the cap
-    return meta.upper ? pct <= 100 : pct >= 80;
-  }).length;
+    if (!meta) continue;
+    const rda = rdaOverrides?.[key] ? parseFloat(rdaOverrides[key]) : meta.rda;
+    const c = cov[key];
+    const confirmed = c.confirmed + (extra[key] || 0);
+    const estimated = c.estimated;
+    const value = confirmed + estimated;
+    // Estimates "exist" when any eaten food contributed an estimate for this
+    // nutrient — grams, not the sum, so a recipe-estimated 0 still counts.
+    const hasEst = c.estimateGrams > 0;
+    const coverage = c.unknownGrams === 0 ? 'full' : (c.knownGrams + c.estimateGrams) > 0 ? 'partial' : 'none';
+    const pct = rda > 0 ? (value / rda) * 100 : 0;
+    const confPct = rda > 0 ? (confirmed / rda) * 100 : 0;
+    let status;
+    if (meta.upper) {
+      // Confirmed alone may prove the limit exceeded; "within the limit" needs
+      // full coverage with no estimates at all (an estimated 0 proves nothing).
+      status = confPct > 100 ? 'over' : coverage !== 'full' ? 'unknown' : hasEst ? 'estimate' : 'met';
+    } else {
+      status = confPct >= 80 ? 'met' : pct >= 80 ? 'estimate' : coverage !== 'full' ? 'unknown'
+        : hasEst ? 'estimate' : value === 0 ? 'zero' : 'below';
+    }
+    counts[status] += 1;
+    rows[key] = { key, value, confirmed, estimated, rda, unit: meta.unit, label: meta.label, icon: meta.icon, upper: !!meta.upper,
+                  pct, coverage, status, approx: hasEst,
+                  atLeast: coverage !== 'full' && status !== 'met' && confirmed > 0 };
+  }
+  const hasData = foodItems.some(f => Number(f?.grams) > 0);
+  return { rows, ...counts, known: MICRO_TOTAL - counts.unknown, total: MICRO_TOTAL, hasData };
+}
 
-  return { met, total: MICRO_TOTAL, hasData: true };
+/**
+ * One compact nutrient figure from coverage entries (Fixes-2l) — the coach's
+ * meal-plan summary uses it; the rule is microStatus's, in small:
+ *   • a target counts as reached on CONFIRMED amounts only;
+ *   • estimates are flagged by their presence (grams), not their sum, so an
+ *     estimated 0 still reads "~";
+ *   • with unknown foods, "≥" is the confirmed amount only, and an estimated
+ *     subtotal is shown apart ("≥ 2 +~10"); with nothing confirmed it is "~N"
+ *     or "—", never a minimum.
+ * parts: microCoverage() entries (several for a combined row like omega-3).
+ * Returns { shown, pct (null = no honest percentage), tone: 'met'|'unsure'|'warn'|'low',
+ *           confirmed, estimated, unknown, hasEst }.
+ */
+export function microCell(parts = [], target = 0, dec = 0) {
+  const list = parts.filter(Boolean);
+  const confirmed = list.reduce((s, c) => s + (c.confirmed || 0), 0);
+  const estimated = list.reduce((s, c) => s + (c.estimated || 0), 0);
+  const unknown = list.some(c => (c.unknownGrams || 0) > 0);
+  const hasEst = list.some(c => (c.estimateGrams || 0) > 0);
+  const r = (x) => +x.toFixed(dec);
+  const confPct = target > 0 ? (confirmed / target) * 100 : 0;
+  const pct = target > 0 ? ((confirmed + estimated) / target) * 100 : 0;
+  const met = confPct >= 80;
+  const tone = met ? 'met' : (unknown || hasEst) ? 'unsure' : pct >= 50 ? 'warn' : 'low';
+  let shown, shownPct;
+  if (!unknown || met) { shown = `${hasEst ? '~' : ''}${r(confirmed + estimated)}`; shownPct = pct; }
+  else if (confirmed > 0) { shown = `≥ ${r(confirmed)}${hasEst ? ` +~${r(estimated)}` : ''}`; shownPct = confPct; }
+  else if (hasEst) { shown = `~${r(estimated)}`; shownPct = null; }
+  else { shown = '—'; shownPct = null; }
+  return { shown, pct: shownPct === null ? null : Math.min(100, shownPct), tone, confirmed, estimated, unknown, hasEst };
+}
+
+/** How many micro-nutrient targets are met today, and how many are not known (same rules as the panel). */
+export function countMicrosMet(args) {
+  const s = microStatus(args);
+  if (!s.hasData) return { met: 0, estimate: 0, unknown: 0, known: 0, total: MICRO_TOTAL, hasData: false };
+  return { met: s.met, estimate: s.estimate, unknown: s.unknown, known: s.known, total: s.total, hasData: true };
 }

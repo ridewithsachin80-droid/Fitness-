@@ -153,7 +153,7 @@ export const GAP_TEMPLATES = {
     `Even a 15-minute walk after dinner counts — log it and it's done.`),
 
   acv: (m) => withLink(
-    `Hi ${first(m.name)}, a couple of ACV doses are still open today. ` +
+    `Hi ${first(m.name)}, a couple of apple cider vinegar doses are still open today. ` +
     `Tick them off if you've had them — easy to forget the logging rather than the drink.`),
 
   supplements: (m) => withLink(
@@ -184,7 +184,7 @@ const GAP_PHRASE = {
   dinner:      'dinner',
   water:       'your water',
   activity:    "today's activity",
-  acv:         'your ACV doses',
+  acv:         'your apple cider vinegar doses',
   supplements: 'your supplements',
   sleep:       'your sleep times',
 };

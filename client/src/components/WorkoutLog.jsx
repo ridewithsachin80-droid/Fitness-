@@ -195,7 +195,7 @@ export default function WorkoutLog({ date }) {
       saveWorkout({
         date,
         duration_min: durationMin ? parseInt(durationMin) : null,
-        exercises: exercisesInSession.map(ex => ({ exercise_id: ex.exercise_id, sets: ex.sets })),
+        exercises: exercisesInSession.map(ex => ({ exercise_id: ex.exercise_id, sets: ex.sets, fromProgram: ex.fromProgram === true })),
         cardio,
       }).catch(() => {});
     }, 4000);
@@ -228,6 +228,7 @@ export default function WorkoutLog({ date }) {
   // server-side works everywhere, handles Hinglish, and gives a review step
   // instead of an alert() when it mishears.
   const searchVoice = useVoiceComposer({
+    contextKey: `workout-search:${date}`,
     onSend: (text) => {
       const t = (text || '').trim();
       if (!t) return;
@@ -345,6 +346,8 @@ export default function WorkoutLog({ date }) {
   const [setVoiceError, setSetVoiceError] = useState('');
 
   const setVoice = useVoiceComposer({
+    contextKey: `workout-set:${date}:${activeProgramDay ?? ''}`,
+    showLanguage: false,
     onSend: (text) => {
       const exerciseId = voiceTargetRef.current;
       // Whatever happens next, this capture is finished — clear the highlight
@@ -374,14 +377,20 @@ export default function WorkoutLog({ date }) {
     },
   });
 
-  const voiceLogSet = (exerciseId) => {
-    // Tapping the row that is already capturing cancels it, rather than
-    // silently re-arming the same target.
-    if (voiceTargetRef.current === exerciseId && listeningSetKey === exerciseId) {
-      voiceTargetRef.current = null;
-      setListeningSetKey(null);
+  const voiceLogSet = (exerciseId, event) => {
+    // The shared composer includes a language select. Changing a preference
+    // must never arm a set or retarget a recording that belongs to another row.
+    const mic = event.target.closest('button');
+    if (!mic || mic.disabled || !event.currentTarget.contains(mic)) return;
+    if (setVoice.active && voiceTargetRef.current != null && voiceTargetRef.current !== exerciseId) {
+      event.preventDefault();
+      event.stopPropagation();
+      setSetVoiceError('Finish or discard your current voice note before switching exercises.');
       return;
     }
+    // Keep the original target when this tap stops recording: onSend still
+    // needs it after the recorder finishes and the transcript is returned.
+    if (voiceTargetRef.current === exerciseId && listeningSetKey === exerciseId) return;
     voiceTargetRef.current = exerciseId;
     setSetVoiceError('');
     setListeningSetKey(exerciseId);
@@ -401,17 +410,17 @@ export default function WorkoutLog({ date }) {
         onClick={() => { haptic(15); openAIChat(); }}
         style={{ minHeight: 48 }}
         className="w-full flex items-center gap-3 mb-3 bg-gradient-to-r from-gold/[0.14] to-gold-dark/[0.10] border border-gold/30 hover:border-gold/55 rounded-2xl px-4 py-3 transition-all active:scale-[0.99]">
-        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgba(212,175,55,0.4)]">✨</span>
+        <span className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm flex-shrink-0 shadow-[0_0_14px_rgb(var(--fit-accent)/0.4)]">✨</span>
         <span className="text-left min-w-0">
           <span className="block text-sm font-bold text-white leading-tight">Log with AI Chat</span>
-          <span className="block text-caption text-mute leading-tight truncate">"Bench press 3 sets of 20kg" or "5 km walk in 1 hour"</span>
+          <span className="block text-caption text-mute leading-tight">"Bench press 3×10 at 20 kg" or "5 km walk"</span>
         </span>
       </button>
 
       {/* Rest timer banner — manually started via the ⏱ button on any exercise */}
       {restSeconds !== null && (
         <div className={`flex items-center justify-between mb-3 px-3 py-2.5 rounded-xl border transition-colors ${
-          restSeconds <= 0 ? 'bg-[rgba(212,175,106,0.12)] border-[rgba(212,175,106,0.30)]' : 'bg-gold/10 border-gold/20'}`}>
+          restSeconds <= 0 ? 'bg-[rgb(var(--fit-accent)/0.12)] border-[rgb(var(--fit-accent)/0.30)]' : 'bg-gold/10 border-gold/20'}`}>
           <div className="flex items-center gap-2">
             <span className="text-lg">⏱</span>
             <span className={`font-display text-lg font-semibold ${restSeconds <= 0 ? 'text-gold' : 'text-bright'}`}>
@@ -487,7 +496,7 @@ export default function WorkoutLog({ date }) {
           <input
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
-            placeholder="Search exercises… e.g. Bench Press"
+            placeholder="Search exercises"
             className="w-full px-3 py-2.5 bg-surface border border-white/[0.1] rounded-xl text-sm
               text-bright placeholder-dim focus:outline-none focus:ring-2 focus:ring-gold/30"
           />
@@ -609,7 +618,7 @@ export default function WorkoutLog({ date }) {
                   + Add Set
                 </button>
                 <div
-                  onClickCapture={() => voiceLogSet(ex.exercise_id)}
+                  onClickCapture={event => voiceLogSet(ex.exercise_id, event)}
                   className={`px-3 py-1 rounded-lg border flex items-center gap-1.5 text-xs font-semibold transition-colors ${
                     listeningSetKey === ex.exercise_id
                       ? 'bg-gold/[0.14] border-gold/35 text-gold-light'
@@ -719,7 +728,7 @@ export default function WorkoutLog({ date }) {
             <div className="bg-gold/[0.08] border border-gold/[0.22] rounded-xl px-3.5 py-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-caption font-bold text-gold-light tracking-wider">Calories burned</span>
-                <span className="font-display text-xl font-bold text-orange-400">{e.totalKcal} kcal</span>
+                <span className="font-display text-xl font-bold text-gold">{e.totalKcal} kcal</span>
               </div>
               <div className="space-y-0.5">
                 {e.sets > 0 && (
@@ -738,7 +747,7 @@ export default function WorkoutLog({ date }) {
                 )}
               </div>
               {!bodyWeightKg && (
-                <p className="text-eyebrow text-amber-300/80 mt-1.5">
+                <p className="text-eyebrow text-warn/80 mt-1.5">
                   Log today's weight for an accurate cardio estimate.
                 </p>
               )}

@@ -9,6 +9,16 @@
  * keep working; new code imports from here.
  */
 import { create } from 'zustand';
+import { useAuthStore } from './authStore';
+import { ensureDraftFoodIds } from '../utils/aiDraftFoodEdits';
+
+// Only the mounted assistant owns browser input actions. Registration is kept
+// outside persisted conversation state and released when its route unmounts.
+let entryAction = null;
+export function registerAIEntryAction(action) {
+  entryAction = action;
+  return () => { if (entryAction === action) entryAction = null; };
+}
 
 // ── Shared chat store — FoodLog banner + DailyLog FAB both use this ─────────
 //
@@ -32,12 +42,18 @@ export const useAIChat = create((set, get) => ({
   // Sprint 5b.3: the composer is summoned, not permanent. openChat() shows it
   // (and focuses it); closeComposer() hides it. The thread stays on the page.
   composerOpen: false,
-  openChat:  () => set((s) => ({ open: true, composerOpen: true, focusRequest: s.focusRequest + 1 })),
+  entryMode: 'text',
+  openChat: (mode = 'text') => {
+    const entryMode = ['text', 'voice', 'photo'].includes(mode) ? mode : 'text';
+    const open = () => set(s => ({ open: true, composerOpen: true, entryMode, focusRequest: s.focusRequest + 1 }));
+    if (entryAction) entryAction(entryMode, open);
+    else open();
+  },
   closeComposer: () => set({ composerOpen: false, composerFocused: false }),
   toggleComposer: () => set((s) => s.composerOpen
     ? { composerOpen: false, composerFocused: false }
     : { open: true, composerOpen: true, focusRequest: s.focusRequest + 1 }),
-  closeChat: () => set({ open: false }),
+  closeChat: () => set({ open: false, composerOpen: false, composerFocused: false }),
 
   // Bumped after every successful Apply. useTodayModel refreshes the workout
   // summary from it (it used to watch the overlay closing — there is no
@@ -58,9 +74,10 @@ export const useAIChat = create((set, get) => ({
   // The day the conversation belongs to. A preview parsed last night must not
   // be applicable to today's log after the date rolls over.
   dayKey: null,
+  revision: 0,
 
   setMessages: (next) =>
-    set((s) => ({ messages: typeof next === 'function' ? next(s.messages) : next })),
+    set((s) => ({ messages: ensureDraftFoodIds(typeof next === 'function' ? next(s.messages) : next, s.messages) })),
   setInput: (next) =>
     set((s) => ({ input: typeof next === 'function' ? next(s.input) : next })),
 
@@ -68,24 +85,31 @@ export const useAIChat = create((set, get) => ({
   resetChat: () => {
     undoSnap.current = null;
     workoutUndoSnap.current = null;
-    set({ messages: [], input: '', dayKey: null });
+    set({ revision: get().revision + 1, messages: [], input: '', dayKey: null, open: false, composerOpen: false, composerFocused: false,
+      prefillText: '', lastAppliedAt: null, entryMode: 'text' });
   },
 
   /** Called when the panel opens; clears a conversation left over from a previous day. */
   ensureFreshDay: (todayKey) => {
-    if (get().dayKey && get().dayKey !== todayKey) get().resetChat();
+    if (get().dayKey && get().dayKey !== todayKey) {
+      const { composerOpen, entryMode } = get();
+      get().resetChat();
+      // A first tap after midnight should still open the freshly cleared chat.
+      set({ composerOpen, open: composerOpen, entryMode });
+    }
     set({ dayKey: todayKey });
   },
 }));
 
-// ── Pre-apply snapshots for Undo ─────────────────────────────────────────────
-// Module-level rather than useRef for the same reason as the messages above:
-// the component unmounts on navigation but the "Applied ✓ · Undo" card now
-// survives, so the snapshot behind that Undo button has to survive with it.
-// Without this, Undo would render as an active button and silently do nothing.
-//
-// Safe across accounts: authStore.logout() sets window.location.href, which is
-// a full document load — this module is re-evaluated and both snapshots reset.
+// Legacy exports retained for compatibility with older callers. New reviews
+// keep account/day-scoped receipts on their own message and never read these
+// global snapshots. Reset still clears them at every authentication boundary.
 export const undoSnap        = { current: null };
 export const workoutUndoSnap = { current: null };
 
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id === previous.user?.id && state.sessionVersion === previous.sessionVersion) return;
+  entryAction = null;
+  useAIChat.getState().resetChat();
+});

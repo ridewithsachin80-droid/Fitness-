@@ -14,12 +14,15 @@
 
 import { useState, useEffect } from 'react';
 import api from '../api/client';
+import { themeColor } from '../utils/themeColor';
+// The theme's warning colour as #rrggbb (chip() appends hex alpha to it).
+const warnHex = () => '#' + themeColor('--fit-warn').match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('');
 
 const MACRO_KEYS = [
-  { key:'calories',    label:'Calories',  unit:'kcal', color:'#FF6B35' },
-  { key:'protein',     label:'Protein',   unit:'g',    color:'#00D49F' },
-  { key:'total_carbs', label:'Carbs',     unit:'g',    color:'#F59E0B' },
-  { key:'fat',         label:'Fat',       unit:'g',    color:'#F0E2B6' },
+  { key:'calories',    label:'Calories',  unit:'kcal', color:'var(--accent)' },
+  { key:'protein',     label:'Protein',   unit:'g',    color:'var(--accent)' },
+  { key:'total_carbs', label:'Carbs',     unit:'g',    color:'rgb(var(--fit-accent) / 0.8)' },
+  { key:'fat',         label:'Fat',       unit:'g',    color:'rgb(var(--fit-accent) / 0.6)' },
   { key:'fiber',       label:'Fiber',     unit:'g',    color:'#4ADE80' },
   { key:'sugar',       label:'Sugar',     unit:'g',    color:'#FB923C' },
 ];
@@ -57,12 +60,12 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
   const [cooldown,    setCooldown]    = useState(0);
 
   // Tokens with fallbacks matching FoodLog's existing dark theme
-  const accent = t?.accent  || '#00D49F';
-  const bg     = t?.card    || '#1A1C20';
-  const text   = t?.text    || '#FFFFFF';
-  const muted  = t?.muted   || '#6a6a78';
-  const faint  = t?.faint   || '#1A1C20';
-  const border = t?.cardBorder || 'rgba(255,255,255,0.1)';
+  const accent = t?.accent  || 'var(--accent)';
+  const bg     = t?.card    || 'var(--bg-surface)';
+  const text   = t?.text    || 'var(--text-hi)';
+  const muted  = t?.muted   || 'var(--text-lo)';
+  const faint  = t?.faint   || 'var(--bg-surface)';
+  const border = t?.cardBorder || 'rgb(var(--fit-ink) / 0.1)';
   const font   = t?.font    || 'inherit';
   const r      = t?.r       || 14;
 
@@ -137,7 +140,8 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
     }
   };
 
-  const sc = (v) => v == null ? '0' : ((v * grams) / 100).toFixed(1).replace(/\.0$/, '');
+  // Fixes-2k: a nutrient nobody recorded shows as "—", never 0.
+  const sc = (v) => v == null ? '—' : ((v * grams) / 100).toFixed(1).replace(/\.0$/, '');
 
   const card  = { background: bg, border: `1.5px solid ${border}`, borderRadius: r, padding: 14 };
   const mBox  = (col) => ({
@@ -180,8 +184,8 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
         disabled={rateLimited && cooldown > 0}
         style={{
           padding: '8px 20px', borderRadius: r,
-          background: (rateLimited && cooldown > 0) ? '#555' : accent,
-          color: '#fff', border: 'none',
+          background: (rateLimited && cooldown > 0) ? 'var(--border)' : accent,
+          color: 'var(--fit-on-accent)', border: 'none',
           cursor: (rateLimited && cooldown > 0) ? 'not-allowed' : 'pointer',
           fontSize: 13, fontWeight: 700, fontFamily: font,
         }}
@@ -208,7 +212,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
             <span style={chip(accent)}>✨ AI Identified</span>
             <span style={chip(
               food.data_confidence === 'high' ? '#4ADE80' :
-              food.data_confidence === 'medium' ? '#F59E0B' : '#EF4444'
+              food.data_confidence === 'medium' ? warnHex() : '#EF4444'
             )}>
               {food.data_confidence === 'high' ? '✓ High confidence' : '~ Medium confidence'}
             </span>
@@ -271,7 +275,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
           <button key={ss.label} onClick={() => setGrams(ss.grams)} style={{
             padding: '4px 10px', borderRadius: 20, fontSize: 11,
             background: grams === ss.grams ? accent : 'transparent',
-            color: grams === ss.grams ? '#fff' : muted,
+            color: grams === ss.grams ? 'var(--fit-on-accent)' : muted,
             border: `1px solid ${grams === ss.grams ? accent : border}`,
             cursor: 'pointer', fontFamily: font,
             fontWeight: grams === ss.grams ? 700 : 400,
@@ -299,8 +303,8 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
         </summary>
         <div style={micro}>
           {VITAMIN_KEYS.map(v => (
-            <div key={v.key} style={mBox('#F0E2B6')}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#F0E2B6', fontFamily: font }}>{sc(food.per_100g?.[v.key])}</div>
+            <div key={v.key} style={mBox('rgb(var(--fit-accent) / 0.6)')}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgb(var(--fit-accent) / 0.6)', fontFamily: font }}>{sc(food.per_100g?.[v.key])}</div>
               <div style={{ fontSize: 9, color: muted, marginTop: 1, fontFamily: font }}>{v.label} {v.unit}</div>
             </div>
           ))}
@@ -351,7 +355,7 @@ export default function AIFoodSearch({ initialQuery, mealSlot = 'meal', onSelect
         style={{
           width: '100%', height: 48, borderRadius: r,
           background: adding ? `${accent}60` : accent,
-          color: '#fff', border: 'none',
+          color: 'var(--fit-on-accent)', border: 'none',
           cursor: adding ? 'not-allowed' : 'pointer',
           fontSize: 15, fontWeight: 800, fontFamily: font,
         }}

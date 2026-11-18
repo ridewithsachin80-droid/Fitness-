@@ -1,0 +1,10 @@
+✓ copied 25 live records locally (live ids → local ids)
+✓ proposed: 22 of 240 accepted by the real batch check; 218 refused because their pinned record is not yet checked against the official source (USDA SR28 11124: 21, USDA SR28 11821: 21, USDA SR28 11529: 21, USDA SR28 11253: 21, USDA SR28 12023: 22, USDA SR28 11457: 21, USDA SR28 01256: 23, USDA SR28 12006: 15, USDA SR28 19902: 18, IFCT 2017|A010: 18, USDA SR28|09087: 17); 0 refused for any other reason
+✓ proposing changed no food
+✓ apply before approval is refused (409)
+✓ approved revision f414c9954ee3…
+✓ applied locally: 22, skipped 0
+✓ a logged copy keeps its statuses (rice: zinc "reference" (applied reference), iron "ai" (the old AI value))
+✓ screens not run in this dry run (set PILOT_SCREENS=1 with onboarded local accounts); the member and coach screens are covered by ui-tests and the delivery screenshots
+✓ rolled back: 22 restored, 0 conflicts
+✓ after rollback every record equals its copy before the batch (25/25)

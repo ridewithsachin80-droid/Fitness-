@@ -1,0 +1,353 @@
+diff --git a/UPDATE-README.txt b/UPDATE-README.txt
+index b0657f9..7cba333 100644
+--- a/UPDATE-README.txt
++++ b/UPDATE-README.txt
+@@ -1,3 +1,32 @@
++FITLIFE — CURRENT AI NUTRITION CONSISTENCY FIX
++Use FitLife-Phase4-Nutrition-Consistency-Fix.zip (updated files only).
++Installed baseline: test 4b1f605a12c38d6001b4f1874792f2aa911db585
++Matching local source: f6686fc431006ff46a787e4943d3a6c40cdbbe3f
++New revision and final local test totals: NUTRITION-CONSISTENCY-INSTALL.txt.
++
++Copy the included paths over the installed baseline, preserving folders.
++The application changes are server-only: initial text/photo carbohydrate
++previews now use the same existing net-carb basis as portion editing/daily
++totals. Signed-amount prompt guidance is stronger but remains probabilistic.
++No migrations, new environment variables, file removals or client changes.
++The rebuilt frontend is byte-identical; unchanged index-DyjU6GwD.js is not
++proof of the new backend deployment. Do not reapply the older code ZIPs.
++
++Deployed CI 62 passed 78 suites / 4,748 assertions and production build.
++Original sambar clarification and UAT-209–211 observed text paths pass live.
++The new carbohydrate patch is NOT deployed. Require fresh full CI, including
++database suites, then deploy that exact test commit and retest UAT-212/213.
++UAT-212 symbolic-minus ambiguity remains OPEN; prompt guidance is not a
++deterministic fix. UAT-213 captures the carbohydrate issue observed live.
++The regression catalog now has 213 cases. Preserve physical-device,
++screen-reader, disposable-account Save/Edit/Undo and coach acceptance gates.
++
++See docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md for scope and limits,
++and PHASE4-PENDING-PLAN.md for the full retained backlog.
++Excel and evidence ZIPs are reports, not application code.
++
++HISTORICAL MEAL-CLARIFICATION PREPARATION RECORD (BELOW)
++The following instructions/results describe the prior ZIP, now deployed.
+ FITLIFE — MEAL QUANTITY CLARIFICATION FIX
+ Incremental updated files only; original repository paths retained.
+ 
+diff --git a/docs/reviews/PHASE4-MEAL-CLARIFICATION-FIX.md b/docs/reviews/PHASE4-MEAL-CLARIFICATION-FIX.md
+index 9f7e857..743496c 100644
+--- a/docs/reviews/PHASE4-MEAL-CLARIFICATION-FIX.md
++++ b/docs/reviews/PHASE4-MEAL-CLARIFICATION-FIX.md
+@@ -1,5 +1,13 @@
+ # Meal quantity clarification — incremental Phase 4 fix
+ 
++Deployment update, 13 October 2026: this meal-clarification patch is now deployed
++as test `4b1f605a`, with CI 62 passing 78 suites / 4,748 assertions. The original
++sambar request, short follow-up and UAT-209–211 observed text branches passed.
++UAT-212 retains a symbolic-minus interpretation issue. A separate carbohydrate
++preview mismatch was found; its new local fix and deployment requirements are
++in `PHASE4-NUTRITION-CONSISTENCY-FIX.md`. The preparation record below is retained
++as historical evidence; its pending-deployment statements describe that time.
++
+ Prepared 13 October 2026. Intended installed baseline:
+ `1c0c0408b80134d8d26812c7e1f0073271e8e939`, matching local
+ `507c2e4434a14e57400cf079dc971dce8ba99051`. The new fix is **not deployed**.
+diff --git a/docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md b/docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md
+new file mode 100644
+index 0000000..2a12fff
+--- /dev/null
++++ b/docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md
+@@ -0,0 +1,64 @@
++# AI review carbohydrate consistency — incremental fix
++
++Prepared 13 October 2026 after testing the deployed meal-clarification patch.
++Installed test baseline: `4b1f605a12c38d6001b4f1874792f2aa911db585`, matching
++local application source `f6686fc431006ff46a787e4943d3a6c40cdbbe3f`.
++This new server fix is not deployed. See `NUTRITION-CONSISTENCY-INSTALL.txt`
++inside the updated-files ZIP for its revision and final local gate results.
++
++## What the live test established
++
++- The original `2 idlis and sambar for breakfast` omission now produces a named
++  Sambar quantity question. Replying `200 grams` resolves only Sambar and retains
++  the prior edited Idli card. UAT-209–211 passed their observed text branches.
++- Deployed CI 62 passed 78 suites / 4,748 assertions, including 49 database
++  suites / 2,316 assertions. All 32 installed package files match GitHub.
++- Scoped live testing recorded 16 passed observations and 2 issues. No member
++  records or macro labels were saved. Home values were unchanged after reload.
++- Sambar 200 g initially showed 15 g carbs; editing its quantity and restoring
++  200 g changed carbs to 11 g. Calories stayed at 92. The initial server preview
++  used total carbs while portion editing and the daily log use net carbs.
++- `rice -50 g` became positive 50 g. Explicit `negative 50 grams`, zero and NaN
++  produced quantity questions. This is an AI interpretation ambiguity; the
++  negative provider-number guard itself was not observed accepting a negative.
++
++## Bounded change
++
++Both text and photo AI previews now use the same carbohydrate basis as existing
++portion editing and the daily log: net carbs when available, total carbs as a
++fallback. Explicit net zero is retained. Stored calories, fibre, total carbs,
++nutrition database records and per-100 g snapshots are unchanged. This aligns
++the basis; existing per-food versus aggregate rounding can still differ by 0.1 g.
++
++Prompt guidance asks for a positive amount instead of removing a minus sign or
++assuming an ambiguous hyphen is a separator. This is prompt hardening, not a
++deterministic guarantee. PH4-LIVE-03 stays open until provider-level retesting.
++
++No client functionality, navigation, theme, camera/microphone entry, AI review,
++Save/Edit/Undo, account guards, or manual logging route is removed. MacroEditor
++continues to preview calories computed from entered macros; cancelling it keeps
++the review's stored calorie value. This patch does not change that behavior.
++
++## Test and deploy
++
++The focused suite exercises the actual text parser and photo handler against
++isolated provider/database responses, then compares their payloads using the
++real client portion and daily helpers. It has 58 assertions, including 12 new
++ones. Restoring the old preview calculations makes six regression checks fail.
++These checks do not prove live model accuracy or HTTP middleware behavior.
++
++Run the production build and complete available local gate before packaging;
++final counts are recorded in the install file and updated regression workbook.
++Require a fresh full GitHub gate for this new revision, including database tests.
++CI 62 verifies the installed baseline only. Deploy to test, then retest UAT-212
++and new UAT-213 plus the original sambar sequence. Use a disposable account for
++Save/Edit/Undo and coach acceptance. Physical-device checks remain pending.
++
++This is a server-only application change. Rebuilding the unchanged frontend
++produces the same `/assets/index-DyjU6GwD.js`; that asset alone cannot prove this
++new backend fix is deployed. Verify the deployed commit and live behavior.
++No migrations, new environment variables or deletions are required.
++
++The complete pending plan and Phase 3 limitations remain in
++`PHASE4-PENDING-PLAN.md`. Earlier omission and clarification evidence is retained
++in `PHASE4-MEAL-CLARIFICATION-FIX.md` and the versioned QA reports.
+diff --git a/docs/reviews/PHASE4-PENDING-PLAN.md b/docs/reviews/PHASE4-PENDING-PLAN.md
+index 938a73f..4557033 100644
+--- a/docs/reviews/PHASE4-PENDING-PLAN.md
++++ b/docs/reviews/PHASE4-PENDING-PLAN.md
+@@ -1,9 +1,16 @@
+ # Phase 4 — accessibility pass and complete pending plan
+ 
+-Release-plan update: 13 October 2026. Verified Phase 4 baseline:
+-uploaded `1c0c0408b80134d8d26812c7e1f0073271e8e939`, matching local
+-`507c2e4434a14e57400cf079dc971dce8ba99051`. The current incremental
+-meal-clarification fix is not deployed; its new build/revision results are pending.
++Release-plan update: 13 October 2026. Verified installed meal-clarification
++baseline: test `4b1f605a12c38d6001b4f1874792f2aa911db585`, matching local
++application source `f6686fc431006ff46a787e4943d3a6c40cdbbe3f`. CI 62 passed
++78 suites / 4,748 assertions. Original sambar and UAT-209–211 observed text
++branches passed live. A separate carbohydrate-preview consistency fix is local
++and needs fresh CI/deployment; symbolic-minus interpretation remains open with
++prompt hardening only. See `PHASE4-NUTRITION-CONSISTENCY-FIX.md`.
++
++The catalog now has 213 cases. New UAT-213 covers preview/portion carbohydrate
++consistency; UAT-212 retains the live symbolic-minus failure. Historical result
++counts and Not run statements below describe their original release stages.
+ 
+ This phase improves interaction with existing dialogs and controls. It preserves
+ the minimalist Home and existing functionality. It is a **partial accessibility
+diff --git a/qa/REGRESSION-README.txt b/qa/REGRESSION-README.txt
+index ac60222..13e5327 100644
+--- a/qa/REGRESSION-README.txt
++++ b/qa/REGRESSION-README.txt
+@@ -1,3 +1,25 @@
++FITLIFE — CURRENT NUTRITION CONSISTENCY REGRESSION
++Installed baseline: test 4b1f605a12c38d6001b4f1874792f2aa911db585
++Matching local source: f6686fc431006ff46a787e4943d3a6c40cdbbe3f
++Deployed CI 62: 78 suites / 4,748 assertions PASS; build PASS.
++Live scope: 16 passed observations, 2 issues; no member records saved.
++Original sambar omission and observed UAT-209–211 text paths now pass.
++UAT-212 retains symbolic-minus ambiguity. New UAT-213 records the initial
++total-carb preview versus existing net-carb portion/daily calculation mismatch.
++
++The new server fix aligns text/photo previews with the existing net-carb basis.
++It also strengthens signed-quantity prompt guidance without a deterministic
++interpretation guarantee. The new patch is NOT deployed or certified by CI 62.
++Run a fresh complete gate and deploy the same commit. Frontend asset unchanged:
++/assets/index-DyjU6GwD.js cannot independently identify the new backend.
++Local results and revision: NUTRITION-CONSISTENCY-INSTALL.txt in the new ZIP.
++Focused server suite: 58 assertions, including 12 consistency checks; test
++fixtures exercise actual text/photo handlers and real client math. Do not count
++focused reruns again in complete gate totals. Catalog: 213 manual cases.
++See docs/reviews/PHASE4-NUTRITION-CONSISTENCY-FIX.md and full pending plan.
++
++HISTORICAL MEAL-CLARIFICATION PREPARATION RECORD (BELOW)
++The remaining counts/pending states describe the prior package before CI 62.
+ FITLIFE — MEAL CLARIFICATION REGRESSION
+ Scope: incremental named-food quantity clarification on verified Phase 4.
+ Intended deployment baseline: 1c0c0408b80134d8d26812c7e1f0073271e8e939
+diff --git a/qa/manual-regression.tsv b/qa/manual-regression.tsv
+index 69c2a1a..311e90f 100644
+--- a/qa/manual-regression.tsv
++++ b/qa/manual-regression.tsv
+@@ -211,3 +211,4 @@ AI quantity clarification	Mixed specified and missing amounts	On Today, send "I
+ AI quantity clarification	Unresolved food without Save	Send "I ate rice" without a quantity and inspect the complete response. If it provides a labelled estimated portion, record that branch; repeat with an unclear portion until an unresolved-only response is observed.	A standard estimated portion stays editable and requires Save. An unresolved-only response visibly names the food and asks its amount, has no saveable food row or Save action, and adds no placeholder quantity or nutrition. Neither branch saves automatically; the model's choice of branch is not guaranteed.	P0	manual AI quantity acceptance (Not Run)
+ AI quantity clarification	Short follow-up resolves latest pending food	On the same day and sign-in, obtain a mixed review containing a resolved food and a named unresolved food; reply "200 grams" without repeating the unresolved food name; inspect both reviews. If the first response estimates all portions, record that branch and repeat until there is an amount question.	The short reply uses the latest same-day pending food context, retains the prior reviewed food information without adding duplicate food rows, and shows the resolved amount in a new editable review. Nothing saves automatically; a wrong or missing model food remains a recognition failure.	P0	manual AI quantity acceptance (Not Run)
+ AI quantity clarification	Reject invalid or unreasonable amounts	Try "rice -50 g", "rice 0 g", "rice 999999 g" and an unusable numeric amount; also clear a review quantity or set it to zero and above 5000 g. Inspect the response, canonical quantity, totals and daily log before Save.	Invalid, negative, zero or non-finite provider quantities are rejected or become named unresolved questions without a 100 g fallback. Existing caps for excessively large positive quantities may remain, with the resulting quantity visible for review. Invalid edited quantities cannot Save, valid positive amounts remain subject to canonical bounds, and no response logs automatically.	P0	manual AI quantity acceptance (Not Run)
++AI nutrition consistency	Initial review and portion edit use the same carbohydrate basis	Request 200 g sambar by text, record its review macros, set grams to 0 then restore 200, and compare; repeat via photo with a recognised food containing fibre. On a disposable account only, Save and compare the daily entry.	Initial and same-gram restored reviews use the existing net-carbohydrate basis when available, with total-carbohydrate fallback. Stored calories and per-100 g nutrient data are unchanged; no automatic Save. Per-food versus aggregate rounding may differ by 0.1 g. Report photo and stateful checks separately if not executed.	P0	test-food-clarifications; deployed text failed before local fix; new deployment/photo/save acceptance pending
+diff --git a/server/routes/aiChat.js b/server/routes/aiChat.js
+index ed5f9ad..e2f2fe2 100644
+--- a/server/routes/aiChat.js
++++ b/server/routes/aiChat.js
+@@ -36,7 +36,7 @@ const axios  = require('axios');
+ const authMW = require('../middleware/auth');
+ const { firstName } = require('../services/personName');
+ const { cleanScalePayload } = require('../services/scaleParse');
+-const { normaliseFoodReview, sanitiseFoodClarification } = require('../services/foodReview');
++const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros } = require('../services/foodReview');
+ const { cookingFatPlausibility, macroPlausibility, massBalance } = require('../services/macroCheck');
+ const { FATS, DEFAULT_FAT, saturatedPlausibility, suggestFatSplit,
+         detectCookingFat } = require('../services/fatProfile');
+@@ -254,6 +254,10 @@ PARSING RULES:
+    as {name, meal (slot or null), reason: 'quantity_needed'}, with grams
+    omitted; do not invent a quantity
+    or silently drop it. Do not put the same portion in both arrays.
++   Explicit zero or negative amounts, including signed numbers, are unusable:
++   return unresolved_foods and ask for a positive amount; never remove a
++   minus sign or estimate a replacement. If a hyphen could be a separator
++   or a minus sign, ask for the positive amount instead of assuming.
+    Example: '2 idlis and sambar for breakfast' must represent both Idli and
+    Sambar, either as reviewable food portions or as an unresolved food.
+    Indian portions:
+@@ -1534,13 +1538,7 @@ Return ONLY raw JSON, no markdown fences:
+       // The phrase this food's portion would be remembered under, so the
+       // client can report a correction without re-deriving it
+       f.portion_phrase = portionPhrase(f.qty_text, f.name);
+-      const factor = f.grams / 100;
+-      f.macros = {
+-        cal:  Math.round((f.per_100g.calories || 0) * factor),
+-        pro:  +((f.per_100g.protein     || 0) * factor).toFixed(1),
+-        carb: +((f.per_100g.total_carbs || 0) * factor).toFixed(1),
+-        fat:  +((f.per_100g.fat         || 0) * factor).toFixed(1),
+-      };
++      f.macros = foodPreviewMacros(f);
+       totCal += f.macros.cal; totPro += f.macros.pro;
+       totCarb += f.macros.carb; totFat += f.macros.fat;
+     }
+@@ -2051,13 +2049,7 @@ async function parseMemberMessage({ userId, message, context }) {
+       // The phrase this food's portion would be remembered under, so the
+       // client can report a correction without re-deriving it
+       f.portion_phrase = portionPhrase(f.qty_text, f.name);
+-      const factor = f.grams / 100;
+-      f.macros = {
+-        cal:  Math.round((f.per_100g.calories || 0) * factor),
+-        pro:  +((f.per_100g.protein     || 0) * factor).toFixed(1),
+-        carb: +((f.per_100g.total_carbs || 0) * factor).toFixed(1),
+-        fat:  +((f.per_100g.fat         || 0) * factor).toFixed(1),
+-      };
++      f.macros = foodPreviewMacros(f);
+       totCal += f.macros.cal; totPro += f.macros.pro;
+       totCarb += f.macros.carb; totFat += f.macros.fat;
+     }
+diff --git a/server/scripts/test-food-clarifications.js b/server/scripts/test-food-clarifications.js
+index 0e05b80..55535c2 100644
+--- a/server/scripts/test-food-clarifications.js
++++ b/server/scripts/test-food-clarifications.js
+@@ -3,7 +3,10 @@
+ const fs = require('fs');
+ const path = require('path');
+ const vm = require('vm');
+-const { normaliseFoodReview, sanitiseFoodClarification } = require('../services/foodReview');
++const { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros } = require('../services/foodReview');
++const { importClient } = require('./lib/client-bundle');
++const { withFoodGrams } = importClient('utils/aiFoodReview.js');
++const { calcFoodMacros } = importClient('lib/day/index.js');
+ let pass = 0, fail = 0;
+ const ck = (name, ok, detail = '') => { console.log(`  ${ok ? '✓' : '✗'} ${name}${ok ? '' : ': ' + JSON.stringify(detail)}`); ok ? pass++ : fail++; };
+ const row = (name, grams, extras = {}) => ({ name, grams, meal: 'Breakfast', per_100g: { calories: 99 }, ...extras });
+@@ -42,10 +45,13 @@ ck('reviewed context accepts only finite positive bounded portions', !badNumbers
+ // Every DB operation stays in this stub and every provider call is intercepted.
+ const filename = path.resolve(__dirname, '../routes/aiChat.js');
+ const router = {};
+-for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = () => router;
+-let fixture = {}, prompts = [], queries = [];
++const routes = new Map();
++for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = (route, ...handlers) => {
++  routes.set(`${method} ${route}`, handlers.at(-1)); return router;
++};
++let fixture = {}, prompts = [], queries = [], photoCalls = 0;
+ const foods = { idli: { id: 1, name: 'Idli', verified: true, per_100g: { calories: 134, protein: 3.9, total_carbs: 26, fat: 0.2 } },
+-  sambar: { id: 2, name: 'Sambar', verified: true, per_100g: { calories: 46, protein: 2.5, total_carbs: 7.5, fat: 1.2 } } };
++  sambar: { id: 2, name: 'Sambar', verified: true, per_100g: { calories: 46, protein: 2.5, total_carbs: 7.5, fiber: 2, fat: 1.2 } } };
+ const db = { query: async (sql, args = []) => {
+   queries.push({ sql, args });
+   if (/WITH c AS/.test(sql) && foods[args[0]]) return { rows: [foods[args[0]]] };
+@@ -56,11 +62,15 @@ const pureModules = new Set(['../services/personName', '../services/scaleParse',
+   '../services/nutrients', '../services/voiceLanguage', '../services/programDay', '../utils/istDate', '../services/safety', '../services/foodReview']);
+ const moduleFixture = { exports: {} };
+ const sandbox = { module: moduleFixture, exports: moduleFixture.exports, console, setTimeout, clearTimeout,
+-  process: { env: { GROQ_API_KEY: 'isolated-fixture', GROQ_MODEL: 'fixture-model', GROQ_FALLBACK_MODEL: 'fixture-model' } },
++  process: { env: { GROQ_API_KEY: 'isolated-fixture', GROQ_MODEL: 'fixture-model', GROQ_FALLBACK_MODEL: 'fixture-model', GEMINI_API_KEY: 'isolated-photo-fixture' } },
+   require(name) {
+     if (name === 'express') return { Router: () => router };
+     if (name === '../db/pool') return db;
+     if (name === 'axios') return { post: async (url, body) => {
++      if (url.startsWith('https://generativelanguage.googleapis.com/v1beta/models/')) {
++        photoCalls++;
++        return { data: { candidates: [{ content: { parts: [{ text: JSON.stringify(fixture) }] } }] } };
++      }
+       if (url !== 'https://api.groq.com/openai/v1/chat/completions') throw new Error('Unexpected provider path');
+       prompts.push(body.messages[0].content);
+       return { data: { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(fixture) } }] } };
+@@ -107,6 +117,29 @@ const parse = async (answer, message = '2 idlis and sambar for breakfast', conte
+   ck('prompt covers every consumed named accompaniment or explicit unresolved item', /EVERY explicitly consumed food/.test(prompts.at(-1)) && /Never silently omit/.test(prompts.at(-1)) && /unresolved_foods/.test(prompts.at(-1)));
+   result = await parse({ foods: [row('Idli', 80)] });
+   ck('known limit: a model omitting both food and issue arrays is not fabricated by validator', result.foods.length === 1 && result.unresolved_foods.length === 0);
++
++  // Live regression: Sambar 200g initially showed C15 but re-entering the
++  // same grams showed C11. Exercise the actual text and photo routes, then
++  // the real client quantity editor and daily-log maths on their payloads.
++  const previewFixture = { foods: [row('Sambar', 200), row('Idli', 80)] };
++  const textPreview = await parse(previewFixture, '200g sambar and 80g idli');
++  fixture = previewFixture;
++  let photoPreview, photoStatus = 200;
++  const response = { status(code) { photoStatus = code; return this; }, json(value) { photoPreview = value; return this; } };
++  await routes.get('post /photo')({ body: { image: 'isolated-test-image', mimeType: 'image/jpeg' }, user: { id: 999, role: 'patient' } }, response);
++  ck('actual photo route succeeds using one isolated vision response', photoStatus === 200 && photoCalls === 1 && photoPreview.foods?.length === 2, photoPreview);
++  for (const [kind, preview] of [['text', textPreview], ['photo', photoPreview]]) {
++    const sambar = preview.foods[0], snapshot = JSON.stringify(sambar.per_100g);
++    const sameGrams = withFoodGrams(sambar, '200');
++    const restored = ['0', '', '5001', '200'].reduce((food, grams) => withFoodGrams(food, grams), sambar);
++    ck(`${kind}: initial Sambar200g uses net C11 while retaining stored92kcal`, sambar.macros.carb === 11 && sambar.macros.cal === 92, sambar.macros);
++    ck(`${kind}: same grams and invalid-draft roundtrip preserve every preview macro`, JSON.stringify(sambar.macros) === JSON.stringify(sameGrams.macros) && JSON.stringify(sambar.macros) === JSON.stringify(restored.macros));
++    ck(`${kind}: portion editing leaves total carbs, fibre and stored calories untouched`, snapshot === JSON.stringify(restored.per_100g) && restored.per_100g.total_carbs === 7.5 && restored.per_100g.fiber === 2 && restored.per_100g.calories === 46);
++    const daily = calcFoodMacros(preview.foods);
++    ck(`${kind}: initial combined calorie and carb totals agree with the daily log`, preview.totals.cal === daily.kcal && preview.totals.carb === +daily.carb.toFixed(1), { preview: preview.totals, daily });
++  }
++  ck('preview keeps explicit net zero instead of falling back to total', foodPreviewMacros(row('Zero net', 200, { per_100g: { total_carbs: 8, net_carbs: 0 } })).carb === 0);
++  ck('preview falls back to total carbs only when net is absent', foodPreviewMacros(row('Legacy', 150, { per_100g: { total_carbs: 8 } })).carb === 12);
+   ck('parser never writes daily logs or workouts during review', queries.every(({ sql }) => !/(?:INSERT INTO|UPDATE)\s+(?:daily_logs|workout_sessions)/i.test(sql)));
+   console.log(`\n${pass} passed, ${fail} failed`);
+   if (fail) process.exitCode = 1;
+diff --git a/server/services/foodReview.js b/server/services/foodReview.js
+index 59c4c0e..b89d968 100644
+--- a/server/services/foodReview.js
++++ b/server/services/foodReview.js
+@@ -5,6 +5,19 @@ const label = (value, max) => typeof value === 'string'
+   ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
+ const identity = row => `${row.name.toLowerCase()}\u0000${(row.meal || '').toLowerCase()}`;
+ 
++/** Match the daily log and editable review: net carbs when available, total
++ * otherwise. Keep stored calories; editing grams must not recalculate energy
++ * from macros or change the food's nutrition snapshot. */
++function foodPreviewMacros(food) {
++  const per = food.per_100g || {}, factor = food.grams / 100;
++  return {
++    cal: Math.round((per.calories || 0) * factor),
++    pro: +((per.protein || 0) * factor).toFixed(1),
++    carb: +(((per.net_carbs != null ? per.net_carbs : per.total_carbs) || 0) * factor).toFixed(1),
++    fat: +((per.fat || 0) * factor).toFixed(1),
++  };
++}
++
+ function normaliseFoodReview(rawFoods, rawUnresolved) {
+   const foods = [], unresolvedFoods = [], seen = new Set();
+   const addUnresolved = row => {
+@@ -47,4 +60,4 @@ function sanitiseFoodClarification(value) {
+   return { unresolved, reviewedFoods };
+ }
+ 
+-module.exports = { normaliseFoodReview, sanitiseFoodClarification };
++module.exports = { normaliseFoodReview, sanitiseFoodClarification, foodPreviewMacros };

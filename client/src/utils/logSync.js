@@ -25,6 +25,7 @@
  *    in flight and today's answer landed in yesterday's screen. resolveSave()
  *    drops an answer for a date that is no longer the one on screen.
  */
+import { resolveProtocolItems, protocolDefaultNone } from '../lib/day/protocol';   // Fixes-3k: one rule for what is in force
 
 /** What an empty day looks like to the server — the base for a day never saved. */
 export const EMPTY_BASE = Object.freeze({
@@ -76,9 +77,28 @@ export function mapServerLog(row) {
   };
 }
 
+/** A queued payload is an edit, not a new server baseline. Preserve the last
+ * server snapshot so reconnect can still distinguish edits from stale fields. */
+export function mapQueuedLog(payload) {
+  return { ...mapServerLog(payload),
+    savedAt: payload.base_saved_at ?? null,
+    baseFoodIds: payload.base_food_ids ?? null,
+    base: payload.base_fields ?? EMPTY_BASE,
+    writeBase: payload.base_client_write ?? null,
+  };
+}
+
 /** Compute total assignable checkable items from the member's protocol */
 export function computeProtocolTotal(protocol) {
   if (!protocol) return null;
+  // Fixes-3k, a member created from 3k on (protocolDefaultNone): exactly the items Today lists, so the saved score uses
+  // the same "of N" the member sees (no selection for ACV or supplements = only the coach's own items).
+  if (protocolDefaultNone(protocol)) {
+    const { activeActivities, activeACV, activeSupplements } = resolveProtocolItems(protocol);
+    return activeActivities.length + activeACV.length + activeSupplements.length;
+  }
+  // Existing members: exactly as before 3k (Sachin's decision: their scores do not change). Note: with the custom
+  // lists the server sends ([]), a group with no selection counts 0 here and the server then uses its 16 floor.
   const acts  = protocol.activities  ? protocol.activities.length
               : protocol.custom_activities?.length ?? 6;
   const acvs  = protocol.acv         ? protocol.acv.length
@@ -107,6 +127,11 @@ export function mapToServer(log, protocol) {
       // The member typed these numbers from their own pack (10 Oct 2026); the
       // coach's day view marks the item so they know where the numbers came from.
       ...(item.label ? { label: true } : {}),
+      // Where the numbers came from and the household portion ("2 rotis").
+      // The server stores both, but they were never sent, so after the
+      // auto-save an AI item read "Nutrition source not recorded" (16 Oct 2026).
+      ...(item.source ? { source: String(item.source).slice(0, 40) } : {}),
+      ...(item.qty_text ? { qty_text: String(item.qty_text).slice(0, 80) } : {}),
     })),
     water_ml:       log.water,
     // What this phone last saw of the day: when it was saved, which food was in
@@ -115,6 +140,7 @@ export function mapToServer(log, protocol) {
     base_saved_at:  log.savedAt ?? null,
     base_food_ids:  log.baseFoodIds ?? null,
     base_fields:    log.base ?? EMPTY_BASE,
+    ...(log.writeBase ? { base_client_write: log.writeBase } : {}),
     supplements:    log.supplements,
     sleep:          log.sleep,
     notes:          log.notes,
@@ -145,16 +171,24 @@ export function resolveSave({ now, sentDate, sentLog, isLatest, result }) {
   //     on screen; only stop the spinner if nothing newer owns it.
   if (now.date !== sentDate) return isLatest ? { saving: false } : null;
 
-  const untouched = now.log === sentLog;
+  // An earlier serialized save may advance only the server base or pending
+  // receipt while this captured snapshot waits. That does not make the
+  // member's visible fields unsaved again. Actual field edits still change
+  // their value/reference and keep the draft dirty.
+  const metadata = new Set(['savedAt', 'baseFoodIds', 'base', 'writeBase']);
+  const untouched = now.log === sentLog || [...new Set([...Object.keys(now.log), ...Object.keys(sentLog)])]
+    .every(key => metadata.has(key) || now.log[key] === sentLog[key]);
 
   if (result.queued) {
     // Held on this device only. `saved` still goes true — the member's edit IS
     // safe — but only if what was queued is still what is on screen.
-    if (untouched && isLatest) return { saving: false, saved: true, queued: true, dirty: false };
-    return isLatest ? { saving: false } : null;
+    const lineage = result.write ? { log: { ...now.log, writeBase: result.write } } : {};
+    if (untouched && isLatest) return { saving: false, saved: true, queued: true, dirty: false, ...lineage };
+    return isLatest ? { saving: false, ...lineage } : result.write ? lineage : null;
   }
 
   const server = mapServerLog(result.data);
+  if (result.write) server.writeBase = result.write;
   if (untouched && isLatest) {
     return { saving: false, saved: true, queued: false, dirty: false, log: server };
   }
@@ -165,7 +199,8 @@ export function resolveSave({ now, sentDate, sentLog, isLatest, result }) {
   //     backwards, if answers arrive out of order.
   const patch = isLatest ? { saving: false } : {};
   if (newer(server.savedAt, now.log.savedAt)) {
-    patch.log = { ...now.log, savedAt: server.savedAt, baseFoodIds: server.baseFoodIds, base: server.base };
+    patch.log = { ...now.log, savedAt: server.savedAt, baseFoodIds: server.baseFoodIds, base: server.base,
+      ...(result.write ? { writeBase: result.write } : {}) };
   }
   return Object.keys(patch).length ? patch : null;
 }

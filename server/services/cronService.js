@@ -35,10 +35,10 @@ const REMINDER_CONFIG = {
       : `⏰ Reminder: Log your morning weight — tap OK when done!`,
   },
   acv: {
-    title: '🍎 ACV Time!',
+    title: '🍎 Apple cider vinegar time!',   // Fixes-3l (UX finding 14): written out
     body:  (retryCount) => retryCount === 0
       ? '1 tbsp in 200ml warm water through a straw — 15 min before your meal.'
-      : `⏰ Reminder: Take your ACV now — tap OK when done!`,
+      : `⏰ Reminder: Take your apple cider vinegar now — tap OK when done!`,
   },
 };
 
@@ -55,8 +55,20 @@ async function getSchedulesForTime(timeStr) {
        WHERE role = 'patient' AND active = true
          AND (rs.patient_id IS NULL OR rs.patient_id = id)
      ) u
+     LEFT JOIN patient_profiles pp ON pp.user_id = u.id
      WHERE rs.active = true
-       AND $1 = ANY(rs.times)`,
+       AND $1 = ANY(rs.times)
+       -- Fixes-3k: no apple cider vinegar reminder for a member who has none in
+       -- force (new-rule member, nothing assigned, no custom item).
+       AND NOT COALESCE(rs.type = 'acv'
+                AND pp.protocol_default_none IS TRUE
+                AND (pp.protocol_acv IS NULL OR jsonb_typeof(pp.protocol_acv) = 'null')
+                AND COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(pp.custom_acv) = 'array' THEN pp.custom_acv END), 0) = 0, false)
+       -- …nor for such a member whose coach switched every ACV item off (an empty list). Existing members: unchanged.
+       -- (COALESCE: a NULL list or a member without a profile row must not drop the reminder)
+       AND NOT COALESCE(rs.type = 'acv'
+                AND pp.protocol_default_none IS TRUE
+                AND jsonb_array_length(CASE WHEN jsonb_typeof(pp.protocol_acv) = 'array' THEN pp.protocol_acv END) = 0, false)`,
     [timeStr]
   );
   return result.rows;
@@ -201,6 +213,9 @@ function start() {
       // Phase 8: voice pilot recordings past their 90 days.
       const v = await require('../routes/voicePilot').deleteExpiredSamples();
       if (v) console.log(`🗑️  Deleted ${v} expired voice pilot recording(s)`);
+      // Fixes-2x: voice calibration takes past their 90 days.
+      const vc = await require('../routes/voiceCalibration').deleteExpiredTakes();
+      if (vc) console.log(`🗑️  Deleted ${vc} expired voice calibration take(s)`);
     } catch (err) { console.error('Plate photo cleanup error:', err.message); }
   }, { timezone: 'Asia/Kolkata' });
 
@@ -255,4 +270,4 @@ function start() {
   console.log('⏰ Cron jobs registered (IST timezone)');
 }
 
-module.exports = { start };
+module.exports = { start, getSchedulesForTime }; // getSchedulesForTime: exported for test-ux-3k (Fixes-3k)

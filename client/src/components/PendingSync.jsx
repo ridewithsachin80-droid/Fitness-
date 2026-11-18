@@ -79,8 +79,8 @@ export default function PendingSync() {
   if (status.unclaimed > 0) {
     const n = status.unclaimed;
     return (
-      <div className="rounded-xl px-3.5 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]" data-testid="unclaimed-queue">
-        <p className="text-xs font-semibold text-amber-300">
+      <div className="rounded-xl px-3.5 py-2.5 border border-warn/30 bg-warn/[0.08]" data-testid="unclaimed-queue">
+        <p className="text-xs font-semibold text-warn">
           {n} unsent {plural(n, 'day')} found on this phone
         </p>
         <p className="text-caption text-mid mt-0.5 leading-relaxed">
@@ -88,7 +88,7 @@ export default function PendingSync() {
         </p>
         <div className="mt-1.5 flex gap-2">
           <button onClick={() => claim(true)} disabled={claiming} style={{ minHeight: 36 }}
-            className="text-caption font-bold text-charcoal bg-amber-300 hover:bg-amber-200
+            className="text-caption font-bold text-charcoal bg-warn hover:bg-warn/90
               disabled:opacity-50 rounded-lg px-3 transition-colors">
             {claiming ? 'Sending…' : 'Mine, send it'}
           </button>
@@ -110,8 +110,8 @@ export default function PendingSync() {
 
   if (status.stuck) {
     return (
-      <div className="rounded-xl px-3.5 py-2.5 border border-amber-400/30 bg-amber-400/[0.08]">
-        <p className="text-xs font-semibold text-amber-300">
+      <div className="rounded-xl px-3.5 py-2.5 border border-warn/30 bg-warn/[0.08]">
+        <p className="text-xs font-semibold text-warn">
           {label} — {status.exhausted ? "couldn't send" : `stuck since ${formatDate(status.oldestDate)}`}
         </p>
         <p className="text-caption text-mid mt-0.5 leading-relaxed">
@@ -121,7 +121,7 @@ export default function PendingSync() {
           onClick={retry}
           disabled={retrying}
           style={{ minHeight: 36 }}
-          className="mt-1.5 text-caption font-bold text-charcoal bg-amber-300 hover:bg-amber-200
+          className="mt-1.5 text-caption font-bold text-charcoal bg-warn hover:bg-warn/90
             disabled:opacity-50 rounded-lg px-3 transition-colors">
           {retrying ? 'Trying…' : 'Try again now'}
         </button>

@@ -1,0 +1,72 @@
+import { normalizeUnresolvedFoods } from './unresolvedFoods';
+import { normalizeSleepClarification } from './sleepClarification';
+
+const hasRows = value => Array.isArray(value) && value.length > 0;
+const positive = value => Number.isFinite(Number(value)) && Number(value) > 0;
+
+/** Logging replies describe a proposal, never a completed write. The model's
+ * prose can disagree with resolved foods, member edits or save status, so the
+ * review itself owns quantities, nutrition and the eventual save receipt. */
+function hasParsedEntries(parsed) {
+  if (!parsed) return false;
+  return ['foods', 'activities', 'acv', 'supplements', 'workouts', 'corrections', 'bodyMetrics']
+    .some(key => hasRows(parsed[key]))
+    || positive(parsed.weight_kg) || positive(parsed.water_ml_add) || !!(parsed.sleep?.bedtime || parsed.sleep?.waketime)
+    || parsed.notesOn === true || (typeof parsed.notes === 'string' && parsed.notes.trim().length > 0);
+}
+
+export function hasLoggingPreview(message) {
+  return !!message?.reviewProposed || hasRows(message?.lab?.results) || hasParsedEntries(message?.parsed)
+    || normalizeUnresolvedFoods(message?.parsed?.unresolved_foods).length > 0
+    || !!normalizeSleepClarification(message?.parsed?.unresolved_sleep);
+}
+
+/** Follow-ups need the member's current reviewed values, including a photo's
+ * food names. Model completion prose is not conversation state. */
+export function aiContextText(message) {
+  if (!hasLoggingPreview(message)) return aiReplyText(message);
+  const p = message.parsed || {};
+  const rows = value => Array.isArray(value) ? value.filter(Boolean) : [];
+  const sleepIssue = normalizeSleepClarification(p.unresolved_sleep);
+  // Keep the pending question before food lists so the bounded conversation
+  // context still explains a reply such as "11pm to7am" in a mixed log.
+  const parts = sleepIssue ? [`Sleep not included${sleepIssue.duration_minutes != null ? ` (${sleepIssue.duration_minutes} minutes reported)` : ''}; bedtime and wake time needed`] : [];
+  parts.push(...rows(p.foods).map(f => `${f.name} ${f.grams}g ${f.meal || ''}${f.on === false ? ' (excluded)' : ''}`.trim()));
+  for (const food of normalizeUnresolvedFoods(p.unresolved_foods)) parts.push(`Not included: ${food.name}${food.meal ? ` (${food.meal})` : ''}; quantity needed`);
+  if (positive(p.weight_kg)) parts.push(`Weight ${p.weight_kg}kg${p.weightOn === false ? ' (excluded)' : ''}`);
+  if (positive(p.water_ml_add)) parts.push(`Water +${p.water_ml_add}ml${p.waterOn === false ? ' (excluded)' : ''}`);
+  if (p.sleep) parts.push(`Sleep ${p.sleep.bedtime || ''}–${p.sleep.waketime || ''}${p.sleepOn === false ? ' (excluded)' : ''}`);
+  for (const key of ['activities', 'acv', 'supplements', 'workouts', 'corrections', 'bodyMetrics']) {
+    for (const row of rows(p[key])) {
+      const details = [row.name || row.label || row.id || key];
+      if (row.grams != null) details.push(`${row.grams}g`);
+      if (row.meal) details.push(row.meal);
+      if (row.value != null) details.push(`${row.value}${row.unit || ''}`);
+      if (row.duration_min != null) details.push(`${row.duration_min}min`);
+      if (hasRows(row.sets)) details.push(rows(row.sets).map(set => `${set.reps} reps at ${set.weight_kg || 0}kg`).join(', '));
+      if (row.on === false || (key === 'bodyMetrics' && p.bodyMetricsOn === false)) details.push('(excluded)');
+      parts.push(details.join(' '));
+    }
+  }
+  if (typeof p.notes === 'string' && p.notes.trim()) parts.push(`Note: ${p.notes.trim()}${p.notesOn === false ? ' (excluded)' : ''}`);
+  for (const row of rows(message.lab?.results)) parts.push(`${row.test_name} ${row.value ?? ''} ${row.unit || ''}${row.on === false ? ' (excluded)' : ''}`.trim());
+  return `${message.applied ? 'Reviewed entries' : 'Unsaved preview'}: ${parts.join('; ')}`;
+}
+
+export function aiReplyText(message) {
+  if (!hasLoggingPreview(message)) return typeof message?.text === 'string' ? message.text : '';
+  if (normalizeSleepClarification(message?.parsed?.unresolved_sleep)
+    && !hasParsedEntries(message?.parsed) && !hasRows(message?.lab?.results)) {
+    return 'There’s a detail to confirm. Nothing has been saved yet.';
+  }
+  if (normalizeUnresolvedFoods(message?.parsed?.unresolved_foods).length
+    && !hasParsedEntries(message?.parsed) && !hasRows(message?.lab?.results)) {
+    return 'Tell me the amount for the food below. Nothing has been saved yet.';
+  }
+  // Even when every row is excluded, this remains an unsaved proposal.
+  // Applied can mean queued or a partial failure; its status below is the
+  // only authority for whether anything actually reached the member's log.
+  return message.applied
+    ? 'Your reviewed entries.'
+    : 'Review the details below. These entries haven’t been saved yet.';
+}

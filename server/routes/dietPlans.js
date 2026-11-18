@@ -206,11 +206,12 @@ async function enrichDays(days) {
       if (!enriched) continue;
       m.items = m.items.map((it, i) => {
         const e = enriched[i];
-        if (!e || !e.per_100g || !e.source || e.source === 'ai') return it;
+        // Raw/cooked comes only from a matched food row, never from the model (Fixes-2h).
+        if (!e || !e.per_100g || !e.source || e.source === 'ai') return { ...it, preparation: null };
         const ai = Number(it.per_100g?.calories) || 0;
         const db = Number(e.per_100g.calories) || 0;
-        if (ai > 0 && (db > ai * 2 || db < ai / 2)) return it;
-        return { ...it, per_100g: e.per_100g };
+        if (ai > 0 && (db > ai * 2 || db < ai / 2)) return { ...it, preparation: null };
+        return { ...it, per_100g: e.per_100g, preparation: e.preparation ?? null };
       });
     }
   }

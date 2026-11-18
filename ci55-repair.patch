@@ -1,0 +1,1283 @@
+diff --git a/.github/workflows/deployment-smoke.yml b/.github/workflows/deployment-smoke.yml
+new file mode 100644
+index 0000000..a28c601
+--- /dev/null
++++ b/.github/workflows/deployment-smoke.yml
+@@ -0,0 +1,29 @@
++name: Test deployment smoke
++on:
++  workflow_dispatch:
++  deployment_status:
++permissions:
++  contents: read
++jobs:
++  smoke:
++    if: >-
++      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/test') ||
++      (github.event.deployment_status.state == 'success' &&
++       github.event.deployment_status.environment_url == 'https://fitness-test.up.railway.app')
++    runs-on: ubuntu-latest
++    timeout-minutes: 5
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          ref: ${{ github.event.deployment.sha || github.sha }}
++      - uses: actions/setup-node@v4
++        with:
++          node-version: 22
++      - name: Verify test deployment and compiled assets
++        run: node server/scripts/test-deployment.mjs
++      - name: Save deployment results
++        if: always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: test-deployment-results
++          path: qa/results/
+diff --git a/.github/workflows/test-gate.yml b/.github/workflows/test-gate.yml
+index f043d55..e8cfff3 100644
+--- a/.github/workflows/test-gate.yml
++++ b/.github/workflows/test-gate.yml
+@@ -19,9 +19,18 @@ jobs:
+       - name: Install client packages
+         working-directory: client
+         run: npm install --no-audit --no-fund
+-      - name: Run all test suites
+-        working-directory: server
+-        run: npm test
+       - name: Build the client
+         working-directory: client
+         run: npm run build
++      - name: Run all test suites after the build
++        working-directory: server
++        env:
++          UI_SHOTS: ${{ github.workspace }}/qa/results/screenshots
++        run: npm test
++      - name: Upload regression evidence
++        if: always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: regression-${{ github.sha }}
++          path: qa/results/
++          if-no-files-found: warn
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..02bf977
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,5 @@
++node_modules
++qa/results/
++.env
++.env.*
++!.env.example
+diff --git a/client/package.json b/client/package.json
+index 39150ca..667faab 100644
+--- a/client/package.json
++++ b/client/package.json
+@@ -5,7 +5,7 @@
+   "main": "index.js",
+   "scripts": {
+     "dev": "vite",
+-    "build": "vite build",
++    "build": "node scripts/clean-build.mjs && vite build",
+     "preview": "vite preview"
+   },
+   "keywords": [],
+diff --git a/client/scripts/clean-build.mjs b/client/scripts/clean-build.mjs
+new file mode 100644
+index 0000000..60a70f9
+--- /dev/null
++++ b/client/scripts/clean-build.mjs
+@@ -0,0 +1,4 @@
++// Uploaded repositories may retain compiled service workers and obsolete
++// bundles. Start each build from source so PWA manifest injection is repeatable.
++import { rm } from 'node:fs/promises';
++await rm(new URL('../dist/', import.meta.url), { recursive: true, force: true });
+diff --git a/qa/REGRESSION-README.txt b/qa/REGRESSION-README.txt
+index e24c668..fb50424 100644
+--- a/qa/REGRESSION-README.txt
++++ b/qa/REGRESSION-README.txt
+@@ -1,77 +1,43 @@
+-FITLIFE P0 — REGRESSION AND DEPLOYMENT
++FITLIFE — TEST GATE #55 REPAIR
+ 
+-Target repository: ridewithsachin80-droid/Fitness-, branch test
+-Target app: https://fitness-test.up.railway.app/
+-Patch baseline: 66b8bc9171f52d28943e37b4df7465d5de4eb805
++Apply after uploaded test commit 18ef815660225d5aaf67d5f0e679da70e696123b.
++Target: https://fitness-test.up.railway.app/ (test only).
+ 
+-Build scope
+-- P0 fixes: offline save/retry integrity, private cache cleanup, account and
+-  session isolation, cold-start recovery, and workout note/selection retention.
+-- New idempotent schema migrations must run during server startup.
+-- Prior Phase 1 features are retained:
+-- My usual inside AI opens an editable review before anything is logged.
+-- Household portion units, counts and grams per unit; opt-in memory and forget.
+-- Nutrition provenance labels and visible raw/cooked/unspecified preparation.
+-- Recent foods use the latest quantity; household memory stores one unit.
+-- Expanded automated regression and read-only deployment smoke workflows.
++Observed run: https://github.com/ridewithsachin80-droid/Fitness-/actions/runs/38347452601
++Three suites failed: private cache browser (missing puppeteer-core), journey
++(old assertion removed the unfinished exercise), known fixes (one-sided lab
++limits). The known-fix suite also stopped before its tracker-state checks.
++Its 47 successful database suites are historical results for that upload,
++not proof that this subsequent correction passes the complete gate.
+ 
+-Run after every source build
+-1. Install client and server dependencies. Build from the repository root:
+-   npm run build
+-2. Install browser-only QA dependencies in server (not needed in production):
+-   npm install --no-save puppeteer-core@25.13.0 @sparticuz/chromium@153.0.0
+-3. On a machine with PostgreSQL binaries, run from server:
+-   npm test
+-   This creates/recreates a disposable localhost database called fitlife_test
+-   on port 5433. NEVER substitute a live Railway database URL.
+-4. The test gate runs logic, component, database and UI/browser suites.
+-   It writes evidence to qa/results. Missing listed suites fail the gate.
+-   For a locally installed Chromium, set CHROME_EXECUTABLE_PATH to that binary.
+-5. Deploy the matching commit to the named test service only.
+-6. From the repository root run:
+-   node server/scripts/test-deployment.mjs
+-   Exit 2 means the matching new build or connectivity could not be verified.
+-   Exit 1 means a smoke assertion failed. Exit 0 verifies HTTP smoke only.
+-7. Execute qa/manual-regression.tsv using dedicated test member/coach/admin
+-   accounts. Complete P0 cases on Android, iPhone Safari and installed PWAs.
+-   Record actual deployed results in the accompanying Excel workbook.
+-8. Fix reproducible failures; rebuild; repeat the relevant checks and the full
+-   registered gate. Do not count an older green CI run as the new build passing.
++Repair
++- Browser packages are pinned development dependencies in server/package.json
++  and package-lock.json. A normal npm install now installs them for testing.
++- Lab entry and analysis share finite number and one-sided reference handling.
++- Tracker callback state is signed, expires, and is bound to member/provider.
++- The workout journey checks no completed sets and preserves the selection.
++- Every client build removes generated dist before rebuilding the PWA worker.
++- The corrected workflow builds first, runs every registered suite and stores
++  logs/screenshots even on failure. Upload the hidden .github folder too.
+ 
+-Automation
+-- Test gate builds the client first, installs browser QA tooling and runs all
+-  registered suites on branch pushes, then uploads logs/screenshots.
+-- Test deployment smoke supports manual dispatch on test and a successful
+-  deployment_status event whose environment URL is the exact test URL.
+-- If Railway does not emit that event or uses a different URL spelling, run
+-  Test deployment smoke manually on test after confirming the deployed commit.
+-- HTTP smoke does not authenticate, edit health records, send notifications,
+-  or certify real phone camera/mic behavior.
++Verification
++1. npm install from the repository root; npm ci in server.
++2. npm run build from the root (safe to repeat over an existing dist).
++3. cd server; npm test
++   Uses disposable localhost PostgreSQL on port 5433. Never use a live DB URL.
++4. Require a green run on the resulting test commit, then deploy that commit.
++5. Run node server/scripts/test-deployment.mjs, then the workbook's signed-in
++   P0 member/coach/device cases with dedicated test accounts.
+ 
+-Current limitations
+-- GitHub writes returned 403 Resource not accessible by integration.
+-- Command-line git push has no available write credentials.
+-- This workspace has no PostgreSQL binaries; new DB integration runs are
+-  blocked here. The uploaded 66b8bc9 CI ran DB tests and exposed four workout
+-  persistence failures; those results predate this P0 patch.
+-- Uploaded Phase 1 frontend assets were verified on the live test app.
+-- The user confirmed one-tap camera and mic work on Android and iPhone.
+-  This does not certify every Safari/PWA/permission path or this newer patch.
+-- New P0 fixes need green database CI, matching deployment and signed-in
+-  acceptance. The live browser currently shows the member/coach login page.
+-- Undefined-identifier lint was not run locally because ESLint is absent.
++Local focused tests run actual Express routes against synthetic SQL/HTTP
++adapters. They never contact real members or wearable providers. Their pass
++is not a PostgreSQL integration pass or live acceptance.
++The local workspace still has no PostgreSQL binaries. The complete database
++gate and real tracker integration must be rerun in CI/test deployment.
++The user confirmed one-tap camera and mic on Android and iPhone before this
++repair; browser fixtures cannot independently certify physical capture.
+ 
+-Excel workbook usage
+-- Overview summarizes actual runs and release blockers.
+-- Acceptance cases contains manual preconditions, steps and expected results.
+-- Suite runs shows the entire registered regression set and blocked DB suites.
+-- Uploaded-build CI is a separate historical column, never a current P0 pass.
+-- Executed checks records actual final local assertion output.
+-- Automated catalog lists assertion declarations and source locations.
+-- Deployment separates current public-site checks from phase 1 acceptance.
+-- Defects records fixes, retests and outstanding access/environment blocks.
+-
+-Artifact boundary
+-Screenshots and UI tests use synthetic fixture data. AI, storage and other
+-external services may be stubbed by individual suites. A fixture pass is not
+-proof of live AI accuracy, production integrations or physical device support.
++GitHub browser uploads omitted the previous hidden .github files. If drag
++upload omits them again, edit .github/workflows/test-gate.yml directly on test
++using the complete file supplied in the repair archive. The package dependency
++fix remains effective even before the workflow is updated.
+diff --git a/qa/manual-regression.tsv b/qa/manual-regression.tsv
+index 8505e54..70d5c40 100644
+--- a/qa/manual-regression.tsv
++++ b/qa/manual-regression.tsv
+@@ -146,3 +146,7 @@ Session	Edit while queued upload completes	Start replaying an older queued day;
+ Session	Lost acknowledgement and retry	In an isolated test environment, let a daily save commit but drop its response; make a newer weight/water edit; retry both revisions.	Retries do not duplicate data or discard the newer edit, and a genuine intervening external edit still follows conflict rules.	P0	test-offline-queue; database receipt tests
+ Workout	Explicit note clearing	Save a note on a disposable workout; send an update with notes omitted, then explicitly clear notes and reopen.	Omitted notes preserve the prior text; explicit clearing removes it.	P0	test-known-fixes
+ Session	Unrelated offline edits in two tabs	Load the same test day in two tabs; go offline; queue water in A, then edit weight from B’s stale copy and save.	A’s queued edit is retained; B’s unrelated edit is merged safely or remains visibly unsaved with recovery guidance. No false saved confirmation or silent overwrite.	P0	test-offline-queue; test-session-logic
++Session	Tracker state validation	Start tracker authorization; reject forged, expired and wrong-provider callback state using a controlled test provider.	Invalid state is rejected before token exchange; a valid signed flow connects only the initiating member.	P0	test-ci55-regressions; test-known-fixes
++Progress	Invalid lab value	As assigned coach, submit blank and nonnumeric lab values, then a valid result with only one reference limit.	Invalid values receive a clear validation error; valid one-sided ranges save and classify correctly.	P0	test-ci55-regressions; test-known-fixes
++Workout	Zero-rep exercise	Save a selected exercise with zero repetitions; close and reopen the workout.	The selected exercise remains unfinished with no completed sets or training volume.	P0	test-journey; test-workout-session-logic
++Deployment	Repeat clean build	Build with an existing compiled dist folder, then build again and inspect the worker and referenced assets.	Both builds succeed; stale bundles are removed and the generated worker contains the current manifest.	P0	npm run build; GitHub test gate
+diff --git a/server/package-lock.json b/server/package-lock.json
+index d1aa276..89f97fc 100644
+--- a/server/package-lock.json
++++ b/server/package-lock.json
+@@ -23,9 +23,11 @@
+         "web-push": "^3.6.7"
+       },
+       "devDependencies": {
++        "@sparticuz/chromium": "153.0.0",
+         "esbuild": "^0.21.5",
+         "jsdom": "^24.1.0",
+-        "nodemon": "^3.1.14"
++        "nodemon": "^3.1.14",
++        "puppeteer-core": "25.13.0"
+       },
+       "engines": {
+         "node": ">=20.0.0"
+@@ -551,12 +553,54 @@
+         "node": ">=12"
+       }
+     },
++    "node_modules/@puppeteer/browsers": {
++      "version": "3.2.4",
++      "resolved": "https://registry.npmjs.org/@puppeteer/browsers/-/browsers-3.2.4.tgz",
++      "integrity": "sha512-okJ6yQMc0SBexOKxMi966omwAV1uAPwgF/YMZdb04gZQPXVjWHl9bmXjZYtIcsN1+PN3Bz4iFfGK3g+c6lZJ0Q==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "modern-tar": "^0.8.5",
++        "yargs": "^18.0.0"
++      },
++      "bin": {
++        "browsers": "lib/main-cli.js"
++      },
++      "engines": {
++        "node": ">=22.12.0"
++      },
++      "peerDependencies": {
++        "proxy-agent": ">=8.0.1",
++        "yauzl": "^2.10.0 || ^3.4.0"
++      },
++      "peerDependenciesMeta": {
++        "proxy-agent": {
++          "optional": true
++        },
++        "yauzl": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@socket.io/component-emitter": {
+       "version": "3.1.2",
+       "resolved": "https://registry.npmjs.org/@socket.io/component-emitter/-/component-emitter-3.1.2.tgz",
+       "integrity": "sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==",
+       "license": "MIT"
+     },
++    "node_modules/@sparticuz/chromium": {
++      "version": "153.0.0",
++      "resolved": "https://registry.npmjs.org/@sparticuz/chromium/-/chromium-153.0.0.tgz",
++      "integrity": "sha512-jiGWqSvPMdu4+P9TilYqAR7yEGPEHINx+lCvE/NqNO/EHYzF/x1hUiI5T6ioVIt7dEy7n88byyT0vk+dnsgQwA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "tar-fs": "^3.1.2"
++      },
++      "engines": {
++        "node": "^22.17.0 || >=24.0.0"
++      }
++    },
+     "node_modules/@types/cors": {
+       "version": "2.8.19",
+       "resolved": "https://registry.npmjs.org/@types/cors/-/cors-2.8.19.tgz",
+@@ -606,6 +650,32 @@
+         "node": ">= 14"
+       }
+     },
++    "node_modules/ansi-regex": {
++      "version": "6.4.0",
++      "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.4.0.tgz",
++      "integrity": "sha512-KzTVk2tCWAHtYrvvvaP8bJKJq2pVinhLcGEQdtLIYPbmNGNyYe8QwNaTUYQp2J7/vIsUKt5QCqAfUkYyG9DkOw==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-regex?sponsor=1"
++      }
++    },
++    "node_modules/ansi-styles": {
++      "version": "6.2.3",
++      "resolved": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-6.2.3.tgz",
++      "integrity": "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/ansi-styles?sponsor=1"
++      }
++    },
+     "node_modules/anymatch": {
+       "version": "3.1.3",
+       "resolved": "https://registry.npmjs.org/anymatch/-/anymatch-3.1.3.tgz",
+@@ -675,6 +745,21 @@
+         "node": ">= 6"
+       }
+     },
++    "node_modules/b4a": {
++      "version": "1.9.0",
++      "resolved": "https://registry.npmjs.org/b4a/-/b4a-1.9.0.tgz",
++      "integrity": "sha512-dpfcF9fDNR6++cthXR67iyhgqWy9CBouAvIWhIntzBG6cvK/cnIPiZQjBwi/ZqjjBEDGfoNDtmB0kTjroOJ3pQ==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "peerDependencies": {
++        "react-native-b4a": "*"
++      },
++      "peerDependenciesMeta": {
++        "react-native-b4a": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/balanced-match": {
+       "version": "4.0.4",
+       "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+@@ -685,6 +770,91 @@
+         "node": "18 || 20 || >=22"
+       }
+     },
++    "node_modules/bare-events": {
++      "version": "2.9.2",
++      "resolved": "https://registry.npmjs.org/bare-events/-/bare-events-2.9.2.tgz",
++      "integrity": "sha512-AIPKioV7/Y/8KfZ3AAhjPJxLLbY49S64Ym5DakZlUg75qQiTgUq9hEJoEwa4eUezPUlXRy/i5NpsKvo9jgKmoA==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "peerDependencies": {
++        "bare-abort-controller": "*"
++      },
++      "peerDependenciesMeta": {
++        "bare-abort-controller": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/bare-fs": {
++      "version": "4.8.4",
++      "resolved": "https://registry.npmjs.org/bare-fs/-/bare-fs-4.8.4.tgz",
++      "integrity": "sha512-MPC2eyrpbk3A873sK4y6rk+Iv4o2enxTjHZ8zH3HO0mjrpm5XjnguY2XmfidIsDV6vnjpbMBKUAJpV0ISD2SsQ==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "bare-events": "^2.5.4",
++        "bare-path": "^3.0.0",
++        "bare-stream": "^2.6.4",
++        "bare-url": "^2.2.2",
++        "fast-fifo": "^1.3.2"
++      },
++      "engines": {
++        "bare": ">=1.28.0"
++      },
++      "peerDependencies": {
++        "bare-buffer": "*"
++      },
++      "peerDependenciesMeta": {
++        "bare-buffer": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/bare-path": {
++      "version": "3.1.2",
++      "resolved": "https://registry.npmjs.org/bare-path/-/bare-path-3.1.2.tgz",
++      "integrity": "sha512-ZyKbsuuqK6Ag0K8pX6V5Txq6XeJRvY+wXucnFGRjiyVYP9YWDpIQugk/b+enRYrEYBJaqLzghRQpXPMR7341Nw==",
++      "dev": true,
++      "license": "Apache-2.0"
++    },
++    "node_modules/bare-stream": {
++      "version": "2.13.4",
++      "resolved": "https://registry.npmjs.org/bare-stream/-/bare-stream-2.13.4.tgz",
++      "integrity": "sha512-PcrQ8lVLbiJscNm1Kez+Yp4Gy4AHGcN1lzwjvf5NybWen7VvEgUfyfnXYJ2zNqWnzOfCb1Abq6lH8ti0syQszA==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "b4a": "^1.8.1",
++        "streamx": "^2.25.0",
++        "teex": "^1.0.1"
++      },
++      "peerDependencies": {
++        "bare-abort-controller": "*",
++        "bare-buffer": "*",
++        "bare-events": "*"
++      },
++      "peerDependenciesMeta": {
++        "bare-abort-controller": {
++          "optional": true
++        },
++        "bare-buffer": {
++          "optional": true
++        },
++        "bare-events": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/bare-url": {
++      "version": "2.5.5",
++      "resolved": "https://registry.npmjs.org/bare-url/-/bare-url-2.5.5.tgz",
++      "integrity": "sha512-iM9qJCruvpt2rPaLsrumVDru9pogI7PHziHIa9kTNRFt8C8HuSa+kI9kFezK+NvHEFnnz71rKGZ1EAilq/3V/Q==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "bare-path": "^3.0.0"
++      }
++    },
+     "node_modules/base64id": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/base64id/-/base64id-2.0.0.tgz",
+@@ -854,6 +1024,56 @@
+         "fsevents": "~2.3.2"
+       }
+     },
++    "node_modules/chromium-bidi": {
++      "version": "157.0.8090-0",
++      "resolved": "https://registry.npmjs.org/chromium-bidi/-/chromium-bidi-157.0.8090-0.tgz",
++      "integrity": "sha512-KJw7IQgqXwxpJgJlEIPg5mr2ZoqA+jkTRtc5EABI7sUJ3bu3cpI7NuEBoj4Gn1AsF78CaT9So5WQWspK3/wYag==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "mitt": "^3.0.1",
++        "zod": "^4.6.5"
++      },
++      "engines": {
++        "node": ">=20.19.0 <22.0.0 || >=22.12.0"
++      },
++      "peerDependencies": {
++        "devtools-protocol": "*"
++      }
++    },
++    "node_modules/cliui": {
++      "version": "9.0.1",
++      "resolved": "https://registry.npmjs.org/cliui/-/cliui-9.0.1.tgz",
++      "integrity": "sha512-k7ndgKhwoQveBL+/1tqGJYNz097I7WOvwbmmU2AR5+magtbjPWQTS1C5vzGkBC8Ym8UWRzfKUzUUqFLypY4Q+w==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "string-width": "^7.2.0",
++        "strip-ansi": "^7.1.0",
++        "wrap-ansi": "^9.0.0"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/cliui/node_modules/string-width": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-7.2.0.tgz",
++      "integrity": "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^10.3.0",
++        "get-east-asian-width": "^1.0.0",
++        "strip-ansi": "^7.1.0"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/combined-stream": {
+       "version": "1.0.8",
+       "resolved": "https://registry.npmjs.org/combined-stream/-/combined-stream-1.0.8.tgz",
+@@ -1010,6 +1230,13 @@
+         "node": ">= 0.8"
+       }
+     },
++    "node_modules/devtools-protocol": {
++      "version": "0.0.1696802",
++      "resolved": "https://registry.npmjs.org/devtools-protocol/-/devtools-protocol-0.0.1696802.tgz",
++      "integrity": "sha512-FO5/SENfvc2K8wRnWQflKcwuoTH4dBkXCWTQ9ebIWtuX8JM5+ZvCotaEmkfh21pO7TvIKGTM3hG4xFiq9WTwmg==",
++      "dev": true,
++      "license": "BSD-3-Clause"
++    },
+     "node_modules/dotenv": {
+       "version": "17.4.2",
+       "resolved": "https://registry.npmjs.org/dotenv/-/dotenv-17.4.2.tgz",
+@@ -1051,6 +1278,13 @@
+       "integrity": "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==",
+       "license": "MIT"
+     },
++    "node_modules/emoji-regex": {
++      "version": "10.6.0",
++      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-10.6.0.tgz",
++      "integrity": "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/encodeurl": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/encodeurl/-/encodeurl-2.0.0.tgz",
+@@ -1060,6 +1294,16 @@
+         "node": ">= 0.8"
+       }
+     },
++    "node_modules/end-of-stream": {
++      "version": "1.4.5",
++      "resolved": "https://registry.npmjs.org/end-of-stream/-/end-of-stream-1.4.5.tgz",
++      "integrity": "sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "once": "^1.4.0"
++      }
++    },
+     "node_modules/engine.io": {
+       "version": "6.6.11",
+       "resolved": "https://registry.npmjs.org/engine.io/-/engine.io-6.6.11.tgz",
+@@ -1229,6 +1473,16 @@
+         "@esbuild/win32-x64": "0.21.5"
+       }
+     },
++    "node_modules/escalade": {
++      "version": "3.2.0",
++      "resolved": "https://registry.npmjs.org/escalade/-/escalade-3.2.0.tgz",
++      "integrity": "sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6"
++      }
++    },
+     "node_modules/escape-html": {
+       "version": "1.0.3",
+       "resolved": "https://registry.npmjs.org/escape-html/-/escape-html-1.0.3.tgz",
+@@ -1244,6 +1498,16 @@
+         "node": ">= 0.6"
+       }
+     },
++    "node_modules/events-universal": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/events-universal/-/events-universal-1.0.1.tgz",
++      "integrity": "sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "bare-events": "^2.7.0"
++      }
++    },
+     "node_modules/express": {
+       "version": "5.2.1",
+       "resolved": "https://registry.npmjs.org/express/-/express-5.2.1.tgz",
+@@ -1296,6 +1560,13 @@
+         "node": ">=6.6.0"
+       }
+     },
++    "node_modules/fast-fifo": {
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/fast-fifo/-/fast-fifo-1.3.2.tgz",
++      "integrity": "sha512-/d9sfos4yxzpwkDkuN7k2SqFKtYNmCTzgfEpz82x34IM9/zc8KGxQoXg1liNC/izpRM/MBdt44Nmx41ZWqk+FQ==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/fill-range": {
+       "version": "7.1.1",
+       "resolved": "https://registry.npmjs.org/fill-range/-/fill-range-7.1.1.tgz",
+@@ -1429,6 +1700,29 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/get-caller-file": {
++      "version": "2.0.5",
++      "resolved": "https://registry.npmjs.org/get-caller-file/-/get-caller-file-2.0.5.tgz",
++      "integrity": "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==",
++      "dev": true,
++      "license": "ISC",
++      "engines": {
++        "node": "6.* || 8.* || >= 10.*"
++      }
++    },
++    "node_modules/get-east-asian-width": {
++      "version": "1.7.0",
++      "resolved": "https://registry.npmjs.org/get-east-asian-width/-/get-east-asian-width-1.7.0.tgz",
++      "integrity": "sha512-XjH1AECxf0giL2V1aU8vKyRR2ppRUb5c0EvT7zuJTokQ74bNo52zOtghqdWIqrhUD79fo3x0WfKZdOqxF6LG1Q==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=18"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/get-intrinsic": {
+       "version": "1.3.0",
+       "resolved": "https://registry.npmjs.org/get-intrinsic/-/get-intrinsic-1.3.0.tgz",
+@@ -1934,6 +2228,23 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/mitt": {
++      "version": "3.0.1",
++      "resolved": "https://registry.npmjs.org/mitt/-/mitt-3.0.1.tgz",
++      "integrity": "sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/modern-tar": {
++      "version": "0.8.5",
++      "resolved": "https://registry.npmjs.org/modern-tar/-/modern-tar-0.8.5.tgz",
++      "integrity": "sha512-snEhs+6G5Tjd4I7tLCDOaoln2RgE0bD19RzEKgvgK2hZ5VKy3MpLhLTZ2fWpXSTg4K2cyPwp+VHATFJhxfnOeA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=18.0.0"
++      }
++    },
+     "node_modules/ms": {
+       "version": "2.1.3",
+       "resolved": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
+@@ -2265,6 +2576,17 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/pump": {
++      "version": "3.0.4",
++      "resolved": "https://registry.npmjs.org/pump/-/pump-3.0.4.tgz",
++      "integrity": "sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "end-of-stream": "^1.1.0",
++        "once": "^1.3.1"
++      }
++    },
+     "node_modules/punycode": {
+       "version": "2.3.1",
+       "resolved": "https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz",
+@@ -2275,6 +2597,24 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/puppeteer-core": {
++      "version": "25.13.0",
++      "resolved": "https://registry.npmjs.org/puppeteer-core/-/puppeteer-core-25.13.0.tgz",
++      "integrity": "sha512-cyBS0OEx3e9NS53B5F6+UazXtR7f9Tw0cR1/FbPW59/hV6JPZbkIiMnxK2543IkFp3rsGlLn1iPDLF77TJsJsA==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@puppeteer/browsers": "3.2.4",
++        "chromium-bidi": "157.0.8090-0",
++        "devtools-protocol": "0.0.1696802",
++        "typed-query-selector": "^2.12.3",
++        "webdriver-bidi-protocol": "1.0.1",
++        "ws": "^8.21.3"
++      },
++      "engines": {
++        "node": ">=22.12.0"
++      }
++    },
+     "node_modules/qs": {
+       "version": "6.16.0",
+       "resolved": "https://registry.npmjs.org/qs/-/qs-6.16.0.tgz",
+@@ -2654,6 +2994,51 @@
+         "node": ">= 0.8"
+       }
+     },
++    "node_modules/streamx": {
++      "version": "2.28.1",
++      "resolved": "https://registry.npmjs.org/streamx/-/streamx-2.28.1.tgz",
++      "integrity": "sha512-zEzXb0s5Cds7tqMH6rhZ05lcJydCWiQPEwiNngVqzsxCc962vLY4Uw+mW7od8kDH258k2Uz/JrOkdIAAhSh9VA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "events-universal": "^1.0.0",
++        "fast-fifo": "^1.3.2",
++        "text-decoder": "^1.1.0"
++      }
++    },
++    "node_modules/string-width": {
++      "version": "8.3.0",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-8.3.0.tgz",
++      "integrity": "sha512-ZbmZM0JCihQN91dWnxoipT2KOEyHqEyfRXUyjuRhW8b/xnqPDoq4gWEVApTVa9db2wN8mmoikgFBbjh71+cGeQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "get-east-asian-width": "^1.5.0",
++        "strip-ansi": "^7.1.2"
++      },
++      "engines": {
++        "node": ">=20"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/strip-ansi": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
++      "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-regex": "^6.2.2"
++      },
++      "engines": {
++        "node": ">=12"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/strip-ansi?sponsor=1"
++      }
++    },
+     "node_modules/supports-color": {
+       "version": "5.5.0",
+       "resolved": "https://registry.npmjs.org/supports-color/-/supports-color-5.5.0.tgz",
+@@ -2674,6 +3059,54 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/tar-fs": {
++      "version": "3.1.3",
++      "resolved": "https://registry.npmjs.org/tar-fs/-/tar-fs-3.1.3.tgz",
++      "integrity": "sha512-/hU4AXnIdZu+Gvl1pk0oI5f5HxWsCJRtY2aFaJdk9VvyL48DWU6iU5WAIPG+wIi1YvWA6eTJvIviP/tMAZZNwQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "pump": "^3.0.0",
++        "tar-stream": "^3.1.5"
++      },
++      "optionalDependencies": {
++        "bare-fs": "^4.0.1",
++        "bare-path": "^3.0.0"
++      }
++    },
++    "node_modules/tar-stream": {
++      "version": "3.2.2",
++      "resolved": "https://registry.npmjs.org/tar-stream/-/tar-stream-3.2.2.tgz",
++      "integrity": "sha512-+8NeqHRjQWH9nYlwo2gamAMImZCVzI4UoEgDpWorBt9OEfppiZn+uSkskzQKPWIZyji/C8fpWO7u69G0DX0tbg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "b4a": "^1.9.0",
++        "bare-fs": "^4.8.2",
++        "fast-fifo": "^1.3.2",
++        "streamx": "^2.28.1"
++      }
++    },
++    "node_modules/teex": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/teex/-/teex-1.0.1.tgz",
++      "integrity": "sha512-eYE6iEI62Ni1H8oIa7KlDU6uQBtqr4Eajni3wX7rpfXD8ysFx8z0+dri+KWEPWpBsxXfxu58x/0jvTVT1ekOSg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "streamx": "^2.12.5"
++      }
++    },
++    "node_modules/text-decoder": {
++      "version": "1.2.7",
++      "resolved": "https://registry.npmjs.org/text-decoder/-/text-decoder-1.2.7.tgz",
++      "integrity": "sha512-vlLytXkeP4xvEq2otHeJfSQIRyWxo/oZGEbXrtEEF9Hnmrdly59sUbzZ/QgyWuLYHctCHxFF4tRQZNQ9k60ExQ==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "b4a": "^1.6.4"
++      }
++    },
+     "node_modules/to-regex-range": {
+       "version": "5.0.1",
+       "resolved": "https://registry.npmjs.org/to-regex-range/-/to-regex-range-5.0.1.tgz",
+@@ -2766,6 +3199,13 @@
+         "url": "https://opencollective.com/express"
+       }
+     },
++    "node_modules/typed-query-selector": {
++      "version": "2.12.3",
++      "resolved": "https://registry.npmjs.org/typed-query-selector/-/typed-query-selector-2.12.3.tgz",
++      "integrity": "sha512-/dtuMZyutHLlrxWhhC1uib00ELUr2dZ8C9B8YzZYsJmeE3V56OxRblrSM2UaF142pcMtak7ehZ6+poWGeehNIg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/undefsafe": {
+       "version": "2.0.5",
+       "resolved": "https://registry.npmjs.org/undefsafe/-/undefsafe-2.0.5.tgz",
+@@ -2850,6 +3290,13 @@
+         "node": ">= 16"
+       }
+     },
++    "node_modules/webdriver-bidi-protocol": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/webdriver-bidi-protocol/-/webdriver-bidi-protocol-1.0.1.tgz",
++      "integrity": "sha512-WXWs/aXF2a6Al1Z2/V/7Gp2oPZOAAmHjJOTmv4KCXRJ122IMj3tSSMc6a4q3K4QOmhQbse/Ahr+oTVJOU2dUiw==",
++      "dev": true,
++      "license": "Apache-2.0"
++    },
+     "node_modules/webidl-conversions": {
+       "version": "7.0.0",
+       "resolved": "https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-7.0.0.tgz",
+@@ -2911,6 +3358,42 @@
+         "node": ">=18"
+       }
+     },
++    "node_modules/wrap-ansi": {
++      "version": "9.0.2",
++      "resolved": "https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-9.0.2.tgz",
++      "integrity": "sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "ansi-styles": "^6.2.1",
++        "string-width": "^7.0.0",
++        "strip-ansi": "^7.1.0"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "funding": {
++        "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
++      }
++    },
++    "node_modules/wrap-ansi/node_modules/string-width": {
++      "version": "7.2.0",
++      "resolved": "https://registry.npmjs.org/string-width/-/string-width-7.2.0.tgz",
++      "integrity": "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "emoji-regex": "^10.3.0",
++        "get-east-asian-width": "^1.0.0",
++        "strip-ansi": "^7.1.0"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/wrappy": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz",
+@@ -2963,6 +3446,54 @@
+       "engines": {
+         "node": ">=0.4"
+       }
++    },
++    "node_modules/y18n": {
++      "version": "5.0.8",
++      "resolved": "https://registry.npmjs.org/y18n/-/y18n-5.0.8.tgz",
++      "integrity": "sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==",
++      "dev": true,
++      "license": "ISC",
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/yargs": {
++      "version": "18.2.0",
++      "resolved": "https://registry.npmjs.org/yargs/-/yargs-18.2.0.tgz",
++      "integrity": "sha512-9OpKOLeaoNFecEp7P6iYbzze/5CqWoH7N3SMs/6y1XF4nMvFMspEGZzJ6uFi9MmQwXhyzqYoSEKO3tvA3Z/o2w==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "cliui": "^9.0.1",
++        "escalade": "^3.1.1",
++        "get-caller-file": "^2.0.5",
++        "string-width": "^8.2.1",
++        "y18n": "^5.0.5",
++        "yargs-parser": "^22.0.0"
++      },
++      "engines": {
++        "node": "^20.19.0 || ^22.12.0 || >=23"
++      }
++    },
++    "node_modules/yargs-parser": {
++      "version": "22.0.0",
++      "resolved": "https://registry.npmjs.org/yargs-parser/-/yargs-parser-22.0.0.tgz",
++      "integrity": "sha512-rwu/ClNdSMpkSrUb+d6BRsSkLUq1fmfsY6TOpYzTwvwkg1/NRG85KBy3kq++A8LKQwX6lsu+aWad+2khvuXrqw==",
++      "dev": true,
++      "license": "ISC",
++      "engines": {
++        "node": "^20.19.0 || ^22.12.0 || >=23"
++      }
++    },
++    "node_modules/zod": {
++      "version": "4.6.7",
++      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz",
++      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
++      "dev": true,
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/colinhacks"
++      }
+     }
+   }
+ }
+diff --git a/server/package.json b/server/package.json
+index 0f51a38..ff324c8 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -36,8 +36,10 @@
+     "web-push": "^3.6.7"
+   },
+   "devDependencies": {
+-    "nodemon": "^3.1.14",
++    "@sparticuz/chromium": "153.0.0",
+     "esbuild": "^0.21.5",
+-    "jsdom": "^24.1.0"
++    "jsdom": "^24.1.0",
++    "nodemon": "^3.1.14",
++    "puppeteer-core": "25.13.0"
+   }
+ }
+diff --git a/server/routes/patients.js b/server/routes/patients.js
+index acda9b9..249c9fb 100644
+--- a/server/routes/patients.js
++++ b/server/routes/patients.js
+@@ -13,6 +13,7 @@ const { composeMember, summarise, composeBrief } = require('../services/triage')
+ const { computeDayTotals } = require('../services/digests');
+ const aiReads = require('../services/aiReads');
+ const dietPlan = require('../services/dietPlan');
++const { finiteOrNull, rangeState } = require('../services/labRange');
+ /** Top up one date's prescribed meals from the diet plan in force. Never throws. */
+ async function ensurePlanDay(memberId, date) {
+   try { await dietPlan.ensureDay(pool, memberId, date, getISTDate()); }
+@@ -1516,11 +1517,10 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
+       return res.status(400).json({ error: 'test_date, test_name, and value are required' });
+     }
+ 
+-    let status = 'normal';
+-    if (ref_min !== undefined && ref_max !== undefined) {
+-      if (parseFloat(value) < parseFloat(ref_min))       status = 'low';
+-      else if (parseFloat(value) > parseFloat(ref_max))  status = 'high';
+-    }
++    const numericValue = finiteOrNull(value);
++    if (numericValue === null) return res.status(400).json({ error: 'value must be a finite number' });
++    const min = finiteOrNull(ref_min), max = finiteOrNull(ref_max);
++    const status = classify(numericValue, min, max);
+ 
+     // Same value for the same test and date within 30 seconds is a double tap:
+     // return the row that is already there. Two identical HbA1c rows otherwise
+@@ -1531,14 +1531,14 @@ router.post('/:id/labs', authMW, roleCheck('monitor', 'admin'), requirePatientAc
+           WHERE patient_id = $1 AND test_date = $2 AND test_name = $3 AND value = $4::numeric
+             AND created_at > NOW() - INTERVAL '30 seconds'
+           ORDER BY id DESC LIMIT 1`,
+-        [req.params.id, test_date, test_name, value]);
++        [req.params.id, test_date, test_name, numericValue]);
+       if (dup.rows.length) return { row: dup.rows[0], duplicate: true };
+       const ins = await db.query(
+         `INSERT INTO lab_values
+            (patient_id, test_date, test_name, value, unit, ref_min, ref_max, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING *`,
+-        [req.params.id, test_date, test_name, value, unit, ref_min, ref_max, status]);
++        [req.params.id, test_date, test_name, numericValue, unit, min, max, status]);
+       return { row: ins.rows[0], duplicate: false };
+     });
+ 
+@@ -1667,19 +1667,8 @@ router.delete('/:id/notes/:noteId', authMW, roleCheck('monitor', 'admin'), requi
+ 
+ const { analyseLabs } = require('../services/labAnalysis');
+ 
+-/** Only a finite number survives; anything else becomes null. */
+-function finiteOrNull(v) {
+-  if (v === undefined || v === null || v === '') return null;
+-  const n = parseFloat(v);
+-  return Number.isFinite(n) ? n : null;
+-}
+-
+ function classify(value, refMin, refMax) {
+-  if (refMin == null || refMax == null) return 'normal';
+-  const v = parseFloat(value);
+-  if (v < parseFloat(refMin)) return 'low';
+-  if (v > parseFloat(refMax)) return 'high';
+-  return 'normal';
++  return rangeState(value, refMin, refMax) || 'normal';
+ }
+ 
+ async function labContext(patientId) {
+@@ -2325,3 +2314,4 @@ router.patch('/:id/weight', authMW, roleCheck('monitor', 'admin'), requirePatien
+ 
+ module.exports = router;
+ module.exports.sendMemberNote = sendMemberNote;
++module.exports.classifyLab = classify;
+diff --git a/server/routes/trackers.js b/server/routes/trackers.js
+index e5a01d3..0c10bc0 100644
+--- a/server/routes/trackers.js
++++ b/server/routes/trackers.js
+@@ -13,6 +13,7 @@
+ const express  = require('express');
+ const router   = express.Router();
+ const axios    = require('axios');
++const jwt      = require('jsonwebtoken');
+ const auth     = require('../middleware/auth');
+ const pool     = require('../db/pool');
+ 
+@@ -140,10 +141,11 @@ async function saveTrackerData(userId, provider, metrics) {
+  */
+ router.get('/oauth/:provider', auth, (req, res) => {
+   const { provider } = req.params;
+-  const cfg = PROVIDERS[provider];
++  const cfg = Object.hasOwn(PROVIDERS, provider) ? PROVIDERS[provider] : null;
+   if (!cfg) return res.status(400).json({ error: 'Unknown provider' });
+ 
+-  const state    = Buffer.from(JSON.stringify({ userId: req.user.id, provider })).toString('base64');
++  const state = jwt.sign({ userId: req.user.id, provider, k: 'tracker_oauth' },
++    process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '10m' });
+   const redirect = `${SERVER_URL}/api/trackers/oauth/${provider}/callback`;
+ 
+   const url = new URL(cfg.authUrl);
+@@ -170,13 +172,17 @@ router.get('/oauth/:provider/callback', async (req, res) => {
+   }
+ 
+   let userId;
++  const cfg = Object.hasOwn(PROVIDERS, provider) ? PROVIDERS[provider] : null;
+   try {
+-    ({ userId } = JSON.parse(Buffer.from(state, 'base64').toString()));
++    const payload = jwt.verify(state, process.env.JWT_SECRET, { algorithms: ['HS256'] });
++    if (!cfg || typeof code !== 'string' || !code || payload.k !== 'tracker_oauth' ||
++        payload.provider !== provider || !Number.isSafeInteger(payload.userId) || payload.userId <= 0 ||
++        !Number.isFinite(payload.exp)) throw new Error('Invalid tracker state');
++    userId = payload.userId;
+   } catch {
+-    return res.status(400).send('Invalid state');
++    return res.redirect(`${CLIENT_URL}/devices?error=oauth_state&provider=${encodeURIComponent(provider)}`);
+   }
+ 
+-  const cfg      = PROVIDERS[provider];
+   const redirect = `${SERVER_URL}/api/trackers/oauth/${provider}/callback`;
+ 
+   try {
+diff --git a/server/scripts/test-ci55-regressions.js b/server/scripts/test-ci55-regressions.js
+new file mode 100644
+index 0000000..6066edd
+--- /dev/null
++++ b/server/scripts/test-ci55-regressions.js
+@@ -0,0 +1,99 @@
++// Actual Express handlers with synthetic SQL/HTTP adapters. No real database,
++// member account or wearable provider is contacted by this focused regression.
++const assert = require('node:assert/strict');
++const express = require('express');
++const jwt = require('jsonwebtoken');
++const axios = require('axios');
++process.env.JWT_SECRET = 'ci55-local-fixture-secret';
++let pass = 0, fail = 0;
++function ck(name, condition) {
++  console.log(`  ${condition ? '✓' : '✗'} ${name}`);
++  condition ? pass++ : fail++;
++}
++const labs = [], connections = [];
++let tokenCalls = 0;
++const query = async (sql, args = []) => {
++  if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql) || /pg_advisory_xact_lock/.test(sql)) return { rows: [] };
++  if (/FROM monitor_patients/.test(sql)) return { rows: args[0] === 99 && String(args[1]) === '1' ? [{ ok: 1 }] : [] };
++  if (/INSERT INTO lab_values/.test(sql)) {
++    // Reject blank NUMERIC input just as the observed PostgreSQL failure did.
++    assert(![args[3], args[5], args[6]].includes(''), 'blank numeric SQL parameter');
++    const row = Object.fromEntries(['patient_id','test_date','test_name','value','unit','ref_min','ref_max','status'].map((k,i)=>[k,args[i]]));
++    row.id = labs.length + 1; labs.push(row); return { rows: [row] };
++  }
++  if (/FROM lab_values/.test(sql)) return { rows: /created_at/.test(sql) ? [] : labs.filter(r=>Number(r.patient_id)===Number(args[0])) };
++  if (/INSERT INTO tracker_connections/.test(sql)) { connections.push(args); return { rows: [] }; }
++  if (/INSERT INTO tracker_data/.test(sql)) return { rows: [] };
++  if (/FROM tracker_connections/.test(sql)) return { rows: [] };
++  throw Error('Unexpected fixture query: ' + sql);
++};
++const poolPath = require.resolve('../db/pool');
++require.cache[poolPath] = { id: poolPath, filename: poolPath, loaded: true, exports: { query, connect: async()=>({ query, release(){} }) } };
++axios.post = async()=>{ tokenCalls++; return { data:{ access_token:'fixture',expires_in:3600 } }; };
++axios.get = async()=>{ throw Error('External network is disabled in this suite'); };
++const patients = require('../routes/patients');
++const analysis = require('../services/labAnalysis');
++const app = express(); app.use(express.json());
++app.use('/api/patients', patients); app.use('/api/trackers', require('../routes/trackers'));
++const server = app.listen(0, '127.0.0.1');
++(async()=>{
++  await new Promise(resolve=>server.once('listening',resolve));
++  const base = `http://127.0.0.1:${server.address().port}`;
++  const member = jwt.sign({id:1,role:'patient'},process.env.JWT_SECRET);
++  const coach = jwt.sign({id:99,role:'monitor'},process.env.JWT_SECRET);
++  const call = async(path, token, body)=>{
++    const r=await fetch(base+path,{method:body?'POST':'GET',redirect:'manual',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});
++    return { status:r.status,location:r.headers.get('location'),data:await r.json().catch(()=>null) };
++  };
++  try {
++    const rows=[
++      {test_name:'Max only',value:250,ref_min:'',ref_max:200},
++      {test_name:'Min only',value:32,ref_min:40,ref_max:''},
++      {test_name:'In range',value:120,ref_max:150},
++      {test_name:'Unknown range',value:14},
++    ];
++    const r=await call('/api/patients/me/labs',member,{test_date:'2026-09-01',results:rows});
++    ck('member lab batch saves through the real route',r.status===201);
++    ck('member maximum-only result is high',r.data?.results?.[0].status==='high');
++    ck('member minimum-only result is low',r.data?.results?.[1].status==='low');
++    ck('member in-range result stays normal',r.data?.results?.[2].status==='normal');
++    ck('member blank reference limits become null',r.data?.results?.[0].ref_min===null && r.data?.results?.[1].ref_max===null);
++    for(const [name,value,min,max,state] of [['upper',180,'',130,'high'],['lower',30,40,'','low'],['equal',130,'',130,'normal'],['none',8,'','','normal']]) {
++      const x=await call('/api/patients/1/labs',coach,{test_date:'2026-09-01',test_name:name,value,ref_min:min,ref_max:max});
++      ck(`coach ${name} reference saves and classifies`,x.status===201&&x.data?.status===state);
++    }
++    for(const value of ['',null,'abc','Infinity']) {
++      const x=await call('/api/patients/1/labs',coach,{test_date:'2026-09-01',test_name:'Invalid',value});
++      ck(`coach rejects invalid numeric value ${JSON.stringify(value)}`,x.status===400);
++    }
++    const blocked=await call('/api/patients/2/labs',coach,{test_date:'2026-09-01',test_name:'No access',value:5});
++    ck('lab correction preserves coach assignment boundary',blocked.status===403);
++    ck('classify contract handles unknown bounds and invalid values',typeof patients.classifyLab==='function'&&patients.classifyLab(5,'','')==='normal'&&patients.classifyLab('abc',1,2)==='normal');
++    for(const [v,min,max,want] of [[250,null,200,'high'],[30,40,null,'low'],[200,null,200,'normal'],[40,40,null,'normal'],[5,null,null,null],['bad',1,2,null],[0,0,1,'normal']]) {
++      ck(`rangeState ${JSON.stringify([v,min,max])}`,typeof analysis.rangeState==='function'&&analysis.rangeState(v,min,max)===want);
++    }
++    ck('one-sided range labels match printed limits',typeof analysis.refText==='function'&&analysis.refText(null,200)==='≤ 200'&&analysis.refText(40,null)==='≥ 40'&&analysis.refText(13,17)==='13–17'&&analysis.refText(null,null)===null);
++    const result=analysis.analyseLabs([{test_name:'Cholesterol',value:230,ref_max:200,test_date:'2026-06-01'},{test_name:'Cholesterol',value:250,ref_max:200,test_date:'2026-09-01'}],[],[]);
++    ck('comparison reports one-sided abnormal result',result.out_of_range[0]?.state==='high'&&result.out_of_range[0]?.ref==='≤ 200');
++    ck('comparison carries one-sided range and state',result.comparisons[0]?.ref==='≤ 200'&&result.comparisons[0]?.to_state==='high');
++    const start=await call('/api/trackers/oauth/fitbit',member);
++    const issued=new URL(start.location).searchParams.get('state');
++    let decoded;try{decoded=jwt.verify(issued,process.env.JWT_SECRET);}catch{}
++    ck('tracker start issues expiring signed state bound to member and provider',start.status===302&&decoded?.userId===1&&decoded?.provider==='fitbit'&&decoded?.k==='tracker_oauth'&&decoded.exp>decoded.iat&&decoded.exp-decoded.iat<=900);
++    const signed=(payload,options={expiresIn:600})=>jwt.sign(payload,process.env.JWT_SECRET,options);
++    const claims={userId:1,provider:'fitbit',k:'tracker_oauth'};
++    const invalid=[['forged',Buffer.from(JSON.stringify(claims)).toString('base64'),'fitbit'],['wrong provider',signed(claims),'whoop'],['expired',signed(claims,{expiresIn:-1}),'fitbit'],['login token',member,'fitbit'],['no expiry',signed(claims,{}),'fitbit'],['invalid user',signed({...claims,userId:-1}),'fitbit'],['unknown provider',signed({...claims,provider:'unknown'}),'unknown']];
++    for(const [name,state,provider] of invalid){
++      const before=tokenCalls;
++      const x=await call(`/api/trackers/oauth/${provider}/callback?code=x&state=${encodeURIComponent(state)}`);
++      ck(`tracker rejects ${name} before token exchange`,x.status===302&&/error=oauth_state/.test(x.location||'')&&tokenCalls===before);
++    }
++    const before=tokenCalls;
++    const valid=await call(`/api/trackers/oauth/fitbit/callback?code=fixture&state=${encodeURIComponent(signed(claims))}`);
++    ck('valid signed tracker callback completes with synthetic provider',valid.status===302&&/connected=fitbit/.test(valid.location||'')&&tokenCalls===before+1);
++    ck('tracker token belongs to the signed member',connections.at(-1)?.[0]===1&&connections.at(-1)?.[1]==='fitbit');
++  } catch(e){fail++;console.error('  ✗ focused suite crashed:',e.stack);}
++  finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
++  console.log(`\nCI55 focused regressions: ${pass} passed, ${fail} failed`);
++  process.exitCode=fail?1:0;
++})();
+diff --git a/server/scripts/test-journey.js b/server/scripts/test-journey.js
+index 92d1a0d..0885e89 100644
+--- a/server/scripts/test-journey.js
++++ b/server/scripts/test-journey.js
+@@ -323,7 +323,10 @@ const IST = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0
+     date: today, exercises: [{ exercise_id: bench.id, sets: [{ reps: 0, weight_kg: 20 }] }], cardio: [],
+   });
+   const zero = (await call('GET', `/api/workouts?date=${today}`, mTok)).data;
+-  ck('zero-rep set discarded', (zero.exercises || []).length === 0, zero.exercises);
++  ck('zero-rep set discarded', (zero.exercises || []).flatMap(e => e.sets || []).length === 0, zero.exercises);
++  ck('selected exercise remains unfinished after a zero-rep save',
++    zero.exercises?.length === 1 && zero.exercises[0].exercise_id === bench.id && zero.exercises[0].sets.length === 0,
++    zero.exercises);
+ 
+   r = await call('POST', '/api/workouts', mTok, {
+     date: today, exercises: [], cardio: [{ type: 'walking', duration_min: 99999 }],
+diff --git a/server/scripts/test-local.sh b/server/scripts/test-local.sh
+index 44fe17f..a0b5824 100644
+--- a/server/scripts/test-local.sh
++++ b/server/scripts/test-local.sh
+@@ -197,7 +197,7 @@ fi
+ # for reading, not for wiring.
+ LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
+ test-coach-program test-coach-questions test-image-routing \
+-test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic"
++test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic test-ci55-regressions"
+ 
+ DB_SUITES="test-workout-merge test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
+ test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
+diff --git a/server/services/labAnalysis.js b/server/services/labAnalysis.js
+index f3b80a2..bfdb8f8 100644
+--- a/server/services/labAnalysis.js
++++ b/server/services/labAnalysis.js
+@@ -30,6 +30,7 @@
+  */
+ 
+ const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
++const { rangeState, refText } = require('./labRange');
+ const mean = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+ 
+ const MIN_INTERVAL_DAYS = 30;
+@@ -125,13 +126,6 @@ function direction(name, from, to) {
+   return delta > 0 ? 'rose' : 'fell';
+ }
+ 
+-function rangeState(v, min, max) {
+-  if (min == null || max == null) return null;
+-  if (v < min) return 'low';
+-  if (v > max) return 'high';
+-  return 'normal';
+-}
+-
+ /**
+  * @param labs      lab_values rows, any order
+  * @param logs      daily_logs rows
+@@ -154,13 +148,12 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
+     rows.sort((a, b) => new Date(a.test_date) - new Date(b.test_date));
+     const latest = rows[rows.length - 1];
+ 
+-    const state = rangeState(num(latest.value), latest.ref_min != null ? num(latest.ref_min) : null,
+-                                                latest.ref_max != null ? num(latest.ref_max) : null);
++    const state = rangeState(latest.value, latest.ref_min, latest.ref_max);
+     if (state === 'low' || state === 'high') {
+       flags.push({
+         test_name: latest.test_name, value: num(latest.value), unit: latest.unit,
+         state, test_date: latest.test_date,
+-        ref: latest.ref_min != null ? `${latest.ref_min}–${latest.ref_max}` : null,
++        ref: refText(latest.ref_min, latest.ref_max),
+       });
+     }
+ 
+@@ -188,10 +181,9 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
+       change: +(to - from).toFixed(2),
+       change_pct: from !== 0 ? Math.round(((to - from) / Math.abs(from)) * 100) : null,
+       direction: direction(latest.test_name, from, to),
+-      from_state: rangeState(from, prev.ref_min != null ? num(prev.ref_min) : null,
+-                                   prev.ref_max != null ? num(prev.ref_max) : null),
++      from_state: rangeState(prev.value, prev.ref_min, prev.ref_max),
+       to_state: state,
+-      ref: latest.ref_min != null ? `${latest.ref_min}–${latest.ref_max}` : null,
++      ref: refText(latest.ref_min, latest.ref_max),
+       from_date: prev.test_date,
+       to_date: latest.test_date,
+       interval_days: gapDays,
+@@ -211,4 +203,4 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
+   };
+ }
+ 
+-module.exports = { analyseLabs, windowContext, MIN_INTERVAL_DAYS };
++module.exports = { analyseLabs, windowContext, MIN_INTERVAL_DAYS, rangeState, refText };
+diff --git a/server/services/labRange.js b/server/services/labRange.js
+new file mode 100644
+index 0000000..77bd84c
+--- /dev/null
++++ b/server/services/labRange.js
+@@ -0,0 +1,22 @@
++// Reference limits come from the entered lab report. A single printed bound
++// is enough to compare a value; an absent/invalid bound is never treated as 0.
++function finiteOrNull(value) {
++  if (value == null || (typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') return null;
++  const n = Number(value);
++  return Number.isFinite(n) ? n : null;
++}
++function rangeState(value, refMin, refMax) {
++  const v = finiteOrNull(value), min = finiteOrNull(refMin), max = finiteOrNull(refMax);
++  if (v === null || (min === null && max === null)) return null;
++  if (min !== null && v < min) return 'low';
++  if (max !== null && v > max) return 'high';
++  return 'normal';
++}
++function refText(refMin, refMax) {
++  const min = finiteOrNull(refMin), max = finiteOrNull(refMax);
++  if (min !== null && max !== null) return `${min}–${max}`;
++  if (min !== null) return `≥ ${min}`;
++  if (max !== null) return `≤ ${max}`;
++  return null;
++}
++module.exports = { finiteOrNull, rangeState, refText };

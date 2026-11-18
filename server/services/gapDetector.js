@@ -43,6 +43,9 @@ const ticked = obj => Object.values(obj || {}).filter(Boolean).length;
  */
 const NEVER_LOGGED = 9999;
 
+/** Fixes-3k: how many of the coach's own items a member has (a custom_* column). */
+const ownCount = (v) => (Array.isArray(v) ? v.length : 0);
+
 const GAPS = [
   {
     key: 'dormant',
@@ -116,7 +119,9 @@ const GAPS = [
     after: 20,
     severity: 'low',
     test: ({ log, protocol }) => {
-      const total = protocol?.acv?.length ?? 3;
+      // Fixes-3k: members created from 3k on have no ACV unless the coach assigned it (protocol.default_none): with
+      // nothing chosen, only the coach's own items for them count. Existing members: unchanged (3).
+      const total = protocol?.acv?.length ?? (protocol?.default_none ? ownCount(protocol?.custom_acv) : 3);
       return total > 0 && ticked(log?.acv) < total;
     },
   },
@@ -126,7 +131,7 @@ const GAPS = [
     after: 20,
     severity: 'low',
     test: ({ log, protocol }) => {
-      const total = protocol?.supplements?.length ?? 7;
+      const total = protocol?.supplements?.length ?? (protocol?.default_none ? ownCount(protocol?.custom_supplements) : 7);   // Fixes-3k, as ACV
       return total > 0 && ticked(log?.supplements) === 0;
     },
   },

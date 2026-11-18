@@ -26,7 +26,7 @@ export default function NextUp({ mealPlans, food, onLog, onOther, onSnap, terms 
     <section className="rounded-3xl border border-gold/40 bg-surface px-4 pt-3 pb-3.5" data-testid="next-up" aria-label="Next up">
       <div className="flex items-baseline justify-between gap-2">
         <Eyebrow tone="gold">Next up · from your coach</Eyebrow>
-        <span className={`text-caption whitespace-nowrap ${next.missed ? 'text-amber-300 font-semibold' : 'text-mid'}`} data-testid="next-up-when">
+        <span className={`text-caption whitespace-nowrap ${next.missed ? 'text-warn font-semibold' : 'text-mid'}`} data-testid="next-up-when">
           {when || `${loggedCount} of ${total} logged`}
         </span>
       </div>

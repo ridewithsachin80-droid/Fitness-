@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Card, SectionTitle, BackButton } from '../components/UI';
 import { plural } from '../constants';
+import { nutrientStatus, STATUS_LABEL } from '../lib/day';
 
 const CATEGORIES = ['grain','vegetable','fruit','pulse','dairy','meat','nut','oil','spice','beverage','branded','supplement','other'];
 const SOURCES = ['manual','ai','nin','usda','off'];
@@ -36,17 +37,20 @@ function normaliseAiCategory(raw) {
   return AI_CATEGORY_MAP[String(raw).toLowerCase().trim()] || 'other';
 }
 
+// Fixes-2k: a blank box is "not recorded" (null), not 0. Only the core figures
+// start at 0. Typing 0 records a real 0.
 const DEFAULT_NUTRIENTS = {
-  calories:0, protein:0, total_carbs:0, net_carbs:0, fat:0, fiber:0, sugar:0,
-  saturated_fat:0, cholesterol:0,
-  vit_a:0, vit_b1:0, vit_b2:0, vit_b3:0, vit_b5:0, vit_b6:0, vit_b12:0,
-  vit_c:0, vit_d:0, vit_e:0, vit_k:0, folate:0, biotin:0, choline:0,
-  calcium:0, iron:0, magnesium:0, phosphorus:0, potassium:0, sodium:0,
-  zinc:0, copper:0, manganese:0, selenium:0,
-  omega3_ala:0, omega3_epa:0, omega3_dha:0, omega6:0,
-  lycopene:0, beta_glucan:0,
-  glycemic_index:0, glycemic_load:0,
+  calories:0, protein:0, total_carbs:0, net_carbs:0, fat:0, fiber:null, sugar:null,
+  saturated_fat:null, cholesterol:null,
+  vit_a:null, vit_b1:null, vit_b2:null, vit_b3:null, vit_b5:null, vit_b6:null, vit_b12:null,
+  vit_c:null, vit_d:null, vit_e:null, vit_k:null, folate:null, biotin:null, choline:null,
+  calcium:null, iron:null, magnesium:null, phosphorus:null, potassium:null, sodium:null,
+  zinc:null, copper:null, manganese:null, selenium:null,
+  omega3_ala:null, omega3_epa:null, omega3_dha:null, omega6:null,
+  lycopene:null, beta_glucan:null,
+  glycemic_index:null, glycemic_load:null,
 };
+const CORE_N = ['calories', 'protein', 'total_carbs', 'net_carbs', 'fat'];
 
 const NUTRIENT_GROUPS = [
   { label: 'Macros', keys: ['calories','protein','total_carbs','net_carbs','fat','fiber','sugar','saturated_fat','cholesterol'] },
@@ -70,6 +74,7 @@ const NUTRIENT_UNITS = {
 function emptyForm() {
   return {
     name: '', name_hindi: '', name_local: '', category: 'vegetable', source: 'manual', verified: true,
+    preparation: '',
     per_100g: { ...DEFAULT_NUTRIENTS },
   };
 }
@@ -80,7 +85,8 @@ function FoodForm({ initial, onSave, onCancel, saving,
   const [nutrientTab, setNutrientTab] = useState('Macros');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const setN = (k, v) => setForm(f => ({ ...f, per_100g: { ...f.per_100g, [k]: parseFloat(v) || 0 } }));
+  const setN = (k, v) => setForm(f => ({ ...f, per_100g: { ...f.per_100g,
+    [k]: v === '' ? (CORE_N.includes(k) ? 0 : null) : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : (CORE_N.includes(k) ? 0 : null)) } }));
 
   return (
     <div className="space-y-4">
@@ -114,6 +120,16 @@ function FoodForm({ initial, onSave, onCancel, saving,
             {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        <div className="col-span-2">
+          {/* Raw or cooked: what these numbers are for (Fixes-2h). Members are told to weigh it the same way. */}
+          <label htmlFor="food-preparation" className="block text-xs font-semibold text-faint tracking-wider mb-1">Numbers are for</label>
+          <select id="food-preparation" value={form.preparation || ''} onChange={e => set('preparation', e.target.value)} data-testid="food-preparation"
+            className="w-full border border-hair-med rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35 bg-surface">
+            <option value="">Not specified</option>
+            <option value="raw">Raw (weigh before cooking)</option>
+            <option value="cooked">Cooked (weigh as eaten)</option>
+          </select>
+        </div>
         <div className="col-span-2 flex items-center gap-2">
           <input type="checkbox" id="verified" checked={form.verified} onChange={e => set('verified', e.target.checked)}
             className="w-4 h-4 accent-gold" />
@@ -138,9 +154,15 @@ function FoodForm({ initial, onSave, onCancel, saving,
               <label className="block text-xs text-faint mb-1 capitalize">
                 {k.replace(/_/g,' ')} {NUTRIENT_UNITS[k] ? `(${NUTRIENT_UNITS[k]})` : ''}
               </label>
-              <input type="number" step="0.001" value={form.per_100g[k] || ''}
+              <input type="number" step="0.001" value={form.per_100g[k] == null ? '' : form.per_100g[k]}
+                placeholder={CORE_N.includes(k) ? '0' : 'not recorded'}
                 onChange={e => setN(k, e.target.value)}
                 className="w-full border border-hair-med rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/35" />
+              {!CORE_N.includes(k) && (
+                <span className="block text-micro text-lo mt-0.5" data-testid="nutrient-status" data-key={k}>
+                  {STATUS_LABEL[nutrientStatus(form.per_100g, k, { source: form.source === 'ai' && !form.verified ? 'ai' : 'db' })]}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -214,6 +236,17 @@ export default function AdminFoods() {
   const [queueIdx, setQueueIdx] = useState(0);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [queueError, setQueueError] = useState('');
+
+  // Raw or cooked, set from the queue by a coach or admin (Fixes-2h).
+  const setPreparation = async (food, value) => {
+    setQueueError('');
+    try {
+      const { data } = await api.patch(`/foods/${food.id}/preparation`, { preparation: value });
+      setReview(r => ({ ...r, foods: r.foods.map(f => (f.id === food.id ? { ...f, preparation: data.preparation } : f)) }));
+    } catch (e) {
+      setQueueError(e.response?.data?.error || "Couldn't save raw or cooked — try again.");
+    }
+  };
 
   const verify = async (food) => {
     setVerifying(v => ({ ...v, [food.id]: true }));
@@ -337,6 +370,21 @@ export default function AdminFoods() {
       .catch(() => setImpact(null));
   }, [editing?.id]);
 
+  // Fixes-2k (18 Oct 2026): the list rows carry only calories. Opening the
+  // form from one showed every nutrient as the form's default, and saving
+  // wrote those defaults over the food's real values (every vitamin and
+  // mineral became 0). The form now opens with the full stored record.
+  const startEdit = async (food) => {
+    setError('');
+    try {
+      const { data } = await api.get(`/foods/${food.id}`);
+      setEditing({ ...food, ...data });
+      setMode('edit');
+    } catch (e) {
+      setError(e.response?.data?.error || 'Could not open this food. Try again.');
+    }
+  };
+
   const handleSave = async (form) => {
     setSaving(true); setError('');
     try {
@@ -426,13 +474,13 @@ export default function AdminFoods() {
                       style={{ minHeight: 30 }}
                       className={`text-caption font-bold px-3 rounded-lg border transition-colors ${
                         flaggedOnly
-                          ? 'bg-amber-400/[0.08] border-amber-300 text-amber-400'
+                          ? 'bg-warn/[0.08] border-warn text-warn'
                           : 'bg-surface border-hair-med text-faint'
                       }`}>
                       {flaggedOnly ? '⚠ Showing only mismatched' : '⚠ Only mismatched macros'}
                     </button>
                     {!flaggedOnly && review.flagged_in_page > 0 && (
-                      <span className="text-caption text-amber-400 font-semibold">
+                      <span className="text-caption text-warn font-semibold">
                         {review.flagged_in_page} of these {review.page_size} look wrong
                       </span>
                     )}
@@ -480,19 +528,19 @@ export default function AdminFoods() {
                             reading before tapping Verify: it is arithmetic, not
                             an opinion, and it is usually right. */}
                         {mc.status === 'suspect' && (
-                          <div className="bg-amber-400/[0.08] border border-amber-400/25 rounded-xl px-3 py-2 mb-3">
+                          <div className="bg-warn/[0.08] border border-warn/25 rounded-xl px-3 py-2 mb-3">
                             {/* The heading follows the reason. "These numbers
                                 disagree with each other" is wrong for a masala
                                 dosa whose numbers agree perfectly and are simply
                                 too low — the coach would look for a mismatch
                                 that isn't there. */}
-                            <p className="text-caption font-bold text-amber-800">
+                            <p className="text-caption font-bold text-warn">
                               {f.checks?.lighter_than_base ? '⚠ Lighter than the plain version of itself'
                                : f.checks?.cooking === 'suspect' && f.checks?.macro === 'ok'
                                  ? '⚠ Cooked dish with no cooking fat'
                                  : '⚠ These numbers disagree with each other'}
                             </p>
-                            <p className="text-caption text-amber-400 leading-snug mt-0.5">
+                            <p className="text-caption text-warn leading-snug mt-0.5">
                               {mc.reason}
                               {mc.delta_pct != null ? ` — off by ${mc.delta_pct}%.` : '.'}
                               {' '}Fix it before verifying, or it skews every member who logs this.
@@ -510,9 +558,25 @@ export default function AdminFoods() {
                           </p>
                         )}
 
+                        <div className="mb-3" data-testid="queue-preparation">
+                          <p className="text-caption text-lo mb-1">Numbers are for</p>
+                          <div className="flex gap-1.5" role="group" aria-label={`${f.name}: numbers are for`}>
+                            {[['raw', 'Raw'], ['cooked', 'Cooked'], [null, 'Not specified']].map(([v, l]) => {
+                              const on = (f.preparation ?? null) === v;
+                              return (
+                                <button key={l} type="button" aria-pressed={on} disabled={busy}
+                                  onClick={() => setPreparation(f, v)} style={{ minHeight: 36 }}
+                                  className={`flex-1 text-caption font-semibold rounded-xl px-2 border ${on ? 'bg-gold/[0.12] border-gold/40 text-gold' : 'bg-surface border-hair-med text-mid'}`}>
+                                  {l}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <p className="text-caption text-faint mb-3">
                           {f.members > 0
-                            ? <>Logged by <span className="font-bold text-amber-400">{f.members} {plural(f.members, 'member')}</span>, {f.times_logged}× in total.</>
+                            ? <>Logged by <span className="font-bold text-warn">{f.members} {plural(f.members, 'member')}</span>, {f.times_logged}× in total.</>
                             : <>Nobody has logged this yet.</>}
                         </p>
 
@@ -652,11 +716,13 @@ export default function AdminFoods() {
                         </div>
                         {food.name_local && <p className="text-xs text-lo mt-0.5">{food.name_local}</p>}
                         {food.kcal_per_100g && (
-                          <p className="text-xs font-semibold text-orange-300 mt-0.5">{Math.round(food.kcal_per_100g)} kcal/100g</p>
+                          <p className="text-xs font-semibold text-gold mt-0.5">{Math.round(food.kcal_per_100g)} kcal/100g</p>
                         )}
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setEditing(food); setMode('edit'); }}
+                      {/* Always visible on touch screens; hover-to-reveal only where there is a mouse
+                          (fix, 10 Oct 2026, ADM-021: on a phone ✏️ and 🗑 could never be tapped). */}
+                      <div className="flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100" data-testid="food-row-actions">
+                        <button onClick={() => startEdit(food)} data-testid="food-edit"
                           className="w-8 h-8 flex items-center justify-center rounded-lg text-lo hover:text-gold hover:bg-gold/[0.08] transition-colors text-sm">
                           ✏️
                         </button>

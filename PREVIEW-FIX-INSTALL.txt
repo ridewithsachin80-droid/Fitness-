@@ -1,0 +1,42 @@
+FitLife Phase 2 — post-deployment AI preview fix
+
+TARGET: existing test branch deployment 1779fcb. This is an updated-files-only
+patch, not a complete application. Preserve the folders exactly.
+
+1. Extract this ZIP. Upload/replace client/, server/ and qa/ contents at the
+   repository root on branch test. Do not put them inside an extra ZIP folder.
+2. Commit the files and require a new green GitHub test/build run.
+3. Deploy test through Railway. No database migration or environment change.
+4. After deployment, reload FitLife and accept the update prompt if shown.
+5. Recheck UAT-174 with a synthetic meal. Before Save, it must say:
+   Review the details below. These entries haven’t been saved yet.
+   Change grams/macros; totals update only in the review. Uncheck/reselect foods.
+
+Alternative for Git: git apply preview-status-fix.patch
+Use either the folder replacement OR the patch, not both.
+
+What changed:
+- Unsaved AI reviews no longer claim logged/saved or show model calorie prose.
+- The canonical edited food review is the sole displayed nutrition total.
+- Unchecked foods and cleared notes remain available to edit/reselect.
+- Workout previews no longer claim they were saved.
+- Follow-ups retain current reviewed food, workout, body and lab values.
+- Standalone Q&A remains. When logging and advice are mixed in one reply,
+  the logging review replaces unstructured prose; advice can be asked separately.
+
+Verification of this patch:
+- Production build passed.
+- 25 available local suites, 2,131 assertions, zero failures.
+- Includes 46 focused preview-status regression checks.
+- Patch applies cleanly to uploaded test commit 1779fcb66645407ae4eabe570310c82465da30c0.
+- Local PostgreSQL is unavailable. New full CI and deployed acceptance pending.
+
+Already verified deployment (before this patch):
+- Phase 2 frontend matches Railway; 13 public smoke checks passed.
+- GitHub run 58:73 suites / 4,401 assertions passed including all 49 DB suites.
+- Live draft-only member checks found the AI wording defect fixed here.
+- Existing member logs were not changed. Real-phone and coach checks remain.
+
+Patch commit: 43a69b3fcf149132d13a890fff6add8e5d4c2c57
+Changed repository files: 23
+New main frontend asset: index-CQVqLPFu.js

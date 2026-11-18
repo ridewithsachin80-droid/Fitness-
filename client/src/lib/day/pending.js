@@ -14,7 +14,7 @@ import { plural } from '../../constants';
  * @param {Array}  p.activeSupplements
  * @param {object} p.log                today's log (activities / acv / supplements / sleep maps)
  * @param {string} p.activitiesLabel    the member's term for activities ("Activities", "Habits"…)
- * @returns {string[]} e.g. ['2 activities', '1 ACV dose', 'sleep times']
+ * @returns {string[]} e.g. ['2 activities', '1 apple cider vinegar dose', 'sleep times']
  */
 export function pendingLabels({ activeActivities = [], activeACV = [], activeSupplements = [], log = {}, activitiesLabel = 'activities' }) {
   const pending = [];
@@ -24,7 +24,7 @@ export function pendingLabels({ activeActivities = [], activeACV = [], activeSup
   const actLabel = String(activitiesLabel).toLowerCase();
   if (actLeft) pending.push(
     `${actLeft} ${/s$/i.test(actLabel) ? actLabel : plural(actLeft, actLabel)}`);
-  if (acvLeft) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
+  if (acvLeft) pending.push(`${acvLeft} ${plural(acvLeft, 'apple cider vinegar dose')}`);   // Fixes-3l (14): written out
   if (supLeft) pending.push(`${supLeft} ${plural(supLeft, 'supplement')}`);
   if (!log.sleep?.bedtime || !log.sleep?.waketime) pending.push('sleep times');
   return pending;

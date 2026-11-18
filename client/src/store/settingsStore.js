@@ -1,12 +1,30 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { normalizeVoiceLang } from '../utils/voiceLanguage';
 
 // ── Theme / font helpers ──────────────────────────────────────────────────────
-// Dark-only now — no more light/system modes, which also removes the whole
-// class of "light-theme CSS override selector" bugs this app kept hitting.
-export function applyTheme() {
-  document.documentElement.setAttribute('data-theme', 'dark');
+// 'dark' | 'light' | 'system'. "system" (the default since 16 Oct 2026)
+// follows the phone's own dark/light setting until the member picks one.
+export function resolvedTheme(theme) {
+  const choice = theme || useSettingsStore.getState().theme || 'system';
+  if (choice === 'dark' || choice === 'light') return choice;
+  try { return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'dark'; }
 }
+export function applyTheme(theme) {
+  const selected = resolvedTheme(theme);
+  document.documentElement.setAttribute('data-theme', selected);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = selected === 'dark' ? '#141817' : '#f8f9f6';
+  // iPhone status bar: white icons on dark, dark icons on light (read at launch).
+  const ios = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (ios) ios.content = selected === 'dark' ? 'black-translucent' : 'default';
+}
+// Keep "system" in step when the phone switches at sunset.
+try {
+  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+    if ((useSettingsStore.getState().theme || 'system') === 'system') applyTheme('system');
+  });
+} catch (_) {}
 
 export function applyFontSize(size) {
   document.documentElement.setAttribute('data-fontsize', size);
@@ -23,6 +41,8 @@ export const useSettingsStore = create(
     (set, get) => ({
       // 'child' | 'adult' | 'senior' | null (null triggers onboarding)
       ageMode: null,
+      theme: 'system',
+      setTheme: (theme) => { const value = ['dark', 'light'].includes(theme) ? theme : 'system'; set({ theme: value }); applyTheme(value); },
       // 'normal' | 'large'
       fontSize: 'normal',
       // 'simple' | 'detailed'
@@ -51,10 +71,9 @@ export const useSettingsStore = create(
       setGuardianEmail: (email) => set({ guardianEmail: email }),
       setEmergencyContact: (contact) => set({ emergencyContact: contact }),
       setMealSlots: (slots) => set({ mealSlots: slots }),
-      // Web Speech live-preview language. The Gemini transcript auto-detects
-      // language regardless; this only tunes the on-screen preview.
+      // Used by live recognition and the recorded-audio transcription hint.
       voiceLang: 'en-IN',
-      setVoiceLang: (lang) => set({ voiceLang: lang === 'hi-IN' ? 'hi-IN' : 'en-IN' }),
+      setVoiceLang: (lang) => set({ voiceLang: normalizeVoiceLang(lang) }),
       setAvatarIdx: (idx) => set({ avatarIdx: idx }),
       finishOnboarding: (mode) => {
         set({ ageMode: mode, onboardingDone: true,
@@ -64,7 +83,13 @@ export const useSettingsStore = create(
         applyFontSize(mode === 'senior' ? 'large' : 'normal');
       },
     }),
-    { name: 'fitlife-settings-v2' }
+    {
+      name: 'fitlife-settings-v2',
+      // Validate on hydration too: old or edited storage cannot inject a locale.
+      merge: (stored, current) => ({
+        ...current, ...stored, voiceLang: normalizeVoiceLang(stored?.voiceLang),
+      }),
+    }
   )
 );
 

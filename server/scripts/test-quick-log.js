@@ -139,6 +139,19 @@ const ck = (n, c, e) => { c ? (pass++, console.log('  \u2713 ' + n))
     ck('...and reports ok:false rather than claiming a save that did not happen',
        failed.body.ok === false, failed.body);
 
+    // Fixes-2u: the phone's dictation sends text; a sentence that is only subtitle/credit
+    // boilerplate (what speech engines invent from silence) is not a log, and this path has no preview.
+    const turnsBefore = (await pool.query(`SELECT COUNT(*)::int n FROM quick_log_turns WHERE patient_id=$1`, [memberId])).rows[0].n;
+    const logsBefore = (await pool.query(`SELECT COUNT(*)::int n FROM daily_logs WHERE patient_id=$1`, [memberId])).rows[0].n;
+    const credits = await call('/api/quick-log', { token: live, body: { text: 'Transcription by ESO. Translation by —' } });
+    ck('2u: a sentence that is only generated credit text is answered "did not catch that", ok:false, rejected generated_text',
+       credits.status === 200 && credits.body.ok === false && credits.body.rejected === 'generated_text' && /did not catch/i.test(credits.body.reply), credits.body);
+    ck('2u: …nothing is parsed, recorded or saved',
+       (await pool.query(`SELECT COUNT(*)::int n FROM quick_log_turns WHERE patient_id=$1`, [memberId])).rows[0].n === turnsBefore
+       && (await pool.query(`SELECT COUNT(*)::int n FROM daily_logs WHERE patient_id=$1`, [memberId])).rows[0].n === logsBefore);
+    const mixed = await call('/api/quick-log', { token: live, body: { text: 'two idli. Thanks for watching.' } });
+    ck('2u: real content with a credit sentence is not refused by the guard (it goes on to the parse, unchanged)', mixed.body.rejected === undefined, mixed.body);
+
     // ── Every turn is recorded ────────────────────────────────────────────
     console.log('\nTurn recording');
     const turns = await pool.query(

@@ -96,26 +96,37 @@ export function dailyRead({
     return { text: 'Log your morning weight to set up the rest of the day.', tone: 'prompt' };
   }
 
-  // ── Energy balance, once there is food to balance against ────────────────
+  // ── Food against the coach's target, once there is food ─────────────────
+  // ONE number (16 Oct 2026, MAC-014): the ring and the food sheet count
+  // against the target ("720 left"); this read used estimated burn and said
+  // "941 under" beside it. With a target, use the target. Without one, say
+  // plainly that the number is against estimated burn.
+  if (foodCount > 0 && Number(kcalTarget) > 0) {
+    const target = Math.round(Number(kcalTarget)), eaten = Math.round(kcalIn);
+    const left = target - eaten, next = pendingLabels[0];
+    const nextUp = next ? ` Next up: ${next}.` : '';
+    const late = t === 'evening' || t === 'night';
+    if (left > 150) {
+      return { text: `${eaten.toLocaleString('en-IN')} of ${target.toLocaleString('en-IN')} kcal so far — ${left.toLocaleString('en-IN')} left${late ? ' for dinner' : ''}.${nextUp}`, tone: 'progress' };
+    }
+    if (left < -150) {
+      return { text: `${Math.abs(left).toLocaleString('en-IN')} kcal over your ${target.toLocaleString('en-IN')} today. ${late ? 'A walk before bed would close some of that.' : 'Keep the next meal light.'}`, tone: 'progress' };
+    }
+    return { text: `Right on target — ${eaten.toLocaleString('en-IN')} of ${target.toLocaleString('en-IN')} kcal.${nextUp}`, tone: 'progress' };
+  }
   if (foodCount > 0 && balance != null) {
-    const pct = protocolTotal ? Math.round((protocolDone / protocolTotal) * 100) : 0;
     const left = pendingLabels.slice(0, 2);
-
+    const nextUp = left.length ? ` Still to go: ${list(left)}.` : '';
     if (balance < -200) {
-      const head = `You're ${Math.abs(Math.round(balance)).toLocaleString()} under`;
-      if (left.length) {
-        return { text: `${head} and ${pct}% through the protocol. ${cap(list(left))} still to go.`, tone: 'progress' };
-      }
-      return { text: `${head} and ${pct}% through the protocol.`, tone: 'progress' };
+      return { text: `About ${Math.abs(Math.round(balance)).toLocaleString('en-IN')} kcal below your estimated burn so far.${nextUp}`, tone: 'progress' };
     }
     if (balance > 300) {
-      const head = `You're ${Math.round(balance).toLocaleString()} over today`;
+      const head = `About ${Math.round(balance).toLocaleString('en-IN')} kcal above your estimated burn today`;
       if (t === 'evening' || t === 'night') {
         return { text: `${head}. A walk before bed would close some of that.`, tone: 'progress' };
       }
       return { text: `${head}. Worth keeping the next meal light.`, tone: 'progress' };
     }
-    // Close to even
     if (left.length) {
       return { text: `Balanced so far today. ${cap(list(left))} left on the protocol.`, tone: 'progress' };
     }

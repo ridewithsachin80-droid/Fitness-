@@ -1,0 +1,90 @@
+name: Phone robot (test site)
+# After every push to the test branch: wait until the test site serves the
+# pushed app, then drive it like a member on an Android phone (390 / 360 px,
+# light and dark). See server/scripts/robot-phone-run.mjs for what it checks.
+# Needs six repository secrets (Settings → Secrets and variables → Actions):
+#   FITLIFE_ROBOT_MEMBER_PHONE, FITLIFE_ROBOT_MEMBER_PIN,
+#   FITLIFE_ROBOT_MEMBER2_PHONE, FITLIFE_ROBOT_MEMBER2_PIN,
+#   FITLIFE_ROBOT_COACH_EMAIL, FITLIFE_ROBOT_COACH_PASSWORD
+# Without them the run is BLOCKED (red): nothing was tested. Never point it at production.
+# After the robot: every file of this build is compared byte for byte with the
+# live site, and the full report is published on the commit as the check
+# "Phone robot report" (readable in the commit's checks and through the API).
+on:
+  push:
+    branches: [test]
+  workflow_dispatch:
+
+concurrency:
+  group: phone-robot
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  robot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install server packages (the browser comes with them)
+        working-directory: server
+        run: npm install --no-audit --no-fund
+      - name: Run the phone robot on fitness-test.up.railway.app
+        working-directory: server
+        env:
+          ROBOT_BASE_URL: https://fitness-test.up.railway.app
+          FITLIFE_ROBOT_MEMBER_PHONE: ${{ secrets.FITLIFE_ROBOT_MEMBER_PHONE }}
+          FITLIFE_ROBOT_MEMBER_PIN: ${{ secrets.FITLIFE_ROBOT_MEMBER_PIN }}
+          FITLIFE_ROBOT_MEMBER2_PHONE: ${{ secrets.FITLIFE_ROBOT_MEMBER2_PHONE }}
+          FITLIFE_ROBOT_MEMBER2_PIN: ${{ secrets.FITLIFE_ROBOT_MEMBER2_PIN }}
+          FITLIFE_ROBOT_COACH_EMAIL: ${{ secrets.FITLIFE_ROBOT_COACH_EMAIL }}
+          FITLIFE_ROBOT_COACH_PASSWORD: ${{ secrets.FITLIFE_ROBOT_COACH_PASSWORD }}
+        run: node scripts/robot-phone-run.mjs --wait-for-deploy
+      - name: Check the live files byte for byte
+        if: always()
+        working-directory: server
+        env:
+          ROBOT_BASE_URL: https://fitness-test.up.railway.app
+        run: node scripts/check-live-assets.mjs
+      # Fixes-3g (28 Oct 2026): the live files matched client/dist, yet client/dist was stale and the admin page had no
+      # calibration panel. This signs in as the robot admin (read-only) and requires the panel and its Wording check.
+      - name: Check the live calibration panel (signed in, read-only)
+        if: always()
+        working-directory: server
+        env:
+          ROBOT_BASE_URL: https://fitness-test.up.railway.app
+          FITLIFE_ROBOT_ADMIN_EMAIL: ${{ secrets.FITLIFE_ROBOT_ADMIN_EMAIL }}
+          FITLIFE_ROBOT_ADMIN_PASSWORD: ${{ secrets.FITLIFE_ROBOT_ADMIN_PASSWORD }}
+        run: node scripts/check-live-calibration-panel.mjs
+      - name: Publish the report on the commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          f=qa/robot-results
+          { cat "$f/report.md" 2>/dev/null || echo "# Phone robot: no report (the run stopped before writing one)"
+            echo; cat "$f/live-assets.md" 2>/dev/null || echo "Live file check: did not run."
+            echo; cat "$f/calibration-panel.md" 2>/dev/null || echo "Live calibration panel check: did not run."
+            echo; cat "$f/nutrient-inventory.md" 2>/dev/null || true; } > "$RUNNER_TEMP/summary.md"
+          head -c 60000 "$RUNNER_TEMP/summary.md" > "$RUNNER_TEMP/summary-cut.md"
+          title=$(grep -m1 '^\*\*' "$f/report.md" 2>/dev/null | tr -d '*' | cut -c1-200)
+          gh api "repos/${{ github.repository }}/check-runs" \
+            -f name='Phone robot report' -f head_sha="${{ github.sha }}" \
+            -f status=completed -f conclusion=neutral \
+            -f "output[title]=${title:-Phone robot report}" \
+            -F "output[summary]=@$RUNNER_TEMP/summary-cut.md" > /dev/null
+          echo "Published the report as the check 'Phone robot report'."
+      - name: Keep the report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-robot-report
+          path: qa/robot-results
+          if-no-files-found: ignore
+          retention-days: 14

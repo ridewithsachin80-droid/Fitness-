@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { generatedText } from '../utils/voiceLanguage';
 
 /**
  * useHandsFree — a spoken conversation for someone who cannot see the screen.
@@ -182,7 +183,8 @@ export function useHandsFree({ enabled, onCommand, onLog }) {
   }, [say, toIdle]);
 
   const handleFinal = useCallback((text) => {
-    if (!text || speakingRef.current) return;
+    // Fixes-2u: subtitle/credit text ("Thanks for watching") is not something the member said.
+    if (!text || speakingRef.current || generatedText(text)) return;
     const phase = stateRef.current;
     setHeard(text);
 

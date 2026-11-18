@@ -67,6 +67,7 @@ function analyse(meal, raw) {
     const ratio = seen && plan ? est / plan : 1;
     const status = !seen ? 'not_seen' : ratio < LESS ? 'less' : ratio > MORE ? 'more' : 'as_planned';
     return { name: it.name, planned_grams: plan, grams: seen ? Math.round(est) : plan, status, per_100g: it.per_100g || {},
+             preparation: ['raw', 'cooked'].includes(it.preparation) ? it.preparation : null,   // from the plan item (Fixes-2h)
              kcal: seen ? kcalOf(est, it.per_100g) : kcalOf(plan, it.per_100g) };
   });
   const extras = (Array.isArray(ans.extras) ? ans.extras : []).slice(0, 10).map(e => {

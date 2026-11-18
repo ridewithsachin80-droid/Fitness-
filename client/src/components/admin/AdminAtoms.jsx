@@ -15,7 +15,7 @@ export function StatCard({ value, label, icon, color }) {
   const colors = {
     emerald: 'bg-ok/10 text-gold-light',
     blue:    'bg-blue-400/10    text-blue-300',
-    purple:  'bg-gold/10  text-amber-300',
+    purple:  'bg-gold/10  text-gold-light',
   };
   return (
     <div className={`rounded-2xl p-4 ${colors[color]}`}>

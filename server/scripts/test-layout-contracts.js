@@ -559,7 +559,7 @@ ck('DailyLog.jsx is a wrapper that renders Today (the route did not move)',
 ck('Today.jsx has no fetches and no store writes of its own — that is the hook\'s job',
    !/api\.(get|post)\(/.test(todayPage) && !/useEffect\(/.test(todayPage) && !/useState\(/.test(todayPage), 'Today.jsx has logic');
 ck('the model still handles the PWA shortcuts (?open=ai / ?open=weight)',
-   /get\('open'\)/.test(model) && /\['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition'\]\.includes\(open\)/.test(model) && /open === 'ai'/.test(model));
+   /get\('open'\)/.test(model) && /\['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition', 'mealidea'\]\.includes\(open\)/.test(model) && /open === 'ai'/.test(model));
 ck('the model still flushes the debounced save on tab hide / unload',
    /visibilitychange/.test(model) && /beforeunload/.test(model));
 ck('auto-derived protocol ticks are still additive only (tick, never untick)',
@@ -570,8 +570,8 @@ ck('auto-derived protocol ticks are still additive only (tick, never untick)',
 // DayStrip.jsx / ProtocolDots.jsx / CoachCard.jsx stay on disk (deploy never
 // deletes) but Today must not import them.
 const plan = read('components/today/TodaysPlan.jsx');
-ck('Today renders TodaysPlan and no longer imports DayStrip, ProtocolDots or CoachCard',
-   /<TodaysPlan m=\{m\}/.test(todayPage) && !/DayStrip|ProtocolDots|CoachCard/.test(todayPage));
+ck('Today provides the AI launcher, daily essentials and full plan entry', /<AILauncher/.test(todayPage) && /<DailyEssentials/.test(todayPage) && /navigate\('\/plan'\)/.test(todayPage));
+
 ck('Today\'s Plan has exactly the three rows and every sheet a row can open is one of the seven',
    ['plan-move', 'plan-eat', 'plan-recover'].filter(id => new RegExp(`testId="${id}"`).test(plan)).length >= 2 &&
    ['workout', 'food', 'nutrition', 'water', 'sleep', 'protocol'].every(n => new RegExp(`onOpen\\('${n}'\\)`).test(plan)),
@@ -598,23 +598,27 @@ const sheetNames = ['weight', 'water', 'sleep', 'protocol', 'food', 'workout', '
 ck('all seven sheets are mounted from the single sheet value',
    sheetNames.every(n => new RegExp(`open=\\{sheet === '${n}'\\}\\s+onClose=\\{closeSheet\\}`).test(todayPage)),
    sheetNames.filter(n => !new RegExp(`open=\\{sheet === '${n}'\\}`).test(todayPage)));
-ck('the hero opens the weight sheet', /openSheet\('weight'\)/.test(todayPage));
+ck('the daily summary opens the weight sheet', /metric\('weight', 'scale', 'Weight'/.test(read('components/member/DailyEssentials.jsx')));
 
 // ── 10. The AI is on the page (Sprint 4) ────────────────────────────────────
 console.log('\n[10] AI thread on the page, composer docked');
 
 const chat = read('components/AIChatLog.jsx');
-ck('AIChatLog no longer renders a full-screen overlay', !/fixed inset-0/.test(chat) && !/if \(!open\) return null/.test(chat), 'overlay code still present');
-ck('the composer is portaled to <body> and fixed above the nav',
-   /createPortal\(/.test(chat) && /data-testid="composer"[^>]*className="fixed/.test(chat) && /COMPOSER_BOTTOM_PX/.test(chat));
+ck('AI workspace is an accessible on-demand dialog', /role="dialog" aria-modal="true"/.test(chat) && /overlay \? \(composerOpen && createPortal/.test(chat));
+
+ck('the composer is portaled to the body and fixed for keyboard support', /createPortal\(/.test(chat) && /data-testid="composer"/.test(chat) && /fixed left-0 right-0/.test(chat) && /kbInset/.test(chat));
+
 ck('openChat() is a focus counter, not a boolean (a second tap still brings the composer up)',
    /focusRequest: s\.focusRequest \+ 1/.test(read('../src/store/aiChatStore.js')));
 ck('Apply stamps lastAppliedAt; the model refreshes the workout summary from it, not from "overlay closed"',
-   /markApplied\(\)/.test(chat) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
-ck('openChat() closes any open sheet so the composer is reachable', /if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
-ck('Today renders the thread inside the page, inside a Card, not as a trailing overlay',
-   // Props are allowed (Phase 3 passes today's meals); the placement is the rule.
-   /<Card>\s*<AIChatLog(\s[^>]*)?\s*\/>\s*<\/Card>/.test(todayPage) && !/<MemberBottomNav \/>\s*<AIChatLog/.test(todayPage));
+   /useAIReviewSave\(/.test(chat) && /markApplied\(\)/.test(read('hooks/useAIReviewSave.js')) && /lastAppliedAt/.test(model) && !/prevChatOpen/.test(model));
+// 17 Oct 2026: only a NEW request closes the sheet. The old form ("any
+// non-zero counter") also fired on arrival at Today and shut the sheet a link
+// had just opened; ui-tests [38] covers both directions in the browser.
+ck('openChat() closes any open sheet so the composer is reachable (a new request only)',
+   /chatFocusRequest !== seenFocusRequest\.current\) setHeroPanel\(null\)/.test(model) && !/if \(chatFocusRequest\) setHeroPanel\(null\)/.test(model));
+ck('Today mounts exactly one AI workspace with overlay enabled', (todayPage.match(/<AIChatLog/g) || []).length === 1 && /<AIChatLog[^>]*overlay/.test(todayPage));
+
 ck('the viewport meta asks Android to resize the layout viewport for the keyboard',
    /interactive-widget=resizes-content/.test(fs.readFileSync(path.join(CLIENT, '../index.html'), 'utf8')));
 ck('the keyboard inset hook exists for iOS (visualViewport delta)', /visualViewport/.test(read('../src/hooks/useKeyboardInset.js')));
@@ -625,21 +629,22 @@ ck('Enter sends, Shift+Enter is a new line', /e\.key === 'Enter' && !e\.shiftKey
 ck('the composer can be left without sending: × clears the draft, Escape steps away',
    /data-testid="composer-clear"/.test(chat) && /e\.key === 'Escape'/.test(chat) && /const clearDraft/.test(chat));
 // Sprint 5b.3: the bar is summoned by the orb, not permanent.
-ck('the composer renders only while composerOpen; the orb toggles it on Today',
-   /composerOpen && createPortal\(/.test(chat) && /toggleComposer/.test(read('components/UI.jsx')) && /data-testid="ai-orb"/.test(read('components/UI.jsx')));
-ck('the bar has its own Close, and the thread offers "Tell me" while the bar is away',
-   /data-testid="composer-close"/.test(chat) && /data-testid="thread-open-composer"/.test(chat));
-ck('Today reserves bottom space only while the bar is up', /composerOpen \? 'pb-32' : 'pb-6'/.test(todayPage));
+ck('the composer appears on request and the member dock opens it', /composerOpen && createPortal/.test(chat) && /openChat\(\)/.test(read('components/UI.jsx')) && /data-testid="ai-orb"/.test(read('components/UI.jsx')));
+
+ck('the assistant has Close, and the thread offers Tell me while the bar is away',
+   /aria-label="Close AI assistant"/.test(chat) && /data-testid="thread-open-composer"/.test(chat));
+ck('AI transcript reserves measured space above its composer', /marginBottom: composerHeight \+ kbInset/.test(chat) && /ResizeObserver/.test(chat));
+
 ck('the box re-measures on every text change (grows and shrinks)', /useEffect\(\(\) => \{ autoGrow\(inputRef\.current\); \}, \[input\]\)/.test(chat));
-ck('the bottom nav steps aside while composing', /composerFocused/.test(read('components/UI.jsx')) && /translate-y-\[120%\]/.test(read('components/UI.jsx')));
+ck('the bottom nav is hidden while the assistant is open', /!composerOpen && <nav/.test(read('components/UI.jsx')));
 
 // ── 11. Plan screen + navigation (Sprint 6) ─────────────────────────────────
 console.log('\n[11] Plan + nav');
 const ui = read('components/UI.jsx');
 const planPage = read('pages/Plan.jsx');
-ck('member nav tabs are Today · Plan · Progress · Profile, in that order, and Settings is not one of them (coach nav keeps its own)',
-   (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0, 4).join(',') === 'Today:/,Plan:/plan,Progress:/progress,Profile:/profile' && !/^Settings/.test(labels[4] || ''); })(),
-   [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1]));
+// 16 Oct 2026 (Sachin): Plan is a tab again — Today · Plan · Progress · More.
+ck('member navigation has Today, Plan, Progress and More', (() => { const labels = [...ui.matchAll(/\{ label: '([A-Za-z]+)',\s+path: '([^']+)'/g)].map(m => m[1] + ':' + m[2]); return labels.slice(0,4).join(',') === 'Today:/,Plan:/plan,Progress:/progress,More:/more'; })());
+
 ck('/settings still resolves and Profile links to it (the screen moved, it did not vanish)',
    /path="\/settings"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')) && /navigate\('\/settings'\)/.test(read('pages/Profile.jsx')));
 ck('/plan is routed for members', /path="\/plan"/.test(fs.readFileSync(path.join(CLIENT, 'App.jsx'), 'utf8')));
@@ -734,8 +739,9 @@ ck('Today prefers the cached read but keeps the local one as a fallback',
 console.log('\n[18] Coach charts + outlier rule');
 const mon3 = read('pages/Monitor.jsx');
 const charts = read('components/coach/MemberCharts.jsx');   // moved out of Monitor in 12b
-ck('the coach\'s weight chart is gold, not the old green/red', /stroke="#D4AF37" strokeWidth=\{2\.5\}/.test(charts) && !/stroke="#10b981"/.test(charts) && !/stroke="#f87171"\n\s+strokeDasharray/.test(charts));
-ck('compliance bars are tinted gold by value, and each still opens that day', /<Cell key=\{i\} fill=\{\(d\.score \|\| 0\) >= 75 \? '#D4AF37'/.test(charts) && /setSelectedLog\(data\.log\)/.test(charts));
+// 16 Oct 2026: the brand is green; the charts read the live theme accent (utils/themeColor), never a hand-written gold.
+ck('the coach\'s weight chart is the brand accent, not the old green/red', /stroke=\{accent\(\)\} strokeWidth=\{2\.5\}/.test(charts) && !/#D4AF37/i.test(charts) && !/stroke="#10b981"/.test(charts) && !/stroke="#f87171"\n\s+strokeDasharray/.test(charts));
+ck('compliance bars are tinted with the brand accent by value, and each still opens that day', /<Cell key=\{i\} fill=\{\(d\.score \|\| 0\) >= 75 \? accent\(\)/.test(charts) && /setSelectedLog\(data\.log\)/.test(charts));
 ck('the member page\'s "vs yesterday" uses the shared outlier rule, not the raw previous row',
    /previousWeight\(sortedLogs, sortedLogs\.findIndex/.test(mon3) && !/const prev = sortedLogs\[i \+ 1\]/.test(mon3));
 const triageSrc = fs.readFileSync(path.join(__dirname, '../services/triage.js'), 'utf8');
@@ -785,7 +791,7 @@ const recCard = read('components/today/RecoveryCard.jsx');
 ck('recovery never estimates: every metric is null unless a provider reported it', /const num = \(v\) => \(v == null/.test(rec) && !/\?\? 0/.test(rec));
 ck('the card renders nothing without data for today or yesterday', /if \(!s\) return null;/.test(recCard) && /if \(latest\.date !== today && latest\.date !== yStr\) return null;/.test(rec));
 ck('the provider is named on the card', /s\.providers\.join/.test(recCard));
-ck('Today mounts it after the plan and only for today; the hero does not read it', /\{isToday && <RecoveryCard today=\{m\.date\} \/>\}/.test(todayPage) && !/RecoveryCard/.test(model));
+ck('Today retains recovery for the current day', /isToday && <><ProgressPhotoCard[\s\S]*?<RecoveryCard today=\{m\.date\}/.test(todayPage) && !/RecoveryCard/.test(model));
 
 // ── 22. House circuits (Sprint 11d) ─────────────────────────────────────────
 console.log('\n[22] House circuits');
@@ -870,6 +876,116 @@ ck('hasBarcodeDetector lives with the scanner and is exported', /export const ha
      !/Delivery failed/i.test(bell));
   ck('no push-transport wording leaks into the member notification panel',
      !/(delivery (failed|error)|could not be delivered|push failed)/i.test(bell));
+}
+
+// ── Brand: green, both themes (16 Oct 2026, Sachin's decision) ────────────────
+console.log('\n[brand] green everywhere, both themes');
+{
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+  const SRC = path.join(__dirname, '../../client/src');
+  const gold = /#(d4af37|d4af6a|c5a059|f0e2b6|8c6d37|c9a227)\b|rgba\(\s*212\s*,\s*175\s*,\s*(55|106)/i;
+  const offenders = walk(SRC).filter(f => /\.(jsx?|css)$/.test(f)).filter(f => {
+    const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    return gold.test(code);
+  }).map(f => path.relative(SRC, f));
+  ck('no gold left in the app code (the brand is green since 16 Oct 2026)', offenders.length === 0, offenders);
+  // 17 Oct 2026: the list above missed the old light gold (#e0c98a) on food
+  // rows, Progress, Devices and Coach AI. Catch gold by its hue instead: any
+  // #rrggbb between about 37° and 52° that is not one of the standard amber
+  // WARNING shades (those are meant to look like a warning, not the brand).
+  const AMBER_OK = new Set(['fbbf24', 'f59e0b', 'fcd34d', 'fde68a', 'fef3c7', 'd97706', 'b45309', 'eab308', 'facc15', 'fde047']);
+  const goldish = (hex) => {
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, dlt = max - min;
+    if (!dlt) return false;
+    const s = dlt / (1 - Math.abs(2 * l - 1));
+    let h = max === r ? ((g - b) / dlt) % 6 : max === g ? (b - r) / dlt + 2 : (r - g) / dlt + 4;
+    h = (h * 60 + 360) % 360;
+    return h >= 37 && h <= 52 && s >= 0.35 && l >= 0.3 && l <= 0.85;
+  };
+  const byHue = walk(SRC).filter(f => /\.(jsx?|css)$/.test(f)).flatMap(f => {
+    const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
+    return [...code.matchAll(/#([0-9a-f]{6})\b/gi)].map(m => m[1].toLowerCase())
+      .filter(h => goldish(h) && !AMBER_OK.has(h)).map(h => `${path.relative(SRC, f)} #${h}`);
+  });
+  ck('no gold-coloured hex codes either (caught by hue, not by a list)', byHue.length === 0, byHue);
+  ck('the hue check itself recognises the old golds', ['d4af37', 'e0c98a', 'b38f1f', 'b08a4a', 'c9a227'].every(goldish) && !goldish('315d47') && !goldish('b7d7c2'));
+  const css = fs.readFileSync(path.join(SRC, 'index.css'), 'utf8');
+  ck('dark accent #B7D7C2 on #141817; light accent #315D47 on #F8F9F6',
+     /--fit-base: 20 24 23;[\s\S]*--fit-accent: 183 215 194;[\s\S]*\[data-theme="light"\][\s\S]*--fit-base: 248 249 246;[\s\S]*--fit-accent: 49 93 71;/.test(css));
+  const store = fs.readFileSync(path.join(SRC, 'store/settingsStore.js'), 'utf8');
+  const init = fs.readFileSync(path.join(SRC, '../public/theme-init.js'), 'utf8');
+  ck('with no saved choice the theme follows the phone (store default "system", start-up script reads prefers-color-scheme)',
+     /theme: 'system'/.test(store) && /prefers-color-scheme/.test(store) && /prefers-color-scheme/.test(init));
+  const html = fs.readFileSync(path.join(SRC, '../index.html'), 'utf8');
+  ck('the start-up theme script runs after the metas it sets', html.indexOf('theme-init.js') > html.indexOf('apple-mobile-web-app-status-bar-style'));
+  // 18 Oct 2026 (Fixes-2i): the "couldn't load" screen in index.html was still
+  // gold. The scans above only read client/src. Read the page shell and the
+  // public scripts and styles too.
+  const PUB = path.join(SRC, '../public');
+  const shell = [path.join(SRC, '../index.html'), ...walk(PUB).filter(f => /\.(js|css|html)$/.test(f))];
+  const shellGold = shell.flatMap(f => {
+    const code = fs.readFileSync(f, 'utf8');
+    const hits = [...code.matchAll(/#([0-9a-f]{6})\b/gi)].map(m => m[1].toLowerCase()).filter(h => goldish(h) && !AMBER_OK.has(h));
+    return (gold.test(code) || hits.length) ? [`${path.relative(path.join(SRC, '..'), f)} ${hits.map(h => '#' + h).join(' ')}`] : [];
+  });
+  ck('no gold in index.html or client/public either (the start-up and recovery screens)', shellGold.length === 0, shellGold);
+  ck('the recovery screen has a dark-theme version', /html\[data-theme="dark"\] #boot-fallback button \{ background: #b7d7c2/.test(html));
+  const eb = fs.readFileSync(path.join(SRC, 'components/ErrorBoundary.jsx'), 'utf8');
+  ck('the crash screen takes its colours from the theme (no fixed near-white text)', !/color: '#/.test(eb) && /color: 'var\(--text-hi\)'/.test(eb));
+  const vite = fs.readFileSync(path.join(SRC, '../vite.config.js'), 'utf8');
+  ck('the manifest uses the brand green and the dark ground', /theme_color: '#315D47'/.test(vite) && /background_color: '#141817'/.test(vite));
+
+  // 18 Oct 2026 (Fixes-2f): Sachin's phone showed "124 kcal" in orange on the
+  // workout sheet and amber Journey cards on Progress. Both passed the checks
+  // above: Tailwind's amber/orange classes were allowed wholesale as "warning".
+  // The rule now: amber only for warnings, and only through the `warn` token.
+  console.log('\n[brand-2f] amber only for warnings');
+  const jsx = walk(SRC).filter(f => /\.jsx?$/.test(f));
+  const palette = jsx.flatMap(f => fs.readFileSync(f, 'utf8').split('\n')
+    .map((line, i) => /\b(?:amber|yellow|orange)-\d{2,3}\b/.test(line) ? `${path.relative(SRC, f)}:${i + 1}` : null).filter(Boolean));
+  ck('no Tailwind amber / yellow / orange classes: warnings use the warn token, everything else the accent', palette.length === 0, palette.slice(0, 12));
+  const amberHex = jsx.flatMap(f => {
+    const code = fs.readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
+    return [...code.matchAll(/#([0-9a-f]{6})\b/gi)].map(m => m[1].toLowerCase()).filter(h => AMBER_OK.has(h))
+      .map(h => `${path.relative(SRC, f).split(path.sep).join('/')} #${h}`);   // '/' on every OS, so the exception below also matches on Windows
+  }).filter(x => x !== 'pages/Monitor.jsx #fef3c7');   // the printed report's own warning badge (paper, not the app): exactly this file and this colour
+  ck('no hand-written amber hex codes in the app (only the printed report keeps its warning badge)', amberHex.length === 0, amberHex);
+  const src = rel => fs.readFileSync(path.join(SRC, rel), 'utf8');
+  const wl = src('components/WorkoutLog.jsx');
+  ck('workout sheet: "Calories burned" is the accent, not a warning colour',
+     /font-display text-xl font-bold text-gold">\{e\.totalKcal\} kcal/.test(wl));
+  const prog = src('pages/Progress.jsx');
+  const cards = [...prog.matchAll(/<div className="([^"]*)" data-testid="journey-card">/g)].map(m => m[1]);
+  ck('Progress → Your Journey: six cards (the last shows when no other applies), none tinted with warn / danger', cards.length === 6 && cards.every(c => !/warn|danger/.test(c)), cards);
+  const kcalWarn = jsx.flatMap(f => fs.readFileSync(f, 'utf8').split('\n')
+    .map((line, i) => /text-warn[^"'`]*["'`]>\{[^}]*\}\s*kcal/.test(line) && !/\?/.test(line) ? `${path.relative(SRC, f)}:${i + 1}` : null).filter(Boolean));
+  // (Warnings that mention kcal — "⚠️ Macro kcal is 120 kcal away", "Not in your plan · 90 kcal" — are fine.)
+  ck('a calorie number is never painted the warning colour unless a condition chose it', kcalWarn.length === 0, kcalWarn);
+  // Carbs and fat have their own colours (they were amber and amber-500).
+  const lum = rgb => rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+    .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const vars = block => Object.fromEntries([...block.matchAll(/--fit-([a-z]+):\s*(\d+) (\d+) (\d+);/g)].map(m => [m[1], [+m[2], +m[3], +m[4]]]));
+  const [darkBlock, lightBlock] = css.split('[data-theme="light"] {');
+  const themes = { dark: vars(darkBlock), light: vars(lightBlock.split('}')[0]) };
+  const macroBad = [];
+  for (const [name, v] of Object.entries(themes)) for (const k of ['carb', 'fat']) {
+    if (!v[k]) { macroBad.push(`${name}: --fit-${k} missing`); continue; }
+    const hex = v[k].map(n => n.toString(16).padStart(2, '0')).join('');
+    for (const bg of ['base', 'surface']) if (ratio(v[k], v[bg]) < 4.5) macroBad.push(`${name} ${k} on ${bg}: ${ratio(v[k], v[bg]).toFixed(2)}:1`);
+    if (goldish(hex)) macroBad.push(`${name} ${k} #${hex} is gold-hued`);
+  }
+  ck('carb and fat colours exist in both themes, read at ≥ 4.5:1 and are not gold', macroBad.length === 0, macroBad);
+  ck('tailwind defines text-carb / text-fat', /'carb': 'rgb\(var\(--fit-carb\)/.test(vite + fs.readFileSync(path.join(SRC, '../tailwind.config.js'), 'utf8')) && /'fat': 'rgb\(var\(--fit-fat\)/.test(fs.readFileSync(path.join(SRC, '../tailwind.config.js'), 'utf8')));
+  // Copy from the same phone check.
+  const plan = src('pages/Plan.jsx');
+  ck('Plan → Eat without targets does not tell the member to "eat to your targets"',
+     /\{macros\s*\n?\s*\? 'No meal plan for today\. Eat to your targets and log as you go\.'\s*\n?\s*: 'No meal plan yet\. Log what you eat; your coach will set your targets\.'/.test(plan));   // any target counts (protein only too); ui-tests E2 renders all four cases
+  ck('food sheet top line no longer points at a mic that is not on screen', !/Tap the mic/.test(src('components/sheets/FoodSheet.jsx')));
+  ck('weight chart labels the first and the latest weigh-in; the goal label sits away from the latest point',
+     /ticks=\{weightTicks\}/.test(prog) && /n - 1\]/.test(prog) && /Goal \$\{targetW\}`, position: 'insideTopLeft'/.test(prog));
+  ck('Progress title wraps instead of cutting the member’s name', /data-testid="progress-title"/.test(prog) && !/text-num font-medium text-white leading-tight mt-1 truncate/.test(prog));
 }
 
 console.log(`\n═══ LAYOUT CONTRACTS: ${pass} passed, ${fail} failed ═══`);

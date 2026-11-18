@@ -44,6 +44,7 @@ export function PrescribedMeals({ items, onChange }) {
           meal: plan.meal,
           food_id: null,
           per_100g: it.per_100g,
+          preparation: it.preparation ?? null,
         };
       }).filter(Boolean);
     if (!toAdd.length) return;

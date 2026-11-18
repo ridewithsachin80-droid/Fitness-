@@ -1,51 +1,54 @@
-/**
- * AIChatLog.jsx  (v2 — full-day logging, premium layout)
- *
- * One message logs the whole day:
- *   "weight 82.5, morning walk done, 2 chapati and dal for lunch,
- *    acv before meal 2, 1 litre water, took b12 and d3, slept 10:30 to 6:30"
- *
- * The AI parses it into weight, activity/ACV/supplement checkboxes, water,
- * sleep and food items. The reply shows grouped preview cards — every item
- * is a toggle chip the member can untick if misheard — then ONE "Apply to
- * today's log" tap writes everything through the log store and saves.
- * After applying: success card with what's still pending today + Undo.
- *
- * Self-sufficient: reads/writes useLogStore directly (log, protocol,
- * updateLog, saveLog) — no prop drilling. Open state lives in its own tiny
- * store (useAIChat) so both the FoodLog banner and the floating ✨ button
- * on DailyLog open the same instance.
- *
- * Mount ONCE per page (DailyLog does this). Open from anywhere with:
- *   import { useAIChat } from '../store/aiChatStore';
- *   const openChat = useAIChat(s => s.openChat);
- */
+/** One review flow for typed, spoken and photographed member logs.
+ * The shared store keeps a draft across navigation. Today mounts this once
+ * as an on-demand workspace; existing manual sheets use the same log store. */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
+import useAIEntryActions from '../hooks/useAIEntryActions';
+import useModalScope, { ModalScopeContext } from '../hooks/useModalScope';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import api from '../api/client';
 import { useLogStore } from '../store/logStore';
+import { useAuthStore } from '../store/authStore';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useVoiceComposer } from './VoiceComposer';
 import { today, plural } from '../constants';
 import { resolveProtocolItems, defaultMealSlot, isMealPlanQuestion } from '../lib/day';
 import LogPlannedButton from './chat/LogPlannedButton';
-import { useAIChat, undoSnap, workoutUndoSnap } from '../store/aiChatStore';
+import { useAIChat } from '../store/aiChatStore';
 import { COMPOSER_BOTTOM_PX, COMPOSER_BOTTOM_FOCUSED_PX, autoGrow, SUGGESTION_CHIPS, GroupHeader, ToggleChip } from './chat/ChatAtoms';
 
 // Re-exported so every existing `import { useAIChat } from './AIChatLog'` keeps working.
 export { useAIChat };
 import DaySummary from './DaySummary';
+import AIFoodReview from './chat/AIFoodReview';
+import UnresolvedFoods from './chat/UnresolvedFoods';
+import UnresolvedSleep from './chat/UnresolvedSleep';
+import { normalizeSleepClarification } from '../utils/sleepClarification';
+import { normalizeUnresolvedFoods, foodClarificationContext } from '../utils/unresolvedFoods';
+import UsualMeals from './chat/UsualMeals';
+import { usualReview } from '../utils/usualMeals';
+import AIAttachments from './chat/AIAttachments';
+import { withFoodGrams, foodReviewError } from '../utils/aiFoodReview';
+import { Icon } from './primitives';
 import { isScaleWeightRow, routeLabRows } from '../utils/labRouting';
-import { rollbackCard } from '../utils/chatCard';
-import ChatFoodMacros, { foodWithLabel } from './chat/ChatFoodMacros';
+import { foodWithLabel } from './chat/ChatFoodMacros';
+import { logTarget } from '../utils/chatCard';
+import { requestSnapshot } from '../utils/aiRequestRecovery';
+import { downscale, readFileAsBase64 } from '../utils/aiAttachments';
+import { countIncluded } from '../utils/aiParsedReview';
+import { aiReplyText, aiContextText, hasLoggingPreview } from '../utils/aiReplyText';
+import useAIRequestRecovery from '../hooks/useAIRequestRecovery';
+import AIRequestRecovery from './chat/AIRequestRecovery';
+import useAIReviewSave from '../hooks/useAIReviewSave';
+import AIReviewSaveStatus from './chat/AIReviewSaveStatus';
+import WeightJumpNote from './chat/WeightJumpNote';
+import { definitiveWriteFailure } from '../utils/aiSaveReceipt';
+import { writeRequestId } from '../utils/writeRequestId';
+import { buildDraftFoodContext, applyDraftFoodEdit, isDraftFoodEditable } from '../utils/aiDraftFoodEdits';
 
-// ── Speech recognition ───────────────────────────────────────────────────────
-const SpeechRecognition =
-  typeof window !== 'undefined'
-    ? window.SpeechRecognition || window.webkitSpeechRecognition
-    : null;
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+const MAX_PHOTO_BASE64 = 3_000_000;
 
 // resolveProtocolItems (lib/day) is the ONE derivation, shared with Today and
 // Plan; this adapter keeps the field names the chat has always used.
@@ -54,7 +57,7 @@ function deriveProtocolItemsCompat(protocol) {
   return { activities: r.activeActivities, acv: r.activeACV, supplements: r.activeSupplements };
 }
 
-export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) {
+export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay = false } = {}) {
   const mealSlots = useSettingsStore(s => s.mealSlots);
   // Where food goes when the member does not say which meal: shown on the
   // preview, and used on apply, so what they see is what is logged.
@@ -71,27 +74,85 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // Transient UI state stays local — a half-finished upload is not worth
   // resuming across a navigation, and leaving `busy` true in the store would
   // strand the composer permanently if the member navigated mid-request.
-  const [busy, setBusy]           = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
+  const {
+    busy, setBusy, photoBusy, setPhotoBusy, labBusy, setLabBusy,
+    replacingPhoto, pickerContext, photoFlight, parseFlight, labFlight,
+    requestEdit, setRequestEdit, requestCurrent, rememberPicker, consumePicker, acceptPhoto,
+    newRequest, beginRequest, failRequest, finishRequest,
+  } = useAIRequestRecovery();
   const fileRef = useRef(null);
+  const galleryRef = useRef(null);
+  const logDate = useLogStore(s => s.date);
+  const chatDay = useAIChat(s => s.dayKey);
+  const logLoading = useLogStore(s => s.loading);
+  const logError = useLogStore(s => s.error);
+  // Any day up to today — a member can fill in yesterday's forgotten dinner
+  // (16 Oct 2026). Every save names the day it writes to (logTarget).
+  const assistantReady = !!logDate && logDate <= today() && !logLoading && logError !== 'Failed to load log';
+  const overlayRef = useRef(null);
+  const composerRef = useRef(null);
+  const composerId = useId();
+  const previousFocus = useRef(null);
+  const [composerHeight, setComposerHeight] = useState(220);
+  const [draftFoodTarget, setDraftFoodTarget] = useState(null);
+  const draftFoods = buildDraftFoodContext(messages, logDate, draftFoodTarget, mealSlots, autoSlot);
+  const selectedDraftFood = draftFoods.context?.target && draftFoods.context.foods.find(f =>
+    f.reviewId === draftFoods.context.target.reviewId && f.foodId === draftFoods.context.target.foodId);
+  useEffect(() => {
+    if (draftFoodTarget && !selectedDraftFood) setDraftFoodTarget(null);
+  }, [draftFoodTarget, selectedDraftFood]);
+
   const labRef  = useRef(null);
-  const [labBusy, setLabBusy] = useState(false);
+  const labSaveFlight = useRef(null);
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
   const recogRef  = useRef(null);
-  const undoRef        = undoSnap;         // module-level, see above
-  const workoutUndoRef = workoutUndoSnap;  // module-level, see above
 
+
+  // ── What's still pending after applying — the "coach nudge" ────────────────
+  const computePending = useCallback((newLog) => {
+    const proto  = deriveProtocolItemsCompat(useLogStore.getState().protocol);
+    const target = useLogStore.getState().protocol?.water_target || 3000;
+    const pending = [];
+
+    if (!newLog.weight) pending.push('morning weight');
+    const actLeft = proto.activities.filter(a => !newLog.activities?.[a.id]).length;
+    if (actLeft > 0) pending.push(`${actLeft} activit${actLeft > 1 ? 'ies' : 'y'}`);
+    const acvLeft = proto.acv.filter(a => !newLog.acv?.[a.id]).length;
+    if (acvLeft > 0) pending.push(`${acvLeft} ${plural(acvLeft, 'apple cider vinegar dose')}`);   // Fixes-3l (14)
+    const suppLeft = proto.supplements.filter(s => !newLog.supplements?.[s.id]).length;
+    if (suppLeft > 0) pending.push(`${suppLeft} ${plural(suppLeft, 'supplement')}`);
+    if ((newLog.water || 0) < target) pending.push(`water (${((target - (newLog.water || 0)) / 1000).toFixed(1)}L to go)`);
+    if (!newLog.food?.length) pending.push('food log');
+    if (!newLog.sleep?.bedtime || !newLog.sleep?.waketime) pending.push('sleep times');
+
+    return pending.slice(0, 3);
+  }, []);
+
+  const { applying, applyingRef, applyAll, undo, editApplied, retryUndo } = useAIReviewSave({ mealSlots, mealPlans, computePending });
+
+  // Move only for a newly appended message, never for quantity, macro or
+  // receipt updates. Long replies start at their first item, not at Save.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
-  }, [messages, busy]);
+    if (!useAIChat.getState().composerOpen || !messages.length) return;
+    const last = messages[messages.length - 1];
+    const reply = last.role !== 'user'
+      ? threadRef.current?.querySelector(`[data-review-index="${messages.length - 1}"]`)
+      : null;
+    (reply || bottomRef.current)?.scrollIntoView?.({ block: reply ? 'start' : 'end', behavior: 'instant' });
+  }, [messages.length]);
 
   const focusRequest = useAIChat(s => s.focusRequest);
   const composerFocused = useAIChat(s => s.composerFocused);
   const composerOpen    = useAIChat(s => s.composerOpen);
   const threadRef = useRef(null);
   const kbInset   = useKeyboardInset();
+  const modal = useModalScope({ open: overlay && composerOpen, roots: [overlayRef, composerRef],
+    focusRef: overlayRef, openerRef: previousFocus,
+    initialFocus: () => useAIChat.getState().entryMode === 'text' ? inputRef.current : overlayRef.current?.querySelector('button'),
+    onClose: () => useAIChat.getState().closeComposer(),
+  });
 
   // The box follows its content in BOTH directions — grows when a dictation
   // lands, shrinks when text is deleted or cleared — so it can never sit
@@ -114,51 +175,18 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
     inputRef.current?.blur();
   };
 
-  // The thread is always on the page now, so a conversation carried over from
-  // a previous day must be dropped on mount — before it can be applied to
-  // today's log — not only when a panel opens.
-  useEffect(() => { useAIChat.getState().ensureFreshDay(today()); }, []);
-
-  // openChat() → bring the composer up: scroll the thread into view (the
-  // sheet, if any, is closed by useTodayModel on the same signal) and focus.
-  useEffect(() => {
-    if (!focusRequest) return undefined;
-    useAIChat.getState().ensureFreshDay(today());
-    const t = setTimeout(() => {
-      (bottomRef.current || threadRef.current)?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
-      inputRef.current?.focus({ preventScroll: true });
-    }, 120);
-    return () => clearTimeout(t);
-  }, [focusRequest]);
+  useEffect(() => { useAIChat.getState().ensureFreshDay(useLogStore.getState().date || today()); }, []);
 
   // ── Voice input ────────────────────────────────────────────────────────────
   // Dictation lives in its own review card above the input (useVoiceComposer):
   // 3s of silence auto-stops into a Send button; the mic appends more takes.
   // The typing box below is untouched by voice.
-  const vc = useVoiceComposer({ onSend: (t) => send(t) });
+  const vc = useVoiceComposer({ onSend: (t) => send(t), contextKey: `${logDate || ''}:${chatDay || ''}` });
+  useAIEntryActions({ inputRef, fileRef, overlayRef, bottomRef, previousFocus, vc, focusRequest, composerOpen,
+    canPhoto: assistantReady && !photoBusy && !labBusy && !busy && !applying });
 
   // ── Photo food logging ─────────────────────────────────────────────────────
-  // Phone photos are 3–8 MB; we downscale to 1280px and re-encode at 0.8 JPEG
-  // before upload. That keeps the request small, the AI just as accurate, and
-  // avoids members on patchy mobile data waiting on a huge upload.
-  const downscale = (file) => new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = () => { img.src = reader.result; };
-    reader.onerror = () => reject(new Error('Could not read the photo'));
-    img.onload = () => {
-      const MAX = 1280;
-      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      resolve(dataUrl.split(',')[1]);
-    };
-    img.onerror = () => reject(new Error('That file is not a readable image'));
-    reader.readAsDataURL(file);
-  });
+
 
   // `silent` is set when we are re-routing a file the member already sent via
   // the report button — a second "📷 Photo" bubble would be confusing.
@@ -166,24 +194,43 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // goes through a ref to avoid a circular useCallback dependency.
   const sendLabReportRef = useRef(null);
 
-  const sendPhoto = useCallback(async (file, { silent = false } = {}) => {
-    if (!file || photoBusy) return;
+  const sendPhoto = useCallback(async (file, { silent = false, recovery = null } = {}) => {
+    if ((!file && !recovery?.payload) || photoFlight.current || parseFlight.current || applyingRef.current) return;
+    if (recovery && !requestCurrent(recovery)) return;
+    const request = recovery || newRequest('photo', 'Photo attached · AI will estimate your meal',
+      { silent, file, payload: null });
+    photoFlight.current = request.id;
+    const controller = beginRequest(request);
+    const requestDay = request.day;
     setPhotoBusy(true);
     haptic(10);
-    if (!silent) setMessages(m => [...m, { role: 'user', text: '📷 Photo attached' }]);
     try {
-      const base64 = await downscale(file);
-      const { data } = await api.post('/ai-chat/photo', {
-        image: base64,
-        mimeType: 'image/jpeg',
-        mealSlots,
-      }, { timeout: 60000 });   // vision is slower than chat; 35s was too tight
+      if (!request.payload) {
+        if (request.file.size > MAX_PHOTO_BYTES) {
+          request.file = null;
+          throw { response: { status: 413 } };
+        }
+        const base64 = await downscale(request.file);
+        if (!requestCurrent(request) || controller.signal.aborted) return;
+        if (base64.length > MAX_PHOTO_BASE64) {
+          request.file = null;
+          throw { response: { status: 413 } };
+        }
+        request.payload = requestSnapshot({ image: base64, mimeType: 'image/jpeg', mealSlots });
+        setMessages(prev => prev.map(m => m.requestId === request.id || m.requestIds?.includes(request.id)
+          ? { ...m, photoPreview: 'data:image/jpeg;base64,' + base64 } : m));
+      }
+      const { data } = await api.post('/ai-chat/photo', requestSnapshot(request.payload),
+        { timeout: 60000, signal: controller.signal });
+      if (!requestCurrent(request) || controller.signal.aborted) return;
 
       // A lab report reached the camera button — send it to the reader instead.
       if (data.route_to === 'lab') {
         setMessages(m => [...m, { role: 'ai', text: data.reply }]);
         setPhotoBusy(false);
-        return sendLabReportRef.current?.(file, { silent: true });
+        const original = request.file || new File([Uint8Array.from(atob(request.payload.image), c => c.charCodeAt(0))], 'meal.jpg', { type: 'image/jpeg' });
+        request.file = null; request.payload = null;
+        return sendLabReportRef.current?.(original, { silent: true });
       }
 
       setMessages(m => [...m, {
@@ -192,6 +239,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         // Eval set: what produced this card. A photo has no replayable text, so
         // it is tagged as such rather than stored as "photo attached" — a
         // sample whose question is not the real question scores nothing.
+        logDate: requestDay,
         evalSource: 'photo',
         evalMessage: null,
         parsed: {
@@ -204,42 +252,46 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
           water_ml_add: null, waterOn: false,
           sleep: null, sleepOn: false,
           foods: (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
+          unresolved_foods: normalizeUnresolvedFoods(data.unresolved_foods),
           workouts: [],
           totals: data.totals,
         },
         applied: false,
       }]);
+      request.file = null;
+      request.payload = null;
     } catch (err) {
-      const msg = err.response?.data?.error || 'Could not analyse that photo — please try again.';
-      setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
+      // Once compressed, the retry needs only the bounded request image.
+      if (request.payload) request.file = null;
+      failRequest(request, err);
     } finally {
-      setPhotoBusy(false);
+      finishRequest(request);
+      if (photoFlight.current === request.id) { photoFlight.current = false; setPhotoBusy(false); }
     }
-  }, [photoBusy, mealSlots]);
+  }, [mealSlots, requestCurrent]);
+
+
 
   // ── Lab report reading ─────────────────────────────────────────────────────
   // PDFs go up untouched: rasterising one client-side would throw away the text
   // layer and turn a clean extraction into OCR guesswork on medical numbers.
   // Photos of printouts get the same downscale as food photos.
-  const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1]);
-    r.onerror = () => reject(new Error('Could not read that file'));
-    r.readAsDataURL(file);
-  });
+
 
   const sendLabReport = useCallback(async (file, { silent = false, force = false } = {}) => {
-    if (!file || labBusy) return;
+    if (!file || labFlight.current) return;
+    const isPdf = file.type === 'application/pdf';
+    const request = newRequest('lab', isPdf ? '📄 PDF attached' : '📷 Photo attached', { silent, file });
+    labFlight.current = request.id;
+    const controller = beginRequest(request);
     setLabBusy(true);
     haptic(10);
-    const isPdf = file.type === 'application/pdf';
     // Neutral label: the member attaches a file, the app works out what it is.
     // Claiming "my lab report" up front reads wrong when it turns out to be a
     // scale photo, and pre-labels a decision the classifier hasn't made yet.
-    if (!silent) setMessages(m => [...m, { role: 'user', text: isPdf ? '📄 PDF attached' : '📷 Photo attached' }]);
     // A full panel can take 30–60 seconds. Without this the screen sits blank
     // and members upload the same file again, doubling the load.
-    setMessages(m => [...m, { role: 'ai', text: 'Reading it… a full lab panel can take up to a minute.', pending: true }]);
+    setMessages(m => [...m, { role: 'ai', text: 'Reading it… a full lab panel can take up to a minute.', pending: true, pendingRequest: request.id }]);
     try {
       // Reject oversized files here rather than after a long upload. Express
       // caps the body at 12MB and base64 inflates by ~33%, so anything over
@@ -251,6 +303,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       }
 
       const base64 = isPdf ? await readFileAsBase64(file) : await downscale(file);
+      if (!requestCurrent(request) || controller.signal.aborted) return;
 
       // Reading a multi-page pathology report takes far longer than a chat
       // reply. The shared client aborts at 35s, which was cutting the request
@@ -260,7 +313,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         file: base64,
         mimeType: isPdf ? 'application/pdf' : 'image/jpeg',
         force,
-      }, { timeout: 120000 });
+      }, { timeout: 120000, signal: controller.signal });
+      if (!requestCurrent(request) || controller.signal.aborted) return;
 
       // Wrong button: the image is a scale reading or a meal. Route it to the
       // photo pipeline, which already reads both — the member never has to
@@ -284,7 +338,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         role: 'ai',
         text: data.reply,
         lab: {
-          test_date: data.test_date || new Date().toISOString().slice(0, 10),
+          test_date: data.test_date || today(),
           lab_name: data.lab_name || '',
           results: (data.results || []).map(r => ({ ...r, on: r.value !== null })),
           needs_review: data.needs_review || 0,
@@ -292,21 +346,27 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         applied: false,
       }]);
     } catch (err) {
+      if (!requestCurrent(request) || controller.signal.aborted) return;
       const timedOut = err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '');
-      const msg = err.response?.data?.error
-        || (timedOut
+      const msg = file.size > 8 * 1024 * 1024
+        ? 'That file is over 8MB. Export a smaller PDF, or photograph just the results page.'
+        : (timedOut
             ? 'That report took too long to read. A single page, or a photo of just the results table, is much quicker.'
             : 'Could not reach the reader — check your connection and try again.');
       setMessages(m => [...m.filter(x => !x.pending), { role: 'ai', text: msg, error: true }]);
-    } finally { setLabBusy(false); }
-  }, [labBusy]);
+    } finally {
+      request.file = null;
+      finishRequest(request);
+      if (labFlight.current === request.id) { labFlight.current = false; setLabBusy(false); }
+    }
+  }, [requestCurrent, sendPhoto]);
   sendLabReportRef.current = sendLabReport;
 
   const patchLab = useCallback((mi, fn) => {
     setMessages(prev => {
       const next = [...prev];
       const m = next[mi];
-      if (!m?.lab || m.applied) return prev;
+      if (!m?.lab || m.applied || labSaveFlight.current || m.labSaveLocked || m.labSaveUnconfirmed || m.labSubmissionConflict) return prev;
       next[mi] = { ...m, lab: fn(m.lab) };
       return next;
     });
@@ -317,24 +377,44 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
   // in lab history (where it duplicates the weight series and never reaches the
   // coach's daily view). 20–300 kg plausibility gate matches the parsers.
   const saveLabs = useCallback(async (mi) => {
-    const m = messages[mi];
-    if (!m?.lab || m.applied) return;
+    const m = useAIChat.getState().messages[mi];
+    if (!m?.lab || m.applied || (m.labSaveUnconfirmed && !m.labRequestId) || m.labSubmissionConflict || applyingRef.current
+      || (labSaveFlight.current?.current())) return;
+    const auth = useAuthStore.getState(), selectedDay = useLogStore.getState().date;
+    const initialWeight = useLogStore.getState().log.weight;
+    const revision = useAIChat.getState().revision, reviewDay = selectedDay;
+    if (selectedDay !== reviewDay || useLogStore.getState().loading || useLogStore.getState().error === 'Failed to load log') return;
+    let invalidated = false;
+    const current = () => !invalidated && useAuthStore.getState().user?.id === auth.user?.id
+      && useAuthStore.getState().sessionVersion === auth.sessionVersion
+      && useAIChat.getState().revision === revision
+      && useLogStore.getState().date === selectedDay && useAIChat.getState().messages.some(card => card.lab === m.lab);
+    const patch = values => { if (current()) setMessages(cards => cards.map(card => card.lab === m.lab ? { ...card, ...values } : card)); };
     const rows = m.lab.results.filter(r => r.on && r.value !== null && r.value !== '');
     if (!rows.length) return;
 
     // Only when the reading is from today — retro-writing today's log from an
     // old report would be wrong. Past-dated weight rows stay in lab history.
-    const today = new Date().toISOString().slice(0, 10);
     // Routing rules live in utils/labRouting.js — the same functions
     // test-coach-view runs, and asserted to agree with the server's copy of the
     // weight-name predicate.
-    const { weightRow, labRows } = routeLabRows(rows, m.lab.test_date, today);
+    const { weightRow, labRows } = routeLabRows(rows, m.lab.test_date, reviewDay);
 
-    setLabBusy(true);
+    const flight = { current }; labSaveFlight.current = flight;
+    const unsubscribe = useLogStore.subscribe((state, previous) => { if (state.date !== previous.date) invalidated = true; });
+    setLabBusy(true); patch({ labSaveNotice: null });
+    let appendSent = false, appendConfirmed = !!m.labSaveLocked;
     try {
-      let saved = 0, notice = null;
-      if (labRows.length) {
+      let saved = m.labSaved || 0, notice = m.labNotice || null;
+      if (labRows.length && !appendConfirmed) {
+        if (!current()) return;
+        appendSent = true;
+        // Persist the uncertain boundary on the card before the append. A
+        // day change or remount must never make the same report retryable.
+        const requestId = m.labRequestId || writeRequestId();
+        patch({ labRequestId: requestId, labSaveUnconfirmed: true, labSaveNotice: 'This report save is not confirmed yet. A retry will not add these results twice.' });
         const { data } = await api.post('/members/me/labs', {
+          request_id: requestId,
           test_date: m.lab.test_date,
           lab_name: m.lab.lab_name || null,
           results: labRows.map(r => ({
@@ -342,60 +422,155 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
             ref_min: r.ref_min, ref_max: r.ref_max,
           })),
         });
+        if (!current()) return;
         saved = data.saved; notice = data.notice;
+        if (Number(saved) !== labRows.length) {
+          patch({ labSaveUnconfirmed: true, labSaveNotice: 'Some report results may already be saved. Check Lab results before adding them again.' }); return;
+        }
+        appendConfirmed = true;
+        patch({ labSaved: saved, labNotice: notice, labSaveLocked: true, labSaveUnconfirmed: false, labSaveNotice: null });
       }
+      let weightQueued = false;
       if (weightRow) {
+        if (!current()) return;
         const { updateLog, saveLog } = useLogStore.getState();
-        updateLog('weight', String(parseFloat(weightRow.value)));
-        saveLog().catch(() => {});
+        const value = String(parseFloat(weightRow.value));
+        if ((m.labWeightApplied && useLogStore.getState().log.weight !== value)
+          || (!m.labWeightApplied && String(useLogStore.getState().log.weight ?? '') !== String(initialWeight ?? ''))) {
+          patch({ labSaveNotice: 'Weight has changed since this review. Keep the newer value and use the Weight editor to make a correction.' }); return;
+        }
+        if (!m.labWeightApplied) updateLog('weight', value);
+        patch({ labWeightApplied: true, labSaveLocked: true });
+        const result = await saveLog();
+        if (!current()) return;
+        if (!result || result.ok === false || useLogStore.getState().error) {
+          patch({ labSaveNotice: `${saved ? 'Report results saved. ' : ''}Weight save was not confirmed. Retry to save the weight without repeating report results.` }); return;
+        }
+        if (result.data && Number(result.data.weight_kg) !== Number(weightRow.value)) {
+          patch({ labSaveNotice: 'The server kept a different weight. Check the Weight editor before making another change.' }); return;
+        }
+        weightQueued = !!result.queued;
       }
+      if (!current()) return;
       haptic(30);
-      setMessages(prev => {
-        const next = [...prev];
-        next[mi] = { ...next[mi], applied: true, labSaved: saved, labNotice: notice,
-                     weightLogged: weightRow ? parseFloat(weightRow.value) : null };
-        return next;
-      });
+      patch({ applied: true, labSaved: saved, labNotice: notice, weightQueued,
+        weightLogged: weightRow ? parseFloat(weightRow.value) : null, labSaveNotice: null });
     } catch (err) {
-      const msg = err.response?.data?.error || 'Could not save those results.';
-      setMessages(prev => [...prev, { role: 'ai', text: msg, error: true }]);
-    } finally { setLabBusy(false); }
-  }, [messages]);
+      if (!current()) return;
+      const uncertain = appendSent && !appendConfirmed && !definitiveWriteFailure(err);
+      patch({ labSubmissionConflict: err.response?.status === 409, labSaveUnconfirmed: uncertain, labSaveNotice: err.response?.status === 409
+        ? 'This submission has different saved results. Check Lab results before making another change.' : uncertain
+        ? 'The report save is not confirmed. Retry safely to check and finish this submission.'
+        : 'Could not save those results. Reconnect and try again.' });
+    } finally {
+      unsubscribe();
+      if (labSaveFlight.current === flight) { labSaveFlight.current = null; if (!labFlight.current) setLabBusy(false); }
+    }
+  }, [setMessages]);
 
   // ── Send → parse ───────────────────────────────────────────────────────────
-  const send = useCallback(async (textOverride) => {
-    const text = (textOverride ?? input).trim();
-    if (!text || busy) return;
-
-    setInput('');
-    if (inputRef.current) inputRef.current.style.height = 'auto';   // collapse the grown textarea
-    setMessages(m => [...m, { role: 'user', text }]);
-    setBusy(true);
-    haptic(10);
-
-    try {
+  const send = useCallback(async (textOverride, { recovery = null } = {}) => {
+    const text = (textOverride ?? recovery?.payload?.message ?? input).trim();
+    if (!text) return;
+    if (parseFlight.current || photoFlight.current || labFlight.current || applyingRef.current || !assistantReady) {
+      // A dictated take must not replace an unrelated typed draft.
+      if (!recovery && textOverride != null) setInput(current => current ? `${current}\n${text}` : text);
+      return;
+    }
+    if (recovery && !requestCurrent(recovery)) return;
+    if (!recovery) useAIChat.getState().ensureFreshDay(useLogStore.getState().date);
+    let payload = recovery?.payload;
+    let draftSnapshot = recovery?.draftSnapshot;
+    if (!payload) {
+      const draft = buildDraftFoodContext(useAIChat.getState().messages, useLogStore.getState().date, draftFoodTarget, mealSlots, autoSlot);
+      if (draft.reason === 'target_unavailable') {
+        setDraftFoodTarget(null);
+        setMessages(previous => [...previous, { role: 'ai', text: 'That food is no longer available for an AI edit. Choose an unsaved food again, or use the existing Edit action for a saved review.' }]);
+        return;
+      }
+      draftSnapshot = draft.snapshot;
       const proto = deriveProtocolItemsCompat(useLogStore.getState().protocol);
       // Chat memory: the last few visible turns plus today's logged foods, so
       // follow-ups like "make the dal 250g" or "that was dinner" resolve to
       // real items instead of "couldn't find anything to log".
-      const recent = messages.slice(-6).map(m => ({
+      const recent = useAIChat.getState().messages.slice(-6).map(m => ({
         role: m.role === 'user' ? 'user' : 'ai',
-        text: String(m.text || '').slice(0, 200),
+        text: aiContextText(m).slice(0, 200),
       })).filter(r => r.text);
       const lastFoods = (useLogStore.getState().log?.food || []).slice(-20)
         .map(f => ({ name: f.name, grams: f.grams, meal: f.meal }));
-      const { data } = await api.post('/ai-chat/parse', {
+      payload = requestSnapshot({
         message: text,
         context: {
           mealSlots,
           recent,
           lastFoods,
+          draftFoods: draft.context,
+          foodClarification: foodClarificationContext(useAIChat.getState().messages, useLogStore.getState().date),
           activities:    proto.activities.map(({ id, label, sub }) => ({ id, label, sub })),
           acv:           proto.acv.map(({ id, label, sub }) => ({ id, label, sub })),
           supplements:   proto.supplements.map(({ id, label, sub }) => ({ id, label, sub })),
           waterTargetMl: useLogStore.getState().protocol?.water_target || 3000,
         },
       });
+    } else if (text !== payload.message) {
+      payload = requestSnapshot({ ...payload, message: text });
+    }
+    const request = recovery ? { ...recovery, payload } : newRequest('text', text, { payload });
+    request.draftSnapshot = draftSnapshot;
+    parseFlight.current = request.id;
+    const controller = beginRequest(request);
+    const requestDay = request.day;
+    // Only a send from the main composer consumes its draft. A voice result,
+    // Retry or the failed-card editor leaves any newer typed message intact.
+    if (!recovery && textOverride == null) {
+      setInput(current => current.trim() === text ? '' : current);
+      if (inputRef.current) inputRef.current.style.height = 'auto';
+    }
+    if (recovery) setMessages(previous => previous.map(m => m.requestId === request.id ? { ...m, text } : m));
+    setBusy(true);
+    haptic(10);
+
+    try {
+      const { data } = await api.post('/ai-chat/parse', requestSnapshot(payload), { signal: controller.signal });
+      if (!requestCurrent(request) || controller.signal.aborted) return;
+
+      // The server's existing safety response takes precedence over edit mode.
+      // Display only its guidance, without attaching any proposed actions.
+      if (data.safety && data.question === true && typeof data.reply === 'string') {
+        setMessages(previous => [...previous, { role: 'ai', text: data.reply }]);
+        return;
+      }
+
+      // A server quantity preflight also takes precedence over selected edit
+      // mode. Retain that selection for the corrected request; accept no
+      // proposed actions or food rows from a clarification response.
+      if (data.amount_clarification === 'positive_quantity' && data.question === true && typeof data.reply === 'string') {
+        setMessages(previous => [...previous, { role: 'ai', text: data.reply }]);
+        return;
+      }
+
+      // Edits update the original unsaved review. Even a malformed response in
+      // explicitly targeted mode cannot fall through to a second food card.
+      if (Object.prototype.hasOwnProperty.call(data, 'draft_edit') || payload.context?.draftFoods?.target) {
+        setMessages(previous => {
+          const result = applyDraftFoodEdit(previous, data.draft_edit, request.draftSnapshot, {
+            day: useLogStore.getState().date, mealSlots: useSettingsStore.getState().mealSlots, applying: !!applyingRef.current,
+          });
+          const choose = data.draft_edit?.status === 'clarify' && data.draft_edit.reason === 'choose_food';
+          const reply = result.applied ? 'Review updated. Nothing saved yet.'
+            : result.reason === 'no_change' ? 'Your review already has those values. Nothing was changed.'
+            : result.reason === 'review_changed' || result.reason === 'busy' ? 'That review changed while I was working. Choose the food again and retry. Nothing was changed.'
+            : choose ? 'Choose Edit with AI on the food you want to change, then tell me the quantity or meal.'
+            : 'I couldn’t update that review. Choose Edit with AI on the food and try again, or edit its fields. Nothing was changed.';
+          return [...result.messages, { role: 'ai', text: reply, draftEditStatus: result.applied ? 'updated' : 'unchanged' }];
+        });
+        // A retry owns its original target, not a selection made after failure.
+        const completedTarget = payload.context?.draftFoods?.target;
+        setDraftFoodTarget(current => current?.reviewId === completedTarget?.reviewId
+          && current?.foodId === completedTarget?.foodId ? null : current);
+        return;
+      }
 
       // A whole-day summary comes back as structured fields, and renders as the
       // same card the coach sees. Nothing to apply, so no preview list.
@@ -408,13 +583,16 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       setMessages(m => [...m, {
         role: 'ai',
         text: data.reply,
-        // Eval set: the exact message that produced this card, so an edit the
-        // member makes below can be paired with the question that caused it.
+        advice: data.advice?.basis === 'saved_snapshot' && typeof data.advice?.text === 'string'
+          ? { text: data.advice.text.slice(0, 700), question: String(data.advice.question || '').slice(0, 300), unavailable: data.advice.unavailable === true }
+          : null,
+        // Eval set: pair member edits with the message that produced this card.
+        logDate: requestDay,
         evalSource: 'member_parse',
         evalMessage: text,
         // A meal-plan question with nothing to apply: the answer offers "Log <next meal> as planned".
         planAsk: isMealPlanQuestion(text) && data.weight_kg == null && !(data.foods || []).length
-          && !(data.workouts || []).length && !(data.corrections || []).length,
+          && !(data.workouts || []).length && !(data.corrections || []).length && !normalizeUnresolvedFoods(data.unresolved_foods).length,
         parsed: {
           weight_kg:    data.weight_kg,
           weightOn:     data.weight_kg != null,
@@ -425,7 +603,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
           waterOn:      data.water_ml_add != null,
           sleep:        data.sleep,
           sleepOn:      !!data.sleep,
+          unresolved_sleep: normalizeSleepClarification(data.unresolved_sleep),
+          notes: data.notes || '', notesOn: !!data.notes,
           foods:        (data.foods || []).map(f => ({ ...f, on: true, ai_grams: f.grams })),
+          unresolved_foods: normalizeUnresolvedFoods(data.unresolved_foods),
           corrections:  (data.corrections || []).map(c => ({ ...c, on: true })),
           workouts:     (data.workouts || []).map(w => ({ ...w, on: true })),
           totals:       data.totals,
@@ -433,12 +614,12 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         applied: false,
       }]);
     } catch (err) {
-      const msg = err.response?.data?.error || 'Something went wrong — please try again.';
-      setMessages(m => [...m, { role: 'ai', text: msg, error: true }]);
+      failRequest(request, err);
     } finally {
-      setBusy(false);
+      finishRequest(request);
+      if (parseFlight.current === request.id) { parseFlight.current = false; setBusy(false); }
     }
-  }, [input, busy, mealSlots, messages]);
+  }, [input, assistantReady, mealSlots, autoSlot, draftFoodTarget, requestCurrent]);
 
   // ── Toggle helpers on a message's parsed preview ───────────────────────────
   const patchParsed = useCallback((mi, patchFn) => {
@@ -446,402 +627,35 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       const next = [...prev];
       const msg = next[mi];
       if (!msg?.parsed || msg.applied) return prev;
-      next[mi] = { ...msg, parsed: patchFn(msg.parsed) };
+      next[mi] = { ...msg, reviewProposed: hasLoggingPreview(msg), noteProposed: msg.noteProposed || !!msg.parsed.notes, parsed: patchFn(msg.parsed) };
       return next;
     });
   }, []);
 
   const setGrams = useCallback((mi, idx, value) => {
-    const g = Math.min(5000, Math.max(0, parseInt(value) || 0));
-    patchParsed(mi, p => ({
-      ...p,
-      foods: p.foods.map((f, i) => {
-        if (i !== idx) return f;
-        const factor = g / 100;
-        return {
-          ...f,
-          grams: g,
-          // Recompute this row's macros so the totals stay honest as they type
-          macros: {
-            cal:  Math.round((f.per_100g?.calories    || 0) * factor),
-            pro:  +((f.per_100g?.protein     || 0) * factor).toFixed(1),
-            carb: +((f.per_100g?.total_carbs || 0) * factor).toFixed(1),
-            fat:  +((f.per_100g?.fat         || 0) * factor).toFixed(1),
-          },
-        };
-      }),
-    }));
+    patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => i === idx ? withFoodGrams(f, value) : f) }));
   }, [patchParsed]);
 
   // The member's own macros for a preview food (10 Oct 2026, chat/ChatFoodMacros).
-  const setMacros = (mi, idx, per) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => (i === idx ? foodWithLabel(f, per) : f)) }));
+  const setMacros = (mi, idx, per, how) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => (i === idx ? foodWithLabel(f, per, how?.preparation) : f)) }));
   const toggleListItem = (mi, key, idx) =>
     patchParsed(mi, p => ({
       ...p,
       [key]: p[key].map((it, i) => (i === idx ? { ...it, on: !it.on } : it)),
     }));
 
-  // ── What's still pending after applying — the "coach nudge" ────────────────
-  const computePending = useCallback((newLog) => {
-    const proto  = deriveProtocolItemsCompat(useLogStore.getState().protocol);
-    const target = useLogStore.getState().protocol?.water_target || 3000;
-    const pending = [];
+  useEffect(() => {
+    if (!overlay || !composerOpen || typeof ResizeObserver === 'undefined') return undefined;
+    const el = document.querySelector('[data-testid="composer-bar"]');
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => setComposerHeight(el.getBoundingClientRect().height + 40));
+    ro.observe(el); return () => ro.disconnect();
+  }, [overlay, composerOpen]);
 
-    if (!newLog.weight) pending.push('morning weight');
-    const actLeft = proto.activities.filter(a => !newLog.activities?.[a.id]).length;
-    if (actLeft > 0) pending.push(`${actLeft} activit${actLeft > 1 ? 'ies' : 'y'}`);
-    const acvLeft = proto.acv.filter(a => !newLog.acv?.[a.id]).length;
-    if (acvLeft > 0) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
-    const suppLeft = proto.supplements.filter(s => !newLog.supplements?.[s.id]).length;
-    if (suppLeft > 0) pending.push(`${suppLeft} ${plural(suppLeft, 'supplement')}`);
-    if ((newLog.water || 0) < target) pending.push(`water (${((target - (newLog.water || 0)) / 1000).toFixed(1)}L to go)`);
-    if (!newLog.food?.length) pending.push('food log');
-    if (!newLog.sleep?.bedtime || !newLog.sleep?.waketime) pending.push('sleep times');
-
-    return pending.slice(0, 3);
-  }, []);
-
-  // ── Workouts — SAFE merge into workout_sessions ────────────────────────────
-  // POST /api/workouts REPLACES the whole day's session (all exercises/sets),
-  // so we always GET the current session first and resend its exercises
-  // unchanged — never silently wiping a manually-logged workout. We only add
-  // duration + a note line; freeform AI-parsed workouts don't map to a named
-  // exercise_id, so they live in the session's `notes` field for now (visible
-  // to the member and their coach) rather than inventing exercise rows.
-  const applyWorkouts = useCallback(async (workoutsOn) => {
-    if (!workoutsOn.length) return { ok: true };
-    const date = useLogStore.getState().date;
-    try {
-      const { data: existing } = await api.get('/workouts', { params: { date } });
-      const prevSession = existing?.session || null;
-      const prevExercises = (existing?.exercises || []).map(ex => ({
-        exercise_id: ex.exercise_id,
-        sets: ex.sets.map(s => ({ reps: s.reps, weight_kg: s.weight_kg })),
-      }));
-
-      // Snapshot for Undo
-      workoutUndoRef.current = {
-        date,
-        hadSession: !!prevSession,
-        duration_min: prevSession?.duration_min ?? null,
-        notes: prevSession?.notes ?? null,
-        exercises: prevExercises,
-        cardio: Array.isArray(existing?.cardio) ? existing.cardio : [],
-      };
-
-      // Resolve an exercise by name, creating it if the library doesn't have it.
-      // The library is shared globally, and POST /exercises upserts on name,
-      // so this is safe to call for an existing name too.
-      const resolveExerciseId = async (name) => {
-        try {
-          const { data: found } = await api.get('/workouts/exercises', { params: { q: name } });
-          const exact = (found || []).find(
-            e => e.name.toLowerCase() === name.toLowerCase()
-          );
-          if (exact) return exact.id;
-        } catch { /* fall through to create */ }
-        try {
-          const { data: created } = await api.post('/workouts/exercises', { name });
-          return created?.id || null;
-        } catch (err) {
-          console.error('AI chat: could not resolve exercise', name, err);
-          return null;
-        }
-      };
-
-      // Three buckets:
-      //   sets      → real exercise rows (volume-based calories)
-      //   cardio    → real cardio rows on the session (MET × time calories)
-      //   freeform  → anything we can't structure, kept as a session note
-      const structured = workoutsOn.filter(w => w.sets?.length);
-      const cardioIn   = workoutsOn.filter(w => !w.sets?.length && w.cardio_type);
-      const freeform   = workoutsOn.filter(w => !w.sets?.length && !w.cardio_type);
-
-      const mergedExercises = [...prevExercises];
-      for (const w of structured) {
-        const exId = await resolveExerciseId(w.name);
-        if (!exId) { freeform.push(w); continue; }  // fall back to a note
-        const sets = w.sets.map(st => ({ reps: st.reps, weight_kg: st.weight_kg }));
-        const already = mergedExercises.find(e => e.exercise_id === exId);
-        if (already) already.sets = [...already.sets, ...sets];  // append, never replace
-        else mergedExercises.push({ exercise_id: exId, sets });
-      }
-
-      // Duration only comes from FREEFORM work (a 30-min walk, an hour of
-      // cycling). Set-based lifts must not add duration — each apply would
-      // stack another block of minutes onto the session, and since burn is
-      // duration × MET that inflates calories without limit. A member logging
-      // "bench press 3 sets" twice was ending up with a 4-hour session.
-      // Merge new cardio with what's already on the session, skipping exact
-      // duplicates so re-applying the same message can't double the day.
-      const prevCardio = Array.isArray(existing?.cardio) ? existing.cardio : [];
-      const newCardio = cardioIn
-        .map(w => ({
-          type:         w.cardio_type,
-          duration_min: parseFloat(w.duration_min) || 0,
-          speed_kmh:    w.speed_kmh ?? null,
-          distance_km:  w.distance_km ?? null,
-        }))
-        .filter(c => c.duration_min > 0)
-        .filter(c => !prevCardio.some(p =>
-          p.type === c.type && Number(p.duration_min) === Number(c.duration_min)
-        ));
-      const mergedCardio = [...prevCardio, ...newCardio];
-
-      const addedMinutes = freeform.reduce((s, w) => s + (parseFloat(w.duration_min) || 0), 0);
-      const rawDuration = (prevSession?.duration_min || 0) + addedMinutes;
-      // 8 h is a generous ceiling for one day's training; beyond that the value
-      // is almost certainly an accumulation bug rather than a real session.
-      const newDuration = rawDuration > 0 ? Math.min(480, rawDuration) : (prevSession?.duration_min || null);
-
-      const newLines = freeform.map(w =>
-        `\u2728 ${w.name}${w.qty_text ? ` \u2014 ${w.qty_text}` : ''}${w.calories_burned ? ` (~${w.calories_burned} kcal)` : ''}`
-      );
-      const combinedNotes = [prevSession?.notes, ...newLines].filter(Boolean).join('\n').slice(0, 2000);
-
-      await api.post('/workouts', {
-        date,
-        duration_min: newDuration,
-        notes: combinedNotes,
-        exercises: mergedExercises,
-        cardio: mergedCardio,
-      });
-      return { ok: true, exercisesAdded: structured.length, cardioAdded: newCardio.length };
-    } catch (err) {
-      console.error('AI chat: failed to save workouts:', err);
-      workoutUndoRef.current = null;
-      return { ok: false };
-    }
-  }, []);
-
-  // ── Apply everything included to today's log ───────────────────────────────
-  const applyAll = useCallback(async (mi) => {
-    const msg = messages[mi];
-    if (!msg?.parsed || msg.applied) return;
-    const p = msg.parsed;
-
-    const { log: cur, updateLog, saveLog } = useLogStore.getState();
-
-    // Snapshot for undo
-    undoRef.current = {
-      weight: cur.weight, activities: cur.activities, acv: cur.acv,
-      supplements: cur.supplements, water: cur.water, sleep: cur.sleep,
-      food: cur.food,
-    };
-
-    const newLog = { ...cur };
-
-    if (p.weightOn && p.weight_kg != null) {
-      newLog.weight = String(p.weight_kg);
-      updateLog('weight', newLog.weight);
-    }
-    const onIds = (list) => list.filter(i => i.on).map(i => i.id);
-    if (onIds(p.activities).length) {
-      newLog.activities = { ...cur.activities };
-      onIds(p.activities).forEach(id => { newLog.activities[id] = true; });
-      updateLog('activities', newLog.activities);
-    }
-    if (onIds(p.acv).length) {
-      newLog.acv = { ...cur.acv };
-      onIds(p.acv).forEach(id => { newLog.acv[id] = true; });
-      updateLog('acv', newLog.acv);
-    }
-    if (onIds(p.supplements).length) {
-      newLog.supplements = { ...cur.supplements };
-      onIds(p.supplements).forEach(id => { newLog.supplements[id] = true; });
-      updateLog('supplements', newLog.supplements);
-    }
-    if (p.waterOn && p.water_ml_add) {
-      newLog.water = Math.min(10000, (cur.water || 0) + p.water_ml_add);
-      updateLog('water', newLog.water);
-    }
-    if (p.sleepOn && p.sleep) {
-      newLog.sleep = {
-        ...cur.sleep,
-        ...(p.sleep.bedtime  ? { bedtime:  p.sleep.bedtime }  : {}),
-        ...(p.sleep.waketime ? { waketime: p.sleep.waketime } : {}),
-      };
-      updateLog('sleep', newLog.sleep);
-    }
-    // Corrections update the LAST matching item by name — the most recently
-    // logged dal is "the dal" the member means. Grams and slot only; the
-    // per_100g stays, so calories recompute automatically from the new grams.
-    const corrOn = (p.corrections || []).filter(c => c.on);
-    if (corrOn.length) {
-      const food = [...(cur.food || [])];
-      for (const c of corrOn) {
-        for (let i = food.length - 1; i >= 0; i--) {
-          if (String(food[i].name).toLowerCase() === c.name.toLowerCase()) {
-            food[i] = { ...food[i],
-              ...(c.grams ? { grams: c.grams } : {}),
-              ...(c.meal  ? { meal: c.meal }   : {}) };
-            break;
-          }
-        }
-      }
-      newLog.food = food;
-      updateLog('food', food);
-    }
-
-    const foodsOn = p.foods.filter(f => f.on);
-    if (foodsOn.length) {
-      const baseId = Date.now();
-      const newItems = foodsOn.map((f, i) => ({
-        id:       baseId + i,
-        name:     f.name,
-        grams:    f.grams,
-        // No meal said: the one due now (lib/day defaultMealSlot), not the first slot.
-        meal:     (f.meal && mealSlots.includes(f.meal)) ? f.meal
-                  : defaultMealSlot({ mealSlots, mealPlans, food: cur.food || [] }),
-        food_id:  f.food_id || null,
-        per_100g: f.per_100g && (f.per_100g.calories || 0) > 0 ? f.per_100g : null,
-        ...(f.label ? { label: true } : {}),
-      }));
-      newLog.food = [...(newLog.food || cur.food || []), ...newItems];
-      updateLog('food', newLog.food);
-    }
-
-    if (p.bodyMetricsOn && p.bodyMetrics?.length) {
-      // Body-scan metrics go to lab history (the coach's Body Composition
-      // section reads from there). Fire-and-forget with a visible failure —
-      // the daily log has already applied and must not be blocked by this.
-      api.post('/members/me/labs', {
-        test_date: new Date().toISOString().slice(0, 10),
-        results: p.bodyMetrics.map(bm => ({ test_name: bm.name, value: bm.value, unit: bm.unit })),
-        lab_name: 'Smart Scale',
-        notes: 'Captured from a scale screenshot via AI chat',
-      }).catch(() => {
-        setMessages(msgs => [...msgs, {
-          role: 'ai', error: true,
-          text: "Your weight was logged, but saving the body metrics failed — try the screenshot again later.",
-        }]);
-      });
-    }
-
-    haptic(30);
-    saveLog().catch(() => {});
-
-    // Teach the app this member's real portion sizes. Only rows they actually
-    // corrected, and only where the AI gave a recognisable unit phrase.
-    const corrections = foodsOn
-      .filter(f => f.portion_phrase && Number(f.grams) > 0 && Number(f.grams) !== Number(f.ai_grams))
-      .map(f => ({ phrase: f.portion_phrase, grams: Number(f.grams) }));
-    if (corrections.length) {
-      api.post('/ai-chat/portions', { corrections })
-        .catch(err => console.error('portion learning failed:', err));
-    }
-
-    // ── Eval set (Sprint L1) ─────────────────────────────────────────────────
-    // Portion memory above only learns from foods that came with a recognisable
-    // unit phrase ("2 katori"). The eval set wants every edit, phrase or not —
-    // "Chicken Curry 300g → 180g" is exactly as much of a parsing error, and
-    // the replay tool has no way to find it otherwise.
-    //
-    // Two signals, both unambiguous:
-    //   · grams changed  → the model's portion was wrong
-    //   · item unticked  → the model logged something that was never said
-    // A meal-slot edit is NOT captured: the preview has no slot control, so a
-    // wrong slot cannot be observed here. Recording it would be a guess.
-    if (msg.evalMessage) {
-      const edits = [
-        ...p.foods
-          .filter(f => f.on && Number(f.grams) > 0 && Number(f.grams) !== Number(f.ai_grams))
-          .map(f => ({
-            field:     'grams',
-            ai_output: { name: f.name, grams: Number(f.ai_grams), meal: f.meal || null },
-            corrected: { name: f.name, grams: Number(f.grams),    meal: f.meal || null },
-          })),
-        ...p.foods
-          .filter(f => !f.on)
-          .map(f => ({
-            field:     'food_name',
-            ai_output: { name: f.name, grams: Number(f.ai_grams), meal: f.meal || null },
-            corrected: null,      // null = the member says this item does not exist
-          })),
-      ];
-      for (const e of edits) {
-        api.post('/ai-chat/eval-sample', {
-          source:  msg.evalSource || 'member_parse',
-          message: msg.evalMessage,
-          ...e,
-        }).catch(() => {});   // bookkeeping — never surfaces to the member
-      }
-    }
-
-    const workoutsOn = p.workouts.filter(w => w.on);
-    const workoutResult = await applyWorkouts(workoutsOn);
-
-    setMessages(prev => {
-      const next = [...prev];
-      next[mi] = { ...next[mi], applied: true, workoutSaveFailed: workoutsOn.length > 0 && !workoutResult.ok, pending: computePending(newLog) };
-      return next;
-    });
-    useAIChat.getState().markApplied();
-  }, [messages, mealSlots, computePending, applyWorkouts]);
-
-  // ── Undo / Edit last apply ─────────────────────────────────────────────────
-  // Both roll the log back to its pre-apply snapshot; they differ only in what
-  // the card becomes afterwards. Undo → "Changes reverted." Edit → the preview
-  // card again, editable, so the member can fix a value and re-apply.
-  const rollback = useCallback((mi, { reopen }) => {
-    const snap = undoRef.current;
-    if (!snap) return;
-    const { updateLog, saveLog } = useLogStore.getState();
-    Object.entries(snap).forEach(([field, val]) => updateLog(field, val));
-    undoRef.current = null;
-    haptic(20);
-    saveLog().catch(() => {});
-
-    // Restore workout_sessions to its pre-apply state, if we changed it
-    const wSnap = workoutUndoRef.current;
-    if (wSnap) {
-      workoutUndoRef.current = null;
-      if (wSnap.hadSession) {
-        api.post('/workouts', {
-          date: wSnap.date,
-          duration_min: wSnap.duration_min,
-          notes: wSnap.notes,
-          exercises: wSnap.exercises,
-          cardio: wSnap.cardio || [],
-        }).catch(err => console.error('AI chat: workout undo failed:', err));
-      }
-      // If there was no session before, the one we created via applyWorkouts
-      // stays — there's no delete endpoint, and an empty/duration-only
-      // session is harmless (it just won't show in the Workout section
-      // until it has notes or sets, which it still does — acceptable
-      // trade-off vs. adding a destructive DELETE path just for undo).
-    }
-
-    // The Undo/Edit transition lives in utils/chatCard.js — the same function
-    // test-coach-view exercises.
-    setMessages(prev => {
-      const next = [...prev];
-      next[mi] = rollbackCard(next[mi], { reopen });
-      return next;
-    });
-  }, []);
-
-  const undo = useCallback((mi) => rollback(mi, { reopen: false }), [rollback]);
-  const editApplied = useCallback((mi) => rollback(mi, { reopen: true }), [rollback]);
-
-  // Count of included things across a parsed preview
-  const countIncluded = (p) =>
-    (p.weightOn && p.weight_kg != null ? 1 : 0) +
-    p.activities.filter(a => a.on).length +
-    p.acv.filter(a => a.on).length +
-    p.supplements.filter(s => s.on).length +
-    (p.waterOn && p.water_ml_add ? 1 : 0) +
-    (p.sleepOn && p.sleep ? 1 : 0) +
-    ((p.bodyMetricsOn && p.bodyMetrics?.length) ? 1 : 0) +
-    (p.corrections || []).filter(c => c.on).length +
-    p.foods.filter(f => f.on).length +
-    p.workouts.filter(w => w.on).length;
-
-  return (
-    <>
+  const thread = (
     <section ref={threadRef} id="ai-thread" data-testid="ai-thread" aria-label="FitLife AI" className="scroll-mt-4">
-      <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm shadow-[0_0_16px_rgba(212,175,55,0.45)] flex-shrink-0">✨</div>
+      <div className="chat-thread-header flex items-center gap-2.5 mb-3">
+        <div className="w-8 h-8 rounded-full text-charcoal bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center text-sm  flex-shrink-0"><Icon name="spark" size={17} /></div>
         <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight">FitLife AI</p>
           <p className="text-eyebrow text-lo leading-tight">Log your whole day in one message</p>
@@ -860,43 +674,48 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       <div className="space-y-4" data-testid="ai-messages">
 
         {messages.length === 0 && (
-          <div className="bg-surface border border-hair rounded-2xl p-4">
-            <p className="text-sm font-semibold text-white mb-1.5">Hi! Tell me about your day 🌤</p>
-            <p className="text-xs text-mid leading-relaxed mb-3">
-              Weight, walks, meals, ACV, water, supplements, sleep — say it all in
-              one message and I'll fill your entire log. Review, then tap Apply.
-              Tap 📷 to log a meal from a photo, or 📄 to upload a lab report.
-            </p>
-            <div className="bg-charcoal border border-white/[0.06] rounded-xl px-3 py-2.5">
-              <p className="text-caption text-mid leading-relaxed italic">
-                "weight 82.5, morning walk done, 2 chapati and dal for lunch,
-                acv before meal 2, drank 1 litre water, took my supplements,
-                slept 10:30 to 6:30"
-              </p>
-            </div>
+          <div className="member-ai-welcome">
+            <Icon name="spark" size={25} />
+            <h2>A little less effort.</h2>
+            <p>Meals, movement, water, sleep or weight. Tell me once; review and save.</p>
+            <p className="member-ai-example">Try “2 idlis and sambar for breakfast”.</p>
           </div>
         )}
 
         {messages.map((m, mi) => (
           m.role === 'user' ? (
             <div key={mi} className="flex justify-end">
-              <div className="max-w-[85%] bg-gold text-charcoal text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+              <div className="ai-user-bubble max-w-[85%] bg-gold text-charcoal text-sm rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm">
+                {m.photoPreview && <img src={m.photoPreview} alt="Your attached meal" className="max-h-40 w-full object-cover rounded-xl mb-2" />}
                 {m.text}
               </div>
             </div>
           ) : (
-            <div key={mi} className="flex justify-start">
+            <div key={mi} className="flex justify-start" data-testid={m.parsed ? "ai-review-card" : undefined} data-review-index={mi} data-review-id={m.saveReceipt?.id}>
               <div className="max-w-[94%] w-full">
-                <div className={`text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
+                <div className={`ai-reply text-sm rounded-2xl rounded-bl-md px-4 py-3 border ${
                   m.error
                     ? 'bg-red-500/[0.08] border-red-500/25 text-red-300'
                     : m.summary
                       ? 'bg-gold/[0.06] border-gold/20 text-gold-light'
                       : 'bg-surface border-hair text-white'
-                }`}>
+                }`} data-testid={m.failedRequest ? 'ai-request-error' : undefined}>
                   {m.summary
                     ? <DaySummary s={m.summary} />
-                    : <p className="leading-relaxed whitespace-pre-line">{m.text}</p>}
+                    : <p className="leading-relaxed whitespace-pre-line" data-testid="ai-reply-text" role={m.draftEditStatus ? 'status' : undefined}>{aiReplyText(m)}</p>}
+                  <UnresolvedFoods foods={m.parsed?.unresolved_foods} reviewedFoods={m.parsed?.foods} />
+                  <UnresolvedSleep value={m.parsed?.unresolved_sleep} />
+                  {m.advice && <div className="mt-3 pt-3 border-t border-hair" data-testid="ai-mixed-answer">
+                    <p className="text-xs text-muted mb-1">{m.advice.unavailable ? 'Question not answered' : 'Based on saved entries when you asked · this review is excluded'}</p>
+                    <p className="leading-relaxed whitespace-pre-line">{m.advice.text}</p>
+                  </div>}
+
+                  {m.failedRequest && requestCurrent(m.failedRequest) && <AIRequestRecovery
+                    request={m.failedRequest} requestEdit={requestEdit} setRequestEdit={setRequestEdit}
+                    disabled={busy || photoBusy || labBusy || applying || !assistantReady}
+                    send={send} sendPhoto={sendPhoto}
+                    onReplace={request => { replacingPhoto.current = request; fileRef.current?.click(); }} />}
+
 
                   {m.planAsk && <LogPlannedButton mealPlans={mealPlans} food={todayFood} onLogPlanned={onLogPlanned} />}
 
@@ -929,19 +748,19 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                     <div className="mt-3">
                       <div className="flex items-center gap-2 mb-2">
                         <input type="date" value={m.lab.test_date}
-                          max={new Date().toISOString().slice(0, 10)}
-                          disabled={m.applied}
+                          max={today()}
+                          disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                           onChange={e => patchLab(mi, l => ({ ...l, test_date: e.target.value }))}
                           style={{ minHeight: 32 }}
                           className="bg-charcoal border border-white/[0.12] rounded-lg px-2 text-caption text-white" />
                         <input value={m.lab.lab_name} placeholder="Lab name"
-                          disabled={m.applied}
+                          disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                           onChange={e => patchLab(mi, l => ({ ...l, lab_name: e.target.value }))}
                           style={{ minHeight: 32 }}
                           className="flex-1 min-w-0 bg-charcoal border border-white/[0.12] rounded-lg px-2 text-caption text-white placeholder-lo" />
                       </div>
                       {!m.applied
-                        && m.lab.test_date === new Date().toISOString().slice(0, 10)
+                        && m.lab.test_date === today()
                         && m.lab.results.some(r => r.on && isScaleWeightRow(r)) && (
                         <p className="text-caption text-gold mb-2 px-1">
                           ⚖ Weight found — it will go into today's daily log, the rest into body history.
@@ -949,7 +768,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       )}
 
                       {m.lab.needs_review > 0 && !m.applied && (
-                        <p className="text-eyebrow text-amber-300 mb-2 leading-relaxed">
+                        <p className="text-eyebrow text-warn mb-2 leading-relaxed">
                           ⚠ {m.lab.needs_review} {plural(m.lab.needs_review, 'row')} came out unclear —
                           check the highlighted ones against your report before saving.
                         </p>
@@ -960,13 +779,13 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                           <div key={ri}
                             className={`bg-charcoal border rounded-xl px-3 py-2 ${
                               r.confidence === 'low' || r.value === null
-                                ? 'border-amber-400/35' : 'border-white/[0.06]'
+                                ? 'border-warn/35' : 'border-white/[0.06]'
                             } ${r.on ? '' : 'opacity-40'}`}>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => patchLab(mi, l => ({
                                   ...l, results: l.results.map((x, j) => j === ri ? { ...x, on: !x.on } : x) }))}
-                                disabled={m.applied}
+                                disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                                 className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
                                   r.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'}`}>✓</button>
                               <span className="text-caption font-semibold text-white flex-1 min-w-0 truncate">
@@ -975,13 +794,13 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                               <input
                                 value={r.value ?? ''} inputMode="decimal"
                                 placeholder="?"
-                                disabled={m.applied}
+                                disabled={m.applied || labBusy || m.labSaveLocked || m.labSaveUnconfirmed}
                                 onChange={e => patchLab(mi, l => ({
                                   ...l, results: l.results.map((x, j) => j === ri
                                     ? { ...x, value: e.target.value === '' ? null : parseFloat(e.target.value), on: e.target.value !== '' } : x) }))}
                                 style={{ width: 62, minHeight: 28 }}
                                 className={`rounded-md px-1 text-center text-caption border bg-surface text-white
-                                  ${r.value === null ? 'border-amber-400/50' : 'border-white/[0.12]'}`} />
+                                  ${r.value === null ? 'border-warn/50' : 'border-white/[0.12]'}`} />
                               <span className="text-eyebrow text-lo w-12 truncate">{r.unit || ''}</span>
                             </div>
                             {(r.ref_min != null || r.ref_max != null) && (
@@ -996,32 +815,32 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       {m.applied ? (
                         <div className="mt-2 bg-ok-deep/[0.08] border border-ok-deep/25 rounded-xl px-3.5 py-3">
                           <p className="text-body-sm font-bold text-gold-light">
-                            ✓ {m.labSaved > 0 ? `${m.labSaved} results saved` : 'Saved'}
-                            {m.weightLogged != null && ` · ⚖ ${m.weightLogged} kg logged for today`}
+                            {m.labSaved > 0 ? `${m.labSaved} results saved` : m.weightQueued ? 'Kept on this device' : 'Saved'}
+                            {m.weightLogged != null && ` · ${m.weightLogged} kg ${m.weightQueued ? 'waiting to sync' : 'logged for today'}`}
                           </p>
                           {m.labNotice && (
-                            <p className="text-caption text-amber-200 mt-1 leading-relaxed">{m.labNotice}</p>
+                            <p className="text-caption text-warn mt-1 leading-relaxed">{m.labNotice}</p>
                           )}
                         </div>
                       ) : (
                         <>
-                          <button onClick={() => saveLabs(mi)} disabled={labBusy}
+                          {m.labSaveNotice && <p role="status" className="text-caption text-warn mt-2">{m.labSaveNotice}</p>}
+                          <button onClick={() => saveLabs(mi)} disabled={labBusy || applying || !assistantReady || m.labSubmissionConflict || (m.labSaveUnconfirmed && !m.labRequestId)}
                             style={{ minHeight: 44 }}
                             className="w-full mt-2 rounded-xl text-sm font-bold text-charcoal
                               bg-gradient-to-r from-gold-light via-gold to-gold-dark
                               active:scale-[0.98] transition-transform disabled:opacity-60">
-                            {labBusy ? 'Saving…' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
+                            {labBusy ? 'Saving…' : m.labSubmissionConflict ? 'Check Lab results' : m.labSaveUnconfirmed ? m.labRequestId ? 'Retry report save' : 'Check Lab results' : m.labSaveLocked ? 'Retry weight save' : `Save ${m.lab.results.filter(r => r.on && r.value !== null).length} results`}
                           </button>
                           <p className="text-eyebrow text-lo mt-1.5 leading-relaxed">
-                            Read from your report by AI — check the numbers before saving.
-                            Nothing is stored until you do.
+                            {m.labSaveLocked || m.labSaveUnconfirmed ? m.labRequestId ? 'Retries confirm the same submission without adding duplicate results.' : 'Previously submitted report results will not be sent again.' : 'Read from your report by AI — check the numbers before saving. Nothing is stored until you do.'}
                           </p>
                         </>
                       )}
                     </div>
                   )}
 
-                  {m.parsed && (countIncluded(m.parsed) > 0 || m.parsed.workouts.length > 0) && (
+                  {m.parsed && hasLoggingPreview(m) && (
                     <div className="mt-3 space-y-3">
 
                       {/* ⚖ Weight */}
@@ -1032,6 +851,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                             onToggle={() => patchParsed(mi, p => ({ ...p, weightOn: !p.weightOn }))}>
                             {m.parsed.weight_kg} kg
                           </ToggleChip>
+                          {m.parsed.weightOn && <WeightJumpNote weightKg={m.parsed.weight_kg} day={m.logDate || logDate} />}
                         </div>
                       )}
 
@@ -1039,10 +859,10 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       {m.parsed.bodyMetrics?.length > 0 && (
                         <div>
                           <GroupHeader icon="📊" title="Body scan" count={m.parsed.bodyMetrics.length} />
-                          <ToggleChip on={m.parsed.bodyMetricsOn}
+                          {m.parsed.bodyMetricsLocked ? <p className="text-caption text-mid">Body metrics were already submitted. Check Lab results to avoid adding them twice.</p> : <ToggleChip on={m.parsed.bodyMetricsOn}
                             onToggle={() => patchParsed(mi, p => ({ ...p, bodyMetricsOn: !p.bodyMetricsOn }))}>
                             Save {m.parsed.bodyMetrics.length} metrics to body history
-                          </ToggleChip>
+                          </ToggleChip>}
                           <p className="text-eyebrow text-lo mt-1 px-1">
                             {m.parsed.bodyMetrics.slice(0, 4).map(bm => `${bm.name} ${bm.value}${bm.unit || ''}`).join(' · ')}
                             {m.parsed.bodyMetrics.length > 4 && ` · +${m.parsed.bodyMetrics.length - 4} more`}
@@ -1085,7 +905,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       {/* 🧃 ACV */}
                       {m.parsed.acv.length > 0 && (
                         <div>
-                          <GroupHeader icon="🧃" title="ACV" count={m.parsed.acv.filter(a => a.on).length} />
+                          <GroupHeader icon="🧃" title="Apple cider vinegar" count={m.parsed.acv.filter(a => a.on).length} />
                           <div className="flex flex-wrap gap-1.5">
                             {m.parsed.acv.map((a, i) => (
                               <ToggleChip key={a.id} on={a.on} onToggle={() => toggleListItem(mi, 'acv', i)}>
@@ -1138,62 +958,28 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       {m.parsed.foods.length > 0 && (
                         <div>
                           <GroupHeader icon="🥗" title="Food" count={m.parsed.foods.filter(f => f.on).length} />
-                          <div className="space-y-1.5">
-                            {m.parsed.foods.map((f, fi) => (
-                              <button key={fi} onClick={() => toggleListItem(mi, 'foods', fi)}
-                                className={`w-full text-left bg-charcoal border rounded-xl px-3 py-2.5 transition-all active:scale-[0.99] ${
-                                  f.on ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-40'
-                                }`}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-tiny flex-shrink-0 ${
-                                      f.on ? 'bg-gold text-charcoal' : 'bg-white/[0.08] text-transparent'
-                                    }`}>✓</span>
-                                    <div className="min-w-0">
-                                      <p className={`text-body-sm font-semibold truncate ${f.on ? 'text-white' : 'text-mid line-through'}`}>
-                                        {f.name}
-                                      </p>
-                                      <div className="flex items-center gap-1.5 text-caption text-lo flex-wrap">
-                                        {f.qty_text ? <span>{f.qty_text} ·</span> : null}
-                                        {/* Editable: the portion guess is the biggest source of
-                                            error in the whole chain, and every correction teaches
-                                            the app this member's actual bowl and glass sizes. */}
-                                        <input
-                                          type="number" inputMode="numeric" value={f.grams}
-                                          onClick={e => e.stopPropagation()}
-                                          onChange={e => setGrams(mi, fi, e.target.value)}
-                                          disabled={m.applied}
-                                          style={{ width: 54, minHeight: 26 }}
-                                          className="bg-charcoal border border-white/[0.14] rounded-md px-1 text-center
-                                            text-caption text-white focus:outline-none focus:ring-1 focus:ring-gold/50"
-                                        />
-                                        <span>g · {(f.meal && mealSlots.includes(f.meal)) ? f.meal : autoSlot}</span>
-                                        {f.source === 'db-verified' && <span className="text-gold-light">· verified</span>}
-                                        {Number(f.grams) !== Number(f.ai_grams) && (
-                                          <span className="text-gold">· I'll remember this</span>
-                                        )}
-                                      </div>
-                                      {f.warning && (
-                                        <p className="text-eyebrow text-amber-300 leading-snug mt-0.5">⚠ {f.warning}</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <ChatFoodMacros f={f} disabled={m.applied} onSave={per => setMacros(mi, fi, per)} />
-                                </div>
-                              </button>
-                            ))}
-                            {m.parsed.totals && m.parsed.foods.filter(f => f.on).length > 1 && (
-                              <div className="flex items-center justify-between px-3 py-2 bg-gold/[0.10] border border-gold/25 rounded-xl">
-                                <span className="text-caption font-bold text-gold-light tracking-wider">Food total</span>
-                                <span className="text-body-sm font-bold text-white">
-                                  {m.parsed.foods.filter(f => f.on).reduce((s, f) => s + (f.macros?.cal || 0), 0)} kcal
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                          <AIFoodReview foods={m.parsed.foods} disabled={m.applied || applying}
+                            mealSlots={mealSlots} autoSlot={autoSlot}
+                            editableFoodIds={m.parsed.foods.filter(f => isDraftFoodEditable(m, f, logDate)).map(f => f.draftFoodId)}
+                            editBusy={busy || photoBusy || labBusy || !assistantReady}
+                            onEditWithAI={fi => {
+                              setDraftFoodTarget({ reviewId: m.draftReviewId, foodId: m.parsed.foods[fi].draftFoodId });
+                              useAIChat.getState().openChat('text');
+                              inputRef.current?.focus();
+                            }}
+                            onToggle={fi => toggleListItem(mi, 'foods', fi)}
+                            onGrams={(fi, value) => setGrams(mi, fi, value)}
+                            onPatch={(fi, patch) => patchParsed(mi, p => ({ ...p, foods: p.foods.map((f, i) => i === fi ? { ...f, ...patch } : f) }))}
+                            onMacros={(fi, per, how) => setMacros(mi, fi, per, how)} />
                         </div>
                       )}
 
+                      {(m.noteProposed || m.parsed.notes || m.parsed.notesOn) && <div className="bg-charcoal rounded-xl p-3">
+                        <label className="flex gap-2 items-center text-sm mb-2"><input type="checkbox" checked={!!m.parsed.notesOn} disabled={m.applied || applying}
+                          onChange={e => patchParsed(mi, p => ({ ...p, notesOn: e.target.checked }))} /> Daily notes & how you feel</label>
+                        <textarea aria-label="Review daily note" value={m.parsed.notes} disabled={m.applied || applying} maxLength={2000}
+                          onChange={e => patchParsed(mi, p => ({ ...p, notes: e.target.value }))} className="w-full text-sm rounded-lg p-2" />
+                      </div>}
                       {/* 💪 Workouts — now actually saved to the Workout section */}
                       {m.parsed.workouts.length > 0 && (
                         <div>
@@ -1227,8 +1013,8 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                             ))}
                             <p className="text-eyebrow text-lo px-1">
                               {m.parsed.workouts.some(w => w.on && w.sets?.length)
-                                ? 'Sets and reps go straight into your Workout log.'
-                                : "Saved to today's session · add exact sets & reps in the Workout section anytime."}
+                                ? 'Sets and reps are included in this workout review.'
+                                : 'Exact sets and reps can be added in the Workout section.'}
                             </p>
                           </div>
                         </div>
@@ -1242,55 +1028,16 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
                       )}
 
                       {countIncluded(m.parsed) > 0 && !m.applied && !m.undone && (
-                        <button onClick={() => applyAll(mi)}
+                        <button data-testid="ai-card-save" onClick={() => applyAll(mi)} disabled={applying || labBusy || !assistantReady || !!foodReviewError(m.parsed.foods)}
                           style={{ minHeight: 48 }}
-                          className="w-full rounded-xl text-sm font-bold bg-gradient-to-r from-gold to-gold-dark text-white hover:from-gold-light hover:to-gold active:scale-[0.98] shadow-[0_2px_16px_rgba(212,175,55,0.4)] transition-all">
-                          Apply {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to today's log
+                          className="w-full rounded-xl text-sm font-bold bg-gold text-charcoal active:scale-[0.98] disabled:opacity-40 transition-all">
+                          {applying ? 'Saving…' : 'Save'} {countIncluded(m.parsed)} {plural(countIncluded(m.parsed), 'item')} to {logTarget(m.logDate || logDate, today())}
                         </button>
                       )}
 
-                      {m.applied && (
-                        <div className={`border rounded-xl px-3.5 py-3 space-y-2 ${
-                          m.workoutSaveFailed ? 'bg-amber-500/[0.08] border-amber-500/25' : 'bg-ok-deep/[0.08] border-ok-deep/25'
-                        }`}>
-                          <div className="flex items-center justify-between">
-                            <p className={`text-body-sm font-bold ${m.workoutSaveFailed ? 'text-amber-400' : 'text-gold-light'}`}>
-                              {m.workoutSaveFailed ? '⚠ Applied — workout not saved' : '✓ Applied & saved'}
-                            </p>
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => editApplied(mi)}
-                                style={{ minHeight: 32 }}
-                                className="text-caption font-semibold text-gold hover:text-gold-light transition-colors">
-                                ✏️ Edit
-                              </button>
-                              <button onClick={() => undo(mi)}
-                                style={{ minHeight: 32 }}
-                                className="text-caption font-semibold text-mid hover:text-white underline underline-offset-2 transition-colors">
-                                Undo
-                              </button>
-                            </div>
-                          </div>
-                          {m.workoutSaveFailed && (
-                            <p className="text-caption text-amber-300 leading-relaxed">
-                              Everything else saved, but the workout note couldn't be saved — check your connection and log it in the Workout section.
-                            </p>
-                          )}
-                          {m.pending?.length > 0 ? (
-                            <p className="text-caption text-mid leading-relaxed">
-                              Still pending today: {m.pending.join(' · ')}
-                            </p>
-                          ) : (
-                            <p className="text-caption text-mid">Everything's logged for today — great job! 🎉</p>
-                          )}
-                          <p className="text-eyebrow text-lo leading-relaxed">
-                            Need a change? Tap Edit — or just tell me: type it, say it with 🎤, or send a 📷 photo.
-                          </p>
-                        </div>
-                      )}
-
-                      {m.undone && (
-                        <p className="text-caption text-mid text-center">Changes reverted.</p>
-                      )}
+                      {m.saveNotice && <p role="status" className="text-caption text-warn">{m.saveNotice}</p>}
+                      <AIReviewSaveStatus card={m} disabled={applying || labBusy || !assistantReady}
+                        onRetry={() => applyAll(mi)} onEdit={() => editApplied(mi)} onUndo={() => undo(mi)} onRetryUndo={() => retryUndo(mi)} />
                     </div>
                   )}
                 </div>
@@ -1318,7 +1065,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       {messages.length === 0 && (
         <div className="-mx-4 px-4 mt-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }} data-testid="ai-suggestions">
           {SUGGESTION_CHIPS.map((chip, i) => (
-            <button key={i} onClick={() => send(chip)}
+            <button key={i} onClick={() => { setInput(chip); inputRef.current?.focus(); }}
               style={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: 36 }}
               className="text-xs bg-surface border border-white/[0.10] hover:border-gold/40 rounded-full px-3.5 py-1.5 text-mid transition-colors">
               {chip}
@@ -1328,6 +1075,19 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       )}
 
     </section>
+  );
+
+  return (<ModalScopeContext.Provider value={modal.scopeId}>
+    {overlay ? (composerOpen && createPortal(
+      <div className="member-assistant-overlay" role="dialog" aria-modal="true" aria-label="FitLife AI daily logging" ref={overlayRef}
+        data-modal-scope="ai-thread" aria-owns={composerId} tabIndex={-1} onKeyDown={modal.onKeyDown}>
+        <div className="member-assistant-head"><div><strong>FitLife AI</strong><p>One place for your whole day.</p></div>
+          <button type="button" className="member-theme" onClick={modal.requestClose} aria-label="Close AI assistant"><Icon name="close" size={19} /></button></div>
+        <div className="member-assistant-scroll" role="region" aria-label="Conversation and food review" tabIndex={0}
+          style={{ marginBottom: composerHeight + kbInset, paddingBottom: 16, scrollPaddingBlock: 16 }}>
+          {thread}
+        </div>
+      </div>, document.body)) : thread}
 
     {/* ── Composer — docked above the bottom nav, on every scroll position ──
         Portaled to <body> so no transformed ancestor (Stagger, motion) can
@@ -1335,11 +1095,23 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
         meta asks Chrome to resize the layout viewport, and useKeyboardInset
         covers iOS, which ignores that and needs the visualViewport delta. */}
     {typeof document !== 'undefined' && composerOpen && createPortal(
-      <div data-testid="composer" className="fixed left-0 right-0 z-[45] pointer-events-none fade-up"
-        style={{ bottom: `calc(${(composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
+      <div ref={composerRef} id={composerId} data-testid="composer" data-modal-scope={overlay ? "ai-composer" : undefined} onKeyDown={overlay ? modal.onKeyDown : undefined} className={`fixed left-0 right-0 z-[45] pointer-events-none fade-up ${overlay ? 'member-assistant-composer' : ''}`}
+        style={{ bottom: `calc(${(overlay ? 8 : composerFocused ? COMPOSER_BOTTOM_FOCUSED_PX : COMPOSER_BOTTOM_PX) + kbInset}px + env(safe-area-inset-bottom))` }}>
       <div className="max-w-md mx-auto px-3 pointer-events-auto">
       <div className="glass glass-solid rounded-2xl shadow-float px-3 pt-2 pb-2" data-testid="composer-bar">
+        <UsualMeals active={composerOpen && !messages.some(m => !m.applied && m.parsed?.foods?.length)}
+          autoSlot={autoSlot} disabled={!assistantReady || busy || photoBusy || labBusy || applying}
+          onChoose={suggestion => { inputRef.current?.blur(); setMessages(m => [...m, usualReview(suggestion, today())]); }} />
         {vc.card}
+        {selectedDraftFood && <div data-testid="draft-food-target" className="flex items-center justify-between gap-2 text-caption text-mid" role="status">
+          <span>Editing {selectedDraftFood.name} · {selectedDraftFood.grams} g{selectedDraftFood.meal ? ` · ${selectedDraftFood.meal}` : ''}. Tell me the quantity or meal.</span>
+          <button type="button" className="text-gold min-h-[44px] shrink-0" aria-label="Cancel food edit"
+            disabled={busy} onClick={() => setDraftFoodTarget(null)}>Cancel</button>
+        </div>}
+        {(photoBusy || labBusy) && <p className="text-caption text-gold py-2" role="status">{photoBusy ? 'Analysing your photo and calculating nutrition…' : 'Reading your document…'}</p>}
+        {logError && <p className="text-caption text-danger pb-2" role="alert">{logError}</p>}
+        {!assistantReady && <p className="text-caption text-warn py-2">{logLoading ? 'Loading your daily log…' : 'Open a day up to today before logging with AI. Your draft is kept.'}</p>}
+
         {/* Sprint 5b.1: two rows. The text gets the full width and grows to
             five lines (a dictated day is often three), the tools sit
             underneath — so "2 idli, sambar, 100g whey protein 1 scoop, walked
@@ -1354,14 +1126,18 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
             onFocus={() => useAIChat.getState().setComposerFocused(true)}
             onBlur={() => useAIChat.getState().setComposerFocused(false)}
             onKeyDown={(e) => {
+              if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229) return;
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
               if (e.key === 'Escape') {
                 e.preventDefault();
-                if (input.trim()) e.currentTarget.blur();                    // step away, keep the draft
+                if (input.trim()) {
+                  if (overlay) overlayRef.current?.querySelector('button')?.focus({ preventScroll: true });
+                  else e.currentTarget.blur();                              // step away, keep the draft
+                }
                 else useAIChat.getState().closeComposer();                    // nothing typed → put the bar away
               }
             }}
-            placeholder="Tell me about your day…"
+            placeholder="Ask or log anything…"
             aria-label="Tell FitLife about your day"
             data-testid="composer-input"
             style={{ maxHeight: 5 * 22 + 16 }}
@@ -1376,31 +1152,14 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
           )}
         </div>
         <div className="flex items-center gap-1 mt-1.5">
-          <button type="button" onClick={() => { haptic(8); useAIChat.getState().closeComposer(); }}
-            aria-label="Close" data-testid="composer-close"
-            style={{ minWidth: 40, minHeight: 40 }}
-            className="flex items-center justify-center rounded-full text-mid hover:text-white transition-colors flex-shrink-0 -ml-1">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 9l7 7 7-7" /></svg>
-          </button>
-          <button onClick={() => labRef.current?.click()}
-            disabled={labBusy}
-            aria-label="Upload a lab report"
-            style={{ minWidth: 40, minHeight: 40 }}
-            className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
-              labBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold'
-            }`}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="9" y1="15" x2="15" y2="15" />
-            </svg>
-          </button>
+          <AIAttachments galleryRef={galleryRef} labRef={labRef} disabled={labBusy || photoBusy || busy || applying || !assistantReady} />
           <input ref={labRef} type="file" accept="application/pdf,image/*"
-            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendLabReport(f); }}
+            onClick={rememberPicker}
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (consumePicker(e.currentTarget) && f) sendLabReport(f); }}
             style={{ display: 'none' }} />
           <button onClick={() => fileRef.current?.click()}
-            disabled={photoBusy}
-            aria-label="Log food from a photo"
+            disabled={photoBusy || busy || labBusy || applying || !assistantReady}
+            aria-label="Open camera" title="Snap"
             style={{ minWidth: 40, minHeight: 40 }}
             className={`flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
               photoBusy ? 'text-lo animate-pulse' : 'text-mid hover:text-gold-light'
@@ -1410,22 +1169,27 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
               <circle cx="12" cy="13" r="4" />
             </svg>
           </button>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment"
-            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }}
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" data-testid="ai-camera-input"
+            onClick={rememberPicker}
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; acceptPhoto(f, e.currentTarget, sendPhoto); }}
+            onCancel={() => { replacingPhoto.current = null; pickerContext.current = null; }}
             style={{ display: 'none' }} />
+          <input ref={galleryRef} type="file" accept="image/*" data-testid="ai-gallery-input"
+            onClick={rememberPicker}
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; acceptPhoto(f, e.currentTarget, sendPhoto); }} style={{ display: 'none' }} />
           {vc.micButton}
           <span className="flex-1" />
           {input.trim() && (
-            <span className="text-tiny text-lo tabular-nums mr-1" aria-hidden="true">{input.trim().length}</span>
+            <span className="hidden sm:block text-tiny text-lo tabular-nums mr-1" aria-hidden="true">{input.trim().length}</span>
           )}
           <button
             onClick={() => send()}
-            disabled={!input.trim() || busy}
+            disabled={!input.trim() || busy || photoBusy || labBusy || applying || !assistantReady}
             aria-label="Send"
             style={{ minWidth: 44, minHeight: 44 }}
             className={`flex items-center justify-center rounded-full transition-all flex-shrink-0 ${
               input.trim() && !busy
-                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgba(212,175,55,0.4)] active:scale-95'
+                ? 'bg-gold text-charcoal shadow-[0_2px_12px_rgb(var(--fit-accent)/0.4)] active:scale-95'
                 : 'bg-white/[0.05] text-lo'
             }`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1438,6 +1202,6 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null } = {}) 
       </div>,
       document.body,
     )}
-    </>
+    </ModalScopeContext.Provider>
   );
 }

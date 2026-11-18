@@ -1,6 +1,7 @@
 import { Icon } from '../primitives';
 import { haptic } from '../../store/settingsStore';
 import { plural } from '../../constants';
+import { waterTarget, sleepTarget } from '../../lib/day';
 
 /**
  * DayStrip — the day at a glance. (The file keeps its Sprint 3 name; deploy
@@ -54,7 +55,9 @@ function Tile({ icon, label, value, unit, sub, pct, tone, onPress, active, quiet
 export default function DayStrip({ m, onOpen }) {
   const { log, protocol, kcalIn, kcalTarget, workoutKcal, coachPlan, micro, sleepText, sleepMins, terms, sheet } = m;
   const water   = log.water || 0;
-  const targetMl = protocol?.water_target || 3000;
+  const targetMl = waterTarget(protocol).ml;
+  // Fixes-2j: the bar fills against this member's own sleep target, not a fixed 8 h.
+  const sleepGoal = sleepTarget(protocol).minutes || 480;
 
   const plan = coachPlan?.todayDay;
   const workoutValue = workoutKcal > 0 ? workoutKcal : plan ? plan.day_label : '—';
@@ -73,7 +76,7 @@ export default function DayStrip({ m, onOpen }) {
         pct={(water / targetMl) * 100} tone="blue" quiet={!water} />
       <Tile icon="moon" testId="chip-sleep" label={terms.sleep} active={sheet === 'sleep'} onPress={() => onOpen('sleep')}
         value={sleepText || '—'} unit={sleepText ? '' : 'set times'}
-        pct={sleepMins != null ? (sleepMins / 480) * 100 : null} tone="ok" quiet={!sleepText} />
+        pct={sleepMins != null ? (sleepMins / sleepGoal) * 100 : null} tone="ok" quiet={!sleepText} />
       <Tile icon="dumbbell" testId="chip-workout" label="Workout" active={sheet === 'workout'} onPress={() => onOpen('workout')}
         value={workoutValue} unit={workoutUnit} sub={workoutSub} quiet={workoutValue === '—'} />
 
@@ -85,8 +88,10 @@ export default function DayStrip({ m, onOpen }) {
         </span>
         <span className="flex-1 min-w-0 flex items-center gap-3">
           <span className={`font-display text-base font-semibold tabular-nums whitespace-nowrap ${micro.hasData ? 'text-white' : 'text-lo'}`}>
-            {micro.hasData ? `${micro.met} / ${micro.total}` : '—'}
-            <span className="text-caption text-lo font-sans font-medium"> {micro.hasData ? 'targets met' : 'log food first'}</span>
+            {micro.hasData && micro.known > 0 ? `${micro.met} / ${micro.total}` : '—'}
+            <span className="text-caption text-lo font-sans font-medium" data-testid="micro-tile-sub"> {!micro.hasData ? 'log food first'
+              : micro.known === 0 ? 'not known for these foods'
+              : `targets met${micro.estimate ? ` · ${micro.estimate} est.` : ''}${micro.unknown ? ` · ${micro.unknown} not known` : ''}`}</span>
           </span>
           <span className="flex-1 h-1 rounded-full bg-white/[0.07] overflow-hidden" aria-hidden="true">
             <span className="block h-full rounded-full bg-gold transition-all duration-500" style={{ width: `${micro.hasData ? (micro.met / micro.total) * 100 : 0}%` }} />

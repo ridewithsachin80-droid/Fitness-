@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { haptic } from '../store/settingsStore';
 import useHealthConnect, { healthConnectSupported } from '../hooks/useHealthConnect';
 import useBluetoothTracker from '../hooks/useBluetoothTracker';
-import { getTrackerStatus, syncOAuthProvider, disconnectTracker, getOAuthUrl } from '../api/trackers';
+import { getTrackerStatus, syncOAuthProvider, disconnectTracker, getOAuthUrl, renewSessionCookie } from '../api/trackers';
 
 /* ─── Tracker catalogue ────────────────────────────────────────────────────── */
 const TRACKERS = [
@@ -112,8 +112,8 @@ const TRACKERS = [
     name: 'Polar',
     subtitle: 'Sports Watch',
     emoji: '🎯',
-    color: '#f59e0b',
-    glow: 'rgba(245,158,11,0.25)',
+    color: '#0ea5e9',
+    glow: 'rgba(14,165,233,0.25)',
     border: 'rgba(245,158,11,0.3)',
     bg: 'rgba(245,158,11,0.06)',
     metrics: ['Heart Rate', 'Training Load', 'VO₂ Max', 'Sleep'],
@@ -292,7 +292,10 @@ export default function DeviceConnect() {
         showToast(`${tracker.name} integration isn't set up yet — ask your admin to enable it.`, 'error');
         return;
       }
-      // Redirect to OAuth flow (fitbit / whoop / polar)
+      // Redirect to OAuth flow (fitbit / whoop / polar). Renew the session
+      // cookie first — the redirect is signed in by it alone (UI-012).
+      try { await renewSessionCookie(); }
+      catch { showToast('Your sign-in has run out — please sign in again, then connect.', 'error'); return; }
       window.location.href = getOAuthUrl(id);
       return;
     }
@@ -338,7 +341,11 @@ export default function DeviceConnect() {
     t.subtitle.toLowerCase().includes(search.toLowerCase())
   );
   const connectedTrackers = filtered.filter(t => localConnected.has(t.id));
-  const availableTrackers = filtered.filter(t => !localConnected.has(t.id));
+  // Working ones first; the ones that cannot connect yet go under "Coming soon"
+  // (16 Oct 2026: five "Not supported yet" cards came before anything usable).
+  const notConnected = filtered.filter(t => !localConnected.has(t.id));
+  const availableTrackers = notConnected.filter(t => !unsupportedNote(t, hcSupported));
+  const comingSoonTrackers = notConnected.filter(t => !!unsupportedNote(t, hcSupported));
 
   /* ── BLE live metric display (for HART) ────────────────────── */
   const bleActive  = ['connecting','reading'].includes(ble.status);
@@ -346,7 +353,7 @@ export default function DeviceConnect() {
   const anyLoading = bleActive || hcActive;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#121316' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
 
       {/* ── Toast ── */}
       {toast && (
@@ -381,7 +388,7 @@ export default function DeviceConnect() {
             </span>
           )}
           {ble.liveMetrics.battery != null && (
-            <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 14 }}>
+            <span style={{ color: 'rgb(var(--fit-mid))', fontWeight: 700, fontSize: 14 }}>
               🔋 {ble.liveMetrics.battery}%
             </span>
           )}
@@ -390,23 +397,23 @@ export default function DeviceConnect() {
 
       {/* ── Header ── */}
       <div style={{
-        background: '#131317',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        background: 'var(--bg-base)',
+        borderBottom: '1px solid rgb(var(--fit-ink) / 0.07)',
         padding: '40px 16px 16px',
       }}>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
           <BackButton onClick={() => navigate(-1)} />
           <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <h1 style={{ color: '#ededf0', fontWeight: 600, fontFamily: 'Fraunces, serif', fontSize: 22, margin: 0 }}>Connected Devices</h1>
-              <p style={{ color: '#6a6a78', fontSize: 13, margin: '4px 0 0' }}>
+              <h1 style={{ color: 'var(--text-hi)', fontWeight: 600, fontFamily: 'Fraunces, serif', fontSize: 22, margin: 0 }}>Connected Devices</h1>
+              <p style={{ color: 'var(--text-lo)', fontSize: 13, margin: '4px 0 0' }}>
                 Sync your fitness tracker to enrich your health data
               </p>
             </div>
             {anyLoading && (
               <div style={{
-                width: 32, height: 32, border: '3px solid rgba(212,175,55,0.2)',
-                borderTopColor: '#D4AF37', borderRadius: '50%',
+                width: 32, height: 32, border: '3px solid rgb(var(--fit-accent) / 0.2)',
+                borderTopColor: 'var(--accent)', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite', flexShrink: 0, marginTop: 4,
               }} />
             )}
@@ -429,7 +436,7 @@ export default function DeviceConnect() {
             style={{
               width: '100%', boxSizing: 'border-box',
               padding: '12px 14px 12px 42px',
-              background: '#131317', border: '1px solid rgba(255,255,255,0.09)',
+              background: 'var(--bg-base)', border: '1px solid rgb(var(--fit-ink) / 0.09)',
               borderRadius: 14, color: '#d8d8de', fontSize: 14, outline: 'none',
             }}
           />
@@ -443,11 +450,11 @@ export default function DeviceConnect() {
         {!hcSupported && (
           <div data-testid="hc-unsupported" style={{
             marginBottom: 16, padding: '14px 16px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.09)',
+            background: 'rgb(var(--fit-ink) / 0.03)',
+            border: '1px solid rgb(var(--fit-ink) / 0.09)',
             borderRadius: 16,
           }}>
-            <p style={{ color: '#ededf0', fontWeight: 700, fontSize: 14, margin: 0 }}>
+            <p style={{ color: 'var(--text-hi)', fontWeight: 700, fontSize: 14, margin: 0 }}>
               Android Health Connect is not supported yet
             </p>
             <p style={{ color: '#8e8e9a', fontSize: 13, margin: '6px 0 0', lineHeight: 1.5 }}>
@@ -472,7 +479,7 @@ export default function DeviceConnect() {
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0,
           }}>🔗</div>
           <div style={{ flex: 1 }}>
-            <p style={{ color: '#ededf0', fontWeight: 700, fontSize: 14, margin: 0 }}>Android Health Connect</p>
+            <p style={{ color: 'var(--text-hi)', fontWeight: 700, fontSize: 14, margin: 0 }}>Android Health Connect</p>
             <p style={{ color: '#8e8e9a', fontSize: 12, margin: '2px 0 0' }}>
               {hcActive
                 ? `${hc.status.charAt(0).toUpperCase() + hc.status.slice(1)}…`
@@ -481,9 +488,9 @@ export default function DeviceConnect() {
           </div>
           <span style={{
             fontSize: 11, fontWeight: 700,
-            color: hcActive ? '#f59e0b' : '#22c55e',
-            background: hcActive ? 'rgba(245,158,11,0.1)' : 'rgba(34,197,94,0.1)',
-            border: `1px solid ${hcActive ? 'rgba(245,158,11,0.25)' : 'rgba(34,197,94,0.25)'}`,
+            color: hcActive ? '#60a5fa' : '#22c55e',
+            background: hcActive ? 'rgba(96,165,250,0.1)' : 'rgba(34,197,94,0.1)',
+            border: `1px solid ${hcActive ? 'rgba(96,165,250,0.25)' : 'rgba(34,197,94,0.25)'}`,
             borderRadius: 20, padding: '3px 10px', flexShrink: 0,
           }}>{hcActive ? 'Syncing' : 'Sync Now'}</span>
         </div>
@@ -493,7 +500,7 @@ export default function DeviceConnect() {
         {connectedTrackers.length > 0 && (
           <div style={{ marginBottom: 8 }}>
             <p style={{
-              fontSize: 10, fontWeight: 700, color: '#6a6a78', marginBottom: 10,
+              fontSize: 10, fontWeight: 700, color: 'var(--text-lo)', marginBottom: 10,
             }}>Connected ({connectedTrackers.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {connectedTrackers.map(tracker => (
@@ -517,7 +524,7 @@ export default function DeviceConnect() {
         {availableTrackers.length > 0 && (
           <div style={{ marginTop: connectedTrackers.length > 0 ? 20 : 0 }}>
             <p style={{
-              fontSize: 10, fontWeight: 700, color: '#6a6a78', marginBottom: 10,
+              fontSize: 10, fontWeight: 700, color: 'var(--text-lo)', marginBottom: 10,
             }}>Available ({availableTrackers.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {availableTrackers.map(tracker => (
@@ -538,11 +545,25 @@ export default function DeviceConnect() {
           </div>
         )}
 
+        {/* ── Coming soon ── */}
+        {comingSoonTrackers.length > 0 && (
+          <div style={{ marginTop: (connectedTrackers.length + availableTrackers.length) > 0 ? 20 : 0 }} data-testid="trackers-coming-soon">
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-lo)', marginBottom: 10 }}>Coming soon ({comingSoonTrackers.length})</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {comingSoonTrackers.map(tracker => (
+                <TrackerCard key={tracker.id} tracker={tracker} isConnected={false} isSyncing={false} liveMetrics={{}}
+                  onSyncNow={() => {}} onDisconnect={() => {}} onConnect={() => handleConnect(tracker.id)}
+                  oauthAvailable={oauthAvailable} unsupported={unsupportedNote(tracker, hcSupported)} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Empty state ── */}
         {filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '48px 24px', color: '#4e4e5c' }}>
             <p style={{ fontSize: 32, margin: '0 0 12px' }}>🔍</p>
-            <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px', color: '#6a6a78' }}>No results</p>
+            <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px', color: 'var(--text-lo)' }}>No results</p>
             <p style={{ fontSize: 13, margin: 0 }}>Try searching by brand name or type</p>
           </div>
         )}
@@ -550,8 +571,8 @@ export default function DeviceConnect() {
         {/* ── Privacy note ── */}
         <div style={{
           marginTop: 16, padding: '12px 14px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgb(var(--fit-ink) / 0.03)',
+          border: '1px solid rgb(var(--fit-ink) / 0.06)',
           borderRadius: 14,
         }}>
           <p style={{ color: '#4e4e5c', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
@@ -576,8 +597,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
   return (
     <div style={{
       borderRadius: 18,
-      background: isConnected ? tracker.bg : '#131317',
-      border: `1px solid ${isConnected ? tracker.border : 'rgba(255,255,255,0.07)'}`,
+      background: isConnected ? tracker.bg : 'var(--bg-base)',
+      border: `1px solid ${isConnected ? tracker.border : 'rgb(var(--fit-ink) / 0.07)'}`,
       overflow: 'hidden',
       transition: 'all 0.2s',
       boxShadow: isConnected ? `0 0 20px ${tracker.glow}` : 'none',
@@ -590,8 +611,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
         {/* Icon */}
         <div style={{
           width: 50, height: 50, borderRadius: 14, flexShrink: 0,
-          background: isConnected ? `${tracker.color}22` : 'rgba(255,255,255,0.06)',
-          border: `1.5px solid ${isConnected ? tracker.border : 'rgba(255,255,255,0.1)'}`,
+          background: isConnected ? `${tracker.color}22` : 'rgb(var(--fit-ink) / 0.06)',
+          border: `1.5px solid ${isConnected ? tracker.border : 'rgb(var(--fit-ink) / 0.1)'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
           boxShadow: isConnected ? `0 0 16px ${tracker.glow}` : 'none',
         }}>
@@ -601,7 +622,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
         {/* Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <p style={{ color: '#ededf0', fontWeight: 700, fontSize: 15, margin: 0 }}>{tracker.name}</p>
+            <p style={{ color: 'var(--text-hi)', fontWeight: 700, fontSize: 15, margin: 0 }}>{tracker.name}</p>
             {(() => {
               // Unconfigured OAuth provider takes priority over any static badge —
               // the user should know this before tapping, not after a failed redirect.
@@ -620,7 +641,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
               );
             })()}
           </div>
-          <p style={{ color: '#6a6a78', fontSize: 12, margin: '1px 0 0' }}>{tracker.subtitle}</p>
+          <p style={{ color: 'var(--text-lo)', fontSize: 12, margin: '1px 0 0' }}>{tracker.subtitle}</p>
         </div>
 
         {/* Status / button */}
@@ -647,8 +668,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
             <div style={{ display: 'flex', gap: 12, marginBottom: 12, padding: '10px 12px', background: 'rgba(34,197,94,0.05)', borderRadius: 10, border: '1px solid rgba(34,197,94,0.15)' }}>
               {liveMetrics.heart_rate && <span style={{ color: '#22c55e', fontSize: 13, fontWeight: 700 }}>❤️ {liveMetrics.heart_rate} bpm</span>}
               {liveMetrics.spo2 && <span style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700 }}>🩸 {liveMetrics.spo2}%</span>}
-              {liveMetrics.hrv && <span style={{ color: '#e0c98a', fontSize: 13, fontWeight: 700 }}>📊 HRV {liveMetrics.hrv}ms</span>}
-              {liveMetrics.battery != null && <span style={{ color: '#f59e0b', fontSize: 13, fontWeight: 700 }}>🔋 {liveMetrics.battery}%</span>}
+              {liveMetrics.hrv && <span style={{ color: '#a78bfa', fontSize: 13, fontWeight: 700 }}>📊 HRV {liveMetrics.hrv}ms</span>}
+              {liveMetrics.battery != null && <span style={{ color: 'rgb(var(--fit-mid))', fontSize: 13, fontWeight: 700 }}>🔋 {liveMetrics.battery}%</span>}
             </div>
           )}
 
@@ -657,9 +678,9 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
             {tracker.metrics.map(m => (
               <span key={m} style={{
                 fontSize: 11, fontWeight: 600,
-                color: isConnected ? tracker.color : '#6a6a78',
-                background: isConnected ? tracker.bg : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${isConnected ? tracker.border : 'rgba(255,255,255,0.06)'}`,
+                color: isConnected ? tracker.color : 'var(--text-lo)',
+                background: isConnected ? tracker.bg : 'rgb(var(--fit-ink) / 0.04)',
+                border: `1px solid ${isConnected ? tracker.border : 'rgb(var(--fit-ink) / 0.06)'}`,
                 borderRadius: 20, padding: '3px 9px',
               }}>{m}</span>
             ))}
@@ -669,8 +690,8 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             marginBottom: 12, padding: '8px 12px',
-            background: 'rgba(255,255,255,0.03)', borderRadius: 10,
-            border: '1px solid rgba(255,255,255,0.06)',
+            background: 'rgb(var(--fit-ink) / 0.03)', borderRadius: 10,
+            border: '1px solid rgb(var(--fit-ink) / 0.06)',
           }}>
             <span style={{ fontSize: 13 }}>{PROTOCOL_LABELS[tracker.protocol].icon}</span>
             <span style={{ color: '#8e8e9a', fontSize: 12 }}>via {PROTOCOL_LABELS[tracker.protocol].label}</span>
@@ -694,7 +715,7 @@ function TrackerCard({ tracker, isConnected, isSyncing, liveMetrics = {}, onConn
           ) : unsupported ? (
             <p data-testid={`tracker-unsupported-${tracker.id}`} style={{
               margin: 0, padding: '11px 12px', borderRadius: 12,
-              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgb(var(--fit-ink) / 0.03)', border: '1px solid rgb(var(--fit-ink) / 0.08)',
               color: '#8e8e9a', fontSize: 13, lineHeight: 1.5,
             }}>{unsupported}</p>
           ) : (

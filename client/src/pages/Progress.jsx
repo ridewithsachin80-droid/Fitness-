@@ -1,3 +1,4 @@
+import { accent, themeColor } from '../utils/themeColor';
 /**
  * Progress.jsx — Sprint 6
  * Member-facing progress page: weight trend, compliance streak,
@@ -13,7 +14,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, ReferenceLine, Legend,
 } from 'recharts';
-import { HeroNumber, Segmented, Eyebrow, Icon, EmptyState } from '../components/primitives';
+import { HeroNumber, Segmented, Eyebrow, Icon, EmptyState, Sheet } from '../components/primitives';
 import { calcFoodMacros } from '../lib/day';
 import { haptic } from '../store/settingsStore';
 import { firstName } from '../utils/personName';
@@ -24,25 +25,26 @@ import StrengthProgress from '../components/StrengthProgress';
 import WeeklyReportCard from '../components/WeeklyReportCard';
 import MuscleCoverage from '../components/MuscleCoverage';
 import TrainingSummary from '../components/TrainingSummary';
-import { today, istDate, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
+import { today, shiftDateKey, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
+import { spanLabel } from '../utils/dayLabel';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function nDaysAgo(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().split('T')[0];
+  return shiftDateKey(today(), -n);
 }
 
 // Chart colours for this page. Carbs and fat were two near-identical yellows
 // (#fbbf24 and #d9b451): the lines could not be told apart. These three are
 // checked for separation, including for colour-blind readers, on the card colour.
-const MACRO = { kcal: '#B08A4A', pro: '#5895DC', carb: '#B38F1F', fat: '#D9608F' };
+// 17 Oct 2026: calories take the brand colour (read live, so both themes work);
+// carbs moved from mustard (read as the old gold) to burnt orange.
+const MACRO = { get kcal() { return accent(); }, pro: '#5895DC', carb: '#C0711F', fat: '#D9608F' };
 // The chart pop-up, dark like the card it sits on (the library's default is a white box).
 const TIP = {
-  contentStyle: { fontSize: 11, borderRadius: 10, background: '#1A1C20', border: '1px solid rgba(255,255,255,0.14)', color: '#FFFFFF', padding: '6px 10px' },
-  labelStyle: { color: '#9EA3B0', marginBottom: 2 },
-  itemStyle: { color: '#FFFFFF', padding: 0 },
+  contentStyle: { fontSize: 11, borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid rgb(var(--fit-ink) / 0.14)', color: 'var(--text-hi)', padding: '6px 10px' },
+  labelStyle: { color: 'var(--text-mid)', marginBottom: 2 },
+  itemStyle: { color: 'var(--text-hi)', padding: 0 },
 };
 /** "1716.00" is 1716 and "26.10" is 26.1; anything that is not a plain number is left alone. */
 function tidyNumber(v) {
@@ -90,128 +92,117 @@ function PastLogModal({ log, onClose }) {
   });
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-2">
-      <div className="bg-charcoal rounded-3xl border border-white/[0.08] w-full max-w-md max-h-[88vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-hair flex-shrink-0">
+    <Sheet open={!!log} onClose={onClose} title={dateStr} eyebrow="Daily log">
+      <div data-testid="past-log-details" className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {log.weight_kg && (
+            <span className="text-xs font-semibold text-gold-deep">⚖ {log.weight_kg} kg</span>
+          )}
+          {log.compliance_pct != null && (
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              log.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
+              log.compliance_pct >= 50 ? 'bg-warn/[0.14] text-warn' :
+              'bg-white/[0.08] text-mid'}`}>
+              {log.compliance_pct}% of checklist
+            </span>
+          )}
+        </div>
+
+        {/* Activities */}
+        {checkedActs.length > 0 && (
           <div>
-            <h3 className="font-bold text-white text-base">{dateStr}</h3>
-            <div className="flex items-center gap-3 mt-1">
-              {log.weight_kg && (
-                <span className="text-xs font-semibold text-gold-deep">⚖ {log.weight_kg} kg</span>
-              )}
-              {log.compliance_pct != null && (
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  log.compliance_pct >= 75 ? 'bg-gold/[0.13] text-gold-light' :
-                  log.compliance_pct >= 50 ? 'bg-amber-400/[0.14] text-amber-400' :
-                  'bg-red-400/[0.14] text-red-400'}`}>
-                  {log.compliance_pct}% compliance
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">🏃 Activities</p>
+            <div className="flex flex-wrap gap-1.5">
+              {checkedActs.map(a => (
+                <span key={a.id} className="text-xs bg-gold/[0.07] text-gold-light border border-gold/[0.14] px-2.5 py-1 rounded-full font-medium">
+                  {a.icon} {a.label}
                 </span>
-              )}
+              ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-lo hover:text-white text-2xl leading-none">×</button>
-        </div>
+        )}
 
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+        {/* ACV */}
+        {checkedAcv.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 Apple cider vinegar</p>
+            <div className="flex flex-wrap gap-1.5">
+              {checkedAcv.map(a => (
+                <span key={a.id} className="text-xs bg-gold/[0.08] text-gold border border-gold/15 px-2.5 py-1 rounded-full font-medium">
+                  {a.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
-          {/* Activities */}
-          {checkedActs.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">🏃 Activities</p>
-              <div className="flex flex-wrap gap-1.5">
-                {checkedActs.map(a => (
-                  <span key={a.id} className="text-xs bg-gold/[0.07] text-gold-light border border-gold/[0.14] px-2.5 py-1 rounded-full font-medium">
-                    {a.icon} {a.label}
+        {/* Food */}
+        {foodItems.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">
+              🥗 Food {kcal > 0 && <span className="font-normal text-gold normal-case">· {kcal} kcal</span>}
+            </p>
+            <div className="space-y-1">
+              {foodItems.map((item, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 text-sm py-1 border-b border-hair last:border-0">
+                  <span className="min-w-0 flex-1 break-words text-white">{item.name || item.food_name}</span>
+                  <span className="max-w-[45%] break-words text-right text-lo text-xs">{item.grams}g
+                    {item.meal && <span className="ml-1 text-ghost">· {item.meal}</span>}
                   </span>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ACV */}
-          {checkedAcv.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 ACV</p>
-              <div className="flex flex-wrap gap-1.5">
-                {checkedAcv.map(a => (
-                  <span key={a.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
-                    {a.label}
-                  </span>
-                ))}
-              </div>
+        {/* Water */}
+        {log.water_ml > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-1">💧 Water</p>
+            <p className="text-sm text-blue-400 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
+          </div>
+        )}
+
+        {/* Supplements */}
+        {checkedSupps.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">💊 Supplements</p>
+            <div className="flex flex-wrap gap-1.5">
+              {checkedSupps.map(s => (
+                <span key={s.id} className="text-xs bg-gold/[0.08] text-gold border border-gold/15 px-2.5 py-1 rounded-full font-medium">
+                  {s.label}
+                </span>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Food */}
-          {foodItems.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">
-                🥗 Food {kcal > 0 && <span className="font-normal text-orange-300 normal-case">· {kcal} kcal</span>}
-              </p>
-              <div className="space-y-1">
-                {foodItems.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-hair last:border-0">
-                    <span className="text-white">{item.name || item.food_name}</span>
-                    <span className="text-lo text-xs">{item.grams}g
-                      {item.meal && <span className="ml-1 text-ghost">· {item.meal}</span>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Sleep */}
+        {(sleep.bedtime || sleep.waketime) && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-1">🌙 Sleep</p>
+            <p className="text-sm text-mid">
+              {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
+              {sleep.bedtime && sleep.waketime && ' → '}
+              {sleep.waketime && `Wake ${sleep.waketime?.slice(0,5)}`}
+              {sleep.quality && <span className="ml-2 text-gold">{'★'.repeat(sleep.quality)}</span>}
+            </p>
+          </div>
+        )}
 
-          {/* Water */}
-          {log.water_ml > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-1">💧 Water</p>
-              <p className="text-sm text-blue-400 font-semibold">{(log.water_ml / 1000).toFixed(1)} L</p>
-            </div>
-          )}
+        {/* Notes */}
+        {log.notes && (
+          <div>
+            <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
+            <p className="text-sm text-mid whitespace-pre-wrap break-words leading-relaxed">{log.notes}</p>
+          </div>
+        )}
 
-          {/* Supplements */}
-          {checkedSupps.length > 0 && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-2">💊 Supplements</p>
-              <div className="flex flex-wrap gap-1.5">
-                {checkedSupps.map(s => (
-                  <span key={s.id} className="text-xs bg-amber-400/[0.08] text-amber-400 border border-amber-400/15 px-2.5 py-1 rounded-full font-medium">
-                    {s.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Sleep */}
-          {(sleep.bedtime || sleep.waketime) && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-1">🌙 Sleep</p>
-              <p className="text-sm text-mid">
-                {sleep.bedtime && `Bed ${sleep.bedtime?.slice(0,5)}`}
-                {sleep.bedtime && sleep.waketime && ' → '}
-                {sleep.waketime && `Wake ${sleep.waketime?.slice(0,5)}`}
-                {sleep.quality && <span className="ml-2 text-amber-400">{'★'.repeat(sleep.quality)}</span>}
-              </p>
-            </div>
-          )}
-
-          {/* Notes */}
-          {log.notes && (
-            <div>
-              <p className="text-xs font-bold text-lo tracking-wider mb-1">📝 Notes</p>
-              <p className="text-sm text-mid whitespace-pre-wrap leading-relaxed">{log.notes}</p>
-            </div>
-          )}
-
-          {!checkedActs.length && !foodItems.length && !log.weight_kg && (
-            <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>
-          )}
-        </div>
+        {!checkedActs.length && !foodItems.length && !log.weight_kg && (
+          <p className="text-sm text-lo italic text-center py-4">No data recorded this day.</p>
+        )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -321,10 +312,24 @@ export default function Progress() {
   const last30   = sorted.slice(-30);
 
   const rangeFrom  = nDaysAgo(parseInt(range, 10));
-  const weightAll  = sorted.filter(l => l.weight_kg);
+  // A newer food/water-only day must not hide the last actual weigh-in.
+  const weightAll  = sorted.filter(l =>
+    (typeof l.weight_kg === 'number' || typeof l.weight_kg === 'string')
+    && Number.isFinite(Number(l.weight_kg)) && Number(l.weight_kg) > 0);
   const weightData = weightAll
     .filter(l => l.log_date >= rangeFrom)
-    .map(l => ({ date: shortDate(l.log_date), weight: parseFloat(l.weight_kg) }));
+    .map(l => ({ date: shortDate(l.log_date), weight: Number(l.weight_kg) }));
+  // X-axis labels: always the first and the latest weigh-in, plus up to two
+  // between (18 Oct 2026: "every Nth" skipped today's date on a phone).
+  const weightTicks = (() => {
+    const n = weightData.length;
+    const idx = n <= 4 ? weightData.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((2 * (n - 1)) / 3), n - 1];
+    return [...new Set(idx)].map(i => weightData[i].date);
+  })();
+  // Fixes-3l (UX finding 14): "over 30 days" on 6 days of data overstated it. When the first weigh-in in the window is
+  // more than a day after the window starts, the change is "since 30 Oct" instead.
+  const firstInRange = weightAll.find(l => l.log_date >= rangeFrom)?.log_date;
+  const deltaLabel = spanLabel(rangeFrom, firstInRange, today(), parseInt(range, 10));
   // Change over the selected window: first weigh-in in range → latest
   const rangeDelta = weightData.length > 1
     ? +(weightData[weightData.length - 1].weight - weightData[0].weight).toFixed(1)
@@ -336,8 +341,8 @@ export default function Progress() {
   }));
 
   // Stats
-  const latest  = sorted[sorted.length - 1];
-  const latestW = latest?.weight_kg ? parseFloat(latest.weight_kg) : null;
+  const latest  = weightAll[weightAll.length - 1];
+  const latestW = latest ? Number(latest.weight_kg) : null;
   const startW  = profile?.start_weight ? parseFloat(profile.start_weight) : null;
   const targetW = profile?.target_weight ? parseFloat(profile.target_weight) : null;
   const lostKg  = startW && latestW ? +(startW - latestW).toFixed(1) : null;
@@ -369,11 +374,13 @@ export default function Progress() {
   // (today and the 29 before). This used to average the last 30 LOGS, which
   // for someone logging twice a week reached back months, so "30-day
   // compliance" read 6% here and 0% on Profile for the same member.
-  const from30 = (() => { const s = new Date(today() + 'T12:00:00'); s.setDate(s.getDate() - 29); return istDate(s); })();
+  const from30 = shiftDateKey(today(), -29);
   const in30 = sorted.filter(l => l.log_date >= from30);
   const avg30 = in30.length
     ? Math.round(in30.reduce((s, l) => s + (l.compliance_pct || 0), 0) / in30.length)
     : 0;
+  // Fixes-3l (14): the same honesty for the average: "since 30 Oct" when the logs start later in the 30 days.
+  const avg30Span = spanLabel(from30, in30[0]?.log_date, today(), 30);
 
   // Total days logged in 90 days
   const daysLogged = logs.length;
@@ -421,7 +428,7 @@ export default function Progress() {
           <div className="flex items-end justify-between gap-3 mt-2">
             <div className="min-w-0">
               <Eyebrow tone="gold">Progress</Eyebrow>
-              <h1 className="font-display text-num font-medium text-white leading-tight mt-1 truncate">{firstName(user?.name) ? `${firstName(user.name)}\u2019s` : 'Your'} journey</h1>
+              <h1 className="font-display text-num font-medium text-white leading-tight mt-1 break-words" data-testid="progress-title">{firstName(user?.name) ? `${firstName(user.name)}\u2019s` : 'Your'} journey</h1>
             </div>
             <Segmented size="sm" name="range" value={range} onChange={setRange} className="w-[168px] flex-shrink-0"
               options={[{ id: '7', label: '7d' }, { id: '30', label: '30d' }, { id: '90', label: '90d' }]} />
@@ -430,7 +437,7 @@ export default function Progress() {
           <div className="mt-5" data-testid="progress-hero">
             {latestW ? (
               <HeroNumber value={latestW} unit="kg" delta={rangeDelta} deltaUnit=" kg"
-                label={rangeDelta == null ? 'latest weigh-in' : `over ${range} ${plural(parseInt(range, 10), 'day')}`} />
+                label={rangeDelta == null ? 'latest weigh-in' : deltaLabel} />
             ) : (
               <HeroNumber value="—" unit="kg" placeholder label="No weight logged yet" />
             )}
@@ -466,20 +473,20 @@ export default function Progress() {
                 <AreaChart data={weightData} margin={{ top: 8, right: 16, left: 16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor="#D4AF37" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#D4AF37" stopOpacity={0} />
+                      <stop offset="0%"   stopColor={accent()} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={accent()} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#7E8596' }} tickLine={false} axisLine={false}
-                    interval={Math.max(0, Math.floor(weightData.length / 4))} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false}
+                    ticks={weightTicks} interval={0} />
                   <YAxis domain={['auto', 'auto']} hide />
-                  <Tooltip content={<WeightTip />} cursor={{ stroke: 'rgba(212,175,55,0.35)' }} />
+                  <Tooltip content={<WeightTip />} cursor={{ stroke: accent(0.35) }} />
                   {targetW && (
-                    <ReferenceLine y={targetW} stroke="#C5A059" strokeDasharray="4 4"
-                      label={{ value: `Goal ${targetW}`, position: 'insideTopRight', fontSize: 9, fill: '#C5A059' }} />
+                    <ReferenceLine y={targetW} stroke="var(--accent)" strokeDasharray="4 4"
+                      label={{ value: `Goal ${targetW}`, position: 'insideTopLeft', fontSize: 9, fill: 'var(--accent)' }} />
                   )}
-                  <Area type="monotone" dataKey="weight" stroke="#D4AF37" strokeWidth={2.5} fill="url(#goldFill)"
-                    dot={weightData.length <= 14 ? { fill: '#D4AF37', r: 3, strokeWidth: 0 } : false} activeDot={{ r: 5, fill: '#F0E2B6' }} />
+                  <Area type="monotone" dataKey="weight" stroke={accent()} strokeWidth={2.5} fill="url(#goldFill)"
+                    dot={weightData.length <= 14 ? { fill: accent(), r: 3, strokeWidth: 0 } : false} activeDot={{ r: 5, fill: accent(0.6) }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -499,9 +506,12 @@ export default function Progress() {
 
         {/* Phase 8: Progress in four groups. The weight and its trend stay above
             them on every tab: it is the number members open this page for. */}
-        <div data-testid="progress-tabs" className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-charcoal/95 backdrop-blur" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
-          <Segmented size="sm" name="progress-tab" value={tab} onChange={pickTab}
-            options={[{ id: 'body', label: 'Body' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'training', label: 'Training' }, { id: 'reports', label: 'Reports' }]} />
+        <div className="member-links" data-testid="progress-tabs">
+          <label className="member-link"><Icon name="trend" size={18} /><span className="flex-1">Explore your progress</span>
+            <select aria-label="Progress detail" value={tab} onChange={e => pickTab(e.target.value)} className="rounded-xl p-3 text-sm border border-hair max-w-[58%]">
+              <option value="body">Body & photos</option><option value="nutrition">Nutrition</option><option value="training">Training</option><option value="reports">Reports & history</option>
+            </select>
+          </label>
         </div>
 
         {tab === 'body' && (<>
@@ -528,35 +538,42 @@ export default function Progress() {
           <SectionTitle icon="🌟">Your Journey</SectionTitle>
           <div className="space-y-2 text-sm text-mid">
             {streak >= 7 && (
-              <div className="flex items-center gap-2 bg-orange-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">🔥</span>
                 <span><strong>{streak}-day streak!</strong> You're building an unstoppable habit.</span>
               </div>
             )}
             {lostKg !== null && lostKg >= 1 && (
-              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">🏆</span>
                 <span><strong>{lostKg} kg lost</strong> since you started. Keep going!</span>
               </div>
             )}
             {avg30 >= 80 && (
-              <div className="flex items-center gap-2 bg-blue-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-info/[0.08] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">⭐</span>
-                <span><strong>{avg30}% compliance</strong> over 30 days — outstanding consistency.</span>
+                <span><strong>{avg30}% of your checklist</strong> {avg30Span} — outstanding consistency.</span>
               </div>
             )}
             {journeyPct !== null && journeyPct >= 25 && (
-              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.07] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">🎯</span>
                 <span><strong>{journeyPct}%</strong> of the way to your {targetW} kg goal!</span>
               </div>
             )}
             {streak < 3 && avg30 < 50 && (
-              <div className="flex items-center gap-2 bg-amber-400/[0.08] px-3 py-2 rounded-xl">
+              <div className="flex items-center gap-2 bg-gold/[0.04] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">💪</span>
                 <span>{streak >= 1
                   ? `Every day counts. Log today to keep your ${streak}-day streak going.`
                   : 'Every day counts. Log today and start your streak!'}</span>
+              </div>
+            )}
+            {/* 18 Oct 2026: with none of the above, the section was a heading over nothing. */}
+            {!(streak >= 7 || (lostKg !== null && lostKg >= 1) || avg30 >= 80 || (journeyPct !== null && journeyPct >= 25) || (streak < 3 && avg30 < 50)) && (
+              <div className="flex items-center gap-2 bg-gold/[0.04] px-3 py-2 rounded-xl" data-testid="journey-card">
+                <span className="text-lg">🌱</span>
+                <span>Keep logging. Your milestones show up here: streaks, kg lost and how close you are to your goal.</span>
               </div>
             )}
           </div>
@@ -603,13 +620,13 @@ export default function Progress() {
             <p className="text-xs text-lo font-medium mb-1">Calories (kcal)</p>
             <ResponsiveContainer width="100%" height={90}>
               <BarChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
+                <Tooltip formatter={(v) => [`${v} kcal`, 'Calories']} cursor={{ fill: themeColor('--fit-ink', 0.04) }}
                   contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle} />
                 {profile?.macros?.kcal && (
-                  <ReferenceLine y={profile.macros.kcal} stroke="#e0c98a" strokeDasharray="3 3" />
+                  <ReferenceLine y={profile.macros.kcal} stroke={accent()} strokeDasharray="3 3" />
                 )}
                 <Bar dataKey="kcal" fill={MACRO.kcal} radius={[3, 3, 0, 0]} />
               </BarChart>
@@ -626,11 +643,11 @@ export default function Progress() {
             </div>
             <ResponsiveContainer width="100%" height={110}>
               <ComposedChart data={nutritionTrend} margin={{ top: 2, right: 4, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 8, fill: '#7E8596' }} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={themeColor('--fit-ink', 0.05)} />
+                <XAxis dataKey="date" tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 8, fill: 'var(--text-lo)' }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={TIP.contentStyle} labelStyle={TIP.labelStyle} itemStyle={TIP.itemStyle}
-                  cursor={{ stroke: 'rgba(255,255,255,0.18)' }} formatter={(v, name) => [`${v} g`, name]} />
+                  cursor={{ stroke: themeColor('--fit-ink', 0.18) }} formatter={(v, name) => [`${v} g`, name]} />
                 <Line type="monotone" name="Protein" dataKey="pro"  stroke={MACRO.pro}  strokeWidth={2} dot={{ r: 3, fill: MACRO.pro,  strokeWidth: 0 }} />
                 <Line type="monotone" name="Carbs"   dataKey="carb" stroke={MACRO.carb} strokeWidth={2} dot={{ r: 3, fill: MACRO.carb, strokeWidth: 0 }} />
                 <Line type="monotone" name="Fat"     dataKey="fat"  stroke={MACRO.fat}  strokeWidth={2} dot={{ r: 3, fill: MACRO.fat,  strokeWidth: 0 }} />
@@ -657,7 +674,7 @@ export default function Progress() {
         )}
 
 
-        <button type="button" onClick={() => { haptic(8); navigate('/plan'); }} data-testid="progress-to-plan"
+        <button type="button" onClick={() => { haptic(8); navigate('/plan?tab=nutrition'); }} data-testid="progress-to-plan"
           className="w-full rounded-2xl border border-white/[0.12] bg-surface px-4 text-left text-sm text-white flex items-center justify-between" style={{ minHeight: 48 }}>
           Your diet plan, PDF and grocery list <Icon name="chevron-right" size={16} className="text-lo" />
         </button>
@@ -694,7 +711,7 @@ export default function Progress() {
           />
           <StatBox
             value={in30.length ? `${avg30}%` : '—'}
-            label="30-day Compliance"
+            label="30-day checklist"
             sub={!in30.length ? 'Nothing logged in 30 days' : avg30 >= 75 ? 'Strong' : avg30 >= 50 ? 'Steady' : 'Room to improve'}
             tone={!in30.length ? null : avg30 >= 75 ? 'good' : avg30 >= 50 ? null : 'warn'}
           />
@@ -717,16 +734,16 @@ export default function Progress() {
           {(() => {
             const byDate = new Map(sorted.map(l => [l.log_date, l]));
             const cells = [];
-            const start = new Date(today() + 'T12:00:00'); start.setDate(start.getDate() - 29);
+            const start = shiftDateKey(today(), -29);
             // pad to the week start so columns are weekdays (Mon first)
-            const pad = (start.getDay() + 6) % 7;
+            const pad = (new Date(`${start}T00:00:00Z`).getUTCDay() + 6) % 7;
             for (let i = 0; i < pad; i++) cells.push(null);
             for (let i = 0; i < 30; i++) {
-              const d = new Date(start); d.setDate(start.getDate() + i);
-              const key = istDate(d);
-              cells.push({ key, log: byDate.get(key) || null, day: d.getDate() });
+              const key = shiftDateKey(start, i);
+              cells.push({ key, log: byDate.get(key) || null, day: Number(key.slice(-2)) });
             }
-            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-ghost'
+            // Fixes-3l (3k QA, A4): a day with no log has a dashed outline, so it no longer looks like a logged 0% day.
+            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-lo border border-dashed border-lo'
               : pct >= 75 ? 'bg-gold/[0.55] text-charcoal' : pct >= 50 ? 'bg-gold/[0.28] text-white' : pct > 0 ? 'bg-gold/[0.12] text-mid' : 'bg-white/[0.06] text-lo';
             return (
               <div data-testid="heat-grid">
@@ -746,7 +763,7 @@ export default function Progress() {
                     ))}
                 </div>
                 <div className="flex items-center justify-between text-tiny text-lo mt-2">
-                  <span>Not logged</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border border-dashed border-lo" />Not logged</span>
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded bg-white/[0.06]" /><span className="w-3 h-3 rounded bg-gold/[0.12]" /><span className="w-3 h-3 rounded bg-gold/[0.28]" /><span className="w-3 h-3 rounded bg-gold/[0.55]" />
                   </span>
@@ -777,7 +794,7 @@ export default function Progress() {
                     </div>
                     <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${
-                        pct >= 75 ? 'bg-gold-deep' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'
+                        pct >= 75 ? 'bg-gold-deep' : pct >= 50 ? 'bg-warn' : 'bg-lo'
                       }`} style={{ width: `${pct || 0}%` }} />
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -785,7 +802,7 @@ export default function Progress() {
                         <span className="text-xs font-semibold text-faint">{log.weight_kg}kg</span>
                       )}
                       <span className={`text-xs font-bold w-10 text-right ${
-                        pct >= 75 ? 'text-gold-deep' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
+                        pct >= 75 ? 'text-gold-deep' : pct >= 50 ? 'text-warn' : 'text-mid'
                       }`}>{pct != null ? `${pct}%` : '—'}</span>
                       <svg className="w-3.5 h-3.5 text-ghost group-hover:text-mid transition-colors"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

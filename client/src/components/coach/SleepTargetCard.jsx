@@ -95,7 +95,7 @@ export default function SleepTargetCard({ memberId, profile, onSaved }) {
 
           {mins != null && (
             <p data-testid="sleep-target-preview"
-              className={`mt-2 text-caption font-semibold ${inRange ? 'text-mid' : 'text-amber-300'}`}>
+              className={`mt-2 text-caption font-semibold ${inRange ? 'text-mid' : 'text-warn'}`}>
               {inRange
                 ? `That is ${formatHours(mins)} of sleep.`
                 : `That is ${formatHours(mins)} of sleep. A target should be between 4 and 12 hours. Check AM and PM.`}

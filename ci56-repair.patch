@@ -1,0 +1,349 @@
+diff --git a/.github/workflows/test-gate.yml b/.github/workflows/test-gate.yml
+index f043d55..fc36ca2 100644
+--- a/.github/workflows/test-gate.yml
++++ b/.github/workflows/test-gate.yml
+@@ -19,9 +19,15 @@ jobs:
+       - name: Install client packages
+         working-directory: client
+         run: npm install --no-audit --no-fund
+-      - name: Run all test suites
++      - name: Build the client and run all test suites
+         working-directory: server
++        env:
++          UI_SHOTS: ${{ github.workspace }}/qa/results/screenshots
+         run: npm test
+-      - name: Build the client
+-        working-directory: client
+-        run: npm run build
++      - name: Upload regression evidence
++        if: always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: regression-${{ github.sha }}
++          path: qa/results/
++          if-no-files-found: warn
+diff --git a/qa/REGRESSION-README.txt b/qa/REGRESSION-README.txt
+index fb50424..0681544 100644
+--- a/qa/REGRESSION-README.txt
++++ b/qa/REGRESSION-README.txt
+@@ -1,43 +1,44 @@
+-FITLIFE — TEST GATE #55 REPAIR
++FITLIFE — TEST GATE #56 REPAIR
+ 
+-Apply after uploaded test commit 18ef815660225d5aaf67d5f0e679da70e696123b.
++Apply on top of test commit fc7003fc1baa94d61dc39143052c355f1309adda.
+ Target: https://fitness-test.up.railway.app/ (test only).
+ 
+-Observed run: https://github.com/ridewithsachin80-droid/Fitness-/actions/runs/38347452601
+-Three suites failed: private cache browser (missing puppeteer-core), journey
+-(old assertion removed the unfinished exercise), known fixes (one-sided lab
+-limits). The known-fix suite also stopped before its tracker-state checks.
+-Its 47 successful database suites are historical results for that upload,
+-not proof that this subsequent correction passes the complete gate.
++Run https://github.com/ridewithsachin80-droid/Fitness-/actions/runs/38350096105
++passed all 20 logic/module suites and all 49 PostgreSQL suites (3,365 passing
++assertions). Only the UI suite failed. CI used the old workflow and tested
++before building. Uploaded dist contained three generations of CSS; the UI
++harness combined them or selected the first obsolete file in the directory.
+ 
+ Repair
+-- Browser packages are pinned development dependencies in server/package.json
+-  and package-lock.json. A normal npm install now installs them for testing.
+-- Lab entry and analysis share finite number and one-sided reference handling.
+-- Tracker callback state is signed, expires, and is bound to member/provider.
+-- The workout journey checks no completed sets and preserves the selection.
+-- Every client build removes generated dist before rebuilding the PWA worker.
+-- The corrected workflow builds first, runs every registered suite and stores
+-  logs/screenshots even on failure. Upload the hidden .github folder too.
++- Both UI suites load local CSS referenced by dist/index.html, in HTML order.
++  Missing linked CSS fails explicitly. All layout/theme assertions remain.
++- npm test, npm run test:ui and npm run test:premium build the client first.
++  This works even when GitHub browser upload omits the hidden .github folder.
++- The corrected workflow relies on npm test to build and retains QA evidence.
++- A focused regression checks stale files, CSS order and missing build output.
++- No application functionality or visual design is changed in this repair.
+ 
+ Verification
+ 1. npm install from the repository root; npm ci in server.
+-2. npm run build from the root (safe to repeat over an existing dist).
+-3. cd server; npm test
++2. cd server; npm test
+    Uses disposable localhost PostgreSQL on port 5433. Never use a live DB URL.
+-4. Require a green run on the resulting test commit, then deploy that commit.
+-5. Run node server/scripts/test-deployment.mjs, then the workbook's signed-in
++3. Require a green NEW run on the resulting test commit. Rerunning #56 tests
++   the old files. Then deploy the matching test revision.
++4. Run node server/scripts/test-deployment.mjs, then the workbook's signed-in
+    P0 member/coach/device cases with dedicated test accounts.
+ 
+-Local focused tests run actual Express routes against synthetic SQL/HTTP
+-adapters. They never contact real members or wearable providers. Their pass
+-is not a PostgreSQL integration pass or live acceptance.
+-The local workspace still has no PostgreSQL binaries. The complete database
+-gate and real tracker integration must be rerun in CI/test deployment.
+-The user confirmed one-tap camera and mic on Android and iPhone before this
+-repair; browser fixtures cannot independently certify physical capture.
++Reproduction: premium UI failed 20 checks with the uploaded CSS directory.
++After changing stylesheet selection only, all 112 premium checks passed,
++with obsolete CSS files still present. npm test then successfully built the
++client before stopping at the local PostgreSQL prerequisite. The database
++suites passed on GitHub fc7003f; this repair changes only test tooling/docs.
++See the Excel workbook and QA evidence ZIP for the final regression results.
+ 
+-GitHub browser uploads omitted the previous hidden .github files. If drag
+-upload omits them again, edit .github/workflows/test-gate.yml directly on test
+-using the complete file supplied in the repair archive. The package dependency
+-fix remains effective even before the workflow is updated.
++Physical camera and microphone are user-confirmed. Browser fixtures do not
++independently certify hardware or signed-in deployed member/coach workflows.
++Repository writes are unavailable to the assistant; this package is not pushed.
++
++Upload server/ and qa/ into the repository root, preserving their paths.
++If hidden .github is omitted, the build-order correction still takes effect.
++For evidence uploads, also replace .github/workflows/test-gate.yml via GitHub's
++Edit button with the full supplied file. Do not add a wrapper folder.
+diff --git a/qa/manual-regression.tsv b/qa/manual-regression.tsv
+index 70d5c40..c6d89f0 100644
+--- a/qa/manual-regression.tsv
++++ b/qa/manual-regression.tsv
+@@ -150,3 +150,5 @@ Session	Tracker state validation	Start tracker authorization; reject forged, exp
+ Progress	Invalid lab value	As assigned coach, submit blank and nonnumeric lab values, then a valid result with only one reference limit.	Invalid values receive a clear validation error; valid one-sided ranges save and classify correctly.	P0	test-ci55-regressions; test-known-fixes
+ Workout	Zero-rep exercise	Save a selected exercise with zero repetitions; close and reopen the workout.	The selected exercise remains unfinished with no completed sets or training volume.	P0	test-journey; test-workout-session-logic
+ Deployment	Repeat clean build	Build with an existing compiled dist folder, then build again and inspect the worker and referenced assets.	Both builds succeed; stale bundles are removed and the generated worker contains the current manifest.	P0	npm run build; GitHub test gate
++Deployment	Stale CSS left by upload	Keep obsolete CSS bundles beside the current build; run the premium UI suite.	Only styles linked in index.html load; all layout and theme checks still pass.	P0	test-built-css; test-premium-ui
++Deployment	Test builds before UI	With an old dist folder, run npm test from server using the original CI workflow.	The clean client build runs before suites; a failed build stops the test command.	P0	npm test; GitHub test gate
+diff --git a/server/package.json b/server/package.json
+index ff324c8..4660768 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -13,7 +13,10 @@
+     "test:ui:install": "npm i --no-save puppeteer-core @sparticuz/chromium",
+     "lint:install": "npm i --no-save eslint@9 @eslint/js@9 globals@15 eslint-plugin-react@7",
+     "lint:undef": "node scripts/lint-undef.mjs",
+-    "test:premium": "node scripts/test-premium-ui.mjs"
++    "test:premium": "node scripts/test-premium-ui.mjs",
++    "pretest": "npm --prefix ../client run build",
++    "pretest:ui": "npm --prefix ../client run build",
++    "pretest:premium": "npm --prefix ../client run build"
+   },
+   "keywords": [],
+   "author": "",
+diff --git a/server/scripts/lib/built-css.mjs b/server/scripts/lib/built-css.mjs
+new file mode 100644
+index 0000000..0e9f8e9
+--- /dev/null
++++ b/server/scripts/lib/built-css.mjs
+@@ -0,0 +1,26 @@
++import fs from 'node:fs';
++import path from 'node:path';
++import { JSDOM } from 'jsdom';
++
++// Browser uploads can leave old hashed bundles in dist. Match the app's HTML,
++// never directory order, and preserve the linked stylesheets' cascade order.
++export function readBuiltCss(dist) {
++  const hint = 'Run the client build first: cd client && npm run build';
++  const index = path.join(dist, 'index.html');
++  if (!fs.existsSync(index)) throw new Error(`Missing built index.html. ${hint}`);
++  const dom = new JSDOM(fs.readFileSync(index, 'utf8'));
++  try {
++    const files = [...dom.window.document.querySelectorAll('link[rel~="stylesheet"][href]')]
++      .map(link => new URL(link.getAttribute('href'), 'http://build.local/'))
++      // External font stylesheets are not local build output.
++      .filter(url => url.origin === 'http://build.local' && url.pathname.endsWith('.css'))
++      .map(url => path.join(dist, decodeURIComponent(url.pathname)));
++    if (!files.length) throw new Error(`No local stylesheet linked in built index.html. ${hint}`);
++    return files.map(file => {
++      if (!fs.existsSync(file)) throw new Error(`Missing linked stylesheet ${file}. ${hint}`);
++      return fs.readFileSync(file, 'utf8');
++    }).join('\n');
++  } finally {
++    dom.window.close();
++  }
++}
+diff --git a/server/scripts/test-built-css.mjs b/server/scripts/test-built-css.mjs
+new file mode 100644
+index 0000000..2007f7d
+--- /dev/null
++++ b/server/scripts/test-built-css.mjs
+@@ -0,0 +1,30 @@
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { readBuiltCss } from './lib/built-css.mjs';
++
++const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'fitlife-built-css-'));
++function check(label, fn) { fn(); console.log(`  ✓ ${label}`); }
++try {
++  check('Missing client build fails with a build instruction', () =>
++    assert.throws(() => readBuiltCss(dist), /Missing built index.html.*Run the client build/));
++  fs.mkdirSync(path.join(dist, 'assets'));
++  fs.writeFileSync(path.join(dist, 'assets/a-obsolete.css'), 'body { width: 9999px; }');
++  fs.writeFileSync(path.join(dist, 'assets/z-current.css'), 'body { width: 100%; }');
++  fs.writeFileSync(path.join(dist, 'assets/b-theme.css'), 'body { background: black; }');
++  fs.writeFileSync(path.join(dist, 'index.html'), `<link rel="preload" href="/assets/a-obsolete.css">
++    <link href="https://fonts.googleapis.com/fonts.css" rel="stylesheet">
++    <link href="/assets/z-current.css?v=1" rel="stylesheet" crossorigin>
++    <link rel="stylesheet" href="./assets/b-theme.css">`);
++  check('Only linked app CSS loads, in HTML order, ignoring obsolete bundles and external fonts', () =>
++    assert.equal(readBuiltCss(dist), 'body { width: 100%; }\nbody { background: black; }'));
++  fs.unlinkSync(path.join(dist, 'assets/z-current.css'));
++  check('A missing linked bundle fails instead of falling back to obsolete CSS', () =>
++    assert.throws(() => readBuiltCss(dist), /Missing linked stylesheet.*z-current.css/));
++  fs.writeFileSync(path.join(dist, 'index.html'), '<link rel="preload" href="/assets/a-obsolete.css">');
++  check('HTML without a stylesheet fails instead of testing an unstyled page', () =>
++    assert.throws(() => readBuiltCss(dist), /No local stylesheet linked/));
++} finally {
++  fs.rmSync(dist, { recursive: true, force: true });
++}
+diff --git a/server/scripts/test-local.sh b/server/scripts/test-local.sh
+index a0b5824..56b8388 100644
+--- a/server/scripts/test-local.sh
++++ b/server/scripts/test-local.sh
+@@ -204,7 +204,7 @@ test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-feat
+ test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
+ test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods test-known-fixes test-usual-foods"
+ 
+-MODULE_SUITES="test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser"
++MODULE_SUITES="test-built-css test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser"
+ RESULTS_DIR="${TEST_RESULTS_DIR:-$ROOT/../qa/results}"
+ mkdir -p "$RESULTS_DIR"
+ 
+diff --git a/server/scripts/test-premium-ui.mjs b/server/scripts/test-premium-ui.mjs
+index e2a7a7a..6d58265 100644
+--- a/server/scripts/test-premium-ui.mjs
++++ b/server/scripts/test-premium-ui.mjs
+@@ -28,23 +28,14 @@
+ import { createRequire } from 'module';
+ import { build } from 'esbuild';
+ import { JSDOM } from 'jsdom';
+-// puppeteer-core and @sparticuz/chromium are loaded ON DEMAND, not imported.
+-//
+-// They are 78MB together, and this repo has no railway.json or nixpacks.toml —
+-// so whether the deploy runs build.sh (which installs the server with
+-// --omit=dev) or its own detected build is not something the code can
+-// guarantee. 78MB of test-only weight that MIGHT ship on every deploy is not a
+-// trade worth making for one check, so they are no longer dependencies at all.
+-//
+-//   cd server && npm run test:ui:install
+-//
+-// installs them without touching package.json.
++// Browser packages are locked server devDependencies, loaded only for browser checks.
+ import path from 'path';
+ import fs from 'fs';
+ import os from 'os';
+ import { fileURLToPath } from 'url';
+ import http from 'http';
+ import { browserExecutable } from './lib/browser-executable.mjs';
++import { readBuiltCss } from './lib/built-css.mjs';
+ 
+ const HERE       = path.dirname(fileURLToPath(import.meta.url));
+ const ROOT       = path.resolve(HERE, '../..');
+@@ -373,7 +364,7 @@ async function navigationFlow() {
+ }
+ async function premiumVisual(code) {
+  const puppeteer=(await import('puppeteer-core')).default,chromium=(await import('@sparticuz/chromium')).default;
+- const assets=path.join(ROOT,'client/dist/assets');const css=fs.readdirSync(assets).filter(f=>f.endsWith('.css')).map(f=>fs.readFileSync(path.join(assets,f),'utf8')).join('\n');
++ const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+  const shell='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style></head><body><div id="root"></div></body></html>';
+  const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(shell)});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));
+diff --git a/server/scripts/ui-tests.mjs b/server/scripts/ui-tests.mjs
+index 5fba5ba..80bfc6c 100644
+--- a/server/scripts/ui-tests.mjs
++++ b/server/scripts/ui-tests.mjs
+@@ -28,23 +28,14 @@
+ import { createRequire } from 'module';
+ import { build } from 'esbuild';
+ import { JSDOM } from 'jsdom';
+-// puppeteer-core and @sparticuz/chromium are loaded ON DEMAND, not imported.
+-//
+-// They are 78MB together, and this repo has no railway.json or nixpacks.toml —
+-// so whether the deploy runs build.sh (which installs the server with
+-// --omit=dev) or its own detected build is not something the code can
+-// guarantee. 78MB of test-only weight that MIGHT ship on every deploy is not a
+-// trade worth making for one check, so they are no longer dependencies at all.
+-//
+-//   cd server && npm run test:ui:install
+-//
+-// installs them without touching package.json.
++// Browser packages are locked server devDependencies, loaded only for browser checks.
+ import path from 'path';
+ import fs from 'fs';
+ import os from 'os';
+ import { fileURLToPath } from 'url';
+ import http from 'http';
+ import { browserExecutable } from './lib/browser-executable.mjs';
++import { readBuiltCss } from './lib/built-css.mjs';
+ 
+ const HERE       = path.dirname(fileURLToPath(import.meta.url));
+ const ROOT       = path.resolve(HERE, '../..');
+@@ -879,8 +870,7 @@ async function progressTest() {
+   try {
+     const puppeteerCore = (await import('puppeteer-core')).default;
+     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
++    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+     await new Promise(r => server.listen(0, '127.0.0.1', r));
+@@ -980,8 +970,7 @@ async function planTest() {
+   try {
+     const puppeteerCore = (await import('puppeteer-core')).default;
+     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
++    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+     await new Promise(r => server.listen(0, '127.0.0.1', r));
+@@ -2609,8 +2598,7 @@ async function reviewFixesTest() {
+     try {
+       const puppeteerCore = (await import('puppeteer-core')).default;
+       const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+-      const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+-      const built = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
++      const built = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+       const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+       try {
+         const page = await browser.newPage();
+@@ -2730,8 +2718,7 @@ async function phase8cTest() {
+   try {
+     const puppeteerCore = (await import('puppeteer-core')).default;
+     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
++    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
+     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+     await new Promise(r => server.listen(0, '127.0.0.1', r));
+@@ -3079,8 +3066,7 @@ async function honestStatesTest() {
+   try {
+     const puppeteerCore = (await import('puppeteer-core')).default;
+     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
+-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
++    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root" style="padding:16px"></div></body></html>`;
+     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
+     await new Promise(r => server.listen(0, '127.0.0.1', r));
+@@ -3352,17 +3338,7 @@ async function overflowTest() {
+   // a vacuous pass of exactly the kind this repo keeps producing.
+   //
+   // Reading from dist/ means the suite tests what a member actually downloads.
+-  const distDir = path.join(ROOT, 'client', 'dist', 'assets');
+-  const cssFile = fs.existsSync(distDir)
+-    ? fs.readdirSync(distDir).find(f => f.endsWith('.css'))
+-    : null;
+-  if (!cssFile) {
+-    throw new Error(
+-      'No built stylesheet found at client/dist/assets/*.css.\n' +
+-      '  Run the client build first:  cd client && npm run build\n' +
+-      '  Without it this check renders an unstyled page and proves nothing.');
+-  }
+-  const css = fs.readFileSync(path.join(distDir, cssFile), 'utf8');
++  const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+ 
+   // Served over http rather than page.setContent(). setContent leaves the page
+   // on an opaque origin, where localStorage and IndexedDB throw SecurityError —

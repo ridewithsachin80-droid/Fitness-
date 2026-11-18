@@ -6,6 +6,9 @@
  *      the existing exercises UNCHANGED, adds duration + a note line
  *   3. assert the manual sets survived, and duration/notes are merged correctly
  */
+if (!process.env.DATABASE_URL?.includes('localhost')) {
+  console.error('Refusing non-local test database'); process.exit(1);
+}
 process.env.JWT_SECRET = 'testsecret';
 const express = require('express');
 const jwt = require('jsonwebtoken');

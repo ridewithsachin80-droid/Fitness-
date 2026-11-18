@@ -3,7 +3,7 @@
  * what it SHOWS.
  *
  * This is the container half of the old pages/DailyLog.jsx, moved here in
- * Sprint 3 line-for-line: the store wiring, every fetch, the 4-second
+ * Sprint 3 line-for-line: the store wiring, every fetch, the debounced
  * auto-save, the streak and milestone logic, the auto-derived protocol ticks,
  * the PWA shortcut handling. The comments inside are the original ones —
  * several record bugs that were hit and fixed (temporal-dead-zone effects,
@@ -18,17 +18,19 @@
  * `sheet`.
  */
 import { useEffect, useCallback, useState, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useLogStore }  from '../store/logStore';
 import { canRefresh } from '../utils/logSync';
 import { useAuthStore } from '../store/authStore';
 import api from '../api/client';
 import { getMyProfile, getMyToday, getMyRead } from '../api/logs';
 import {
-  today, istDate, istDaysAgo,
+  today, istDate, istDaysAgo, shiftDateKey,
   calcCompliance, plural,
 } from '../constants';
 import { useAIChat } from '../store/aiChatStore';
 import { sessionEnergy } from '../utils/exerciseCalories';
+import { completedWorkoutExercises } from '../utils/workoutSession';
 import { dailyRead } from '../utils/dailyRead';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { usePush }        from '../hooks/usePush';
@@ -53,18 +55,25 @@ export default function useTodayModel() {
   usePush();
   useOfflineSync();
 
-  useEffect(() => { setDate(today()); }, []);
+  // Fixes-2p: until this visit's own load has begun, the store still holds the
+  // day as it was when the member last left Today. Showing that for a frame let a
+  // tap land on content that was swapped for the loading placeholder a moment
+  // later: the tap was lost and a section the member opened snapped shut (seen
+  // on the way back from More). Show the placeholder from the first frame instead.
+  const [visitLoadStarted, setVisitLoadStarted] = useState(false);
+  useEffect(() => { setDate(today()); setVisitLoadStarted(true); }, []);
 
-  // Fetch yesterday's weight for trend delta shown after weight entry
+  // Compare with the day before the SELECTED entry, not always yesterday.
   const [yesterdayWeight, setYesterdayWeight] = useState(null);
   useEffect(() => {
-    // Was toISOString() — UTC — while today() is IST. For 5.5 hours a day
-    // those pointed at different dates and the trend delta silently vanished.
-    const yStr = istDaysAgo(1);
-    api.get(`/logs/${yStr}`).then(({ data }) => {
-      if (data?.weight_kg) setYesterdayWeight(parseFloat(data.weight_kg));
+    let cancelled = false;
+    setYesterdayWeight(null);
+    const previous = shiftDateKey(date, -1);
+    api.get(`/logs/${previous}`).then(({ data }) => {
+      if (!cancelled && data?.weight_kg) setYesterdayWeight(parseFloat(data.weight_kg));
     }).catch(() => {});
-  }, []);
+    return () => { cancelled = true; };
+  }, [date]);
 
   // Fetch coach notes + profile age once on mount
   const [coachNotes, setCoachNotes] = useState([]);
@@ -222,6 +231,7 @@ export default function useTodayModel() {
 
   // ── Weight sanity check ───────────────────────────────────────────────────
   const [weightWarning, setWeightWarning] = useState('');
+  useEffect(() => { setWeightWarning(''); }, [date]);   // Fixes-3j (QA review): a warning is about one day's value
   const validateWeight = (val) => {
     const w = parseFloat(val);
     const minW = ageMode === 'child' ? 15 : 30;
@@ -231,28 +241,51 @@ export default function useTodayModel() {
     } else { setWeightWarning(''); }
   };
 
-  // ── Auto-save (4-second debounce) ─────────────────────────────────────────
+  // ── Auto-save (1.5-second debounce) ─────────────────────────────────────────
   // Every field writes through here — this is now the ONLY save path (no more
-  // manual "Save Today's Log" button). 4s feels instant in practice while
-  // still coalescing rapid edits (e.g. dragging the water slider) into one
+  // manual "Save Today's Log" button). A short delay coalesces rapid edits
+  // (e.g. dragging the water slider) into one
   // request instead of firing on every pixel of movement.
   const autoSaveRef = useRef(null);
   const [autoSaved, setAutoSaved] = useState(false);
 
   // ── Premium hero state ─────────────────────────────────────────────────────
+  const [detailSection, setDetailSection] = useState(() => {
+    const section = new URLSearchParams(window.location.search).get('section');
+    return ['plan', 'log', 'insights'].includes(section) ? section : null;
+  });
+  const deepSection = useRef(detailSection);
+  useEffect(() => {
+    if (loading || !deepSection.current) return;
+    const name = deepSection.current === 'insights' ? 'insight' : deepSection.current;
+    const timer = setTimeout(() => {
+      document.querySelector(`[data-testid="home-${name}-details"]`)?.scrollIntoView?.({ block: 'start' });
+      deepSection.current = null;
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [loading]);
   const [heroPanel, setHeroPanel] = useState(null);   // 'weight'|'food'|'protocol'|'water'|'workout'|'sleep'
+
+  const [foodTarget, setFoodTarget] = useState(null);
 
   // PWA app shortcuts: long-press icon → /?open=ai or /?open=weight.
   // Handled once on mount, then the param is stripped so a refresh doesn't
   // re-trigger it.
+  //
+  // Read from the ROUTER's location, not once on mount (fix, 10 Oct 2026,
+  // VOI-013; restored 16 Oct): hands-free "open workout" navigates to
+  // /?open=workout while Today is already on screen, and a mount-only read
+  // never saw it.
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
-    const open = new URLSearchParams(window.location.search).get('open');
+    const open = new URLSearchParams(location.search).get('open');
     if (!open) return;
     if (open === 'ai') useAIChat.getState().openChat();
     // Sprint 6: the Plan screen deep-links to any sheet (/?open=workout …)
-    if (['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition'].includes(open)) setHeroPanel(open);
-    window.history.replaceState({}, '', window.location.pathname);
-  }, []);
+    if (['weight', 'food', 'water', 'sleep', 'workout', 'protocol', 'nutrition', 'mealidea'].includes(open)) setHeroPanel(open);
+    navigate(location.pathname, { replace: true });
+  }, [location.search]);
   const [workoutSummary, setWorkoutSummary] = useState({ count: 0, duration: null, sets: [], cardio: [] });
   // Bumped whenever the AI applies a day, so WorkoutLog remounts and picks up
   // anything the AI just wrote (otherwise an open sheet shows stale data).
@@ -268,9 +301,17 @@ export default function useTodayModel() {
   // openChat() from anywhere (orb, Today's read, a sheet's "Log with AI"
   // banner) must be able to reach the composer — which a sheet would cover.
   // Close whatever sheet is open on the same signal.
+  //
+  // Only a NEW request closes the sheet (17 Oct 2026). The counter keeps its
+  // value between screens, so reacting to it on arrival closed the sheet a
+  // link had just asked for: once the member had used the AI, More → Meal
+  // ideas / Food / Nutrition and Plan → Log, Water, Sleep, Start all landed on
+  // Today with nothing open.
   const chatFocusRequest = useAIChat(s => s.focusRequest);
+  const seenFocusRequest = useRef(chatFocusRequest);
   useEffect(() => {
-    if (chatFocusRequest) setHeroPanel(null);
+    if (chatFocusRequest !== seenFocusRequest.current) setHeroPanel(null);
+    seenFocusRequest.current = chatFocusRequest;
   }, [chatFocusRequest]);
 
   // Personal-best detection. Declared here, AFTER heroPanel and
@@ -302,7 +343,7 @@ export default function useTodayModel() {
       .then(({ data }) => {
         if (cancelled) return;
         setWorkoutSummary({
-          count: (data?.exercises || []).length,
+          count: completedWorkoutExercises(data?.exercises).length,
           duration: data?.session?.duration_min || null,
           // Raw sets + cardio feed the shared calorie model (volume-based for
           // strength, MET × time for cardio)
@@ -418,39 +459,39 @@ export default function useTodayModel() {
     return () => clearTimeout(t);
   }, [chipInfo]);
 
+  const saveCurrentEntry = useCallback(async () => {
+    await saveLog();
+    const state = useLogStore.getState();
+    const persisted = !state.dirty && !state.error;
+    if (persisted) {
+      setAutoSaved(true);
+      setTimeout(() => setAutoSaved(false), 2500);
+    }
+    return persisted;
+  }, [saveLog]);
+
   const triggerAutoSave = useCallback(() => {
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = setTimeout(async () => {
       autoSaveRef.current = null;
-      if (date === today()) {
-        try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
-      }
-    }, 4000);
-  }, [saveLog, date]);
+      // Past-day edits are real edits too. saveLog captures the current date.
+      await saveCurrentEntry();
+    }, 1500);
+  }, [saveCurrentEntry]);
 
-  // Flush a pending debounced save NOW. Used before the date changes.
-  //
-  // Found by the Sprint 3 jsdom flow: tick a supplement, press ‹ within four
-  // seconds to look at yesterday. The timer fired after setDate had already
-  // swapped the store to yesterday's log, so saveLog() posted yesterday's data
-  // to yesterday and today's tick was gone. The member saw the tick, left,
-  // came back to find it missing. Saving before the store changes closes it.
+  // Flush before changing dates; a rejected save must keep the edited day open.
   const flushPendingSave = useCallback(async () => {
-    if (!autoSaveRef.current) return;
     clearTimeout(autoSaveRef.current);
     autoSaveRef.current = null;
-    if (date === today()) {
-      try { await saveLog(); setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2500); } catch {}
-    }
-  }, [saveLog, date]);
+    if (!useLogStore.getState().dirty) return true;
+    return saveCurrentEntry();
+  }, [saveCurrentEntry]);
 
-  // Safety net: if the debounce hasn't fired yet and the user navigates away,
-  // switches tabs, or closes the app, flush an immediate save so the last few
-  // seconds of edits aren't silently lost.
   useEffect(() => {
     const flush = () => {
-      if (autoSaveRef.current && date === today()) {
+      if (autoSaveRef.current) {
         clearTimeout(autoSaveRef.current);
+        autoSaveRef.current = null;
         saveLog().catch(() => {});
       }
     };
@@ -458,10 +499,11 @@ export default function useTodayModel() {
     window.addEventListener('beforeunload', flush);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      flush();
       window.removeEventListener('beforeunload', flush);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [saveLog, date]);
+  }, [saveLog]);
 
   // Coming back to the app. A PWA stays open in the background for days, so
   // "open" is not "freshly loaded": the day on screen may be hours old, with
@@ -485,7 +527,7 @@ export default function useTodayModel() {
   const actDone    = activeActivities.filter(a => log.activities?.[a.id]).length;
   const acvDone    = activeACV.filter(a => log.acv?.[a.id]).length;
   const suppDone   = activeSupplements.filter(s => log.supplements?.[s.id]).length;
-  const update     = useCallback((field, val) => { updateLog(field, val); triggerAutoSave(); }, [updateLog, triggerAutoSave]);
+  const update     = useCallback((field, val) => { setAutoSaved(false); updateLog(field, val); triggerAutoSave(); }, [updateLog, triggerAutoSave]);
 
   // Keep the auto-derived protocol ticks in sync with the Workout log.
   // Writes only when the derived value actually differs, so this can't loop.
@@ -524,6 +566,7 @@ export default function useTodayModel() {
       meal:     meal.name,
       food_id:  item.food_id  || null,
       per_100g: item.per_100g || null,
+      preparation: item.preparation ?? null,
     }));
     const existing = log.food || [];
     // Only skip items already in THIS meal slot — same food can appear in multiple meals
@@ -633,25 +676,25 @@ export default function useTodayModel() {
 
   // Date navigation, shared by the header arrows
   const goPrevDay = async () => {
-    await flushPendingSave();
-    const d = new Date(date + 'T12:00:00');
-    d.setDate(d.getDate() - 1);
-    setDate(istDate(d));
+    if (!await flushPendingSave()) return;
+    setDate(shiftDateKey(date, -1));
   };
   // Steps forward ONE day, mirroring '‹'. It used to jump straight back to
   // today, so a member who went back five days to fix something and then
   // wanted day four was thrown to today and had to press '‹' four more times.
   const goNextDay = async () => {
-    await flushPendingSave();
-    const d = new Date(`${date}T12:00:00`);   // midday: no DST/offset edge
-    d.setDate(d.getDate() + 1);
-    const next = istDate(d);
+    if (!await flushPendingSave()) return;
+    const next = shiftDateKey(date, 1);
     setDate(next > today() ? today() : next);
   };
-  const goToday = async () => { await flushPendingSave(); setDate(today()); };
+  const goToday = async () => { if (await flushPendingSave()) setDate(today()); };
 
-  const openSheet  = (key) => { setHeroPanel(key); haptic(10); };
-  const closeSheet = () => setHeroPanel(null);
+  const openSheet = (key, target = null) => {
+    setFoodTarget(key === 'food' && target && typeof target.meal === 'string'
+      ? { ...target, date, owner: user?.id } : null);
+    setHeroPanel(key); haptic(10);
+  };
+  const closeSheet = () => { setHeroPanel(null); setFoodTarget(null); };
   // Phase 2: the prescribed meal being logged "as planned" (null = sheet closed).
   const [plannedMeal, setPlannedMeal] = useState(null);
   const openPlanned  = (meal) => setPlannedMeal(meal);
@@ -665,9 +708,9 @@ export default function useTodayModel() {
     // identity & settings
     user, terms, ageMode, avatarIdx, avatar: AVATARS_LIST[avatarIdx] || AVATARS_LIST[0],
     // store
-    date, isToday, log, protocol, loading, saving, saved, queued, error,
+    date, isToday, log, protocol, loading: loading || !visitLoadStarted, saving, saved, queued, error,
     update, setDate, goPrevDay, goNextDay, goToday,
-    autoSaved,
+    autoSaved, detailSection, setDetailSection, retrySave: flushPendingSave,
     // protocol items
     activeActivities, activeACV, activeSupplements,
     actDone, acvDone, suppDone, protocolDone, protocolTotal, compliance,
@@ -688,6 +731,7 @@ export default function useTodayModel() {
     streak, streakIsBest, milestone, setMilestone, volumePB,
     // sheets (heroPanel under its historical name)
     sheet: heroPanel, openSheet, closeSheet,
+    foodTarget: foodTarget?.date === date && foodTarget?.owner === user?.id ? foodTarget : null,
     plannedMeal, openPlanned, closePlanned,
     plateJob, openPlate, closePlate,
     // protocol chip long-press popover

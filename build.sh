@@ -1,5 +1,9 @@
 #!/bin/bash
 set -e  # Exit on any error
+# A failed install piped through `tail` must stop the build too (18 Oct 2026:
+# without this, a client install that left vite out went unnoticed until
+# "vite: not found").
+set -o pipefail
 
 echo "=== Health Monitor Build Script v2 ==="
 echo "Working directory: $(pwd)"
@@ -29,7 +33,11 @@ echo "=== Building React client ==="
 cd "$ROOT_DIR/client"
 echo "Client dir: $(pwd)"
 
-npm install --prefer-offline 2>&1 | tail -5
+# --include=dev: vite and the other build tools are devDependencies. When the
+# build runs with NODE_ENV=production (the Railway test service did from 18 Oct
+# 2026), npm leaves devDependencies out and the build fails with
+# "vite: not found". The server install below still omits them.
+npm install --include=dev --prefer-offline 2>&1 | tail -5
 npm run build 2>&1
 echo "✅ Client build complete"
 

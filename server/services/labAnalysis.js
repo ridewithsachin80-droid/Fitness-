@@ -30,6 +30,7 @@
  */
 
 const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+const { rangeState, refText } = require('./labRange');
 const mean = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 
 const MIN_INTERVAL_DAYS = 30;
@@ -125,13 +126,6 @@ function direction(name, from, to) {
   return delta > 0 ? 'rose' : 'fell';
 }
 
-function rangeState(v, min, max) {
-  if (min == null || max == null) return null;
-  if (v < min) return 'low';
-  if (v > max) return 'high';
-  return 'normal';
-}
-
 /**
  * @param labs      lab_values rows, any order
  * @param logs      daily_logs rows
@@ -154,13 +148,12 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
     rows.sort((a, b) => new Date(a.test_date) - new Date(b.test_date));
     const latest = rows[rows.length - 1];
 
-    const state = rangeState(num(latest.value), latest.ref_min != null ? num(latest.ref_min) : null,
-                                                latest.ref_max != null ? num(latest.ref_max) : null);
+    const state = rangeState(latest.value, latest.ref_min, latest.ref_max);
     if (state === 'low' || state === 'high') {
       flags.push({
         test_name: latest.test_name, value: num(latest.value), unit: latest.unit,
         state, test_date: latest.test_date,
-        ref: latest.ref_min != null ? `${latest.ref_min}–${latest.ref_max}` : null,
+        ref: refText(latest.ref_min, latest.ref_max),
       });
     }
 
@@ -188,10 +181,9 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
       change: +(to - from).toFixed(2),
       change_pct: from !== 0 ? Math.round(((to - from) / Math.abs(from)) * 100) : null,
       direction: direction(latest.test_name, from, to),
-      from_state: rangeState(from, prev.ref_min != null ? num(prev.ref_min) : null,
-                                   prev.ref_max != null ? num(prev.ref_max) : null),
+      from_state: rangeState(prev.value, prev.ref_min, prev.ref_max),
       to_state: state,
-      ref: latest.ref_min != null ? `${latest.ref_min}–${latest.ref_max}` : null,
+      ref: refText(latest.ref_min, latest.ref_max),
       from_date: prev.test_date,
       to_date: latest.test_date,
       interval_days: gapDays,
@@ -211,4 +203,4 @@ function analyseLabs(labs = [], logs = [], sessions = []) {
   };
 }
 
-module.exports = { analyseLabs, windowContext, MIN_INTERVAL_DAYS };
+module.exports = { analyseLabs, windowContext, MIN_INTERVAL_DAYS, rangeState, refText };

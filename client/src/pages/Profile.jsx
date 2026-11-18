@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { calcBMR, foodKcal } from '../lib/day';
+import { calcBMR, foodKcal, waterTarget, STANDARD_LABEL } from '../lib/day';
 import { useAuthStore } from '../store/authStore';
 import { getMyProfile, updateMyProfile }  from '../api/logs';
 import { Card, SectionTitle, PageLoader, MemberBottomNav } from '../components/UI';
@@ -18,7 +18,9 @@ import { sessionEnergy } from '../utils/exerciseCalories';
 import MetabolicInsight from '../components/MetabolicInsight';
 import LabResults from '../components/LabResults';
 import api from '../api/client';
-import { plural } from '../constants';
+import { plural, today } from '../constants';
+import { dayLabel } from '../utils/dayLabel';
+import { goalHeadline } from '../utils/goalHeadline';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,7 +51,7 @@ function bmiLabel(b) {
   const v = parseFloat(b);
   if (v < 18.5) return { label: 'Underweight', cls: 'text-blue-300 bg-blue-400/10 border-blue-400/20' };
   if (v < 25)   return { label: 'Healthy',     cls: 'text-gold-light bg-gold/10 border-gold/20' };
-  if (v < 30)   return { label: 'Overweight',  cls: 'text-amber-300 bg-amber-400/10 border-amber-400/20' };
+  if (v < 30)   return { label: 'Overweight',  cls: 'text-warn bg-warn/10 border-warn/20' };
   return             { label: 'Obese',          cls: 'text-red-300 bg-red-400/10 border-red-400/20' };
 }
 
@@ -134,17 +136,19 @@ const CONDITION_LABELS = {
  * was no way to tell which number mattered. The member opens this page to see
  * their weight, so that one is gold and the rest are ink.
  */
-function StatPill({ label, value, unit, accent = false }) {
+function StatPill({ label, value, unit, accent = false, note = '', testId }) {
   return (
     <div className={`rounded-2xl px-3 py-3 text-center ${
       accent ? 'bg-gold/[0.07]' : 'bg-surface'}`}
-      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+      style={{ boxShadow: 'inset 0 1px 0 rgb(var(--fit-ink) / 0.045)' }}>
       <p className={`font-display text-[23px] leading-none font-medium tabular-nums ${
         accent ? 'text-gold-light' : 'text-white'}`}>
         {value ?? '—'}
         {unit && <span className="text-body-sm font-normal ml-1 text-lo">{unit}</span>}
       </p>
       <p className="text-micro mt-1.5 text-mute">{label}</p>
+      {/* Fixes-3l (8b): how old the figure is, e.g. "4 Nov", so a weeks-old weight is never read as today's. */}
+      {note && <p className="text-micro text-lo mt-0.5" data-testid={testId}>{note}</p>}
     </div>
   );
 }
@@ -204,19 +208,8 @@ export default function Profile() {
   const goalList = goalIds.map(id => GOAL_OPTIONS.find(g => g.id === id)).filter(Boolean);
   const primaryGoal = goalList[0] || null;
   const weeks = p.member_since ? Math.max(1, Math.floor((Date.now() - new Date(p.member_since).getTime()) / (7 * 86400000)) + 1) : null;
-  const goalHeadline = (() => {
-    if (!primaryGoal) return null;
-    if (primaryGoal.id === 'lose' && p.start_weight && p.target_weight) {
-      const total = +(p.start_weight - p.target_weight).toFixed(1);
-      return toGoKg != null && toGoKg > 0 ? `Lose ${total} kg · ${toGoKg} kg to go` : `Lose ${total} kg · goal reached`;
-    }
-    if (primaryGoal.id === 'gain' && p.start_weight && p.target_weight) {
-      const total = +(p.target_weight - p.start_weight).toFixed(1);
-      const left = toGoKg != null ? +(-toGoKg).toFixed(1) : null;
-      return left != null && left > 0 ? `Gain ${total} kg · ${left} kg to go` : `Gain ${total} kg`;
-    }
-    return primaryGoal.label;
-  })();
+  // Fixes-3j: utils/goalHeadline — "goal reached" only with a known weight at or past the target.
+  const headline = goalHeadline({ goalId: primaryGoal?.id, goalLabel: primaryGoal?.label, startWeight: p.start_weight, targetWeight: p.target_weight, currentWeight: p.current_weight });
 
   return (
     <div className="min-h-screen bg-charcoal font-sans">
@@ -234,7 +227,7 @@ export default function Profile() {
                 <h1 className="font-display text-num font-medium leading-tight truncate">{p.name}</h1>
                 <p className="text-caption text-mid mt-0.5" data-testid="profile-meta">
                   {weeks ? `Week ${weeks}` : 'New member'}
-                  {p.monitor_name ? ` · Coach ${p.monitor_name}` : ''}
+                  {p.monitor_name ? ` · ${/^coach\b/i.test(p.monitor_name) ? '' : 'Coach '}${p.monitor_name}` : ''}
                   {memberAge ? ` · ${memberAge} yrs` : ''}
                 </p>
               </div>
@@ -249,8 +242,8 @@ export default function Profile() {
           {/* ── Goal ── */}
           <div className="mt-5" data-testid="profile-goal">
             <Eyebrow>Goal</Eyebrow>
-            {goalHeadline ? (
-              <p className="font-display text-xl font-medium text-white leading-tight mt-1">{goalHeadline}</p>
+            {headline ? (
+              <p className="font-display text-xl font-medium text-white leading-tight mt-1">{headline}</p>
             ) : (
               <p className="text-sm text-mid mt-1">No goal set yet — your coach can set one, or update it in onboarding.</p>
             )}
@@ -307,7 +300,8 @@ export default function Profile() {
 
         {/* Weight stats */}
         <div className="grid grid-cols-3 gap-2">
-          <StatPill label="Current weight" value={p.current_weight} unit="kg" accent />
+          <StatPill label="Current weight" value={p.current_weight} unit="kg" accent
+            note={p.current_weight != null ? dayLabel(p.current_weight_date, today()) : ''} testId="profile-weight-date" />
           <StatPill label="Lost so far"
             value={lostKg !== null ? (lostKg >= 0 ? lostKg : `+${Math.abs(lostKg)}`) : null}
             unit="kg" />
@@ -319,14 +313,14 @@ export default function Profile() {
         {/* Activity stats */}
         <div className="grid grid-cols-2 gap-2">
           <StatPill label="Total logs" value={p.total_logs} />
-          <StatPill label="30-day compliance"
+          <StatPill label="30-day checklist"
             value={p.avg_compliance !== null ? `${p.avg_compliance}%` : null}
             />
         </div>
 
 
         <section data-testid="section-plan">
-          <Eyebrow className="mb-2">My plan</Eyebrow>
+          <Collapsible title="My plan & daily targets" summary="Food, activity, recovery and coach instructions" icon="calendar">
           <div className="space-y-3">
         {/* Macro targets */}
         {p.macros && (
@@ -337,9 +331,9 @@ export default function Profile() {
             )}
             <div className="grid grid-cols-2 gap-2 mt-2">
               {[
-                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-orange-400/[0.08] border-orange-400/[0.16] text-orange-300' },
+                { label: 'Calories', value: p.macros.kcal, unit: 'kcal', color: 'bg-gold/[0.08] border-gold/[0.16] text-gold' },
                 { label: 'Protein',  value: p.macros.pro,  unit: 'g',    color: 'bg-blue-400/[0.08] border-blue-400/[0.16] text-blue-300' },
-                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-amber-400/[0.08] border-amber-400/[0.16] text-amber-300' },
+                { label: 'Carbs',    value: p.macros.carb, unit: 'g',    color: 'bg-carb/[0.08] border-carb/[0.16] text-carb' },
                 { label: 'Fat',      value: p.macros.fat,  unit: 'g',    color: 'bg-gold/[0.08] border-gold/[0.16] text-gold' },
               ].filter(m => m.value).map(m => (
                 <div key={m.label} className={`rounded-xl border px-3 py-2.5 text-center ${m.color}`}>
@@ -359,6 +353,9 @@ export default function Profile() {
             <span className="text-mid font-medium">litres per day</span>
           </div>
           <p className="text-xs text-lo mt-2">Stop 1 hour before sleep. Not during meals.</p>
+          {waterTarget(p).isDefault && (
+            <p className="text-xs text-mid mt-1" data-testid="profile-water-origin">{STANDARD_LABEL}. Your coach hasn’t set your own yet.</p>
+          )}
         </Card>
 
         {/* Fasting protocol */}
@@ -399,6 +396,7 @@ export default function Profile() {
         )}
 
           </div>
+        </Collapsible>
         </section>
 
         <section data-testid="section-insights">
@@ -486,21 +484,21 @@ export default function Profile() {
                 ))}
                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-white/[0.06]">
                   <span className="text-mid">Food eaten today</span>
-                  <span className="font-bold text-orange-400">{totalIn} kcal</span>
+                  <span className="font-bold text-gold">{totalIn} kcal</span>
                 </div>
               </div>
 
               {logged ? (
                 <div className={`rounded-xl px-3.5 py-3 border ${
                   balance > 0
-                    ? 'bg-amber-400/[0.08] border-amber-400/25'
+                    ? 'bg-warn/[0.08] border-warn/25'
                     : 'bg-ok/[0.08] border-ok/25'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className={`text-sm font-bold ${balance > 0 ? 'text-amber-300' : 'text-gold-light'}`}>
+                    <span className={`text-sm font-bold ${balance > 0 ? 'text-warn' : 'text-gold-light'}`}>
                       {balance > 0 ? 'Surplus' : 'Deficit'}
                     </span>
-                    <span className={`font-display text-xl font-bold ${balance > 0 ? 'text-amber-300' : 'text-gold-light'}`}>
+                    <span className={`font-display text-xl font-bold ${balance > 0 ? 'text-warn' : 'text-gold-light'}`}>
                       {balance > 0 ? '+' : ''}{balance} kcal
                     </span>
                   </div>
@@ -539,7 +537,7 @@ export default function Profile() {
               </span>
             </div>
             <div className="mt-3 h-2 bg-white/[0.08] rounded-full overflow-hidden">
-              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-gold via-amber-400 to-red-500" />
+              <div className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-gold via-warn to-red-400" />
             </div>
             <div className="flex justify-between text-xs text-lo mt-1">
               <span>18.5</span><span>25</span><span>30</span><span>35+</span>

@@ -2,7 +2,7 @@
  * ErrorBoundary — the last line between a runtime crash and a blank screen.
  *
  * Any uncaught render/lifecycle error anywhere in the tree lands here and
- * shows a dark, branded recovery screen instead of white. "Reload app" uses
+ * shows a branded recovery screen (either theme) instead of white. "Reload app" uses
  * the same nuclear option as the index.html boot watchdog: unregister service
  * workers, clear caches, reload — because in a PWA the crash is as often a
  * stale-cache mismatch as it is a code bug.
@@ -45,7 +45,7 @@ export default class ErrorBoundary extends React.Component {
     if (!this.state.error) return this.props.children;
     return (
       <div style={{
-        minHeight: '100vh', background: '#121316', color: '#EDEDF0',
+        minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-hi)',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', padding: 24, textAlign: 'center',
         fontFamily: 'Outfit, system-ui, sans-serif',
@@ -54,17 +54,17 @@ export default class ErrorBoundary extends React.Component {
         <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px' }}>
           Something went wrong
         </p>
-        <p style={{ fontSize: 13, color: '#9EA3B0', margin: '0 0 20px', maxWidth: 300 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '0 0 20px', maxWidth: 300 }}>
           Your logged data is safe on the server. Reloading usually fixes this.
         </p>
         <button onClick={this.recover} style={{
-          background: '#D4AF37', color: '#121316', border: 0, borderRadius: 999,
+          background: 'var(--accent)', color: 'var(--bg-base)', border: 0, borderRadius: 999,
           padding: '12px 28px', fontSize: 15, fontWeight: 600,
         }}>
           Reload app
         </button>
         <p style={{
-          fontSize: 10, color: '#5a5f6b', marginTop: 24, maxWidth: 320,
+          fontSize: 10, color: 'var(--text-lo)', marginTop: 24, maxWidth: 320,
           wordBreak: 'break-word', userSelect: 'all',
         }}>
           {String(this.state.error?.message || this.state.error).slice(0, 200)}

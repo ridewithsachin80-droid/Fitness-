@@ -1,14 +1,14 @@
 import GrocerySheet from '../components/plan/GrocerySheet';
 import { shareOrDownload } from '../utils/shareFile';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getMyToday } from '../api/logs';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore, useTerms, haptic } from '../store/settingsStore';
 import { OfflineBanner, MemberBottomNav } from '../components/UI';
 import { Eyebrow, Icon, Segmented, Skeleton, SkeletonCard, EmptyState } from '../components/primitives';
 import { WEEKDAYS, istWeekday, labelHasWeekday, isWeekdayScheduled, deriveTodayDay } from '../utils/programDay';
-import { resolveProtocolItems, AUTO_TICK_IDS, clock, sleepTarget } from '../lib/day';
+import { resolveProtocolItems, protocolDefaultNone, AUTO_TICK_IDS, clock, sleepTarget, protocolFromProfile, waterTarget, routineOrigin, planSourceLine, STANDARD_LABEL } from '../lib/day';
 import { formatDate } from '../constants';
 import { plural } from '../constants';
 
@@ -35,6 +35,10 @@ function fmtTime(t) {
   const hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m || 0).padStart(2, '0')} ${ampm}`;
 }
+
+// Fixes-2j: a FitLife standard value says so, instead of passing as the coach's.
+const waterSub = (w) => (w.isDefault ? `${STANDARD_LABEL} · your coach hasn\u2019t set yours yet` : 'Stop 1 hr before sleep · not during meals');
+const sleepSub = (t) => `${t.bedLabel} → ${t.wakeLabel}${t.isDefault ? ` · ${STANDARD_LABEL}` : ''}`;
 
 function Section({ eyebrow, title, children, action }) {
   return (
@@ -71,12 +75,38 @@ function Line({ icon, title, sub, right, onPress, testId, tone }) {
     : <div className={cls} data-testid={testId}>{body}</div>;
 }
 
+/** The member's targets from either shape the API sends ({ macros } or the raw
+ *  macro_* columns). Only positive numbers count; null when none is set. */
+export function planTargets(protocol) {
+  if (!protocol) return null;
+  const raw = protocol.macros || { kcal: protocol.macro_kcal, pro: protocol.macro_pro, carb: protocol.macro_carb, fat: protocol.macro_fat };
+  const num = v => (Number(v) > 0 ? Number(v) : null);
+  const t = { kcal: num(raw.kcal), pro: num(raw.pro), carb: num(raw.carb), fat: num(raw.fat) };
+  return Object.values(t).some(v => v != null) ? t : null;
+}
+
+/** "1,600 kcal · 100 g protein", "1,600 kcal", "100 g protein" — only what the coach set. */
+export function targetsTitle(t, terms = { kcal: 'kcal' }) {
+  if (!t) return '';
+  const parts = [];
+  if (t.kcal) parts.push(`${t.kcal.toLocaleString('en-IN')} ${terms.kcal}`);
+  if (t.pro) parts.push(`${t.pro} g protein`);
+  if (!parts.length) {
+    if (t.carb) parts.push(`${t.carb} g carbs`);
+    if (t.fat) parts.push(`${t.fat} g fat`);
+  }
+  return parts.join(' · ');
+}
+
 export default function Plan() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const terms = useTerms();
   const mealSlots = useSettingsStore(s => s.mealSlots);
-  const [view, setView] = useState('today');
+  // /plan?tab=nutrition opens a tab directly (fix, 10 Oct 2026, PRG-007):
+  // Progress's "Your diet plan, PDF and grocery list" landed on Today.
+  const [params] = useSearchParams();
+  const [view, setView] = useState(() => (['today', 'week', 'nutrition', 'recovery'].includes(params.get('tab')) ? params.get('tab') : 'today'));
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 
@@ -86,7 +116,9 @@ export default function Plan() {
       .catch(() => setError('Could not load your plan. Pull down to try again.'));
   }, []);
 
-  const protocol = data?.profile || null;
+  // Fixes-2j: the profile row calls the routine choice protocol_activities etc.
+  // Read as-is, every built-in item showed even when the coach had picked a few.
+  const protocol = protocolFromProfile(data?.profile || null);
   const days     = data?.program?.days || [];
   const program  = data?.program?.program || null;
   const meals    = data?.meal_plan?.meals || [];
@@ -96,10 +128,15 @@ export default function Plan() {
   // /members/me/today returns the raw profile row (macro_kcal …), not the
   // { macros: { kcal … } } shape /members/me returns, so the Eat section said
   // "Targets not set yet" for every member. Accept both shapes.
-  const macros = protocol?.macros || (protocol?.macro_kcal ? {
-    kcal: protocol.macro_kcal, pro: protocol.macro_pro, carb: protocol.macro_carb, fat: protocol.macro_fat,
-  } : null);
-  const waterL = ((protocol?.water_target || 3000) / 1000).toFixed(1);
+  // 18 Oct 2026: a coach may set protein only (or calories only). Any one
+  // positive target counts; the heading names exactly what was set.
+  const macros = planTargets(protocol);
+  const eatTitle = targetsTitle(macros, terms);
+  const water = waterTarget(protocol);
+  const waterL = (water.ml / 1000).toFixed(1);
+  const routine = routineOrigin(protocol);
+  // Fixes-3k: a member created from 3k on has no supplements or ACV until the coach adds them; existing members: unchanged.
+  const newRule = protocolDefaultNone(protocol);
   // The member's own bedtime and wake time when the coach has set them; the
   // hours are worked out from the times, never typed in beside them.
   const sleep = sleepTarget(protocol);
@@ -145,7 +182,7 @@ export default function Plan() {
             {program?.name ? program.name : 'Your plan'}
           </h1>
           <p className="text-sm text-mid mt-1">
-            {protocol?.monitor_name ? `Set by ${protocol.monitor_name}` : 'Set by your coach'}{scheduled ? ' · weekday schedule' : ''}
+            <span data-testid="plan-source">{planSourceLine(protocol, { coachName: protocol?.monitor_name, hasCoachContent: !!(program || meals.length || dietPlan) })}</span>{scheduled ? ' · weekday schedule' : ''}
           </p>
           <Segmented className="mt-4" name="plan-view" value={view} onChange={setView}
             options={[{ id: 'today', label: 'Today' }, { id: 'week', label: 'Week' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'recovery', label: 'Recovery' }]} />
@@ -173,7 +210,7 @@ export default function Plan() {
               )}
             </Section>
 
-            <Section eyebrow="Eat" title={macros?.kcal ? `${macros.kcal.toLocaleString('en-IN')} ${terms.kcal} · ${macros.pro || '—'} g protein` : 'Targets not set yet'}
+            <Section eyebrow="Eat" title={eatTitle || 'Targets not set yet'}
               action={<button type="button" onClick={() => { haptic(10); goToday('food'); }} className="text-caption font-bold text-gold" style={{ minHeight: 32 }}>Log ›</button>}>
               {meals.length ? (
                 <div data-testid="plan-today-meals">
@@ -184,18 +221,23 @@ export default function Plan() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-mid">No meal plan for today. Eat to your targets and log as you go.</p>
+                <p className="text-sm text-mid" data-testid="plan-eat-empty">{macros
+                  ? 'No meal plan for today. Eat to your targets and log as you go.'
+                  : 'No meal plan yet. Log what you eat; your coach will set your targets.'}</p>
               )}
             </Section>
 
             <Section eyebrow="Recover" title={`${waterL} L water · ${sleep.hoursLabel} sleep`}>
               <div data-testid="plan-today-recover">
-                <Line icon="drop" title="Water" sub="Stop 1 hr before sleep · not during meals" right={`${waterL} L`} onPress={() => goToday('water')} />
-                <Line icon="moon" title={terms.sleep} sub={`${sleep.bedLabel} → ${sleep.wakeLabel}`} right={sleep.hoursLabel} onPress={() => goToday('sleep')} />
-                {activeSupplements.length > 0 && (
-                  <Line icon="pill" title={terms.supplements} sub={activeSupplements.map(s => s.label).join(' · ')}
+                <Line icon="drop" title="Water" sub={waterSub(water)} right={`${waterL} L`} onPress={() => goToday('water')} testId="plan-water" />
+                <Line icon="moon" title={terms.sleep} sub={sleepSub(sleep)} right={sleep.hoursLabel} onPress={() => goToday('sleep')} testId="plan-sleep" />
+                {activeSupplements.length > 0 ? (
+                  <Line icon="pill" title={terms.supplements} sub={(routine.standard.includes('supplements') && !newRule ? `${STANDARD_LABEL} · ` : '') + activeSupplements.map(s => s.label).join(' · ')}
                     right={`${activeSupplements.length}`} onPress={() => goToday('protocol')} />
-                )}
+                ) : newRule ? (
+                  // Fixes-3k (UX review finding 3): never a "FitLife standard" list of supplements nobody prescribed.
+                  <Line icon="pill" title={terms.supplements} sub="Your coach will add these if you need any" testId="plan-supplements-none" />
+                ) : null}
               </div>
             </Section>
           </>
@@ -314,7 +356,7 @@ export default function Plan() {
 
         {data && view === 'nutrition' && !dietPlan && (
           <>
-            <Section eyebrow="Daily targets" title={macros?.kcal ? `${macros.kcal.toLocaleString('en-IN')} ${terms.kcal}` : 'Not set yet'}>
+            <Section eyebrow="Daily targets" title={macros?.kcal ? `${macros.kcal.toLocaleString('en-IN')} ${terms.kcal}` : macros ? 'No calorie target' : 'Not set yet'}>
               {macros ? (
                 <div className="grid grid-cols-3 gap-2" data-testid="plan-macros">
                   {[['Protein', macros.pro], ['Carbs', macros.carb], ['Fat', macros.fat]].map(([k, v]) => (
@@ -346,14 +388,28 @@ export default function Plan() {
           <>
             <Section eyebrow="Recovery" title={`${sleep.hoursLabel} sleep · ${waterL} L water`}>
               <div data-testid="plan-recovery">
-                <Line icon="moon" title={terms.sleep} sub={`${sleep.bedLabel} → ${sleep.wakeLabel}`} right={sleep.hoursLabel} />
-                <Line icon="drop" title="Water" sub="Stop 1 hr before sleep · not during meals" right={`${waterL} L`} />
+                <Line icon="moon" title={terms.sleep} sub={sleepSub(sleep)} right={sleep.hoursLabel} />
+                <Line icon="drop" title="Water" sub={waterSub(water)} right={`${waterL} L`} />
                 {scheduled && (
                   <Line icon="calendar" title="Rest days" sub={WEEKDAYS.filter(wd => !days.some(d => labelHasWeekday(d.day_label, wd))).join(' · ') || 'None — every day has a session'} />
                 )}
               </div>
             </Section>
             <Section eyebrow="Protocol" title={(() => { const n = activeActivities.length + activeACV.length + activeSupplements.length; return `${n} ${plural(n, 'item')} a day`; })()}>
+              {routine.anyStandard && (
+                <p className="text-caption text-mid mb-2" data-testid="plan-routine-standard">
+                  {newRule
+                    // Fixes-3k: for a new-rule member only activities can be "standard"; supplements and ACV are the coach's.
+                    ? (routine.standard.includes('activities')
+                        ? (routine.allStandard
+                            ? 'Activities are FitLife\u2019s standard for now; your coach hasn\u2019t chosen yours yet. Supplements and apple cider vinegar are added only by your coach.'
+                            : 'Your coach chose some of this. Activities: FitLife standard.')
+                        : 'Your coach chose this routine.')
+                    : routine.allStandard
+                      ? 'This is FitLife\u2019s standard daily routine. Your coach hasn\u2019t chosen yours yet.'
+                      : `Your coach chose some of this. ${routine.standard.map(g => ({ activities: 'Activities', acv: 'Apple cider vinegar', supplements: terms.supplements }[g])).join(' and ')}: FitLife standard.`}
+                </p>
+              )}
               <div data-testid="plan-protocol">
                 {activeActivities.map(a => <Line key={a.id} icon="run" title={a.label} sub={a.sub || (AUTO_TICK_IDS.includes(a.id) ? 'Ticks from your Workout log' : '')} />)}
                 {activeACV.map(a => <Line key={a.id} icon="drop" title={a.label} sub={a.sub || '1 tbsp in 200 ml warm water, 15 min before the meal'} />)}

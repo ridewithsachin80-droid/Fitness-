@@ -28,22 +28,14 @@
 import { createRequire } from 'module';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
-// puppeteer-core and @sparticuz/chromium are loaded ON DEMAND, not imported.
-//
-// They are 78MB together, and this repo has no railway.json or nixpacks.toml —
-// so whether the deploy runs build.sh (which installs the server with
-// --omit=dev) or its own detected build is not something the code can
-// guarantee. 78MB of test-only weight that MIGHT ship on every deploy is not a
-// trade worth making for one check, so they are no longer dependencies at all.
-//
-//   cd server && npm run test:ui:install
-//
-// installs them without touching package.json.
+// Browser packages are locked server devDependencies, loaded only for browser checks.
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import http from 'http';
+import { browserExecutable } from './lib/browser-executable.mjs';
+import { readBuiltCss } from './lib/built-css.mjs';
 
 const HERE       = path.dirname(fileURLToPath(import.meta.url));
 const ROOT       = path.resolve(HERE, '../..');
@@ -108,15 +100,28 @@ async function bundle(contents, apiStub = null) {
 }
 
 /** Run bundled code in a fresh jsdom and hand back the document plus any errors. */
+const RUN_WINDOWS = [];
 function run(code, before = null) {
   const errors = [];
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     runScripts: 'outside-only', pretendToBeVisual: true, url: 'https://fitness.upscale-app.com/',
   });
   const w = dom.window;
+  RUN_WINDOWS.push(w);
   w.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {},
                           addEventListener() {}, removeEventListener() {} });
   w.scrollTo = () => {};
+  // JSDOM has no layout. Give connected, CSS-visible controls a rectangle so
+  // production modal eligibility can run; actual geometry/inert/focus behavior
+  // is verified separately by test-modal-accessibility in Chromium.
+  w.HTMLElement.prototype.getClientRects = function () {
+    if (!this.isConnected || this.closest('[hidden]')) return [];
+    for (let el = this; el; el = el.parentElement) {
+      const style = w.getComputedStyle(el);
+      if (style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)) return [];
+    }
+    return [new w.DOMRect(0, 0, 1, 1)];
+  };
   w.confirm  = () => true;
   w.fetch    = () => Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
   w.addEventListener('error', e => errors.push(String(e.message)));
@@ -357,6 +362,15 @@ export default {
       { id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', means: 'A bowl of kosambari and bisi bele bath', recorded: true, heard: 'Ondu bowl kosambari mattu bisi bele bath, swalpa majjige kooda kudide nenne raatri ele gante aada mele' },
       { id: 'f01', say: 'Your own words: what did you eat yesterday?', means: 'Say it the way you would tell a friend', free: true, recorded: false }] });
     if (u.includes('/voice-pilot/members')) return ok({ members: [{ patient_id: 1, name: 'Mrs. Venkataramana Reddy Lakshmi', consented_at: 'x', recorded: 18 }], phrases: 22 });
+    // Fixes-2p: the test-only voice backup switch, on, with the longest names and texts.
+    if (u.includes('/voice-fallback-test')) return ok({ available: true, hours: 24,
+      account: { user_id: 1, name: 'Mrs. Venkataramana Reddy Lakshmi (test account)', set_at: '2026-10-20T08:00:00Z', ends_at: '2026-10-21T08:00:00Z' },
+      runs: [{ id: 2, created_at: '2026-10-20T08:05:00Z', name: 'Mrs. Venkataramana Reddy Lakshmi (test account)', lang_hint: 'kn-IN', language_sent: 'kn',
+               whisper_text: 'ಬೆಳಗ್ಗೆ ಎರಡು ಇಡ್ಲಿ ಮತ್ತು ಒಂದು ಬೌಲ್ ಸಾಂಬಾರ್, weight 82.5 kg, ondu cup coffee sakkare haakilla', whisper_language: 'kannada',
+               segments: [{}, {}], accepted: false, reason: 'unsure', transcript: null, error: null },
+             { id: 1, created_at: '2026-10-20T08:02:00Z', name: 'Mrs. Venkataramana Reddy Lakshmi (test account)', lang_hint: 'en-IN', language_sent: null,
+               whisper_text: '2 idli, 1 bowl sambar, weight 82.5 kg', whisper_language: 'english', segments: [{}], accepted: true, reason: null,
+               transcript: '2 idli, 1 bowl sambar, weight 82.5 kg and a long walk of forty five minutes around Kempambudhi lake', error: null }] });
     if (u.includes('/voice-pilot/results')) return ok({ overall: { gemini: 84, whisper: 71, samples: 120 },
       phrases: [{ id: 'k19', say: 'Ondu bowl kosambari mattu bisi bele bath', samples: 6, gemini: 92, whisper: 58 }], samples: [] });
     if (u.includes('/weekly/brief/')) return ok({ questions: [{ key: 'stress', label: 'Stress' }, { key: 'plan', label: 'Sticking to the plan' }],
@@ -540,6 +554,9 @@ const OVERFLOW_PAGES = [
      const P = () => <div className="p-4"><p>Today</p><VS open onClose={() => {}} /></div>;`],
   ['VoicePilotPanel', `import VP from './components/voicepilot/VoicePilotPanel.jsx';
      const P = () => <div className="p-4"><VP /></div>;`],
+  // Fixes-2p: the admin's test-only voice backup switch, on, with recorded tries.
+  ['VoiceFallbackTestPanel', `import VF from './components/admin/VoiceFallbackTestPanel.jsx';
+     const P = () => <div className="p-4"><VF /></div>;`],
   // The Studio with a draft open and the Fit to target preview showing: the
   // item row gained a third control in Phase 1.3 and is the tightest row here.
   // 10 Oct 2026: macros eaten (plan and no plan), the macro editor in the
@@ -644,7 +661,7 @@ async function primitivesTest() {
   ck('sheet locks page scroll while open', d.body.style.overflow === 'hidden');
   ck('sheet moves focus inside itself (first input)', d.activeElement && d.activeElement.id === 'sheet-input', d.activeElement && d.activeElement.id);
   ck('sheet has a footer', /Done/.test(dialog.innerHTML));
-  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(500);
+  d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await tick(500);
   ck('Escape closes the sheet and unlocks scroll', !d.querySelector('[role=dialog]') && d.body.style.overflow === '');
   w.__click('Open sheet'); await tick(200);
   d.querySelector('[data-sheet-close]').click(); await tick(500);
@@ -725,230 +742,8 @@ const TODAY_API_STUB = `
     export default { get, post, put: post, patch: post, delete: async () => ({ data: {} }) };`;
 
 async function todayTest() {
-  console.log('\n[6] Today — member home (Sprint 3)');
-  const api = stub('api-today.js', TODAY_API_STUB);
-
-  const code = await bundle(`
-    import { createRoot } from 'react-dom/client';
-    import { MemoryRouter } from 'react-router-dom';
-    import DailyLog from './pages/DailyLog.jsx';
-    import { useAuthStore } from './store/authStore.js';
-    import { useLogStore } from './store/logStore.js';
-    import { useAIChat } from './components/AIChatLog.jsx';
-    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
-    window.__logStore = useLogStore; window.__aiChat = useAIChat;
-    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
-
-  const { w, errors, html } = run(code);
-  await tick(900);
-  const d = w.document;
-  const q = (id) => d.querySelector(`[data-testid="${id}"]`);
-  let h = html();
-
-  ck('Today mounts through the DailyLog route without throwing', errors.length === 0, errors.join('|'));
-  ck('greeting names the member (first name only)', /Good (morning|afternoon|evening), Asha/.test(h) && !/Asha Rao/.test(h));
-  ck('the hero number is today\'s weight, in kg, with the delta vs yesterday',
-     q('hero-weight') && /82\.4/.test(q('hero-weight').textContent) && /↓ 0\.3/.test(q('hero-weight').textContent), q('hero-weight')?.textContent);
-  ck('Today\'s read is present and mentions the day (tap opens the AI chat)', !!q('ai-read') && q('ai-read').textContent.length > 30);
-  // Sprint 10: with no cached read the LOCAL read stands in, so Today is never blank.
-  ck('with /members/me/read empty, the locally computed read is shown', w.__calls.some(u => /me\/read/.test(u)) && !/Good morning, Asha\. Yesterday/.test(q('ai-read').textContent), q('ai-read').textContent.slice(0, 80));
-  // ── Sprint 5b: Today's Plan replaces coach card + tiles + deficit chip + dots card
-  const plan = q('todays-plan');
-  ck('Today\'s Plan renders one section with Move, Eat and Recover rows', !!plan && ['plan-move', 'plan-eat', 'plan-recover'].every(id => plan.querySelector(`[data-testid="${id}"]`)));
-  ck('the old cards are gone: no day strip, no coach card, no deficit chip, no dots card', !q('day-strip') && !q('coach-card') && !q('balance-chip'));
-  ck('Move: the coach\'s program day with exercise count and Start workout', /Push ·/.test(q('plan-move').textContent) && /2 exercises/.test(q('plan-move').textContent) && /Start workout/.test(q('plan-move').textContent), q('plan-move').textContent);
-  ck('Eat: 666 / 1,800 kcal, then protein 37 / 120 g, carbs 59 / 150 g, fat 34 / 60 g (10 Oct 2026: all three, not protein alone)', /666/.test(q('plan-eat').textContent) && /1,800/.test(q('plan-eat').textContent)
-     && /Protein37 \/ 120 g/.test(q('plan-macros-pro').textContent) && /Carbs59 \/ 150 g/.test(q('plan-macros-carb').textContent) && /Fat34 \/ 60 g/.test(q('plan-macros-fat').textContent), q('plan-eat').textContent);
-  ck('Eat: the pending Dinner plan and the deficit fold in as sub-lines', /\d of \d meals? logged/.test(q('plan-eat').textContent) && !/meal plans? pending/.test(q('plan-eat').textContent) && /1,373 kcal under target/.test(q('plan-balance').textContent), q('plan-eat').textContent);
-  ck('Eat: View meal plan is the action while a plan is pending', /View meal plan/.test(q('plan-eat').textContent));
-  ck('Eat: nutrients N/31 inline', /\/31 nutrients/.test(q('chip-nutrition').textContent));
-  ck('Recover: 1.5 / 3.0 L and 7h 45m inline', /1\.5/.test(q('chip-water').textContent) && /3\.0 L/.test(q('chip-water').textContent) && /7h 45m/.test(q('chip-sleep').textContent));
-  const dots = q('protocol-dots');
-  ck('Recover: the protocol dots — one per item, "3 of 5" — live inside the row', !!dots && dots.querySelectorAll('span.block.w-2\\.5').length === 5 && /3 of 5/.test(dots.textContent), dots?.textContent);
-  // Time-gated in IST: the workout is the action from 06:00 IST; before that the protocol count is.
-  const istH = parseInt(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }), 10) % 24;
-  ck('the read carries ONE action, derived from the day (food logged, workout planned → Start today\'s workout from 06:00 IST)', q('read-action') && (istH >= 6 ? /Start today/.test(q('read-action').textContent) : /Tick the protocol/.test(q('read-action').textContent)), [istH, q('read-action')?.textContent]);
-  ck('the header shows the date and Week N (joined 6 weeks ago in the fixture)', /Week 6/.test(q('date-line').textContent), q('date-line').textContent);
-
-  const tl = q('timeline');
-  ck('timeline lists weight, both meals, water and sleep in day order',
-     !!tl && ['row-weight', 'row-meal', 'row-water', 'row-sleep'].every(id => tl.querySelector(`[data-testid="${id}"]`)) && tl.querySelectorAll('[data-testid="row-meal"]').length === 2);
-  const mealTitles = [...tl.querySelectorAll('[data-testid="row-meal"]')].map(r => r.textContent);
-  ck('meals are grouped by slot with their own kcal (Breakfast 276, Lunch 390)', /Breakfast/.test(mealTitles[0]) && /276/.test(mealTitles[0]) && /Lunch/.test(mealTitles[1]) && /390/.test(mealTitles[1]), mealTitles);
-  ck('no workout row when nothing was logged (the coach plan is not a log)', !tl.querySelector('[data-testid="row-workout"]'));
-  ck('unread coach message shows with Reply and Got it', d.querySelectorAll('[data-testid="coach-note"]').length === 1 && /add a walk after dinner/.test(h) && /Reply/.test(h));
-  ck('no legacy inline drawer ids remain on the page', !d.getElementById('section-water') && !d.getElementById('section-protocol') && !d.getElementById('section-hero'));
-  ck('the streak is one line in the header, not a card', q('streak-badge') && /3-day streak/.test(q('streak-badge').textContent) && !/14-day/.test(html()), q('streak-badge')?.textContent);
-  ck('notes are collapsed to a row until tapped', !!q('notes-row') && !q('notes'));
-  q('notes-row').click(); await tick(100);
-  ck('tapping the row opens the textarea', !!q('notes'));
-
-  // ── Sheets open from their chips and save through the store ─────────────
-  q('chip-water').click(); await tick(300);
-  let dlg = d.querySelector('[role=dialog]');
-  ck('water chip opens the water sheet', !!dlg && /Target 3\.0 L/.test(dlg.textContent));
-  dlg.querySelector('[data-testid="water-add-500"]').click(); await tick(100);
-  ck('+500 updates the store (1500 → 2000) and the sheet total (2.00)',
-     w.__logStore.getState().log.water === 2000 && /2\.00/.test(d.querySelector('[data-testid="water-total"]').textContent));
-  ck('the chip behind the sheet updates too (2.0 L)', /2\.0/.test(q('chip-water').textContent));
-  w.__click('Done'); await tick(500);
-  ck('Done closes the sheet', !d.querySelector('[role=dialog]'));
-
-  q('hero-weight').click(); await tick(300);
-  dlg = d.querySelector('[role=dialog]');
-  ck('tapping the hero weight opens the weight sheet with the current value', !!dlg && dlg.querySelector('[data-testid="weight-input"]')?.value === '82.4');
-  const wi = dlg.querySelector('[data-testid="weight-input"]');
-  const setVal = (el, v) => { const proto = el.tagName === 'TEXTAREA' ? w.HTMLTextAreaElement.prototype : w.HTMLInputElement.prototype; const setter = Object.getOwnPropertyDescriptor(proto, 'value').set; setter.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
-  setVal(wi, '350'); await tick(100);
-  ck('an implausible weight shows the warning and is still stored (member decides)', /looks unusual/.test(dlg.textContent) && w.__logStore.getState().log.weight === '350');
-  setVal(wi, '82.1'); await tick(100);
-  ck('a plausible weight clears the warning', !/looks unusual/.test(dlg.textContent) && w.__logStore.getState().log.weight === '82.1');
-  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(500);
-  ck('hero shows the new weight after the sheet closes', /82\.1/.test(q('hero-weight').textContent), q('hero-weight').textContent);
-
-  q('protocol-dots').click(); await tick(300);
-  dlg = d.querySelector('[role=dialog]');
-  ck('protocol dots open the protocol sheet with all chips', !!dlg && dlg.querySelectorAll('[data-testid^="chip-"]').length === 5, dlg ? dlg.querySelectorAll('[data-testid^="chip-"]').length : 'no dialog: ' + h.slice(0, 0));
-  dlg.querySelector('[data-testid="chip-b12"]').click(); await tick(100);
-  ck('ticking B12 writes to the store and the title becomes 4 of 5', w.__logStore.getState().log.supplements.b12 === true && /4 of 5 done/.test(dlg.textContent), [w.__logStore.getState().log.supplements, dlg.textContent.slice(0, 80)]);
-  dlg.querySelector('[data-testid="chip-walk"]').click(); await tick(100);
-  ck('tapping an AUTO chip explains instead of ticking', w.__logStore.getState().log.activities.walk === false && /Ticks automatically/.test(dlg.textContent));
-  w.__click('Done'); await tick(500);
-  ck('dots now read 4 of 5', /4 of 5/.test(q('protocol-dots').textContent));
-
-  q('chip-sleep').click(); await tick(300);
-  dlg = d.querySelector('[role=dialog]');
-  setVal(dlg.querySelector('[data-testid="sleep-wake"]'), '05:00'); await tick(100);
-  ck('changing wake time recomputes duration (22:30→05:00 = 6h 30m) and stores it',
-     /6h 30m/.test(dlg.querySelector('[data-testid="sleep-duration"]').textContent) && w.__logStore.getState().log.sleep.waketime === '05:00');
-  w.__click('Done'); await tick(500);
-
-  q('plan-eat-action').click(); await tick(400);
-  dlg = d.querySelector('[role=dialog]');
-  ck('the Eat action opens the food sheet with the real FoodLog and macro bars', !!dlg && !!dlg.querySelector('#section-food') && /Protein|protein/.test(dlg.textContent));
-  w.__click('Done'); await tick(500);
-
-  q('chip-nutrition').click(); await tick(300);
-  dlg = d.querySelector('[role=dialog]');
-  ck('nutrition sheet shows the 31-target panel when food has per_100g data', !!dlg && /of 31 targets met/.test(dlg.textContent) && /Vitamins|vitamins/i.test(dlg.textContent));
-  w.__click('Done'); await tick(500);
-
-  // ── save path: nothing has been POSTed yet — edits are debounced ────────
-  ck('no POST fired yet — edits are debounced, not saved per keystroke', w.__posts.filter(p => /^\/logs\//.test(p.url)).length === 0);
-
-  // ── AI read → chat; timeline empty state; date navigation ───────────────
-  q('ai-read').click(); await tick(50);
-  ck('tapping the read opens the AI chat', w.__aiChat.getState().open === true);
-  w.__aiChat.getState().closeChat(); await tick(50);
-
-  const beforeCalls = w.__calls.length;
-  q('date-nav').querySelector('[aria-label="Previous day"]').click(); await tick(700);
-  ck('‹ loads yesterday (label changes, "Editing past entry", a new /logs fetch)',
-     !/^Today$/.test(q('date-label').textContent) && /Editing past entry/.test(q('date-nav').textContent) && w.__calls.length > beforeCalls, q('date-label').textContent);
-  ck('yesterday has only a weight, so the timeline shows the weight row and nothing else',
-     q('timeline') && q('timeline').querySelectorAll('button').length === 1 && /82\.7/.test(q('timeline').textContent), q('timeline')?.textContent);
-  ck('no streak badge on a past day', !q('streak-badge'));
-  w.__click('Jump to today'); await tick(700);
-  ck('Jump to today returns to today', q('date-label').textContent === 'Today');
-
-
-  // ── Sprint 4: the AI is on the page ─────────────────────────────────────
-  ck('the AI thread renders on the page (no full-screen overlay)', !!q('ai-thread') && !d.querySelector('.fixed.inset-0.z-\\[70\\]'));
-  ck('suggestion chips show while the conversation is empty', !!q('ai-suggestions') && q('ai-suggestions').querySelectorAll('button').length >= 3);
-  // Sprint 5b.3: the bar is summoned, not permanent. (Earlier steps opened the
-  // chat via the read and openChat(); put it away to start from the resting state.)
-  w.__aiChat.getState().closeComposer(); await tick(200);
-  ck('the composer is NOT on the page until asked for', !q('composer') && w.__aiChat.getState().composerOpen === false);
-  ck('with the bar away the page bottom padding is small (no dead space above the nav)', /pb-6/.test(d.querySelector('main').className) && !/pb-32/.test(d.querySelector('main').className));
-  ck('the thread header offers a "Tell me" button while the bar is away', !!q('thread-open-composer'));
-  const orb = q('ai-orb');
-  orb.click(); await tick(300);
-  let composer = q('composer');
-  ck('tapping the ✨ orb summons the composer: portaled to <body>, position fixed, above the nav', !!composer && composer.parentElement === d.body && /fixed/.test(composer.className) && /bottom/.test(composer.getAttribute('style') || ''), composer && composer.getAttribute('style'));
-  ck('the "Tell me" button disappears while the bar is up; the orb reads as pressed', !q('thread-open-composer') && orb.getAttribute('aria-pressed') === 'true');
-  orb.click(); await tick(300);
-  ck('tapping the orb again puts the bar away', !q('composer') && w.__aiChat.getState().composerOpen === false);
-  q('thread-open-composer').click(); await tick(300);
-  ck('"Tell me" in the thread summons it too', !!q('composer'));
-  q('composer-close').click(); await tick(300);
-  ck('the ⌄ Close button on the bar puts it away', !q('composer'));
-  orb.click(); await tick(300);
-  composer = q('composer');
-  const composerInput = composer && composer.querySelector('[data-testid="composer-input"]');
-  ck('the composer has the text field, mic, camera and lab-report controls', !!composerInput && !!composer.querySelector('[aria-label="Log food from a photo"]') && !!composer.querySelector('[aria-label="Upload a lab report"]'), composer && composer.innerHTML.length);
-
-  // The flush on ‹ was this device's first save of the day, and the fixture
-  // member is 5.9 kg under her start weight — so the milestone celebration is
-  // up. Assert it, dismiss it, then carry on.
-  const milestone = q('milestone');
-  ck('the first save of the day raised the "5 kg lost" milestone', !!milestone && /5 kg lost/.test(milestone.textContent), milestone && milestone.textContent.slice(0, 60));
-  if (milestone) { w.__click("Let's keep going."); await tick(200); }
-  ck('dismissing the milestone removes it', !q('milestone'));
-  const sheetDlg = () => [...d.querySelectorAll('[role=dialog]')].find(x => x.getAttribute('aria-label') !== 'Milestone') || null;
-
-  // openChat() while a sheet is open: the sheet closes and the composer takes focus
-  q('chip-water').click(); await tick(300);
-  ck('(setup) water sheet is open', !!sheetDlg());
-  w.__aiChat.getState().openChat(); await tick(700);
-  ck('openChat() closes the sheet so the composer is reachable', !sheetDlg(), 'focusRequest=' + w.__aiChat.getState().focusRequest);
-  ck('openChat() focuses the composer input', d.activeElement === composerInput, d.activeElement && (d.activeElement.tagName + ' ' + (d.activeElement.getAttribute('data-testid') || d.activeElement.placeholder || '')));
-  ck('a second openChat() bumps the focus counter (a counter, not a boolean)', (() => { const before = w.__aiChat.getState().focusRequest; w.__aiChat.getState().openChat(); return w.__aiChat.getState().focusRequest === before + 1; })());
-
-  // Send → preview → Apply, through the stubbed parser
-  const beforeApplied = w.__aiChat.getState().lastAppliedAt;
-  ck('the composer is a multi-line textarea, not a single-line input (a dictated day stays readable)', composerInput.tagName === 'TEXTAREA' && composerInput.getAttribute('rows') === '1' && /maxHeight|max-height/.test(composerInput.getAttribute('style') || ''));
-  composerInput.focus(); await tick(50);
-  ck('focusing the composer slides the bottom nav away (keyboard + composer + thread share the screen)', w.__aiChat.getState().composerFocused === true && d.querySelector('[data-testid="member-nav"]').dataset.composing === '1');
-  composerInput.blur(); await tick(50);
-  ck('blur brings the nav back', w.__aiChat.getState().composerFocused === false && d.querySelector('[data-testid="member-nav"]').dataset.composing === '0');
-  // A way out without sending: × discards the draft; Escape steps away and keeps it.
-  ck('no clear button while the box is empty', !q('composer-clear'));
-  setVal(composerInput, 'half typed thou'); await tick(50);
-  ck('typing shows the × clear button', !!q('composer-clear'));
-  composerInput.focus(); await tick(30);
-  composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(50);
-  ck('Escape blurs the composer but keeps the draft', composerInput.value === 'half typed thou' && w.__aiChat.getState().composerFocused === false && d.activeElement !== composerInput);
-  q('composer-clear').click(); await tick(50);
-  ck('× clears the draft, hides itself and sends nothing', composerInput.value === '' && !q('composer-clear') && !w.__posts.some(p => p.url === '/ai-chat/parse'));
-  composerInput.focus(); composerInput.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(300);
-  ck('Escape on an EMPTY box puts the bar away', !q('composer'));
-  q('ai-orb').click(); await tick(300);
-  const composerInput2 = q('composer').querySelector('[data-testid="composer-input"]');
-  setVal(composerInput2, 'drank 500ml water, took b12, weight 82.0'); await tick(50);
-  composerInput2.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
-  ck('Enter sends: the member bubble and the AI reply appear in the thread', /drank 500ml water/.test(q('ai-messages').textContent) && /Got it — water, B12/.test(q('ai-messages').textContent), q('ai-messages').textContent.slice(0, 160));
-  ck('the request carried the message to /ai-chat/parse', w.__posts.some(p => p.url === '/ai-chat/parse' && /500ml/.test(p.body.message || JSON.stringify(p.body))));
-  ck('the preview offers an Apply button for the 3 parsed items', /Apply 3 items/.test(q('ai-messages').textContent), q('ai-messages').textContent.match(/Apply[^<]{0,30}/));
-  const waterBefore = w.__logStore.getState().log.water;
-  w.__click('Apply 3 items to today'); await tick(700);
-  const st = w.__logStore.getState().log;
-  ck('Apply writes weight 82.0, +500 ml and the B12 tick into the store', st.weight === '82' && st.water === waterBefore + 500 && st.supplements.b12 === true, [st.weight, st.water, st.supplements]);
-  ck('the thread shows "Applied & saved" with Edit and Undo', /Applied/.test(q('ai-messages').textContent) && /Undo/.test(q('ai-messages').textContent) && /Edit/.test(q('ai-messages').textContent));
-  ck('Apply stamps lastAppliedAt (the workout-refresh signal replaces "overlay closed")', w.__aiChat.getState().lastAppliedAt != null && w.__aiChat.getState().lastAppliedAt !== beforeApplied);
-  ck('the hero, chips and dots reflect the applied day without a reload', /(^|\D)82(\D|$)/.test(q('hero-weight').textContent) && !/82\.1/.test(q('hero-weight').textContent) && /2\.0/.test(q('chip-water').textContent) && /4 of 5/.test(q('protocol-dots').textContent), [q('hero-weight').textContent, q('chip-water').textContent, q('protocol-dots').textContent]);
-
-  // The debounce itself: one more edit, then wait past 4s and the ONE save fires.
-  q('chip-water').click(); await tick(300);
-  d.querySelector('[data-testid="water-add-250"]').click(); await tick(100);
-  w.__click('Done'); await tick(4500);
-  const saves = w.__posts.filter(p => /^\/logs\/\d{4}-\d{2}-\d{2}$/.test(p.url));
-  // Two saves, and the ORDER matters:
-  //  1. pressing ‹ earlier flushed the pending edits (water 2000, B12, wake 05:00)
-  //     to TODAY before the store switched to yesterday — this is the fix for the
-  //     lost-tick bug; without it the first POST would carry yesterday's data.
-  //  2. jumping back to today reloaded the log from the server (1500 in the
-  //     fixture), then +250 → 1750, debounced 4s → one POST.
-  ck('pressing ‹ flushed the pending edits to TODAY first (water 2000, B12 ticked, wake 05:00)',
-     saves.length >= 1 && saves[0].url.endsWith(w.__todayStr) && saves[0].body.water_ml === 2000 && saves[0].body.supplements?.b12 === true && saves[0].body.sleep?.waketime === '05:00',
-     saves.map(p => [p.url, p.body && p.body.water_ml, p.body && p.body.supplements && p.body.supplements.b12, p.body && p.body.sleep && p.body.sleep.waketime]));
-  // Apply saved once (saveLog inside applyAll), then +250 debounced → the last POST carries 2250.
-  ck('after 4s of quiet the final POST carries the applied day plus the new edit (1500 + 500 + 250)',
-     saves.length >= 2 && saves[saves.length - 1].body.water_ml === 2250 && saves[saves.length - 1].body.weight_kg == 82,
-     saves.map(p => [p.url, p.body && p.body.water_ml, p.body && p.body.weight_kg]));
-  ck('the header shows the auto-saved confirmation', /auto-saved/.test(html()), (q('save-status') || {}).textContent);
-
-  ck('nothing in the page tree hit an unrouted endpoint that matters', !w.__calls.some(u => /^\/logs\/undefined|NaN/.test(u)), w.__calls.filter(u => /undefined|NaN/.test(u)));
-  ck('no error escaped during the whole flow', errors.length === 0, errors.join(' | '));
+  const premium = await import('./test-premium-ui.mjs');
+  await premium.assertPremiumFlow();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -961,134 +756,9 @@ async function todayTest() {
 // food sheet (the widest content) open. Screenshots land in
 // /tmp/fitlife-shots/ so a human can look at what shipped.
 async function todayVisualTest() {
-  console.log('\n[8] Today at phone widths (headless Chrome) + screenshots');
-  let puppeteerCore, chromiumPkg;
-  try {
-    puppeteerCore = (await import('puppeteer-core')).default;
-    chromiumPkg   = (await import('@sparticuz/chromium')).default;
-  } catch {
-    console.log('  – browser not installed, visual check NOT RUN (cd server && npm run test:ui:install)');
-    return;
-  }
-  const chromium = chromiumPkg.default || chromiumPkg;
-  const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-  const cssFile = fs.existsSync(distDir) ? fs.readdirSync(distDir).find(f => f.endsWith('.css')) : null;
-  if (!cssFile) throw new Error('No built stylesheet — run: cd client && npm run build');
-  const css = fs.readFileSync(path.join(distDir, cssFile), 'utf8');
-  const api = stub('api-today-visual.js', TODAY_API_STUB);
-  const code = await bundle(`
-    import { createRoot } from 'react-dom/client';
-    import { MemoryRouter } from 'react-router-dom';
-    import DailyLog from './pages/DailyLog.jsx';
-    import { useAuthStore } from './store/authStore.js';
-    useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
-    createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
-
-  const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-    <style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
-  const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const origin = `http://127.0.0.1:${server.address().port}/`;
-  const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
-  const shotDir = '/tmp/fitlife-shots'; fs.mkdirSync(shotDir, { recursive: true });
-  // A docked composer covers whatever scrolls under it, exactly like a phone.
-  // Bring the target into the middle of the viewport before tapping, as a thumb would.
-  const tapVisible = async (page, sel) => {
-    await page.$eval(sel, el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
-    await new Promise(r => setTimeout(r, 250));
-    await page.tap(sel);
-  };
-
-  const measure = (page, vw) => page.evaluate((vw) => {
-    const scrollW = document.documentElement.scrollWidth;
-    const offenders = [];
-    if (scrollW > vw + 1) for (const el of document.querySelectorAll('body *')) {
-      const r = el.getBoundingClientRect();
-      if ((r.width === 0 && r.height === 0) || r.right <= vw + 1) continue;
-      if ([...el.children].some(c => c.getBoundingClientRect().right > vw + 1)) continue;
-      offenders.push(`<${el.tagName.toLowerCase()} class="${String(el.className || '').slice(0, 80)}"> right=${Math.round(r.right)}`);
-    }
-    const dialog = document.querySelector('[role=dialog]');
-    const dialogW = dialog ? Math.round(dialog.getBoundingClientRect().width) : null;
-    return { scrollW, offenders: offenders.slice(0, 4), mounted: document.getElementById('root').innerHTML.length, dialogW };
-  }, vw);
-
-  try {
-    for (const width of [320, 360, 390]) {
-      const page = await browser.newPage();
-      await page.setViewport({ width, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-      await page.goto(origin, { waitUntil: 'domcontentloaded' });
-      await page.addScriptTag({ content: code });
-      await new Promise(r => setTimeout(r, 1200));
-      let m = await measure(page, width);
-      ck(`Today @${width}px mounts`, m.mounted > 50, m.mounted);
-      ck(`Today @${width}px does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
-      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360.png'), fullPage: true });
-
-      // Sprint 5b.3: the bar is summoned by the orb. Tap it first.
-      await page.tap('[data-testid="ai-orb"]'); await new Promise(r => setTimeout(r, 500));
-      // Sprint 4: the composer is fixed above the nav. Scrolled to the very end,
-      // the last card (notes) must still clear the composer — otherwise the
-      // bottom of the page is permanently unreachable.
-      // html has scroll-behavior:smooth — scroll instantly, then let layout settle before measuring.
-      await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
-      await new Promise(r => setTimeout(r, 400));
-      const dock = await page.evaluate(() => {
-        const c = document.querySelector('[data-testid="composer"]');
-        const n = document.querySelector('[data-testid="notes-row"]') || document.querySelector('[data-testid="notes"]');
-        const nav = document.querySelector('nav') || document.querySelector('[class*="fixed bottom"]');
-        const cr = c && c.getBoundingClientRect(), nr = n && n.getBoundingClientRect(), vr = nav && nav.getBoundingClientRect();
-        return { composerTop: cr && Math.round(cr.top), composerBottom: cr && Math.round(cr.bottom), notesBottom: nr && Math.round(nr.bottom),
-                 navTop: vr && Math.round(vr.top), vh: window.innerHeight, composerVisible: !!cr && cr.height > 30 && cr.bottom <= window.innerHeight };
-      });
-      await new Promise(r => setTimeout(r, 300));
-      ck(`composer @${width}px is docked inside the viewport, above the bottom nav`, dock.composerVisible && (dock.navTop == null || dock.composerBottom <= dock.navTop + 2), dock);
-      ck(`scrolled to the end @${width}px, the notes card clears the composer (page bottom is reachable)`, dock.notesBottom != null && dock.notesBottom <= dock.composerTop, JSON.stringify(dock));
-      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-bottom.png') });
-
-      // Sprint 5b.1: a long dictated day must be fully visible while typing.
-      await page.focus('[data-testid="composer-input"]');
-      await page.type('[data-testid="composer-input"]', '2 idli and sambar for breakfast, 100g whey protein 1 scoop after the walk, chicken curry with 2 chapati for lunch, drank 2 litres water so far', { delay: 0 });
-      await new Promise(r => setTimeout(r, 300));
-      const grown = await page.evaluate(() => {
-        const t = document.querySelector('[data-testid="composer-input"]');
-        const nav = document.querySelector('[data-testid="member-nav"]');
-        return { h: t.clientHeight, sh: t.scrollHeight, lines: Math.round(t.clientHeight / 22), navHidden: nav.dataset.composing === '1', navRight: nav.getBoundingClientRect().top >= window.innerHeight - 2 };
-      });
-      // Fits entirely, or has reached the 5-line cap and scrolls inside (never a clipped single line).
-      ck(`composer @${width}px grows to fit the text (${Math.min(grown.lines, 5)} lines shown${grown.h < grown.sh - 2 ? ', capped and scrolling' : ''})`, grown.lines >= 3 && (grown.h >= grown.sh - 2 || grown.h >= 5 * 22 + 16 - 4), JSON.stringify(grown));
-      ck(`while typing @${width}px the bottom nav is off-screen`, grown.navHidden && grown.navRight, JSON.stringify(grown));
-      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-composing.png') });
-      await page.evaluate(() => { const t = document.querySelector('[data-testid="composer-input"]'); t.blur(); });
-      await page.evaluate(() => { const t = document.querySelector('[data-testid="composer-input"]'); const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(t, ''); t.dispatchEvent(new Event('input', { bubbles: true })); });
-      await new Promise(r => setTimeout(r, 300));
-      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' })); await new Promise(r => setTimeout(r, 300));
-
-      await tapVisible(page, '[data-testid="plan-eat-action"]'); await new Promise(r => setTimeout(r, 900));
-      m = await measure(page, width);
-      ck(`Today @${width}px with the food sheet open still does not scroll sideways`, m.scrollW <= width + 1, `scrollWidth ${m.scrollW} · ${m.offenders.join(' · ')}`);
-      ck(`the food sheet @${width}px fills the viewport width`, m.dialogW != null && m.dialogW >= width - 2 && m.dialogW <= width, JSON.stringify(m));
-      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-food-sheet.png') });
-      await page.keyboard.press('Escape'); await new Promise(r => setTimeout(r, 600));
-
-      await tapVisible(page, '[data-testid="protocol-dots"]'); await new Promise(r => setTimeout(r, 900));
-      m = await measure(page, width);
-      ck(`protocol sheet @${width}px: no sideways scroll`, m.scrollW <= width + 1 && m.dialogW != null, `scrollWidth ${m.scrollW}`);
-      if (width === 360) await page.screenshot({ path: path.join(shotDir, 'today-360-protocol-sheet.png') });
-      await page.keyboard.press('Escape');
-      // The sheet slides out over ~300 ms. A fixed 600 ms wait failed on a busy
-      // machine (three times on 5 Oct, always at 390 px, never reproducible):
-      // wait up to 3 s for it to go, so a slow runner is not a red gate.
-      // A sheet that never closes still fails.
-      let closed = false;
-      for (let t = 0; t < 15 && !closed; t++) { await new Promise(r => setTimeout(r, 200)); closed = (await measure(page, width)).dialogW === null; }
-      ck(`Escape closes the sheet in a real browser @${width}px`, closed);
-      await page.close();
-    }
-  } finally {
-    await browser.close();
-    await new Promise(r => server.close(r));
-  }
+  try { await import('puppeteer-core'); await import('@sparticuz/chromium'); } catch { console.log('  – optional browser checks NOT RUN; npm run test:ui:install'); return; }
+  const premium = await import('./test-premium-ui.mjs');
+  await premium.assertPremiumVisual();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1156,19 +826,24 @@ async function progressTest() {
   // range control is the three tabs named 7d, 30d, 90d.
   const allTabs = [...d.querySelectorAll('[role=tab]')];
   const tabs = allTabs.filter(t => /^(7|30|90)d$/.test(t.textContent.trim()));
-  const groupTab = (name) => allTabs.find(t => t.textContent.trim() === name);
+  const progressSelect = d.querySelector('[aria-label="Progress detail"]');
+  const selectGroup = (name) => { Object.getOwnPropertyDescriptor(w.HTMLSelectElement.prototype,'value').set.call(progressSelect,name.toLowerCase()); progressSelect.dispatchEvent(new w.Event('change',{bubbles:true})); };
+  const hasGroup = name => [...progressSelect.options].some(o=>o.value===name.toLowerCase());
   ck('7 / 30 / 90 segmented control is present', tabs.length === 3 && tabs.map(t => t.textContent.trim()).join(',') === '7d,30d,90d');
   ck('Phase 8: Body, Nutrition, Training and Reports tabs, Body open first',
-     ['Body', 'Nutrition', 'Training', 'Reports'].every(n => groupTab(n)) && groupTab('Body').getAttribute('aria-selected') === 'true'
+     ['Body', 'Nutrition', 'Training', 'Reports'].every(hasGroup) && progressSelect.value === 'body'
      && !!q('journey') && !q('heat-grid'), allTabs.map(t => t.textContent.trim()));
   tabs[2].click(); await tick(200);
-  ck('90d widens the window: the change now includes the 86.0 point (↓ 3.6 kg over 90 days)',
-     /over 90 days/.test(q('progress-hero').textContent) && /3\.6/.test(q('progress-hero').textContent), q('progress-hero').textContent);
+  // Fixes-3l (UX finding 14): the 86.0 point is 60 days back, so the hero names that day ("since 19 Sep"), not "over 90 days".
+  const ist3l = (n) => new Date(Date.now() + 5.5 * 3600e3 - n * 86400e3).toISOString().slice(0, 10);
+  const since60 = (() => { const [y, m, d] = ist3l(60).split('-').map(Number); return `since ${d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1]}${y === +ist3l(0).slice(0, 4) ? '' : ' ' + y}`; })();
+  ck('90d widens the window: the change now includes the 86.0 point (↓ 3.6 kg since the day of that point)',
+     q('progress-hero').textContent.includes(since60) && !/over 90 days/.test(q('progress-hero').textContent) && /3\.6/.test(q('progress-hero').textContent), [since60, q('progress-hero').textContent]);
   tabs[0].click(); await tick(200);
   ck('7d narrows it (change over 7 days is small)', /over 7 days/.test(q('progress-hero').textContent) && /0\.[0-9]/.test(q('progress-hero').textContent), q('progress-hero').textContent);
 
   // The 30-day grid lives under Reports.
-  groupTab('Reports').click(); await tick(200);
+  selectGroup('Reports'); await tick(200);
   ck('Reports holds the 30-day grid; the weight hero stays above every tab', !!q('heat-grid') && !!q('progress-hero'));
   const grid = q('heat-grid');
   const cells = grid ? [...grid.querySelectorAll('[data-testid="heat-cell"]')] : [];
@@ -1179,15 +854,19 @@ async function progressTest() {
   ck('tapping an unlogged cell opens nothing', !d.querySelector('.fixed.inset-0'));
   const logged = cells.find(c => /: 90%/.test(c.getAttribute('aria-label')));
   logged.click(); await tick(200);
-  ck('tapping a logged cell opens that day\'s full log', d.querySelector('.fixed.inset-0') != null && /Compliance|compliance/.test(html()));
+  // Fixes-3k (UX review findings 8 and 14): the member's screens say "checklist" instead of "compliance". The old check
+  // matched "Compliance" in #root, i.e. the page's "30-day Compliance" label, not the opened log (the sheet renders
+  // outside #root). It now reads the opened day log itself: that day's 90% as "90% of checklist".
+  ck('tapping a logged cell opens that day\'s full log', d.querySelector('.fixed.inset-0') != null
+    && /90% of checklist/.test(d.querySelector('[data-testid="past-log-details"]')?.textContent || ''), d.querySelector('[data-testid="past-log-details"]')?.textContent?.slice(0, 120));
   ck('no purple/blue header leftovers on the page', !/#0d0b18|text-blue-200/.test(h));
   const pageSrc = fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8');
   ck('Training holds the training trends; Nutrition the nutrition trend and a way to the diet plan',
      /tab === 'training' && \(<>[\s\S]*?Training Trends[\s\S]*?<StrengthProgress \/>[\s\S]*?<MuscleCoverage \/>/.test(pageSrc)
      && /tab === 'nutrition' && \(<>[\s\S]*?Nutrition Trend[\s\S]*?progress-to-plan/.test(pageSrc));
   ck('each section appears exactly once on the page', ['<ProgressPhotos />', '<WeeklyReportCard />', 'Log History', 'Your Journey', 'Latest Lab Values', '<StrengthProgress />'].every(x => pageSrc.split(x).length === 2));
-  groupTab('Training').click(); await tick(200);
-  ck('switching to Training shows Training and hides the Reports grid', groupTab('Training').getAttribute('aria-selected') === 'true' && !q('heat-grid'));
+  selectGroup('Training'); await tick(200);
+  ck('switching to Training shows Training and hides the Reports grid', progressSelect.value === 'training' && !q('heat-grid'));
   ck('nutrition trend gets its macros from lib/day (no hand-copied reduce)', !/const macros = items\.reduce/.test(fs.readFileSync(path.join(ROOT, 'client/src/pages/Progress.jsx'), 'utf8')));
   ck('no error escaped', errors.length === 0, errors.join('|'));
 
@@ -1197,22 +876,22 @@ async function progressTest() {
     for (let i = 29; i >= 0; i--) if (!skipSet.has(i)) vals.push(i % 3 === 0 ? 90 : i % 3 === 1 ? 60 : 30);
     const want = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
     const withOld = Math.round((vals.reduce((a, b) => a + b, 0) + 80) / (vals.length + 1));
-    groupTab('Reports').click(); await tick(200);
+    selectGroup('Reports'); await tick(200);
     const shown = (d.body.textContent.match(/(\d+)% average/) || [])[1];
     ck('"30-day" compliance is the 30 days the grid shows: the 60-day-old log is not in it', want !== withOld && Number(shown) === want, { shown, want, withOld });
     ck('a 3-day streak says "Keep going"', /3 days/.test(d.body.textContent) && /Keep going/.test(d.body.textContent));
-    groupTab('Body').click(); await tick(200);
+    selectGroup('Body'); await tick(200);
     const bt = d.body.textContent;
     ck('lab values: "Muscle Mass %" does not get a second %, and 70.20 / 1716.00 read 70.2 / 1716', /Muscle Mass %70\.2(?!0)/.test(bt) && !/Muscle Mass %\s*%/.test(bt) && /BMR\s*Cal\s*1716(?!\.)/.test(bt), bt.slice(bt.indexOf('Muscle Mass'), bt.indexOf('Muscle Mass') + 60));
-    groupTab('Nutrition').click(); await tick(200);
+    selectGroup('Nutrition'); await tick(200);
     const sw = [...(q('macro-legend')?.querySelectorAll('span[style]') || [])].map(x => x.style.background || x.style.backgroundColor);
     ck('nutrition chart: Protein, Carbs and Fat each have their own colour (carbs and fat were both yellow)', sw.length === 3 && new Set(sw).size === 3 && /Protein/.test(q('macro-legend').textContent) && /Fat/.test(q('macro-legend').textContent), sw);
     ck('and the chart says what it covers: "Your last N logged days", not "7-Day"', /^Your last \d+ logged days$/.test(q('nutrition-trend-span')?.textContent || '') && !/7-Day/.test(d.body.textContent), q('nutrition-trend-span')?.textContent);
-    ck('chart pop-ups are dark, not the library\'s white box', /const TIP = \{[\s\S]*?background: '#1A1C20'/.test(pageSrc) && !/border: '1px solid #e7e5e4'/.test(pageSrc));
+    ck('chart pop-ups use the active theme', /const TIP = \{[\s\S]*?background: 'var\(--bg-surface\)'/.test(pageSrc) && !/border: '1px solid #e7e5e4'/.test(pageSrc));
 
     const S2 = run(code, (win) => { win.__streak2 = true; }); await tick(900);
-    const tab2 = [...S2.w.document.querySelectorAll('[role=tab]')].find(t => t.textContent.trim() === 'Reports');
-    tab2.click(); await tick(200);
+    const tab2 = S2.w.document.querySelector('[aria-label="Progress detail"]');
+    Object.getOwnPropertyDescriptor(S2.w.HTMLSelectElement.prototype,'value').set.call(tab2,'reports'); tab2.dispatchEvent(new S2.w.Event('change',{bubbles:true})); await tick(200);
     const t2 = S2.w.document.body.textContent;
     ck('a 2-day streak says "Good start", never "Start today"', S2.errors.length === 0 && /2 days/.test(t2) && /Good start/.test(t2) && !/Start today/.test(t2), S2.errors.join('|'));
   }
@@ -1221,12 +900,11 @@ async function progressTest() {
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const page = await browser.newPage();
       await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -1292,9 +970,10 @@ async function planTest() {
   ck('header: program name and "Set by Sachin · weekday schedule"', /Foundation/.test(html()) && /Set by Sachin/.test(html()) && /weekday schedule/.test(html()));
 
   // nav
-  const navLabels = [...d.querySelectorAll('[data-testid="member-nav"] button')].map(b => b.textContent.trim()).filter(Boolean);
-  ck('nav is Today · Plan · Progress · Profile — Settings is no longer a tab', navLabels.join(',') === 'Today,Plan,Progress,Profile', navLabels);
-  ck('Plan is the active tab', /text-gold/.test([...d.querySelectorAll('[data-testid="member-nav"] button')].find(b => /Plan/.test(b.textContent)).className));
+  const navLabels = [...d.querySelectorAll('.member-nav-links button')].map(b => b.textContent.trim()).filter(Boolean);
+  // 16 Oct 2026 (Sachin): Plan is a tab again.
+  ck('nav is Today · Plan · Progress · More — profile and settings remain available', navLabels.join(',') === 'Today,Plan,Progress,More', navLabels);
+  ck('on the Plan page the Plan tab is the current one', [...d.querySelectorAll('.member-nav-links button')].find(b => /Plan/.test(b.textContent))?.getAttribute('aria-current') === 'page');
 
   // Today view
   ck('Today view: this weekday\'s program day with sets × reps', q('plan-today-workout') && /Bench press/.test(q('plan-today-workout').textContent) && /3 × 10/.test(q('plan-today-workout').textContent), q('plan-today-workout')?.textContent);
@@ -1322,12 +1001,11 @@ async function planTest() {
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const page = await browser.newPage();
       await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -1445,6 +1123,7 @@ async function profileTest() {
   ck('"Connected devices" is listed once (its own section), not again under Account', (d.body.textContent.match(/Connected devices/g) || []).length === 1, (d.body.textContent.match(/Connected devices/g) || []).length);
   ck('sections in order: My plan → Health insights → Devices → Account', ['section-plan', 'section-insights', 'section-devices', 'section-account'].map(id => q(id)).every(Boolean) &&
      q('section-plan').compareDocumentPosition(q('section-insights')) & 4 && q('section-insights').compareDocumentPosition(q('section-devices')) & 4 && q('section-devices').compareDocumentPosition(q('section-account')) & 4);
+  w.__click('My plan & daily targets'); await tick(120);
   ck('My plan shows the macro targets, water target and diet notes', /1600|1,600/.test(q('section-plan').textContent) && /3\.0|3000/.test(q('section-plan').textContent) && /No fried food/.test(q('section-plan').textContent));
   ck('Health insights: BMI, TDEE, conditions, labs, metabolism, portions — one line each, closed', ['ins-tdee', 'ins-bmi', 'ins-conditions', 'ins-labs', 'ins-metabolism', 'ins-portions'].every(id => q(id) && q(id).dataset.open === '0'));
   ck('BMI summary line is right for 82.4 kg / 160 cm (32.2)', /32\.2/.test(q('ins-bmi').textContent), q('ins-bmi').textContent);
@@ -1624,7 +1303,7 @@ async function memberPage9bTest() {
   setV(q('push-body'), 'Please log lunch'); q('push-send').click(); await tick(200);
   const push = w.__posts.find(p => /\/admin\/push$/.test(p.url));
   ck('push POST carries patient_id 12 and the text', push && push.body.patient_id === 12 && /log lunch/.test(push.body.body) && !!q('push-done'), push && push.body);
-  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await tick(700);
+  d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await tick(700);
   ck('Escape closes the sheet', !d.querySelector('[role=dialog]'));
 
   // a coach (not admin) gets no Push tab
@@ -1671,6 +1350,7 @@ async function cachedReadTest() {
     createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
   const { w, errors } = run(code); await tick(900);
   const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+  q('home-insight-details').querySelector('button').click(); await tick(100);
   ck('Today asks for the cached read once', errors.length === 0 && w.__calls.filter(u => /me\/read/.test(u)).length === 1, [errors.join('|'), w.__calls.filter(u => /me\/read/.test(u))]);
   ck('the cached sentence is what Today shows — the same words the member got by WhatsApp', /Yesterday: 1,650 kcal · 82\.7 kg/.test(q('ai-read').textContent), q('ai-read').textContent.slice(0, 120));
   // The action is time-gated in IST: before 09:00 a member who already logged
@@ -1728,7 +1408,8 @@ async function sprint11Test() {
   const { w, errors, html } = run(code); await tick(900);
   const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
   ck('Today mounts', errors.length === 0, errors.join('|'));
-  ck('the Eat row offers "What to eat"', !!q('chip-mealidea') && /What to eat/.test(q('chip-mealidea').textContent));
+  q('home-plan-details').querySelector('button').click(); await tick(100);
+  ck('the plan tools offer "What to eat"', !!q('chip-mealidea') && /What could I eat/.test(q('chip-mealidea').textContent));
   q('chip-mealidea').click(); await tick(500);
   const dlg = d.querySelector('[role=dialog]');
   ck('it opens the meal-idea sheet and asks for the member\'s usual foods', !!dlg && w.__calls.some(u => /recent-foods/.test(u)));
@@ -1869,6 +1550,7 @@ async function sprint11cTest() {
     useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
     createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, api);
   const A = run(todayCode); await tick(900);
+  A.w.document.querySelector('[data-testid="home-insight-details"] button').click(); await tick(200);
   ck('a member with no tracker sees no recovery card (nothing estimated)', A.errors.length === 0 && !A.w.document.querySelector('[data-testid="recovery-card"]') && A.w.__calls.some(u => /trackers\/data/.test(u)), A.errors.join('|'));
 
   const B = run(todayCode, (w) => {
@@ -1879,11 +1561,12 @@ async function sprint11cTest() {
   });
   await tick(900);
   const bd = B.w.document; const bq = (id) => bd.querySelector(`[data-testid="${id}"]`);
+  bq('home-insight-details').querySelector('button').click(); await tick(200);
   ck('with a synced tracker the recovery card renders: sleep, HRV, resting HR, steps, score', !!bq('recovery-card') && ['rec-sleep', 'rec-hrv', 'rec-rhr', 'rec-steps', 'rec-score'].every(id => bq(id)), B.errors.join('|'));
   ck('numbers are the device\'s (5h 30m, 58 ms, 62 bpm, 4,200, 30/100) with the provider named', /5h 30m/.test(bq('rec-sleep').textContent) && /62/.test(bq('rec-rhr').textContent) && /4,200/.test(bq('rec-steps').textContent) && /30/.test(bq('rec-score').textContent) && /whoop/.test(bq('recovery-card').textContent), bq('recovery-card').textContent.slice(0, 160));
   ck('deltas compare to the week (resting HR ↑ 7 vs week)', /↑ 7bpm vs week|↑ 7 vs week/.test(bq('rec-rhr').textContent.replace('bpm vs', 'bpm vs')) || /↑ 7/.test(bq('rec-rhr').textContent), bq('rec-rhr').textContent);
   ck('one insight, the most important: low recovery → go easy', bq('rec-insight') && /Recovery is low \(30\)/.test(bq('rec-insight').textContent), bq('rec-insight')?.textContent);
-  ck('the hero and Today\'s plan do not depend on it', !!bq('hero-weight') && !!bq('todays-plan'));
+  ck('the hero and Today\'s plan do not depend on it', !!bq('hero-weight') && !!bq('daily-essentials'));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2192,7 +1875,7 @@ async function cspTest() {
   app.use((req, res) => res.sendFile(path.join(dist, 'index.html')));
   const server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+  const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
   try {
     const page = await browser.newPage();
     // Block the service worker: a stale one from another run must not answer.
@@ -2216,6 +1899,65 @@ async function cspTest() {
       return called;
     });
     ck('the "Reload app" button calls the recovery (no blocked onclick)', clicked === 1, clicked);
+
+    // Fixes-2i (18 Oct 2026). The local robot caught the "couldn't load" screen
+    // left on top of a working app: the app took just over the watchdog's 10 s
+    // to start, and nothing took the screen down afterwards. It was also still
+    // gold, and dark only. Hold the app's main file back for 11.5 s, as a slow
+    // phone would, in each theme.
+    // Fixes-2p (20 Oct 2026): the file was let go on a fixed 11.5 s timer, which left the
+    // test 1.5 s to see the 10 s screen; under load it missed it ("booted: true" in the gate
+    // log). Now the file is held until the screen has been seen (30 s at most), so there is
+    // no window to miss, and the screen must not come up before about 10 s either.
+    const lum = c => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    for (const theme of ['light', 'dark']) {
+      // The page above already loaded the app: skip its service worker and the
+      // browser cache, or the held-back file is served from them and never held.
+      const slow = await browser.newPage();
+      await slow.setBypassServiceWorker(true);
+      await slow.setCacheEnabled(false);
+      await slow.evaluateOnNewDocument(t => {
+        try { localStorage.setItem('fitlife-settings-v2', JSON.stringify({ state: { theme: t }, version: 0 })); } catch {}
+        Object.defineProperty(navigator, 'serviceWorker', { value: undefined });
+      }, theme);
+      await slow.setRequestInterception(true);
+      let release, released = false;
+      const held = new Promise(r => { release = () => { if (!released) { released = true; r(); } }; });
+      const cap = setTimeout(() => release(), 30000);
+      slow.on('request', req => {
+        if (/\/assets\/index-[^/]+\.js$/.test(new URL(req.url()).pathname)) held.then(() => req.continue().catch(() => {}));
+        else req.continue().catch(() => {});
+      });
+      const navStart = Date.now();
+      // Not awaited: the page's load waits for the held-back app file itself.
+      const nav = slow.goto(origin + '/login', { waitUntil: 'load', timeout: 40000 }).catch(() => {});
+      // Poll by hand: a waitForFunction set up before the page commits is lost with about:blank.
+      let during = { shown: false };
+      for (const until = Date.now() + 28000; Date.now() < until && !during.shown;) {
+        await new Promise(r => setTimeout(r, 250));
+        during = await slow.evaluate(() => {
+          const fb = document.getElementById('boot-fallback'); if (!fb) return { shown: false };
+          const b = fb.querySelector('button'), p = fb.querySelector('p'), cs = e => getComputedStyle(e);
+          return { shown: cs(fb).display !== 'none', booted: !!window.__fitlifeBooted, theme: document.documentElement.dataset.theme,
+            bg: cs(fb).backgroundColor, text: cs(p).color, btn: cs(b).backgroundColor, btnText: cs(b).color };
+        }).catch(() => ({ shown: false }));
+      }
+      const shownAfterMs = Date.now() - navStart;
+      ck(`slow start (${theme}): the recovery screen appears after 10 s, while the app is still loading`, during.shown && !during.booted && during.theme === theme, JSON.stringify(during));
+      ck(`slow start (${theme}): and not before about 10 s`, during.shown && shownAfterMs >= 9500, `${shownAfterMs} ms`);
+      ck(`slow start (${theme}): the recovery screen has no gold`, during.shown && !/212, 175, 55/.test(JSON.stringify(during)), JSON.stringify(during));
+      ck(`slow start (${theme}): its button is the green accent`, during.shown && during.btn === (theme === 'dark' ? 'rgb(183, 215, 194)' : 'rgb(49, 93, 71)'), during.btn);
+      const rt = during.shown ? [ratio(during.text, during.bg), ratio(during.btnText, during.btn)] : [0, 0];
+      ck(`slow start (${theme}): text and button text are readable (≥ 4.5:1)`, rt[0] >= 4.5 && rt[1] >= 4.5, { text: rt[0].toFixed(2), button: rt[1].toFixed(2) });
+      release(); clearTimeout(cap);
+      await nav;
+      await slow.waitForFunction(() => window.__fitlifeBooted === true, { timeout: 20000 }).catch(() => {});
+      await new Promise(r => setTimeout(r, 300));
+      const after = await slow.evaluate(() => ({ booted: !!window.__fitlifeBooted, shown: getComputedStyle(document.getElementById('boot-fallback')).display !== 'none', root: document.getElementById('root').childElementCount }));
+      ck(`slow start (${theme}): once the app arrives, the recovery screen goes away`, after.booted && !after.shown && after.root > 0, after);
+      await slow.close();
+    }
 
     // Phase 3 photos. A blob: image (the member's own plate preview) must load,
     // and the policy must allow the R2 photo host (signed links). Before the
@@ -2328,8 +2070,14 @@ async function platePhotoTest() {
   ck('typing grams keeps the same box (the keyboard stays open)', gramsBox.isConnected && gramsBox.value === '120');
   boxes[2].click(); await tick(50);
   ck('ticking "had buttermilk" adds it: now 120 + 82 + 80 + 156 = 438 kcal', /Log this · 438 kcal/.test(q('plate-save').textContent), q('plate-save')?.textContent);
+  d.querySelector('[data-testid="plate-edit-macros"]').click(); await tick(120);
+  const proteinField = q('macro-in-protein');
+  Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype,'value').set.call(proteinField,'70');
+  proteinField.dispatchEvent(new w.Event('input',{bubbles:true})); await tick(60);
+  q('macro-remember').click(); q('macro-save').click(); await tick(100);
   q('plate-save').click(); await tick(700);
   const up = w.__updates[0]?.v || [];
+  ck('plate macro edit reaches the saved food with its label', up[0]?.per_100g.protein === 70 && up[0]?.label === true);
   ck('saving logs four foods under Meal 2, with the changed grams', w.__updates.length === 1 && up.length === 4 && up.every(r => r.meal === 'Meal 2') && up.find(r => r.name === 'Guava').grams === 120, up);
   ck('the "kind" bookkeeping does not leak into the food log', up.every(r => r.kind === undefined));
   const conf = w.__posts.find(p => /\/plate\/77\/confirm$/.test(p.url));
@@ -2750,7 +2498,8 @@ async function weeklyTest() {
   ck('the coach sees the week, the brief and that only they see it', B.errors.length === 0 && /Week brief · .*28 Sep.*4 Oct/.test(bq('weekly-brief').textContent) && /stress was high/.test(bq('brief-text').textContent) && /Only you see this/.test(bq('weekly-brief').textContent), B.errors.join('|'));
   ck('the numbers under it: days, kcal, weight, workouts', /5\/7/.test(bq('brief-facts').textContent) && /1400/.test(bq('brief-facts').textContent) && /-0.8 kg/.test(bq('brief-facts').textContent));
   const stress = [...bq('brief-checkin').querySelectorAll('span')].find(x => /Stress 5\/5/.test(x.textContent));
-  ck('the check-in answers, a worrying one marked, and the note', !!stress && /amber/.test(stress.className) && /Wedding at home/.test(bq('brief-checkin').textContent));
+  // 18 Oct 2026 (2f): warnings use the `warn` token (same colour amber-300/400 drew); "amber" no longer appears in class names.
+  ck('the check-in answers, a worrying one marked (warning colour), and the note', !!stress && /(^|\s)(text|border)-warn\b/.test(stress.className) && /Wedding at home/.test(bq('brief-checkin').textContent));
   bq('brief-refresh').click(); await tick(300);
   ck('Refresh writes it again; a brief without the AI says so', B.w.__posts.some(p => /\/weekly\/brief\/12$/.test(p.url)) && /The AI was unavailable/.test(bq('weekly-brief').textContent));
 }
@@ -2758,6 +2507,54 @@ async function weeklyTest() {
 // ═══════════════════════════════════════════════════════════════════════════
 // 32. Phase 8 — Kannada voice pilot: the member records, the coach compares
 // ═══════════════════════════════════════════════════════════════════════════
+async function voiceFallbackTestPanelTest() {
+  console.log('\n[32b] Voice backup test switch (Fixes-2p, admin, test server only)');
+  const api = stub('api-vft.js', `
+    window.__puts = []; window.__dels = [];
+    let account = window.__account || null;
+    const runs = [
+      { id: 2, created_at: '2026-10-20T08:05:00Z', name: 'Test Member', lang_hint: 'kn-IN', language_sent: 'kn', whisper_text: '2 idli, weight 82.5 kg', whisper_language: 'kannada', segments: [{}, {}], accepted: false, reason: 'unsure', transcript: null, error: null },
+      { id: 1, created_at: '2026-10-20T08:02:00Z', name: 'Test Member', lang_hint: 'en-IN', language_sent: null, whisper_text: '1 cup coffee', whisper_language: 'english', segments: [{}], accepted: true, reason: null, transcript: '1 cup coffee', error: null },
+      { id: 0, created_at: '2026-10-20T08:01:00Z', name: 'Test Member', lang_hint: 'hi-IN', language_sent: 'hi', whisper_text: null, whisper_language: null, segments: [], accepted: null, reason: null, transcript: null, error: 'Whisper is busy' }];
+    const get = async (url) => {
+      if (/\\/voice-fallback-test$/.test(url)) return { data: window.__unavailable
+        ? { available: false, message: 'This switch only works on the test server, so members on the live app are never affected.', account: null, runs: [] }
+        : { available: true, hours: 24, account, runs: window.__noRuns ? [] : runs } };
+      if (/\\/admin\\/members$/.test(url)) return { data: [{ id: 21, name: 'Test Member', active: true }, { id: 22, name: 'Old Account', active: false }] };
+      return { data: {} }; };
+    const put = async (url, body) => { window.__puts.push({ url, body }); account = { user_id: body.user_id, name: 'Test Member', set_at: '2026-10-20T08:00:00Z', ends_at: '2026-10-21T08:00:00Z' }; return { data: { ok: true, account } }; };
+    const del = async (url) => { window.__dels.push(url); if (/test$/.test(url)) account = null; return { data: { ok: true } }; };
+    export default { get, post: put, put, patch: put, delete: del };`);
+  const code = await bundle(`
+    import { createRoot } from 'react-dom/client';
+    import VF from './components/admin/VoiceFallbackTestPanel.jsx';
+    createRoot(document.getElementById('root')).render(<VF />);`, api);
+  {
+    const { w, errors } = run(code, (win) => { win.__unavailable = true; }); await tick(300);
+    const q = (id) => w.document.querySelector(`[data-testid="${id}"]`);
+    ck('on the live server the card is one line: off, and why; no switch to press', errors.length === 0 && /Off on this server/.test(q('vft-off')?.textContent || '') && /test server/.test(q('vft-off').textContent) && !q('vft-pick') && !q('vft-turn-on'), errors.join('|'));
+  }
+  {
+    const { w, errors } = run(code, (win) => { win.confirm = () => true; }); await tick(300);
+    const d = w.document, q = (id) => d.querySelector(`[data-testid="${id}"]`);
+    ck('on the test server it explains: one test account, 24 hours, skips Gemini, the normal app after that, no one else, not a real member',
+      errors.length === 0 && /one test account/.test(q('vft-explain').textContent) && /24 hours/.test(q('vft-explain').textContent) && /skip Gemini/.test(q('vft-explain').textContent)
+        && /Retry, the preview and Apply/.test(q('vft-explain').textContent) && /No one else is affected/.test(q('vft-explain').textContent) && /Don't pick a real member/.test(q('vft-explain').textContent), errors.join('|'));
+    ck('switched-off accounts are not offered', ![...q('vft-pick').options].some(o => o.textContent === 'Old Account') && q('vft-turn-on').disabled);
+    const sel = q('vft-pick'); sel.value = '21'; sel.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(50);
+    q('vft-turn-on').click(); await tick(300);
+    ck('Turn on sends that account; the card then says who and until when', w.__puts[0]?.url === '/voice-fallback-test' && w.__puts[0].body.user_id === 21 && /On for Test Member until/.test(q('vft-on')?.textContent || ''));
+    const runsText = q('vft-runs').textContent;
+    ck('each try says what happened in plain words: refused and why (with what Whisper heard), accepted text, or no answer',
+      /Refused: Whisper wasn't sure of part of it\. The member saw Retry \/ type\./.test(runsText) && /Whisper heard: “2 idli, weight 82\.5 kg”/.test(runsText)
+        && /Accepted: “1 cup coffee”/.test(runsText) && /No answer: Whisper is busy/.test(runsText) && /Whisper told: kn/.test(runsText) && /Whisper told: not set/.test(runsText));
+    q('vft-turn-off').click(); await tick(300);
+    ck('Turn off ends it', w.__dels.includes('/voice-fallback-test') && !q('vft-on') && !!q('vft-pick'));
+    q('vft-clear').click(); await tick(200);
+    ck('Clear asks, then deletes the tries', w.__dels.includes('/voice-fallback-test/runs'));
+  }
+}
+
 async function voicePilotTest() {
   console.log('\n[32] Kannada voice pilot (Phase 8)');
   const api = stub('api-vp.js', `
@@ -2806,7 +2603,9 @@ async function voicePilotTest() {
   const d = w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
   ck('an invited member sees the card', errors.length === 0 && /Kannada voice test/.test(q('vp-card')?.textContent || ''), errors.join('|'));
   q('vp-card').click(); await tick(400);
-  ck('first they read what is recorded, who hears it, 90 days, nothing logged, stop any time', !!q('vp-consent') && /Only your coach hears the recordings/.test(q('vp-consent').textContent)
+  // Changed 19 Oct 2026 (Fixes-2n): the server lets assigned coaches AND administrators play the recordings
+  // (routes/voicePilot.js, coachOnly + mine()); the consent now says so (reviewer). Still checks who hears them.
+  ck('first they read what is recorded, who hears it, 90 days, nothing logged, stop any time', !!q('vp-consent') && /Your assigned coach and authorised FitLife administrators can listen to the recordings/.test(q('vp-consent').textContent) && !/Only your coach/.test(q('vp-consent').textContent)
      && /deleted after 90 days/.test(q('vp-consent').textContent) && /Nothing you record is added to your food log/.test(q('vp-consent').textContent) && /stop at any time/.test(q('vp-consent').textContent));
   q('vp-agree').click(); await tick(300);
   ck('agreeing is sent, then the lines show with what they mean', w.__posts.some(p => /consent$/.test(p.url)) && !!q('vp-phrases') && /This morning I ate two idli/.test(q('vp-phrases').textContent));
@@ -2867,6 +2666,93 @@ async function voicePilotTest() {
   ck('for a coach it starts folded, with the scores still on the header', CP.errors.length === 0 && !!cq('vp-toggle') && !cq('vp-invite') && /Gemini 100%/.test(cq('vp-overall')?.textContent || ''), CP.errors.join('|'));
   cq('vp-toggle').click(); await tick(100);
   ck('opened: Download results is there, and the invite list is the coach\'s own members', !!cq('vp-download') && CP.w.__coachList === true && [...CP.w.document.querySelectorAll('select option')].some(o => o.textContent === 'Coach Member'));
+
+  // Fixes-2m (19 Oct real recordings): keyword score named as such; meaning checks; scripts; re-runs; Excel file; honest wording.
+  {
+    const TAMIL = 'விளைகே இரடு இட்ளி, ஒந்து போல் சாம்பா திந்தே.', KN = 'ಬೆಳಗ್ಗೆ ಎರಡು ಇಡ್ಲಿ';
+    const api2 = stub('api-vp-2m.js', `
+      window.__posts = []; window.__gets = [];
+      const get = async (url, cfg) => { window.__gets.push({ url, cfg });
+        if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [{ patient_id: 12, name: 'Ragavendra', active: true, consented_at: '2026-10-19', recorded: 2 }] } };
+        if (/\\/voice-pilot\\/results$/.test(url)) return { data: { overall: { gemini: 100, whisper: 25, samples: 2, gemini_answered: 2, whisper_answered: 2 },
+          checks: { gemini: { meal: { passed: 2, total: 2 }, quantity: { passed: 5, total: 5 } }, whisper: { meal: { passed: 1, total: 2 }, quantity: { passed: 1, total: 5 } } },
+          phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: 100, whisper: 0 }],
+          samples: [{ id: 1, phrase_id: 'k01', name: 'Ragavendra', gemini: 'Belagge eradu idli ondu bowl sambar tinde', gemini_score: 1, whisper: ${JSON.stringify(TAMIL)}, whisper_score: 0,
+            gemini_script: 'latin', whisper_script: 'tamil', gemini_latin: null, whisper_latin: null, whisper_setting: 'auto', whisper_language: null,
+            gemini_checks: [{ kind: 'meal', label: 'morning', pass: true }, { kind: 'quantity', label: '2 idli', pass: true }], whisper_checks: [{ kind: 'meal', label: 'morning', pass: false }],
+            reruns: [{ engine: 'whisper', setting: 'kn', text: ${JSON.stringify(KN)}, score: 0.67, script: 'kannada', latin: 'belagge eradu idli', language: 'kannada', checks: [{ kind: 'quantity', label: '2 idli', pass: true }, { kind: 'quantity', label: '1 bowl sambar', result: 'unverified', pass: false }] }],
+            audio_url: null }] } };
+        if (/\\/admin\\/members$/.test(url)) return { data: [] };
+        if (/results\\.xlsx$/.test(url)) return { data: new Blob(['PK'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), headers: { 'content-disposition': 'attachment; filename="FitLife-Voice-Pilot-2026-10-19.xlsx"' } };
+        return { data: {} }; };
+      const post = async (url, body) => { window.__posts.push({ url, body });
+        if (/rerun$/.test(url)) return { data: { ok: true, setting: body.setting, asked: 2, answered: 2, more: false, problems: [] } };
+        return { data: { ok: true } }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const panel2 = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 1, name: 'Admin', role: 'admin' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, api2);
+    const Q = run(panel2, prep()); await tick(400);
+    const qq = (id) => Q.w.document.querySelector(`[data-testid="${id}"]`);
+    ck('2m: the percentages are labelled "Keyword score" (headline and table)', Q.errors.length === 0 && /^Keyword score: Gemini 100% · Whisper 25% · 2 recordings$/.test((qq('vp-overall')?.textContent || '').trim()) && /Keyword score/.test(qq('vp-head-score')?.textContent || ''), [Q.errors.join('|'), qq('vp-overall')?.textContent]);
+    ck('2m: it says what the keyword score cannot tell (sugar vs no sugar) and points to the meaning checks', /keyword score is the share of a line's key words/.test(qq('vp-explain')?.textContent || '') && /"sugar" scores the same as "no sugar"/.test(qq('vp-explain').textContent));
+    ck('2m: it says the test teaches FitLife nobody\'s voice, and that 2 recordings are far too few to choose an engine', /does not teach FitLife anyone's voice/.test(qq('vp-not-learning')?.textContent || '') && /2 recordings are far too few to choose one/.test(qq('vp-not-learning').textContent), qq('vp-not-learning')?.textContent);
+    ck('2m: meaning checks per engine (passed of checked)', /Gemini: meal 2\/2 · quantities 5\/5/.test(qq('vp-checks-gemini')?.textContent || '') && /Whisper: meal 1\/2 · quantities 1\/5/.test(qq('vp-checks-whisper')?.textContent || ''), qq('vp-checks')?.textContent);
+    qq('vp-row').click(); await tick(100);
+    const sx = qq('vp-sample')?.textContent || '';
+    ck('2m: the Tamil answer is shown as written, labelled "Tamil script: wrong language", with its keyword score and what Whisper was asked', sx.includes(TAMIL) && /Tamil script: wrong language/.test(qq('vp-script-whisper')?.textContent || '') && /Whisper · keyword score 0%/.test(sx)
+       && /Language asked: not set \(Whisper guesses\) · used: not recorded/.test(qq('vp-whisper-lang')?.textContent || '') && qq('vp-sample-whisper').querySelector('[lang="ta"]'), sx);
+    // Changed 19 Oct 2026 (Fixes-2n): the line is labelled "Rule checks", not "Meaning" (reviewer: limited, rule-based checks).
+    ck('2m: rule checks per recording', /Rule checks: morning ✓ · 2 idli ✓/.test(qq('vp-checks-line-gemini')?.textContent || '') && /Rule checks: morning ✗/.test(qq('vp-checks-line-whisper')?.textContent || ''));
+    ck('2m: the re-run sits under the original, Kannada script spelled out', /Whisper again, language Kannada · keyword score 67%/.test(qq('vp-rerun')?.textContent || '') && /Kannada script · in English letters: belagge eradu idli/.test(qq('vp-rerun').textContent) && sx.includes(TAMIL), qq('vp-rerun')?.textContent);
+    qq('vp-rerun-kn').click(); await tick(300);
+    ck('2m: "Whisper · Kannada" asks the server to re-run with kn and says what came back', Q.w.__posts.some(p => /\/voice-pilot\/results\/rerun$/.test(p.url) && p.body.setting === 'kn') && /Whisper \(language Kannada\) answered 2 of 2/.test(qq('vp-rerun-result')?.textContent || ''), qq('vp-rerun-result')?.textContent);
+    Q.w.__downloads = []; Q.w.HTMLAnchorElement.prototype.click = function () { Q.w.__downloads.push(this.download); };
+    qq('vp-download-xlsx').click(); await tick(300);
+    const xget = Q.w.__gets.find(g => /results\.xlsx$/.test(g.url));
+    ck('2m: "Download results (Excel)" fetches the .xlsx as a file and saves it with the server\'s name; the CSV stays as a second choice', /Download results \(Excel\)/.test(qq('vp-download-xlsx').textContent) && xget?.cfg?.responseType === 'blob' && Q.w.__downloads[0] === 'FitLife-Voice-Pilot-2026-10-19.xlsx' && /or as CSV/.test(qq('vp-download')?.textContent || ''), [xget?.cfg, Q.w.__downloads]);
+    const cardSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotCard.jsx'), 'utf8'), sheetSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotSheet.jsx'), 'utf8');
+    ck('2m: the member card no longer says FitLife "learns how you speak"; the consent says it does not', !/learns how you speak/.test(cardSrc) && /test how well two speech services understand Kannada/.test(cardSrc) && /FitLife does not learn or store a model of your voice/.test(sheetSrc));
+    ck('2n: an unverified (conflicting) check shows "?", not ✓ or ✗', /1 bowl sambar \?/.test(qq('vp-rerun')?.textContent || '') && /2 idli ✓/.test(qq('vp-rerun').textContent), qq('vp-rerun')?.textContent);
+    ck('2n: the panel calls them limited, rule-based checks, not a guarantee of meaning', /limited, rule-based checks, not a guarantee of meaning/.test(qq('vp-explain')?.textContent || '') && /Rule checks \(✓ passed of checked · \? unverified\)/.test(qq('vp-checks')?.textContent || ''));
+  }
+
+  // Fixes-2u (first real run, 21 Oct): an empty Whisper answer was shown as "answered 2 of 2". Now the
+  // re-run says requests / replies / with words / empty apart, and an empty answer is shown as such.
+  {
+    const api3 = stub('api-vp-2u.js', `
+      window.__posts = [];
+      const get = async (url) => {
+        if (/\\/voice-pilot\\/members$/.test(url)) return { data: { members: [] } };
+        if (/\\/voice-pilot\\/results$/.test(url)) return { data: { overall: { gemini: 100, whisper: 25, samples: 2, gemini_answered: 2, whisper_answered: 2, whisper_empty: 0 },
+          checks: { gemini: {}, whisper: {} }, phrases: [{ id: 'k01', say: 'Belagge eradu idli mattu ondu bowl sambar thinde', samples: 1, gemini: 100, whisper: 0 }],
+          samples: [{ id: 1, phrase_id: 'k01', name: 'Member One', gemini: 'Belagge eradu idli ondu bowl sambar tinde', gemini_score: 1, whisper: 'x', whisper_score: 0,
+            gemini_script: 'latin', whisper_script: 'latin', whisper_setting: 'auto', whisper_language: null, gemini_checks: [], whisper_checks: [],
+            reruns: [{ engine: 'whisper', setting: 'kn', text: '', score: 0, empty: true, problem: 'empty answer', script: null, latin: null, language: 'kannada', checks: [],
+              attempts: [{ outcome: 'empty', source: 'rerun' }] }], audio_url: null }] } };
+        return { data: {} }; };
+      const post = async (url, body) => { window.__posts.push({ url, body });
+        if (/rerun$/.test(url)) return { data: { ok: true, setting: body.setting, asked: 2, responses: 2, answered: 1, empty: 1, errors: 0, more: false, problems: ['Whisper answered with no words (an empty answer).'] } };
+        return { data: { ok: true } }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const panel3 = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import VoicePilotPanel from './components/voicepilot/VoicePilotPanel.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 1, name: 'Admin', role: 'admin' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<VoicePilotPanel />);`, api3);
+    const R = run(panel3, prep()); await tick(400);
+    const rq = (id) => R.w.document.querySelector(`[data-testid="${id}"]`);
+    rq('vp-row').click(); await tick(100);
+    ck('2u: an empty re-run answer is shown as "empty answer (no words)", not as blank text', R.errors.length === 0 && /empty answer \(no words\)/.test(rq('vp-rerun-empty')?.textContent || '') && !/heard nothing/.test(rq('vp-rerun')?.textContent || ''), [R.errors.join('|'), rq('vp-rerun')?.textContent]);
+    rq('vp-rerun-kn').click(); await tick(300);
+    ck('2u: the re-run result says 2 asked · 2 replied · 1 with words · 1 empty (it said "answered 2 of 2")', /Whisper \(language Kannada\): 2 asked · 2 replied · 1 with words · 1 empty\./.test(rq('vp-rerun-result')?.textContent || '') && /empty answer/.test(rq('vp-rerun-result').textContent), rq('vp-rerun-result')?.textContent);
+    const panelSrc = fs.readFileSync(path.join(CLIENT_SRC, 'components/voicepilot/VoicePilotPanel.jsx'), 'utf8');
+    ck('2u: every kept attempt is listed when there is more than one (words / empty / no answer)', /data-testid="vp-rerun-attempts"/.test(panelSrc) && /Attempts kept:/.test(panelSrc));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2934,15 +2820,14 @@ async function reviewFixesTest() {
   // 3. The chat input bar was see-through on Android.
   {
     const css = fs.readFileSync(path.join(CLIENT_SRC, 'index.css'), 'utf8');
-    const m = css.match(/\.glass-solid\s*\{[^}]*background:\s*rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/);
+    const m = css.match(/\.glass-solid\s*\{[^}]*background:\s*rgb\(var\(--fit-surface\)\s*\/\s*([\d.]+)\)/);
     ck('the chat bar has a near-solid background of its own, declared after .glass', !!m && Number(m[1]) >= 0.9 && css.indexOf('.glass-solid') > css.indexOf('.glass {'), m?.[0]);
     ck('and the chat bar uses it', /className="glass glass-solid [^"]*" data-testid="composer-bar"/.test(srcOf('components/AIChatLog.jsx')));
     try {
       const puppeteerCore = (await import('puppeteer-core')).default;
       const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-      const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-      const built = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
-      const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+      const built = readBuiltCss(path.join(ROOT, 'client', 'dist'));
+      const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
       try {
         const page = await browser.newPage();
         await page.setContent(`<!doctype html><html><head><style>${built}</style></head><body style="background:#121316"><p style="color:#fff">text under the bar</p><div class="fade-up" style="position:fixed;left:0;right:0;top:0"><div id="bar" class="glass glass-solid">bar</div><div id="plain" class="glass">plain</div></div></body></html>`);
@@ -3061,12 +2946,11 @@ async function phase8cTest() {
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const out = [];
       for (const [role, width] of [['admin', 320], ['admin', 360], ['monitor', 320], ['monitor', 390]]) {
@@ -3084,7 +2968,7 @@ async function phase8cTest() {
         await page.close();
       }
       ck('in real Chrome at 320 to 390 px, coach and admin: the button is dead centre, 56 px, nothing scrolls sideways', out.every(o => o.off <= 1 && o.orb === 56 && o.sw <= o.vw + 1), out);
-      ck('every tab is at least 44 px tall and its label fits (admin at 320 px is the tight one)', out.every(o => o.tabs.every(t => t.h >= 44 && !t.clipped)), out.map(o => o.tabs));
+      ck('every tab is at least 44 px tall and its label fits (admin at 320 px is the tight one)', out.every(o => o.tabs.every(t => t.h >= 44 && !t.clipped)), JSON.stringify(out));
     } finally { await browser.close(); await new Promise(r => server.close(r)); }
   } catch (e) { console.log('  – browser not installed, the bottom bar was NOT measured in Chrome (' + String(e.message).slice(0, 60) + ')'); }
 
@@ -3176,11 +3060,17 @@ async function phase8cTest() {
   ck('with every planned meal logged there is no button', btn().length === 0);
   const Y = run(chat); await tick(500);
   await say(Y, 'I ate 2 idli for breakfast');
-  ck('a message that logs food gets its usual card and no "Log as planned" button', /Got it: 2 idli/.test(Y.w.document.body.textContent) && !Y.w.document.querySelector('[data-testid="chat-log-planned"]'));
+  const foodReview = Y.w.document.querySelector('[data-testid="ai-food-review"]');
+  ck('a food message gets its canonical unsaved review and no "Log as planned" button',
+    Y.errors.length === 0 && !!foodReview && /Idli/.test(foodReview.textContent)
+    && foodReview.querySelector('[aria-label="Idli grams"]')?.value === '80'
+    && /These entries haven’t been saved yet/.test(Y.w.document.querySelector('[data-testid="ai-reply-text"]')?.textContent || '')
+    && [...Y.w.document.querySelectorAll('button')].some(b => /Save 1 item to today/.test(b.textContent))
+    && !Y.w.document.querySelector('[data-testid="chat-log-planned"]'));
   const Z = run(chat, (win) => { win.__noPlan = true; }); await tick(500);
   await say(Z, "what's today's meal plan?");
   ck('a member with no plan gets the answer and no button', /Today: Breakfast/.test(Z.w.document.body.textContent) && !Z.w.document.querySelector('[data-testid="chat-log-planned"]'));
-  ck('Today hands the chat the same opener the Next up card uses', /<AIChatLog mealPlans=\{m\.mealPlans\} onLogPlanned=\{m\.openPlanned\} \/>/.test(srcOf('pages/Today.jsx')) && /onLog=\{m\.openPlanned\}/.test(srcOf('pages/Today.jsx')));
+  ck('Today hands the chat the same opener the Next up card uses', /<AIChatLog mealPlans=\{m\.mealPlans\} onLogPlanned=\{m\.openPlanned\} overlay \/>/.test(srcOf('pages/Today.jsx')) && /onLog=\{m\.openPlanned\}/.test(srcOf('pages/Today.jsx')));
 
   // ── D. Voice test: try the unanswered recordings again ──────────────────────
   const vpApi = stub('api-8c-vp.js', `
@@ -3400,19 +3290,30 @@ async function honestStatesTest() {
   ck('member with no real gaps: no nutrient section at all (it used to list six invented ones)', MM2.errors.length === 0 && !mq(MM2, 'micro-block') && !/Consistently under target/.test(MM2.w.document.body.textContent));
   const MC2 = run(mi, (win) => { win.__coach = true; win.__gaps = []; }); await tick(400);
   ck('coach with no real gaps: no "under target" heading, but still told what cannot be judged', !/Consistently under target/.test(MC2.w.document.body.textContent) && !!mq(MC2, 'micro-unknown'));
+  // The completed fixtures are no longer used. Release their React timers and
+  // DOMs before the last fixture and the multi-page Chromium pass.
+  RUN_WINDOWS.splice(0).forEach(win => win.close());
   const MC3 = run(mi, (win) => { win.__coach = true; win.__gaps = []; win.__unknown = []; }); await tick(400);
   ck('nothing low and nothing unknown: no section', MC3.errors.length === 0 && !mq(MC3, 'micro-block'));
+  // Fixes-2l: a gap resting on recipe or AI estimates is labelled an estimate, not a confirmed shortfall.
+  const MC4 = run(mi, (win) => { win.__coach = true; win.__unknown = [];
+    win.__gaps = [{ nutrient: 'iron', avg: 9, rda: 18, pct: 50, coverage: 88, basis: 'estimate' }, { nutrient: 'fiber', avg: 14, rda: 30, pct: 47, coverage: 92, basis: 'confirmed' }]; }); await tick(400);
+  ck('2l: an estimate-based gap reads "~50%" with an "Estimate" tag; a confirmed gap stays plain "47%"; the caption says why',
+     MC4.errors.length === 0 && /~50%/.test(mq(MC4, 'micro-gap-iron')?.textContent || '') && !!mq(MC4, 'micro-gap-estimate-iron')
+     && /47%/.test(mq(MC4, 'micro-gap-fiber')?.textContent || '') && !/~47%/.test(mq(MC4, 'micro-gap-fiber')?.textContent || '') && !mq(MC4, 'micro-gap-estimate-fiber')
+     && /not a confirmed shortfall/.test(mq(MC4, 'micro-caption')?.textContent || ''), [mq(MC4, 'micro-gap-iron')?.textContent, mq(MC4, 'micro-caption')?.textContent]);
+  ck('2l: the estimate gap is neutral (amber stays for confirmed warnings only); the confirmed gap keeps its amber',
+     !/text-warn|bg-warn/.test(mq(MC4, 'micro-gap-iron')?.innerHTML || 'text-warn') && /text-warn/.test(mq(MC4, 'micro-gap-fiber')?.innerHTML || ''), mq(MC4, 'micro-gap-iron')?.innerHTML);
 
   // ── E. In real Chrome at phone widths ──────────────────────────────────────
   try {
     const puppeteerCore = (await import('puppeteer-core')).default;
     const chromiumPkg = (await import('@sparticuz/chromium')).default; const chromium = chromiumPkg.default || chromiumPkg;
-    const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-    const css = fs.readFileSync(path.join(distDir, fs.readdirSync(distDir).find(f => f.endsWith('.css'))), 'utf8');
+    const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
     const shell = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;background:#121316"><div id="root" style="padding:16px"></div></body></html>`;
     const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(shell); });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const browser = await puppeteerCore.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
+    const browser = await puppeteerCore.launch({ executablePath: await browserExecutable(chromium), args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'], headless: true });
     try {
       const out = [];
       for (const width of [320, 360, 390]) {
@@ -3487,14 +3388,18 @@ async function macrosEatenTest() {
   const q = (id, root = d) => root.querySelector(`[data-testid="${id}"]`);
   const qa = (id, root = d) => [...root.querySelectorAll(`[data-testid="${id}"]`)];
   ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
-  ck('Eat row: protein, carbs and fat each eaten against the coach\'s target, with a bar each',
-     ['pro', 'carb', 'fat'].every(k => q(`plan-macros-${k}`)?.querySelector('.h-1')) && /37 \/ 120 g/.test(q('plan-macros-pro').textContent), q('plan-macros')?.textContent);
+  // 16 Oct 2026: against the coach's targets again, as on production ("37 / 120 g").
+  ck('home shows all three eaten macros against the coach\'s targets', ['P 37 / 120 g', 'C 59 / 150 g', 'F 34 / 60 g'].every(v => q('plan-eat').textContent.replace(/\s+/g, ' ').includes(v)), q('plan-eat').textContent);
+  q('home-log-details').querySelector('button').click(); await tick(150);
   const meals = qa('meal-macros').map(e => e.textContent);
   ck('timeline: each meal shows its macros under the foods (Breakfast P 10 · C 52 · F 4; Lunch P 27 · C 8 · F 30)',
      meals[0] === 'P 10 g · C 52 g · F 4 g' && meals[1] === 'P 27 g · C 8 g · F 30 g', meals);
 
-  q('plan-eat-action').click(); await tick(500);
-  const dlg = () => d.querySelector('[role=dialog]');
+  q('plan-eat').click(); await tick(500);
+  const dlg = () => d.querySelector('[role=dialog][aria-label="What did you eat?"]');
+  // 16 Oct 2026: the day's totals are one line at the top; the bars sit under "Macros & nutrients".
+  ck('food sheet: the day on one line, against the targets', /666 \/ 1,800 kcal · P 37 g · C 59 g · F 34 g/.test(q('food-day-total')?.textContent.replace(/\s+/g, ' ') || ''), q('food-day-total')?.textContent);
+  q('food-macros-details')?.querySelector('button')?.click(); await tick(300);
   ck('food sheet with targets: the macro bars (as before), not the no-target card', /Macro Targets/.test(dlg()?.textContent || '') && !q('eaten-card'), dlg()?.textContent.slice(0, 80));
   ck('each food shows kcal · P · C · F in the simple view', qa('food-macros').length === 3 && /390 kcal · P27g · C7\.5g · F30g/.test(qa('food-macros')[2].textContent), qa('food-macros').map(e => e.textContent));
   ck('each meal header shows P, C and F in the simple view too (it showed kcal only)', /P 9\.8g/.test(dlg().textContent) && /C 51\.6g/.test(dlg().textContent) && /F 4\.0g/.test(dlg().textContent));
@@ -3513,6 +3418,12 @@ async function macrosEatenTest() {
   [...ed().querySelectorAll('[role=tab]')][0].click(); await tick(80);
   ck('and back to per 100 g (37.5 → 25)', q('macro-in-protein').value === '25');
   ck('"Use these every time" is on by default and names the food', q('macro-remember').checked && /every time I log Paneer bhurji/.test(ed().textContent));
+  // Fixes-2h: "These numbers are for" — the member says cooked.
+  const prepTabs = [...ed().querySelectorAll('[role=tab]')].slice(2);
+  ck('the editor asks what the numbers are for: Raw · Cooked · Not sure, starting at "Not sure"', prepTabs.map(t => t.textContent.trim()).join('|') === 'Raw|Cooked|Not sure'
+     && prepTabs[2].getAttribute('aria-selected') === 'true', prepTabs.map(t => t.textContent));
+  prepTabs[1].click(); await tick(60);
+  ck('choosing Cooked says how to weigh it', /Weigh it cooked/.test(q('macro-prep-note').textContent), q('macro-prep-note').textContent);
   const putsBefore = A.w.__posts.filter(p => p.url === '/member-foods').length;
   q('macro-save').click(); await tick(300);
   const put = A.w.__posts.filter(p => p.url === '/member-foods').pop();
@@ -3520,6 +3431,7 @@ async function macrosEatenTest() {
      && put.body.name === 'Paneer bhurji' && put.body.per_100g.protein === 25 && put.body.per_100g.calories === 300 && put.body.per_100g.net_carbs === 5, put?.body);
   const item = A.w.__logStore.getState().log.food.find(f => f.id === 3);
   ck('the logged food now carries the new numbers and the label mark', item.per_100g.protein === 25 && item.per_100g.calories === 300 && item.label === true, item);
+  ck('the saved label and the logged food both say "cooked"', put.body.preparation === 'cooked' && item.preparation === 'cooked', { label: put?.body?.preparation, item: item.preparation });
   ck('the row says "your label" and shows 450 kcal · P37.5g', qa('food-label-tag').length === 1 && /450 kcal · P37\.5g/.test(qa('food-macros')[2]?.textContent || ''), qa('food-macros').map(e => e.textContent));
   ck('the editor closed', !ed());
 
@@ -3536,17 +3448,19 @@ async function macrosEatenTest() {
   q('macro-save').click(); await tick(200);
   const idli = A.w.__logStore.getState().log.food.find(f => f.id === 1);
   ck('with "every time" unticked: just this entry changes, no label saved', A.w.__posts.filter(p => p.url === '/member-foods').length === n1 && idli.per_100g.fat === 1 && idli.label === true, idli.per_100g);
+  ck('left at "Not sure", the entry is not specified (null), not guessed', idli.preparation === null, idli.preparation);
   ck('Cancel on a fresh editor changes nothing', await (async () => { qa('food-edit-macros')[1].click(); await tick(100); await typeIn(A, q('macro-in-protein'), '40'); q('macro-cancel').click(); await tick(100);
      return !ed() && A.w.__logStore.getState().log.food.find(f => f.id === 2).per_100g.protein === 2.8; })());
 
   // Today's numbers follow the edit
   const closeBtn = [...dlg().querySelectorAll('button')].find(b => b.textContent.trim() === 'Done'); closeBtn?.click(); await tick(500);
-  ck('Today\'s Eat row follows the edit: protein 37 → 47 (paneer 27 → 37.5 g)', /47 \/ 120 g/.test(q('plan-macros-pro')?.textContent || ''), q('plan-macros-pro')?.textContent);
+  ck('Today\'s Eat row follows the edit: protein 37 → 47 (paneer 27 → 37.5 g)', /P 47/.test(q('plan-eat')?.textContent || ''), q('plan-eat')?.textContent);
 
+  q('milestone')?.click(); await tick(50);
   // The label is offered in the search next time (the sheet re-mounts and reloads the labels)
   A.w.__labels = [{ id: 1, name: 'Paneer bhurji', per_100g: put.body.per_100g, base_food_id: null }];
-  q('plan-eat-action').click(); await tick(500);
-  [...dlg().querySelectorAll('button')].find(b => /Add food item/.test(b.textContent)).click(); await tick(150);
+  q('plan-eat').click(); await tick(500);
+  [...dlg().querySelectorAll('button')].find(b => /Add food item/.test(b.textContent)).click(); await tick(450);
   await typeIn(A, dlg().querySelector('input[placeholder="Food name…"]'), 'paneer'); await tick(500);
   const sug = q('suggest-label');
   ck('typing "paneer" offers the member\'s own label first, marked "your label"', !!sug && /Paneer bhurji/.test(sug.closest('button').textContent), dlg().textContent.slice(0, 200));
@@ -3565,13 +3479,13 @@ async function macrosEatenTest() {
   ck('(fixture: the no-plan member really has no targets)', noPlan !== TODAY_API_STUB);
   const B = run(await mount(noPlan, 'api-36-noplan.js')); await tick(900);
   const bd = B.w.document; const bq = (id) => bd.querySelector(`[data-testid="${id}"]`);
+  bq('home-log-details').querySelector('button').click(); await tick(200);
   ck('mounts', B.errors.length === 0, B.errors.join('|'));
   ck('Eat row: calories alone, no "/ target"', /666/.test(bq('plan-eat').textContent) && !/666 \//.test(bq('plan-eat').textContent.replace(/\s+/g, ' ')), bq('plan-eat').textContent);
-  ck('Eat row: protein 37 g, carbs 59 g, fat 34 g — eaten numbers, no invented target, no bars',
-     /^Protein37 g$/.test(bq('plan-macros-pro').textContent) && /^Carbs59 g$/.test(bq('plan-macros-carb').textContent) && /^Fat34 g$/.test(bq('plan-macros-fat').textContent) && !bq('plan-macros').querySelector('.h-1'),
-     ['pro', 'carb', 'fat'].map(k => bq(`plan-macros-${k}`)?.textContent));
+  ck('without targets home still shows all eaten macros', ['P 37 g', 'C 59 g', 'F 34 g'].every(v => bq('plan-eat').textContent.includes(v)));
   ck('timeline meals show their macros too', bd.querySelectorAll('[data-testid="meal-macros"]').length === 2);
-  bq('plan-eat-action').click(); await tick(500);
+  bq('plan-eat').click(); await tick(500);
+  bq('food-macros-details')?.querySelector('button')?.click(); await tick(300);
   ck('food sheet: an "Eaten today" card with 666 kcal and the three macros, saying there are no targets yet',
      /Eaten today/.test(bq('eaten-card')?.textContent || '') && /666/.test(bq('eaten-kcal').textContent) && /37 g/.test(bq('eaten-card').textContent) && /No targets from your coach yet/.test(bq('eaten-no-targets').textContent) && !/Macro Targets/.test(bd.body.textContent), bq('eaten-card')?.textContent);
   ck('each food still shows kcal · P · C · F (the line was hidden with no calorie target), without the target dot',
@@ -3603,7 +3517,7 @@ async function macrosEatenTest() {
   Object.getOwnPropertyDescriptor(C.w.HTMLTextAreaElement.prototype, 'value').set.call(t, '100g oats');
   t.dispatchEvent(new C.w.Event('input', { bubbles: true })); await tick(60);
   t.dispatchEvent(new C.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600);
-  const row = () => cq('chat-edit-macros')?.closest('button');
+  const row = () => cq('chat-edit-macros')?.closest('.ai-food-review');
   ck('the preview row shows 374 kcal, P 13.2 and "Edit macros" (the screenshot that started this)', C.errors.length === 0 && /374 kcal/.test(row()?.textContent || '') && /P 13\.2/.test(row().textContent) && cq('chat-edit-macros').textContent === 'Edit macros', [C.errors.join('|'), row()?.textContent]);
   const onBefore = /line-through/.test(row().innerHTML);
   cq('chat-edit-macros').click(); await tick(300);
@@ -3619,7 +3533,7 @@ async function macrosEatenTest() {
   ck('the row now reads 386 kcal · P 24 · C 55 · F 7.8 and "Your label · edit"; sheet closed',
      /386 kcal/.test(row().textContent) && /P 24 · C 55 · F 7\.8/.test(row().textContent) && cq('chat-edit-macros').textContent === 'Your label · edit' && !cq('macro-editor'), row()?.textContent);
   ck('the food is still ticked to log', /line-through/.test(row().innerHTML) === onBefore && !/line-through/.test(row().innerHTML));
-  const applyBtn = [...cd.querySelectorAll('button')].find(b => /^Apply 1 item/.test(b.textContent.trim()));
+  const applyBtn = [...cd.querySelectorAll('button')].find(b => /^Save 1 item/.test(b.textContent.trim()));
   ck('Apply offers the one food', !!applyBtn);
   applyBtn?.click(); await tick(400);
   const daySave = C.w.__posts.filter(p => /^\/logs\/\d{4}-\d{2}-\d{2}$/.test(p.url)).pop();
@@ -3654,6 +3568,723 @@ async function macrosEatenTest() {
   } catch (e) { ck('section D ran to the end', false, e.message); }
 }
 
+
+// Fixes-2b (16 Oct 2026): the redesigned Today with production's features back,
+// Sachin's decisions (Plan tab, coach line open, both themes) and the UX review.
+async function fixes2bTest() {
+  console.log('\n[38] Fixes-2b — Today: one-line header, targets, weight change, program day, coach line, next habits, what\'s new');
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import DailyLog from './pages/DailyLog.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      import { useSettingsStore } from './store/settingsStore.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+      useSettingsStore.setState({ onboardingDone: true, ageMode: 'adult' });
+      createRoot(document.getElementById('root')).render(<MemoryRouter><DailyLog /></MemoryRouter>);`, stub('api-38-today.js', TODAY_API_STUB));
+    const A = run(code); await tick(1200);
+    const d = A.w.document, q = id => d.querySelector(`[data-testid="${id}"]`), txt = el => (el?.textContent || '').replace(/\s+/g, ' ');
+    ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
+    ck('no big "Your day." title — the greeting is one line', !/Your day\./.test(d.body.textContent) && /Asha/.test(txt(d.querySelector('.member-hello'))));
+    ck('the streak shows beside the greeting (it was hidden on Today)', /🔥 3/.test(txt(q('today-streak'))), txt(q('today-streak')));
+    ck('weight tile: 82.4 kg and the change vs yesterday (↓ 0.3)', /82\.4 kg/.test(txt(q('hero-weight'))) && /↓ 0\.3 vs yesterday/.test(txt(q('hero-weight'))), txt(q('hero-weight')));
+    ck('Move tile names the program day and its exercises', /Push · \w{3} · \d+ ex/.test(txt(q('plan-move'))), txt(q('plan-move')));
+    ck('protein, carbs and fat against the coach\'s targets, each with a bar', /37 \/ 120 g/.test(txt(q('plan-macros'))) && d.querySelectorAll('.member-macro-bar').length === 3, txt(q('plan-macros')));
+    ck('the ring says it opens the meals', /See meals/.test(txt(q('plan-eat'))));
+    ck('the coach line is open on Today with the unread message', /Great week/.test(txt(q('coach-line'))), txt(q('coach-line')).slice(0, 80));
+    ck('"Plan & tools" names the next habits instead of "0 of 16"', /^Next: /.test(txt(q('home-plan-details')?.querySelector('button small, button span:last-child') || q('home-plan-details')).replace(/^Plan & tools ?/, '')) || /Next: /.test(txt(q('home-plan-details'))), txt(q('home-plan-details')).slice(0, 80));
+    ck('a one-time "What\'s new" card for members who used the app before', !!q('whats-new'));
+    q('whats-new-ok')?.click(); await tick(200);
+    ck('…"Got it" hides it for good on this phone', !q('whats-new') && A.w.localStorage.getItem('fitlife-whats-new-2026-10') === '1');
+  } catch (e) { ck('section A ran to the end', false, e.message); }
+  // 17 Oct 2026 (found by Sachin): once the AI had been used, More → Meal ideas
+  // / Food / Nutrition and Plan → Log, Water, Sleep landed on Today with nothing
+  // open — Today closed the sheet on arrival because the AI's request counter
+  // was not 0. Arrive the way those links do, with the counter already used.
+  for (const sheet of ['mealidea', 'food', 'water']) {
+    try {
+      const code = await bundle(`
+        import { createRoot } from 'react-dom/client';
+        import { MemoryRouter } from 'react-router-dom';
+        import DailyLog from './pages/DailyLog.jsx';
+        import { useAuthStore } from './store/authStore.js';
+        import { useSettingsStore } from './store/settingsStore.js';
+        import { useAIChat } from './store/aiChatStore.js';
+        useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+        useSettingsStore.setState({ onboardingDone: true, ageMode: 'adult' });
+        useAIChat.setState({ focusRequest: 3, open: false, composerOpen: false }); window.__aiChat = useAIChat;
+        createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/?open=${sheet}']}><DailyLog /></MemoryRouter>);`, stub(`api-38-open-${sheet}.js`, TODAY_API_STUB));
+      const S = run(code); await tick(1500);
+      // A closing sheet stays in the page for its exit animation, marked aria-hidden; count only live ones.
+      const live = () => [...S.w.document.querySelectorAll('[role="dialog"][aria-modal="true"]')].filter(d => !d.closest('[aria-hidden="true"]'));
+      const dialogs = live();
+      ck(`/?open=${sheet} after the AI was used: the sheet is open on arrival`, dialogs.length === 1, dialogs.map(d => d.getAttribute('aria-label')));
+      if (sheet === 'food') {
+        // …and the rule still does its job: a NEW AI request closes the sheet,
+        // so the composer is never hidden behind it.
+        S.w.__aiChat.getState().openChat(); await tick(800);
+        const labels = live().map(d => d.getAttribute('aria-label'));
+        ck('a new AI request still closes the open sheet (only the AI panel is left)', !labels.includes('What did you eat?') && labels.some(l => /FitLife AI/.test(l || '')), labels);
+      }
+    } catch (e) { ck(`open=${sheet} section ran to the end`, false, e.message); }
+  }
+  // 18 Oct 2026: desktop dialogs. From 768 px the sheet is a centred dialog
+  // sized to its content; phones keep the bottom sheet; switching re-styles the
+  // SAME panel, so typed text survives a resize.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { useState } from 'react';
+      import { Sheet } from './components/primitives';
+      const listeners = new Set(); window.__wide = true;
+      window.matchMedia = (q) => ({ get matches() { return window.__wide; }, media: q, addEventListener: (_, f) => listeners.add(f), removeEventListener: (_, f) => listeners.delete(f) });
+      window.__resize = (wide) => { window.__wide = wide; listeners.forEach(f => f()); };
+      function App() { const [v, setV] = useState(''); return <Sheet open size="sm" onClose={() => {}} title="Water" footer={<button>Done</button>}>
+        <input data-testid="typed" value={v} onChange={e => setV(e.target.value)} /></Sheet>; }
+      createRoot(document.getElementById('root')).render(<App />);`);
+    const D = run(code); await tick(600);
+    const d = D.w.document, layout = () => d.querySelector('[data-sheet-layout]')?.dataset.sheetLayout, panel = () => d.querySelector('[role="dialog"]');
+    ck('desktop: the sheet opens as a centred dialog, 440 px wide for a small panel, no drag handle', layout() === 'dialog' && panel().style.maxWidth === '440px' && !d.querySelector('.cursor-grab'), [layout(), panel()?.style.maxWidth]);
+    const input = d.querySelector('[data-testid="typed"]');
+    Object.getOwnPropertyDescriptor(D.w.HTMLInputElement.prototype, 'value').set.call(input, '71.3');
+    input.dispatchEvent(new D.w.Event('input', { bubbles: true })); await tick(100);
+    D.w.__resize(false); await tick(400);
+    ck('narrowed to a phone: the same panel becomes a bottom sheet with its drag handle', layout() === 'sheet' && !!d.querySelector('.cursor-grab'), layout());
+    ck('…and what was typed is still there, in the very same input (nothing remounted)', d.querySelector('[data-testid="typed"]') === input && input.value === '71.3', input.value);
+    D.w.__resize(true); await tick(400);
+    ck('back to desktop: dialog again, text kept', layout() === 'dialog' && d.querySelector('[data-testid="typed"]').value === '71.3');
+  } catch (e) { ck('desktop dialog section ran to the end', false, e.message); }
+  // 17 Oct 2026: Meal ideas has one explicit screen per situation. Before, no
+  // targets showed a heading and "Done" only, and a failed request looked like
+  // "no food history". Each case mounts the real sheet in the browser.
+  {
+    const ideaApi = stub('api-38-idea.js', `
+      window.__calls = 0;
+      const foods = [{ name: 'Paneer (Low Fat)', per_100g: { calories: 204, protein: 18 }, last_g: 150, count: 5 },
+                     { name: 'Idli', per_100g: { calories: 130, protein: 3.5 }, last_g: 120, count: 9 }];
+      const get = async (url) => { window.__calls++;
+        if (!/recent-foods/.test(url)) return { data: [] };
+        const mode = window.__mode;
+        if (mode === 'pending') return new Promise(() => {});
+        if (mode === 'fail' && window.__calls === 1) throw new Error('Network Error');
+        return { data: mode === 'empty' ? [] : foods }; };
+      export default { get, post: get, put: get, patch: get, delete: get };`);
+    const mount = async (mode, targets) => {
+      const code = await bundle(`
+        import { createRoot } from 'react-dom/client';
+        import MealIdeaSheet from './components/sheets/MealIdeaSheet.jsx';
+        window.__mode = ${JSON.stringify(mode)};
+        const m = { log: { food: [] }, update: () => {}, kcalIn: 900, proteinIn: 40, terms: { kcal: 'kcal' }, ...${JSON.stringify(targets)} };
+        createRoot(document.getElementById('root')).render(<MealIdeaSheet open m={m} onClose={() => {}} />);`, ideaApi);
+      const W = run(code); await tick(900);
+      const body = () => W.w.document.querySelector('[data-testid="meal-idea-body"]');
+      const all = () => (W.w.document.querySelector('[role="dialog"]')?.textContent || '');
+      return { W, body, all };
+    };
+    const both = { kcalTarget: 1800, proteinTarget: 120 };
+    try {
+      const n = await mount('ok', {});
+      ck('Meal ideas, no targets: says targets aren’t set and that meals can still be logged (no fetch, no invented gap)',
+        n.body()?.dataset.state === 'no-targets' && /targets aren’t set yet/.test(n.all()) && /still log meals/.test(n.all()) && n.W.w.__calls === 0, n.all().slice(0, 140));
+      const l = await mount('pending', both);
+      ck('Meal ideas, loading: a loading state, not an empty one', l.body()?.dataset.state === 'loading', l.body()?.dataset.state);
+      const f = await mount('fail', both);
+      ck('Meal ideas, request failed: says so with "Try again" — not "no history"', f.body()?.dataset.state === 'error' && /Couldn’t load your recent foods/.test(f.all()) && !/log a few meals/i.test(f.all()), f.all().slice(0, 140));
+      f.W.w.document.querySelector('[data-testid="idea-retry"]').click(); await tick(900);
+      ck('…"Try again" loads the foods and shows a suggestion', f.body()?.dataset.state === 'suggestion' && f.W.w.document.querySelectorAll('[data-testid="idea-item"]').length > 0, f.body()?.dataset.state);
+      const e = await mount('empty', both);
+      ck('Meal ideas, no food history: asks to log a few meals', e.body()?.dataset.state === 'message' && e.body()?.dataset.reason === 'no-history' && /log a few meals/i.test(e.all()), e.all().slice(0, 140));
+      const head = e.W.w.document.querySelector('[role="dialog"]')?.getAttribute('aria-label') || '';
+      ck('…and the heading is not printed twice', head && e.all().split(head).length - 1 === 1, e.all().slice(0, 160));
+      const s = await mount('ok', both);
+      ck('Meal ideas, valid suggestion: foods from the member’s history with "Add to today"', s.body()?.dataset.state === 'suggestion' && /Paneer/.test(s.all()) && !!s.W.w.document.querySelector('[data-testid="idea-add"]'), s.all().slice(0, 140));
+      for (const [label, t] of [['calories and protein', both], ['protein only', { proteinTarget: 120 }], ['calories only', { kcalTarget: 1800 }], ['neither', {}]]) {
+        for (const mode of ['ok', 'empty']) {
+          const x = await mount(mode, t);
+          ck(`Meal ideas, ${label}, ${mode === 'ok' ? 'with' : 'no'} history: never shows null / undefined / NaN`, !/null|undefined|NaN/.test(x.all()) && x.all().trim().length > 20, x.all().slice(0, 120));
+        }
+      }
+    } catch (e) { ck('meal idea states section ran to the end', false, e.message); }
+  }
+  // Raw or cooked: the food sheet no longer tells everyone to weigh before cooking.
+  try {
+    const sheet = fs.readFileSync(path.join(CLIENT_SRC, 'components/sheets/FoodSheet.jsx'), 'utf8');
+    ck('the food sheet no longer says "Enter weight before cooking" to everyone', !/Enter weight before cooking/.test(sheet));
+    const brief = fs.readFileSync(path.join(CLIENT_SRC, 'components/coach/WeeklyBrief.jsx'), 'utf8');
+    ck('the coach week brief wraps long unbroken text (it pushed the member page wider than a phone)', /data-testid="brief-text"/.test(brief) && /brief-text|break-words/.test(brief) && /overflowWrap: 'anywhere'/.test(brief));
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import WeighingHint from './components/food/WeighingHint.jsx';
+      createRoot(document.getElementById('root')).render(<div>
+        <div id="c"><WeighingHint name="Rice (Cooked)" /></div><div id="r"><WeighingHint name="Oats (Raw)" /></div>
+        <div id="u"><WeighingHint name="Paneer" /></div><div id="n"><WeighingHint name="" /></div>
+        <div id="m"><WeighingHint food={{ name: 'Poha', preparation: 'cooked' }} /></div>
+        <div id="x"><WeighingHint food={{ name: 'Oats (Raw)', preparation: 'cooked' }} /></div></div>);`);
+    const H = run(code); await tick(300);
+    const t = id => H.w.document.querySelector(`#${id}`).textContent;
+    ck('weighing hint: cooked food → weigh it cooked; raw → weigh before cooking; unknown → check raw or cooked; no food → nothing',
+      /weigh it cooked/.test(t('c')) && /weigh it before cooking/.test(t('r')) && /Check whether these numbers are for raw or cooked/.test(t('u')) && t('n') === '', [t('c'), t('r'), t('u'), t('n')]);
+    ck('weighing hint: the record’s marker is used first (Poha marked cooked → weigh it cooked)', /weigh it cooked/.test(t('m')) && H.w.document.querySelector('#m [data-from]').dataset.from === 'record');
+    ck('weighing hint: record and name disagree → it says so and asks the member to check', /record says cooked but its name says raw/.test(t('x')) && /check which the numbers are for/.test(t('x')), t('x'));
+    // Fixes-2h: a stored answer (record or label) is said plainly; one read from the name says it is from the name.
+    ck('weighing hint: a stored answer is said plainly; one read only from the name says so ("probably")',
+      /^These numbers are for the cooked food/.test(t('m')) && /^The name says cooked, so these numbers are probably for the cooked food/.test(t('c'))
+      && /^The name says raw/.test(t('r')) && H.w.document.querySelector('#c [data-from]').dataset.from === 'name', [t('m'), t('c'), t('r')]);
+  } catch (e) { ck('weighing hint section ran to the end', false, e.message); }
+
+  // Fixes-2i: unknown nutrient values are "not known", never zero — panel, tile and coach agree.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { NutritionSummary } from './components/today/DayWidgets.jsx';
+      import { countMicrosMet } from './lib/day/index.js';
+      const zero = { calories: 150, protein: 5, total_carbs: 20, fat: 5, fiber: 0, vit_b12: 0, iron: 0, sodium: 0, calcium: 0 };
+      const foods = [
+        { name: 'Dal', grams: 100, per_100g: { calories: 110, vit_b12: 0, vit_c: 2, iron: 2, calcium: 20, sodium: 300, fiber: 4 } },
+        { name: 'Curry (AI)', grams: 100, per_100g: zero },
+      ];
+      window.__count = countMicrosMet({ foodItems: foods });
+      createRoot(document.getElementById('root')).render(<NutritionSummary foodItems={foods} supplements={{}} activities={{}} activeActivities={[]} />);`);
+    const N = run(code); await tick(400);
+    const nd = N.w.document;
+    const row = k => nd.querySelector(`[data-testid="micro-row"][data-key="${k}"]`);
+    const tab = re => [...nd.querySelectorAll('button')].find(b => re.test(b.textContent));
+    ck('panel: the note says some foods do not list every nutrient (never shown as zero)', /never as zero/.test(nd.querySelector('[data-testid="micro-unknown-note"]')?.textContent || ''));
+    ck('panel: B12 (measured 0 in the dal, unknown in the curry) reads "—" and "Not known", not 0 and red',
+       row('vit_b12')?.dataset.status === 'unknown' && /—/.test(row('vit_b12').textContent) && /Not known/.test(row('vit_b12').textContent) && !/text-red/.test(row('vit_b12').innerHTML), row('vit_b12')?.textContent);
+    tab(/Minerals/)?.click(); await tick(120);
+    ck('panel: iron reads "≥ 2" and "At least" (a minimum), not "2 / 18 · 11%" in red', row('iron')?.dataset.status === 'unknown' && /≥ 2/.test(row('iron').textContent) && /At least/.test(row('iron').textContent), row('iron')?.textContent);
+    ck('panel: sodium is not shown as safely under its limit ("At least", no green)', row('sodium')?.dataset.status === 'unknown' && /At least/.test(row('sodium').textContent) && !/bg-gold-deep/.test(row('sodium').innerHTML), row('sodium')?.textContent);
+    const badge = nd.querySelector('[data-testid="micro-summary"]')?.textContent || '';
+    ck('panel header and the Today tile count agree (same met, same not known)', badge === `${N.w.__count.met}/${N.w.__count.total} · ${N.w.__count.unknown} not known`, [badge, N.w.__count]);
+    const badgeEl = nd.querySelector('[data-testid="micro-summary"]');
+    ck('with nutrients not known, the count is neutral, not red ("not known" is not "failing")', !/red-400|text-warn/.test(badgeEl?.className || '') && /text-mid/.test(badgeEl?.className || ''), badgeEl?.className);
+  } catch (e) { ck('unknown-nutrients section ran to the end', false, e.message); }
+
+  // Fixes-2k: reference, recorded, recipe and AI values are told apart on the real panel.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { NutritionSummary } from './components/today/DayWidgets.jsx';
+      import { countMicrosMet } from './lib/day/index.js';
+      const foods = [
+        { name: 'Spinach', grams: 100, source: 'db', per_100g: { calories: 24, iron: 2.95, vit_c: 30.28, calcium: 82.29, _status: { iron: 'reference', vit_c: 'reference', calcium: 'reference' } } },
+        { name: 'Palak curry (AI)', grams: 200, source: 'ai', per_100g: { calories: 90, iron: 3, vit_c: 10, zinc: 0 } },
+        { name: 'Dal tadka', grams: 150, source: 'db', per_100g: { calories: 110, calcium: 20, _status: { calcium: 'recipe' } } },
+      ];
+      window.__count = countMicrosMet({ foodItems: foods, rdaOverrides: { iron: '8', vit_c: '25' } });
+      createRoot(document.getElementById('root')).render(<NutritionSummary foodItems={foods} supplements={{}} activities={{}} activeActivities={[]} rdaOverrides={{ iron: '8', vit_c: '25' }} />);`);
+    const N = run(code); await tick(400);
+    const nd = N.w.document;
+    const row = k => nd.querySelector(`[data-testid="micro-row"][data-key="${k}"]`);
+    const tab = re => [...nd.querySelectorAll('button')].find(b => re.test(b.textContent));
+    ck('2k panel: vitamin C met on reference values alone (30.28 of 25) shows "~" because an AI estimate is in the total, and is "met"',
+       row('vit_c')?.dataset.status === 'met' && row('vit_c').dataset.approx === '1' && /~50/.test(row('vit_c').textContent), row('vit_c')?.textContent);
+    tab(/Minerals/)?.click(); await tick(120);
+    ck('2k panel: iron reaches 8.95 of 8 only with the AI curry → "~9" and "Estimate", never "met", never red',
+       row('iron')?.dataset.status === 'estimate' && /~9/.test(row('iron').textContent) && /Estimate/.test(row('iron').textContent) && !/text-red|bg-gold-deep/.test(row('iron').innerHTML), row('iron')?.textContent);
+    ck('2k panel: zinc (an old AI 0) is "Not known", not 0', row('zinc')?.dataset.status === 'unknown' && /Not known/.test(row('zinc').textContent), row('zinc')?.textContent);
+    ck('2k panel: the estimate note explains "~" and why an estimate is not "met"', /reached only with estimates shows as “Estimate”, not as met/.test(nd.querySelector('[data-testid="micro-estimate-note"]')?.textContent || ''));
+    const badge = nd.querySelector('[data-testid="micro-summary"]')?.textContent || '';
+    ck('2k panel: the header says how many are estimated, matching the Today count',
+       badge === `${N.w.__count.met}/${N.w.__count.total} · ${N.w.__count.estimate} estimated · ${N.w.__count.unknown} not known` && N.w.__count.estimate >= 1, [badge, N.w.__count]);
+  } catch (e) { ck('2k provenance panel section ran to the end', false, e.message); }
+
+  // Fixes-2l (19 Oct review): on the real panel, a guaranteed minimum shows only
+  // confirmed amounts; an estimated subtotal is shown apart; estimated zeros
+  // stay estimates; sunlight does not fill vitamin D.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { NutritionSummary } from './components/today/DayWidgets.jsx';
+      const foods = [
+        { name: 'Dal', grams: 100, source: 'db', per_100g: { calories: 110, zinc: 2, _status: { zinc: 'recorded' } } },
+        { name: 'Palak (AI)', grams: 100, source: 'ai', per_100g: { calories: 90, iron: 10, zinc: 10 } },
+        { name: 'Rasam (recipe)', grams: 100, source: 'db', per_100g: { calories: 40, sodium: 0, calcium: 0, _status: { sodium: 'recipe', calcium: 'recipe' } } },
+        { name: 'Sabzi (no data)', grams: 100, source: 'db', per_100g: { calories: 60 } },
+      ];
+      createRoot(document.getElementById('root')).render(<NutritionSummary foodItems={foods} supplements={{}} activities={{ sun: true }} activeActivities={[{ id: 'sun', vitD_iu: 1000 }]} rdaOverrides={{ iron: '18', zinc: '20' }} />);`);
+    const N = run(code); await tick(400);
+    const nd = N.w.document;
+    const row = k => nd.querySelector(`[data-testid="micro-row"][data-key="${k}"]`);
+    const tab = re => [...nd.querySelectorAll('button')].find(b => re.test(b.textContent));
+    ck('2l panel: ticked sunlight does not fill vitamin D — "Not known", never met (2k: 1000 IU confirmed, met)',
+       row('vit_d')?.dataset.status === 'unknown' && /Not known/.test(row('vit_d').textContent) && !/1000/.test(row('vit_d').textContent), row('vit_d')?.textContent);
+    ck('2l panel: the footnote no longer says sunlight is included', /Sunlight stays on your activity list/.test(nd.body.textContent) && !/food \+ supplements \+ sunlight/.test(nd.body.textContent));
+    tab(/Minerals/)?.click(); await tick(120);
+    const iron = row('iron')?.textContent || '';
+    ck('2l panel: AI iron 10 with unknown iron elsewhere reads "~10 · Estimate" — no "≥", no "At least" (2k: "≥ ~10 · At least")',
+       row('iron')?.dataset.status === 'unknown' && /~10/.test(iron) && /Estimate/.test(iron) && !/≥|At least/.test(iron), iron);
+    const zinc = row('zinc')?.textContent || '';
+    ck('2l panel: zinc reads "≥ 2 +~10 · At least" — the minimum is the confirmed 2; the AI 10 is shown apart',
+       /≥ 2 \+~10/.test(zinc) && /At least/.test(zinc) && !/≥ ~?12/.test(zinc), zinc);
+    ck('2l panel: on a partly-unknown row the bar shows only the confirmed part (zinc 2 of 20 → 10%, not 60%)',
+       Math.abs(parseFloat(row('zinc')?.querySelector('[style]')?.style.width || '0') - 10) < 0.5, row('zinc')?.querySelector('[style]')?.style.width);
+    ck('2l panel: sodium 0 from a recipe, with unknown sodium elsewhere, is not "safely under the limit" (no green, ~0 · Estimate)',
+       row('sodium')?.dataset.approx === '1' && !/bg-gold-deep|text-gold-deep/.test(row('sodium').innerHTML) && /Estimate/.test(row('sodium').textContent), row('sodium')?.textContent);
+    ck('2l panel: the note says estimates never count toward a guaranteed minimum', /never count toward a guaranteed minimum/.test(nd.querySelector('[data-testid="micro-estimate-note"]')?.textContent || ''));
+  } catch (e) { ck('2l lower-bound panel section ran to the end', false, e.message); }
+
+  // Fixes-2k: the admin food form keeps "not recorded" blank and says each value's status.
+  try {
+    const src = fs.readFileSync(path.join(CLIENT_SRC, 'pages/AdminFoods.jsx'), 'utf8');
+    ck('2k admin form: blank boxes start empty (null), not 0; a cleared box saves null',
+       /vit_c:null/.test(src) && /iron:null/.test(src) && /v === '' \? \(CORE_N\.includes\(k\) \? 0 : null\)/.test(src) && /value=\{form\.per_100g\[k\] == null \? '' : form\.per_100g\[k\]\}/.test(src));
+    ck('2k admin form: each nutrient shows its status (Reference value / Recorded / Recipe estimate / AI estimate / Not known)', /data-testid="nutrient-status"/.test(src) && /STATUS_LABEL\[nutrientStatus\(/.test(src));
+    ck('2k admin form: editing from the list loads the full food first (list rows carry only calories; saving them wiped every nutrient)',
+       /onClick=\{\(\) => startEdit\(food\)\}/.test(src) && /api\.get\(`\/foods\/\$\{food\.id\}`\)/.test(src) && !/onClick=\{\(\) => \{ setEditing\(food\); setMode\('edit'\); \}\}/.test(src));
+    const chat = fs.readFileSync(path.join(CLIENT_SRC, 'components/CoachAIChat.jsx'), 'utf8');
+    ck('2k coach chat food card: the status map is never shown as a nutrient box', /k !== '_status'/.test(chat));
+  } catch (e) { ck('2k admin form checks ran', false, e.message); }
+  try {
+    const dd = fs.readFileSync(path.join(CLIENT_SRC, 'components/coach/DayDetail.jsx'), 'utf8');
+    const strip = fs.readFileSync(path.join(CLIENT_SRC, 'components/today/DayStrip.jsx'), 'utf8');
+    ck('the coach\u2019s Key Nutrients use the member\u2019s rule (microStatus + MicroRow), not the old zero-filling copy',
+       /microStatus\(/.test(dd) && /<MicroRow /.test(dd) && !/calcMicrosFromItems\(/.test(dd));
+    ck('the Today tile says "not known for these foods" when nothing is known, and "· N not known" otherwise',
+       /not known for these foods/.test(strip) && /not known` : ''/.test(strip));
+    // Every place that counts micronutrients passes the same inputs, so the
+    // counts agree: the activities and the coach's targets (rdaOverrides).
+    // (Since Fixes-2l sunlight no longer adds to vitamin D inside microStatus,
+    // but every caller still hands over the same inputs so no view can drift.)
+    // The coach's view once left out activities, and the Food sheet badge the targets.
+    const callers = [['components/coach/DayDetail.jsx', 'microStatus'], ['components/today/DayWidgets.jsx', 'microStatus'], ['hooks/useTodayModel.js', 'countMicrosMet']];
+    const missing = callers.flatMap(([f, fn]) => {
+      const src = fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+      return [...src.matchAll(new RegExp(`${fn}\\(\\{([\\s\\S]*?)\\}\\)`, 'g'))].map(m => m[1])
+        .filter(a => !['activities', 'activeActivities', 'rdaOverrides'].every(k => new RegExp(`\\b${k}\\b`).test(a)))
+        .map(a => `${f}: ${a.replace(/\s+/g, ' ').slice(0, 80)}`);
+    });
+    ck('every micronutrient count passes sunlight, the active activities and the coach’s targets', missing.length === 0, missing);
+    const foodSheet = fs.readFileSync(path.join(CLIENT_SRC, 'components/sheets/FoodSheet.jsx'), 'utf8');
+    ck('the Food sheet hands the coach’s targets to its nutrient badge', /<MacroProgress[\s\S]*?rdaOverrides=\{protocol\?\.rda_overrides/.test(foodSheet));
+  } catch (e) { ck('coach nutrients check ran', false, e.message); }
+
+  // Fixes-2h: raw/cooked from the food search reaches the logged item.
+  try {
+    const api = stub('api-2h-foodlog.js', `
+      const POHA = { id: 91, name: 'Poha (Plain)', per_100g: { calories: 130, protein: 2.5, total_carbs: 27, net_carbs: 26, fat: 1 }, preparation: 'cooked' };
+      const get = async (url) => /\\/foods\\/search/.test(url) ? { data: [POHA] } : { data: [] };
+      export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { useState } from 'react';
+      import FoodLog from './components/FoodLog.jsx';
+      window.__items = [];
+      function Host() { const [items, set] = useState([]); return <FoodLog items={items} onChange={v => { window.__items = v; set(v); }} />; }
+      createRoot(document.getElementById('root')).render(<Host />);`, api);
+    const F = run(code); await tick(400);
+    const fd = F.w.document;
+    const setVal = (el, v) => { Object.getOwnPropertyDescriptor(F.w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new F.w.Event('input', { bubbles: true })); };
+    const findBtn = (re) => [...fd.querySelectorAll('button')].find(b => re.test(b.textContent.trim()));
+    findBtn(/Add food item/)?.click(); await tick(200);
+    setVal(fd.querySelector('input[placeholder="Food name…"]'), 'poha'); await tick(700);
+    findBtn(/^Poha \(Plain\)/)?.click(); await tick(200);
+    const hint = fd.querySelector('[data-testid="weighing-hint"]');
+    ck('food search: a food stored as cooked shows the stored hint (not a guess from the name)', hint?.dataset.basis === 'cooked' && hint?.dataset.from === 'record', hint?.outerHTML?.slice(0, 200));
+    setVal(fd.querySelector('input[placeholder="Weight in grams"]'), '150'); await tick(100);
+    findBtn(/^Add$/)?.click(); await tick(200);
+    const added = F.w.__items[0];
+    ck('…and Add logs it with preparation "cooked"', added?.name === 'Poha (Plain)' && added?.grams === 150 && added?.preparation === 'cooked', added);
+    findBtn(/Add food item/)?.click(); await tick(200);
+    setVal(fd.querySelector('input[placeholder="Food name…"]'), 'Homemade thing'); await tick(100);
+    setVal(fd.querySelector('input[placeholder="Weight in grams"]'), '80'); await tick(50);
+    findBtn(/^Add$/)?.click(); await tick(200);
+    ck('a food typed without choosing a search result is logged as not specified (null), never guessed', F.w.__items[1]?.name === 'Homemade thing' && F.w.__items[1]?.preparation === null, F.w.__items[1]);
+  } catch (e) { ck('food search raw/cooked section ran to the end', false, e.message); }
+  // MAC-003 (17 Oct 2026): a macro over the coach's target turns amber on
+  // Today, as it did on production's Eat row; the others stay as they are.
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import DailyEssentials from './components/member/DailyEssentials.jsx';
+      const m = { log: { food: [{ name: 'Ghee rice' }], water: 0 }, kcalIn: 900, kcalTarget: 1800, protocol: null, sleepText: null, sleepMins: null,
+        coachPlan: null, coachRows: null, workoutSummary: {}, isToday: true, ageMode: 'adult', weightDelta: null,
+        eaten: { pro: 37, carb: 40, fat: 75 }, macroTargets: { pro: 120, carb: 150, fat: 60 } };
+      createRoot(document.getElementById('root')).render(<DailyEssentials m={m} onOpen={() => {}} />);`);
+    const O = run(code); await tick(300);
+    const cells = [...O.w.document.querySelectorAll('[data-testid="plan-macros"] > span')];
+    ck('a macro over its target is marked (fat 75 / 60 g) and the others are not', cells.length === 3 && cells[2].classList.contains('is-over') && !cells[0].classList.contains('is-over') && !cells[1].classList.contains('is-over'), cells.map(c => c.className));
+    const css = fs.readFileSync(path.join(CLIENT_SRC, 'components/member/member.css'), 'utf8');
+    ck('…and the marked number and bar use the warning colour', /\.is-over \.member-macro-value\{color:rgb\(var\(--fit-warn\)\)\}/.test(css) && /\.is-over \.member-macro-bar>span\{background:rgb\(var\(--fit-warn\)\)\}/.test(css));
+  } catch (e) { ck('over-target section ran to the end', false, e.message); }
+  try {
+    const src = f => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+    ck('quick re-add says "238 kcal", not "238k"', !/\{kcal\}k</.test(src('components/FoodLog.jsx')) && /\{kcal\} kcal/.test(src('components/FoodLog.jsx')));
+    ck('Connected Devices lists working trackers first and the rest under "Coming soon"', /comingSoonTrackers/.test(src('pages/DeviceConnect.jsx')) && /trackers-coming-soon/.test(src('pages/DeviceConnect.jsx')));
+    ck('Settings offers Match phone / Light / Dark', /\['system', 'Match phone'\]/.test(src('pages/Settings.jsx')));
+    ck('the profile never says "Coach Coach"', /\^coach\\b\/i\.test\(p\.monitor_name\)/.test(src('pages/Profile.jsx')));
+    ck('Today\'s Read uses the target, one number ("720 left", not "941 under")', /kcal so far — \$\{left/.test(src('utils/dailyRead.js')) && !/You're \$\{Math\.abs/.test(src('utils/dailyRead.js')));
+  } catch (e) { ck('section B ran to the end', false, e.message); }
+}
+
+// Restored 16 Oct 2026: deleted on 12–14 Oct together with the fixes it guards.
+async function knownFixesTest() {
+  console.log('\n[37] known fixes — past-day saves, chat undo/day, voice routes, workout, labs, plan tab, coach buttons, reminders, devices');
+  const srcOf = (f) => fs.readFileSync(path.join(CLIENT_SRC, f), 'utf8');
+  const typeIn = (W, el, v, proto = 'HTMLInputElement') => {
+    Object.getOwnPropertyDescriptor(W.w[proto].prototype, 'value').set.call(el, v);
+    el.dispatchEvent(new W.w.Event('input', { bubbles: true }));
+  };
+  const btn = (doc, re) => [...doc.querySelectorAll('button')].find(b => re.test(b.textContent.trim()));
+
+  // ── A. Today: a past day saves; the chat says which day; spoken "open …" works
+  try {
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter, useNavigate } from 'react-router-dom';
+      import DailyLog from './pages/DailyLog.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      import { useLogStore } from './store/logStore.js';
+      import { useAIChat } from './components/AIChatLog.jsx';
+      import { matchCommand } from './utils/voiceCommands.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+      window.__logStore = useLogStore; window.__aiChat = useAIChat; window.__match = matchCommand;
+      function Nav() { window.__nav = useNavigate(); return null; }
+      createRoot(document.getElementById('root')).render(<MemoryRouter><Nav /><DailyLog /></MemoryRouter>);`, stub('api-37-today.js', TODAY_API_STUB));
+    const A = run(code); await tick(900);
+    const d = A.w.document; const q = (id) => d.querySelector(`[data-testid="${id}"]`);
+    const T = A.w.__todayStr, Y = new Date(new Date(T + 'T12:00:00').getTime() - 86400000).toISOString().slice(0, 10);
+    ck('Today mounts', A.errors.length === 0, A.errors.join('|'));
+
+    // VOI-013: spoken navigation goes to pages that exist, and Today opens the sheet even when already on screen
+    ck('"open workout" and "open food" go to /?open=workout and /?open=food (there is no /workout or /food page)',
+       A.w.__match('open workout').route === '/?open=workout' && A.w.__match('open food').route === '/?open=food' && A.w.__match('show progress').route === '/progress');
+    A.w.__nav('/?open=food'); await tick(500);
+    const dlg = () => d.querySelector('[role=dialog]');
+    ck('navigating to /?open=food while Today is on screen opens the food sheet (it was read only once, on first load)', /What did you eat\?/.test(dlg()?.textContent || ''), dlg()?.textContent.slice(0, 60));
+    btn(dlg(), /^Done$/).click(); await tick(500);
+    A.w.__nav('/?open=workout'); await tick(500);
+    ck('…and /?open=workout opens the workout sheet', /Workout/.test(dlg()?.textContent || ''));
+    A.w.document.dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Escape' })); await tick(500);
+
+    // TOD-018 / MAC-025: an edit on yesterday's page is saved to yesterday
+    d.querySelector('[aria-label="Previous day"]').click(); await tick(700);
+    ck('(on yesterday\'s page)', A.w.__logStore.getState().date === Y, A.w.__logStore.getState().date);
+    q('chip-water').click(); await tick(300);
+    d.querySelector('[data-testid="water-add-250"]').click(); await tick(100);
+    btn(dlg(), /^Done$/).click();
+    await tick(4600);
+    const ySave = A.w.__posts.filter(p => p.url === `/logs/${Y}`).pop();
+    ck('adding water on yesterday\'s page is saved to yesterday after the usual 4 seconds (it never was)', !!ySave && ySave.body.water_ml === 250, A.w.__posts.map(p => p.url));
+
+    // AIC-029: the Apply button names the day it writes to
+    A.w.__aiChat.getState().openChat(); await tick(400);
+    const t = d.querySelector('[data-testid="composer-input"]');
+    typeIn(A, t, 'drank 500ml water', 'HTMLTextAreaElement'); await tick(60);
+    t.dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(700);
+    // 16 Oct 2026: AI logging works on past days; the button is "Save … to <day>".
+    const apply = d.querySelector('[data-testid="ai-card-save"]');
+    ck('on yesterday\'s page the chat button says "Save 1 item to yesterday\'s log" (AI was blocked on past days, and before that said "today\'s log")', /^Save \d+ items? to yesterday's log$/.test(apply?.textContent.trim().replace(/\s+/g, ' ') || ''), apply?.textContent);
+    apply?.click(); await tick(4800);
+    const yAi = A.w.__posts.filter(p => p.url === `/logs/${Y}`).pop();
+    ck('…and saving writes to yesterday, not today', !!yAi && yAi.body.water_ml >= 750 && !A.w.__posts.some(p => p.url === `/logs/${T}` && p.body.water_ml >= 500), A.w.__posts.map(p => p.url + ':' + p.body?.water_ml));
+  } catch (e) { ck('section A ran to the end', false, e.message); }
+
+  // ── B. AIC-011: Undo belongs to the card that made the change
+  try {
+    const chatApi = stub('api-37-chat.js', `
+      window.__posts = [];
+      const get = async () => ({ data: {} });
+      const food = (name, kcal) => ({ name, grams: 100, meal: 'Breakfast', per_100g: { calories: kcal }, macros: { cal: kcal } });
+      const post = async (url, body) => { window.__posts.push({ url, body });
+        if (url === '/ai-chat/parse') return { data: { reply: 'Got it.', foods: [/idli/.test(body.message) ? food('Idli', 130) : food('Dosa', 170)], totals: {} } };
+        // The day save answers with the day as saved, as the server does.
+        if (/^\\/logs\\//.test(url)) return { data: { ...body, saved_at: new Date().toISOString() } };
+        return { data: {} }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const chat = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import AIChatLog from './components/AIChatLog.jsx';
+      import { useAIChat } from './store/aiChatStore.js';
+      import { useLogStore } from './store/logStore.js';
+      window.__log = useLogStore;
+      useLogStore.setState(st => ({ log: { ...(st.log || {}), food: [], activities: {}, acv: {}, supplements: {}, water: 0, sleep: {} } }));
+      createRoot(document.getElementById('root')).render(<AIChatLog mealPlans={[]} />);
+      useAIChat.getState().openChat();`, chatApi);
+    const B = run(chat); await tick(500);
+    const bd = B.w.document;
+    const say = async (text) => { const t = bd.querySelector('[data-testid="composer-input"]'); typeIn(B, t, text, 'HTMLTextAreaElement'); await tick(60);
+      t.dispatchEvent(new B.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await tick(600); };
+    const foods = () => (B.w.__log.getState().log.food || []).map(f => f.name);
+    // Since 14 Oct each card keeps its own save receipt and undoes only its own
+    // change (16 Oct: kept instead of hiding Undo on older cards). The rule
+    // that matters is the same: Undo never removes another card's food.
+    const save = () => [...bd.querySelectorAll('[data-testid="ai-card-save"]')].pop();
+    await say('2 idli'); save().click(); await tick(900);
+    await say('1 dosa'); save().click(); await tick(900);
+    ck('(both foods are logged)', foods().join() === 'Idli,Dosa', foods());
+    const undos = () => [...bd.querySelectorAll('[data-testid="ai-card-undo"]')];
+    undos().pop().click(); await tick(900);
+    ck('Undo on the latest card removes only its own food (Dosa); Idli stays', foods().join() === 'Idli', foods());
+    await say('1 dosa'); save().click(); await tick(900);
+    const first = undos()[0]; first?.click(); await tick(900);
+    ck('Undo on the OLDER card never removes the newer card\'s food (Dosa stays)', foods().includes('Dosa') && foods().filter(f => f === 'Dosa').length === 1, foods());
+  } catch (e) { ck('section B ran to the end', false, e.message); }
+
+  // ── C. WKT-011 / WKT-012: the workout sheet sends its notes and remembers program exercises
+  try {
+    const api = stub('api-37-workout.js', `
+      window.__posts = [];
+      const get = async (url) => {
+        if (/^\\/workouts$/.test(url)) return { data: { session: { duration_min: 20, notes: '20 min walk · felt strong' }, exercises: [], cardio: [] } };
+        if (/^\\/programs\\/active/.test(url)) return { data: { program: { id: 1, name: 'Foundation' }, days: [{ day_number: 1, day_label: 'Push', exercises: [{ exercise_id: 7, exercise_name: 'Bench press', target_sets: 3, target_reps_min: 8, target_reps_max: 12 }] }] } };
+        return { data: [] }; };
+      export default { get, post: async (u, b) => { window.__posts.push({ u, b }); return { data: {} }; }, put: async () => ({ data: {} }), patch: async () => ({ data: {} }), delete: async () => ({ data: {} }) };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import WorkoutLog from './components/WorkoutLog.jsx';
+      import { today } from './constants.js';
+      createRoot(document.getElementById('root')).render(<WorkoutLog date={today()} />);`, api);
+    const C = run(code); await tick(900);
+    btn(C.w.document, /Push$/).click(); await tick(4600);
+    const save = C.w.__posts.filter(p => p.u === '/workouts').pop();
+    // Since 14 Oct the sheet never sends notes and the server keeps them when
+    // none are sent (test-known-fixes); a blank can therefore never erase them.
+    ck('after pulling in a program day, the save cannot erase the session notes (no blank notes sent)', save && !(save.b && Object.hasOwn(save.b, 'notes') && !save.b.notes), save?.b);
+    ck('…and marks the program exercise, so the server keeps it listed until a set is done', save?.b?.exercises?.[0]?.exercise_id === 7 && save.b.exercises[0].fromProgram === true, save?.b?.exercises);
+  } catch (e) { ck('section C ran to the end', false, e.message); }
+
+  // ── D. LAB-005: the arrow follows the number, the colour says good or bad
+  try {
+    const api = stub('api-37-labs.js', `
+      const analysis = { comparisons: [
+        { test_name: 'Vitamin D', unit: 'ng/mL', from: 20, to: 35, direction: 'improved', interval_days: 60, from_date: '2026-07-01', to_date: '2026-09-01' },
+        { test_name: 'LDL', unit: 'mg/dL', from: 150, to: 120, direction: 'improved', interval_days: 60, from_date: '2026-07-01', to_date: '2026-09-01' },
+        { test_name: 'Fasting Glucose', unit: 'mg/dL', from: 95, to: 110, direction: 'worsened', interval_days: 60, from_date: '2026-07-01', to_date: '2026-09-01' },
+      ], out_of_range: [] };
+      const get = async (url) => /lab-analysis$/.test(url) ? { data: analysis } : { data: { labs: [] } };
+      export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import LabResults from './components/LabResults.jsx';
+      createRoot(document.getElementById('root')).render(<MemoryRouter><LabResults /></MemoryRouter>);`, api);
+    const D = run(code); await tick(700);
+    const m = [...D.w.document.querySelectorAll('[data-testid="lab-marker"]')].map(x => x.textContent);
+    ck('vitamin D rising 20 → 35 (good) reads "↑ from 20" (it read "↓")', m.some(x => /Vitamin D/.test(x) && /↑ from 20/.test(x)), m);
+    ck('LDL falling 150 → 120 (good) reads "↓ from 150"; glucose rising (bad) reads "↑ from 95"', m.some(x => /LDL/.test(x) && /↓ from 150/.test(x)) && m.some(x => /Glucose/.test(x) && /↑ from 95/.test(x)), m);
+    const tone = (name) => [...D.w.document.querySelectorAll('[data-testid="lab-marker"]')].find(x => x.textContent.includes(name)).lastElementChild.className;
+    ck('good moves are the accent, bad moves the warning colour, whichever way the number went', /gold-light/.test(tone('Vitamin D')) && /gold-light/.test(tone('LDL')) && /(^|\s)text-warn\b/.test(tone('Glucose')) && !/warn/.test(tone('LDL')));
+  } catch (e) { ck('section D ran to the end', false, e.message); }
+
+  // ── E. PRG-007: the link from Progress opens Plan on Nutrition
+  try {
+    const api = stub('api-37-plan.js', `const get = async () => ({ data: { profile: {}, program: null, meal_plan: null } }); export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import Plan from './pages/Plan.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__entry]}><Plan /></MemoryRouter>);`, api);
+    const sel = (W) => [...W.w.document.querySelectorAll('[role=tab]')].find(t => t.getAttribute('aria-selected') === 'true')?.textContent;
+    const E1 = run(code, (win) => { win.__entry = '/plan?tab=nutrition'; }); await tick(600);
+    const E2 = run(code, (win) => { win.__entry = '/plan'; }); await tick(600);
+    const E3 = run(code, (win) => { win.__entry = '/plan?tab=nonsense'; }); await tick(600);
+    ck('/plan?tab=nutrition opens on the Nutrition tab; /plan and an unknown tab open on Today', sel(E1) === 'Nutrition' && sel(E2) === 'Today' && sel(E3) === 'Today', [sel(E1), sel(E2), sel(E3)]);
+    ck('Progress\'s "Your diet plan, PDF and grocery list" links to /plan?tab=nutrition', /navigate\('\/plan\?tab=nutrition'\); \}\} data-testid="progress-to-plan"/.test(srcOf('pages/Progress.jsx')));
+  } catch (e) { ck('section E ran to the end', false, e.message); }
+
+  // ── E2. Plan → Eat names exactly the targets the coach set (18 Oct 2026: with
+  //        protein only, the heading still said "Targets not set yet").
+  try {
+    const api = stub('api-37-plan-targets.js', `const get = async () => ({ data: { profile: window.__profile, program: null, meal_plan: null } }); export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import Plan from './pages/Plan.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 215, name: 'Ravi Shetty', role: 'patient' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__entry || '/plan']}><Plan /></MemoryRouter>);`, api);
+    const CASES = [
+      ['neither',                    {},                                        'Targets not set yet',          /coach will set your targets/, 'Not set yet'],
+      ['calories only',              { macro_kcal: 1600 },                      '1,600 kcal',                   /Eat to your targets/,         '1,600 kcal'],
+      ['protein only (columns)',     { macro_pro: 100 },                        '100 g protein',                /Eat to your targets/,         'No calorie target'],
+      ['protein only ({ macros })',  { macros: { pro: 100 } },                  '100 g protein',                /Eat to your targets/,         'No calorie target'],
+      ['both',                       { macros: { kcal: 1600, pro: 100 } },     '1,600 kcal · 100 g protein',   /Eat to your targets/,         '1,600 kcal'],
+    ];
+    const titleOf = (doc, eyebrow) => {
+      const eb = [...doc.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim().toLowerCase() === eyebrow.toLowerCase());
+      let n = eb; while (n && !n.nextElementSibling) n = n.parentElement;
+      return n?.nextElementSibling?.textContent.trim() ?? null;
+    };
+    for (const [name, profile, title, msg, daily] of CASES) {
+      const T = run(code, (win) => { win.__profile = profile; win.__entry = '/plan'; }); await tick(600);
+      const d = T.w.document;
+      const eat = titleOf(d, 'Eat'); const empty = d.querySelector('[data-testid="plan-eat-empty"]')?.textContent || '';
+      const N = run(code, (win) => { win.__profile = profile; win.__entry = '/plan?tab=nutrition'; }); await tick(600);
+      const dt = titleOf(N.w.document, 'Daily targets');
+      ck(`Plan, ${name}: Eat says "${title}", the message agrees, Daily targets says "${daily}"`,
+         T.errors.length === 0 && eat === title && msg.test(empty) && (title === 'Targets not set yet') === /coach will set/.test(empty) && dt === daily,
+         { eat, empty, dt, errors: T.errors });
+    }
+  } catch (e) { ck('section E2 ran to the end', false, e.message); }
+
+  // ── E3. Fixes-2j: the Plan says which targets the coach set and which are
+  //        FitLife standards, and honours the coach's routine selection.
+  try {
+    const api = stub('api-38-plan-origin.js', `const get = async () => ({ data: { profile: window.__profile, program: null, meal_plan: null } }); export default { get, post: get, put: get, patch: get, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import Plan from './pages/Plan.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 216, name: 'Meera Rao', role: 'patient' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.__entry || '/plan']}><Plan /></MemoryRouter>);`, api);
+    const view = async (profile, entry = '/plan') => { const T = run(code, (win) => { win.__profile = profile; win.__entry = entry; }); await tick(600); return T; };
+    const txt = (T, id) => T.w.document.querySelector(`[data-testid="${id}"]`)?.textContent.replace(/\s+/g, ' ').trim() || null;
+    const protoLines = (T) => T.w.document.querySelectorAll('[data-testid="plan-protocol"] > *').length;
+
+    const std = await view({ water_target: 3000 }), stdR = await view({ water_target: 3000 }, '/plan?tab=recovery');
+    ck('nothing set: header "FitLife starting plan · your coach will personalise it", not "Set by your coach"',
+       txt(std, 'plan-source') === 'FitLife starting plan · your coach will personalise it' && !/Set by/.test(std.w.document.body.textContent), txt(std, 'plan-source'));
+    ck('nothing set: water and sleep are labelled FitLife standard',
+       /FitLife standard · your coach hasn.t set yours yet/.test(txt(std, 'plan-water') || '') && /FitLife standard/.test(txt(std, 'plan-sleep') || ''), [txt(std, 'plan-water'), txt(std, 'plan-sleep')]);
+    ck('nothing set: the routine says it is FitLife’s standard, every item listed',
+       /standard daily routine\. Your coach hasn.t chosen yours yet/.test(txt(stdR, 'plan-routine-standard') || '') && protoLines(stdR) >= 9, [txt(stdR, 'plan-routine-standard'), protoLines(stdR)]);
+
+    const set = { water_target: 3500, target_origin: { water: 'coach', sleep: 'coach', activities: 'coach', acv: 'coach', supplements: 'coach', macros: 'coach' },
+      sleep_bed: '23:00', sleep_wake: '06:30', protocol_activities: ['walk'], protocol_acv: [], protocol_supplements: ['b12'], macro_kcal: 1600 };
+    const coach = await view(set), coachR = await view(set, '/plan?tab=recovery');
+    ck('all set: header "Set by your coach", and no "FitLife standard" anywhere',
+       txt(coach, 'plan-source') === 'Set by your coach' && !/FitLife standard/.test(coach.w.document.body.textContent + coachR.w.document.body.textContent), txt(coach, 'plan-source'));
+    ck('all set: the routine shows only what the coach chose (walk + B12), no standard note (it listed every item before)',
+       protoLines(coachR) === 2 && !coachR.w.document.querySelector('[data-testid="plan-routine-standard"]'), protoLines(coachR));
+
+    const mixed = await view({ water_target: 3500, protocol_activities: ['walk'] }), mixedR = await view({ water_target: 3500, protocol_activities: ['walk'] }, '/plan?tab=recovery');
+    ck('mixed: "Set by your coach · some items are FitLife standards"; water is not labelled standard',
+       txt(mixed, 'plan-source') === 'Set by your coach · some items are FitLife standards' && !/FitLife standard/.test(txt(mixed, 'plan-water') || ''), [txt(mixed, 'plan-source'), txt(mixed, 'plan-water')]);
+    ck('mixed: the routine note names the groups still standard', /Your coach chose some of this\. Apple cider vinegar and Supplements: FitLife standard\./.test(txt(mixedR, 'plan-routine-standard') || ''), txt(mixedR, 'plan-routine-standard'));
+    ck('no screen errors in any case', [std, stdR, coach, coachR, mixed, mixedR].every(T => T.errors.length === 0), [std, coach, mixed].map(T => T.errors));
+  } catch (e) { ck('section E3 ran to the end', false, e.message); }
+
+  // ── E4. Fixes-2j: Today's water and sleep sheets, the checklist, the strip,
+  //        and the coach's water card.
+  try {
+    const api = stub('api-39-water-card.js', `const get = async () => ({ data: {} }); const patch = async (url, body) => { (window.__sent = window.__sent || []).push({ url, body }); return { data: { ...window.__profile, ...body, water_target: body.water_target ?? 3000, target_origin: { ...(window.__profile.target_origin || {}), water: body.water_target == null ? 'standard' : 'coach' } } }; }; export default { get, post: get, put: get, patch, delete: get };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import WaterSheet from './components/sheets/WaterSheet.jsx';
+      import SleepSheet from './components/sheets/SleepSheet.jsx';
+      import DayStrip from './components/today/DayStrip.jsx';
+      import WaterTargetCard from './components/coach/WaterTargetCard.jsx';
+      const p = window.__profile;
+      const m = { log: { water: 1500, sleep: { bedtime: '23:00', waketime: '05:00' } }, protocol: p, update: () => {}, terms: { sleep: 'Sleep', kcal: 'kcal' },
+        kcalIn: 0, kcalTarget: null, workoutKcal: 0, coachPlan: null, micro: { hasData: false, met: 0, total: 31, known: 0, unknown: 0 }, sleepText: '6h', sleepMins: 360, sheet: null };
+      createRoot(document.getElementById('root')).render(<div>
+        <WaterSheet open onClose={() => {}} m={m} />
+        <SleepSheet open onClose={() => {}} m={m} />
+        <DayStrip m={m} onOpen={() => {}} />
+        <WaterTargetCard memberId={7} profile={{ name: 'Meera Rao', ...p }} />
+      </div>);`, api);
+    const T1 = run(code, (win) => { win.__profile = { water_target: 3000 }; }); await tick(500);
+    const d1 = T1.w.document, q = (d, id) => d.querySelector(`[data-testid="${id}"]`);
+    ck('standard: the water sheet and the sleep sheet say FitLife standard', /FitLife standard\. Your coach hasn.t set your own water target yet/.test(q(d1, 'water-target-origin')?.textContent || '') && /FitLife standard times/.test(q(d1, 'sleep-target-origin')?.textContent || ''),
+       [q(d1, 'water-target-origin')?.textContent, q(d1, 'sleep-target-origin')?.textContent]);
+    ck('standard: the coach card says so, and offers "Keep 3.0 L as Meera’s target"', /FitLife standard/.test(q(d1, 'water-target-note')?.textContent || '') && /Keep 3\.0 L as Meera/.test(q(d1, 'water-target-keep')?.textContent || ''), q(d1, 'water-target-note')?.textContent);
+    ck('standard: the coach card says the daily routine is the standard set', /Daily routine: FitLife standard \(every item on\)/.test(q(d1, 'routine-origin')?.textContent || ''), q(d1, 'routine-origin')?.textContent);
+    q(d1, 'water-target-keep').click(); await tick(300);
+    ck('"Keep" saves 3000 ml for this member, and the card then says it is set', JSON.stringify(T1.w.__sent) === JSON.stringify([{ url: '/members/7/profile', body: { water_target: 3000 } }]) && /Set for Meera/.test(q(d1, 'water-target-note')?.textContent || ''),
+       [T1.w.__sent, q(d1, 'water-target-note')?.textContent]);
+    const T2 = run(code, (win) => { win.__profile = { water_target: 3500, sleep_bed: '23:00', sleep_wake: '05:00', target_origin: { water: 'coach', sleep: 'coach', activities: 'coach', acv: 'coach', supplements: 'coach', macros: 'none' } }; }); await tick(500);
+    const d2 = T2.w.document;
+    ck('coach-set: no standard notes on either sheet, no "Keep" on the coach card', !q(d2, 'water-target-origin') && !q(d2, 'sleep-target-origin') && !q(d2, 'water-target-keep'), null);
+    const bar = (d) => { const tile = q(d, 'chip-sleep'); const b = [...(tile?.querySelectorAll('[style]') || [])].find(e => /width/.test(e.getAttribute('style'))); return b?.getAttribute('style'); };
+    ck('the Today sleep bar fills against the member’s own 6 h target (6 h slept = full), not a fixed 8 h (75%)', /width:\s*100%/.test(bar(d2) || ''), bar(d2));
+    ck('with the standard 8.5 h target, 6 h slept is about 71%', /width:\s*70\.5|width:\s*70\.6/.test(bar(d1) || ''), bar(d1));
+    ck('no errors', T1.errors.length === 0 && T2.errors.length === 0, [T1.errors, T2.errors]);
+  } catch (e) { ck('section E4 ran to the end', false, e.message); }
+
+  // ── F. CMP-010 / CMP-011: the coach's Log Weight and program buttons open something
+  try {
+    const api = stub('api-37-coach.js', `
+      import { istDaysAgo } from '${CONSTANTS_JS}';
+      window.__calls = []; window.__posts = [];
+      const T = istDaysAgo(0);
+      const member = { profile: { id: 12, name: 'Daya Kumar', phone: '9000000012', meal_slots: ['Breakfast', 'Lunch', 'Dinner'], macros: { kcal: 1700, pro: 115 }, activities: [], acv: [], supplements: [], conditions: [] },
+        logs: [{ log_date: T, weight_kg: '81.2', food_items: [], water_ml: 0, activities: {}, acv: {}, supplements: {}, sleep: {}, compliance_pct: 0, notes: '' }], labs: [], notes: [] };
+      const get = async (url) => { window.__calls.push(url); if (/\\/members\\/12$/.test(url)) return { data: member }; if (/\\/logs\\/range/.test(url)) return { data: member.logs };
+        if (/\\/workouts/.test(url)) return { data: { exercises: [], cardio: [], session: null, sessions: [] } }; if (/programs\\/active/.test(url)) return { data: { program: null, days: [] } }; if (/templates/.test(url)) return { data: [] }; return { data: {} }; };
+      const post = async (url, body) => { window.__posts.push({ url, body }); return { data: { log: { log_date: body.date, weight_kg: body.weight_kg } } }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter, Routes, Route } from 'react-router-dom';
+      import Monitor from './pages/Monitor.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 300, name: 'Sachin', role: 'admin' }, isRestoring: false });
+      createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/coach/12']}><Routes><Route path="/coach/:memberId" element={<Monitor />} /></Routes></MemoryRouter>);`, api);
+    const F = run(code); await tick(900);
+    const fd = F.w.document;
+    btn(fd, /Log Weight$/).click(); await tick(200);
+    ck('"⚖️ Log Weight" opens the weight form for this member (it did nothing)', /Save Weight/.test(fd.body.textContent) && /Daya Kumar/.test(fd.body.textContent));
+    typeIn(F, fd.querySelector('input[placeholder="e.g. 84.5"]'), '81.2'); await tick(50);
+    btn(fd, /^Save Weight$/).click(); await tick(300);
+    const wp = F.w.__posts.find(p => p.url === '/members/12/weight');
+    ck('saving sends the weight for the member and date', wp && wp.body.weight_kg === 81.2 && /^\d{4}-\d{2}-\d{2}$/.test(wp.body.date), wp);
+    await tick(1200);
+    [...fd.querySelectorAll('[role=tab]')].find(t => t.textContent === 'Training').click(); await tick(400);
+    btn(fd, /^\+ Create$/).click(); await tick(400);
+    ck('Training → "+ Create" opens the program builder (it did nothing)', /Daya Kumar's Program/.test(fd.body.textContent), F.errors.join('|'));
+  } catch (e) { ck('section F ran to the end', false, e.message); }
+
+  // ── G. ADM-017: each reminder editor is titled for its own type
+  try {
+    const api = stub('api-37-rem.js', `const get = async (url) => ({ data: /members|patients/.test(url) ? [] : [] }); const post = async () => ({ data: {} }); export default { get, post, put: post, patch: post, delete: post };`);
+    const code = await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import AdminReminders from './components/AdminReminders.jsx';
+      createRoot(document.getElementById('root')).render(<AdminReminders />);`, api);
+    const G = run(code); await tick(600);
+    const gd = G.w.document;
+    const openFor = async (label) => {
+      const card = [...gd.querySelectorAll('div')].find(x => x.textContent.trim() === label && x.children.length === 0)?.parentElement;
+      card?.querySelector('button')?.click(); await tick(200);
+      const h = gd.querySelector('h3')?.textContent.trim();
+      btn(gd, /^Cancel$/)?.click(); await tick(100);
+      return h;
+    };
+    const wTitle = await openFor('⚖️ Weight'), aTitle = await openFor('🍎 ACV'), waterTitle = await openFor('💧 Water');
+    ck('Weight → "⚖️ Weight Reminders", ACV → "🍎 ACV Reminders", Water unchanged (Weight and ACV both said "🏃 Activity Reminders")',
+       wTitle === '⚖️ Weight Reminders' && aTitle === '🍎 ACV Reminders' && waterTitle === '💧 Water Reminders', [wTitle, aTitle, waterTitle, G.errors.join('|')]);
+  } catch (e) { ck('section G ran to the end', false, e.message); }
+
+  // ── H. UI-012: the session is renewed before leaving for a tracker's sign-in
+  try {
+    const mkApi = (ok) => stub(`api-37-dev-${ok}.js`, `
+      window.__posts = [];
+      const get = async (url) => /trackers\\/status/.test(url) ? { data: { connections: [], available: { fitbit: true, whoop: true, polar: true } } } : { data: {} };
+      const post = async (url, body) => { window.__posts.push(url);
+        if (url === '/auth/refresh') { if (${ok}) return { data: { accessToken: 'new' } }; throw Object.assign(new Error('401'), { response: { status: 401 } }); }
+        return { data: {} }; };
+      export default { get, post, put: post, patch: post, delete: post };`);
+    const mk = async (ok) => run(await bundle(`
+      import { createRoot } from 'react-dom/client';
+      import { MemoryRouter } from 'react-router-dom';
+      import DeviceConnect from './pages/DeviceConnect.jsx';
+      import { useAuthStore } from './store/authStore.js';
+      useAuthStore.setState({ user: { id: 214, name: 'Asha Rao', role: 'patient' }, accessToken: 'old', isRestoring: false });
+      window.__auth = useAuthStore;
+      createRoot(document.getElementById('root')).render(<MemoryRouter><DeviceConnect /></MemoryRouter>);`, mkApi(ok)));
+    const openCard = (W) => [...W.w.document.querySelectorAll('p')].find(p => p.textContent === 'Fitbit')?.closest('div[style*="cursor: pointer"]')?.click();
+    const H1 = await mk(true); await tick(600); openCard(H1); await tick(100);
+    H1.w.document.querySelector('[data-testid="tracker-connect-fitbit"]').click(); await tick(300);
+    ck('"Connect Fitbit" renews the sign-in first (the redirect is signed in by the cookie alone, which lapses after ~15 min)',
+       H1.w.__posts[0] === '/auth/refresh' && H1.w.__auth.getState().accessToken === 'new', [H1.w.__posts, H1.w.__auth.getState().accessToken]);
+    const H2 = await mk(false); await tick(600); openCard(H2); await tick(100);
+    H2.w.document.querySelector('[data-testid="tracker-connect-fitbit"]').click(); await tick(300);
+    ck('if the sign-in has run out, it says so in words instead of showing {"error":"Token expired"}', /Your sign-in has run out — please sign in again, then connect\./.test(H2.w.document.body.textContent));
+  } catch (e) { ck('section H ran to the end', false, e.message); }
+
+  // ── I. The rest, read from the source
+  ck('UI-014: the Connected Devices tile names what connects (Fitbit, WHOOP and Polar), not Garmin/Apple Watch', />Fitbit, WHOOP and Polar<\/p>/.test(srcOf('pages/Settings.jsx')) && !/HART, Garmin, Apple Watch/.test(srcOf('pages/Settings.jsx')));
+  ck('ADM-022: the admin NO LOG badge uses India\'s date, not UTC', /const today = istToday\(\);/.test(srcOf('pages/AdminDashboard.jsx')) && !/new Date\(\)\.toISOString\(\)\.split\('T'\)\[0\]/.test(srcOf('pages/AdminDashboard.jsx')));
+  ck('ADM-021: food ✏️/🗑 are hidden-until-hover only on devices with a mouse', /\[@media\(hover:hover\)\]:opacity-0 \[@media\(hover:hover\)\]:group-hover:opacity-100/.test(srcOf('pages/AdminFoods.jsx')) && !/"flex gap-1 opacity-0 group-hover/.test(srcOf('pages/AdminFoods.jsx')));
+  ck('SET-006: the server\'s setup answers seed a device only once — Settings choices are not reset on every launch', /if \(data\.onboarding_done && data\.age_mode && !useSettingsStore\.getState\(\)\.onboardingDone\)/.test(srcOf('App.jsx')));
+}
+
 async function overflowTest() {
   console.log('\n[9] horizontal overflow at phone widths (headless Chrome)');
 
@@ -3680,17 +4311,7 @@ async function overflowTest() {
   // a vacuous pass of exactly the kind this repo keeps producing.
   //
   // Reading from dist/ means the suite tests what a member actually downloads.
-  const distDir = path.join(ROOT, 'client', 'dist', 'assets');
-  const cssFile = fs.existsSync(distDir)
-    ? fs.readdirSync(distDir).find(f => f.endsWith('.css'))
-    : null;
-  if (!cssFile) {
-    throw new Error(
-      'No built stylesheet found at client/dist/assets/*.css.\n' +
-      '  Run the client build first:  cd client && npm run build\n' +
-      '  Without it this check renders an unstyled page and proves nothing.');
-  }
-  const css = fs.readFileSync(path.join(distDir, cssFile), 'utf8');
+  const css = readBuiltCss(path.join(ROOT, 'client', 'dist'));
 
   // Served over http rather than page.setContent(). setContent leaves the page
   // on an opaque origin, where localStorage and IndexedDB throw SecurityError —
@@ -3709,7 +4330,7 @@ async function overflowTest() {
   const origin = `http://127.0.0.1:${server.address().port}/`;
 
   const browser = await puppeteerCore.launch({
-    executablePath: await chromium.executablePath(),
+    executablePath: await browserExecutable(chromium),
     args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
     headless: true,
   });
@@ -3779,42 +4400,47 @@ async function overflowTest() {
 
 // ═══════════════════════════════════════════════════════════════════════════
 (async () => {
+  const selected = process.env.UI_TESTS?.split(",");
+  const runTest = async (name, fn) => { if (!selected || selected.includes(name)) { try { await fn(); } catch(e) { ck(name + ' completed', false, e.message); } finally { RUN_WINDOWS.splice(0).forEach(w=>w.close()); } } };
   try {
-    await bootTest();
-    await evalSamplesTest();
-    await foodsQueueTest();
-    await nudgeCardTest();
-    await primitivesTest();
-    await todayTest();
-    await todayVisualTest();
-    await progressTest();
-    await planTest();
-    await onboardingTest();
-    await profileTest();
-    await triageTest();
-    await memberBriefTest();
-    await memberPage9bTest();
-    await cachedReadTest();
-    await sprint11Test();
-    await sprint11bTest();
-    await sprint11cTest();
-    await circuitsCardTest();
-    await dietStudio13Test();
-    await memberPlanTest();
-    await platePhotoTest();
-    await coachDocAttachTest();
-    await foodLogGroupsTest();
-    await progressPhotosTest();
-    await planPdfTest();
-    await swapsTest();
-    await weeklyTest();
-    await voicePilotTest();
-    await reviewFixesTest();
-    await phase8cTest();
-    await honestStatesTest();
-    await macrosEatenTest();
-    await overflowTest();
-    await cspTest();
+    await runTest("bootTest", bootTest);
+    await runTest("evalSamplesTest", evalSamplesTest);
+    await runTest("foodsQueueTest", foodsQueueTest);
+    await runTest("nudgeCardTest", nudgeCardTest);
+    await runTest("primitivesTest", primitivesTest);
+    await runTest("todayTest", todayTest);
+    await runTest("todayVisualTest", todayVisualTest);
+    await runTest("progressTest", progressTest);
+    await runTest("planTest", planTest);
+    await runTest("onboardingTest", onboardingTest);
+    await runTest("profileTest", profileTest);
+    await runTest("triageTest", triageTest);
+    await runTest("memberBriefTest", memberBriefTest);
+    await runTest("memberPage9bTest", memberPage9bTest);
+    await runTest("cachedReadTest", cachedReadTest);
+    await runTest("sprint11Test", sprint11Test);
+    await runTest("sprint11bTest", sprint11bTest);
+    await runTest("sprint11cTest", sprint11cTest);
+    await runTest("circuitsCardTest", circuitsCardTest);
+    await runTest("dietStudio13Test", dietStudio13Test);
+    await runTest("memberPlanTest", memberPlanTest);
+    await runTest("platePhotoTest", platePhotoTest);
+    await runTest("coachDocAttachTest", coachDocAttachTest);
+    await runTest("foodLogGroupsTest", foodLogGroupsTest);
+    await runTest("progressPhotosTest", progressPhotosTest);
+    await runTest("planPdfTest", planPdfTest);
+    await runTest("swapsTest", swapsTest);
+    await runTest("weeklyTest", weeklyTest);
+    await runTest("voicePilotTest", voicePilotTest);
+    await runTest("voiceFallbackTestPanelTest", voiceFallbackTestPanelTest);
+    await runTest("reviewFixesTest", reviewFixesTest);
+    await runTest("phase8cTest", phase8cTest);
+    await runTest("honestStatesTest", honestStatesTest);
+    await runTest("macrosEatenTest", macrosEatenTest);
+    await runTest("knownFixesTest", knownFixesTest);
+    await runTest("fixes2bTest", fixes2bTest);
+    await runTest("overflowTest", overflowTest);
+    await runTest("cspTest", cspTest);
   } catch (err) {
     // A crash here is a failure, not a skip. A UI suite that exits quietly
     // because a dependency is missing is worse than not having one.

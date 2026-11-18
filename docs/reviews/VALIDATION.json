@@ -1,0 +1,141 @@
+{
+  "review_date": "2026-10-12",
+  "baseline_commit": "2ebbf01e35cdfcf9e71c7c68ec54ce58b7c65c4f",
+  "production_build": "passed",
+  "main_entry_kb": 697.23,
+  "main_entry_gzip_kb": 220.26,
+  "logic_suites": [
+    {
+      "suite": "test-coach-view",
+      "exit_code": 0,
+      "checks": 125
+    },
+    {
+      "suite": "test-rename-contracts",
+      "exit_code": 0,
+      "checks": 12
+    },
+    {
+      "suite": "smoke-routes",
+      "exit_code": 0,
+      "checks": 55
+    },
+    {
+      "suite": "test-member-questions",
+      "exit_code": 0,
+      "checks": 36
+    },
+    {
+      "suite": "test-coach-program",
+      "exit_code": 0,
+      "checks": 9
+    },
+    {
+      "suite": "test-coach-questions",
+      "exit_code": 0,
+      "checks": 59
+    },
+    {
+      "suite": "test-workout-merge",
+      "exit_code": 1,
+      "checks": 0
+    },
+    {
+      "suite": "test-image-routing",
+      "exit_code": 0,
+      "checks": 13
+    },
+    {
+      "suite": "test-layout-contracts",
+      "exit_code": 0,
+      "checks": 152
+    },
+    {
+      "suite": "test-session-logic",
+      "exit_code": 0,
+      "checks": 49
+    },
+    {
+      "suite": "test-push-vapid",
+      "exit_code": 0,
+      "checks": 13
+    },
+    {
+      "suite": "test-twa-contract",
+      "exit_code": 0,
+      "checks": 33
+    },
+    {
+      "suite": "test-hands-free",
+      "exit_code": 0,
+      "checks": 54
+    },
+    {
+      "suite": "test-day-lib",
+      "exit_code": 0,
+      "checks": 153
+    },
+    {
+      "suite": "test-offline-queue",
+      "exit_code": 0,
+      "checks": 52
+    }
+  ],
+  "new_cache_checks": {
+    "passed": 11,
+    "failed": 0
+  },
+  "specific_portion_checks": {
+    "passed": 6,
+    "failed": 0
+  },
+  "premium_flow_and_navigation": {
+    "passed": 56,
+    "failed": 0
+  },
+  "premium_browser_layout_checks": {
+    "passed": 56,
+    "failed": 0,
+    "widths": [
+      320,
+      390,
+      1280
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ]
+  },
+  "broader_ui": {
+    "combined_run_recorded_passes": 594,
+    "combined_run_recorded_failures": 0,
+    "combined_run_complete": false,
+    "completion_runs": [
+      {
+        "suites": [
+          "macrosEatenTest",
+          "overflowTest",
+          "cspTest"
+        ],
+        "passed": 207,
+        "failed": 0
+      },
+      {
+        "suites": [
+          "honestStatesTest"
+        ],
+        "passed": 50,
+        "failed": 0
+      }
+    ],
+    "note": "The combined runner stopped before completing. Remaining groups passed in focused runs. Completed DOM fixtures are now released before the final honest-state fixtures and browser pass. Counts overlap and must not be added as unique tests."
+  },
+  "not_verified": [
+    "PostgreSQL integration gate, including workout-merge DB behavior",
+    "Live AI accuracy and production API behavior",
+    "Physical Android/iPhone camera, microphone and keyboard behavior",
+    "Installed PWA service-worker account-switch lifecycle",
+    "Production third-party notifications and device integrations"
+  ],
+  "github_push": "Not performed successfully; previous connector write requests were rejected by integration permissions."
+}

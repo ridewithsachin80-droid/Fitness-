@@ -53,9 +53,13 @@ export const TYPICAL_GRAMS = {
   ladoo: 30, barfi: 30, halwa: 60, kheer: 100, rasgulla: 50,
 };
 
+// Specific dishes must win over ingredients: "egg white" before "egg",
+// and "chicken curry" before "chicken". These remain editable estimates.
+const PORTION_MATCHES = Object.entries(TYPICAL_GRAMS).sort(([a], [b]) => b.length - a.length);
+
 export function smartGrams(foodName) {
   const lc = (foodName || '').toLowerCase();
-  for (const [key, g] of Object.entries(TYPICAL_GRAMS)) {
+  for (const [key, g] of PORTION_MATCHES) {
     if (lc.includes(key)) return g;
   }
   return null;

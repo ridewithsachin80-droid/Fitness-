@@ -323,7 +323,10 @@ const IST = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0
     date: today, exercises: [{ exercise_id: bench.id, sets: [{ reps: 0, weight_kg: 20 }] }], cardio: [],
   });
   const zero = (await call('GET', `/api/workouts?date=${today}`, mTok)).data;
-  ck('zero-rep set discarded', (zero.exercises || []).length === 0, zero.exercises);
+  ck('zero-rep set discarded', (zero.exercises || []).flatMap(e => e.sets || []).length === 0, zero.exercises);
+  ck('selected exercise remains unfinished after a zero-rep save',
+    zero.exercises?.length === 1 && zero.exercises[0].exercise_id === bench.id && zero.exercises[0].sets.length === 0,
+    zero.exercises);
 
   r = await call('POST', '/api/workouts', mTok, {
     date: today, exercises: [], cardio: [{ type: 'walking', duration_min: 99999 }],

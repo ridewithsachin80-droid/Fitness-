@@ -48,6 +48,49 @@ done
 cd "$(dirname "$0")/.." || exit 1
 ROOT=$(pwd)
 
+# On GitHub, also write what failed as an annotation (17 Oct 2026). The job
+# log is stored on a server our build workspace cannot reach; annotations can
+# be read through the GitHub API. Output only — no check changes.
+failed_suites=""
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  GATE_OUT=$(mktemp)
+  exec > >(tee "$GATE_OUT") 2>&1
+  gh_annotate() {
+    local code=$? body="" s log
+    [ "$code" -eq 0 ] && return
+    sleep 1
+    body=$(grep -E -A4 '✗|FAILED|could not run' "$GATE_OUT" | head -40)
+    for s in $failed_suites; do
+      log="${RESULTS_DIR:-}/$s.log"
+      [ -f "$log" ] && body="$body
+── $s.log ──
+$(grep -E -B2 -A3 '✗|Error|error:|AssertionError|Timeout' "$log" | head -40)"
+    done
+    [ -f "${RESULTS_DIR:-}/ui-tests.log" ] && grep -q '✗\|Error' "${RESULTS_DIR}/ui-tests.log" && body="$body
+── ui-tests.log (✗ lines) ──
+$(grep -E -B2 -A3 '✗|Error' "${RESULTS_DIR}/ui-tests.log" | head -40)"
+    # Short, one per failed suite: a very long annotation is dropped by GitHub
+    # (17 Oct 2026: a 120-line one never arrived).
+    enc() { printf '%s' "$1" | head -c 900 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e 's/::/: :/g' | awk '{printf "%s%%0A", $0}'; }
+    for s in $failed_suites; do
+      log="${RESULTS_DIR:-}/$s.log"
+      [ -f "$log" ] && echo "::error title=Gate: $s failed::$(enc "$(grep -E '✗|Error|AssertionError|Timeout' "$log" | head -6)")"
+    done
+    # Fixes-2p (20 Oct 2026): on 864590c ui-tests failed on GitHub and this line showed only a PASSING
+    # check whose name contains "✗" (the old pattern matched it), with no cause. Match failure lines only,
+    # and when there are none (a crash, a time limit, a missing summary) send the end of the log instead.
+    if [ "${ui_failed:-0}" = "1" ] && [ -f "${RESULTS_DIR:-}/ui-tests.log" ]; then
+      ui_fail_lines=$(grep -E '^\s*✗' "${RESULTS_DIR}/ui-tests.log" | head -6)
+      echo "::error title=Gate: ui-tests failed (${ui_reason:-see log})::$(enc "${ui_fail_lines:-$(grep -E 'Error|ERR_|Killed|heap|Timed out|Timeout' "${RESULTS_DIR}/ui-tests.log" | head -3)
+── last lines ──
+$(tail -8 "${RESULTS_DIR}/ui-tests.log")}")"
+    fi
+    [ -z "$failed_suites" ] && echo "::error title=Test gate failed (exit $code)::$(enc "${body:-no ✗ line printed}")"
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '### Test gate failed\n\n```\n%s\n```\n' "$body" >> "$GITHUB_STEP_SUMMARY"
+  }
+  trap gh_annotate EXIT
+fi
+
 # ── Locate the Postgres binaries ─────────────────────────────────────────────
 if ! command -v initdb >/dev/null 2>&1; then
   for d in /usr/lib/postgresql/*/bin /opt/homebrew/opt/postgresql*/bin /usr/local/opt/postgresql*/bin; do
@@ -144,7 +187,17 @@ cleanup() {
     pg_run "pg_ctl -D $PGDATA stop -m fast" >/dev/null 2>&1
   fi
 }
-trap cleanup EXIT
+# One EXIT trap for both jobs (19 Oct 2026). A second `trap … EXIT` replaces
+# the first, so the GitHub failure annotation above never ran and two gate
+# failures on GitHub arrived with no detail. Annotate first, then stop Postgres,
+# and keep the original exit code.
+on_exit() {
+  local code=$?
+  if declare -F gh_annotate >/dev/null; then (exit "$code"); gh_annotate; fi
+  cleanup
+  exit "$code"
+}
+trap on_exit EXIT
 
 # ── Rebuild the database from schema.sql ─────────────────────────────────────
 # Dropped and recreated every run, so this also verifies that schema.sql still
@@ -195,26 +248,33 @@ fi
 # Split by whether the suite needs Postgres, which is just whether it carries
 # the localhost guard. Both lists run after DATABASE_URL is exported, so this is
 # for reading, not for wiring.
-LOGIC_SUITES="test-coach-view test-rename-contracts smoke-routes test-member-questions \
-test-coach-program test-coach-questions test-workout-merge test-image-routing \
-test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue"
+LOGIC_SUITES="test-ci-completion test-mixed-request-answer test-sleep-clarification test-draft-food-edits test-ai-draft-food-edits test-food-clarifications test-voice-phase2 test-coach-view test-rename-contracts smoke-routes test-member-questions \
+test-coach-program test-coach-questions test-image-routing \
+test-layout-contracts test-session-logic test-push-vapid test-twa-contract test-hands-free test-day-lib test-offline-queue test-workout-session-logic test-ci55-regressions test-speech-presence"
 
-DB_SUITES="test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
+DB_SUITES="test-reliable-writes test-workout-merge test-weekly-report test-journey test-gaps test-coach-triage test-ai-reads test-coach-circuits test-labs test-macrolab test-lab-insight \
 test-sprint1 test-aichat test-messaging test-adaptive test-food-lookup test-features \
 test-food-learning test-portion-memory test-ai-workout-sets test-cardio \
-test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods"
+test-learning-model test-evals test-foods-queue test-nudges test-diet-plan test-coach-assign test-nutrition-contract test-food-propagate test-session test-morning-nudge test-member-apply test-quick-log test-diet-studio test-diet-fit test-member-plan test-safety test-food-cooked test-day-merge test-plate-photo test-progress-photos test-plan-pdf test-swaps test-weekly test-audit test-voice-pilot test-sleep-target test-member-foods test-known-fixes test-usual-foods test-food-preparation test-nutrient-unknown test-target-origin test-nutrient-provenance test-learning-features test-voice-fallback-test test-voice-calibration test-voice-calibration-2y test-voice-calibration-2z test-voice-calibration-3a test-voice-calibration-3b test-voice-calibration-3c test-voice-calibration-3d test-voice-calibration-3e test-voice-calibration-3f test-calibration-panel test-ux-3j test-ux-3k test-protocol-rule-switch test-ux-3l"
+
+MODULE_SUITES="test-connection-recovery test-timeline-meal-entry test-ai-chat-scroll test-ai-food-caption-sync test-progress-weight test-sleep-clarification-ui test-ai-draft-food-edits-ui test-ai-food-clarifications test-modal-accessibility test-ai-save-receipts test-ai-preview-status test-logging-phase2 test-built-css test-private-api-cache test-portion-defaults test-logging-phase1 test-private-api-cache-browser test-voice-evidence-robot test-calibration-mode check-built-client test-build-and-deploy-checks test-voice-calibration-3i"
+RESULTS_DIR="${TEST_RESULTS_DIR:-$ROOT/../qa/results}"
+mkdir -p "$RESULTS_DIR"
 
 failed=0
 total_pass=0
 
 run_suite() {
   local name=$1
-  local log="/tmp/fitlife-$name.log"
-  if [ ! -f "scripts/$name.js" ]; then
-    printf "  %-24s %s\n" "$name" "— not present, skipped"
+  local log="$RESULTS_DIR/$name.log"
+  local script="scripts/$name.js"
+  [ -f "$script" ] || script="scripts/$name.mjs"
+  if [ ! -f "$script" ]; then
+    printf "  %-24s %s\n" "$name" "— missing required suite"
+    failed=$((failed + 1))
     return
   fi
-  if timeout 300 node "scripts/$name.js" >"$log" 2>&1; then
+  if timeout 300 node "$script" >"$log" 2>&1; then
     local n; n=$(grep -c '✓' "$log")
     # A suite that exits 0 having asserted NOTHING is not a pass. test-weekly-report
     # skipped itself for months because it wanted TEST_DATABASE_URL and the gate
@@ -230,6 +290,7 @@ run_suite() {
     printf "  ✓ %-22s %s assertions\n" "$name" "$n"
   else
     failed=$((failed + 1))
+    failed_suites="$failed_suites $name"
     printf "  ✗ %-22s FAILED\n" "$name"
     grep -E '✗|Error|error:' "$log" | head -4 | sed 's/^/      /'
   fi
@@ -238,6 +299,7 @@ run_suite() {
 echo
 echo "▸ Logic suites (no database needed)"
 for s in $LOGIC_SUITES; do run_suite "$s"; done
+for s in $MODULE_SUITES; do run_suite "$s"; done
 
 echo
 echo "▸ Database suites (these self-seed; no fixtures required)"
@@ -262,19 +324,30 @@ elif [ ! -d "$ROOT/../node_modules/react" ] && [ ! -d "$ROOT/../client/node_modu
   printf "  %-24s %s\n" "ui-tests" "✗ client dependencies missing — run: npm install (from the repo root)"
   failed=$((failed + 1))
 else
-  uilog=/tmp/fitlife-ui-tests.log
+  uilog="$RESULTS_DIR/ui-tests.log"
   if timeout 600 node scripts/ui-tests.mjs >"$uilog" 2>&1; then
     n=$(grep -c '✓' "$uilog")
-    if [ "$n" -eq 0 ]; then
+    if ! grep -Eq '^✅ ui-tests: [1-9][0-9]* passed, 0 failed$' "$uilog"; then
+      printf "  %-24s %s\n" "ui-tests" "✗ missing successful completion summary"
+      ui_failed=1; ui_reason="no completion summary"
+      failed=$((failed + 1))
+    elif [ "$n" -eq 0 ]; then
       printf "  %-24s %s\n" "ui-tests" "✗ exited 0 having asserted nothing"
+      ui_failed=1; ui_reason="asserted nothing"
       failed=$((failed + 1))
     else
       printf "  %-24s %s\n" "ui-tests" "✓ $n assertions"
       total_pass=$((total_pass + n))
     fi
   else
-    printf "  %-24s %s\n" "ui-tests" "✗ FAILED"
+    ui_status=$?
+    ui_failed=1; ui_reason="exit $ui_status$([ "$ui_status" = 124 ] && echo ', 600 s time limit')"
+    printf "  %-24s %s\n" "ui-tests" "✗ FAILED (exit $ui_status)"
     grep -E '✗|could not run' "$uilog" | head -8 | sed 's/^/        /'
+    # Uncaught exceptions, heap failures and signals do not necessarily include
+    # our assertion marker. Keep the actual failure visible in GitHub's log.
+    echo "        Last 40 lines of the UI process log:"
+    tail -40 "$uilog" | sed 's/^/        /'
     failed=$((failed + 1))
   fi
 fi
@@ -283,6 +356,6 @@ echo
 if [ "$failed" -eq 0 ]; then
   echo "✅ All suites passed — $total_pass assertions"
 else
-  echo "❌ $failed suite(s) failed — see /tmp/fitlife-<suite>.log"
+  echo "❌ $failed suite(s) failed — see $RESULTS_DIR/<suite>.log"
 fi
 exit $failed

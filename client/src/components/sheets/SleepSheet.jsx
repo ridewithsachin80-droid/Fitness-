@@ -1,5 +1,5 @@
 import { Sheet, Pressable } from '../primitives';
-import { sleepMinutes, sleepTone, sleepTarget } from '../../lib/day';
+import { sleepMinutes, sleepTone, sleepTarget, STANDARD_LABEL } from '../../lib/day';
 
 export default function SleepSheet({ open, onClose, m }) {
   const { log, update, terms, protocol } = m;
@@ -12,8 +12,11 @@ export default function SleepSheet({ open, onClose, m }) {
   const mins = sleepMinutes(log.sleep?.bedtime, log.sleep?.waketime);
   const tone = sleepTone(mins);
   return (
-    <Sheet open={open} onClose={onClose} eyebrow={`${terms.sleep} target · ${target.hoursLabel}`} title={`${target.bedLabel} → ${target.wakeLabel}`}
+    <Sheet size="sm" open={open} onClose={onClose} eyebrow={`${terms.sleep} target · ${target.hoursLabel}`} title={`${target.bedLabel} → ${target.wakeLabel}`}
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
+      {target.isDefault && (
+        <p className="text-caption text-mid -mt-1 mb-2" data-testid="sleep-target-origin">{STANDARD_LABEL} times. Your coach hasn’t set your own yet.</p>
+      )}
       <div className="flex gap-2 pt-1">
         <div className="flex-1 min-w-0">
           <label className="block text-micro font-medium text-mute mb-1" htmlFor="sleep-bed">Bedtime</label>
@@ -32,7 +35,7 @@ export default function SleepSheet({ open, onClose, m }) {
       </div>
       {mins != null && (
         <div data-testid="sleep-duration" className={`mt-3 text-center text-caption font-bold py-2 rounded-xl ${
-          tone === 'great' ? 'bg-ok/10 text-gold-light' : tone === 'short' ? 'bg-amber-400/10 text-amber-300' : 'bg-white/[0.04] text-mid'}`}>
+          tone === 'great' ? 'bg-ok/10 text-gold-light' : tone === 'short' ? 'bg-warn/10 text-warn' : 'bg-white/[0.04] text-mid'}`}>
           {Math.floor(mins / 60)}h {mins % 60}m{tone === 'great' ? ' — great sleep' : tone === 'short' ? ' — try for 7+ hours' : ''}
         </div>
       )}

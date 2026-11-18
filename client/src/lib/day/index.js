@@ -10,3 +10,5 @@ export * from './fromServerLog';
 export * from './mealSuggest';
 export * from './recovery';
 export * from './planMeals';
+export * from './targets';
+export * from './nutrientStatus';
