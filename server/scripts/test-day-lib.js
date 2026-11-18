@@ -393,13 +393,14 @@ console.log('\n[7] pendingLabels');
     activeSupplements: [{ id: 'b12' }, { id: 'd3' }],
   };
   const p1 = day.pendingLabels({ ...base, log: { activities: { walk: true }, acv: {}, supplements: { b12: true }, sleep: {} }, activitiesLabel: 'Activity' });
-  ck('counts what is left, pluralised', eq(p1, ['2 activities', '1 ACV dose', '1 supplement', 'sleep times']), p1);
+  // Fixes-3l (UX finding 14): apple cider vinegar is written out on member screens (was '1 ACV dose').
+  ck('counts what is left, pluralised', eq(p1, ['2 activities', '1 apple cider vinegar dose', '1 supplement', 'sleep times']), p1);
   const p2 = day.pendingLabels({ ...base, log: { activities: { walk: true }, acv: {}, supplements: { b12: true }, sleep: {} }, activitiesLabel: 'Activities' });
   ck('a coach label already plural is left alone (no "activitieses")', p2[0] === '2 activities', p2);
   const p3 = day.pendingLabels({ ...base, log: { activities: { walk: true, sun: true, steps: true }, acv: { acv1: true }, supplements: { b12: true, d3: true }, sleep: { bedtime: '22:30', waketime: '06:15' } } });
   ck('everything done → empty', eq(p3, []), p3);
   const p4 = day.pendingLabels({ ...base, log: {}, activitiesLabel: 'Habit' });
-  ck('nothing logged → all counts', eq(p4, ['3 habits', '1 ACV dose', '2 supplements', 'sleep times']), p4);
+  ck('nothing logged → all counts', eq(p4, ['3 habits', '1 apple cider vinegar dose', '2 supplements', 'sleep times']), p4);   // Fixes-3l: written out
 }
 
 // ── 7b. nextAction — the one button on Today's read ──────────────────────

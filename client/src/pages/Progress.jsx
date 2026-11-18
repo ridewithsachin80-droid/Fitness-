@@ -26,6 +26,7 @@ import WeeklyReportCard from '../components/WeeklyReportCard';
 import MuscleCoverage from '../components/MuscleCoverage';
 import TrainingSummary from '../components/TrainingSummary';
 import { today, shiftDateKey, ACTIVITIES, ACV_ITEMS, SUPPLEMENTS, plural } from '../constants';
+import { spanLabel } from '../utils/dayLabel';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -124,7 +125,7 @@ function PastLogModal({ log, onClose }) {
         {/* ACV */}
         {checkedAcv.length > 0 && (
           <div>
-            <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 ACV</p>
+            <p className="text-xs font-bold text-lo tracking-wider mb-2">🍶 Apple cider vinegar</p>
             <div className="flex flex-wrap gap-1.5">
               {checkedAcv.map(a => (
                 <span key={a.id} className="text-xs bg-gold/[0.08] text-gold border border-gold/15 px-2.5 py-1 rounded-full font-medium">
@@ -325,6 +326,10 @@ export default function Progress() {
     const idx = n <= 4 ? weightData.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((2 * (n - 1)) / 3), n - 1];
     return [...new Set(idx)].map(i => weightData[i].date);
   })();
+  // Fixes-3l (UX finding 14): "over 30 days" on 6 days of data overstated it. When the first weigh-in in the window is
+  // more than a day after the window starts, the change is "since 30 Oct" instead.
+  const firstInRange = weightAll.find(l => l.log_date >= rangeFrom)?.log_date;
+  const deltaLabel = spanLabel(rangeFrom, firstInRange, today(), parseInt(range, 10));
   // Change over the selected window: first weigh-in in range → latest
   const rangeDelta = weightData.length > 1
     ? +(weightData[weightData.length - 1].weight - weightData[0].weight).toFixed(1)
@@ -374,6 +379,8 @@ export default function Progress() {
   const avg30 = in30.length
     ? Math.round(in30.reduce((s, l) => s + (l.compliance_pct || 0), 0) / in30.length)
     : 0;
+  // Fixes-3l (14): the same honesty for the average: "since 30 Oct" when the logs start later in the 30 days.
+  const avg30Span = spanLabel(from30, in30[0]?.log_date, today(), 30);
 
   // Total days logged in 90 days
   const daysLogged = logs.length;
@@ -430,7 +437,7 @@ export default function Progress() {
           <div className="mt-5" data-testid="progress-hero">
             {latestW ? (
               <HeroNumber value={latestW} unit="kg" delta={rangeDelta} deltaUnit=" kg"
-                label={rangeDelta == null ? 'latest weigh-in' : `over ${range} ${plural(parseInt(range, 10), 'day')}`} />
+                label={rangeDelta == null ? 'latest weigh-in' : deltaLabel} />
             ) : (
               <HeroNumber value="—" unit="kg" placeholder label="No weight logged yet" />
             )}
@@ -545,7 +552,7 @@ export default function Progress() {
             {avg30 >= 80 && (
               <div className="flex items-center gap-2 bg-info/[0.08] px-3 py-2 rounded-xl" data-testid="journey-card">
                 <span className="text-lg">⭐</span>
-                <span><strong>{avg30}% of your checklist</strong> over 30 days — outstanding consistency.</span>
+                <span><strong>{avg30}% of your checklist</strong> {avg30Span} — outstanding consistency.</span>
               </div>
             )}
             {journeyPct !== null && journeyPct >= 25 && (
@@ -735,7 +742,8 @@ export default function Progress() {
               const key = shiftDateKey(start, i);
               cells.push({ key, log: byDate.get(key) || null, day: Number(key.slice(-2)) });
             }
-            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-lo'
+            // Fixes-3l (3k QA, A4): a day with no log has a dashed outline, so it no longer looks like a logged 0% day.
+            const tone = (pct) => pct == null ? 'bg-white/[0.04] text-lo border border-dashed border-lo'
               : pct >= 75 ? 'bg-gold/[0.55] text-charcoal' : pct >= 50 ? 'bg-gold/[0.28] text-white' : pct > 0 ? 'bg-gold/[0.12] text-mid' : 'bg-white/[0.06] text-lo';
             return (
               <div data-testid="heat-grid">
@@ -755,7 +763,7 @@ export default function Progress() {
                     ))}
                 </div>
                 <div className="flex items-center justify-between text-tiny text-lo mt-2">
-                  <span>Not logged</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border border-dashed border-lo" />Not logged</span>
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded bg-white/[0.06]" /><span className="w-3 h-3 rounded bg-gold/[0.12]" /><span className="w-3 h-3 rounded bg-gold/[0.28]" /><span className="w-3 h-3 rounded bg-gold/[0.55]" />
                   </span>

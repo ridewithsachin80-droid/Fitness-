@@ -195,6 +195,8 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
            -- Fixes-3j (UX review 1): the latest day WITH a weight. The newest day often has none yet (before the morning
            -- weigh-in, or every day for weekly weighers), which made Profile say "goal reached" and hide BMI/TDEE.
            (SELECT weight_kg FROM daily_logs WHERE patient_id = u.id AND weight_kg IS NOT NULL ORDER BY log_date DESC LIMIT 1) AS current_weight,
+           -- Fixes-3l (UX finding 8b): the day of that weight, so Profile can say how old it is.
+           (SELECT to_char(log_date, 'YYYY-MM-DD') FROM daily_logs WHERE patient_id = u.id AND weight_kg IS NOT NULL ORDER BY log_date DESC LIMIT 1) AS current_weight_date,
            -- Today (India) and the 29 days before: the same 30 calendar days the
            -- member's Progress grid shows, so the two screens give one figure.
            (SELECT AVG(compliance_pct) FROM daily_logs
@@ -262,6 +264,7 @@ router.get('/me', authMW, roleCheck('patient'), async (req, res) => {
       start_weight:    p.start_weight,
       target_weight:   p.target_weight,
       current_weight:  p.current_weight,
+      current_weight_date: p.current_weight_date || null,   // Fixes-3l: 'YYYY-MM-DD' of current_weight
       // Sprint 7: goals is the ordered list the member picked; goal is its first
       // entry (kept for the coach views and older clients).
       goal:            p.goal || null,

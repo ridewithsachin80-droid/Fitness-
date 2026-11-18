@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { saveMyOnboarding } from '../api/logs';
+import { useState, useEffect } from 'react';
+import { saveMyOnboarding, getMyOnboarding } from '../api/logs';
 import { markWhatsNewSeen } from './member/WhatsNew';
 import { useSettingsStore, haptic } from '../store/settingsStore';
 import { useAIChat } from '../store/aiChatStore';
@@ -85,10 +85,27 @@ export default function Onboarding({ onDone } = {}) {
   const [targetW, setTargetW]   = useState('');
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveErr] = useState('');
+  // Fixes-3l (UX finding 6): weights already on the member's record (set by the coach, or on an earlier setup). The
+  // server keeps them and ignores anything typed over them, so they are shown read-only instead of empty boxes.
+  const [setWeights, setSetW]   = useState({ start: null, target: null, byCoach: true });
   const { finishOnboarding, setAvatarIdx } = useSettingsStore();
 
+  useEffect(() => {
+    let live = true;
+    getMyOnboarding().then(({ data }) => {
+      if (!live || !data) return;
+      const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+      const start = n(data.start_weight), target = n(data.target_weight);
+      setSetW({ start, target, byCoach: data.onboarding_done !== true });
+      if (start != null) setStartW('');     // anything typed there would be ignored by the server
+      if (target != null) setTargetW('');
+    }).catch(() => {});   // offline or an error: the boxes stay editable, exactly as before
+    return () => { live = false; };
+  }, []);
+
   const wOk = (v) => { if (!v) return true; const n = parseFloat(v); return Number.isFinite(n) && n >= 20 && n <= 300; };
-  const weightsValid = wOk(startW) && wOk(targetW);
+  // QA review of 3l: a box replaced by the read-only weight no longer counts (its half-typed text could block Next).
+  const weightsValid = (setWeights.start != null || wOk(startW)) && (setWeights.target != null || wOk(targetW));
 
   const toggleGoal = (id) => {
     haptic(10);
@@ -100,8 +117,8 @@ export default function Onboarding({ onDone } = {}) {
     try {
       await saveMyOnboarding({
         age_mode: ageMode, avatar_idx: avatarIdx, goals,
-        start_weight: startW ? parseFloat(startW) : null,
-        target_weight: targetW ? parseFloat(targetW) : null,
+        start_weight: setWeights.start == null && startW ? parseFloat(startW) : null,
+        target_weight: setWeights.target == null && targetW ? parseFloat(targetW) : null,
       });
       setAvatarIdx(avatarIdx);
       markWhatsNewSeen();   // Fixes-3j: a brand-new member gets no "A fresh look" card about a redesign they never saw
@@ -171,9 +188,24 @@ export default function Onboarding({ onDone } = {}) {
   // ── 3. Numbers ───────────────────────────────────────────────────────────
   if (step === 2) return (
     <Screen step={2} total={TOTAL}>
-      <Question eyebrow="Your numbers" title="Where are you starting from?" sub="Both optional — your coach can set these too. Everything on Progress is measured from here." />
+      <Question eyebrow="Your numbers" title="Where are you starting from?"
+        sub={setWeights.start != null && setWeights.target != null
+          ? 'Already set — everything on Progress is measured from here. Your coach can change them.'
+          : setWeights.start != null || setWeights.target != null
+            ? 'One is already set; the other is optional. Everything on Progress is measured from here.'
+            : 'Both optional — your coach can set these too. Everything on Progress is measured from here.'} />
       <div className="grid grid-cols-2 gap-3" data-testid="onb-weights">
-        {[['Weight now', startW, setStartW, 'e.g. 82.5', 'onb-start'], ['Target', targetW, setTargetW, 'e.g. 75', 'onb-target']].map(([label, val, set, ph, id]) => (
+        {[['Weight now', startW, setStartW, 'e.g. 82.5', 'onb-start', setWeights.start], ['Target', targetW, setTargetW, 'e.g. 75', 'onb-target', setWeights.target]].map(([label, val, set, ph, id, fixed]) => fixed != null ? (
+          // Fixes-3l: already on the record → shown, not an empty box that would be ignored.
+          <div key={id} className="block" data-testid={`${id}-set`} role="group" aria-label={`${label}: ${fixed} kg, ${setWeights.byCoach ? 'set by your coach' : 'already set'}`}>
+            <Eyebrow className="mb-1.5">{label}</Eyebrow>
+            <div className="flex items-center justify-center gap-2 rounded-2xl border-2 border-white/[0.08] bg-surface" style={{ minHeight: 56 }}>
+              <span className="font-display font-semibold tabular-nums text-white" style={{ fontSize: 24 }}>{fixed}</span>
+              <span className="text-lo font-semibold">kg</span>
+            </div>
+            <p className="text-caption text-lo mt-1.5 text-center">{setWeights.byCoach ? 'Set by your coach' : 'Already set'}</p>
+          </div>
+        ) : (
           <label key={id} className="block">
             <Eyebrow className="mb-1.5">{label}</Eyebrow>
             <div className="flex items-center gap-2">

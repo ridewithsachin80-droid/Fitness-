@@ -206,7 +206,7 @@ router.post('/test', async (req, res) => {
     const pushService = require('../services/pushService');
     await pushService.sendToUser(
       patient_id,
-      { water: '💧 Drink Water!', activity: '🏃 Move Your Body!', weight: '⚖️ Log Your Weight', acv: '🍎 ACV Time!' }[type] || '🔔 Reminder',
+      { water: '💧 Drink Water!', activity: '🏃 Move Your Body!', weight: '⚖️ Log Your Weight', acv: '🍎 Apple cider vinegar time!' }[type] || '🔔 Reminder',
       `This is a test ${type} reminder — tap OK to acknowledge!`,
       type,
       { ackId: null, requiresAck: true, isTest: true }

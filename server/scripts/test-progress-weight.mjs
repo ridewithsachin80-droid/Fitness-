@@ -116,6 +116,10 @@ try {
     check('no numeric NaN or Infinity leaks into the progress display', !/NaN|Infinity/.test(A.q('progress-hero').textContent + A.q('journey').textContent));
   });
 
+  // Fixes-3l: the day the first weight in the window was logged, as the hero names it ("since 19 Sep"; the year only if it differs).
+  const ist = (n) => new Date(Date.now() + 5.5 * 3600e3 - n * 86400e3).toISOString().slice(0, 10);   // the app's India date
+  const sinceDay = (n) => { const [y, m, d] = ist(n).split('-').map(Number), [ty] = ist(0).split('-').map(Number);
+    return `since ${d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1]}${y === ty ? '' : ' ' + y}`; };
   await section(code, 'Existing chronological and window behavior', [
     { days: 1, weight: '75.5' }, { days: 60, weight: '80.0' },
     { days: 0, weight: null }, { days: 20, weight: '78.0' },
@@ -124,7 +128,7 @@ try {
     await A.range('7');
     check('7-day single point keeps the global latest weight without a delta', A.number() === '75.5' && A.hero().includes('latest weigh-in') && !/↓|↑/.test(A.hero()), A.hero());
     await A.range('90');
-    check('90-day delta expands while the latest weigh-in stays unchanged', A.number() === '75.5' && /↓ 4\.5 kg/.test(A.hero()) && /over 90 days/.test(A.hero()), A.hero());
+    check('90-day delta expands while the latest weigh-in stays unchanged', A.number() === '75.5' && /↓ 4\.5 kg/.test(A.hero()) && A.hero().includes(sinceDay(60)) && !/over 90 days/.test(A.hero()), A.hero());   // Fixes-3l (UX finding 14): the weights start 60 days back, so "since <that day>", not "over 90 days"
   });
 
   await section(code, 'Latest weigh-in outside selected window', [

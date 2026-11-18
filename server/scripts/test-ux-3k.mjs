@@ -107,8 +107,10 @@ try {
   const shapes = [{ ...ROW }, {}, { ...ROW, custom_supplements: [{ id: 'x' }] }, { ...ROW, supplements: ['d3', 'multi', 'b12', 'flax', 'yeast'] }, { ...ROW, activities: ['walk', 'sun', 'steps1', 'steps2'] }, { activities: ['walk'], acv: ['acv1'], supplements: [] }];
   ck('EXISTING member: the score total is exactly the pre-3k number for every shape (so their stored scores do not change)', shapes.every(p => T({ ...OLD, ...p }) === preT(p)), shapes.map(p => [T({ ...OLD, ...p }), preT(p)]));
   const pend = (p) => day.pendingLabels({ ...day.resolveProtocolItems(p), log: {} });
-  ck('NEW member: "Next" / "Still pending today" names no ACV or supplements', !pend(NEW).some(l => /ACV|supplement/i.test(l)), pend(NEW));
-  ck('EXISTING member: still names them, as before', pend(OLD).some(l => /ACV/i.test(l)) && pend(OLD).some(l => /supplement/i.test(l)), pend(OLD));
+  // Fixes-3l: the wording is "apple cider vinegar dose" now (was "ACV dose"); both spellings are looked for, so the
+  // "names none" check cannot pass just because the word changed.
+  ck('NEW member: "Next" / "Still pending today" names no ACV or supplements', !pend(NEW).some(l => /apple cider vinegar|ACV|supplement/i.test(l)), pend(NEW));
+  ck('EXISTING member: still names them, as before', pend(OLD).some(l => /apple cider vinegar/i.test(l)) && pend(OLD).some(l => /supplement/i.test(l)), pend(OLD));
 
   console.log('\n[3] the server rules agree');
   const { protocolTotalFor, calcCompliance } = require('../services/compliance');
@@ -324,7 +326,7 @@ try {
   ck('Progress: no red for a low checklist day; the low bar uses the readable `lo` colour; "of checklist" / "30-day checklist", not "compliance"',
     !/red-400/.test(prog) && /: 'bg-lo'/.test(prog) && /% of checklist/.test(prog) && /30-day checklist/.test(prog) && !/% compliance/.test(prog) && !/30-day Compliance/.test(prog));
   ck('Profile: "30-day checklist", not "30-day compliance"', /30-day checklist/.test(prof) && !/30-day compliance/.test(prof));
-  ck('Progress calendar: a day with no log uses `lo` text (finding 12: `ghost` was 4.19:1 in dark)', /pct == null \? 'bg-white\/\[0\.04\] text-lo'/.test(prog));
+  ck('Progress calendar: a day with no log uses `lo` text (finding 12: `ghost` was 4.19:1 in dark)', /pct == null \? 'bg-white\/\[0\.04\] text-lo(?:'| (?![^']*\btext-)[^']*')/.test(prog));   // Fixes-3l: 3l adds a dashed outline after text-lo; any later text colour still fails
 } catch (e) { ck('the suite ran to the end', false, e.stack); }
 finally {
   srv?.close();

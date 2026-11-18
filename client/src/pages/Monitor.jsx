@@ -832,7 +832,7 @@ export default function Coach() {
                 className="flex-1 h-5 rounded-[3px]"
                 style={{ background: !d.logged ? 'rgb(var(--fit-ink) / 0.05)'
                   : d.pct >= 75 ? 'rgb(var(--fit-accent) / 0.55)'
-                  : d.pct >= 50 ? 'rgba(251,191,36,0.40)'
+                  : d.pct >= 50 ? 'rgb(var(--fit-warn) / 0.45)'   /* Fixes-3l (finding 13): the theme's warn colour, not leftover amber */
                   :               'rgba(248,113,113,0.35)' }} />
             ))}
           </div>

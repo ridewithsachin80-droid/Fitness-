@@ -78,7 +78,7 @@ export default function DaySummary({ s }) {
       </Row>
 
       <Protocol label="Activities"  p={s.activities} />
-      <Protocol label="ACV"         p={s.acv} />
+      <Protocol label="Apple cider vinegar" p={s.acv} />
       <Protocol label="Supplements" p={s.supplements} />
 
       {(s.weight != null || s.sleep) && (

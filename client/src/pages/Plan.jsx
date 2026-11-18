@@ -407,7 +407,7 @@ export default function Plan() {
                         : 'Your coach chose this routine.')
                     : routine.allStandard
                       ? 'This is FitLife\u2019s standard daily routine. Your coach hasn\u2019t chosen yours yet.'
-                      : `Your coach chose some of this. ${routine.standard.map(g => ({ activities: 'Activities', acv: 'ACV', supplements: terms.supplements }[g])).join(' and ')}: FitLife standard.`}
+                      : `Your coach chose some of this. ${routine.standard.map(g => ({ activities: 'Activities', acv: 'Apple cider vinegar', supplements: terms.supplements }[g])).join(' and ')}: FitLife standard.`}
                 </p>
               )}
               <div data-testid="plan-protocol">

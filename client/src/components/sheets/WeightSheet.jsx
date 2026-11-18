@@ -6,7 +6,7 @@ import { weightJumpNote } from '../../utils/weightCheck';
  * (`update('weight', …)` → 4s auto-save) as the old inline panel.
  */
 export default function WeightSheet({ open, onClose, m }) {
-  const { log, update, weightWarning, validateWeight, weightDelta, yesterdayWeight } = m;
+  const { log, update, weightWarning, validateWeight, weightDelta, yesterdayWeight, isToday = true } = m;
   // Fixes-3j (UX review 7; QA review): worked out from THIS day's weight and the day before, every time the sheet shows —
   // so it is right for a saved weight, after the day before has loaded, and never carried over from another day.
   // The out-of-range warning (30–250 kg) takes precedence.
@@ -15,13 +15,17 @@ export default function WeightSheet({ open, onClose, m }) {
     <Sheet size="sm" open={open} onClose={onClose} eyebrow="Morning weight" title="After washroom, before food"
       footer={<Pressable variant="primary" className="w-full" onPress={onClose}>Done</Pressable>}>
       <div className="flex items-center gap-3 pt-1">
-        <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder="e.g. 92.5"
+        {/* Fixes-3l (finding 15): no example number in the box (it looked like a weight); the last weight is a hint below. */}
+        <input type="number" step="0.1" inputMode="decimal" value={log.weight} placeholder=""
           aria-label="Weight in kilograms" data-testid="weight-input"
           onChange={e => { update('weight', e.target.value); validateWeight(e.target.value); }}
           style={{ minHeight: 56, fontSize: 26 }}
           className="flex-1 font-display font-semibold text-center border-2 border-white/[0.15] rounded-2xl py-2 focus:outline-none focus:ring-2 focus:ring-gold/30 text-white bg-surface tabular-nums" />
         <span className="text-lo font-semibold">kg</span>
       </div>
+      {!log.weight && yesterdayWeight != null && (
+        <p className="text-caption text-mute mt-2 text-center" data-testid="weight-yesterday">{isToday ? 'Yesterday' : 'The day before'} {yesterdayWeight} kg</p>
+      )}
       {log.weight && yesterdayWeight != null && (
         <p className="text-caption text-mute mt-2 text-center">
           {weightDelta < 0 ? `↓ ${Math.abs(weightDelta).toFixed(1)} kg vs yesterday`

@@ -35,10 +35,10 @@ const REMINDER_CONFIG = {
       : `⏰ Reminder: Log your morning weight — tap OK when done!`,
   },
   acv: {
-    title: '🍎 ACV Time!',
+    title: '🍎 Apple cider vinegar time!',   // Fixes-3l (UX finding 14): written out
     body:  (retryCount) => retryCount === 0
       ? '1 tbsp in 200ml warm water through a straw — 15 min before your meal.'
-      : `⏰ Reminder: Take your ACV now — tap OK when done!`,
+      : `⏰ Reminder: Take your apple cider vinegar now — tap OK when done!`,
   },
 };
 

@@ -120,7 +120,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
     const actLeft = proto.activities.filter(a => !newLog.activities?.[a.id]).length;
     if (actLeft > 0) pending.push(`${actLeft} activit${actLeft > 1 ? 'ies' : 'y'}`);
     const acvLeft = proto.acv.filter(a => !newLog.acv?.[a.id]).length;
-    if (acvLeft > 0) pending.push(`${acvLeft} ${plural(acvLeft, 'ACV dose')}`);
+    if (acvLeft > 0) pending.push(`${acvLeft} ${plural(acvLeft, 'apple cider vinegar dose')}`);   // Fixes-3l (14)
     const suppLeft = proto.supplements.filter(s => !newLog.supplements?.[s.id]).length;
     if (suppLeft > 0) pending.push(`${suppLeft} ${plural(suppLeft, 'supplement')}`);
     if ((newLog.water || 0) < target) pending.push(`water (${((target - (newLog.water || 0)) / 1000).toFixed(1)}L to go)`);
@@ -905,7 +905,7 @@ export default function AIChatLog({ mealPlans = [], onLogPlanned = null, overlay
                       {/* 🧃 ACV */}
                       {m.parsed.acv.length > 0 && (
                         <div>
-                          <GroupHeader icon="🧃" title="ACV" count={m.parsed.acv.filter(a => a.on).length} />
+                          <GroupHeader icon="🧃" title="Apple cider vinegar" count={m.parsed.acv.filter(a => a.on).length} />
                           <div className="flex flex-wrap gap-1.5">
                             {m.parsed.acv.map((a, i) => (
                               <ToggleChip key={a.id} on={a.on} onToggle={() => toggleListItem(mi, 'acv', i)}>

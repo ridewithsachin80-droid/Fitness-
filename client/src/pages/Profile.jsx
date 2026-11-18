@@ -18,7 +18,8 @@ import { sessionEnergy } from '../utils/exerciseCalories';
 import MetabolicInsight from '../components/MetabolicInsight';
 import LabResults from '../components/LabResults';
 import api from '../api/client';
-import { plural } from '../constants';
+import { plural, today } from '../constants';
+import { dayLabel } from '../utils/dayLabel';
 import { goalHeadline } from '../utils/goalHeadline';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -135,7 +136,7 @@ const CONDITION_LABELS = {
  * was no way to tell which number mattered. The member opens this page to see
  * their weight, so that one is gold and the rest are ink.
  */
-function StatPill({ label, value, unit, accent = false }) {
+function StatPill({ label, value, unit, accent = false, note = '', testId }) {
   return (
     <div className={`rounded-2xl px-3 py-3 text-center ${
       accent ? 'bg-gold/[0.07]' : 'bg-surface'}`}
@@ -146,6 +147,8 @@ function StatPill({ label, value, unit, accent = false }) {
         {unit && <span className="text-body-sm font-normal ml-1 text-lo">{unit}</span>}
       </p>
       <p className="text-micro mt-1.5 text-mute">{label}</p>
+      {/* Fixes-3l (8b): how old the figure is, e.g. "4 Nov", so a weeks-old weight is never read as today's. */}
+      {note && <p className="text-micro text-lo mt-0.5" data-testid={testId}>{note}</p>}
     </div>
   );
 }
@@ -297,7 +300,8 @@ export default function Profile() {
 
         {/* Weight stats */}
         <div className="grid grid-cols-3 gap-2">
-          <StatPill label="Current weight" value={p.current_weight} unit="kg" accent />
+          <StatPill label="Current weight" value={p.current_weight} unit="kg" accent
+            note={p.current_weight != null ? dayLabel(p.current_weight_date, today()) : ''} testId="profile-weight-date" />
           <StatPill label="Lost so far"
             value={lostKg !== null ? (lostKg >= 0 ? lostKg : `+${Math.abs(lostKg)}`) : null}
             unit="kg" />

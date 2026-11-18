@@ -17,16 +17,15 @@ import HouseCircuits from '../components/coach/HouseCircuits';
 import VoiceLogging from '../components/VoiceLogging';
 import { VOICE_LANGUAGES, normalizeVoiceLang } from '../utils/voiceLanguage';
 import { roleLabel } from '../constants';
+import { AGE_MODES } from '../components/Onboarding';
+import { Icon } from '../components/primitives';
 import { changeMyPin, getMyReminderSchedule } from '../api/logs';
 import { pushPermission, registerPushSubscription } from '../hooks/usePush';
 
 
 const AVATARS = ['🐶','🐱','🦊','🐻','🦁','🐼','🐸','🦋','🌟','🎈','🌈','🦄'];
-const AGE_MODES = [
-  { id: 'child',  label: 'Child (5–17)',   emoji: '🌟' },
-  { id: 'adult',  label: 'Adult (18–59)',  emoji: '💪' },
-  { id: 'senior', label: 'Senior (60+)',   emoji: '🌿' },
-];
+// Fixes-3l (UX finding 14): one age picker. Settings used its own list (with "5–17" for children) that disagreed with
+// onboarding's ("Child · Under 18"); both now read onboarding's AGE_MODES.
 const DEFAULT_MEALS = ['Breakfast', 'Lunch', 'Dinner'];
 const MEAL_OPTIONS  = ['Breakfast', 'Morning Snack', 'Lunch', 'Afternoon Snack', 'Dinner', 'Bedtime Snack'];
 
@@ -274,12 +273,13 @@ export default function Settings() {
           <SectionTitle icon="👤" tooltip="Changes terminology, text size, and which features are shown">Who is using this app?</SectionTitle>
           <div className="flex gap-2">
             {AGE_MODES.map(m => (
-              <button key={m.id} onClick={() => { setAgeMode(m.id); haptic(15); }}
+              <button key={m.id} onClick={() => { setAgeMode(m.id); haptic(15); }} aria-pressed={ageMode === m.id} data-testid={`settings-age-${m.id}`}
                 style={{ minHeight: 64, flex: 1 }}
                 className={`rounded-xl border flex flex-col items-center justify-center gap-1 py-2 transition-all ${
                   ageMode === m.id ? 'border-gold/50 bg-gold/10' : 'border-hair bg-surface'}`}>
-                <span style={{ fontSize: 22 }}>{m.emoji}</span>
+                <Icon name={m.icon} size={20} className={ageMode === m.id ? 'text-gold' : 'text-lo'} />
                 <span className="text-xs font-semibold text-white text-center leading-tight">{m.label}</span>
+                <span className="text-micro text-lo text-center leading-tight">{m.sub}</span>
               </button>
             ))}
           </div>
@@ -508,7 +508,7 @@ export default function Settings() {
           Sign Out
         </button>
 
-        <p className="text-center text-xs text-ghost pt-2">FitLife · Enhanced UX</p>
+        <p className="text-center text-xs text-lo pt-2">FitLife</p>
       </div>
       {user?.role === 'patient' ? <MemberBottomNav /> : <BottomNav role={user?.role} />}
     </div>

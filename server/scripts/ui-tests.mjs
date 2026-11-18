@@ -834,8 +834,11 @@ async function progressTest() {
      ['Body', 'Nutrition', 'Training', 'Reports'].every(hasGroup) && progressSelect.value === 'body'
      && !!q('journey') && !q('heat-grid'), allTabs.map(t => t.textContent.trim()));
   tabs[2].click(); await tick(200);
-  ck('90d widens the window: the change now includes the 86.0 point (↓ 3.6 kg over 90 days)',
-     /over 90 days/.test(q('progress-hero').textContent) && /3\.6/.test(q('progress-hero').textContent), q('progress-hero').textContent);
+  // Fixes-3l (UX finding 14): the 86.0 point is 60 days back, so the hero names that day ("since 19 Sep"), not "over 90 days".
+  const ist3l = (n) => new Date(Date.now() + 5.5 * 3600e3 - n * 86400e3).toISOString().slice(0, 10);
+  const since60 = (() => { const [y, m, d] = ist3l(60).split('-').map(Number); return `since ${d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1]}${y === +ist3l(0).slice(0, 4) ? '' : ' ' + y}`; })();
+  ck('90d widens the window: the change now includes the 86.0 point (↓ 3.6 kg since the day of that point)',
+     q('progress-hero').textContent.includes(since60) && !/over 90 days/.test(q('progress-hero').textContent) && /3\.6/.test(q('progress-hero').textContent), [since60, q('progress-hero').textContent]);
   tabs[0].click(); await tick(200);
   ck('7d narrows it (change over 7 days is small)', /over 7 days/.test(q('progress-hero').textContent) && /0\.[0-9]/.test(q('progress-hero').textContent), q('progress-hero').textContent);
 
@@ -4153,7 +4156,7 @@ async function knownFixesTest() {
     const mixed = await view({ water_target: 3500, protocol_activities: ['walk'] }), mixedR = await view({ water_target: 3500, protocol_activities: ['walk'] }, '/plan?tab=recovery');
     ck('mixed: "Set by your coach · some items are FitLife standards"; water is not labelled standard',
        txt(mixed, 'plan-source') === 'Set by your coach · some items are FitLife standards' && !/FitLife standard/.test(txt(mixed, 'plan-water') || ''), [txt(mixed, 'plan-source'), txt(mixed, 'plan-water')]);
-    ck('mixed: the routine note names the groups still standard', /Your coach chose some of this\. ACV and Supplements: FitLife standard\./.test(txt(mixedR, 'plan-routine-standard') || ''), txt(mixedR, 'plan-routine-standard'));
+    ck('mixed: the routine note names the groups still standard', /Your coach chose some of this\. Apple cider vinegar and Supplements: FitLife standard\./.test(txt(mixedR, 'plan-routine-standard') || ''), txt(mixedR, 'plan-routine-standard'));
     ck('no screen errors in any case', [std, stdR, coach, coachR, mixed, mixedR].every(T => T.errors.length === 0), [std, coach, mixed].map(T => T.errors));
   } catch (e) { ck('section E3 ran to the end', false, e.message); }
 

@@ -41,7 +41,7 @@ export default function ProtocolDots({ activeActivities = [], activeACV = [], ac
       </div>
       <p className="text-caption text-mute mt-1.5">
         {allDone ? 'Protocol complete for today.'
-          : `${terms?.activities || 'Activities'}, ACV and ${(terms?.supplements || 'supplements').toLowerCase()} · tap to tick`}
+          : `${terms?.activities || 'Activities'}, apple cider vinegar and ${(terms?.supplements || 'supplements').toLowerCase()} · tap to tick`}
       </p>
     </button>
   );
