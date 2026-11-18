@@ -11,6 +11,10 @@
  *   [3] once per database: a second boot changes nothing; two boots at the same moment → one switch;
  *   [4] after the switch, a member with no coach selection gets the new rule everywhere (score total, reminders);
  *   [5] a failure halfway rolls everything back; [6] the exact undo (UNDO_SQL) restores the database as it was.
+ *   [7] Fixes-3k.2 (Sachin, 18 Nov): PRODUCTION (branch exactly "main") moves everyone too, once, under its own record,
+ *       on a second scratch database standing for production; the undo for that record restores it exactly.
+ * Changed in 3k.2 (listed in DELIVERY-FIXES-3k2.md): [1] no longer expects "main" to be refused (it now runs, [7]),
+ * and the refusal reason reads "not the test or production server".
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,8 +37,10 @@ const pool = new Pool({ connectionString: Object.assign(new URL(base), { pathnam
 await pool.query(SCHEMA);
 // cronService reads the shared pool module: point it at the scratch database before it is loaded.
 process.env.DATABASE_URL = Object.assign(new URL(base), { pathname: '/' + NAME }).toString();
-const { switchTestMembersToNewRule, onTestBranch, UNDO_SQL, MIGRATION } = require('../services/protocolRuleSwitch');
+const { switchTestMembersToNewRule, switchMembersToNewRule, migrationForBranch, onTestBranch, undoSql, UNDO_SQL, MIGRATION, MIGRATIONS } = require('../services/protocolRuleSwitch');
 const made = [];
+const NAME2 = `fitlife_prs2_${process.pid}`;
+let pool2 = null;
 try {
   const tag = String(Date.now()).slice(-7);
   const mk = async (n, role = 'patient') => { const id = (await pool.query(`INSERT INTO users (name,phone,password,role,active) VALUES ($1,$2,'x',$3,true) RETURNING id`, [`PRS ${n}`, `64${tag}${n}`, role])).rows[0].id; made.push(id); return id; };
@@ -51,19 +57,26 @@ try {
   console.log('\n[1] not the test server');
   const before = await flags();
   let r = await switchTestMembersToNewRule(pool, { onTestServer: false });
-  ck('not the test server → it does not run', r.ran === false && r.why === 'not the test server', r);
+  ck('not the test server → it does not run', r.ran === false && r.why === 'not the test or production server', r);
   ck('…and nothing changed', JSON.stringify(await flags()) === JSON.stringify(before), [before, await flags()]);
+  { const b0 = process.env.RAILWAY_GIT_BRANCH; process.env.RAILWAY_GIT_BRANCH = 'main';
+    try { r = await switchMembersToNewRule(pool, { onTestServer: false }); } finally { if (b0 === undefined) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = b0; }
+    ck('…even on branch "main", an explicit "not the test server" wins', r.ran === false && JSON.stringify(await flags()) === JSON.stringify(before), r); }
   const env = { b: process.env.RAILWAY_GIT_BRANCH, t: process.env.FITLIFE_TEST_SERVER };
   const tryWith = async (branch, testVar) => {
     if (branch == null) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = branch;
     if (testVar == null) delete process.env.FITLIFE_TEST_SERVER; else process.env.FITLIFE_TEST_SERVER = testVar;
     return { guard: onTestBranch(), r: await switchTestMembersToNewRule(pool) };   // the service's OWN default guard
   };
-  const onMain = await tryWith('main', 'yes'), noBranch = await tryWith(null, 'yes'), nothing = await tryWith(null, null), prod = await tryWith('production', null);
-  const near = [await tryWith('Test', null), await tryWith('testing', null), await tryWith('test ', null), await tryWith('main-test', null)];
-  ck('the service itself does not run on branch main (even with FITLIFE_TEST_SERVER=yes), with no branch reported (even with it), with nothing set, or on another branch',
-    [onMain, noBranch, nothing, prod].every(x => x.guard === false && x.r.ran === false) && (await flags())[plain] === null, [onMain, noBranch, nothing, prod]);
-  ck('…nor on branch names that only look like "test" (Test, testing, "test ", main-test)', near.every(x => x.guard === false && x.r.ran === false) && (await flags())[plain] === null, near);
+  const noBranch = await tryWith(null, 'yes'), nothing = await tryWith(null, null), prod = await tryWith('production', null), master = await tryWith('master', 'yes');
+  const near = [await tryWith('Test', null), await tryWith('testing', null), await tryWith('test ', null), await tryWith('main-test', null),
+    await tryWith('Main', null), await tryWith('main ', null), await tryWith('constructor', null), await tryWith('__proto__', null)];
+  ck('the service itself does not run with no branch reported (even with FITLIFE_TEST_SERVER=yes), with nothing set, or on another branch (production, master)',
+    [noBranch, nothing, prod, master].every(x => x.guard === false && x.r.ran === false) && (await flags())[plain] === null, [noBranch, nothing, prod, master]);
+  ck('…nor on names that only look like "test" or "main" (Test, testing, "test ", main-test, Main, "main ", constructor, __proto__)', near.every(x => x.guard === false && x.r.ran === false) && (await flags())[plain] === null, near);
+  ck('the record per site: "test" → the test record, "main" → the production record, anything else → none',
+    migrationForBranch('test') === MIGRATIONS.test && migrationForBranch('main') === MIGRATIONS.main && MIGRATIONS.test !== MIGRATIONS.main
+      && [undefined, '', 'Main', 'master', 'production', 'toString', 'hasOwnProperty'].every(b => migrationForBranch(b) === null));
   process.env.RAILWAY_GIT_BRANCH = 'test'; delete process.env.FITLIFE_TEST_SERVER;
   ck('…and its guard says yes only for branch "test" (checked without running it here)', onTestBranch() === true);
   delete process.env.RAILWAY_GIT_BRANCH; delete process.env.FITLIFE_TEST_SERVER;
@@ -87,7 +100,10 @@ try {
   const late = await mk(7);
   await pool.query(`INSERT INTO patient_profiles (user_id) VALUES ($1)`, [late]);
   r = await switchTestMembersToNewRule(pool, { onTestServer: true });
-  ck('a second boot does nothing (already done); a row made afterwards without the flag is left alone', r.ran === false && r.why === 'already done' && (await row(late)).f === null, [r, (await row(late)).f]);
+  // Changed in 3k.2 (QA review): a member created AFTER the switch with the old meaning (as the old version creates
+  // them during a release) is now moved on the next start ("catch-up"); the switch itself still does not re-run.
+  ck('a second boot does not re-run the switch (already done); it moves only the member created afterwards with the old meaning',
+    r.ran === false && r.why === 'already done' && r.caughtUp === 1 && (await row(late)).f === true, [r, (await row(late)).f]);
   await pool.query('DELETE FROM migrations WHERE name = $1', [MIGRATION]);
   const both = await Promise.all([switchTestMembersToNewRule(pool, { onTestServer: true }), switchTestMembersToNewRule(pool, { onTestServer: true })]);
   ck('two boots at the same moment → exactly one runs', both.filter(x => x.ran).length === 1 && both.some(x => x.why === 'already done'), both);
@@ -138,8 +154,78 @@ try {
     const c3 = await row(chose);
     ck('coach selections still as they were', JSON.stringify(c3.s) === '["d3","b12"]' && JSON.stringify(c3.a) === '[]');
   }
+
+  console.log('\n[7] production (branch "main"), on a second scratch database standing for production');
+  {
+    await admin.query(`DROP DATABASE IF EXISTS ${NAME2}`); await admin.query(`CREATE DATABASE ${NAME2}`);
+    pool2 = new Pool({ connectionString: Object.assign(new URL(base), { pathname: '/' + NAME2 }).toString() });
+    await pool2.query(SCHEMA);
+    const mk2 = async (n, role = 'patient') => (await pool2.query(`INSERT INTO users (name,phone,password,role,active) VALUES ($1,$2,'x',$3,true) RETURNING id`, [`PRS2 ${n}`, `65${tag}${n}`, role])).rows[0].id;
+    const pPlain = await mk2(1), pChose = await mk2(2), pNoRow = await mk2(3), pCoach = await mk2(4, 'monitor'), pNew = await mk2(5);
+    await pool2.query(`INSERT INTO patient_profiles (user_id) VALUES ($1), ($2)`, [pPlain, pCoach]);
+    await pool2.query(`INSERT INTO patient_profiles (user_id, protocol_supplements) VALUES ($1, '["d3"]')`, [pChose]);
+    await pool2.query(`INSERT INTO patient_profiles (user_id, protocol_default_none) VALUES ($1, TRUE)`, [pNew]);
+    const row2 = async (id) => (await pool2.query(`SELECT protocol_default_none AS f, protocol_supplements AS s FROM patient_profiles WHERE user_id=$1`, [id])).rows[0];
+    const flags2 = async () => Object.fromEntries(await Promise.all([pPlain, pChose, pNoRow, pCoach, pNew].map(async id => [id, (await row2(id))?.f ?? ((await row2(id)) ? null : 'no row')])));
+    const snap2 = JSON.stringify((await pool2.query(`SELECT * FROM patient_profiles ORDER BY user_id`)).rows);
+    const env2 = process.env.RAILWAY_GIT_BRANCH;
+    process.env.RAILWAY_GIT_BRANCH = 'main';
+    let r2;
+    try { r2 = await switchMembersToNewRule(pool2); } finally { if (env2 === undefined) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = env2; }
+    const f2 = await flags2();
+    ck(`branch "main" (the service's own default guard) → runs once under the production record: ${r2.moved} moved, ${r2.createdRows} created`,
+      r2.ran === true && r2.migration === MIGRATIONS.main && r2.moved === 2 && r2.createdRows === 1, r2);
+    ck('production members are on the new rule; the coach-chosen D3 stays; the coach untouched', f2[pPlain] === true && f2[pChose] === true && f2[pNoRow] === true && f2[pCoach] === null
+      && JSON.stringify((await row2(pChose)).s) === '["d3"]', f2);
+    const recs = (await pool2.query(`SELECT name FROM migrations WHERE name LIKE 'protocol_rule_all_new_%' ORDER BY name`)).rows.map(x => x.name);
+    ck('recorded under the production record only (not the test one)', JSON.stringify(recs) === JSON.stringify([MIGRATIONS.main]), recs);
+    process.env.RAILWAY_GIT_BRANCH = 'main';
+    try { r2 = await switchMembersToNewRule(pool2); } finally { if (env2 === undefined) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = env2; }
+    ck('a second production start does nothing (already done)', r2.ran === false && r2.why === 'already done', r2);
+    const logged2 = (await pool2.query(`SELECT user_id, created_row FROM protocol_rule_switch_log WHERE migration=$1 ORDER BY user_id`, [MIGRATIONS.main])).rows;
+    ck('the production log names exactly the members it moved (not the one already TRUE, not the coach)',
+      JSON.stringify(logged2.map(x => [x.user_id, x.created_row])) === JSON.stringify([[pPlain, false], [pChose, false], [pNoRow, true]].sort((a, b) => a[0] - b[0])), logged2);
+    process.env.RAILWAY_GIT_BRANCH = 'test';
+    try { r = await switchMembersToNewRule(pool); } finally { if (env2 === undefined) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = env2; }
+    ck('the test site, already switched on 6 Nov under its own record, does not run again after this change', r.ran === false && r.why === 'already done', r);
+    const c3 = await pool2.connect();
+    try { await c3.query('BEGIN'); for (const q of undoSql(MIGRATIONS.main)) await c3.query(q); await c3.query('COMMIT'); } finally { c3.release(); }
+    ck('the production undo restores the profiles exactly as they were before the release', JSON.stringify((await pool2.query(`SELECT * FROM patient_profiles ORDER BY user_id`)).rows) === snap2);
+    let threw = false; try { undoSql("x'; DROP TABLE users; --"); } catch { threw = true; }
+    ck('the undo only accepts the two known record names', threw && undoSql(MIGRATIONS.test).join() === UNDO_SQL.join());
+    // QA review of 3k.2: the record names are pinned. The test site recorded "protocol_rule_all_new_test_v1" on 6 Nov;
+    // renaming it would make the live test site switch everyone again on its next start.
+    ck('the record names are exactly the ones written on the sites (test: 6 Nov)', MIGRATIONS.test === 'protocol_rule_all_new_test_v1' && MIGRATIONS.main === 'protocol_rule_all_new_main_v1' && MIGRATION === 'protocol_rule_all_new_test_v1');
+
+    console.log('\n[8] catch-up: members the OLD version created during the release (or after a rollback)');
+    // The undo above put pPlain (created before the switch) back on the old meaning: it must stay there.
+    const late = await mk2(6), lateNoRow = await mk2(7);
+    await pool2.query(`INSERT INTO patient_profiles (user_id) VALUES ($1)`, [late]);              // as the old version creates it
+    process.env.RAILWAY_GIT_BRANCH = 'main';
+    try { r2 = await switchMembersToNewRule(pool2); } finally { if (env2 === undefined) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = env2; }
+    ck(`the next production start moves the members created after the switch (${r2.caughtUp}), and logs them`,
+      r2.ran === false && r2.why === 'already done' && r2.caughtUp === 2 && (await row2(late)).f === true && (await row2(lateNoRow))?.f === true
+        && (await pool2.query(`SELECT count(*)::int n FROM protocol_rule_switch_log WHERE migration=$1 AND user_id = ANY($2)`, [MIGRATIONS.main, [late, lateNoRow]])).rows[0].n === 2, r2);
+    ck('…a member from before the switch whom the undo put back stays on the old meaning (an undo stays undone)', (await row2(pPlain)).f === null);
+    process.env.RAILWAY_GIT_BRANCH = 'main';
+    try { r2 = await switchMembersToNewRule(pool2); } finally { if (env2 === undefined) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = env2; }
+    ck('…and a start with nothing new moves nobody', r2.caughtUp === 0, r2);
+    // QA re-check of 3k.2: an undo must stay undone for the members the catch-up moved too.
+    { const c4 = await pool2.connect();
+      try { await c4.query('BEGIN'); for (const q of undoSql(MIGRATIONS.main)) await c4.query(q); await c4.query('COMMIT'); } finally { c4.release(); } }
+    const afterUndo = [(await row2(late))?.f ?? null, (await row2(lateNoRow)) ? 'row' : 'no row'];
+    process.env.RAILWAY_GIT_BRANCH = 'main';
+    try { r2 = await switchMembersToNewRule(pool2); } finally { if (env2 === undefined) delete process.env.RAILWAY_GIT_BRANCH; else process.env.RAILWAY_GIT_BRANCH = env2; }
+    ck('after an undo, the next start does not move the caught-up members back (undo stays undone for everyone)',
+      afterUndo[0] === null && afterUndo[1] === 'no row' && r2.caughtUp === 0 && (await row2(late)).f === null && !(await row2(lateNoRow)), [afterUndo, r2]);
+    const boot = fs.readFileSync(path.resolve(HERE, '../startup.js'), 'utf8');
+    ck('startup.js calls the switch with its own guard (no options), and looks again 15 minutes later on the app pool',
+      /switchMembersToNewRule\(pool\);/.test(boot) && !/onTestServer/.test(boot) && /switchMembersToNewRule\(require\('\.\/db\/pool'\)\)/.test(boot) && /15 \* 60 \* 1000/.test(boot));
+  }
 } catch (e) { ck('the suite ran to the end', false, e.stack); }
 finally {
+  try { await pool2?.end(); } catch {}
+  try { await admin.query(`DROP DATABASE IF EXISTS ${NAME2}`); } catch {}
   try { await pool.end(); } catch {}
   try { await require('../db/pool').end(); } catch {}
   try { await admin.query(`DROP DATABASE IF EXISTS ${NAME}`); } catch {}

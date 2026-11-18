@@ -1659,10 +1659,10 @@ UPDATE voice_calibration_attempts SET legacy_max_calls = max_calls, max_calls = 
 -- written only where a member is created (POST /api/admin/members and POST /api/patients); any other row stays NULL.
 -- No column default on purpose: a profile row made later for an old member (a lazy insert) must keep the old meaning.
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS protocol_default_none BOOLEAN;
--- Fixes-3k.1 (Sachin, 6 Nov: "all are test members"): on the TEST server only, every existing member is moved once to
--- the new rule (services/protocolRuleSwitch.js, run by startup.js, only where RAILWAY_GIT_BRANCH is "test"). Each
--- member moved is logged here, so it can be undone exactly (created_row: the switch made their profile row; the undo
--- deletes those rows). Production is not touched.
+-- Fixes-3k.1 (Sachin, 6 Nov: "all are test members") and 3k.2 (18 Nov: production too, at release): on the test site
+-- and on production, every existing member is moved once to the new rule (services/protocolRuleSwitch.js, run by
+-- startup.js, only where RAILWAY_GIT_BRANCH is exactly "test" or "main"; one record per site). Each member moved is
+-- logged here, so it can be undone exactly (created_row: the switch made their profile row; the undo deletes those rows).
 CREATE TABLE IF NOT EXISTS protocol_rule_switch_log (
   user_id     INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   migration   TEXT        NOT NULL,
