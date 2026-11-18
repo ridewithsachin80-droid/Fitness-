@@ -23,3 +23,4 @@ Add one line per request (date and why). Results: the run's summary, and the art
 - 2026-11-05: after Fixes-3k (fa405d3): Today, Plan and Progress for the robot member (an existing member: lists unchanged); "checklist" wording; no red on Progress.
 - 2026-11-05: rerun after Fixes-3k: the 360 px run (42031373877) stopped at sign-in (411 px passed every check); the robot now reports why sign-in stalls (screen, login form, Log In button, alert text) and photographs it.
 - 2026-11-06: after Fixes-3k.1 (eb6a3da): confirm the robot member's Plan shows the new supplement rule (information line), and the usual screens.
+- 2026-11-18: after Fixes-3l (6353d5a): Today tiles on one line at 360 px; the weight sheet (empty box, "Yesterday … kg" hint); Profile weight date; Progress "since …" and the dashed no-log days; Settings age picker; "apple cider vinegar" wording.
